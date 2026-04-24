@@ -1,0 +1,33 @@
+{
+  "name": "@learnship/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Frontend Next.js 15 de LearnShip (alumno + admin de tenant)",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev -p ${WEB_PORT:-3000}",
+    "start": "next start -p ${WEB_PORT:-3000}",
+    "lint": "next lint",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf .next .turbo"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "next": "^15.1.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^2.6.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "^15.1.3",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
