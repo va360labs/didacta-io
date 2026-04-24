@@ -1,0 +1,46 @@
+# macOS
+.DS_Store
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.cursor/
+
+# Node
+node_modules/
+dist/
+build/
+*.log
+.pnpm-store/
+.npm/
+
+# Turbo
+.turbo/
+
+# Next.js
+.next/
+out/
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Archives (not versioned)
+*.zip
+*.tar.gz
+
+# Prisma local dev DB
+packages/database/prisma/*.db*
+
+# OS / misc
+Thumbs.db
+*.swp
+*.swo
