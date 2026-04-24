@@ -51,13 +51,13 @@ Detalle completo en [docs/PRD.md](docs/PRD.md#6-stack-tecnológico-cerrado).
 
 ## Roadmap de alto nivel
 
-| Fase | Duración | Objetivo |
-|---|---|---|
-| Fase 0 | 2 semanas | Discovery técnico, repo, infraestructura base |
-| Fase 1.A | 8 semanas | CORE + cursos asíncronos + certificados |
-| Fase 1.B | 8 semanas | Zoom directo + comunidad + Fundae básico |
-| Fase 1.C | 8 semanas | IA integrada + piloto + auditoría externa |
-| Fase 2+ | Iterativo | Migradores, SSO, comercial, IFAPA |
+| Fase     | Duración  | Objetivo                                      |
+| -------- | --------- | --------------------------------------------- |
+| Fase 0   | 2 semanas | Discovery técnico, repo, infraestructura base |
+| Fase 1.A | 8 semanas | CORE + cursos asíncronos + certificados       |
+| Fase 1.B | 8 semanas | Zoom directo + comunidad + Fundae básico      |
+| Fase 1.C | 8 semanas | IA integrada + piloto + auditoría externa     |
+| Fase 2+  | Iterativo | Migradores, SSO, comercial, IFAPA             |
 
 ## Licencia
 

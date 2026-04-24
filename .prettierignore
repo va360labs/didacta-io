@@ -1,0 +1,14 @@
+node_modules
+dist
+.next
+out
+build
+coverage
+.turbo
+pnpm-lock.yaml
+*.md.backup
+
+# Documentación autorizada manualmente (no tocar formato)
+docs/**/*.md
+prompts/**/*.md
+!docs/adrs/**/*.md
