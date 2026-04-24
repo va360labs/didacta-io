@@ -1,0 +1,331 @@
+// ============================================================================
+// LearnShip — Schema Prisma v1 (Core)
+// ----------------------------------------------------------------------------
+// Reglas clave:
+// - Toda tabla con datos de negocio incluye `tenantId` + política RLS (ver rls.sql)
+// - Sin FKs cross-module (los módulos usan IDs lógicos)
+// - Append-only en AuditLog (triggers en rls.sql)
+// - Soft delete preferido (deletedAt)
+// Referencia: docs/PRD.md §9.1, docs/ARQUITECTURA-MODULAR.md §4.1
+// ============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "debian-openssl-3.0.x"]
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [uuidOssp(map: "uuid-ossp"), pgcrypto, vector]
+}
+
+// ============================================================================
+// TENANTS & MODULE REGISTRY
+// ============================================================================
+
+model Tenant {
+  id        String    @id @default(uuid()) @db.Uuid
+  slug      String    @unique
+  name      String
+  status    TenantStatus @default(ACTIVE)
+  config    Json      @default("{}")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  users            User[]
+  sessions         Session[]
+  apiKeys          ApiKey[]
+  tenantModules    TenantModule[]
+  auditLogs        AuditLog[]
+  evidenceEntries  EvidenceVaultEntry[]
+  outboxEvents     OutboxEvent[]
+  webhooks         Webhook[]
+  notifTemplates   NotificationTemplate[]
+
+  @@index([slug])
+  @@index([status])
+  @@map("tenant")
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+model Module {
+  id                String   @id @default(uuid()) @db.Uuid
+  name              String   @unique
+  version           String
+  displayName       String   @map("display_name")
+  description       String?
+  enabledByDefault  Boolean  @default(false) @map("enabled_by_default")
+  manifest          Json
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  tenantModules TenantModule[]
+
+  @@map("module")
+}
+
+model TenantModule {
+  tenantId  String   @map("tenant_id") @db.Uuid
+  moduleId  String   @map("module_id") @db.Uuid
+  enabled   Boolean  @default(true)
+  config    Json     @default("{}")
+  enabledAt DateTime @default(now()) @map("enabled_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  module Module @relation(fields: [moduleId], references: [id])
+
+  @@id([tenantId, moduleId])
+  @@index([tenantId, enabled])
+  @@map("tenant_module")
+}
+
+// ============================================================================
+// IAM
+// ============================================================================
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  email         String
+  emailVerified Boolean   @default(false) @map("email_verified")
+  name          String?
+  passwordHash  String?   @map("password_hash")
+  mfaSecret     String?   @map("mfa_secret")
+  mfaEnabled    Boolean   @default(false) @map("mfa_enabled")
+  status        UserStatus @default(ACTIVE)
+  locale        String    @default("es-ES")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  lastLoginAt   DateTime? @map("last_login_at")
+
+  tenant   Tenant     @relation(fields: [tenantId], references: [id])
+  sessions Session[]
+  apiKeys  ApiKey[]
+  roles    UserRole[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId, status])
+  @@map("user")
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+  DEACTIVATED
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  description String?
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("role")
+}
+
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  moduleName  String?  @map("module_name")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  roles RolePermission[]
+
+  @@index([moduleName])
+  @@map("permission")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permission")
+}
+
+model UserRole {
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_role")
+}
+
+model Session {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  ip         String?
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  revokedAt  DateTime? @map("revoked_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("session")
+}
+
+model ApiKey {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  name         String
+  tokenHash    String    @unique @map("token_hash")
+  scopes       String[]
+  expiresAt    DateTime? @map("expires_at")
+  lastUsedAt   DateTime? @map("last_used_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  revokedAt    DateTime? @map("revoked_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@map("api_key")
+}
+
+// ============================================================================
+// AUDIT LOG (append-only, triggers en rls.sql)
+// ============================================================================
+
+model AuditLog {
+  id           BigInt   @id @default(autoincrement())
+  tenantId     String   @map("tenant_id") @db.Uuid
+  actorId      String?  @map("actor_id") @db.Uuid
+  action       String
+  resourceType String   @map("resource_type")
+  resourceId   String   @map("resource_id")
+  metadata     Json     @default("{}")
+  ip           String?
+  userAgent    String?  @map("user_agent")
+  timestamp    DateTime @default(now())
+  prevHash     String?  @map("prev_hash")
+  hash         String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, timestamp])
+  @@index([actorId])
+  @@index([resourceType, resourceId])
+  @@map("audit_log")
+}
+
+// ============================================================================
+// EVIDENCE VAULT
+// ============================================================================
+
+model EvidenceVaultEntry {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  resourceType String   @map("resource_type")
+  resourceId   String   @map("resource_id")
+  storageKey   String   @map("storage_key")
+  hash         String
+  size         BigInt
+  contentType  String?  @map("content_type")
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, resourceType, resourceId])
+  @@index([hash])
+  @@map("evidence_vault_entry")
+}
+
+// ============================================================================
+// EVENT BUS (outbox pattern) + WEBHOOKS
+// ============================================================================
+
+model OutboxEvent {
+  id              BigInt   @id @default(autoincrement())
+  tenantId        String   @map("tenant_id") @db.Uuid
+  eventName       String   @map("event_name")
+  payloadVersion  Int      @default(1) @map("payload_version")
+  payload         Json
+  metadata        Json     @default("{}")
+  idempotencyKey  String   @map("idempotency_key")
+  createdAt       DateTime @default(now()) @map("created_at")
+  processedAt     DateTime? @map("processed_at")
+  processingAttempts Int   @default(0) @map("processing_attempts")
+  lastError       String?  @map("last_error")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([processedAt])
+  @@index([tenantId, eventName])
+  @@map("outbox_event")
+}
+
+model Webhook {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  url         String
+  events      String[]
+  secretHash  String    @map("secret_hash")
+  enabled     Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  lastDeliveryAt DateTime? @map("last_delivery_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, enabled])
+  @@map("webhook")
+}
+
+// ============================================================================
+// NOTIFICATION TEMPLATES
+// ============================================================================
+
+model NotificationTemplate {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  key        String
+  channel    NotificationChannel
+  locale     String   @default("es-ES")
+  subject    String?
+  body       String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, key, channel, locale])
+  @@map("notification_template")
+}
+
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+  WEBHOOK
+}
