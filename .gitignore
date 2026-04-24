@@ -44,3 +44,6 @@ packages/database/prisma/*.db*
 Thumbs.db
 *.swp
 *.swo
+
+# TypeScript build info
+*.tsbuildinfo
