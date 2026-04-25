@@ -3,13 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "description": "Cliente Prisma compartido, schema v1 del core y migraciones de LearnShip",
-  "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "files": [
@@ -26,7 +26,7 @@
     "db:migrate:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
     "db:rls:apply": "psql \"$DATABASE_URL\" -f prisma/rls.sql",
-    "db:seed": "node --import tsx/esm src/seed.ts",
+    "db:seed": "tsx src/seed.ts",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {

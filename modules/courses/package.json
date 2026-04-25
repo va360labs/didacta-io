@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "description": "Módulo de gestión de cursos, módulos y lecciones (mod.courses)",
-  "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "files": [
