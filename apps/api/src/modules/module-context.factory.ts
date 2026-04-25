@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import type {
   AuditLogService,
+  DomainEvent,
   EventBus,
   EvidenceVaultService,
   HookContext,
@@ -38,18 +39,50 @@ class InMemoryHookRegistry implements HookRegistry {
   }
 }
 
-class StubEventBus implements EventBus {
+/**
+ * Implementación in-memory del EventBus. Despacha a handlers locales sincrónicamente.
+ * No persiste eventos (cuando llegue mod.outbox lo reemplazamos).
+ */
+type AnyEventHandler = (event: DomainEvent<unknown>) => Promise<void> | void;
+
+class InMemoryEventBus implements EventBus {
+  private readonly handlers = new Map<string, Set<AnyEventHandler>>();
+
   constructor(private readonly logger: Logger) {}
 
-  async publish(event: { name: string; metadata: { tenantId: string } }) {
-    this.logger.info('event published (stub, sin outbox aún)', {
+  async publish<TPayload>(event: DomainEvent<TPayload>) {
+    this.logger.info('event published', {
       event: event.name,
       tenantId: event.metadata.tenantId,
     });
+    const set = this.handlers.get(event.name);
+    if (!set) return;
+    for (const handler of set) {
+      try {
+        await handler(event as DomainEvent<unknown>);
+      } catch (error) {
+        this.logger.error('event handler falló', {
+          event: event.name,
+          error: (error as Error).message,
+        });
+      }
+    }
   }
 
-  subscribe() {
-    return () => undefined;
+  subscribe<TPayload>(
+    eventName: string,
+    handler: (event: DomainEvent<TPayload>) => Promise<void> | void,
+  ) {
+    let set = this.handlers.get(eventName);
+    if (!set) {
+      set = new Set();
+      this.handlers.set(eventName, set);
+    }
+    const wrapped = handler as AnyEventHandler;
+    set.add(wrapped);
+    return () => {
+      set?.delete(wrapped);
+    };
   }
 }
 
@@ -119,7 +152,7 @@ export class ModuleContextFactory {
   build(): ModuleContext {
     const adaptedLogger = this.adaptLogger(this.pino);
     return {
-      eventBus: new StubEventBus(adaptedLogger),
+      eventBus: new InMemoryEventBus(adaptedLogger),
       hookRegistry: this.hookRegistry,
       storage: stubStorage,
       auditLog: stubAuditLog,

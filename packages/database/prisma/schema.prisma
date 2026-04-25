@@ -501,3 +501,60 @@ model ModLearningInvitation {
   @@index([tenantId, courseId])
   @@map("mod_learning_invitation")
 }
+
+// ============================================================================
+// mod.certificates — Plantillas y emisión de certificados PDF
+// ============================================================================
+
+model ModCertificatesTemplate {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  /// Nombre legible: "Default", "VA360 oficial", etc.
+  name          String
+  /// Si true, esta plantilla se usa cuando no hay otra explícita asociada
+  isDefault     Boolean  @default(false) @map("is_default")
+  /// Texto del cuerpo. Soporta {{alumno}}, {{curso}}, {{fecha}}, {{numero}}
+  body          String
+  /// Color principal en hex (#RRGGBB) usado en bordes y títulos
+  primaryColor  String   @default("#0f172a") @map("primary_color")
+  /// URL absoluta del logo del tenant (opcional)
+  logoUrl       String?  @map("logo_url")
+  /// Nombre del firmante (queda en el PDF)
+  signerName    String?  @map("signer_name")
+  signerTitle   String?  @map("signer_title")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isDefault])
+  @@map("mod_certificates_template")
+}
+
+model ModCertificatesIssued {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  /// IDs lógicos sin FK cross-module
+  courseId      String   @map("course_id") @db.Uuid
+  enrollmentId  String   @map("enrollment_id") @db.Uuid
+  templateId    String?  @map("template_id") @db.Uuid
+  /// Número correlativo único por tenant
+  number        String
+  /// Hash SHA-256 del PDF generado (para verificación)
+  hash          String
+  /// Datos congelados al momento de emisión (alumno, curso, fecha, etc.)
+  snapshot      Json     @default("{}")
+  /// Path en el storage del PDF generado
+  storageKey    String   @map("storage_key")
+  /// Tamaño del PDF en bytes
+  size          Int
+  issuedAt      DateTime @default(now()) @map("issued_at")
+  revokedAt     DateTime? @map("revoked_at")
+  revokeReason  String?  @map("revoke_reason")
+
+  @@unique([tenantId, number])
+  @@unique([tenantId, enrollmentId])
+  @@index([userId])
+  @@index([courseId])
+  @@map("mod_certificates_issued")
+}

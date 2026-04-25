@@ -1,0 +1,38 @@
+{
+  "name": "@learnship/mod-certificates",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Módulo de emisión de certificados PDF tras finalización de cursos (mod.certificates)",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@learnship/core-kernel": "workspace:*",
+    "@learnship/database": "workspace:*",
+    "pdfkit": "^0.16.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pdfkit": "^0.13.9",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { AuthModule } from '../auth/auth.module';
+import { CertificatesController } from './certificates.controller';
 import { CoursesController } from './courses.controller';
 import { CoursesErrorFilter } from './courses-error.filter';
 import { LearningController } from './learning.controller';
@@ -10,7 +11,7 @@ import { ModuleRegistryService } from './module-registry.service';
 
 @Module({
   imports: [AuthModule],
-  controllers: [CoursesController, LearningController],
+  controllers: [CoursesController, LearningController, CertificatesController],
   providers: [
     ModuleContextFactory,
     ModuleRegistryService,

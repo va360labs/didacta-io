@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
+import { certificatesApi, type Certificate } from '@/lib/certificates';
 import { coursesApi, type CourseDetail, type CourseLesson } from '@/lib/courses';
 import { learningApi, type Enrollment } from '@/lib/learning';
 
@@ -19,6 +20,8 @@ export default function CourseAlumnoPage() {
   const [progressByLesson, setProgressByLesson] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [certificate, setCertificate] = useState<Certificate | null>(null);
+  const [downloadingCert, setDownloadingCert] = useState(false);
 
   const reload = useCallback(async () => {
     if (!params?.slug) return;
@@ -38,6 +41,20 @@ export default function CourseAlumnoPage() {
       setEnrollment(found ?? null);
       const firstLesson = detail.modules.flatMap((m) => m.lessons)[0];
       setActiveLessonId((current) => current ?? firstLesson?.id ?? null);
+
+      if (found?.status === 'COMPLETED') {
+        try {
+          const certs = await certificatesApi.listMine();
+          const match = certs.find((c) => c.courseId === detail.id);
+          setCertificate(match ?? null);
+        } catch {
+          // El certificado puede tardar segundos en emitirse tras course.completed.
+          // No mostramos error: lo intentamos al refrescar.
+          setCertificate(null);
+        }
+      } else {
+        setCertificate(null);
+      }
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'Error al cargar el curso');
     }
@@ -62,6 +79,19 @@ export default function CourseAlumnoPage() {
       }
     } finally {
       setPending(false);
+    }
+  }
+
+  async function handleDownloadCertificate() {
+    if (!certificate) return;
+    setDownloadingCert(true);
+    setError(null);
+    try {
+      await certificatesApi.openInNewTab(certificate.id, `${certificate.number}.pdf`);
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No se pudo descargar el certificado');
+    } finally {
+      setDownloadingCert(false);
     }
   }
 
@@ -142,17 +172,29 @@ export default function CourseAlumnoPage() {
             <CardTitle className="text-lg">Tu progreso</CardTitle>
             <CardDescription>
               {enrollment.status === 'COMPLETED'
-                ? '¡Curso completado! Tu certificado se está procesando.'
+                ? certificate
+                  ? `¡Curso completado! Certificado ${certificate.number} listo para descargar.`
+                  : '¡Curso completado! Tu certificado se está procesando.'
                 : `${enrollment.progressPercent}% — meta para finalizar: ${enrollment.completionThreshold}%`}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
               <div
                 className="h-full rounded-full bg-neutral-900 dark:bg-neutral-50"
                 style={{ width: `${enrollment.progressPercent}%` }}
               />
             </div>
+            {enrollment.status === 'COMPLETED' && certificate ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadCertificate}
+                disabled={downloadingCert}
+              >
+                {downloadingCert ? 'Descargando…' : 'Descargar certificado (PDF)'}
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
       )}

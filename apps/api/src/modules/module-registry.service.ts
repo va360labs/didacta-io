@@ -1,5 +1,6 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { ModuleRegistry } from '@learnship/core-registry';
+import { buildCertificatesModule, CertificatesService } from '@learnship/mod-certificates';
 import { coursesModule, CoursesService } from '@learnship/mod-courses';
 import { helloWorldModule } from '@learnship/mod-hello-world';
 import { learningModule, LearningService } from '@learnship/mod-learning';
@@ -13,6 +14,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private registry?: ModuleRegistry;
   private courses?: CoursesService;
   private learning?: LearningService;
+  private certificates?: CertificatesService;
 
   constructor(
     private readonly factory: ModuleContextFactory,
@@ -23,10 +25,19 @@ export class ModuleRegistryService implements OnModuleInit {
     const context = this.factory.build();
     this.registry = new ModuleRegistry({ coreVersion: CORE_VERSION, context });
 
-    await this.registry.register([helloWorldModule, coursesModule, learningModule]);
+    const prisma = this.factory.getPrisma() as never;
+    this.courses = new CoursesService(prisma, context);
+    this.learning = new LearningService(prisma, context);
+    this.certificates = new CertificatesService(prisma, context);
 
-    this.courses = new CoursesService(this.factory.getPrisma() as never, context);
-    this.learning = new LearningService(this.factory.getPrisma() as never, context);
+    const certificatesModule = buildCertificatesModule(this.certificates);
+
+    await this.registry.register([
+      helloWorldModule,
+      coursesModule,
+      learningModule,
+      certificatesModule,
+    ]);
 
     this.pino.log(
       { modules: this.registry.listModules().map((m) => m.manifest.name) },
@@ -42,6 +53,11 @@ export class ModuleRegistryService implements OnModuleInit {
   getLearningService(): LearningService {
     if (!this.learning) throw new Error('ModuleRegistry no está inicializado');
     return this.learning;
+  }
+
+  getCertificatesService(): CertificatesService {
+    if (!this.certificates) throw new Error('ModuleRegistry no está inicializado');
+    return this.certificates;
   }
 
   isModuleEnabledForTenant(_tenantId: string, _moduleName: string): boolean {
