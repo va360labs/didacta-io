@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # ============================================================================
-# entrypoint.sh — corre migraciones y políticas RLS antes de arrancar la app
+# entrypoint.sh — sincroniza schema, aplica políticas RLS y arranca la app
 # Se ejecuta en el contenedor de Easypanel en cada deploy.
+#
+# Decisión actual (Fase 1.A): usamos `prisma db push` en lugar de
+# `prisma migrate deploy`. Razón: el schema cambia rápido entre PRs y todavía
+# no estabilizamos las migraciones versionadas. `db push` sincroniza el schema
+# directamente con la BD sin necesidad de archivos en prisma/migrations.
+# Cuando entremos a producción real migramos a `migrate deploy` con archivos
+# versionados generados por `prisma migrate dev`.
 # ============================================================================
 set -euo pipefail
 
@@ -9,18 +16,26 @@ log() {
   printf '[entrypoint] %s\n' "$*"
 }
 
+# psql nativo no acepta `?schema=public` ni params propios de Prisma.
+# Devuelve la URL sin query string para usarla en psql.
+strip_url_query() {
+  printf '%s' "${1%%\?*}"
+}
+
 run_migrations() {
   if [[ -z "${DATABASE_URL:-}" ]]; then
-    log "DATABASE_URL no definido, salto migraciones."
+    log "DATABASE_URL no definido, salto sincronización de schema."
     return 0
   fi
 
-  log "Aplicando migraciones Prisma…"
-  pnpm --filter @learnship/database exec prisma migrate deploy
+  log "Sincronizando schema con prisma db push…"
+  pnpm --filter @learnship/database exec prisma db push --skip-generate --accept-data-loss
 
-  log "Aplicando políticas RLS…"
-  if pnpm --filter @learnship/database exec node -e "process.exit(0)" >/dev/null 2>&1; then
-    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/prisma/rls.sql
+  if command -v psql >/dev/null 2>&1; then
+    log "Aplicando políticas RLS…"
+    local psql_url
+    psql_url="$(strip_url_query "$DATABASE_URL")"
+    psql "$psql_url" -v ON_ERROR_STOP=1 -f packages/database/prisma/rls.sql
     log "RLS aplicado correctamente."
   else
     log "psql no disponible, salto RLS (verificá imagen base)."
@@ -41,9 +56,9 @@ start_all() {
   run_migrations
 
   log "Arrancando API y Web en paralelo…"
-  pnpm --filter @learnship/api  exec node dist/main.js &
+  pnpm --filter @learnship/api exec node dist/main.js &
   api_pid=$!
-  pnpm --filter @learnship/web  exec next start -p "${WEB_PORT:-3000}" &
+  pnpm --filter @learnship/web exec next start -p "${WEB_PORT:-3000}" &
   web_pid=$!
 
   shutdown() {
@@ -62,11 +77,11 @@ start_all() {
 }
 
 case "${1:-start}" in
-  start)         start_all ;;
-  api)           run_migrations; start_api ;;
-  web)           start_web ;;
-  migrate)       run_migrations; log "Solo migraciones, salgo."; exit 0 ;;
-  seed)          run_migrations; pnpm --filter @learnship/database db:seed; exit 0 ;;
-  shell)         exec bash ;;
-  *)             exec "$@" ;;
+  start)   start_all ;;
+  api)     run_migrations; start_api ;;
+  web)     start_web ;;
+  migrate) run_migrations; log "Solo sincronización de schema, salgo."; exit 0 ;;
+  seed)    run_migrations; pnpm --filter @learnship/database db:seed; exit 0 ;;
+  shell)   exec bash ;;
+  *)       exec "$@" ;;
 esac
