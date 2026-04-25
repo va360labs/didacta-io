@@ -1,13 +1,17 @@
+import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
-import { beforeAll, afterAll, describe, expect, it } from 'vitest';
-import { AppModule } from '../src/app.module';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { HealthModule } from '../src/health/health.module';
+
+@Module({ imports: [HealthModule] })
+class HealthAppModule {}
 
 describe('Health endpoints (e2e)', () => {
   let app: NestFastifyApplication;
 
   beforeAll(async () => {
-    app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
+    app = await NestFactory.create<NestFastifyApplication>(HealthAppModule, new FastifyAdapter(), {
       logger: false,
     });
     app.setGlobalPrefix('api/v1', { exclude: ['healthz', 'readyz'] });
