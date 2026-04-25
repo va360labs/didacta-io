@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { AuthModule } from '../auth/auth.module';
 import { AssessmentsController } from './assessments.controller';
+import { AssessmentsAttemptsController } from './assessments-attempts.controller';
 import { AssessmentsErrorFilter } from './assessments-error.filter';
 import { AuditController } from './audit.controller';
 import { CertificatesController } from './certificates.controller';
@@ -21,6 +22,7 @@ import { OutboxRecoveryWorker } from './outbox-recovery.worker';
     CertificatesController,
     AuditController,
     AssessmentsController,
+    AssessmentsAttemptsController,
   ],
   providers: [
     ModuleContextFactory,

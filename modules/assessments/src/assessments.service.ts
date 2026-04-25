@@ -137,6 +137,44 @@ export class AssessmentsService {
     return quiz;
   }
 
+  /**
+   * Vista del quiz pensada para el alumno: solo se exponen los datos
+   * necesarios para responder. Las opciones NO incluyen `isCorrect` ni
+   * el `feedback` por pregunta — esos llegan al alumno solo tras enviar
+   * el intento (y solo si `quiz.showFeedback` es true).
+   */
+  async getQuizForAlumno(tenantId: string, quizId: string) {
+    const quiz = await this.prisma.modAssessmentsQuiz.findFirst({
+      where: { id: quizId, tenantId, deletedAt: null, status: 'PUBLISHED' },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        passThreshold: true,
+        maxAttempts: true,
+        timeLimitMinutes: true,
+        shuffleQuestions: true,
+        questions: {
+          where: { deletedAt: null },
+          orderBy: { position: 'asc' },
+          select: {
+            id: true,
+            type: true,
+            prompt: true,
+            position: true,
+            points: true,
+            options: {
+              orderBy: { position: 'asc' },
+              select: { id: true, label: true, position: true },
+            },
+          },
+        },
+      },
+    });
+    if (!quiz) throw new QuizNotFoundError();
+    return quiz;
+  }
+
   // -------------------- Flujo del alumno --------------------
 
   async startAttempt(tenantId: string, userId: string, dto: StartAttemptDto) {
