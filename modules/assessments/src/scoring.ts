@@ -4,18 +4,23 @@
  * Sin dependencias de Prisma ni ningún side effect — todo entrada / salida —
  * para que sea testeable sin DB y reutilizable desde cualquier capa.
  *
- * Reglas v0.1:
+ * Reglas v0.2:
  * - SINGLE_CHOICE / TRUE_FALSE: el alumno acierta solo si selecciona EXACTAMENTE
  *   la opción correcta y nada más. No hay crédito parcial.
  * - MULTIPLE_CHOICE: el alumno acierta solo si el conjunto de opciones marcadas
  *   coincide EXACTAMENTE con el conjunto de opciones correctas. Sin crédito parcial.
- *   (En PRs futuros podría introducirse crédito parcial — por ahora binario por
- *    pregunta para mantener la corrección simple y predecible.)
+ * - FILL_IN_BLANK: el alumno escribe un texto libre. Acierta si tras normalizar
+ *   (trim + lowercase + colapsar espacios + sin acentos) coincide con CUALQUIERA
+ *   de las respuestas aceptadas (también normalizadas).
  * - Si el alumno no responde una pregunta, cuenta como fallo (0 puntos en esa pregunta).
  * - Pasa el quiz si scorePercent >= passThreshold del quiz.
  */
 
-export type ScoringQuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE';
+export type ScoringQuestionType =
+  | 'SINGLE_CHOICE'
+  | 'MULTIPLE_CHOICE'
+  | 'TRUE_FALSE'
+  | 'FILL_IN_BLANK';
 
 export interface ScoringOption {
   id: string;
@@ -27,11 +32,15 @@ export interface ScoringQuestion {
   type: ScoringQuestionType;
   points: number;
   options: ScoringOption[];
+  /** Solo para FILL_IN_BLANK: respuestas válidas. Vacío para los demás tipos. */
+  acceptedAnswers?: string[];
 }
 
 export interface ScoringAnswer {
   questionId: string;
   selectedOptionIds: string[];
+  /** Solo para FILL_IN_BLANK: texto que escribió el alumno. */
+  textAnswer?: string;
 }
 
 export interface ScoredAnswer {
@@ -76,10 +85,18 @@ export function scoreAttempt(
   for (const q of questions) {
     scoreMax += q.points;
     const a = answerByQuestion.get(q.id);
-    const selected = new Set(a?.selectedOptionIds ?? []);
-    const correct = new Set(q.options.filter((o) => o.isCorrect).map((o) => o.id));
 
-    const isCorrect = setsEqual(selected, correct);
+    let isCorrect: boolean;
+    if (q.type === 'FILL_IN_BLANK') {
+      const expected = (q.acceptedAnswers ?? []).map(normalize).filter((s) => s.length > 0);
+      const actual = normalize(a?.textAnswer ?? '');
+      isCorrect = actual.length > 0 && expected.includes(actual);
+    } else {
+      const selected = new Set(a?.selectedOptionIds ?? []);
+      const correct = new Set(q.options.filter((o) => o.isCorrect).map((o) => o.id));
+      isCorrect = setsEqual(selected, correct);
+    }
+
     const earned = isCorrect ? q.points : 0;
     scoreEarned += earned;
     perAnswer.push({ questionId: q.id, isCorrect, scoreEarned: earned });
@@ -95,4 +112,21 @@ function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
   if (a.size !== b.size) return false;
   for (const v of a) if (!b.has(v)) return false;
   return true;
+}
+
+/**
+ * Normaliza un texto para comparar respuestas FILL_IN_BLANK.
+ *
+ * Lo aplicamos tanto a la respuesta del alumno como a cada respuesta aceptada,
+ * de modo que el formador no tenga que prever variantes de mayúscula/acento /
+ * espaciado: si pone "París" como respuesta, "paris", " PARIS ", "Paris " o
+ * "p a r í s" (con espaciado raro pero misma letra) cuentan como correctas.
+ */
+function normalize(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 }

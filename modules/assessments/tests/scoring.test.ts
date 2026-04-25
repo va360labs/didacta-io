@@ -29,6 +29,14 @@ const trueFalse = (id: string, options: { id: string; correct: boolean }[]): Sco
   options: options.map((o) => ({ id: o.id, isCorrect: o.correct })),
 });
 
+const fillInBlank = (id: string, accepted: string[], points = 1): ScoringQuestion => ({
+  id,
+  type: 'FILL_IN_BLANK',
+  points,
+  options: [],
+  acceptedAnswers: accepted,
+});
+
 describe('scoreAttempt', () => {
   it('todas correctas: 100% y passed', () => {
     const questions = [
@@ -200,5 +208,112 @@ describe('scoreAttempt', () => {
   it('threshold fuera de rango: lanza RangeError', () => {
     expect(() => scoreAttempt([], [], -1)).toThrow(RangeError);
     expect(() => scoreAttempt([], [], 101)).toThrow(RangeError);
+  });
+
+  describe('FILL_IN_BLANK', () => {
+    const q = fillInBlank('q1', ['París', 'Paris']);
+
+    it('coincidencia exacta cuenta como correcta', () => {
+      const r = scoreAttempt(
+        [q],
+        [{ questionId: 'q1', selectedOptionIds: [], textAnswer: 'París' }],
+        60,
+      );
+      expect(r.perAnswer[0]?.isCorrect).toBe(true);
+    });
+
+    it('insensible a mayúsculas/minúsculas', () => {
+      const r = scoreAttempt(
+        [q],
+        [{ questionId: 'q1', selectedOptionIds: [], textAnswer: 'PARIS' }],
+        60,
+      );
+      expect(r.perAnswer[0]?.isCorrect).toBe(true);
+    });
+
+    it('insensible a acentos: paris (sin acento) coincide con París aceptada', () => {
+      const r = scoreAttempt(
+        [q],
+        [{ questionId: 'q1', selectedOptionIds: [], textAnswer: 'paris' }],
+        60,
+      );
+      expect(r.perAnswer[0]?.isCorrect).toBe(true);
+    });
+
+    it('respeta espaciado: trim + colapsa espacios internos', () => {
+      const r = scoreAttempt(
+        [q],
+        [{ questionId: 'q1', selectedOptionIds: [], textAnswer: '  París   ' }],
+        60,
+      );
+      expect(r.perAnswer[0]?.isCorrect).toBe(true);
+    });
+
+    it('respuesta diferente: incorrecta', () => {
+      const r = scoreAttempt(
+        [q],
+        [{ questionId: 'q1', selectedOptionIds: [], textAnswer: 'Madrid' }],
+        60,
+      );
+      expect(r.perAnswer[0]?.isCorrect).toBe(false);
+    });
+
+    it('respuesta vacía: incorrecta (no es null/undefined-friendly)', () => {
+      const r = scoreAttempt(
+        [q],
+        [{ questionId: 'q1', selectedOptionIds: [], textAnswer: '   ' }],
+        60,
+      );
+      expect(r.perAnswer[0]?.isCorrect).toBe(false);
+    });
+
+    it('sin textAnswer en la respuesta: incorrecta sin romper', () => {
+      const r = scoreAttempt([q], [{ questionId: 'q1', selectedOptionIds: [] }], 60);
+      expect(r.perAnswer[0]?.isCorrect).toBe(false);
+    });
+
+    it('múltiples respuestas aceptadas: cualquiera basta', () => {
+      const multi = fillInBlank('q1', ['NodeJS', 'Node.js', 'node']);
+      expect(
+        scoreAttempt(
+          [multi],
+          [{ questionId: 'q1', selectedOptionIds: [], textAnswer: 'Node.js' }],
+          60,
+        ).perAnswer[0]?.isCorrect,
+      ).toBe(true);
+      expect(
+        scoreAttempt(
+          [multi],
+          [{ questionId: 'q1', selectedOptionIds: [], textAnswer: 'NODEJS' }],
+          60,
+        ).perAnswer[0]?.isCorrect,
+      ).toBe(true);
+      expect(
+        scoreAttempt(
+          [multi],
+          [{ questionId: 'q1', selectedOptionIds: [], textAnswer: 'Node.JS' }],
+          60,
+        ).perAnswer[0]?.isCorrect,
+      ).toBe(true);
+    });
+
+    it('mezcla con otros tipos: ambos contribuyen al total', () => {
+      const sc = singleChoice('q-sc', [
+        { id: 'a', correct: true },
+        { id: 'b', correct: false },
+      ]);
+      const fb = fillInBlank('q-fb', ['Madrid'], 2);
+      const result = scoreAttempt(
+        [sc, fb],
+        [
+          { questionId: 'q-sc', selectedOptionIds: ['a'] },
+          { questionId: 'q-fb', selectedOptionIds: [], textAnswer: 'madrid' },
+        ],
+        60,
+      );
+      expect(result.scoreEarned).toBe(3);
+      expect(result.scoreMax).toBe(3);
+      expect(result.passed).toBe(true);
+    });
   });
 });

@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-export const questionTypeSchema = z.enum(['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE']);
+export const questionTypeSchema = z.enum([
+  'SINGLE_CHOICE',
+  'MULTIPLE_CHOICE',
+  'TRUE_FALSE',
+  'FILL_IN_BLANK',
+]);
 export type QuestionTypeDto = z.infer<typeof questionTypeSchema>;
 
 export const createQuizSchema = z.object({
@@ -30,10 +35,34 @@ export const createQuestionSchema = z
     prompt: z.string().min(3).max(2000),
     feedback: z.string().max(2000).optional(),
     points: z.number().int().positive().optional(),
-    options: z.array(createOptionSchema).min(2).max(10),
+    /** Para SINGLE_CHOICE / MULTIPLE_CHOICE / TRUE_FALSE. Vacío para FILL_IN_BLANK. */
+    options: z.array(createOptionSchema).max(10).optional(),
+    /** Solo para FILL_IN_BLANK. Vacío para los demás tipos. */
+    acceptedAnswers: z.array(z.string().min(1).max(200)).max(20).optional(),
   })
   .superRefine((q, ctx) => {
-    const correctCount = q.options.filter((o) => o.isCorrect).length;
+    if (q.type === 'FILL_IN_BLANK') {
+      if (!q.acceptedAnswers || q.acceptedAnswers.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'FILL_IN_BLANK exige al menos una respuesta aceptada',
+          path: ['acceptedAnswers'],
+        });
+      }
+      return;
+    }
+
+    // Tipos con opciones
+    const options = q.options ?? [];
+    if (options.length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Tipos con opciones exigen al menos 2 opciones',
+        path: ['options'],
+      });
+      return;
+    }
+    const correctCount = options.filter((o) => o.isCorrect).length;
     if (correctCount === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -49,7 +78,7 @@ export const createQuestionSchema = z
       });
     }
     if (q.type === 'TRUE_FALSE') {
-      if (q.options.length !== 2) {
+      if (options.length !== 2) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: 'TRUE_FALSE exige exactamente 2 opciones',
@@ -76,7 +105,10 @@ export type StartAttemptDto = z.infer<typeof startAttemptSchema>;
 
 export const submitAttemptAnswerSchema = z.object({
   questionId: z.string().uuid(),
-  selectedOptionIds: z.array(z.string().uuid()).max(10),
+  /** Para SINGLE_CHOICE / MULTIPLE_CHOICE / TRUE_FALSE. */
+  selectedOptionIds: z.array(z.string().uuid()).max(10).optional().default([]),
+  /** Solo para FILL_IN_BLANK. */
+  textAnswer: z.string().max(500).optional(),
 });
 export type SubmitAttemptAnswerDto = z.infer<typeof submitAttemptAnswerSchema>;
 

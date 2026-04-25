@@ -19,6 +19,7 @@ const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
   { value: 'SINGLE_CHOICE', label: 'Opción única' },
   { value: 'MULTIPLE_CHOICE', label: 'Opciones múltiples' },
   { value: 'TRUE_FALSE', label: 'Verdadero / Falso' },
+  { value: 'FILL_IN_BLANK', label: 'Rellenar el hueco' },
 ];
 
 interface DraftOption {
@@ -243,19 +244,37 @@ function QuestionRow({
           Eliminar
         </button>
       </div>
-      <ul className="mt-2 space-y-1 text-sm">
-        {question.options.map((o) => (
-          <li key={o.id} className="flex items-center gap-2">
-            <span
-              className={`inline-block h-2 w-2 rounded-full ${
-                o.isCorrect ? 'bg-green-500' : 'bg-neutral-300 dark:bg-neutral-700'
-              }`}
-              aria-label={o.isCorrect ? 'correcta' : 'incorrecta'}
-            />
-            <span>{o.label}</span>
-          </li>
-        ))}
-      </ul>
+      {question.type === 'FILL_IN_BLANK' ? (
+        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+          Respuestas aceptadas:{' '}
+          {question.acceptedAnswers.length === 0 ? (
+            <span className="text-amber-600">ninguna</span>
+          ) : (
+            question.acceptedAnswers.map((a, i) => (
+              <span
+                key={`${a}-${i}`}
+                className="mr-2 rounded bg-neutral-100 px-1.5 py-0.5 text-xs dark:bg-neutral-800"
+              >
+                {a}
+              </span>
+            ))
+          )}
+        </p>
+      ) : (
+        <ul className="mt-2 space-y-1 text-sm">
+          {question.options.map((o) => (
+            <li key={o.id} className="flex items-center gap-2">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${
+                  o.isCorrect ? 'bg-green-500' : 'bg-neutral-300 dark:bg-neutral-700'
+                }`}
+                aria-label={o.isCorrect ? 'correcta' : 'incorrecta'}
+              />
+              <span>{o.label}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -275,6 +294,7 @@ function NewQuestionForm({
     { label: '', isCorrect: false },
     { label: '', isCorrect: false },
   ]);
+  const [acceptedAnswersText, setAcceptedAnswersText] = useState('');
   const [points, setPoints] = useState('1');
   const [feedback, setFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -318,16 +338,28 @@ function NewQuestionForm({
     setError(null);
     setSubmitting(true);
     try {
+      const acceptedAnswers =
+        type === 'FILL_IN_BLANK'
+          ? acceptedAnswersText
+              .split(/\r?\n/)
+              .map((s) => s.trim())
+              .filter((s) => s.length > 0)
+          : undefined;
       await assessmentsApi.addQuestion(quizId, {
         type,
         prompt,
         feedback: feedback || undefined,
         points: Number(points),
-        options: options.map((o) => ({ label: o.label, isCorrect: o.isCorrect })),
+        ...(type === 'FILL_IN_BLANK'
+          ? { acceptedAnswers: acceptedAnswers ?? [] }
+          : {
+              options: options.map((o) => ({ label: o.label, isCorrect: o.isCorrect })),
+            }),
       });
       setPrompt('');
       setFeedback('');
       setPoints('1');
+      setAcceptedAnswersText('');
       setOptions(
         type === 'TRUE_FALSE'
           ? [
@@ -390,42 +422,60 @@ function NewQuestionForm({
           required
         />
       </div>
-      <div className="space-y-2">
-        <p className="text-xs uppercase tracking-wider text-neutral-500">
-          Opciones (marca las correctas)
-        </p>
-        {options.map((opt, idx) => (
-          <div key={idx} className="flex items-center gap-2">
-            <input
-              type={type === 'MULTIPLE_CHOICE' ? 'checkbox' : 'radio'}
-              name="correct-marker"
-              checked={opt.isCorrect}
-              onChange={() => updateOption(idx, { isCorrect: !opt.isCorrect })}
-            />
-            <Input
-              value={opt.label}
-              onChange={(e) => updateOption(idx, { label: e.target.value })}
-              placeholder={`Opción ${idx + 1}`}
-              required
-              disabled={type === 'TRUE_FALSE'}
-            />
-            {type !== 'TRUE_FALSE' && options.length > 2 ? (
-              <button
-                type="button"
-                onClick={() => removeOption(idx)}
-                className="text-xs text-red-600 underline decoration-dotted"
-              >
-                Quitar
-              </button>
-            ) : null}
-          </div>
-        ))}
-        {type !== 'TRUE_FALSE' && options.length < 10 ? (
-          <Button type="button" variant="ghost" size="sm" onClick={addOption}>
-            + opción
-          </Button>
-        ) : null}
-      </div>
+      {type === 'FILL_IN_BLANK' ? (
+        <div className="space-y-1">
+          <Label htmlFor="qaccepted">Respuestas aceptadas (una por línea)</Label>
+          <Textarea
+            id="qaccepted"
+            rows={3}
+            value={acceptedAnswersText}
+            onChange={(e) => setAcceptedAnswersText(e.target.value)}
+            placeholder={'París\nParis\nFRANCIA, capital'}
+            required
+          />
+          <p className="text-xs text-neutral-500">
+            La comparación es insensible a mayúsculas, acentos y espaciado: "Paris" coincidirá con
+            "PARÍS".
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs uppercase tracking-wider text-neutral-500">
+            Opciones (marca las correctas)
+          </p>
+          {options.map((opt, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <input
+                type={type === 'MULTIPLE_CHOICE' ? 'checkbox' : 'radio'}
+                name="correct-marker"
+                checked={opt.isCorrect}
+                onChange={() => updateOption(idx, { isCorrect: !opt.isCorrect })}
+              />
+              <Input
+                value={opt.label}
+                onChange={(e) => updateOption(idx, { label: e.target.value })}
+                placeholder={`Opción ${idx + 1}`}
+                required
+                disabled={type === 'TRUE_FALSE'}
+              />
+              {type !== 'TRUE_FALSE' && options.length > 2 ? (
+                <button
+                  type="button"
+                  onClick={() => removeOption(idx)}
+                  className="text-xs text-red-600 underline decoration-dotted"
+                >
+                  Quitar
+                </button>
+              ) : null}
+            </div>
+          ))}
+          {type !== 'TRUE_FALSE' && options.length < 10 ? (
+            <Button type="button" variant="ghost" size="sm" onClick={addOption}>
+              + opción
+            </Button>
+          ) : null}
+        </div>
+      )}
       <div className="space-y-1">
         <Label htmlFor="qfeedback">Feedback (opcional)</Label>
         <Input

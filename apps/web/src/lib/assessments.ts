@@ -1,7 +1,7 @@
 import { ApiHttpError, apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
 
-export type QuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE';
+export type QuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'FILL_IN_BLANK';
 export type QuizStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 
 export interface QuizSummary {
@@ -36,6 +36,7 @@ export interface FormadorQuestion {
   position: number;
   points: number;
   options: FormadorOption[];
+  acceptedAnswers: string[];
 }
 
 export interface QuizFormadorView extends QuizSummary {
@@ -156,7 +157,8 @@ export const assessmentsApi = {
       prompt: string;
       feedback?: string;
       points?: number;
-      options: { label: string; isCorrect: boolean }[];
+      options?: { label: string; isCorrect: boolean }[];
+      acceptedAnswers?: string[];
     },
   ): Promise<FormadorQuestion> {
     return apiFetch<FormadorQuestion>(
@@ -206,7 +208,7 @@ export const assessmentsApi = {
 
   async submitAttempt(
     attemptId: string,
-    answers: { questionId: string; selectedOptionIds: string[] }[],
+    answers: { questionId: string; selectedOptionIds?: string[]; textAnswer?: string }[],
   ): Promise<AttemptSummary> {
     return apiFetch<AttemptSummary>(
       `/api/v1/modules/assessments/attempts/${attemptId}/submit`,

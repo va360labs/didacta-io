@@ -573,6 +573,7 @@ enum QuestionType {
   SINGLE_CHOICE
   MULTIPLE_CHOICE
   TRUE_FALSE
+  FILL_IN_BLANK
 }
 
 enum AttemptStatus {
@@ -626,6 +627,10 @@ model ModAssessmentsQuestion {
   position  Int
   /// Puntos que vale la pregunta (default 1).
   points    Int          @default(1)
+  /// Lista de respuestas aceptadas para FILL_IN_BLANK. Se compara
+  /// case-insensitive y trimmed contra la respuesta del alumno. Vacío
+  /// para todos los demás tipos.
+  acceptedAnswers String[] @default([]) @map("accepted_answers")
   createdAt DateTime     @default(now()) @map("created_at")
   updatedAt DateTime     @updatedAt @map("updated_at")
   deletedAt DateTime?    @map("deleted_at")
@@ -690,7 +695,10 @@ model ModAssessmentsAnswer {
   attemptId         String   @map("attempt_id") @db.Uuid
   questionId        String   @map("question_id") @db.Uuid
   /// IDs de las opciones marcadas por el alumno (vacío si no respondió).
+  /// Solo aplica a SINGLE_CHOICE / MULTIPLE_CHOICE / TRUE_FALSE.
   selectedOptionIds String[] @default([]) @map("selected_option_ids") @db.Uuid
+  /// Texto que escribió el alumno. Solo aplica a FILL_IN_BLANK.
+  textAnswer        String?  @map("text_answer")
   /// Resultado del scoring (rellenado al submit).
   isCorrect         Boolean  @default(false) @map("is_correct")
   scoreEarned       Int      @default(0) @map("score_earned")

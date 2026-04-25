@@ -70,6 +70,7 @@ export class AssessmentsService {
       select: { position: true },
     });
     const position = (lastPosition?.position ?? 0) + 1;
+    const options = dto.options ?? [];
 
     return this.prisma.modAssessmentsQuestion.create({
       data: {
@@ -80,8 +81,9 @@ export class AssessmentsService {
         feedback: dto.feedback ?? null,
         points: dto.points ?? 1,
         position,
+        acceptedAnswers: dto.acceptedAnswers ?? [],
         options: {
-          create: dto.options.map((opt, idx) => ({
+          create: options.map((opt, idx) => ({
             tenantId,
             label: opt.label,
             isCorrect: opt.isCorrect,
@@ -246,6 +248,7 @@ export class AssessmentsService {
       type: q.type,
       points: q.points,
       options: q.options.map((o) => ({ id: o.id, isCorrect: o.isCorrect })),
+      acceptedAnswers: q.acceptedAnswers,
     }));
 
     const result = scoreAttempt(scoringQuestions, dto.answers, quiz.passThreshold);
@@ -262,7 +265,8 @@ export class AssessmentsService {
             tenantId,
             attemptId: attempt.id,
             questionId: a.questionId,
-            selectedOptionIds: a.selectedOptionIds,
+            selectedOptionIds: a.selectedOptionIds ?? [],
+            textAnswer: a.textAnswer ?? null,
             isCorrect: scored.isCorrect,
             scoreEarned: scored.scoreEarned,
           },

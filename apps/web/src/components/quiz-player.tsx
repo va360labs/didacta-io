@@ -30,6 +30,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
   const [state, setState] = useState<ViewState>({ kind: 'loading' });
   const [pending, setPending] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
+  const [textAnswers, setTextAnswers] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     if (!quizId) {
@@ -60,6 +61,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
     try {
       const attempt = await assessmentsApi.startAttempt({ quizId, enrollmentId, lessonId });
       setAnswers({});
+      setTextAnswers({});
       setState({ kind: 'attempt', quiz: state.quiz, attempt });
     } catch (e) {
       setState({
@@ -75,13 +77,20 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
     if (state.kind !== 'attempt') return;
     setPending(true);
     try {
-      const submitted = await assessmentsApi.submitAttempt(
-        state.attempt.id,
-        Object.entries(answers).map(([questionId, selectedOptionIds]) => ({
-          questionId,
-          selectedOptionIds,
-        })),
-      );
+      const payload = state.quiz.questions.map((q) => {
+        if (q.type === 'FILL_IN_BLANK') {
+          return {
+            questionId: q.id,
+            selectedOptionIds: [],
+            textAnswer: textAnswers[q.id] ?? '',
+          };
+        }
+        return {
+          questionId: q.id,
+          selectedOptionIds: answers[q.id] ?? [],
+        };
+      });
+      const submitted = await assessmentsApi.submitAttempt(state.attempt.id, payload);
       setState({ kind: 'result', quiz: state.quiz, attempt: submitted });
       if (submitted.passed) onPassed?.();
     } catch (e) {
@@ -185,28 +194,43 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
                 {idx + 1}. {q.prompt}
                 <span className="ml-2 text-xs text-neutral-500">
                   ({q.points} pt{q.points === 1 ? '' : 's'} ·{' '}
-                  {q.type === 'MULTIPLE_CHOICE' ? 'múltiples respuestas' : 'una respuesta'})
+                  {q.type === 'MULTIPLE_CHOICE'
+                    ? 'múltiples respuestas'
+                    : q.type === 'FILL_IN_BLANK'
+                      ? 'rellena el hueco'
+                      : 'una respuesta'}
+                  )
                 </span>
               </legend>
-              <div className="space-y-1">
-                {q.options.map((o) => {
-                  const checked = (answers[q.id] ?? []).includes(o.id);
-                  return (
-                    <label
-                      key={o.id}
-                      className="flex cursor-pointer items-center gap-2 rounded-md p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                    >
-                      <input
-                        type={q.type === 'MULTIPLE_CHOICE' ? 'checkbox' : 'radio'}
-                        name={`q-${q.id}`}
-                        checked={checked}
-                        onChange={(e) => setSelected(q, o.id, e.target.checked)}
-                      />
-                      <span className="text-sm">{o.label}</span>
-                    </label>
-                  );
-                })}
-              </div>
+              {q.type === 'FILL_IN_BLANK' ? (
+                <input
+                  type="text"
+                  value={textAnswers[q.id] ?? ''}
+                  onChange={(e) => setTextAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                  placeholder="Escribe tu respuesta…"
+                  className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                />
+              ) : (
+                <div className="space-y-1">
+                  {q.options.map((o) => {
+                    const checked = (answers[q.id] ?? []).includes(o.id);
+                    return (
+                      <label
+                        key={o.id}
+                        className="flex cursor-pointer items-center gap-2 rounded-md p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                      >
+                        <input
+                          type={q.type === 'MULTIPLE_CHOICE' ? 'checkbox' : 'radio'}
+                          name={`q-${q.id}`}
+                          checked={checked}
+                          onChange={(e) => setSelected(q, o.id, e.target.checked)}
+                        />
+                        <span className="text-sm">{o.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </fieldset>
           ))}
           <Button onClick={handleSubmit} disabled={pending}>
