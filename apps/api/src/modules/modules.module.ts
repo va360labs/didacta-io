@@ -9,6 +9,7 @@ import { AuditController } from './audit.controller';
 import { CertificatesController } from './certificates.controller';
 import { CoursesController } from './courses.controller';
 import { CoursesErrorFilter } from './courses-error.filter';
+import { FormadorStatsController } from './formador-stats.controller';
 import { LearningController } from './learning.controller';
 import { LearningErrorFilter } from './learning-error.filter';
 import { ModuleContextFactory } from './module-context.factory';
@@ -27,6 +28,7 @@ import { OutboxRecoveryWorker } from './outbox-recovery.worker';
     AssessmentsController,
     AssessmentsAttemptsController,
     NotificationsController,
+    FormadorStatsController,
   ],
   providers: [
     ModuleContextFactory,

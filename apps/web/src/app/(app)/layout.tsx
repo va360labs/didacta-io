@@ -10,6 +10,7 @@ import { authStorage, type StoredSession } from '@/lib/auth-storage';
 const NAV = [
   { href: '/cursos', label: 'Catálogo' },
   { href: '/mis-certificados', label: 'Mis certificados' },
+  { href: '/formador', label: 'Panel formador', requiresAdmin: true, exactMatch: true },
   { href: '/formador/cursos', label: 'Mis cursos', requiresAdmin: true },
 ];
 
@@ -46,19 +47,24 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             LearnShip
           </Link>
           <nav className="flex gap-2">
-            {NAV.filter((item) => !item.requiresAdmin || isAdminOrFormador).map((item) => (
-              <Link
-                key={item.href}
-                href={item.href as never}
-                className={
-                  pathname?.startsWith(item.href)
-                    ? 'rounded-md bg-neutral-100 px-3 py-1.5 text-sm font-medium dark:bg-neutral-800'
-                    : 'rounded-md px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800'
-                }
-              >
-                {item.label}
-              </Link>
-            ))}
+            {NAV.filter((item) => !item.requiresAdmin || isAdminOrFormador).map((item) => {
+              const isActive = item.exactMatch
+                ? pathname === item.href
+                : (pathname?.startsWith(item.href) ?? false);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href as never}
+                  className={
+                    isActive
+                      ? 'rounded-md bg-neutral-100 px-3 py-1.5 text-sm font-medium dark:bg-neutral-800'
+                      : 'rounded-md px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800'
+                  }
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
             <NotificationsBell />
