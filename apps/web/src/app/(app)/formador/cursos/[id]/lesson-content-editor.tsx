@@ -1,11 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
+import { assessmentsApi } from '@/lib/assessments';
 import { coursesApi, type CourseLesson, type LessonType } from '@/lib/courses';
 
 const HELP_BY_TYPE: Record<LessonType, string> = {
@@ -13,7 +15,7 @@ const HELP_BY_TYPE: Record<LessonType, string> = {
   HTML: 'HTML inline que se renderiza en el player. Useful para slides o microcopy.',
   PDF: 'URL del PDF. Se muestra en iframe a 70dvh.',
   TEXT: 'Texto plano largo. Se preservan saltos de línea.',
-  QUIZ: 'Reservado para mod.assessments. Por ahora pegá el quizId si ya existe.',
+  QUIZ: 'Crea un nuevo quiz o vincula uno existente por ID. El editor del quiz vive en /formador/quizzes/<id>.',
 };
 
 export function LessonContentEditor({
@@ -156,15 +158,7 @@ export function LessonContentEditor({
       )}
 
       {lesson.type === 'QUIZ' && (
-        <div className="space-y-1">
-          <Label htmlFor={`quizId-${lesson.id}`}>Quiz ID</Label>
-          <Input
-            id={`quizId-${lesson.id}`}
-            value={quizId}
-            onChange={(e) => setQuizId(e.target.value)}
-            placeholder="UUID de mod.assessments (cuando exista)"
-          />
-        </div>
+        <QuizLink lessonId={lesson.id} lessonTitle={title} quizId={quizId} setQuizId={setQuizId} />
       )}
 
       <p className="text-xs text-neutral-500">{HELP_BY_TYPE[lesson.type]}</p>
@@ -183,6 +177,77 @@ export function LessonContentEditor({
           Cancelar
         </Button>
       </div>
+    </div>
+  );
+}
+
+function QuizLink({
+  lessonId,
+  lessonTitle,
+  quizId,
+  setQuizId,
+}: {
+  lessonId: string;
+  lessonTitle: string;
+  quizId: string;
+  setQuizId: (v: string) => void;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  async function handleCreate() {
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const quiz = await assessmentsApi.createQuiz({
+        lessonId,
+        title: lessonTitle || 'Quiz nuevo',
+      });
+      setQuizId(quiz.id);
+    } catch (e) {
+      setCreateError(e instanceof ApiHttpError ? e.message : 'Error al crear');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={`quizId-${lessonId}`}>Quiz vinculado</Label>
+      <div className="flex gap-2">
+        <Input
+          id={`quizId-${lessonId}`}
+          value={quizId}
+          onChange={(e) => setQuizId(e.target.value)}
+          placeholder="UUID del quiz (mod.assessments)"
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={handleCreate}
+          disabled={creating || quizId.length > 0}
+        >
+          {creating ? 'Creando…' : 'Crear nuevo'}
+        </Button>
+      </div>
+      {quizId ? (
+        <Link
+          href={`/formador/quizzes/${quizId}`}
+          className="inline-block text-xs underline decoration-dotted hover:decoration-solid"
+        >
+          → Editar este quiz
+        </Link>
+      ) : (
+        <p className="text-xs text-neutral-500">
+          Crea uno nuevo o pega el UUID de un quiz existente.
+        </p>
+      )}
+      {createError ? (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {createError}
+        </p>
+      ) : null}
     </div>
   );
 }
