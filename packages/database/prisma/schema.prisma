@@ -101,6 +101,7 @@ model User {
   passwordHash  String?   @map("password_hash")
   mfaSecret     String?   @map("mfa_secret")
   mfaEnabled    Boolean   @default(false) @map("mfa_enabled")
+  mfaRecoveryCodes String[] @default([]) @map("mfa_recovery_codes")
   status        UserStatus @default(ACTIVE)
   locale        String    @default("es-ES")
   createdAt     DateTime  @default(now()) @map("created_at")
