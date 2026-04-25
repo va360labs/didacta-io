@@ -36,6 +36,14 @@ function makeFakePrisma() {
         rows.push(row);
         return row;
       },
+      async findMany(args: {
+        where: { tenantId: string };
+        orderBy: { id: 'asc' };
+      }): Promise<AuditRow[]> {
+        return rows
+          .filter((r) => r.tenantId === args.where.tenantId)
+          .sort((a, b) => Number(a.id - b.id));
+      },
     },
     _rows: rows,
   };
@@ -129,5 +137,153 @@ describe('PrismaAuditLogService', () => {
     });
 
     expect(prisma._rows[0].hash).not.toEqual(prisma._rows[1].hash);
+  });
+
+  describe('verifyChain', () => {
+    it('valida una cadena intacta', async () => {
+      const prisma = makeFakePrisma();
+      const svc = new PrismaAuditLogService(prisma as never);
+
+      await svc.record({
+        tenantId: 't1',
+        actorId: 'u1',
+        action: 'a',
+        resourceType: 'r',
+        resourceId: 'r1',
+      });
+      await svc.record({
+        tenantId: 't1',
+        actorId: 'u1',
+        action: 'b',
+        resourceType: 'r',
+        resourceId: 'r2',
+      });
+      await svc.record({
+        tenantId: 't1',
+        actorId: 'u1',
+        action: 'c',
+        resourceType: 'r',
+        resourceId: 'r3',
+      });
+
+      const result = await svc.verifyChain('t1');
+      expect(result.valid).toBe(true);
+      expect(result.totalEntries).toBe(3);
+      expect(result.firstBrokenId).toBeNull();
+      expect(result.brokenAt).toBeNull();
+    });
+
+    it('aísla cadenas por tenant: la verificación de t1 ignora filas de t2', async () => {
+      const prisma = makeFakePrisma();
+      const svc = new PrismaAuditLogService(prisma as never);
+
+      await svc.record({
+        tenantId: 't1',
+        actorId: 'u1',
+        action: 'a',
+        resourceType: 'r',
+        resourceId: 'r1',
+      });
+      await svc.record({
+        tenantId: 't2',
+        actorId: 'u2',
+        action: 'b',
+        resourceType: 'r',
+        resourceId: 'r2',
+      });
+      await svc.record({
+        tenantId: 't1',
+        actorId: 'u1',
+        action: 'c',
+        resourceType: 'r',
+        resourceId: 'r3',
+      });
+
+      const t1 = await svc.verifyChain('t1');
+      const t2 = await svc.verifyChain('t2');
+      expect(t1.valid).toBe(true);
+      expect(t1.totalEntries).toBe(2);
+      expect(t2.valid).toBe(true);
+      expect(t2.totalEntries).toBe(1);
+    });
+
+    it('detecta tampering: si se modifica el metadata de una fila vieja, la cadena se rompe', async () => {
+      const prisma = makeFakePrisma();
+      const svc = new PrismaAuditLogService(prisma as never);
+
+      await svc.record({
+        tenantId: 't1',
+        actorId: 'u1',
+        action: 'a',
+        resourceType: 'r',
+        resourceId: 'r1',
+      });
+      await svc.record({
+        tenantId: 't1',
+        actorId: 'u1',
+        action: 'b',
+        resourceType: 'r',
+        resourceId: 'r2',
+      });
+      await svc.record({
+        tenantId: 't1',
+        actorId: 'u1',
+        action: 'c',
+        resourceType: 'r',
+        resourceId: 'r3',
+      });
+
+      // Tampering: alguien modifica metadata de la 2ª fila sin recalcular el hash
+      prisma._rows[1].metadata = { mutado: true };
+
+      const result = await svc.verifyChain('t1');
+      expect(result.valid).toBe(false);
+      expect(result.firstBrokenId).toBe('2');
+      expect(result.totalEntries).toBe(3);
+    });
+
+    it('detecta ruptura del prev_hash: si se reescribe el hash de una fila intermedia, la siguiente falla', async () => {
+      const prisma = makeFakePrisma();
+      const svc = new PrismaAuditLogService(prisma as never);
+
+      await svc.record({
+        tenantId: 't1',
+        actorId: 'u1',
+        action: 'a',
+        resourceType: 'r',
+        resourceId: 'r1',
+      });
+      await svc.record({
+        tenantId: 't1',
+        actorId: 'u1',
+        action: 'b',
+        resourceType: 'r',
+        resourceId: 'r2',
+      });
+      await svc.record({
+        tenantId: 't1',
+        actorId: 'u1',
+        action: 'c',
+        resourceType: 'r',
+        resourceId: 'r3',
+      });
+
+      // Tampering: reescriben el hash de la 2ª fila — la propia fila ya no valida
+      prisma._rows[1].hash = 'f'.repeat(64);
+
+      const result = await svc.verifyChain('t1');
+      expect(result.valid).toBe(false);
+      expect(result.firstBrokenId).toBe('2');
+    });
+
+    it('cadena vacía es válida', async () => {
+      const prisma = makeFakePrisma();
+      const svc = new PrismaAuditLogService(prisma as never);
+
+      const result = await svc.verifyChain('t1');
+      expect(result.valid).toBe(true);
+      expect(result.totalEntries).toBe(0);
+      expect(result.firstBrokenId).toBeNull();
+    });
   });
 });

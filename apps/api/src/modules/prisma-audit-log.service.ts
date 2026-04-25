@@ -67,4 +67,63 @@ export class PrismaAuditLogService implements AuditLogService {
       },
     });
   }
+
+  /**
+   * Recorre toda la cadena del tenant en orden cronológico (id asc) y verifica
+   * que cada `hash` coincide con SHA-256 sobre los datos visibles + `prev_hash`.
+   *
+   * Si alguien editó una fila vieja, el hash deja de coincidir y todas las
+   * posteriores también fallan (porque su prev_hash apuntaba al hash original).
+   */
+  async verifyChain(tenantId: string): Promise<{
+    valid: boolean;
+    totalEntries: number;
+    firstBrokenId: string | null;
+    brokenAt: Date | null;
+  }> {
+    const rows = await this.prisma.auditLog.findMany({
+      where: { tenantId },
+      orderBy: { id: 'asc' },
+    });
+
+    let prevHash: string | null = null;
+    for (const row of rows) {
+      if (row.prevHash !== prevHash) {
+        return {
+          valid: false,
+          totalEntries: rows.length,
+          firstBrokenId: row.id.toString(),
+          brokenAt: row.timestamp,
+        };
+      }
+
+      const expected: string = createHash('sha256')
+        .update(
+          JSON.stringify({
+            prevHash: row.prevHash,
+            tenantId: row.tenantId,
+            actorId: row.actorId,
+            action: row.action,
+            resourceType: row.resourceType,
+            resourceId: row.resourceId,
+            metadata: row.metadata ?? {},
+            timestamp: row.timestamp.toISOString(),
+          }),
+        )
+        .digest('hex');
+
+      if (expected !== row.hash) {
+        return {
+          valid: false,
+          totalEntries: rows.length,
+          firstBrokenId: row.id.toString(),
+          brokenAt: row.timestamp,
+        };
+      }
+
+      prevHash = row.hash;
+    }
+
+    return { valid: true, totalEntries: rows.length, firstBrokenId: null, brokenAt: null };
+  }
 }

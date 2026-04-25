@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { AuthModule } from '../auth/auth.module';
+import { AuditController } from './audit.controller';
 import { CertificatesController } from './certificates.controller';
 import { CoursesController } from './courses.controller';
 import { CoursesErrorFilter } from './courses-error.filter';
@@ -12,7 +13,7 @@ import { OutboxRecoveryWorker } from './outbox-recovery.worker';
 
 @Module({
   imports: [AuthModule],
-  controllers: [CoursesController, LearningController, CertificatesController],
+  controllers: [CoursesController, LearningController, CertificatesController, AuditController],
   providers: [
     ModuleContextFactory,
     ModuleRegistryService,
