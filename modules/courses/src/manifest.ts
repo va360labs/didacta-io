@@ -22,8 +22,10 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'courses.course.published',
     'courses.course.archived',
     'courses.module.created',
+    'courses.module.deleted',
     'courses.lesson.created',
     'courses.lesson.updated',
+    'courses.lesson.moved',
   ],
   eventsConsumed: [],
   hooksExposed: [

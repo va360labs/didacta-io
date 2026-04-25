@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -164,6 +165,41 @@ export class CoursesController {
     if (!user) throw new UnauthorizedException();
     try {
       return await this.registry.getCoursesService().archiveCourse(user.tenantId, user.sub, id);
+    } catch (error) {
+      throw this.translate(error);
+    }
+  }
+
+  @Post('lessons/:lessonId/move')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Mover lección 1 puesto arriba o abajo dentro de su módulo' })
+  async moveLesson(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('lessonId') lessonId: string,
+    @Body(new ZodValidationPipe(z.object({ direction: z.enum(['up', 'down']) })))
+    body: { direction: 'up' | 'down' },
+  ) {
+    if (!user) throw new UnauthorizedException();
+    try {
+      return await this.registry
+        .getCoursesService()
+        .moveLesson(user.tenantId, user.sub, lessonId, body.direction);
+    } catch (error) {
+      throw this.translate(error);
+    }
+  }
+
+  @Delete('modules/:moduleId')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Eliminar módulo (soft delete con cascade lógico de sus lecciones)' })
+  async deleteModule(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('moduleId') moduleId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    try {
+      await this.registry.getCoursesService().deleteModule(user.tenantId, user.sub, moduleId);
+      return { deleted: true };
     } catch (error) {
       throw this.translate(error);
     }

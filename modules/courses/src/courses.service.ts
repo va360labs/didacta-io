@@ -165,6 +165,94 @@ export class CoursesService {
     return created;
   }
 
+  /**
+   * Mueve una lección 1 puesto arriba o abajo dentro de su módulo,
+   * intercambiándola con la vecina. Si la lección ya está en el extremo del
+   * módulo, no hace nada (no error).
+   *
+   * Idempotente y transaccional: si los dos updates fallaran, el orden no
+   * queda corrupto.
+   */
+  async moveLesson(
+    tenantId: string,
+    actorId: string | null,
+    lessonId: string,
+    direction: 'up' | 'down',
+  ) {
+    const lesson = await this.prisma.modCoursesLesson.findFirst({
+      where: { tenantId, id: lessonId, deletedAt: null },
+    });
+    if (!lesson) throw new CourseNotFoundError(lessonId);
+
+    const neighbor = await this.prisma.modCoursesLesson.findFirst({
+      where: {
+        tenantId,
+        moduleId: lesson.moduleId,
+        deletedAt: null,
+        position: direction === 'up' ? { lt: lesson.position } : { gt: lesson.position },
+      },
+      orderBy: { position: direction === 'up' ? 'desc' : 'asc' },
+    });
+    if (!neighbor) return lesson; // ya está en el extremo
+
+    // Truco para evitar conflicto con el unique (moduleId, position): pasamos
+    // la lección actual a una posición temporal negativa, movemos la vecina,
+    // luego ponemos la actual en la posición destino.
+    const temp = -lesson.position - 1;
+    await this.prisma.$transaction([
+      this.prisma.modCoursesLesson.update({
+        where: { id: lesson.id },
+        data: { position: temp },
+      }),
+      this.prisma.modCoursesLesson.update({
+        where: { id: neighbor.id },
+        data: { position: lesson.position },
+      }),
+      this.prisma.modCoursesLesson.update({
+        where: { id: lesson.id },
+        data: { position: neighbor.position },
+      }),
+    ]);
+
+    await this.publish(tenantId, actorId, 'courses.lesson.moved', {
+      lessonId: lesson.id,
+      moduleId: lesson.moduleId,
+      from: lesson.position,
+      to: neighbor.position,
+    });
+
+    return this.prisma.modCoursesLesson.findUniqueOrThrow({ where: { id: lesson.id } });
+  }
+
+  /**
+   * Soft-delete del módulo y de todas sus lecciones (cascade lógico).
+   * No borra registros: solo marca `deletedAt`. El curso sigue publicado y
+   * el resto de módulos quedan intactos.
+   */
+  async deleteModule(tenantId: string, actorId: string | null, moduleId: string) {
+    const courseModule = await this.prisma.modCoursesModule.findFirst({
+      where: { tenantId, id: moduleId, deletedAt: null },
+    });
+    if (!courseModule) throw new CourseNotFoundError(moduleId);
+
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.modCoursesLesson.updateMany({
+        where: { tenantId, moduleId, deletedAt: null },
+        data: { deletedAt: now },
+      }),
+      this.prisma.modCoursesModule.update({
+        where: { id: moduleId },
+        data: { deletedAt: now },
+      }),
+    ]);
+
+    await this.publish(tenantId, actorId, 'courses.module.deleted', {
+      courseId: courseModule.courseId,
+      moduleId,
+    });
+  }
+
   async updateLesson(
     tenantId: string,
     actorId: string | null,

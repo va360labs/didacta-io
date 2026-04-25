@@ -175,6 +175,30 @@ function ModuleBlock({
     }
   }
 
+  async function handleMoveLesson(lessonId: string, direction: 'up' | 'down') {
+    setPending(true);
+    try {
+      await coursesApi.moveLesson(lessonId, direction);
+      await onChange();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function handleDeleteModule() {
+    const confirmed = window.confirm(
+      `¿Eliminar el módulo "${courseModule.title}" y sus ${courseModule.lessons.length} lecciones? Esto es soft-delete: los datos se conservan pero dejarán de mostrarse.`,
+    );
+    if (!confirmed) return;
+    setPending(true);
+    try {
+      await coursesApi.deleteModule(courseModule.id);
+      await onChange();
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <div className="rounded-md border border-neutral-200 p-4 dark:border-neutral-800">
       <header className="mb-3 flex items-center justify-between">
@@ -184,11 +208,21 @@ function ModuleBlock({
             <p className="text-xs text-neutral-500">{courseModule.description}</p>
           ) : null}
         </div>
-        <span className="text-xs text-neutral-500">{courseModule.lessons.length} lecciones</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-neutral-500">{courseModule.lessons.length} lecciones</span>
+          <button
+            type="button"
+            onClick={handleDeleteModule}
+            disabled={pending}
+            className="text-xs text-red-600 underline decoration-dotted hover:decoration-solid"
+          >
+            Eliminar módulo
+          </button>
+        </div>
       </header>
 
       <ul className="mb-3 space-y-2 text-sm">
-        {courseModule.lessons.map((l) => (
+        {courseModule.lessons.map((l, idx) => (
           <li key={l.id} className="space-y-2">
             <div className="flex items-center justify-between">
               <span>
@@ -201,6 +235,26 @@ function ModuleBlock({
                 {l.durationMinutes ? (
                   <span className="text-xs text-neutral-500">{l.durationMinutes} min</span>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={() => handleMoveLesson(l.id, 'up')}
+                  disabled={pending || idx === 0}
+                  className="text-xs disabled:opacity-30"
+                  aria-label="Mover arriba"
+                  title="Mover arriba"
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMoveLesson(l.id, 'down')}
+                  disabled={pending || idx === courseModule.lessons.length - 1}
+                  className="text-xs disabled:opacity-30"
+                  aria-label="Mover abajo"
+                  title="Mover abajo"
+                >
+                  ▼
+                </button>
                 <button
                   type="button"
                   onClick={() => setEditingLessonId(editingLessonId === l.id ? null : l.id)}

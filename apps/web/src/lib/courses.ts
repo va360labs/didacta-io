@@ -133,4 +133,20 @@ export const coursesApi = {
       withAuth(),
     );
   },
+
+  async moveLesson(lessonId: string, direction: 'up' | 'down'): Promise<CourseLesson> {
+    return apiFetch<CourseLesson>(
+      `/api/v1/modules/courses/lessons/${lessonId}/move`,
+      { method: 'POST', body: JSON.stringify({ direction }) },
+      withAuth(),
+    );
+  },
+
+  async deleteModule(moduleId: string): Promise<void> {
+    await apiFetch<{ deleted: true }>(
+      `/api/v1/modules/courses/modules/${moduleId}`,
+      { method: 'DELETE' },
+      withAuth(),
+    );
+  },
 };
