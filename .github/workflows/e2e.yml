@@ -1,0 +1,120 @@
+name: E2E
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/e2e/**'
+      - 'apps/web/**'
+      - 'apps/api/**'
+      - 'modules/**'
+      - 'packages/**'
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright golden path
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: learnship
+          POSTGRES_PASSWORD: learnship
+          POSTGRES_DB: learnship
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://learnship:learnship@localhost:5432/learnship?schema=public
+      JWT_SECRET: e2e-test-secret-must-be-at-least-32-chars-long-aaaa
+      JWT_REFRESH_SECRET: e2e-refresh-secret-must-be-32-chars-long-bbbb
+      NODE_ENV: production
+      PORT: 4000
+      WEB_PORT: 3000
+      API_INTERNAL_URL: http://localhost:4000
+      BOOTSTRAP_PASSWORD: E2eAdminPassword123!
+      BOOTSTRAP_EMAIL: e2e-admin@example.test
+      BOOTSTRAP_TENANT_SLUG: va360
+      E2E_BASE_URL: http://localhost:3000
+      E2E_API_URL: http://localhost:3000
+      E2E_TENANT_SLUG: va360
+      E2E_ADMIN_EMAIL: e2e-admin@example.test
+      E2E_ADMIN_PASSWORD: E2eAdminPassword123!
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.21.0
+          run_install: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @learnship/database db:generate
+
+      - name: Apply schema
+        run: pnpm --filter @learnship/database exec prisma db push --skip-generate
+
+      - name: Seed admin user
+        run: pnpm --filter @learnship/database db:seed
+
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Start API
+        run: pnpm --filter @learnship/api start &
+        env:
+          PORT: 4000
+
+      - name: Start Web
+        run: pnpm --filter @learnship/web start &
+        env:
+          PORT: 3000
+
+      - name: Wait for services
+        run: |
+          for i in {1..40}; do
+            if curl -sf http://localhost:3000/api/v1/health > /dev/null; then
+              echo "API up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Services no respondieron"
+          exit 1
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @learnship/e2e exec playwright install --with-deps chromium
+
+      - name: Run E2E
+        run: pnpm --filter @learnship/e2e test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/e2e/playwright-report/
+          retention-days: 14
