@@ -1,6 +1,6 @@
 # Estado del proyecto — punto de retomada
 
-> **Última actualización**: 2026-04-25 (post NotificationHub + UI polish)
+> **Última actualización**: 2026-04-25 (final de sesión: 23 PRs)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo de este doc**: que cualquier sesión nueva (otro equipo, otra IA) pueda retomar exactamente donde quedó la anterior.
 
@@ -8,16 +8,16 @@
 
 ## TL;DR
 
-- **`mod.assessments` v0.3 + NotificationHub IN_APP + UI polish**. Sesión cerró 19 PRs (#44–#62) consecutivos.
+- **23 PRs consecutivos cerrados esta sesión** (#44–#66).
+- **`mod.assessments` cerrado en v0.3**: 6 tipos de pregunta (4 auto-corregidos + 2 con corrección manual), bridge a `mod.learning`, UI completa formador y alumno.
+- **NotificationHub real**: persistencia + bandeja IN_APP en `/notificaciones` con bell badge en el header. EMAIL stub listo para SMTP.
+- **Dashboard del formador**: `/formador` con stats agregadas (cursos, matriculaciones, % progreso, correcciones pendientes).
+- **Editor de cursos pulido**: reordenar lecciones (▲ ▼), eliminar módulo con cascade lógico.
+- **Migraciones versionadas** (`prisma migrate deploy`) + **audit log con IP+UA**.
 - Aplicación funcional end-to-end en Easypanel: `https://lab-learnship.3qntut.easypanel.host`.
-- El alumno puede registrarse, matricularse (link directo, código de invitación), **realizar quizzes** (4 tipos auto-corregidos + 2 abiertos que el formador califica vía UI), completar un curso, descargar su certificado PDF, y **ver sus notificaciones in-app** con bell badge en el header.
-- El formador puede gestionar cursos con reordenar lecciones y eliminar módulos, crear/publicar quizzes, y corregir manualmente respuestas abiertas en `/formador/correcciones/[id]`.
-- Servicios core (EventBus persistente, AuditLog encadenado, EvidenceVault, Storage, NotificationHub) son reales — sin stubs. SMTP adapter queda como log-stub que se reemplaza al llegar la infra sin tocar contrato.
-- **Migraciones versionadas** con `prisma migrate deploy` — primer paso post-deploy en Easypanel: `prisma migrate resolve --applied 0_init`.
-- **Audit log enriquecido** con IP y user-agent reales (signup/signin/MFA).
-- 78 tests unitarios en `apps/api` + 58 tests en módulos = **136 tests verdes** en CI principal. **5 specs E2E** Playwright (golden + quiz + invite + grading manual + MFA setup).
+- 91 tests unitarios en `apps/api` + 65 tests en módulos = **156 tests verdes** en CI principal. **5 specs E2E** Playwright (golden + quiz + invite + grading manual + MFA setup).
 - Módulos cargados al boot: `mod.hello-world`, `mod.courses`, `mod.learning`, `mod.certificates`, `mod.assessments`.
-- **Items pendientes del roadmap todos bloqueados por infra externa** (Redis, S3, SMTP). Nada queda accionable sin esa infra.
+- **Items pendientes del roadmap todos bloqueados por infra externa** (Redis, S3, SMTP). Próximo paso natural: **iniciar Fase 1.B** (`mod.zoom-live`, `mod.community`, `mod.fundae`) o desbloquear infra.
 
 ---
 
@@ -61,7 +61,7 @@ Para el deploy en Easypanel: ver `docs/test.env.md`.
 
 ## Trabajo en curso
 
-Ninguno. Todo lo iniciado en esta sesión quedó cerrado y mergeado a main (PRs #44–62, 19 PRs). Lo siguiente es desbloquear infra externa o iniciar Fase 1.B.
+Ninguno. Todo lo iniciado en esta sesión quedó cerrado y mergeado a main (PRs #44–66, 23 PRs).
 
 ---
 
@@ -75,12 +75,19 @@ Ninguno. Todo lo iniciado en esta sesión quedó cerrado y mergeado a main (PRs 
 
 > Ningún item del roadmap conocido es accionable sin estos 3 desbloqueos.
 
-## Posibles siguientes pasos sin bloqueo
+## Próximo paso recomendado: Fase 1.B
 
-- **Iniciar Fase 1.B** — Zoom directo (mod.zoom-live), comunidad básica (mod.community), Fundae básico (mod.fundae).
-- **Per-tenant notification templates** — UX para tenant_admin que customiza copy de los emails/in-app.
-- **More test coverage** — el bridge a NotificationHub no tiene tests; el grading detalle tampoco.
-- **Webhook adapter en NotificationHub** — sin caso de uso concreto, defer.
+Items grandes que cabe arrancar en la siguiente sesión:
+
+- **`mod.zoom-live`** — aula virtual con Zoom API + SDK Web. Bloqueado por **credenciales Zoom**.
+- **`mod.community`** — foros, comentarios, preguntas. **Sin bloqueo de infra**, pero requiere planning de alcance (¿qué nivel de moderación? ¿reacciones? ¿menciones?).
+- **`mod.fundae`** — cumplimiento sectorial Fundae (RD 694/2017). Requiere conocimiento de dominio profundo (cómo funciona Fundae) — **planning con stakeholder antes de empezar**.
+
+## Otros polish posibles sin bloqueo
+
+- **Per-tenant notification templates** — UX para tenant_admin que customiza el copy de cada plantilla.
+- **Drag & drop visual de lecciones** en el editor (las flechas ▲▼ funcionan, pero un DnD sería más natural).
+- **Webhook adapter en NotificationHub** — defer hasta caso de uso concreto.
 
 Detalle completo en `docs/PLAN-FASES.md`.
 
@@ -223,6 +230,9 @@ packages/
 | #60 | feat(courses): polish del editor del formador (reordenar lecciones + eliminar módulo) | merged |
 | #61 | feat(core): NotificationHub real con persistencia + bandeja in-app del alumno | merged |
 | #62 | feat(web): bell de notificaciones con badge de no leídas en el header | merged |
+| #64 | test: cobertura unitaria de NotificationHub (service + bridge) | merged |
+| #65 | test(assessments): cobertura de gradeAttempt (corrección manual) | merged |
+| #66 | feat(formador): dashboard con stats agregadas del tenant | merged |
 
 ---
 
