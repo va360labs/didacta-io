@@ -74,8 +74,8 @@ jobs:
       - name: Generate Prisma client
         run: pnpm --filter @learnship/database db:generate
 
-      - name: Apply schema
-        run: pnpm --filter @learnship/database exec prisma db push --skip-generate
+      - name: Apply migrations
+        run: pnpm --filter @learnship/database db:migrate:deploy
 
       - name: Seed admin user
         run: pnpm --filter @learnship/database db:seed

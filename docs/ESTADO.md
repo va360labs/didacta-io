@@ -14,7 +14,7 @@
 - Todos los servicios core (EventBus, AuditLog, EvidenceVault, Storage) son **reales** — ya no quedan stubs en `module-context.factory`.
 - 68 tests unitarios en `apps/api` + 48 tests en módulos = **116 tests verdes** en CI principal. E2E con Playwright (1 spec) corre en workflow separado, no bloquea PRs.
 - Módulos cargados al boot: `mod.hello-world`, `mod.courses`, `mod.learning`, `mod.certificates`, `mod.assessments`.
-- Próximo item del roadmap: **versionar migraciones con `prisma migrate dev`** (item #2).
+- Próximo item del roadmap: **`auditLog.record()` con IP + user-agent reales** (item #1).
 
 ---
 
@@ -35,10 +35,10 @@ cp env.example .env
 # Editar .env: DATABASE_URL, JWT_SECRET, JWT_REFRESH_SECRET, BOOTSTRAP_*, etc.
 # Para deploy hay docs/test.env.md con todo lo que pide Easypanel.
 
-# 4. Instalar + generar Prisma + sembrar DB
+# 4. Instalar + generar Prisma + aplicar migraciones + sembrar DB
 pnpm install
 pnpm --filter @learnship/database db:generate
-pnpm --filter @learnship/database exec prisma db push --skip-generate
+pnpm --filter @learnship/database db:migrate:deploy   # aplica migrations versionadas
 BOOTSTRAP_PASSWORD='tu-password-12chars' pnpm --filter @learnship/database db:seed
 
 # 5. Levantar dev
@@ -66,13 +66,12 @@ Ninguno. **`mod.assessments` v0.1 cerrado** (PRs #44–49). Lo siguiente es eleg
 
 | # | Item | Por qué | Esfuerzo |
 |---|---|---|---|
-| 1 | **Versionar migraciones con `prisma migrate dev`** | Hoy se usa `prisma db push` (no genera migraciones). Con 5 modelos nuevos del módulo de assessments, ya conviene estabilizar y migrar a migrate-style antes de que el schema crezca más. | 1 sesión |
-| 2 | **Llamadas explícitas a `auditLog.record()` con IP + UA** | Hoy las metadata no llevan IP ni user-agent. Hay que pasar el `request` desde controllers. | < 1 sesión |
-| 3 | **mod.outbox real con BullMQ + Redis** | Ya hay outbox persistente, pero el dispatch sigue siendo in-process. Cuando Easypanel tenga Redis, se reemplaza el processor. | 1 sesión + infra |
-| 4 | **MinIO/S3 storage para producción** | Hoy se usa LocalDiskStorageService. Para prod hace falta storage compartido entre instancias. | 1 sesión |
-| 5 | **Más specs E2E** | Solo hay golden path. Faltan: invitación por código, MFA admin, **flujo completo de quiz alumno**, edición por formador. | 1-2 sesiones |
-| 6 | **Notificaciones reales (NotificationHub)** | Sigue siendo stub. El alumno no recibe email al matricularse, al obtener certificado ni al aprobar/no aprobar un quiz. | 1-2 sesiones + SMTP |
-| 7 | **mod.assessments tipos avanzados** | v0.1 solo cubre tipos objetivos. Faltan FILL_IN_BLANK, SHORT_ANSWER, LONG_ANSWER y la pipeline de corrección manual. | 2 sesiones |
+| 1 | **Llamadas explícitas a `auditLog.record()` con IP + UA** | Hoy las metadata no llevan IP ni user-agent. Hay que pasar el `request` desde controllers. | < 1 sesión |
+| 2 | **mod.outbox real con BullMQ + Redis** | Ya hay outbox persistente, pero el dispatch sigue siendo in-process. Cuando Easypanel tenga Redis, se reemplaza el processor. | 1 sesión + infra |
+| 3 | **MinIO/S3 storage para producción** | Hoy se usa LocalDiskStorageService. Para prod hace falta storage compartido entre instancias. | 1 sesión |
+| 4 | **Más specs E2E** | Solo hay golden path. Faltan: invitación por código, MFA admin, **flujo completo de quiz alumno**, edición por formador. | 1-2 sesiones |
+| 5 | **Notificaciones reales (NotificationHub)** | Sigue siendo stub. El alumno no recibe email al matricularse, al obtener certificado ni al aprobar/no aprobar un quiz. | 1-2 sesiones + SMTP |
+| 6 | **mod.assessments tipos avanzados** | v0.1 solo cubre tipos objetivos. Faltan FILL_IN_BLANK, SHORT_ANSWER, LONG_ANSWER y la pipeline de corrección manual. | 2 sesiones |
 
 Detalle completo en `docs/PLAN-FASES.md`.
 
@@ -150,7 +149,7 @@ packages/
 - **NestJS 10** (no migrar a 11 hasta que `nestjs-pino` lo soporte sin pelea)
 - **CommonJS en TODO el monorepo** (NestJS necesita CJS por decoradores; cualquier `"type": "module"` en un workspace package rompe el build de api)
 - **Fastify** sobre Express (más rápido, mejor con TS)
-- **prisma db push** (no migrate dev) hasta que el schema estabilice
+- **`prisma migrate deploy/dev`** versionado en `packages/database/prisma/migrations/` (baseline `0_init` capturado tras cerrar `mod.assessments`). Para una nueva máquina: `pnpm --filter @learnship/database db:migrate:deploy`. Para cambios de schema: editar `schema.prisma` y `pnpm --filter @learnship/database db:migrate:dev --name <descripción>`.
 - **JWT con jose + HS256** (ADR pendiente para pasar a RS256 cuando haya rotación de keys)
 - **argon2id** para passwords (no bcrypt, por memory cost)
 
@@ -225,8 +224,11 @@ pnpm --filter @learnship/mod-certificates build
 # Re-generar Prisma tras cambios en schema.prisma
 pnpm --filter @learnship/database db:generate
 
-# Aplicar cambios de schema sin migration files
-pnpm --filter @learnship/database exec prisma db push --skip-generate --accept-data-loss
+# Crear nueva migración tras editar schema.prisma (la aplica al instante en local)
+pnpm --filter @learnship/database db:migrate:dev --name <descripción-corta>
+
+# Aplicar todas las migraciones pendientes (CI / nueva máquina / Easypanel)
+pnpm --filter @learnship/database db:migrate:deploy
 
 # Re-seed (idempotente)
 BOOTSTRAP_PASSWORD='...' pnpm --filter @learnship/database db:seed

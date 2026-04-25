@@ -11,16 +11,41 @@ Cliente Prisma compartido, schema v1 del core y políticas RLS.
 
 ## Flujo de migración
 
-```bash
-# 1. Aplicar migraciones Prisma
-pnpm --filter @learnship/database db:migrate:dev
+Las migraciones viven en `prisma/migrations/` versionadas en git. La baseline `0_init` captura todo el schema hasta el cierre de `mod.assessments` (PRs #44–49).
 
-# 2. Aplicar políticas RLS (después de cada migración)
+### Setup en una máquina nueva (o un Postgres recién creado)
+
+```bash
+# 1. Aplicar todas las migraciones pendientes
+pnpm --filter @learnship/database db:migrate:deploy
+
+# 2. Aplicar políticas RLS (idempotente)
 pnpm --filter @learnship/database db:rls:apply
 
-# 3. Generar cliente tipado
+# 3. Generar cliente Prisma tipado
 pnpm --filter @learnship/database db:generate
 ```
+
+### Cambios al schema
+
+```bash
+# 1. Editar prisma/schema.prisma
+# 2. Crear y aplicar la migración localmente
+pnpm --filter @learnship/database db:migrate:dev --name <descripción-corta>
+# 3. Reaplicar RLS si los nuevos modelos lo necesitan
+pnpm --filter @learnship/database db:rls:apply
+# 4. Commitear el contenido de prisma/migrations/<timestamp>_<descripción>/
+```
+
+### DBs existentes (Easypanel) que vienen del flujo `prisma db push`
+
+La primera vez tras este PR hay que marcar la baseline como ya aplicada (sin reejecutar el SQL), porque las tablas ya existen:
+
+```bash
+pnpm --filter @learnship/database exec prisma migrate resolve --applied 0_init
+```
+
+A partir de ese momento, los próximos `db:migrate:deploy` aplicarán solo las migraciones nuevas posteriores a `0_init`.
 
 ## Regla de oro
 
