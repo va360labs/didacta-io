@@ -338,6 +338,74 @@ enum NotificationChannel {
 /// El channel IN_APP siempre se persiste y es leído por el alumno desde
 /// /notificaciones. Los demás canales también persisten para auditoría:
 /// el campo `sentAt`/`failedAt` registra el resultado del adapter.
+// ============================================================================
+// mod.community — Posts, comentarios y reacciones
+// ============================================================================
+
+model ModCommunityPost {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  /// ID lógico del autor (sin FK cross-module a IAM).
+  authorId  String    @map("author_id") @db.Uuid
+  /// ID lógico del curso al que está vinculado el post (null = post global).
+  courseId  String?   @map("course_id") @db.Uuid
+  title     String
+  body      String
+  /// Tags libres (#general, #ayuda, #anuncios, etc.). Vacío = sin tags.
+  tags      String[]  @default([])
+  /// Snapshot del nombre del autor al crear el post (denormalizado para
+  /// listados rápidos sin necesidad de join cross-module a IAM).
+  authorDisplayName String? @map("author_display_name")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  comments  ModCommunityComment[]
+  reactions ModCommunityReaction[]
+
+  @@index([tenantId, courseId, createdAt])
+  @@index([tenantId, authorId])
+  @@map("mod_community_post")
+}
+
+model ModCommunityComment {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  postId    String    @map("post_id") @db.Uuid
+  authorId  String    @map("author_id") @db.Uuid
+  body      String
+  authorDisplayName String? @map("author_display_name")
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  post      ModCommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  reactions ModCommunityReaction[]
+
+  @@index([tenantId, postId, createdAt])
+  @@map("mod_community_comment")
+}
+
+model ModCommunityReaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  /// Solo uno de postId o commentId está poblado.
+  postId    String?  @map("post_id") @db.Uuid
+  commentId String?  @map("comment_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  /// Emoji corto: "👍", "❤️", "🎉", etc. Limitado a 8 caracteres.
+  emoji     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post    ModCommunityPost?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment ModCommunityComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([authorId, postId, emoji])
+  @@unique([authorId, commentId, emoji])
+  @@index([tenantId, postId])
+  @@index([tenantId, commentId])
+  @@map("mod_community_reaction")
+}
+
 model Notification {
   id              String              @id @default(uuid()) @db.Uuid
   tenantId        String              @map("tenant_id") @db.Uuid

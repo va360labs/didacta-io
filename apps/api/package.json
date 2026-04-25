@@ -21,6 +21,7 @@
     "@learnship/database": "workspace:*",
     "@learnship/mod-assessments": "workspace:*",
     "@learnship/mod-certificates": "workspace:*",
+    "@learnship/mod-community": "workspace:*",
     "@learnship/mod-courses": "workspace:*",
     "@learnship/mod-hello-world": "workspace:*",
     "@learnship/mod-learning": "workspace:*",
