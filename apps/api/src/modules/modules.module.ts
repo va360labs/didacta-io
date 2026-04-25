@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module';
 import { AssessmentsController } from './assessments.controller';
 import { AssessmentsAttemptsController } from './assessments-attempts.controller';
 import { AssessmentsErrorFilter } from './assessments-error.filter';
+import { AssessmentsLearningBridge } from './assessments-learning.bridge';
 import { AuditController } from './audit.controller';
 import { CertificatesController } from './certificates.controller';
 import { CoursesController } from './courses.controller';
@@ -28,6 +29,7 @@ import { OutboxRecoveryWorker } from './outbox-recovery.worker';
     ModuleContextFactory,
     ModuleRegistryService,
     OutboxRecoveryWorker,
+    AssessmentsLearningBridge,
     { provide: APP_FILTER, useClass: CoursesErrorFilter },
     { provide: APP_FILTER, useClass: LearningErrorFilter },
     { provide: APP_FILTER, useClass: AssessmentsErrorFilter },
