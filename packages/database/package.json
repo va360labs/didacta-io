@@ -26,14 +26,17 @@
     "db:migrate:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
     "db:rls:apply": "psql \"$DATABASE_URL\" -f prisma/rls.sql",
+    "db:seed": "node --import tsx/esm src/seed.ts",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0"
+    "@prisma/client": "^5.22.0",
+    "argon2": "^0.41.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "prisma": "^5.22.0",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
 }

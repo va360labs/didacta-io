@@ -66,6 +66,7 @@ case "${1:-start}" in
   api)           run_migrations; start_api ;;
   web)           start_web ;;
   migrate)       run_migrations; log "Solo migraciones, salgo."; exit 0 ;;
+  seed)          run_migrations; pnpm --filter @learnship/database db:seed; exit 0 ;;
   shell)         exec bash ;;
   *)             exec "$@" ;;
 esac
