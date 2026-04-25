@@ -26,6 +26,8 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'assessments.quiz.published',
     'assessments.attempt.started',
     'assessments.attempt.submitted',
+    'assessments.attempt.pending_review',
+    'assessments.attempt.graded',
     'assessments.attempt.passed',
     'assessments.attempt.failed',
   ],

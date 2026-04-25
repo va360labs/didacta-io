@@ -67,3 +67,21 @@ export class QuestionHasNoCorrectOptionError extends AssessmentsError {
     );
   }
 }
+
+export class AttemptNotPendingReviewError extends AssessmentsError {
+  constructor() {
+    super(
+      'ATTEMPT_NOT_PENDING_REVIEW',
+      'Solo se pueden corregir intentos en estado PENDING_REVIEW',
+    );
+  }
+}
+
+export class GradeExceedsQuestionPointsError extends AssessmentsError {
+  constructor(questionId: string, scoreEarned: number, max: number) {
+    super(
+      'GRADE_EXCEEDS_QUESTION_POINTS',
+      `La puntuación ${scoreEarned} para la pregunta ${questionId} excede el máximo (${max})`,
+    );
+  }
+}

@@ -1,8 +1,21 @@
 import { ApiHttpError, apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
 
-export type QuestionType = 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'FILL_IN_BLANK';
+export type QuestionType =
+  | 'SINGLE_CHOICE'
+  | 'MULTIPLE_CHOICE'
+  | 'TRUE_FALSE'
+  | 'FILL_IN_BLANK'
+  | 'SHORT_ANSWER'
+  | 'LONG_ANSWER';
 export type QuizStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+export type AttemptStatus =
+  | 'IN_PROGRESS'
+  | 'SUBMITTED'
+  | 'PENDING_REVIEW'
+  | 'GRADED'
+  | 'EXPIRED'
+  | 'ABANDONED';
 
 export interface QuizSummary {
   id: string;
@@ -76,7 +89,7 @@ export interface AttemptSummary {
   userId: string;
   enrollmentId: string | null;
   lessonId: string | null;
-  status: 'IN_PROGRESS' | 'SUBMITTED' | 'EXPIRED' | 'ABANDONED';
+  status: AttemptStatus;
   scoreEarned: number | null;
   scoreMax: number | null;
   scorePercent: number | null;
@@ -84,6 +97,8 @@ export interface AttemptSummary {
   startedAt: string;
   expiresAt: string | null;
   submittedAt: string | null;
+  gradedAt?: string | null;
+  gradedById?: string | null;
 }
 
 export interface AttemptDetail extends AttemptSummary {
@@ -229,6 +244,30 @@ export const assessmentsApi = {
     return apiFetch<AttemptSummary[]>(
       `/api/v1/modules/assessments/attempts?quizId=${encodeURIComponent(quizId)}`,
       { method: 'GET' },
+      withAuth(),
+    );
+  },
+
+  // -------------------- formador (corrección manual) --------------------
+
+  async listPendingReview(): Promise<
+    Array<
+      AttemptSummary & {
+        quiz: { id: string; title: string; lessonId: string | null };
+        answers: { id: string; questionId: string }[];
+      }
+    >
+  > {
+    return apiFetch('/api/v1/modules/assessments/attempts/pending', { method: 'GET' }, withAuth());
+  },
+
+  async gradeAttempt(
+    attemptId: string,
+    grades: { questionId: string; scoreEarned: number; feedback?: string }[],
+  ): Promise<AttemptSummary> {
+    return apiFetch<AttemptSummary>(
+      `/api/v1/modules/assessments/attempts/${attemptId}/grade`,
+      { method: 'POST', body: JSON.stringify({ grades }) },
       withAuth(),
     );
   },

@@ -15,9 +15,11 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   createQuestionSchema,
   createQuizSchema,
+  gradeAttemptSchema,
   updateQuizSchema,
   type CreateQuestionDto,
   type CreateQuizDto,
+  type GradeAttemptDto,
   type UpdateQuizDto,
 } from '@learnship/mod-assessments';
 import { CurrentUser } from '../auth/decorators';
@@ -107,5 +109,29 @@ export class AssessmentsController {
   async publishQuiz(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
     const u = requireFormador(user);
     return this.registry.getAssessmentsService().publishQuiz(u.tenantId, u.sub, id);
+  }
+
+  @Get('attempts/pending')
+  @ApiOperation({
+    summary: 'Listar attempts en estado PENDING_REVIEW del tenant (panel de corrección manual)',
+  })
+  async listPendingReview(@CurrentUser() user: SessionClaims | undefined) {
+    const u = requireFormador(user);
+    return this.registry.getAssessmentsService().listPendingReview(u.tenantId);
+  }
+
+  @Post('attempts/:id/grade')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Calificar manualmente un attempt PENDING_REVIEW. Recomputa totales y emite passed/failed + assessments.attempt.graded.',
+  })
+  async gradeAttempt(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(gradeAttemptSchema)) dto: GradeAttemptDto,
+  ) {
+    const u = requireFormador(user);
+    return this.registry.getAssessmentsService().gradeAttempt(u.tenantId, u.sub, id, dto);
   }
 }

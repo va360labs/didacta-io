@@ -60,8 +60,8 @@ describe('scoreAttempt', () => {
     expect(result.scorePercent).toBe(100);
     expect(result.passed).toBe(true);
     expect(result.perAnswer).toEqual([
-      { questionId: 'q1', isCorrect: true, scoreEarned: 1 },
-      { questionId: 'q2', isCorrect: true, scoreEarned: 1 },
+      { questionId: 'q1', isCorrect: true, scoreEarned: 1, needsReview: false },
+      { questionId: 'q2', isCorrect: true, scoreEarned: 1, needsReview: false },
     ]);
   });
 
@@ -77,7 +77,12 @@ describe('scoreAttempt', () => {
     const result = scoreAttempt(questions, answers, 60);
     expect(result.scorePercent).toBe(0);
     expect(result.passed).toBe(false);
-    expect(result.perAnswer[0]).toEqual({ questionId: 'q1', isCorrect: false, scoreEarned: 0 });
+    expect(result.perAnswer[0]).toEqual({
+      questionId: 'q1',
+      isCorrect: false,
+      scoreEarned: 0,
+      needsReview: false,
+    });
   });
 
   it('MULTIPLE_CHOICE exige conjunto exacto: marcar todas las correctas + ninguna incorrecta', () => {
@@ -183,6 +188,7 @@ describe('scoreAttempt', () => {
       scoreMax: 0,
       scorePercent: 0,
       passed: false,
+      needsReview: false,
       perAnswer: [],
     });
     expect(scoreAttempt([], [], 0).passed).toBe(true);
@@ -314,6 +320,82 @@ describe('scoreAttempt', () => {
       expect(result.scoreEarned).toBe(3);
       expect(result.scoreMax).toBe(3);
       expect(result.passed).toBe(true);
+    });
+  });
+
+  describe('SHORT_ANSWER / LONG_ANSWER (tipos abiertos)', () => {
+    const open = (
+      id: string,
+      type: 'SHORT_ANSWER' | 'LONG_ANSWER',
+      points = 5,
+    ): ScoringQuestion => ({
+      id,
+      type,
+      points,
+      options: [],
+    });
+
+    it('SHORT_ANSWER siempre marca needsReview=true y no aporta puntos al total', () => {
+      const result = scoreAttempt(
+        [open('q1', 'SHORT_ANSWER')],
+        [{ questionId: 'q1', selectedOptionIds: [], textAnswer: 'cualquier respuesta' }],
+        60,
+      );
+      expect(result.needsReview).toBe(true);
+      expect(result.scoreEarned).toBe(0);
+      expect(result.scoreMax).toBe(5);
+      expect(result.perAnswer[0]).toEqual({
+        questionId: 'q1',
+        isCorrect: false,
+        scoreEarned: 0,
+        needsReview: true,
+      });
+    });
+
+    it('LONG_ANSWER mismo comportamiento que SHORT_ANSWER', () => {
+      const r = scoreAttempt(
+        [open('q1', 'LONG_ANSWER', 10)],
+        [{ questionId: 'q1', selectedOptionIds: [], textAnswer: 'ensayo largo' }],
+        60,
+      );
+      expect(r.needsReview).toBe(true);
+      expect(r.perAnswer[0]?.needsReview).toBe(true);
+    });
+
+    it('mezcla objetivo + abierto → needsReview=true global y total parcial solo de objetivo', () => {
+      const result = scoreAttempt(
+        [
+          singleChoice('q-sc', [
+            { id: 'a', correct: true },
+            { id: 'b', correct: false },
+          ]),
+          open('q-open', 'SHORT_ANSWER', 4),
+        ],
+        [
+          { questionId: 'q-sc', selectedOptionIds: ['a'] },
+          { questionId: 'q-open', selectedOptionIds: [], textAnswer: 'algo' },
+        ],
+        60,
+      );
+      expect(result.needsReview).toBe(true);
+      expect(result.scoreEarned).toBe(1); // solo el objetivo
+      expect(result.scoreMax).toBe(5);
+      // passed/scorePercent en este punto son provisionales; el caller (service)
+      // los descarta cuando needsReview=true.
+    });
+
+    it('quiz solo de tipos cerrados: needsReview=false', () => {
+      const r = scoreAttempt(
+        [
+          singleChoice('q1', [
+            { id: 'a', correct: true },
+            { id: 'b', correct: false },
+          ]),
+        ],
+        [{ questionId: 'q1', selectedOptionIds: ['a'] }],
+        60,
+      );
+      expect(r.needsReview).toBe(false);
     });
   });
 });

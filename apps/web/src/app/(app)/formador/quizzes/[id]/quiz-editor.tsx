@@ -20,6 +20,8 @@ const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
   { value: 'MULTIPLE_CHOICE', label: 'Opciones múltiples' },
   { value: 'TRUE_FALSE', label: 'Verdadero / Falso' },
   { value: 'FILL_IN_BLANK', label: 'Rellenar el hueco' },
+  { value: 'SHORT_ANSWER', label: 'Respuesta corta (corrección manual)' },
+  { value: 'LONG_ANSWER', label: 'Respuesta larga (corrección manual)' },
 ];
 
 interface DraftOption {
@@ -260,6 +262,10 @@ function QuestionRow({
             ))
           )}
         </p>
+      ) : question.type === 'SHORT_ANSWER' || question.type === 'LONG_ANSWER' ? (
+        <p className="mt-2 text-xs italic text-amber-700 dark:text-amber-400">
+          Pregunta abierta — corrección manual requerida.
+        </p>
       ) : (
         <ul className="mt-2 space-y-1 text-sm">
           {question.options.map((o) => (
@@ -345,6 +351,7 @@ function NewQuestionForm({
               .map((s) => s.trim())
               .filter((s) => s.length > 0)
           : undefined;
+      const isOpen = type === 'SHORT_ANSWER' || type === 'LONG_ANSWER';
       await assessmentsApi.addQuestion(quizId, {
         type,
         prompt,
@@ -352,9 +359,11 @@ function NewQuestionForm({
         points: Number(points),
         ...(type === 'FILL_IN_BLANK'
           ? { acceptedAnswers: acceptedAnswers ?? [] }
-          : {
-              options: options.map((o) => ({ label: o.label, isCorrect: o.isCorrect })),
-            }),
+          : isOpen
+            ? {} // SHORT/LONG_ANSWER: sin opciones ni acceptedAnswers
+            : {
+                options: options.map((o) => ({ label: o.label, isCorrect: o.isCorrect })),
+              }),
       });
       setPrompt('');
       setFeedback('');
@@ -438,6 +447,12 @@ function NewQuestionForm({
             "PARÍS".
           </p>
         </div>
+      ) : type === 'SHORT_ANSWER' || type === 'LONG_ANSWER' ? (
+        <p className="rounded-md bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          Este tipo no se auto-corrige. Cuando un alumno envíe el quiz, el intento quedará en
+          PENDING_REVIEW hasta que lo corrijas manualmente desde el panel de pendientes
+          (/formador/correcciones).
+        </p>
       ) : (
         <div className="space-y-2">
           <p className="text-xs uppercase tracking-wider text-neutral-500">

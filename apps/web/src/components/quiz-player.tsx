@@ -78,7 +78,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
     setPending(true);
     try {
       const payload = state.quiz.questions.map((q) => {
-        if (q.type === 'FILL_IN_BLANK') {
+        if (q.type === 'FILL_IN_BLANK' || q.type === 'SHORT_ANSWER' || q.type === 'LONG_ANSWER') {
           return {
             questionId: q.id,
             selectedOptionIds: [],
@@ -208,6 +208,14 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
                   value={textAnswers[q.id] ?? ''}
                   onChange={(e) => setTextAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
                   placeholder="Escribe tu respuesta…"
+                  className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                />
+              ) : q.type === 'SHORT_ANSWER' || q.type === 'LONG_ANSWER' ? (
+                <textarea
+                  rows={q.type === 'LONG_ANSWER' ? 6 : 2}
+                  value={textAnswers[q.id] ?? ''}
+                  onChange={(e) => setTextAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                  placeholder="Escribe tu respuesta… (la corregirá manualmente el formador)"
                   className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
                 />
               ) : (

@@ -4,6 +4,7 @@ import type { PrismaClient } from '@learnship/database';
 import type {
   CreateQuestionDto,
   CreateQuizDto,
+  GradeAttemptDto,
   StartAttemptDto,
   SubmitAttemptDto,
   UpdateQuizDto,
@@ -12,6 +13,8 @@ import {
   AttemptAlreadySubmittedError,
   AttemptExpiredError,
   AttemptNotFoundError,
+  AttemptNotPendingReviewError,
+  GradeExceedsQuestionPointsError,
   MaxAttemptsReachedError,
   QuestionNotFoundError,
   QuizHasNoQuestionsError,
@@ -272,14 +275,17 @@ export class AssessmentsService {
           },
         });
       }
+      const nextStatus = result.needsReview ? 'PENDING_REVIEW' : 'SUBMITTED';
       return tx.modAssessmentsAttempt.update({
         where: { id: attempt.id },
         data: {
-          status: 'SUBMITTED',
+          status: nextStatus,
+          // Para PENDING_REVIEW guardamos el score parcial (solo lo objetivo)
+          // pero passed queda null hasta el grading.
           scoreEarned: result.scoreEarned,
           scoreMax: result.scoreMax,
-          scorePercent: result.scorePercent,
-          passed: result.passed,
+          scorePercent: result.needsReview ? null : result.scorePercent,
+          passed: result.needsReview ? null : result.passed,
           submittedAt,
         },
       });
@@ -295,16 +301,139 @@ export class AssessmentsService {
       scoreMax: result.scoreMax,
       scorePercent: result.scorePercent,
       passed: result.passed,
+      needsReview: result.needsReview,
     };
     await this.publish(tenantId, userId, 'assessments.attempt.submitted', eventPayload);
+
+    if (result.needsReview) {
+      // No emitimos passed/failed todavía: la decisión depende del formador.
+      await this.publish(tenantId, userId, 'assessments.attempt.pending_review', eventPayload);
+    } else {
+      await this.publish(
+        tenantId,
+        userId,
+        result.passed ? 'assessments.attempt.passed' : 'assessments.attempt.failed',
+        eventPayload,
+      );
+    }
+
+    return persisted;
+  }
+
+  /**
+   * Lista intentos PENDING_REVIEW del tenant. Pensado para el panel del
+   * formador / tenant_admin.
+   */
+  async listPendingReview(tenantId: string) {
+    return this.prisma.modAssessmentsAttempt.findMany({
+      where: { tenantId, status: 'PENDING_REVIEW' },
+      orderBy: { submittedAt: 'asc' },
+      include: {
+        quiz: { select: { id: true, title: true, lessonId: true } },
+        answers: { select: { id: true, questionId: true } },
+      },
+    });
+  }
+
+  /**
+   * Corrección manual del attempt: el formador asigna `scoreEarned` por
+   * cada respuesta abierta. Recalcula totales y emite passed/failed +
+   * assessments.attempt.graded para que el bridge a mod.learning pueda
+   * marcar la lección como completada si corresponde.
+   */
+  async gradeAttempt(
+    tenantId: string,
+    formadorId: string,
+    attemptId: string,
+    dto: GradeAttemptDto,
+  ) {
+    const attempt = await this.prisma.modAssessmentsAttempt.findFirst({
+      where: { id: attemptId, tenantId },
+      include: { answers: true },
+    });
+    if (!attempt) throw new AttemptNotFoundError();
+    if (attempt.status !== 'PENDING_REVIEW') throw new AttemptNotPendingReviewError();
+
+    const quiz = await this.requireQuiz(tenantId, attempt.quizId);
+    const questions = await this.prisma.modAssessmentsQuestion.findMany({
+      where: { tenantId, quizId: attempt.quizId, deletedAt: null },
+      select: { id: true, points: true },
+    });
+    const pointsByQuestion = new Map(questions.map((q) => [q.id, q.points]));
+    const gradeByQuestion = new Map(dto.grades.map((g) => [g.questionId, g]));
+
+    // Validar que ninguna nota excede el máximo de puntos de su pregunta.
+    for (const grade of dto.grades) {
+      const max = pointsByQuestion.get(grade.questionId);
+      if (max !== undefined && grade.scoreEarned > max) {
+        throw new GradeExceedsQuestionPointsError(grade.questionId, grade.scoreEarned, max);
+      }
+    }
+
+    const gradedAt = new Date();
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // Aplicar la nota a cada answer correspondiente.
+      for (const answer of attempt.answers) {
+        const grade = gradeByQuestion.get(answer.questionId);
+        if (!grade) continue;
+        await tx.modAssessmentsAnswer.update({
+          where: { id: answer.id },
+          data: {
+            scoreEarned: grade.scoreEarned,
+            isCorrect:
+              (pointsByQuestion.get(answer.questionId) ?? 0) > 0
+                ? grade.scoreEarned === pointsByQuestion.get(answer.questionId)
+                : false,
+            gradedFeedback: grade.feedback ?? null,
+          },
+        });
+      }
+
+      // Recomputar totales sumando todas las respuestas (las objetivas ya
+      // tenían scoreEarned correcto desde submitAttempt).
+      const allAnswers = await tx.modAssessmentsAnswer.findMany({
+        where: { attemptId: attempt.id },
+        select: { scoreEarned: true },
+      });
+      const scoreEarned = allAnswers.reduce((acc, a) => acc + a.scoreEarned, 0);
+      const scoreMax = attempt.scoreMax ?? 0;
+      const scorePercent = scoreMax === 0 ? 0 : Math.round((scoreEarned / scoreMax) * 100);
+      const passed = scorePercent >= quiz.passThreshold;
+
+      return tx.modAssessmentsAttempt.update({
+        where: { id: attempt.id },
+        data: {
+          status: 'GRADED',
+          scoreEarned,
+          scorePercent,
+          passed,
+          gradedAt,
+          gradedById: formadorId,
+        },
+      });
+    });
+
+    const eventPayload = {
+      attemptId: attempt.id,
+      quizId: attempt.quizId,
+      userId: attempt.userId,
+      enrollmentId: attempt.enrollmentId,
+      lessonId: attempt.lessonId,
+      scoreEarned: updated.scoreEarned,
+      scoreMax: updated.scoreMax,
+      scorePercent: updated.scorePercent,
+      passed: updated.passed,
+    };
+    await this.publish(tenantId, formadorId, 'assessments.attempt.graded', eventPayload);
     await this.publish(
       tenantId,
-      userId,
-      result.passed ? 'assessments.attempt.passed' : 'assessments.attempt.failed',
+      attempt.userId,
+      updated.passed ? 'assessments.attempt.passed' : 'assessments.attempt.failed',
       eventPayload,
     );
 
-    return persisted;
+    return updated;
   }
 
   async getAttempt(tenantId: string, userId: string, attemptId: string) {

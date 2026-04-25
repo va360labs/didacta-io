@@ -574,11 +574,20 @@ enum QuestionType {
   MULTIPLE_CHOICE
   TRUE_FALSE
   FILL_IN_BLANK
+  SHORT_ANSWER
+  LONG_ANSWER
 }
 
 enum AttemptStatus {
   IN_PROGRESS
   SUBMITTED
+  /// El alumno envió las respuestas pero el quiz tiene preguntas abiertas
+  /// (SHORT_ANSWER / LONG_ANSWER) que requieren corrección manual del formador
+  /// antes de poder declarar pasa/no pasa.
+  PENDING_REVIEW
+  /// Estado final tras corrección manual: scoreEarned/scorePercent/passed
+  /// reflejan los puntos asignados por el formador.
+  GRADED
   EXPIRED
   ABANDONED
 }
@@ -680,6 +689,10 @@ model ModAssessmentsAttempt {
   /// Vencimiento del intento si el quiz tenía time limit (start + timeLimit).
   expiresAt     DateTime?     @map("expires_at")
   submittedAt   DateTime?     @map("submitted_at")
+  /// Quién (formador / tenant_admin) corrigió las respuestas abiertas y cuándo.
+  /// Null mientras el attempt está en PENDING_REVIEW.
+  gradedAt      DateTime?     @map("graded_at")
+  gradedById    String?       @map("graded_by_id") @db.Uuid
 
   quiz    ModAssessmentsQuiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
   answers ModAssessmentsAnswer[]
@@ -697,11 +710,16 @@ model ModAssessmentsAnswer {
   /// IDs de las opciones marcadas por el alumno (vacío si no respondió).
   /// Solo aplica a SINGLE_CHOICE / MULTIPLE_CHOICE / TRUE_FALSE.
   selectedOptionIds String[] @default([]) @map("selected_option_ids") @db.Uuid
-  /// Texto que escribió el alumno. Solo aplica a FILL_IN_BLANK.
+  /// Texto que escribió el alumno. Aplica a FILL_IN_BLANK / SHORT_ANSWER /
+  /// LONG_ANSWER.
   textAnswer        String?  @map("text_answer")
-  /// Resultado del scoring (rellenado al submit).
+  /// Resultado del scoring (rellenado al submit). Para SHORT/LONG_ANSWER
+  /// queda en false hasta la corrección manual.
   isCorrect         Boolean  @default(false) @map("is_correct")
   scoreEarned       Int      @default(0) @map("score_earned")
+  /// Comentario opcional del formador al corregir (visible al alumno tras
+  /// el GRADED).
+  gradedFeedback    String?  @map("graded_feedback")
   createdAt         DateTime @default(now()) @map("created_at")
 
   attempt ModAssessmentsAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)

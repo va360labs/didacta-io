@@ -5,6 +5,8 @@ export const questionTypeSchema = z.enum([
   'MULTIPLE_CHOICE',
   'TRUE_FALSE',
   'FILL_IN_BLANK',
+  'SHORT_ANSWER',
+  'LONG_ANSWER',
 ]);
 export type QuestionTypeDto = z.infer<typeof questionTypeSchema>;
 
@@ -49,6 +51,12 @@ export const createQuestionSchema = z
           path: ['acceptedAnswers'],
         });
       }
+      return;
+    }
+
+    if (q.type === 'SHORT_ANSWER' || q.type === 'LONG_ANSWER') {
+      // Tipos abiertos: no requieren options ni acceptedAnswers. La corrección
+      // es manual via gradeAttempt.
       return;
     }
 
@@ -117,3 +125,18 @@ export const submitAttemptSchema = z.object({
   answers: z.array(submitAttemptAnswerSchema).min(1).max(200),
 });
 export type SubmitAttemptDto = z.infer<typeof submitAttemptSchema>;
+
+export const gradeAnswerSchema = z.object({
+  questionId: z.string().uuid(),
+  scoreEarned: z.number().int().min(0),
+  feedback: z.string().max(2000).optional(),
+});
+export type GradeAnswerDto = z.infer<typeof gradeAnswerSchema>;
+
+export const gradeAttemptSchema = z.object({
+  /** Lista de respuestas con la puntuación que el formador les asigna.
+   *  Solo deberían venir las respuestas a preguntas SHORT_ANSWER / LONG_ANSWER;
+   *  el service ignora silenciosamente entries para preguntas auto-corregidas. */
+  grades: z.array(gradeAnswerSchema).min(1).max(200),
+});
+export type GradeAttemptDto = z.infer<typeof gradeAttemptSchema>;
