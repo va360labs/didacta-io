@@ -1,19 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import type {
-  AuditLogService,
-  EvidenceVaultService,
   HookContext,
   HookRegistry,
   I18nService,
   Logger,
   ModuleContext,
   NotificationHubService,
-  StorageService,
   TenantConfigService,
 } from '@learnship/core-kernel';
 import { PrismaService } from '../prisma/prisma.service';
+import { LocalDiskStorageService } from './local-disk-storage.service';
 import { PersistentEventBus } from './persistent-event-bus';
+import { PrismaAuditLogService } from './prisma-audit-log.service';
+import { PrismaEvidenceVaultService } from './prisma-evidence-vault.service';
 
 type AnyHandler = (ctx: HookContext<unknown>) => Promise<void> | void;
 
@@ -42,33 +42,6 @@ class InMemoryHookRegistry implements HookRegistry {
  * Implementación in-memory del EventBus. Despacha a handlers locales sincrónicamente.
  * No persiste eventos (cuando llegue mod.outbox lo reemplazamos).
  */
-const stubStorage: StorageService = {
-  async upload(key: string) {
-    return { key };
-  },
-  async download() {
-    throw new Error('StubStorage: no implementado');
-  },
-  async delete() {
-    /* noop */
-  },
-  async getSignedUrl(key: string) {
-    return `https://stub.local/${key}`;
-  },
-};
-
-const stubAuditLog: AuditLogService = {
-  async record() {
-    /* noop hasta T-1A-008 */
-  },
-};
-
-const stubEvidenceVault: EvidenceVaultService = {
-  async store({ resourceId }) {
-    return { id: resourceId, hash: 'stub', storageKey: `stub/${resourceId}` };
-  },
-};
-
 const stubNotificationHub: NotificationHubService = {
   async send() {
     /* noop hasta T-1A-009 */
@@ -99,6 +72,7 @@ class StubTenantConfig implements TenantConfigService {
 export class ModuleContextFactory {
   private readonly hookRegistry = new InMemoryHookRegistry();
   private readonly tenantConfig = new StubTenantConfig();
+  private readonly storage = new LocalDiskStorageService();
   private eventBus?: PersistentEventBus;
 
   constructor(
@@ -109,12 +83,14 @@ export class ModuleContextFactory {
   build(): ModuleContext {
     const adaptedLogger = this.adaptLogger(this.pino);
     this.eventBus = new PersistentEventBus(this.prisma, adaptedLogger);
+    const auditLog = new PrismaAuditLogService(this.prisma);
+    const evidenceVault = new PrismaEvidenceVaultService(this.prisma, this.storage);
     return {
       eventBus: this.eventBus,
       hookRegistry: this.hookRegistry,
-      storage: stubStorage,
-      auditLog: stubAuditLog,
-      evidenceVault: stubEvidenceVault,
+      storage: this.storage,
+      auditLog,
+      evidenceVault,
       notificationHub: stubNotificationHub,
       i18n: stubI18n,
       logger: adaptedLogger,
