@@ -1,6 +1,6 @@
 # Estado del proyecto — punto de retomada
 
-> **Última actualización**: 2026-04-25 (final de sesión: 23 PRs)
+> **Última actualización**: 2026-04-26 (sesión maratón: 27 PRs)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo de este doc**: que cualquier sesión nueva (otro equipo, otra IA) pueda retomar exactamente donde quedó la anterior.
 
@@ -8,16 +8,17 @@
 
 ## TL;DR
 
-- **23 PRs consecutivos cerrados esta sesión** (#44–#66).
+- **27 PRs consecutivos cerrados esta sesión** (#44–#70).
 - **`mod.assessments` cerrado en v0.3**: 6 tipos de pregunta (4 auto-corregidos + 2 con corrección manual), bridge a `mod.learning`, UI completa formador y alumno.
+- **`mod.community` cerrado en v0.1** (Fase 1.B arrancada): posts + comments + reacciones por emoji con UI alumno en `/comunidad`. Sin nested replies ni moderación todavía.
 - **NotificationHub real**: persistencia + bandeja IN_APP en `/notificaciones` con bell badge en el header. EMAIL stub listo para SMTP.
 - **Dashboard del formador**: `/formador` con stats agregadas (cursos, matriculaciones, % progreso, correcciones pendientes).
 - **Editor de cursos pulido**: reordenar lecciones (▲ ▼), eliminar módulo con cascade lógico.
 - **Migraciones versionadas** (`prisma migrate deploy`) + **audit log con IP+UA**.
 - Aplicación funcional end-to-end en Easypanel: `https://lab-learnship.3qntut.easypanel.host`.
-- 91 tests unitarios en `apps/api` + 65 tests en módulos = **156 tests verdes** en CI principal. **5 specs E2E** Playwright (golden + quiz + invite + grading manual + MFA setup).
-- Módulos cargados al boot: `mod.hello-world`, `mod.courses`, `mod.learning`, `mod.certificates`, `mod.assessments`.
-- **Items pendientes del roadmap todos bloqueados por infra externa** (Redis, S3, SMTP). Próximo paso natural: **iniciar Fase 1.B** (`mod.zoom-live`, `mod.community`, `mod.fundae`) o desbloquear infra.
+- **173 tests verdes** en CI principal (101 unitarios api + 72 en módulos). **5 specs E2E** Playwright.
+- Módulos cargados al boot: `mod.hello-world`, `mod.courses`, `mod.learning`, `mod.certificates`, `mod.assessments`, **`mod.community`**.
+- **Items pendientes del roadmap**: 3 bloqueados por infra externa (Redis, S3, SMTP) + 2 módulos grandes de Fase 1.B (`mod.zoom-live` necesita credenciales Zoom; `mod.fundae` necesita planning con stakeholder).
 
 ---
 
@@ -61,7 +62,7 @@ Para el deploy en Easypanel: ver `docs/test.env.md`.
 
 ## Trabajo en curso
 
-Ninguno. Todo lo iniciado en esta sesión quedó cerrado y mergeado a main (PRs #44–66, 23 PRs).
+Ninguno. Todo lo iniciado en esta sesión quedó cerrado y mergeado a main (PRs #44–70, 27 PRs).
 
 ---
 
@@ -75,19 +76,24 @@ Ninguno. Todo lo iniciado en esta sesión quedó cerrado y mergeado a main (PRs 
 
 > Ningún item del roadmap conocido es accionable sin estos 3 desbloqueos.
 
-## Próximo paso recomendado: Fase 1.B
+## Próximo paso recomendado
 
-Items grandes que cabe arrancar en la siguiente sesión:
+Restantes de Fase 1.B + polish:
 
-- **`mod.zoom-live`** — aula virtual con Zoom API + SDK Web. Bloqueado por **credenciales Zoom**.
-- **`mod.community`** — foros, comentarios, preguntas. **Sin bloqueo de infra**, pero requiere planning de alcance (¿qué nivel de moderación? ¿reacciones? ¿menciones?).
-- **`mod.fundae`** — cumplimiento sectorial Fundae (RD 694/2017). Requiere conocimiento de dominio profundo (cómo funciona Fundae) — **planning con stakeholder antes de empezar**.
-
-## Otros polish posibles sin bloqueo
-
+- **`mod.zoom-live`** — aula virtual con Zoom API + SDK Web. **Bloqueado por credenciales Zoom**.
+- **`mod.fundae`** — cumplimiento sectorial Fundae (RD 694/2017). **Bloqueado por planning con stakeholder** (cómo funciona Fundae a fondo).
+- **Polish de `mod.community`** — moderación (flagging + admin panel), nested replies, menciones (`@usuario`), notificaciones via NotificationHub cuando alguien responde a tu post.
 - **Per-tenant notification templates** — UX para tenant_admin que customiza el copy de cada plantilla.
 - **Drag & drop visual de lecciones** en el editor (las flechas ▲▼ funcionan, pero un DnD sería más natural).
 - **Webhook adapter en NotificationHub** — defer hasta caso de uso concreto.
+
+## Items aún bloqueados por infra externa
+
+| # | Item | Bloqueo |
+|---|---|---|
+| 1 | `mod.outbox` real con BullMQ + Redis | **Redis en Easypanel** |
+| 2 | MinIO/S3 storage para producción | **S3 / MinIO** |
+| 3 | Adapter SMTP real (NotificationHub) | **SMTP** |
 
 Detalle completo en `docs/PLAN-FASES.md`.
 
@@ -233,6 +239,9 @@ packages/
 | #64 | test: cobertura unitaria de NotificationHub (service + bridge) | merged |
 | #65 | test(assessments): cobertura de gradeAttempt (corrección manual) | merged |
 | #66 | feat(formador): dashboard con stats agregadas del tenant | merged |
+| #68 | feat(community): scaffold mod.community + service + 17 tests (PR A) | merged |
+| #69 | feat(community): endpoints HTTP del módulo community (PR B) | merged |
+| #70 | feat(community): UI alumno (lista + detalle + reacciones) (PR C) | merged |
 
 ---
 
