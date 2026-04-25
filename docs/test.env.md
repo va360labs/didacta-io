@@ -17,10 +17,13 @@ API_PORT=4000
 WEB_PORT=3000
 
 # Easypanel sirve un solo dominio https://lab-learnship.3qntut.easypanel.host/
-# Por ahora la API y el web responden en ese mismo origen.
-# Si en el futuro separás API y web en dos servicios, ajustá WEB_URL/API_URL.
+# Configurar el dominio público para que apunte al puerto :3000 (Next.js).
+# Next.js reescribe internamente /api/*, /healthz, /readyz, /api/docs al :4000
+# (la API NestJS dentro del mismo contenedor).
 WEB_URL=https://lab-learnship.3qntut.easypanel.host
 API_URL=https://lab-learnship.3qntut.easypanel.host
+# URL interna por loopback que usa Next.js para llamar a la API en SSR
+API_INTERNAL_URL=http://localhost:4000
 
 # ============================================================================
 # AUTH (ADR-003 → JWT firmado con jose, MFA TOTP obligatorio para admins)
@@ -94,6 +97,21 @@ BOOTSTRAP_NAME=Valentín Ayesa
 # Cambiala si querés otra cosa, mínimo 12 caracteres.
 BOOTSTRAP_PASSWORD=1SWsTvJ/oy/xbaN6Q3lWDGTQHX8IOZJg
 ```
+
+## Configuración crítica del dominio en Easypanel
+
+En el panel del servicio LearnShip → **Domains** o **Proxy** del dominio principal:
+
+| Campo | Valor |
+| --- | --- |
+| **Target port** | `3000` |
+| **Path** | `/` |
+
+**¿Por qué `:3000` y no `:4000`?**
+
+El contenedor expone los dos puertos: `:4000` (API NestJS) y `:3000` (Web Next.js). Easypanel solo proxea uno al dominio público. Apuntá al `:3000` (frontend); Next.js reescribe internamente todo lo que sea `/api/*`, `/healthz`, `/readyz` y `/api/docs` al `:4000` por loopback (\`localhost:4000\`).
+
+Resultado: el browser hace todo a `https://lab-learnship.3qntut.easypanel.host/...` con same-origin. Sin CORS, sin variables públicas que filtrar.
 
 ## Pasos para arrancar
 

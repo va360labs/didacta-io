@@ -1,13 +1,16 @@
 /**
- * Cliente HTTP mínimo para hablar con la API.
- * En el server (RSC, server actions) lee API_URL del env.
- * En el cliente (use client) usa NEXT_PUBLIC_API_URL.
+ * Cliente HTTP mínimo.
+ *
+ * En el browser usamos same-origin (`API_URL = ''`): el frontend hace requests
+ * al mismo dominio que lo sirve, y Next.js reescribe internamente `/api/*` a
+ * la API en localhost:4000 (configurado en next.config.ts). Sin CORS, sin
+ * mismatch de cookies, sin variables públicas que filtrar.
+ *
+ * En server-side (RSC, server actions) llamamos directo a la API por loopback.
  */
 
 const API_URL =
-  typeof window === 'undefined'
-    ? (process.env.API_URL ?? 'http://localhost:4000')
-    : (process.env.NEXT_PUBLIC_API_URL ?? '');
+  typeof window === 'undefined' ? (process.env.API_INTERNAL_URL ?? 'http://localhost:4000') : '';
 
 export interface ApiError {
   message: string;
