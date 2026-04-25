@@ -321,6 +321,31 @@ export class AssessmentsService {
   }
 
   /**
+   * Vista del attempt para el formador: incluye TODAS las respuestas (incluso
+   * de otros usuarios) con el detalle del quiz para que pueda calificar.
+   * Distinto de getAttempt(tenantId, userId) que filtra por userId.
+   */
+  async getAttemptForFormador(tenantId: string, attemptId: string) {
+    const attempt = await this.prisma.modAssessmentsAttempt.findFirst({
+      where: { id: attemptId, tenantId },
+      include: {
+        answers: { orderBy: { createdAt: 'asc' } },
+        quiz: {
+          include: {
+            questions: {
+              where: { deletedAt: null },
+              orderBy: { position: 'asc' },
+              include: { options: { orderBy: { position: 'asc' } } },
+            },
+          },
+        },
+      },
+    });
+    if (!attempt) throw new AttemptNotFoundError();
+    return attempt;
+  }
+
+  /**
    * Lista intentos PENDING_REVIEW del tenant. Pensado para el panel del
    * formador / tenant_admin.
    */

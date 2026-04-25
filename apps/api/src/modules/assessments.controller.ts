@@ -120,6 +120,19 @@ export class AssessmentsController {
     return this.registry.getAssessmentsService().listPendingReview(u.tenantId);
   }
 
+  @Get('attempts/:id/full')
+  @ApiOperation({
+    summary:
+      'Detalle del attempt para el formador: incluye answers + quiz + questions + options.isCorrect (NO usar en alumno)',
+  })
+  async getAttemptForFormador(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+  ) {
+    const u = requireFormador(user);
+    return this.registry.getAssessmentsService().getAttemptForFormador(u.tenantId, id);
+  }
+
   @Post('attempts/:id/grade')
   @HttpCode(200)
   @ApiOperation({

@@ -261,6 +261,27 @@ export const assessmentsApi = {
     return apiFetch('/api/v1/modules/assessments/attempts/pending', { method: 'GET' }, withAuth());
   },
 
+  async getAttemptForFormador(attemptId: string): Promise<
+    AttemptSummary & {
+      answers: {
+        id: string;
+        questionId: string;
+        selectedOptionIds: string[];
+        textAnswer: string | null;
+        isCorrect: boolean;
+        scoreEarned: number;
+        gradedFeedback: string | null;
+      }[];
+      quiz: QuizFormadorView;
+    }
+  > {
+    return apiFetch(
+      `/api/v1/modules/assessments/attempts/${attemptId}/full`,
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
   async gradeAttempt(
     attemptId: string,
     grades: { questionId: string; scoreEarned: number; feedback?: string }[],
