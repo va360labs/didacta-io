@@ -13,6 +13,8 @@ import { LearningController } from './learning.controller';
 import { LearningErrorFilter } from './learning-error.filter';
 import { ModuleContextFactory } from './module-context.factory';
 import { ModuleRegistryService } from './module-registry.service';
+import { NotificationsBridge } from './notifications.bridge';
+import { NotificationsController } from './notifications.controller';
 import { OutboxRecoveryWorker } from './outbox-recovery.worker';
 
 @Module({
@@ -24,12 +26,14 @@ import { OutboxRecoveryWorker } from './outbox-recovery.worker';
     AuditController,
     AssessmentsController,
     AssessmentsAttemptsController,
+    NotificationsController,
   ],
   providers: [
     ModuleContextFactory,
     ModuleRegistryService,
     OutboxRecoveryWorker,
     AssessmentsLearningBridge,
+    NotificationsBridge,
     { provide: APP_FILTER, useClass: CoursesErrorFilter },
     { provide: APP_FILTER, useClass: LearningErrorFilter },
     { provide: APP_FILTER, useClass: AssessmentsErrorFilter },

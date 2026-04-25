@@ -14,6 +14,7 @@ import { LocalDiskStorageService } from './local-disk-storage.service';
 import { PersistentEventBus } from './persistent-event-bus';
 import { PrismaAuditLogService } from './prisma-audit-log.service';
 import { PrismaEvidenceVaultService } from './prisma-evidence-vault.service';
+import { PrismaNotificationHubService } from './prisma-notification-hub.service';
 
 type AnyHandler = (ctx: HookContext<unknown>) => Promise<void> | void;
 
@@ -39,12 +40,12 @@ class InMemoryHookRegistry implements HookRegistry {
 }
 
 /**
- * Implementación in-memory del EventBus. Despacha a handlers locales sincrónicamente.
- * No persiste eventos (cuando llegue mod.outbox lo reemplazamos).
+ * Stub del NotificationHub solo para tests / fallback. La implementación real
+ * vive en PrismaNotificationHubService y se inyecta en build().
  */
 const stubNotificationHub: NotificationHubService = {
   async send() {
-    /* noop hasta T-1A-009 */
+    /* noop */
   },
 };
 
@@ -85,17 +86,24 @@ export class ModuleContextFactory {
     this.eventBus = new PersistentEventBus(this.prisma, adaptedLogger);
     const auditLog = new PrismaAuditLogService(this.prisma);
     const evidenceVault = new PrismaEvidenceVaultService(this.prisma, this.storage);
+    const notificationHub = new PrismaNotificationHubService(this.prisma, this.pino);
+    void stubNotificationHub; // se mantiene exportado para tests; producción usa Prisma.
     return {
       eventBus: this.eventBus,
       hookRegistry: this.hookRegistry,
       storage: this.storage,
       auditLog,
       evidenceVault,
-      notificationHub: stubNotificationHub,
+      notificationHub,
       i18n: stubI18n,
       logger: adaptedLogger,
       config: this.tenantConfig,
     };
+  }
+
+  getNotificationHub(): PrismaNotificationHubService {
+    // Útil para handlers internos (bridge) que necesitan el service real.
+    return new PrismaNotificationHubService(this.prisma, this.pino);
   }
 
   getPrisma(): PrismaService {

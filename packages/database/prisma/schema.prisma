@@ -334,6 +334,34 @@ enum NotificationChannel {
   WEBHOOK
 }
 
+/// Cada notificación que el NotificationHub envía o intenta enviar.
+/// El channel IN_APP siempre se persiste y es leído por el alumno desde
+/// /notificaciones. Los demás canales también persisten para auditoría:
+/// el campo `sentAt`/`failedAt` registra el resultado del adapter.
+model Notification {
+  id              String              @id @default(uuid()) @db.Uuid
+  tenantId        String              @map("tenant_id") @db.Uuid
+  userId          String              @map("user_id") @db.Uuid
+  channel         NotificationChannel
+  templateKey     String              @map("template_key")
+  subject         String?
+  body            String
+  metadata        Json                @default("{}")
+  /// Timestamp de lectura por el destinatario (solo aplica a IN_APP).
+  readAt          DateTime?           @map("read_at")
+  /// Timestamp de despacho del adapter (SMTP enviado, webhook OK, etc.).
+  /// Para IN_APP se rellena al persistir, ya que entregar = persistir.
+  sentAt          DateTime?           @map("sent_at")
+  /// Si el adapter falló (SMTP rebote, webhook 5xx), la razón queda aquí.
+  failedAt        DateTime?           @map("failed_at")
+  failureReason   String?             @map("failure_reason")
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  @@index([tenantId, userId, readAt])
+  @@index([tenantId, channel, sentAt])
+  @@map("notification")
+}
+
 // ============================================================================
 // mod.courses — Catálogo de cursos, módulos y lecciones
 // ============================================================================
