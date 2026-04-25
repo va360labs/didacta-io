@@ -330,3 +330,86 @@ enum NotificationChannel {
   IN_APP
   WEBHOOK
 }
+
+// ============================================================================
+// mod.courses — Catálogo de cursos, módulos y lecciones
+// ============================================================================
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LessonType {
+  VIDEO
+  HTML
+  PDF
+  TEXT
+  QUIZ
+}
+
+model ModCoursesCourse {
+  id               String       @id @default(uuid()) @db.Uuid
+  tenantId         String       @map("tenant_id") @db.Uuid
+  slug             String
+  title            String
+  description      String?
+  thumbnailUrl     String?      @map("thumbnail_url")
+  language         String       @default("es-ES")
+  estimatedMinutes Int?         @map("estimated_minutes")
+  status           CourseStatus @default(DRAFT)
+  category         String?
+  createdById      String?      @map("created_by_id") @db.Uuid
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+  publishedAt      DateTime?    @map("published_at")
+  deletedAt        DateTime?    @map("deleted_at")
+
+  modules ModCoursesModule[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, status])
+  @@index([tenantId, category])
+  @@map("mod_courses_course")
+}
+
+model ModCoursesModule {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  courseId    String    @map("course_id") @db.Uuid
+  title       String
+  description String?
+  position    Int
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  course  ModCoursesCourse   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons ModCoursesLesson[]
+
+  @@unique([courseId, position])
+  @@index([tenantId, courseId])
+  @@map("mod_courses_module")
+}
+
+model ModCoursesLesson {
+  id              String     @id @default(uuid()) @db.Uuid
+  tenantId        String     @map("tenant_id") @db.Uuid
+  moduleId        String     @map("module_id") @db.Uuid
+  type            LessonType
+  title           String
+  position        Int
+  /// Contenido por tipo: { videoUrl, html, pdfUrl, text, quizId } según LessonType
+  content         Json       @default("{}")
+  durationMinutes Int?       @map("duration_minutes")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  deletedAt       DateTime?  @map("deleted_at")
+
+  module ModCoursesModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([moduleId, position])
+  @@index([tenantId, moduleId])
+  @@map("mod_courses_lesson")
+}
