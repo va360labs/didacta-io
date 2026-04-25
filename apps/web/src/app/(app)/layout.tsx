@@ -9,6 +9,7 @@ import { authStorage, type StoredSession } from '@/lib/auth-storage';
 
 const NAV = [
   { href: '/cursos', label: 'Catálogo' },
+  { href: '/comunidad', label: 'Comunidad' },
   { href: '/mis-certificados', label: 'Mis certificados' },
   { href: '/formador', label: 'Panel formador', requiresAdmin: true, exactMatch: true },
   { href: '/formador/cursos', label: 'Mis cursos', requiresAdmin: true },

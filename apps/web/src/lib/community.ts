@@ -1,0 +1,120 @@
+import { ApiHttpError, apiFetch } from './api-client';
+import { authStorage } from './auth-storage';
+
+export interface Post {
+  id: string;
+  tenantId: string;
+  authorId: string;
+  authorDisplayName: string | null;
+  courseId: string | null;
+  title: string;
+  body: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface Comment {
+  id: string;
+  tenantId: string;
+  postId: string;
+  authorId: string;
+  authorDisplayName: string | null;
+  body: string;
+  createdAt: string;
+  deletedAt: string | null;
+}
+
+export interface Reaction {
+  id: string;
+  tenantId: string;
+  postId: string | null;
+  commentId: string | null;
+  authorId: string;
+  emoji: string;
+  createdAt: string;
+}
+
+export interface PostDetail extends Post {
+  comments: Comment[];
+  reactions: Reaction[];
+}
+
+function withAuth(): string {
+  const token = authStorage.getAccessToken();
+  if (!token) throw new ApiHttpError({ message: 'Sesión expirada', status: 401 });
+  return token;
+}
+
+export const communityApi = {
+  async listPosts(opts: { courseId?: string; tag?: string; limit?: number } = {}): Promise<Post[]> {
+    const params = new URLSearchParams();
+    if (opts.courseId) params.set('courseId', opts.courseId);
+    if (opts.tag) params.set('tag', opts.tag);
+    if (opts.limit) params.set('limit', String(opts.limit));
+    const path = `/api/v1/modules/community/posts${params.toString() ? `?${params}` : ''}`;
+    return apiFetch<Post[]>(path, { method: 'GET' }, withAuth());
+  },
+  async getPost(id: string): Promise<PostDetail> {
+    return apiFetch<PostDetail>(
+      `/api/v1/modules/community/posts/${id}`,
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+  async createPost(input: {
+    title: string;
+    body: string;
+    tags?: string[];
+    courseId?: string;
+  }): Promise<Post> {
+    return apiFetch<Post>(
+      '/api/v1/modules/community/posts',
+      { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+  async deletePost(id: string): Promise<void> {
+    await apiFetch<{ deleted: true }>(
+      `/api/v1/modules/community/posts/${id}`,
+      { method: 'DELETE' },
+      withAuth(),
+    );
+  },
+  async addComment(postId: string, body: string): Promise<Comment> {
+    return apiFetch<Comment>(
+      `/api/v1/modules/community/posts/${postId}/comments`,
+      { method: 'POST', body: JSON.stringify({ body }) },
+      withAuth(),
+    );
+  },
+  async deleteComment(id: string): Promise<void> {
+    await apiFetch<{ deleted: true }>(
+      `/api/v1/modules/community/comments/${id}`,
+      { method: 'DELETE' },
+      withAuth(),
+    );
+  },
+  async addReactionToPost(postId: string, emoji: string): Promise<Reaction> {
+    return apiFetch<Reaction>(
+      '/api/v1/modules/community/reactions',
+      { method: 'POST', body: JSON.stringify({ postId, emoji }) },
+      withAuth(),
+    );
+  },
+  async addReactionToComment(commentId: string, emoji: string): Promise<Reaction> {
+    return apiFetch<Reaction>(
+      '/api/v1/modules/community/reactions',
+      { method: 'POST', body: JSON.stringify({ commentId, emoji }) },
+      withAuth(),
+    );
+  },
+  async removeReaction(id: string): Promise<void> {
+    await apiFetch<{ deleted: true }>(
+      `/api/v1/modules/community/reactions/${id}`,
+      { method: 'DELETE' },
+      withAuth(),
+    );
+  },
+};
