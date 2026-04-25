@@ -3,4 +3,7 @@
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "vector";
+
+-- pgvector se activa en Fase 1.C (mod.ai-tutor + embeddings).
+-- Requiere imagen pgvector/pgvector:pg16 o equivalente con la extensión instalada.
+-- CREATE EXTENSION IF NOT EXISTS "vector";

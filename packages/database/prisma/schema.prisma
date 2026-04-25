@@ -16,9 +16,12 @@ generator client {
 }
 
 datasource db {
-  provider   = "postgresql"
-  url        = env("DATABASE_URL")
-  extensions = [uuidOssp(map: "uuid-ossp"), pgcrypto, vector]
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // pgvector se añade en Fase 1.C cuando se active mod.ai-tutor (embeddings + RAG).
+  // Para activarlo en Postgres de Easypanel, cambiar la imagen del servicio
+  // a pgvector/pgvector:pg16 y volver a añadir `vector` aquí.
+  extensions = [uuidOssp(map: "uuid-ossp"), pgcrypto]
 }
 
 // ============================================================================
