@@ -16,6 +16,18 @@ export const enrollByLinkSchema = z.object({
 });
 export type EnrollByLinkDto = z.infer<typeof enrollByLinkSchema>;
 
+/** El alumno se matricula a sí mismo. Solo requiere el curso. */
+export const enrollSelfSchema = z.object({
+  courseId: z.string().uuid(),
+});
+export type EnrollSelfDto = z.infer<typeof enrollSelfSchema>;
+
+/** Listar invitaciones activas de un curso (para que el formador las gestione). */
+export const listInvitationsQuerySchema = z.object({
+  courseId: z.string().uuid(),
+});
+export type ListInvitationsQueryDto = z.infer<typeof listInvitationsQuerySchema>;
+
 export const trackProgressSchema = z.object({
   enrollmentId: z.string().uuid(),
   lessonId: z.string().uuid(),

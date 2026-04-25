@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { CourseEditor } from './course-editor';
+import { InvitationsPanel } from './invitations-panel';
 import { ApiHttpError } from '@/lib/api-client';
 import { coursesApi, type CourseDetail } from '@/lib/courses';
 
@@ -32,5 +33,10 @@ export default function CourseEditorPage() {
       </p>
     );
   if (!course) return <p className="text-sm text-neutral-500">Cargando…</p>;
-  return <CourseEditor initial={course} onChange={reload} />;
+  return (
+    <div className="space-y-6">
+      <CourseEditor initial={course} onChange={reload} />
+      <InvitationsPanel courseId={course.id} />
+    </div>
+  );
 }

@@ -6,6 +6,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Query,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -15,11 +16,15 @@ import {
   enrollByAdminSchema,
   enrollByCodeSchema,
   enrollByLinkSchema,
+  enrollSelfSchema,
+  listInvitationsQuerySchema,
   trackProgressSchema,
   type CreateInvitationDto,
   type EnrollByAdminDto,
   type EnrollByCodeDto,
   type EnrollByLinkDto,
+  type EnrollSelfDto,
+  type ListInvitationsQueryDto,
   type TrackProgressDto,
   LearningError,
 } from '@learnship/mod-learning';
@@ -44,13 +49,23 @@ export class LearningController {
   }
 
   @Post('enrollments')
-  @ApiOperation({ summary: 'Enrollar a un usuario por admin (requiere permiso)' })
+  @ApiOperation({ summary: 'Enrollar a un usuario por admin' })
   async enrollAdmin(
     @CurrentUser() user: SessionClaims | undefined,
     @Body(new ZodValidationPipe(enrollByAdminSchema)) dto: EnrollByAdminDto,
   ) {
     if (!user) throw new UnauthorizedException();
     return this.registry.getLearningService().enrollByAdmin(user.tenantId, user.sub, dto);
+  }
+
+  @Post('enrollments/me')
+  @ApiOperation({ summary: 'Auto-matriculación: el alumno se enrolla a sí mismo en un curso' })
+  async enrollSelf(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(enrollSelfSchema)) dto: EnrollSelfDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getLearningService().enrollSelf(user.tenantId, user.sub, dto.courseId);
   }
 
   @Post('enrollments/by-code')
@@ -92,6 +107,18 @@ export class LearningController {
     return this.registry.getLearningService().trackProgress(user.tenantId, user.sub, dto);
   }
 
+  @Get('invitations')
+  @ApiOperation({ summary: 'Listar invitaciones activas de un curso' })
+  async listInvitations(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(listInvitationsQuerySchema)) query: ListInvitationsQueryDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry
+      .getLearningService()
+      .listInvitationsForCourse(user.tenantId, query.courseId);
+  }
+
   @Post('invitations')
   @ApiOperation({ summary: 'Crear invitación (código + token)' })
   async createInvitation(
@@ -100,6 +127,15 @@ export class LearningController {
   ) {
     if (!user) throw new UnauthorizedException();
     return this.registry.getLearningService().createInvitation(user.tenantId, user.sub, dto);
+  }
+
+  @Delete('invitations/:id')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Revocar invitación' })
+  async revokeInvitation(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException();
+    await this.registry.getLearningService().revokeInvitation(user.tenantId, id);
+    return { revoked: true };
   }
 }
 

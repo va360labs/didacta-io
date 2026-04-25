@@ -52,19 +52,11 @@ export default function CourseAlumnoPage() {
     setPending(true);
     setError(null);
     try {
-      const newEnrollment = await learningApi.enrollByAdmin({
-        userId: '__self__',
-        courseId: course.id,
-      });
-      // Si el backend devuelve un enrollment válido, recargamos para reflejar
+      const newEnrollment = await learningApi.enrollSelf(course.id);
       if (newEnrollment.status === 'ACTIVE') await reload();
     } catch (e) {
-      // Plan B: el backend exige userId del propio usuario; los alumnos generalmente
-      // se enrollan via código o link. Si no hay manera, mostramos el mensaje crudo.
       if (e instanceof ApiHttpError) {
-        setError(
-          'No podés auto-matricularte directamente. Pedile a tu tenant_admin un código de invitación.',
-        );
+        setError(e.message);
       } else {
         setError('Error al matricularte');
       }

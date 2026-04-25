@@ -33,6 +33,19 @@ export interface ProgressResult {
   progressPercent: number;
 }
 
+export interface Invitation {
+  id: string;
+  tenantId: string;
+  courseId: string;
+  code: string;
+  token: string;
+  maxUses: number | null;
+  usedCount: number;
+  expiresAt: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
 function bearer(): string {
   const token = authStorage.getAccessToken();
   if (!token) throw new ApiHttpError({ message: 'Sesión expirada', status: 401 });
@@ -48,10 +61,10 @@ export const learningApi = {
     );
   },
 
-  async enrollByAdmin(input: { userId: string; courseId: string }): Promise<Enrollment> {
+  async enrollSelf(courseId: string): Promise<Enrollment> {
     return apiFetch<Enrollment>(
-      '/api/v1/modules/learning/enrollments',
-      { method: 'POST', body: JSON.stringify(input) },
+      '/api/v1/modules/learning/enrollments/me',
+      { method: 'POST', body: JSON.stringify({ courseId }) },
       bearer(),
     );
   },
@@ -82,6 +95,35 @@ export const learningApi = {
     return apiFetch<ProgressResult>(
       '/api/v1/modules/learning/progress',
       { method: 'POST', body: JSON.stringify(input) },
+      bearer(),
+    );
+  },
+
+  async listInvitations(courseId: string): Promise<Invitation[]> {
+    const params = new URLSearchParams({ courseId });
+    return apiFetch<Invitation[]>(
+      `/api/v1/modules/learning/invitations?${params}`,
+      { method: 'GET' },
+      bearer(),
+    );
+  },
+
+  async createInvitation(input: {
+    courseId: string;
+    maxUses?: number;
+    expiresAt?: string;
+  }): Promise<Invitation> {
+    return apiFetch<Invitation>(
+      '/api/v1/modules/learning/invitations',
+      { method: 'POST', body: JSON.stringify(input) },
+      bearer(),
+    );
+  },
+
+  async revokeInvitation(invitationId: string): Promise<void> {
+    await apiFetch<{ revoked: boolean }>(
+      `/api/v1/modules/learning/invitations/${invitationId}`,
+      { method: 'DELETE' },
       bearer(),
     );
   },

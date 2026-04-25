@@ -49,6 +49,34 @@ export class LearningService {
     return this.createFromInvitation(tenantId, userId, invitation, 'INVITATION_LINK');
   }
 
+  /**
+   * El alumno se matricula a sí mismo en un curso PUBLISHED del tenant.
+   * No requiere código ni link — útil cuando el formador deja el curso open-enrollment.
+   */
+  async enrollSelf(tenantId: string, userId: string, courseId: string) {
+    return this.createEnrollment({
+      tenantId,
+      actorId: userId,
+      userId,
+      courseId,
+      source: 'ADMIN',
+    });
+  }
+
+  async listInvitationsForCourse(tenantId: string, courseId: string) {
+    return this.prisma.modLearningInvitation.findMany({
+      where: { tenantId, courseId, revokedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async revokeInvitation(tenantId: string, invitationId: string) {
+    await this.prisma.modLearningInvitation.updateMany({
+      where: { id: invitationId, tenantId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
   async trackProgress(tenantId: string, userId: string, dto: TrackProgressDto) {
     const enrollment = await this.prisma.modLearningEnrollment.findFirst({
       where: { tenantId, userId, id: dto.enrollmentId },
