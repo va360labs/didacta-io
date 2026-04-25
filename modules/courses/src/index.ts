@@ -8,10 +8,12 @@ export {
   updateCourseSchema,
   createModuleSchema,
   createLessonSchema,
+  updateLessonSchema,
   type CreateCourseDto,
   type UpdateCourseDto,
   type CreateModuleDto,
   type CreateLessonDto,
+  type UpdateLessonDto,
 } from './dto.js';
 export {
   CoursesError,

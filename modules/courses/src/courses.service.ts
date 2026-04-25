@@ -8,7 +8,13 @@ import {
   CourseSlugAlreadyExistsError,
   PublishValidationError,
 } from './errors.js';
-import type { CreateCourseDto, CreateLessonDto, CreateModuleDto, UpdateCourseDto } from './dto.js';
+import type {
+  CreateCourseDto,
+  CreateLessonDto,
+  CreateModuleDto,
+  UpdateCourseDto,
+  UpdateLessonDto,
+} from './dto.js';
 
 export class CoursesService {
   constructor(
@@ -149,6 +155,30 @@ export class CoursesService {
       lessonId: created.id,
     });
     return created;
+  }
+
+  async updateLesson(
+    tenantId: string,
+    actorId: string | null,
+    lessonId: string,
+    dto: UpdateLessonDto,
+  ) {
+    const lesson = await this.prisma.modCoursesLesson.findFirst({
+      where: { tenantId, id: lessonId, deletedAt: null },
+    });
+    if (!lesson) throw new CourseNotFoundError(lessonId);
+
+    const updated = await this.prisma.modCoursesLesson.update({
+      where: { id: lessonId },
+      data: {
+        ...(dto.title !== undefined ? { title: dto.title } : {}),
+        ...(dto.content !== undefined ? { content: dto.content as never } : {}),
+        ...(dto.durationMinutes !== undefined ? { durationMinutes: dto.durationMinutes } : {}),
+      },
+    });
+
+    await this.publish(tenantId, actorId, 'courses.lesson.updated', { lessonId });
+    return updated;
   }
 
   async publishCourse(tenantId: string, actorId: string | null, courseId: string) {

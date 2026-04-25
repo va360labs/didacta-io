@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
 import { coursesApi, type CourseDetail, type CourseModule, type LessonType } from '@/lib/courses';
+import { LessonContentEditor } from './lesson-content-editor';
 
 const LESSON_TYPES: { value: LessonType; label: string }[] = [
   { value: 'VIDEO', label: 'Vídeo' },
@@ -156,6 +157,7 @@ function ModuleBlock({
   onChange: () => Promise<void>;
 }) {
   const [pending, setPending] = useState(false);
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
 
   async function handleAddLesson(form: FormData) {
     setPending(true);
@@ -185,17 +187,35 @@ function ModuleBlock({
         <span className="text-xs text-neutral-500">{courseModule.lessons.length} lecciones</span>
       </header>
 
-      <ul className="mb-3 space-y-1 text-sm">
+      <ul className="mb-3 space-y-2 text-sm">
         {courseModule.lessons.map((l) => (
-          <li key={l.id} className="flex items-center justify-between">
-            <span>
-              <span className="mr-2 inline-block min-w-[3rem] rounded bg-neutral-100 px-1.5 py-0.5 text-center text-[10px] uppercase tracking-wider text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
-                {l.type}
+          <li key={l.id} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span>
+                <span className="mr-2 inline-block min-w-[3rem] rounded bg-neutral-100 px-1.5 py-0.5 text-center text-[10px] uppercase tracking-wider text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
+                  {l.type}
+                </span>
+                {l.title}
               </span>
-              {l.title}
-            </span>
-            {l.durationMinutes ? (
-              <span className="text-xs text-neutral-500">{l.durationMinutes} min</span>
+              <div className="flex items-center gap-3">
+                {l.durationMinutes ? (
+                  <span className="text-xs text-neutral-500">{l.durationMinutes} min</span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setEditingLessonId(editingLessonId === l.id ? null : l.id)}
+                  className="text-xs underline decoration-dotted hover:decoration-solid"
+                >
+                  {editingLessonId === l.id ? 'Cerrar' : 'Editar contenido'}
+                </button>
+              </div>
+            </div>
+            {editingLessonId === l.id ? (
+              <LessonContentEditor
+                lesson={l}
+                onUpdated={onChange}
+                onCancel={() => setEditingLessonId(null)}
+              />
             ) : null}
           </li>
         ))}

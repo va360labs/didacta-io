@@ -27,6 +27,7 @@ export interface CourseLesson {
   title: string;
   position: number;
   durationMinutes: number | null;
+  content?: Record<string, unknown>;
 }
 
 export interface CourseModule {
@@ -98,6 +99,21 @@ export const coursesApi = {
     return apiFetch<CourseLesson>(
       `/api/v1/modules/courses/modules/${moduleId}/lessons`,
       { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async updateLesson(
+    lessonId: string,
+    input: {
+      title?: string;
+      content?: Record<string, unknown>;
+      durationMinutes?: number | null;
+    },
+  ): Promise<CourseLesson> {
+    return apiFetch<CourseLesson>(
+      `/api/v1/modules/courses/lessons/${lessonId}`,
+      { method: 'PUT', body: JSON.stringify(input) },
       withAuth(),
     );
   },

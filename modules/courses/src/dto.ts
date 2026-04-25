@@ -43,3 +43,10 @@ export const createLessonSchema = z.object({
   durationMinutes: z.number().int().positive().optional(),
 });
 export type CreateLessonDto = z.infer<typeof createLessonSchema>;
+
+export const updateLessonSchema = z.object({
+  title: z.string().min(1).max(160).optional(),
+  content: lessonContentSchema.optional(),
+  durationMinutes: z.number().int().positive().nullable().optional(),
+});
+export type UpdateLessonDto = z.infer<typeof updateLessonSchema>;

@@ -17,10 +17,12 @@ import {
   createLessonSchema,
   createModuleSchema,
   updateCourseSchema,
+  updateLessonSchema,
   type CreateCourseDto,
   type CreateLessonDto,
   type CreateModuleDto,
   type UpdateCourseDto,
+  type UpdateLessonDto,
 } from '@learnship/mod-courses';
 import { z } from 'zod';
 import { CurrentUser } from '../auth/decorators';
@@ -121,6 +123,23 @@ export class CoursesController {
       return await this.registry
         .getCoursesService()
         .createLesson(user.tenantId, user.sub, moduleId, dto);
+    } catch (error) {
+      throw this.translate(error);
+    }
+  }
+
+  @Put('lessons/:lessonId')
+  @ApiOperation({ summary: 'Actualizar contenido de una lección' })
+  async updateLesson(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('lessonId') lessonId: string,
+    @Body(new ZodValidationPipe(updateLessonSchema)) dto: UpdateLessonDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    try {
+      return await this.registry
+        .getCoursesService()
+        .updateLesson(user.tenantId, user.sub, lessonId, dto);
     } catch (error) {
       throw this.translate(error);
     }
