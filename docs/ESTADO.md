@@ -8,11 +8,12 @@
 
 ## TL;DR
 
-- **Fase 1.A** del plan está al ~90 %. Falta solo el **endpoint público de verificación de la cadena de auditoría** (PR 41, en curso, ver "Trabajo en curso" más abajo).
+- **Fase 1.A** del plan **cerrada**. El audit log ahora es verificable de extremo a extremo (PR #42 mergeado): registrable + verificable por tenant.
 - Aplicación funcional end-to-end en Easypanel: `https://lab-learnship.3qntut.easypanel.host`.
 - El alumno puede registrarse, matricularse, completar un curso y descargar su certificado PDF.
 - Todos los servicios core (EventBus, AuditLog, EvidenceVault, Storage) son **reales** — ya no quedan stubs en `module-context.factory`.
-- 49 tests unitarios en `apps/api` + 23 tests en módulos = **72 tests verdes** en CI principal. E2E con Playwright (1 spec) corre en workflow separado, no bloquea PRs.
+- 54 tests unitarios en `apps/api` + 23 tests en módulos = **77 tests verdes** en CI principal. E2E con Playwright (1 spec) corre en workflow separado, no bloquea PRs.
+- Próximo item del roadmap: **mod.assessments** (quizzes), diferido en su momento de Fase 1.A.
 
 ---
 
@@ -54,36 +55,9 @@ Para el deploy en Easypanel: ver `docs/test.env.md`.
 
 ---
 
-## Trabajo en curso (PR 41 — `feat/T-1A-018-audit-verify`)
+## Trabajo en curso
 
-**Rama**: `feat/T-1A-018-audit-verify` — pusheada al remoto con un commit `wip(audit): verifyChain + AuditController (sin registrar en módulo, sin tests)`.
-
-Lo que falta para cerrar PR 41:
-
-1. **Registrar `AuditController`** en `apps/api/src/modules/modules.module.ts` (añadir a `controllers: [...]`).
-2. **Tests del `verifyChain`** en `apps/api/tests/audit-log.test.ts` (caso válido + caso corrupto: editar la fila intermedia y comprobar que `firstBrokenId` apunta a esa fila o la siguiente).
-3. **Format + commit final** (squash el `wip`), abrir PR, esperar CI verde, mergear con `--squash --delete-branch`.
-
-Snippet sugerido para el test:
-
-```ts
-it('detecta tampering: si se modifica el metadata de una fila vieja, la cadena se rompe', async () => {
-  const prisma = makeFakePrisma();
-  const svc = new PrismaAuditLogService(prisma as never);
-  await svc.record({ tenantId: 't1', actorId: 'u1', action: 'a', resourceType: 'r', resourceId: 'r1' });
-  await svc.record({ tenantId: 't1', actorId: 'u1', action: 'b', resourceType: 'r', resourceId: 'r2' });
-  await svc.record({ tenantId: 't1', actorId: 'u1', action: 'c', resourceType: 'r', resourceId: 'r3' });
-
-  // Tampering: alguien modifica metadata de la 2ª fila sin recalcular el hash
-  prisma._rows[1].metadata = { mutado: true };
-
-  const result = await svc.verifyChain('t1');
-  expect(result.valid).toBe(false);
-  expect(result.firstBrokenId).toBe('2');
-});
-```
-
-Recordatorio: el endpoint solo permite `super_admin` y `tenant_admin`, y siempre verifica la cadena del **tenant del usuario** (no acepta tenantId arbitrario en el path por seguridad).
+Ninguno. **PR #42 mergeado** — Fase 1.A cerrada. Lo siguiente es elegir un item del "Roadmap inmediato" (recomendado: `mod.assessments`, item #1).
 
 ---
 
@@ -91,14 +65,13 @@ Recordatorio: el endpoint solo permite `super_admin` y `tenant_admin`, y siempre
 
 | # | Item | Por qué | Esfuerzo |
 |---|---|---|---|
-| 1 | **PR 41 — audit verify** (en curso, ver arriba) | Cierra el ciclo del audit log: ahora es verificable, no solo registrable. | < 1 sesión |
-| 2 | **mod.assessments** (quizzes) | Sin quizzes, los cursos no validan aprendizaje. Era el item original diferido en Fase 1.A. | 1-2 sesiones |
-| 3 | **Versionar migraciones con `prisma migrate dev`** | Hoy se usa `prisma db push` (no genera migraciones). Al estabilizar schema, hay que migrar a migrate-style. | 1 sesión |
-| 4 | **Llamadas explícitas a `auditLog.record()` con IP + UA** | Hoy las metadata no llevan IP ni user-agent. Hay que pasar el `request` desde controllers. | < 1 sesión |
-| 5 | **mod.outbox real con BullMQ + Redis** | Ya hay outbox persistente, pero el dispatch sigue siendo in-process. Cuando Easypanel tenga Redis, se reemplaza el processor. | 1 sesión + infra |
-| 6 | **MinIO/S3 storage para producción** | Hoy se usa LocalDiskStorageService. Para prod hace falta storage compartido entre instancias. | 1 sesión |
-| 7 | **Más specs E2E** | Solo hay golden path. Faltan: invitación por código, MFA admin, edición por formador. | 1-2 sesiones |
-| 8 | **Notificaciones reales (NotificationHub)** | Sigue siendo stub. El alumno no recibe email al matricularse ni al obtener certificado. | 1-2 sesiones + SMTP |
+| 1 | **mod.assessments** (quizzes) | Sin quizzes, los cursos no validan aprendizaje. Era el item original diferido en Fase 1.A. | 1-2 sesiones |
+| 2 | **Versionar migraciones con `prisma migrate dev`** | Hoy se usa `prisma db push` (no genera migraciones). Al estabilizar schema, hay que migrar a migrate-style. | 1 sesión |
+| 3 | **Llamadas explícitas a `auditLog.record()` con IP + UA** | Hoy las metadata no llevan IP ni user-agent. Hay que pasar el `request` desde controllers. | < 1 sesión |
+| 4 | **mod.outbox real con BullMQ + Redis** | Ya hay outbox persistente, pero el dispatch sigue siendo in-process. Cuando Easypanel tenga Redis, se reemplaza el processor. | 1 sesión + infra |
+| 5 | **MinIO/S3 storage para producción** | Hoy se usa LocalDiskStorageService. Para prod hace falta storage compartido entre instancias. | 1 sesión |
+| 6 | **Más specs E2E** | Solo hay golden path. Faltan: invitación por código, MFA admin, edición por formador. | 1-2 sesiones |
+| 7 | **Notificaciones reales (NotificationHub)** | Sigue siendo stub. El alumno no recibe email al matricularse ni al obtener certificado. | 1-2 sesiones + SMTP |
 
 Detalle completo en `docs/PLAN-FASES.md`.
 
@@ -125,11 +98,11 @@ apps/
         certificates.controller.ts  # GET /me, /:id, /:id/download (PR 36)
         courses.controller.ts       # CRUD cursos
         learning.controller.ts      # Matrícula + progreso
-        audit.controller.ts         # GET /verify (PR 41 WIP — falta registrar)
+        audit.controller.ts         # GET /audit/verify, super_admin/tenant_admin only (PR 42)
         modules.module.ts           # Registra TODOS los controllers + providers
       prisma/             # PrismaService inyectable
       ...
-    tests/                # 49 tests unitarios (vitest)
+    tests/                # 54 tests unitarios (vitest)
 
   web/                    # Next.js 15 (App Router) + React 19 + Tailwind 4
     src/
@@ -218,7 +191,7 @@ packages/
 | #38 | feat(core): AuditLog, EvidenceVault y Storage funcionales | merged |
 | #39 | test(e2e): tests Playwright del golden path del alumno | merged |
 | #40 | feat(audit): registrar eventos clave en audit_log y evidence_vault | merged |
-| **WIP** | feat(audit): endpoint /audit/verify para validar cadena de hashes | rama `feat/T-1A-018-audit-verify` pusheada, sin PR todavía |
+| #42 | feat(audit): endpoint /audit/verify para validar la cadena de hashes | merged |
 
 ---
 
@@ -263,9 +236,8 @@ pnpm --filter @learnship/database exec prisma studio
 ## Para el próximo asistente / próximo PC
 
 1. Leer este doc completo. **No empezar a tocar código sin entender el "Trabajo en curso".**
-2. Si vas a continuar PR 41, hacer `git checkout feat/T-1A-018-audit-verify` y seguir desde el commit `wip(audit): verifyChain + AuditController (sin registrar en módulo, sin tests)`.
-3. Si vas a empezar algo nuevo, mirar la tabla "Roadmap inmediato" y proponer el siguiente item al usuario antes de tocar.
-4. **Reglas que NO se negocian** (ver `CLAUDE.md` global):
+2. No hay rama abierta. Mirar la tabla "Roadmap inmediato" y proponer el siguiente item al usuario antes de tocar.
+3. **Reglas que NO se negocian** (ver `CLAUDE.md` global):
    - Commits en español, conventional commits, SIN `Co-Authored-By` ni referencias a IA
    - 1 PR por feature, ramas por feature, squash-merge
    - Verificar antes de afirmar; si el user dice algo técnicamente raro, decir "dejame verificar"
