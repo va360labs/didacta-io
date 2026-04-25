@@ -1,6 +1,6 @@
 # Estado del proyecto — punto de retomada
 
-> **Última actualización**: 2026-04-25
+> **Última actualización**: 2026-04-25 (post `mod.assessments`)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo de este doc**: que cualquier sesión nueva (otro equipo, otra IA) pueda retomar exactamente donde quedó la anterior.
 
@@ -8,12 +8,13 @@
 
 ## TL;DR
 
-- **Fase 1.A** del plan **cerrada**. El audit log ahora es verificable de extremo a extremo (PR #42 mergeado): registrable + verificable por tenant.
+- **Fase 1.A cerrada + `mod.assessments` v0.1 cerrado** (PRs #44–49). El alumno puede ahora hacer quizzes con auto-corrección de tipos objetivos (SINGLE_CHOICE / MULTIPLE_CHOICE / TRUE_FALSE) y, si aprueba, la lección QUIZ se marca completada automáticamente vía evento.
 - Aplicación funcional end-to-end en Easypanel: `https://lab-learnship.3qntut.easypanel.host`.
-- El alumno puede registrarse, matricularse, completar un curso y descargar su certificado PDF.
+- El alumno puede registrarse, matricularse, **realizar quizzes**, completar un curso y descargar su certificado PDF.
 - Todos los servicios core (EventBus, AuditLog, EvidenceVault, Storage) son **reales** — ya no quedan stubs en `module-context.factory`.
-- 54 tests unitarios en `apps/api` + 23 tests en módulos = **77 tests verdes** en CI principal. E2E con Playwright (1 spec) corre en workflow separado, no bloquea PRs.
-- Próximo item del roadmap: **mod.assessments** (quizzes), diferido en su momento de Fase 1.A.
+- 68 tests unitarios en `apps/api` + 48 tests en módulos = **116 tests verdes** en CI principal. E2E con Playwright (1 spec) corre en workflow separado, no bloquea PRs.
+- Módulos cargados al boot: `mod.hello-world`, `mod.courses`, `mod.learning`, `mod.certificates`, `mod.assessments`.
+- Próximo item del roadmap: **versionar migraciones con `prisma migrate dev`** (item #2).
 
 ---
 
@@ -57,7 +58,7 @@ Para el deploy en Easypanel: ver `docs/test.env.md`.
 
 ## Trabajo en curso
 
-Ninguno. **PR #42 mergeado** — Fase 1.A cerrada. Lo siguiente es elegir un item del "Roadmap inmediato" (recomendado: `mod.assessments`, item #1).
+Ninguno. **`mod.assessments` v0.1 cerrado** (PRs #44–49). Lo siguiente es elegir un item del "Roadmap inmediato".
 
 ---
 
@@ -65,13 +66,13 @@ Ninguno. **PR #42 mergeado** — Fase 1.A cerrada. Lo siguiente es elegir un ite
 
 | # | Item | Por qué | Esfuerzo |
 |---|---|---|---|
-| 1 | **mod.assessments** (quizzes) | Sin quizzes, los cursos no validan aprendizaje. Era el item original diferido en Fase 1.A. | 1-2 sesiones |
-| 2 | **Versionar migraciones con `prisma migrate dev`** | Hoy se usa `prisma db push` (no genera migraciones). Al estabilizar schema, hay que migrar a migrate-style. | 1 sesión |
-| 3 | **Llamadas explícitas a `auditLog.record()` con IP + UA** | Hoy las metadata no llevan IP ni user-agent. Hay que pasar el `request` desde controllers. | < 1 sesión |
-| 4 | **mod.outbox real con BullMQ + Redis** | Ya hay outbox persistente, pero el dispatch sigue siendo in-process. Cuando Easypanel tenga Redis, se reemplaza el processor. | 1 sesión + infra |
-| 5 | **MinIO/S3 storage para producción** | Hoy se usa LocalDiskStorageService. Para prod hace falta storage compartido entre instancias. | 1 sesión |
-| 6 | **Más specs E2E** | Solo hay golden path. Faltan: invitación por código, MFA admin, edición por formador. | 1-2 sesiones |
-| 7 | **Notificaciones reales (NotificationHub)** | Sigue siendo stub. El alumno no recibe email al matricularse ni al obtener certificado. | 1-2 sesiones + SMTP |
+| 1 | **Versionar migraciones con `prisma migrate dev`** | Hoy se usa `prisma db push` (no genera migraciones). Con 5 modelos nuevos del módulo de assessments, ya conviene estabilizar y migrar a migrate-style antes de que el schema crezca más. | 1 sesión |
+| 2 | **Llamadas explícitas a `auditLog.record()` con IP + UA** | Hoy las metadata no llevan IP ni user-agent. Hay que pasar el `request` desde controllers. | < 1 sesión |
+| 3 | **mod.outbox real con BullMQ + Redis** | Ya hay outbox persistente, pero el dispatch sigue siendo in-process. Cuando Easypanel tenga Redis, se reemplaza el processor. | 1 sesión + infra |
+| 4 | **MinIO/S3 storage para producción** | Hoy se usa LocalDiskStorageService. Para prod hace falta storage compartido entre instancias. | 1 sesión |
+| 5 | **Más specs E2E** | Solo hay golden path. Faltan: invitación por código, MFA admin, **flujo completo de quiz alumno**, edición por formador. | 1-2 sesiones |
+| 6 | **Notificaciones reales (NotificationHub)** | Sigue siendo stub. El alumno no recibe email al matricularse, al obtener certificado ni al aprobar/no aprobar un quiz. | 1-2 sesiones + SMTP |
+| 7 | **mod.assessments tipos avanzados** | v0.1 solo cubre tipos objetivos. Faltan FILL_IN_BLANK, SHORT_ANSWER, LONG_ANSWER y la pipeline de corrección manual. | 2 sesiones |
 
 Detalle completo en `docs/PLAN-FASES.md`.
 
@@ -99,10 +100,14 @@ apps/
         courses.controller.ts       # CRUD cursos
         learning.controller.ts      # Matrícula + progreso
         audit.controller.ts         # GET /audit/verify, super_admin/tenant_admin only (PR 42)
+        assessments.controller.ts   # CRUD quizzes (formador role) (PR 45)
+        assessments-attempts.controller.ts # Flujo alumno (PR 46)
+        assessments-error.filter.ts # Mapping AssessmentsError → HTTP (PR 45)
+        assessments-learning.bridge.ts # Subscribe a assessments.attempt.passed → trackProgress (PR 47)
         modules.module.ts           # Registra TODOS los controllers + providers
       prisma/             # PrismaService inyectable
       ...
-    tests/                # 54 tests unitarios (vitest)
+    tests/                # 68 tests unitarios (vitest)
 
   web/                    # Next.js 15 (App Router) + React 19 + Tailwind 4
     src/
@@ -129,6 +134,7 @@ modules/                  # Módulos de negocio (contrato LearnShipModule)
   courses/                # mod.courses (estructura, lecciones, publish)
   learning/               # mod.learning (matrícula, progreso, invitaciones)
   certificates/           # mod.certificates (PDF, idempotente, EvidenceVault)
+  assessments/            # mod.assessments (quizzes + scoring engine puro + 25 tests)
 
 packages/
   core-kernel/            # Tipos del contrato de módulo (ModuleContext, EventBus, etc.)
@@ -192,6 +198,12 @@ packages/
 | #39 | test(e2e): tests Playwright del golden path del alumno | merged |
 | #40 | feat(audit): registrar eventos clave en audit_log y evidence_vault | merged |
 | #42 | feat(audit): endpoint /audit/verify para validar la cadena de hashes | merged |
+| #44 | feat(assessments): scaffold mod.assessments + scoring engine | merged |
+| #45 | feat(assessments): endpoints HTTP del formador | merged |
+| #46 | feat(assessments): endpoints del alumno (start/submit attempt) | merged |
+| #47 | feat(assessments): bridge mod.assessments → mod.learning | merged |
+| #48 | feat(assessments): UI formador del editor de quiz | merged |
+| #49 | feat(assessments): UI alumno del player de quiz | merged |
 
 ---
 
