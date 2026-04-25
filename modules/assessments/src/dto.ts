@@ -1,0 +1,87 @@
+import { z } from 'zod';
+
+export const questionTypeSchema = z.enum(['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE']);
+export type QuestionTypeDto = z.infer<typeof questionTypeSchema>;
+
+export const createQuizSchema = z.object({
+  lessonId: z.string().uuid().optional(),
+  title: z.string().min(3).max(200),
+  description: z.string().max(2000).optional(),
+  passThreshold: z.number().int().min(0).max(100).optional(),
+  maxAttempts: z.number().int().positive().optional(),
+  timeLimitMinutes: z.number().int().positive().optional(),
+  shuffleQuestions: z.boolean().optional(),
+  showFeedback: z.boolean().optional(),
+});
+export type CreateQuizDto = z.infer<typeof createQuizSchema>;
+
+export const updateQuizSchema = createQuizSchema.partial();
+export type UpdateQuizDto = z.infer<typeof updateQuizSchema>;
+
+export const createOptionSchema = z.object({
+  label: z.string().min(1).max(500),
+  isCorrect: z.boolean(),
+});
+export type CreateOptionDto = z.infer<typeof createOptionSchema>;
+
+export const createQuestionSchema = z
+  .object({
+    type: questionTypeSchema,
+    prompt: z.string().min(3).max(2000),
+    feedback: z.string().max(2000).optional(),
+    points: z.number().int().positive().optional(),
+    options: z.array(createOptionSchema).min(2).max(10),
+  })
+  .superRefine((q, ctx) => {
+    const correctCount = q.options.filter((o) => o.isCorrect).length;
+    if (correctCount === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'La pregunta debe tener al menos una opción correcta',
+        path: ['options'],
+      });
+    }
+    if (q.type === 'SINGLE_CHOICE' && correctCount !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'SINGLE_CHOICE exige exactamente una opción correcta',
+        path: ['options'],
+      });
+    }
+    if (q.type === 'TRUE_FALSE') {
+      if (q.options.length !== 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'TRUE_FALSE exige exactamente 2 opciones',
+          path: ['options'],
+        });
+      }
+      if (correctCount !== 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'TRUE_FALSE exige exactamente una opción correcta',
+          path: ['options'],
+        });
+      }
+    }
+  });
+export type CreateQuestionDto = z.infer<typeof createQuestionSchema>;
+
+export const startAttemptSchema = z.object({
+  quizId: z.string().uuid(),
+  enrollmentId: z.string().uuid().optional(),
+  lessonId: z.string().uuid().optional(),
+});
+export type StartAttemptDto = z.infer<typeof startAttemptSchema>;
+
+export const submitAttemptAnswerSchema = z.object({
+  questionId: z.string().uuid(),
+  selectedOptionIds: z.array(z.string().uuid()).max(10),
+});
+export type SubmitAttemptAnswerDto = z.infer<typeof submitAttemptAnswerSchema>;
+
+export const submitAttemptSchema = z.object({
+  attemptId: z.string().uuid(),
+  answers: z.array(submitAttemptAnswerSchema).min(1).max(200),
+});
+export type SubmitAttemptDto = z.infer<typeof submitAttemptSchema>;

@@ -558,3 +558,147 @@ model ModCertificatesIssued {
   @@index([courseId])
   @@map("mod_certificates_issued")
 }
+
+// ============================================================================
+// mod.assessments — Quizzes con auto-corrección de tipos objetivos
+// ============================================================================
+
+enum QuizStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  EXPIRED
+  ABANDONED
+}
+
+model ModAssessmentsQuiz {
+  id                String     @id @default(uuid()) @db.Uuid
+  tenantId          String     @map("tenant_id") @db.Uuid
+  /// ID lógico de la lección a la que pertenece el quiz (sin FK cross-module).
+  /// Null mientras se redacta y aún no se ha asociado a ninguna lección.
+  lessonId          String?    @map("lesson_id") @db.Uuid
+  title             String
+  description       String?
+  status            QuizStatus @default(DRAFT)
+  /// Umbral de aprobación en porcentaje (0-100). Default 60 %.
+  passThreshold     Int        @default(60) @map("pass_threshold")
+  /// Máximo de intentos por alumno (null = ilimitado).
+  maxAttempts       Int?       @map("max_attempts")
+  /// Límite de tiempo en minutos (null = sin límite).
+  timeLimitMinutes  Int?       @map("time_limit_minutes")
+  /// Si true, el orden de preguntas y opciones se barajará al iniciar el intento.
+  shuffleQuestions  Boolean    @default(false) @map("shuffle_questions")
+  /// Si true, al terminar el alumno ve la corrección por pregunta.
+  showFeedback      Boolean    @default(true) @map("show_feedback")
+  createdById       String?    @map("created_by_id") @db.Uuid
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+  publishedAt       DateTime?  @map("published_at")
+  deletedAt         DateTime?  @map("deleted_at")
+
+  questions ModAssessmentsQuestion[]
+  attempts  ModAssessmentsAttempt[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, lessonId])
+  @@map("mod_assessments_quiz")
+}
+
+model ModAssessmentsQuestion {
+  id        String       @id @default(uuid()) @db.Uuid
+  tenantId  String       @map("tenant_id") @db.Uuid
+  quizId    String       @map("quiz_id") @db.Uuid
+  type      QuestionType
+  prompt    String
+  /// Texto de feedback opcional que se muestra tras corregir.
+  feedback  String?
+  position  Int
+  /// Puntos que vale la pregunta (default 1).
+  points    Int          @default(1)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+  deletedAt DateTime?    @map("deleted_at")
+
+  quiz    ModAssessmentsQuiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options ModAssessmentsOption[]
+
+  @@unique([quizId, position])
+  @@index([tenantId, quizId])
+  @@map("mod_assessments_question")
+}
+
+model ModAssessmentsOption {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  questionId String   @map("question_id") @db.Uuid
+  label      String
+  /// True si esta opción cuenta como respuesta correcta.
+  isCorrect  Boolean  @default(false) @map("is_correct")
+  position   Int
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  question ModAssessmentsQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, position])
+  @@index([tenantId, questionId])
+  @@map("mod_assessments_option")
+}
+
+model ModAssessmentsAttempt {
+  id            String        @id @default(uuid()) @db.Uuid
+  tenantId      String        @map("tenant_id") @db.Uuid
+  quizId        String        @map("quiz_id") @db.Uuid
+  userId        String        @map("user_id") @db.Uuid
+  /// IDs lógicos del contexto (sin FK cross-module): la matriculación y la lección
+  /// desde las que el alumno está realizando el intento.
+  enrollmentId  String?       @map("enrollment_id") @db.Uuid
+  lessonId      String?       @map("lesson_id") @db.Uuid
+  status        AttemptStatus @default(IN_PROGRESS)
+  /// Snapshot inmutable del intento al enviarlo: puntos obtenidos, máximos, % y pasa/no pasa.
+  scoreEarned   Int?          @map("score_earned")
+  scoreMax      Int?          @map("score_max")
+  scorePercent  Int?          @map("score_percent")
+  passed        Boolean?
+  startedAt     DateTime      @default(now()) @map("started_at")
+  /// Vencimiento del intento si el quiz tenía time limit (start + timeLimit).
+  expiresAt     DateTime?     @map("expires_at")
+  submittedAt   DateTime?     @map("submitted_at")
+
+  quiz    ModAssessmentsQuiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  answers ModAssessmentsAnswer[]
+
+  @@index([tenantId, quizId, userId])
+  @@index([userId, status])
+  @@map("mod_assessments_attempt")
+}
+
+model ModAssessmentsAnswer {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  attemptId         String   @map("attempt_id") @db.Uuid
+  questionId        String   @map("question_id") @db.Uuid
+  /// IDs de las opciones marcadas por el alumno (vacío si no respondió).
+  selectedOptionIds String[] @default([]) @map("selected_option_ids") @db.Uuid
+  /// Resultado del scoring (rellenado al submit).
+  isCorrect         Boolean  @default(false) @map("is_correct")
+  scoreEarned       Int      @default(0) @map("score_earned")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  attempt ModAssessmentsAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@index([tenantId, attemptId])
+  @@map("mod_assessments_answer")
+}

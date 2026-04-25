@@ -1,5 +1,6 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { ModuleRegistry } from '@learnship/core-registry';
+import { assessmentsModule, AssessmentsService } from '@learnship/mod-assessments';
 import { buildCertificatesModule, CertificatesService } from '@learnship/mod-certificates';
 import { coursesModule, CoursesService } from '@learnship/mod-courses';
 import { helloWorldModule } from '@learnship/mod-hello-world';
@@ -15,6 +16,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private courses?: CoursesService;
   private learning?: LearningService;
   private certificates?: CertificatesService;
+  private assessments?: AssessmentsService;
 
   constructor(
     private readonly factory: ModuleContextFactory,
@@ -29,6 +31,7 @@ export class ModuleRegistryService implements OnModuleInit {
     this.courses = new CoursesService(prisma, context);
     this.learning = new LearningService(prisma, context);
     this.certificates = new CertificatesService(prisma, context);
+    this.assessments = new AssessmentsService(prisma, context);
 
     const certificatesModule = buildCertificatesModule(this.certificates);
 
@@ -37,6 +40,7 @@ export class ModuleRegistryService implements OnModuleInit {
       coursesModule,
       learningModule,
       certificatesModule,
+      assessmentsModule,
     ]);
 
     this.pino.log(
@@ -58,6 +62,11 @@ export class ModuleRegistryService implements OnModuleInit {
   getCertificatesService(): CertificatesService {
     if (!this.certificates) throw new Error('ModuleRegistry no está inicializado');
     return this.certificates;
+  }
+
+  getAssessmentsService(): AssessmentsService {
+    if (!this.assessments) throw new Error('ModuleRegistry no está inicializado');
+    return this.assessments;
   }
 
   isModuleEnabledForTenant(_tenantId: string, _moduleName: string): boolean {

@@ -19,6 +19,7 @@
     "@learnship/core-kernel": "workspace:*",
     "@learnship/core-registry": "workspace:*",
     "@learnship/database": "workspace:*",
+    "@learnship/mod-assessments": "workspace:*",
     "@learnship/mod-certificates": "workspace:*",
     "@learnship/mod-courses": "workspace:*",
     "@learnship/mod-hello-world": "workspace:*",
