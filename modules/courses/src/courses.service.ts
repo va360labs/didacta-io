@@ -43,6 +43,14 @@ export class CoursesService {
     });
 
     await this.publish(tenantId, actorId, 'courses.course.created', { courseId: course.id });
+    await this.ctx.auditLog.record({
+      tenantId,
+      actorId,
+      action: 'course.created',
+      resourceType: 'course',
+      resourceId: course.id,
+      metadata: { slug: course.slug, title: course.title },
+    });
     return course;
   }
 
@@ -205,6 +213,14 @@ export class CoursesService {
     });
 
     await this.publish(tenantId, actorId, 'courses.course.published', { courseId });
+    await this.ctx.auditLog.record({
+      tenantId,
+      actorId,
+      action: 'course.published',
+      resourceType: 'course',
+      resourceId: courseId,
+      metadata: { lessonCount, slug: course.slug },
+    });
     return published;
   }
 
@@ -216,6 +232,13 @@ export class CoursesService {
       data: { status: 'ARCHIVED' },
     });
     await this.publish(tenantId, actorId, 'courses.course.archived', { courseId });
+    await this.ctx.auditLog.record({
+      tenantId,
+      actorId,
+      action: 'course.archived',
+      resourceType: 'course',
+      resourceId: courseId,
+    });
     return updated;
   }
 

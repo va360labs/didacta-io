@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { ApiKeyController } from './api-key.controller';
 import { JwtOrApiKeyGuard } from './api-key.guard';
 import { ApiKeyService } from './api-key.service';
@@ -20,6 +21,7 @@ import { TokenService } from './token.service';
     ApiKeyService,
     JwtAuthGuard,
     JwtOrApiKeyGuard,
+    PrismaAuditLogService,
   ],
   exports: [
     AuthService,
@@ -29,6 +31,7 @@ import { TokenService } from './token.service';
     ApiKeyService,
     JwtAuthGuard,
     JwtOrApiKeyGuard,
+    PrismaAuditLogService,
   ],
 })
 export class AuthModule {}

@@ -85,6 +85,31 @@ export class CertificatesService {
       },
     });
 
+    // Vault: el PDF inmutable queda con su hash referenciado en evidence_vault_entry.
+    // Si el snapshot del cert se corrompe en el futuro, el original se reconstruye
+    // desde el vault.
+    await this.ctx.evidenceVault.store({
+      tenantId: input.tenantId,
+      resourceType: 'certificate',
+      resourceId: created.id,
+      data: pdf,
+      contentType: 'application/pdf',
+    });
+
+    await this.ctx.auditLog.record({
+      tenantId: input.tenantId,
+      actorId: input.userId,
+      action: 'certificate.issued',
+      resourceType: 'certificate',
+      resourceId: created.id,
+      metadata: {
+        number,
+        courseId: input.courseId,
+        enrollmentId: input.enrollmentId,
+        hash,
+      },
+    });
+
     await this.publish(input.tenantId, input.userId, 'certificates.issued', {
       certificateId: created.id,
       enrollmentId: input.enrollmentId,

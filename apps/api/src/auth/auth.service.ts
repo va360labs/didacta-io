@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PasswordService } from './password.service';
 import { TokenService, type SignedTokens } from './token.service';
@@ -26,6 +27,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
     private readonly tokens: TokenService,
+    private readonly auditLog: PrismaAuditLogService,
   ) {}
 
   async signup(dto: SignupDto): Promise<AuthResult> {
@@ -66,6 +68,15 @@ export class AuthService {
       mfaVerified: !mfaRequired,
     });
 
+    await this.auditLog.record({
+      tenantId: tenant.id,
+      actorId: user.id,
+      action: 'user.signup',
+      resourceType: 'user',
+      resourceId: user.id,
+      metadata: { email: user.email, tenantSlug: tenant.slug },
+    });
+
     return {
       tokens,
       mfaRequired,
@@ -92,11 +103,27 @@ export class AuthService {
       include: { roles: { include: { role: true } }, tenant: true },
     });
     if (!user || !user.passwordHash || user.status !== 'ACTIVE') {
+      await this.auditLog.record({
+        tenantId: tenant.id,
+        actorId: null,
+        action: 'user.signin.failed',
+        resourceType: 'user',
+        resourceId: dto.email,
+        metadata: { reason: 'user_not_found_or_inactive', tenantSlug: tenant.slug },
+      });
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
     const valid = await this.passwords.verify(user.passwordHash, dto.password);
     if (!valid) {
+      await this.auditLog.record({
+        tenantId: tenant.id,
+        actorId: user.id,
+        action: 'user.signin.failed',
+        resourceType: 'user',
+        resourceId: user.id,
+        metadata: { reason: 'invalid_password' },
+      });
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
@@ -113,6 +140,15 @@ export class AuthService {
       tenantId: tenant.id,
       roles,
       mfaVerified: !mfaRequired,
+    });
+
+    await this.auditLog.record({
+      tenantId: tenant.id,
+      actorId: user.id,
+      action: 'user.signin.success',
+      resourceType: 'user',
+      resourceId: user.id,
+      metadata: { mfaRequired, roles },
     });
 
     return {

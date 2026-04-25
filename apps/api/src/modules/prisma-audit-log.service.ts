@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
+import { Injectable } from '@nestjs/common';
 import type { AuditLogService } from '@learnship/core-kernel';
-import type { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Audit log append-only con cadena de hashes para detección de tampering.
@@ -16,6 +17,7 @@ import type { PrismaService } from '../prisma/prisma.service';
  * dos filas con el mismo prev_hash. Para Fase 1.A es aceptable; en Fase 2 se
  * añadirá un lock advisory por tenantId al insertar para garantizar linealidad.
  */
+@Injectable()
 export class PrismaAuditLogService implements AuditLogService {
   constructor(private readonly prisma: PrismaService) {}
 

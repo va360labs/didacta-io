@@ -14,6 +14,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { MfaService } from './mfa.service';
 import { TokenService, type SessionClaims } from './token.service';
 import { ZodValidationPipe } from './zod-validation.pipe';
+import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const enableSchema = z.object({
@@ -36,6 +37,7 @@ export class MfaController {
     private readonly mfa: MfaService,
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
+    private readonly auditLog: PrismaAuditLogService,
   ) {}
 
   @Post('setup')
@@ -80,6 +82,14 @@ export class MfaController {
       data: { mfaEnabled: true },
     });
 
+    await this.auditLog.record({
+      tenantId: user.tenantId,
+      actorId: user.sub,
+      action: 'user.mfa.enabled',
+      resourceType: 'user',
+      resourceId: user.sub,
+    });
+
     const tokens = await this.tokens.sign({
       sub: user.sub,
       tenantId: user.tenantId,
@@ -114,7 +124,16 @@ export class MfaController {
       if (result.valid) updatedRecoveryCodes = result.remaining;
     }
 
-    if (!success) throw new ForbiddenException('Código incorrecto');
+    if (!success) {
+      await this.auditLog.record({
+        tenantId: user.tenantId,
+        actorId: user.sub,
+        action: 'user.mfa.verify.failed',
+        resourceType: 'user',
+        resourceId: user.sub,
+      });
+      throw new ForbiddenException('Código incorrecto');
+    }
 
     if (updatedRecoveryCodes) {
       await this.prisma.user.update({
@@ -122,6 +141,15 @@ export class MfaController {
         data: { mfaRecoveryCodes: updatedRecoveryCodes },
       });
     }
+
+    await this.auditLog.record({
+      tenantId: user.tenantId,
+      actorId: user.sub,
+      action: 'user.mfa.verify.success',
+      resourceType: 'user',
+      resourceId: user.sub,
+      metadata: { usedRecoveryCode: !!updatedRecoveryCodes },
+    });
 
     const tokens = await this.tokens.sign({
       sub: user.sub,
