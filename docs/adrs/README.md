@@ -16,7 +16,7 @@ Registro de decisiones arquitectónicas no triviales. Cada ADR es inmutable una 
 | --- | ------------------------------------------ | -------- |
 | 001 | Monolito modular vs microservicios         | Accepted |
 | 002 | Multi-tenancy strategy: Row-Level Security | Accepted |
-| 003 | Auth provider: Better-Auth vs Auth.js v5   | Proposed |
+| 003 | Auth provider: Auth.js v5                  | Accepted |
 | 004 | Streaming provider Fase 1: Zoom API        | Accepted |
 | 005 | ORM: Prisma 5                              | Accepted |
 | 006 | API versioning: URL path                   | Accepted |
