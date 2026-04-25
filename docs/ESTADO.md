@@ -1,6 +1,6 @@
 # Estado del proyecto — punto de retomada
 
-> **Última actualización**: 2026-04-25 (post `mod.assessments`)
+> **Última actualización**: 2026-04-25 (post `mod.assessments` v0.3 + grading UI)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo de este doc**: que cualquier sesión nueva (otro equipo, otra IA) pueda retomar exactamente donde quedó la anterior.
 
@@ -8,13 +8,15 @@
 
 ## TL;DR
 
-- **Fase 1.A cerrada + `mod.assessments` v0.1 cerrado** (PRs #44–49). El alumno puede ahora hacer quizzes con auto-corrección de tipos objetivos (SINGLE_CHOICE / MULTIPLE_CHOICE / TRUE_FALSE) y, si aprueba, la lección QUIZ se marca completada automáticamente vía evento.
+- **`mod.assessments` cerrado en v0.3** (PRs #44–56). Soporta los 6 tipos del PRD original (SINGLE/MULTIPLE/TRUE_FALSE/FILL_IN_BLANK/SHORT_ANSWER/LONG_ANSWER) con auto-corrección + corrección manual end-to-end (UI formador en `/formador/correcciones/[id]`).
+- **Migraciones versionadas** con `prisma migrate deploy` — baseline `0_init` capturado tras Fase 1.A; primer paso post-deploy en Easypanel: `prisma migrate resolve --applied 0_init`.
+- **Audit log enriquecido** con IP y user-agent reales (signup/signin/MFA).
 - Aplicación funcional end-to-end en Easypanel: `https://lab-learnship.3qntut.easypanel.host`.
-- El alumno puede registrarse, matricularse, **realizar quizzes**, completar un curso y descargar su certificado PDF.
-- Todos los servicios core (EventBus, AuditLog, EvidenceVault, Storage) son **reales** — ya no quedan stubs en `module-context.factory`.
-- 68 tests unitarios en `apps/api` + 48 tests en módulos = **116 tests verdes** en CI principal. E2E con Playwright (1 spec) corre en workflow separado, no bloquea PRs.
+- El alumno puede registrarse, matricularse (link directo, código de invitación), **realizar quizzes** (auto-corregidos o con respuestas abiertas que el formador califica), completar un curso y descargar su certificado PDF.
+- Servicios core (EventBus persistente, AuditLog encadenado, EvidenceVault, Storage) son reales — sin stubs.
+- 78 tests unitarios en `apps/api` + 58 tests en módulos = **136 tests verdes** en CI principal. **3 specs E2E** Playwright (golden path + quiz alumno + matrícula por código) en workflow separado.
 - Módulos cargados al boot: `mod.hello-world`, `mod.courses`, `mod.learning`, `mod.certificates`, `mod.assessments`.
-- Próximo item del roadmap: **`auditLog.record()` con IP + user-agent reales** (item #1).
+- **Items pendientes del roadmap todos bloqueados por infra externa** (Redis, S3, SMTP) o son nice-to-have (más specs E2E, UI polish).
 
 ---
 
@@ -58,20 +60,20 @@ Para el deploy en Easypanel: ver `docs/test.env.md`.
 
 ## Trabajo en curso
 
-Ninguno. **`mod.assessments` v0.1 cerrado** (PRs #44–49). Lo siguiente es elegir un item del "Roadmap inmediato".
+Ninguno. Todo lo iniciado en esta sesión quedó cerrado y mergeado a main (PRs #44–56). Lo siguiente es elegir items del roadmap, **casi todo bloqueado por infra externa**.
 
 ---
 
 ## Roadmap inmediato (en orden de prioridad)
 
-| # | Item | Por qué | Esfuerzo |
-|---|---|---|---|
-| 1 | **Llamadas explícitas a `auditLog.record()` con IP + UA** | Hoy las metadata no llevan IP ni user-agent. Hay que pasar el `request` desde controllers. | < 1 sesión |
-| 2 | **mod.outbox real con BullMQ + Redis** | Ya hay outbox persistente, pero el dispatch sigue siendo in-process. Cuando Easypanel tenga Redis, se reemplaza el processor. | 1 sesión + infra |
-| 3 | **MinIO/S3 storage para producción** | Hoy se usa LocalDiskStorageService. Para prod hace falta storage compartido entre instancias. | 1 sesión |
-| 4 | **Más specs E2E** | Solo hay golden path. Faltan: invitación por código, MFA admin, **flujo completo de quiz alumno**, edición por formador. | 1-2 sesiones |
-| 5 | **Notificaciones reales (NotificationHub)** | Sigue siendo stub. El alumno no recibe email al matricularse, al obtener certificado ni al aprobar/no aprobar un quiz. | 1-2 sesiones + SMTP |
-| 6 | **mod.assessments tipos avanzados** | v0.1 solo cubre tipos objetivos. Faltan FILL_IN_BLANK, SHORT_ANSWER, LONG_ANSWER y la pipeline de corrección manual. | 2 sesiones |
+| # | Item | Por qué | Esfuerzo | Bloqueo |
+|---|---|---|---|---|
+| 1 | **mod.outbox real con BullMQ + Redis** | Ya hay outbox persistente, pero el dispatch sigue siendo in-process. | 1 sesión + infra | **Redis en Easypanel** |
+| 2 | **MinIO/S3 storage para producción** | Hoy se usa LocalDiskStorageService. Para prod hace falta storage compartido entre instancias. | 1 sesión | **S3 / MinIO** |
+| 3 | **Notificaciones reales (NotificationHub)** | Sigue siendo stub. El alumno no recibe email al matricularse, al obtener certificado ni al aprobar/no aprobar un quiz. | 1-2 sesiones | **SMTP** |
+| 4 | **Más specs E2E del flujo de corrección manual** | Hay specs para quiz auto-corregido pero falta el flujo SHORT_ANSWER + corrección formador. | < 1 sesión | — |
+| 5 | **MFA admin spec E2E** | Pendiente desde Fase 1.A. | < 1 sesión | — |
+| 6 | **UI: editor de cursos por formador** | Hay editor pero falta polish (ordenar lecciones, eliminar módulo, etc.). | 1 sesión | — |
 
 Detalle completo en `docs/PLAN-FASES.md`.
 
@@ -203,6 +205,12 @@ packages/
 | #47 | feat(assessments): bridge mod.assessments → mod.learning | merged |
 | #48 | feat(assessments): UI formador del editor de quiz | merged |
 | #49 | feat(assessments): UI alumno del player de quiz | merged |
+| #51 | chore(db): baseline `0_init` + switch a prisma migrate deploy | merged |
+| #52 | feat(audit): IP + user-agent reales | merged |
+| #53 | test(e2e): specs Playwright (quiz alumno + matrícula por código) | merged |
+| #54 | feat(assessments): tipo FILL_IN_BLANK con auto-corrección (v0.2) | merged |
+| #55 | feat(assessments): SHORT/LONG_ANSWER + corrección manual (v0.3) | merged |
+| #56 | feat(assessments): UI detalle de corrección manual + endpoint formador | merged |
 
 ---
 
