@@ -63,4 +63,8 @@ export class ModuleRegistryService implements OnModuleInit {
   isModuleEnabledForTenant(_tenantId: string, _moduleName: string): boolean {
     return true;
   }
+
+  async recoverOutbox(): Promise<{ processed: number; failed: number }> {
+    return this.factory.getEventBus().recoverPending();
+  }
 }

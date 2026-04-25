@@ -2,8 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import type {
   AuditLogService,
-  DomainEvent,
-  EventBus,
   EvidenceVaultService,
   HookContext,
   HookRegistry,
@@ -15,6 +13,7 @@ import type {
   TenantConfigService,
 } from '@learnship/core-kernel';
 import { PrismaService } from '../prisma/prisma.service';
+import { PersistentEventBus } from './persistent-event-bus';
 
 type AnyHandler = (ctx: HookContext<unknown>) => Promise<void> | void;
 
@@ -43,49 +42,6 @@ class InMemoryHookRegistry implements HookRegistry {
  * Implementación in-memory del EventBus. Despacha a handlers locales sincrónicamente.
  * No persiste eventos (cuando llegue mod.outbox lo reemplazamos).
  */
-type AnyEventHandler = (event: DomainEvent<unknown>) => Promise<void> | void;
-
-class InMemoryEventBus implements EventBus {
-  private readonly handlers = new Map<string, Set<AnyEventHandler>>();
-
-  constructor(private readonly logger: Logger) {}
-
-  async publish<TPayload>(event: DomainEvent<TPayload>) {
-    this.logger.info('event published', {
-      event: event.name,
-      tenantId: event.metadata.tenantId,
-    });
-    const set = this.handlers.get(event.name);
-    if (!set) return;
-    for (const handler of set) {
-      try {
-        await handler(event as DomainEvent<unknown>);
-      } catch (error) {
-        this.logger.error('event handler falló', {
-          event: event.name,
-          error: (error as Error).message,
-        });
-      }
-    }
-  }
-
-  subscribe<TPayload>(
-    eventName: string,
-    handler: (event: DomainEvent<TPayload>) => Promise<void> | void,
-  ) {
-    let set = this.handlers.get(eventName);
-    if (!set) {
-      set = new Set();
-      this.handlers.set(eventName, set);
-    }
-    const wrapped = handler as AnyEventHandler;
-    set.add(wrapped);
-    return () => {
-      set?.delete(wrapped);
-    };
-  }
-}
-
 const stubStorage: StorageService = {
   async upload(key: string) {
     return { key };
@@ -143,6 +99,7 @@ class StubTenantConfig implements TenantConfigService {
 export class ModuleContextFactory {
   private readonly hookRegistry = new InMemoryHookRegistry();
   private readonly tenantConfig = new StubTenantConfig();
+  private eventBus?: PersistentEventBus;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -151,8 +108,9 @@ export class ModuleContextFactory {
 
   build(): ModuleContext {
     const adaptedLogger = this.adaptLogger(this.pino);
+    this.eventBus = new PersistentEventBus(this.prisma, adaptedLogger);
     return {
-      eventBus: new InMemoryEventBus(adaptedLogger),
+      eventBus: this.eventBus,
       hookRegistry: this.hookRegistry,
       storage: stubStorage,
       auditLog: stubAuditLog,
@@ -166,6 +124,11 @@ export class ModuleContextFactory {
 
   getPrisma(): PrismaService {
     return this.prisma;
+  }
+
+  getEventBus(): PersistentEventBus {
+    if (!this.eventBus) throw new Error('EventBus aún no construido (build() no fue llamado)');
+    return this.eventBus;
   }
 
   private adaptLogger(pino: PinoLogger): Logger {
