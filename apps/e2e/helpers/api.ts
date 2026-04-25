@@ -266,6 +266,45 @@ export async function createPublishedQuizForLesson(args: {
 }
 
 /**
+ * Crea, configura y publica un quiz con UNA pregunta SHORT_ANSWER (sin
+ * auto-corrección). Pensado para testear el flujo PENDING_REVIEW + grading.
+ */
+export async function createPublishedShortAnswerQuiz(args: {
+  bearer: string;
+  lessonId: string;
+  passThreshold?: number;
+  points?: number;
+}): Promise<{ quizId: string; questionId: string; questionPoints: number }> {
+  const points = args.points ?? 5;
+  const created = await api<{ id: string }>('/api/v1/modules/assessments/quizzes', {
+    method: 'POST',
+    body: {
+      lessonId: args.lessonId,
+      title: 'Quiz E2E SHORT_ANSWER',
+      passThreshold: args.passThreshold ?? 60,
+    },
+    bearer: args.bearer,
+  });
+  const question = await api<{ id: string }>(
+    `/api/v1/modules/assessments/quizzes/${created.id}/questions`,
+    {
+      method: 'POST',
+      body: {
+        type: 'SHORT_ANSWER',
+        prompt: 'Explica brevemente qué es Postgres.',
+        points,
+      },
+      bearer: args.bearer,
+    },
+  );
+  await api(`/api/v1/modules/assessments/quizzes/${created.id}/publish`, {
+    method: 'POST',
+    bearer: args.bearer,
+  });
+  return { quizId: created.id, questionId: question.id, questionPoints: points };
+}
+
+/**
  * Crea un curso DRAFT con una lección de tipo QUIZ vinculada a un quiz
  * publicado, y publica el curso. Devuelve el detalle + ids del quiz.
  */
@@ -305,6 +344,60 @@ export async function createPublishedCourseWithQuiz(args: {
   );
   const quiz = await createPublishedQuizForLesson({ bearer: args.bearer, lessonId: lesson.id });
   // Vincular el quiz a la lección actualizando lesson.content.quizId
+  await api(`/api/v1/modules/courses/lessons/${lesson.id}`, {
+    method: 'PUT',
+    body: { content: { quizId: quiz.quizId } },
+    bearer: args.bearer,
+  });
+  await api(`/api/v1/modules/courses/${course.id}/publish`, {
+    method: 'POST',
+    bearer: args.bearer,
+  });
+  const detail = await api<CourseDetail>(`/api/v1/modules/courses/${course.id}`, {
+    bearer: args.bearer,
+  });
+  return { course: detail, ...quiz };
+}
+
+/**
+ * Crea un curso DRAFT con una lección QUIZ vinculada a un quiz SHORT_ANSWER
+ * publicado. Pensado para tests de grading manual.
+ */
+export async function createPublishedCourseWithShortAnswerQuiz(args: {
+  bearer: string;
+  title: string;
+  slug: string;
+}): Promise<{ course: CourseDetail; quizId: string; questionId: string; questionPoints: number }> {
+  const course = await api<{ id: string }>('/api/v1/modules/courses', {
+    method: 'POST',
+    body: {
+      title: args.title,
+      slug: args.slug,
+      description: 'Curso E2E con quiz de respuesta corta',
+      category: 'general',
+    },
+    bearer: args.bearer,
+  });
+  const moduleResp = await api<{ id: string }>(`/api/v1/modules/courses/${course.id}/modules`, {
+    method: 'POST',
+    body: { title: 'Módulo único', orderIndex: 0 },
+    bearer: args.bearer,
+  });
+  const lesson = await api<{ id: string }>(
+    `/api/v1/modules/courses/modules/${moduleResp.id}/lessons`,
+    {
+      method: 'POST',
+      body: {
+        title: 'Quiz lesson SHORT',
+        type: 'QUIZ',
+        orderIndex: 0,
+        content: {},
+        durationSec: 60,
+      },
+      bearer: args.bearer,
+    },
+  );
+  const quiz = await createPublishedShortAnswerQuiz({ bearer: args.bearer, lessonId: lesson.id });
   await api(`/api/v1/modules/courses/lessons/${lesson.id}`, {
     method: 'PUT',
     body: { content: { quizId: quiz.quizId } },
