@@ -5,6 +5,10 @@
 # Construye apps/api (NestJS) y apps/web (Next.js) en un solo contenedor.
 # Easypanel hace deploy desde el repo en cada merge a main.
 # El entrypoint corre `prisma migrate deploy` y `db:rls:apply` antes de levantar.
+#
+# Patrón usado: `pnpm fetch` + `pnpm install --offline`. Esto evita tener que
+# enumerar cada workspace package.json en COPYs separados — el lockfile basta.
+# Cuando se añaden módulos nuevos no hay que tocar el Dockerfile.
 # ============================================================================
 
 # ----------------------------------------------------------------------------
@@ -22,79 +26,51 @@ RUN corepack enable && corepack prepare pnpm@10.21.0 --activate
 WORKDIR /repo
 ENV PNPM_HOME=/root/.local/share/pnpm \
     PATH=$PNPM_HOME:$PATH \
-    NODE_ENV=production
+    NODE_ENV=production \
+    HUSKY=0
 
 # ----------------------------------------------------------------------------
-# Stage 2: deps — instala dependencias con cache eficiente
+# Stage 2: fetcher — descarga el store completo (devDeps + prodDeps) sin código
 # ----------------------------------------------------------------------------
-FROM base AS deps
-ENV NODE_ENV=development
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.base.json .npmrc* ./
-COPY apps/api/package.json apps/api/
-COPY apps/web/package.json apps/web/
-COPY packages/core-kernel/package.json packages/core-kernel/
-COPY packages/core-registry/package.json packages/core-registry/
-COPY packages/database/package.json packages/database/
-COPY modules/hello-world/package.json modules/hello-world/
+FROM base AS fetcher
+COPY pnpm-lock.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile
+    pnpm fetch
 
 # ----------------------------------------------------------------------------
-# Stage 3: builder — genera Prisma client y buildea api + web
+# Stage 3: builder — copia código y buildea TODO el monorepo (devDeps activas)
 # ----------------------------------------------------------------------------
-FROM deps AS builder
+FROM fetcher AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY . .
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --offline --frozen-lockfile
 RUN pnpm --filter @learnship/database db:generate
-RUN pnpm turbo run build --filter=@learnship/api --filter=@learnship/web
+RUN pnpm turbo run build
 
 # ----------------------------------------------------------------------------
-# Stage 4: runner — imagen final mínima con solo lo necesario para runtime
+# Stage 4: runner — imagen final con prune de devDeps
 # ----------------------------------------------------------------------------
-FROM base AS runner
-ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1 \
-    API_PORT=4000 \
-    WEB_PORT=3000
+FROM builder AS runner
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --offline --frozen-lockfile --prod \
+ && pnpm store prune || true
 
 RUN groupadd --system --gid 1001 learnship \
- && useradd  --system --uid 1001 --gid learnship --shell /bin/bash learnship
-
-# Workspace minimal: lockfile + manifests para que pnpm pueda resolver
-COPY --chown=learnship:learnship package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
-COPY --chown=learnship:learnship apps/api/package.json                apps/api/
-COPY --chown=learnship:learnship apps/web/package.json                apps/web/
-COPY --chown=learnship:learnship packages/core-kernel/package.json    packages/core-kernel/
-COPY --chown=learnship:learnship packages/core-registry/package.json  packages/core-registry/
-COPY --chown=learnship:learnship packages/database/package.json       packages/database/
-COPY --chown=learnship:learnship modules/hello-world/package.json     modules/hello-world/
-
-# Solo prod deps (más pequeño y sin devDeps)
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --prod
-
-# Artefactos buildeados
-COPY --chown=learnship:learnship --from=builder /repo/apps/api/dist                 apps/api/dist
-COPY --chown=learnship:learnship --from=builder /repo/apps/web/.next                apps/web/.next
-COPY --chown=learnship:learnship --from=builder /repo/apps/web/public               apps/web/public/
-COPY --chown=learnship:learnship --from=builder /repo/apps/web/next.config.ts       apps/web/
-COPY --chown=learnship:learnship --from=builder /repo/packages/core-kernel/dist     packages/core-kernel/dist
-COPY --chown=learnship:learnship --from=builder /repo/packages/core-registry/dist   packages/core-registry/dist
-COPY --chown=learnship:learnship --from=builder /repo/packages/database/dist        packages/database/dist
-COPY --chown=learnship:learnship --from=builder /repo/packages/database/prisma      packages/database/prisma
-COPY --chown=learnship:learnship --from=builder /repo/modules/hello-world/dist      modules/hello-world/dist
-
-# Cliente Prisma generado
-COPY --chown=learnship:learnship --from=builder /repo/node_modules/.pnpm/@prisma+client* node_modules/.pnpm/
+ && useradd  --system --uid 1001 --gid learnship --shell /bin/bash learnship \
+ && chown -R learnship:learnship /repo
 
 # Entrypoint: migraciones + rls + arranque
 COPY --chown=learnship:learnship infra/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 USER learnship
+
+ENV API_PORT=4000 \
+    WEB_PORT=3000
+
 EXPOSE 4000 3000
 
-# Healthcheck contra /healthz de la API (más representativo del estado del proceso)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD curl -fsS http://localhost:${API_PORT}/healthz || exit 1
 
