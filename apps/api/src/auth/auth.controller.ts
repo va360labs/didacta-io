@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UsePipes } from '@nestjs/common';
+import { Body, Controller, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import {
@@ -18,22 +18,19 @@ export class AuthController {
 
   @Post('signup')
   @ApiOperation({ summary: 'Registrar un usuario en un tenant existente' })
-  @UsePipes(new ZodValidationPipe(signupSchema))
-  async signup(@Body() dto: SignupDto) {
+  async signup(@Body(new ZodValidationPipe(signupSchema)) dto: SignupDto) {
     return this.auth.signup(dto);
   }
 
   @Post('signin')
   @ApiOperation({ summary: 'Iniciar sesión con email + password' })
-  @UsePipes(new ZodValidationPipe(signinSchema))
-  async signin(@Body() dto: SigninDto) {
+  async signin(@Body(new ZodValidationPipe(signinSchema)) dto: SigninDto) {
     return this.auth.signin(dto);
   }
 
   @Post('refresh')
   @ApiOperation({ summary: 'Renovar access token con un refresh token' })
-  @UsePipes(new ZodValidationPipe(refreshSchema))
-  async refresh(@Body() dto: RefreshDto) {
+  async refresh(@Body(new ZodValidationPipe(refreshSchema)) dto: RefreshDto) {
     const tokens = await this.auth.refresh(dto.refreshToken);
     return { tokens };
   }

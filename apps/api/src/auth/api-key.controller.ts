@@ -8,7 +8,6 @@ import {
   Post,
   UnauthorizedException,
   UseGuards,
-  UsePipes,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -33,10 +32,9 @@ export class ApiKeyController {
 
   @Post()
   @ApiOperation({ summary: 'Crear API key. El token solo se devuelve una vez aquí.' })
-  @UsePipes(new ZodValidationPipe(createSchema))
   async create(
     @CurrentUser() user: SessionClaims | undefined,
-    @Body() body: z.infer<typeof createSchema>,
+    @Body(new ZodValidationPipe(createSchema)) body: z.infer<typeof createSchema>,
   ) {
     if (!user) throw new UnauthorizedException();
     return this.apiKeys.create({

@@ -8,7 +8,6 @@ import {
   Post,
   UnauthorizedException,
   UseGuards,
-  UsePipes,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
@@ -46,24 +45,30 @@ export class LearningController {
 
   @Post('enrollments')
   @ApiOperation({ summary: 'Enrollar a un usuario por admin (requiere permiso)' })
-  @UsePipes(new ZodValidationPipe(enrollByAdminSchema))
-  async enrollAdmin(@CurrentUser() user: SessionClaims | undefined, @Body() dto: EnrollByAdminDto) {
+  async enrollAdmin(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(enrollByAdminSchema)) dto: EnrollByAdminDto,
+  ) {
     if (!user) throw new UnauthorizedException();
     return this.registry.getLearningService().enrollByAdmin(user.tenantId, user.sub, dto);
   }
 
   @Post('enrollments/by-code')
   @ApiOperation({ summary: 'Auto-matriculación con código' })
-  @UsePipes(new ZodValidationPipe(enrollByCodeSchema))
-  async enrollByCode(@CurrentUser() user: SessionClaims | undefined, @Body() dto: EnrollByCodeDto) {
+  async enrollByCode(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(enrollByCodeSchema)) dto: EnrollByCodeDto,
+  ) {
     if (!user) throw new UnauthorizedException();
     return this.registry.getLearningService().enrollByCode(user.tenantId, user.sub, dto);
   }
 
   @Post('enrollments/by-link')
   @ApiOperation({ summary: 'Auto-matriculación con token de invitación' })
-  @UsePipes(new ZodValidationPipe(enrollByLinkSchema))
-  async enrollByLink(@CurrentUser() user: SessionClaims | undefined, @Body() dto: EnrollByLinkDto) {
+  async enrollByLink(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(enrollByLinkSchema)) dto: EnrollByLinkDto,
+  ) {
     if (!user) throw new UnauthorizedException();
     return this.registry.getLearningService().enrollByLink(user.tenantId, user.sub, dto);
   }
@@ -79,18 +84,19 @@ export class LearningController {
   @Post('progress')
   @HttpCode(200)
   @ApiOperation({ summary: 'Reportar progreso en una lección' })
-  @UsePipes(new ZodValidationPipe(trackProgressSchema))
-  async track(@CurrentUser() user: SessionClaims | undefined, @Body() dto: TrackProgressDto) {
+  async track(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(trackProgressSchema)) dto: TrackProgressDto,
+  ) {
     if (!user) throw new UnauthorizedException();
     return this.registry.getLearningService().trackProgress(user.tenantId, user.sub, dto);
   }
 
   @Post('invitations')
   @ApiOperation({ summary: 'Crear invitación (código + token)' })
-  @UsePipes(new ZodValidationPipe(createInvitationSchema))
   async createInvitation(
     @CurrentUser() user: SessionClaims | undefined,
-    @Body() dto: CreateInvitationDto,
+    @Body(new ZodValidationPipe(createInvitationSchema)) dto: CreateInvitationDto,
   ) {
     if (!user) throw new UnauthorizedException();
     return this.registry.getLearningService().createInvitation(user.tenantId, user.sub, dto);

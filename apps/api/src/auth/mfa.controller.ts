@@ -6,7 +6,6 @@ import {
   Post,
   UnauthorizedException,
   UseGuards,
-  UsePipes,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -17,7 +16,6 @@ import { TokenService, type SessionClaims } from './token.service';
 import { ZodValidationPipe } from './zod-validation.pipe';
 import { PrismaService } from '../prisma/prisma.service';
 
-const setupSchema = z.object({});
 const enableSchema = z.object({
   code: z
     .string()
@@ -42,7 +40,6 @@ export class MfaController {
 
   @Post('setup')
   @ApiOperation({ summary: 'Generar nuevo secreto TOTP + recovery codes (no activa MFA todavía)' })
-  @UsePipes(new ZodValidationPipe(setupSchema))
   async setup(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
     const dbUser = await this.prisma.user.findUnique({ where: { id: user.sub } });
@@ -67,8 +64,10 @@ export class MfaController {
 
   @Post('enable')
   @ApiOperation({ summary: 'Confirmar el setup verificando el primer código TOTP' })
-  @UsePipes(new ZodValidationPipe(enableSchema))
-  async enable(@CurrentUser() user: SessionClaims | undefined, @Body() body: { code: string }) {
+  async enable(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(enableSchema)) body: z.infer<typeof enableSchema>,
+  ) {
     if (!user) throw new UnauthorizedException();
     const dbUser = await this.prisma.user.findUnique({ where: { id: user.sub } });
     if (!dbUser?.mfaSecret) throw new BadRequestException('Setup no iniciado');
@@ -93,8 +92,10 @@ export class MfaController {
 
   @Post('verify')
   @ApiOperation({ summary: 'Verificar el segundo factor para elevar la sesión a mfaVerified=true' })
-  @UsePipes(new ZodValidationPipe(verifySchema))
-  async verify(@CurrentUser() user: SessionClaims | undefined, @Body() body: { code: string }) {
+  async verify(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(verifySchema)) body: z.infer<typeof verifySchema>,
+  ) {
     if (!user) throw new UnauthorizedException();
     const dbUser = await this.prisma.user.findUnique({ where: { id: user.sub } });
     if (!dbUser?.mfaSecret || !dbUser.mfaEnabled) {

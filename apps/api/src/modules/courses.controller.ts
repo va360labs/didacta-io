@@ -9,7 +9,6 @@ import {
   Query,
   UnauthorizedException,
   UseGuards,
-  UsePipes,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
@@ -57,8 +56,10 @@ export class CoursesController {
 
   @Post()
   @ApiOperation({ summary: 'Crear curso (DRAFT)' })
-  @UsePipes(new ZodValidationPipe(createCourseSchema))
-  async create(@CurrentUser() user: SessionClaims | undefined, @Body() dto: CreateCourseDto) {
+  async create(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(createCourseSchema)) dto: CreateCourseDto,
+  ) {
     if (!user) throw new UnauthorizedException();
     try {
       return await this.registry.getCoursesService().createCourse(user.tenantId, user.sub, dto);
