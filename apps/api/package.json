@@ -21,6 +21,7 @@
     "@learnship/database": "workspace:*",
     "@learnship/mod-courses": "workspace:*",
     "@learnship/mod-hello-world": "workspace:*",
+    "@learnship/mod-learning": "workspace:*",
     "@nestjs/common": "^10.4.15",
     "@nestjs/core": "^10.4.15",
     "@nestjs/platform-fastify": "^10.4.15",
