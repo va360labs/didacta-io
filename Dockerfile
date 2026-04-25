@@ -22,11 +22,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     tini \
   && rm -rf /var/lib/apt/lists/*
-RUN corepack enable && corepack prepare pnpm@10.21.0 --activate
+# Instalamos pnpm globalmente como binario (sin corepack) para evitar problemas
+# de caché por usuario en runtime (corepack quiere escribir a $HOME que no es
+# writable cuando corremos como un user no-root).
+RUN npm install --global pnpm@10.21.0
 WORKDIR /repo
-ENV PNPM_HOME=/root/.local/share/pnpm \
-    PATH=$PNPM_HOME:$PATH \
-    NODE_ENV=production \
+ENV NODE_ENV=production \
     HUSKY=0
 
 # ----------------------------------------------------------------------------
@@ -57,8 +58,9 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
  && pnpm store prune || true
 
 RUN groupadd --system --gid 1001 learnship \
- && useradd  --system --uid 1001 --gid learnship --shell /bin/bash learnship \
- && chown -R learnship:learnship /repo
+ && useradd  --system --uid 1001 --gid learnship --create-home --home-dir /home/learnship --shell /bin/bash learnship \
+ && mkdir -p /home/learnship/.cache /home/learnship/.local /home/learnship/.npm \
+ && chown -R learnship:learnship /repo /home/learnship
 
 # Entrypoint: migraciones + rls + arranque
 COPY --chown=learnship:learnship infra/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
@@ -66,7 +68,11 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 
 USER learnship
 
-ENV API_PORT=4000 \
+ENV HOME=/home/learnship \
+    XDG_CACHE_HOME=/home/learnship/.cache \
+    XDG_DATA_HOME=/home/learnship/.local/share \
+    NPM_CONFIG_CACHE=/home/learnship/.npm \
+    API_PORT=4000 \
     WEB_PORT=3000
 
 EXPOSE 4000 3000
