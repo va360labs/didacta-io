@@ -1,6 +1,6 @@
 # Estado del proyecto — punto de retomada
 
-> **Última actualización**: 2026-04-25 (post `mod.assessments` v0.3 + grading UI)
+> **Última actualización**: 2026-04-25 (post NotificationHub + UI polish)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo de este doc**: que cualquier sesión nueva (otro equipo, otra IA) pueda retomar exactamente donde quedó la anterior.
 
@@ -8,15 +8,16 @@
 
 ## TL;DR
 
-- **`mod.assessments` cerrado en v0.3** (PRs #44–56). Soporta los 6 tipos del PRD original (SINGLE/MULTIPLE/TRUE_FALSE/FILL_IN_BLANK/SHORT_ANSWER/LONG_ANSWER) con auto-corrección + corrección manual end-to-end (UI formador en `/formador/correcciones/[id]`).
-- **Migraciones versionadas** con `prisma migrate deploy` — baseline `0_init` capturado tras Fase 1.A; primer paso post-deploy en Easypanel: `prisma migrate resolve --applied 0_init`.
-- **Audit log enriquecido** con IP y user-agent reales (signup/signin/MFA).
+- **`mod.assessments` v0.3 + NotificationHub IN_APP + UI polish**. Sesión cerró 19 PRs (#44–#62) consecutivos.
 - Aplicación funcional end-to-end en Easypanel: `https://lab-learnship.3qntut.easypanel.host`.
-- El alumno puede registrarse, matricularse (link directo, código de invitación), **realizar quizzes** (auto-corregidos o con respuestas abiertas que el formador califica), completar un curso y descargar su certificado PDF.
-- Servicios core (EventBus persistente, AuditLog encadenado, EvidenceVault, Storage) son reales — sin stubs.
-- 78 tests unitarios en `apps/api` + 58 tests en módulos = **136 tests verdes** en CI principal. **3 specs E2E** Playwright (golden path + quiz alumno + matrícula por código) en workflow separado.
+- El alumno puede registrarse, matricularse (link directo, código de invitación), **realizar quizzes** (4 tipos auto-corregidos + 2 abiertos que el formador califica vía UI), completar un curso, descargar su certificado PDF, y **ver sus notificaciones in-app** con bell badge en el header.
+- El formador puede gestionar cursos con reordenar lecciones y eliminar módulos, crear/publicar quizzes, y corregir manualmente respuestas abiertas en `/formador/correcciones/[id]`.
+- Servicios core (EventBus persistente, AuditLog encadenado, EvidenceVault, Storage, NotificationHub) son reales — sin stubs. SMTP adapter queda como log-stub que se reemplaza al llegar la infra sin tocar contrato.
+- **Migraciones versionadas** con `prisma migrate deploy` — primer paso post-deploy en Easypanel: `prisma migrate resolve --applied 0_init`.
+- **Audit log enriquecido** con IP y user-agent reales (signup/signin/MFA).
+- 78 tests unitarios en `apps/api` + 58 tests en módulos = **136 tests verdes** en CI principal. **5 specs E2E** Playwright (golden + quiz + invite + grading manual + MFA setup).
 - Módulos cargados al boot: `mod.hello-world`, `mod.courses`, `mod.learning`, `mod.certificates`, `mod.assessments`.
-- **Items pendientes del roadmap todos bloqueados por infra externa** (Redis, S3, SMTP) o son nice-to-have (más specs E2E, UI polish).
+- **Items pendientes del roadmap todos bloqueados por infra externa** (Redis, S3, SMTP). Nada queda accionable sin esa infra.
 
 ---
 
@@ -60,20 +61,26 @@ Para el deploy en Easypanel: ver `docs/test.env.md`.
 
 ## Trabajo en curso
 
-Ninguno. Todo lo iniciado en esta sesión quedó cerrado y mergeado a main (PRs #44–56). Lo siguiente es elegir items del roadmap, **casi todo bloqueado por infra externa**.
+Ninguno. Todo lo iniciado en esta sesión quedó cerrado y mergeado a main (PRs #44–62, 19 PRs). Lo siguiente es desbloquear infra externa o iniciar Fase 1.B.
 
 ---
 
-## Roadmap inmediato (en orden de prioridad)
+## Roadmap inmediato — todos bloqueados por infra
 
 | # | Item | Por qué | Esfuerzo | Bloqueo |
 |---|---|---|---|---|
 | 1 | **mod.outbox real con BullMQ + Redis** | Ya hay outbox persistente, pero el dispatch sigue siendo in-process. | 1 sesión + infra | **Redis en Easypanel** |
 | 2 | **MinIO/S3 storage para producción** | Hoy se usa LocalDiskStorageService. Para prod hace falta storage compartido entre instancias. | 1 sesión | **S3 / MinIO** |
-| 3 | **Notificaciones reales (NotificationHub)** | Sigue siendo stub. El alumno no recibe email al matricularse, al obtener certificado ni al aprobar/no aprobar un quiz. | 1-2 sesiones | **SMTP** |
-| 4 | **Más specs E2E del flujo de corrección manual** | Hay specs para quiz auto-corregido pero falta el flujo SHORT_ANSWER + corrección formador. | < 1 sesión | — |
-| 5 | **MFA admin spec E2E** | Pendiente desde Fase 1.A. | < 1 sesión | — |
-| 6 | **UI: editor de cursos por formador** | Hay editor pero falta polish (ordenar lecciones, eliminar módulo, etc.). | 1 sesión | — |
+| 3 | **Adapter SMTP real** (NotificationHub) | El branch EMAIL en `prisma-notification-hub.service.ts` ya está listo para que se sustituya por SMTP/Resend/SES sin tocar el contrato. | < 1 sesión | **SMTP** |
+
+> Ningún item del roadmap conocido es accionable sin estos 3 desbloqueos.
+
+## Posibles siguientes pasos sin bloqueo
+
+- **Iniciar Fase 1.B** — Zoom directo (mod.zoom-live), comunidad básica (mod.community), Fundae básico (mod.fundae).
+- **Per-tenant notification templates** — UX para tenant_admin que customiza copy de los emails/in-app.
+- **More test coverage** — el bridge a NotificationHub no tiene tests; el grading detalle tampoco.
+- **Webhook adapter en NotificationHub** — sin caso de uso concreto, defer.
 
 Detalle completo en `docs/PLAN-FASES.md`.
 
@@ -211,6 +218,11 @@ packages/
 | #54 | feat(assessments): tipo FILL_IN_BLANK con auto-corrección (v0.2) | merged |
 | #55 | feat(assessments): SHORT/LONG_ANSWER + corrección manual (v0.3) | merged |
 | #56 | feat(assessments): UI detalle de corrección manual + endpoint formador | merged |
+| #58 | test(e2e): spec del flujo end-to-end de corrección manual (SHORT_ANSWER) | merged |
+| #59 | test(e2e): spec del flujo MFA admin (setup + enable con TOTP) | merged |
+| #60 | feat(courses): polish del editor del formador (reordenar lecciones + eliminar módulo) | merged |
+| #61 | feat(core): NotificationHub real con persistencia + bandeja in-app del alumno | merged |
+| #62 | feat(web): bell de notificaciones con badge de no leídas en el header | merged |
 
 ---
 
