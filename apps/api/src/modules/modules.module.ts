@@ -7,6 +7,8 @@ import { AssessmentsErrorFilter } from './assessments-error.filter';
 import { AssessmentsLearningBridge } from './assessments-learning.bridge';
 import { AuditController } from './audit.controller';
 import { CertificatesController } from './certificates.controller';
+import { CommunityController } from './community.controller';
+import { CommunityErrorFilter } from './community-error.filter';
 import { CoursesController } from './courses.controller';
 import { CoursesErrorFilter } from './courses-error.filter';
 import { FormadorStatsController } from './formador-stats.controller';
@@ -29,6 +31,7 @@ import { OutboxRecoveryWorker } from './outbox-recovery.worker';
     AssessmentsAttemptsController,
     NotificationsController,
     FormadorStatsController,
+    CommunityController,
   ],
   providers: [
     ModuleContextFactory,
@@ -39,6 +42,7 @@ import { OutboxRecoveryWorker } from './outbox-recovery.worker';
     { provide: APP_FILTER, useClass: CoursesErrorFilter },
     { provide: APP_FILTER, useClass: LearningErrorFilter },
     { provide: APP_FILTER, useClass: AssessmentsErrorFilter },
+    { provide: APP_FILTER, useClass: CommunityErrorFilter },
   ],
   exports: [ModuleRegistryService],
 })
