@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
+import { NotificationsBell } from '@/components/notifications-bell';
 import { Button } from '@/components/ui/button';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
 
@@ -60,6 +61,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
+            <NotificationsBell />
             <span className="text-neutral-500">
               {session.user.name ?? session.user.email}
               <span className="ml-2 text-xs text-neutral-400">@ {session.user.tenantSlug}</span>
