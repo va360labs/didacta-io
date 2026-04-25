@@ -4,11 +4,14 @@ import {
   Controller,
   ForbiddenException,
   Post,
+  Req,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { extractClientContext } from './client-context';
 import { CurrentUser } from './decorators';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { MfaService } from './mfa.service';
@@ -67,6 +70,7 @@ export class MfaController {
   @Post('enable')
   @ApiOperation({ summary: 'Confirmar el setup verificando el primer código TOTP' })
   async enable(
+    @Req() req: FastifyRequest,
     @CurrentUser() user: SessionClaims | undefined,
     @Body(new ZodValidationPipe(enableSchema)) body: z.infer<typeof enableSchema>,
   ) {
@@ -82,12 +86,15 @@ export class MfaController {
       data: { mfaEnabled: true },
     });
 
+    const ctx = extractClientContext(req);
     await this.auditLog.record({
       tenantId: user.tenantId,
       actorId: user.sub,
       action: 'user.mfa.enabled',
       resourceType: 'user',
       resourceId: user.sub,
+      ip: ctx.ip ?? undefined,
+      userAgent: ctx.userAgent ?? undefined,
     });
 
     const tokens = await this.tokens.sign({
@@ -103,6 +110,7 @@ export class MfaController {
   @Post('verify')
   @ApiOperation({ summary: 'Verificar el segundo factor para elevar la sesión a mfaVerified=true' })
   async verify(
+    @Req() req: FastifyRequest,
     @CurrentUser() user: SessionClaims | undefined,
     @Body(new ZodValidationPipe(verifySchema)) body: z.infer<typeof verifySchema>,
   ) {
@@ -124,6 +132,8 @@ export class MfaController {
       if (result.valid) updatedRecoveryCodes = result.remaining;
     }
 
+    const ctx = extractClientContext(req);
+
     if (!success) {
       await this.auditLog.record({
         tenantId: user.tenantId,
@@ -131,6 +141,8 @@ export class MfaController {
         action: 'user.mfa.verify.failed',
         resourceType: 'user',
         resourceId: user.sub,
+        ip: ctx.ip ?? undefined,
+        userAgent: ctx.userAgent ?? undefined,
       });
       throw new ForbiddenException('Código incorrecto');
     }
@@ -149,6 +161,8 @@ export class MfaController {
       resourceType: 'user',
       resourceId: user.sub,
       metadata: { usedRecoveryCode: !!updatedRecoveryCodes },
+      ip: ctx.ip ?? undefined,
+      userAgent: ctx.userAgent ?? undefined,
     });
 
     const tokens = await this.tokens.sign({

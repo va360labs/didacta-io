@@ -1,6 +1,8 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { FastifyRequest } from 'fastify';
 import { AuthService } from './auth.service';
+import { extractClientContext } from './client-context';
 import {
   signinSchema,
   signupSchema,
@@ -18,14 +20,20 @@ export class AuthController {
 
   @Post('signup')
   @ApiOperation({ summary: 'Registrar un usuario en un tenant existente' })
-  async signup(@Body(new ZodValidationPipe(signupSchema)) dto: SignupDto) {
-    return this.auth.signup(dto);
+  async signup(
+    @Req() req: FastifyRequest,
+    @Body(new ZodValidationPipe(signupSchema)) dto: SignupDto,
+  ) {
+    return this.auth.signup(dto, extractClientContext(req));
   }
 
   @Post('signin')
   @ApiOperation({ summary: 'Iniciar sesión con email + password' })
-  async signin(@Body(new ZodValidationPipe(signinSchema)) dto: SigninDto) {
-    return this.auth.signin(dto);
+  async signin(
+    @Req() req: FastifyRequest,
+    @Body(new ZodValidationPipe(signinSchema)) dto: SigninDto,
+  ) {
+    return this.auth.signin(dto, extractClientContext(req));
   }
 
   @Post('refresh')

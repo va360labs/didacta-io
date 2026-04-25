@@ -1,11 +1,14 @@
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import type { ClientContext } from './client-context';
 import { PasswordService } from './password.service';
 import { TokenService, type SignedTokens } from './token.service';
 import type { SigninDto, SignupDto } from './dto';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
+
+const NO_CLIENT_CONTEXT: ClientContext = { ip: null, userAgent: null };
 
 export interface AuthResult {
   tokens: SignedTokens;
@@ -30,7 +33,7 @@ export class AuthService {
     private readonly auditLog: PrismaAuditLogService,
   ) {}
 
-  async signup(dto: SignupDto): Promise<AuthResult> {
+  async signup(dto: SignupDto, ctx: ClientContext = NO_CLIENT_CONTEXT): Promise<AuthResult> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: dto.tenantSlug } });
     if (!tenant || tenant.status !== 'ACTIVE') {
       throw new UnauthorizedException('Tenant no válido o no activo');
@@ -75,6 +78,8 @@ export class AuthService {
       resourceType: 'user',
       resourceId: user.id,
       metadata: { email: user.email, tenantSlug: tenant.slug },
+      ip: ctx.ip ?? undefined,
+      userAgent: ctx.userAgent ?? undefined,
     });
 
     return {
@@ -92,7 +97,7 @@ export class AuthService {
     };
   }
 
-  async signin(dto: SigninDto): Promise<AuthResult> {
+  async signin(dto: SigninDto, ctx: ClientContext = NO_CLIENT_CONTEXT): Promise<AuthResult> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: dto.tenantSlug } });
     if (!tenant || tenant.status !== 'ACTIVE') {
       throw new UnauthorizedException('Credenciales inválidas');
@@ -110,6 +115,8 @@ export class AuthService {
         resourceType: 'user',
         resourceId: dto.email,
         metadata: { reason: 'user_not_found_or_inactive', tenantSlug: tenant.slug },
+        ip: ctx.ip ?? undefined,
+        userAgent: ctx.userAgent ?? undefined,
       });
       throw new UnauthorizedException('Credenciales inválidas');
     }
@@ -123,6 +130,8 @@ export class AuthService {
         resourceType: 'user',
         resourceId: user.id,
         metadata: { reason: 'invalid_password' },
+        ip: ctx.ip ?? undefined,
+        userAgent: ctx.userAgent ?? undefined,
       });
       throw new UnauthorizedException('Credenciales inválidas');
     }
@@ -149,6 +158,8 @@ export class AuthService {
       resourceType: 'user',
       resourceId: user.id,
       metadata: { mfaRequired, roles },
+      ip: ctx.ip ?? undefined,
+      userAgent: ctx.userAgent ?? undefined,
     });
 
     return {
