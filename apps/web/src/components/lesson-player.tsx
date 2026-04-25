@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { QuizPlayer } from '@/components/quiz-player';
 import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
 import type { CourseLesson } from '@/lib/courses';
@@ -74,6 +75,10 @@ export function LessonPlayer({
     }
   }
 
+  // En lecciones QUIZ, el "marcar como completada" no es manual: lo dispara el
+  // bridge en backend cuando el alumno aprueba (assessments.attempt.passed).
+  const showManualCompleteButton = lesson.type !== 'QUIZ';
+
   return (
     <article className="space-y-4">
       <header className="flex items-start justify-between gap-3">
@@ -89,15 +94,21 @@ export function LessonPlayer({
             <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-900 dark:bg-green-950 dark:text-green-100">
               Completada
             </span>
-          ) : (
+          ) : showManualCompleteButton ? (
             <Button onClick={markCompleted} disabled={pending} size="sm">
               {pending ? 'Guardando…' : 'Marcar como completada'}
             </Button>
-          )}
+          ) : null}
         </div>
       </header>
 
-      <LessonContent lesson={lesson} resumeAt={initialResumePositionSec} onTick={sendDelta} />
+      <LessonContent
+        lesson={lesson}
+        resumeAt={initialResumePositionSec}
+        onTick={sendDelta}
+        enrollmentId={enrollmentId}
+        onQuizPassed={() => setCompleted(true)}
+      />
 
       {error ? (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
@@ -112,10 +123,14 @@ function LessonContent({
   lesson,
   resumeAt,
   onTick: _onTick,
+  enrollmentId,
+  onQuizPassed,
 }: {
   lesson: CourseLesson & { content: Record<string, unknown> };
   resumeAt: number;
   onTick: (delta: number, opts?: { resumePositionSec?: number }) => Promise<void>;
+  enrollmentId: string;
+  onQuizPassed: () => void;
 }) {
   const content = lesson.content;
 
@@ -169,8 +184,19 @@ function LessonContent({
   }
 
   if (lesson.type === 'QUIZ') {
+    const quizId = typeof content['quizId'] === 'string' ? content['quizId'] : '';
+    if (!quizId) {
+      return (
+        <Empty hint="Esta lección está marcada como QUIZ pero el formador aún no vinculó un quiz." />
+      );
+    }
     return (
-      <Empty hint="El módulo de quizzes (mod.assessments) llega en el próximo PR del Sprint." />
+      <QuizPlayer
+        quizId={quizId}
+        enrollmentId={enrollmentId}
+        lessonId={lesson.id}
+        onPassed={onQuizPassed}
+      />
     );
   }
 
