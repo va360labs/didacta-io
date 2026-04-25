@@ -413,3 +413,88 @@ model ModCoursesLesson {
   @@index([tenantId, moduleId])
   @@map("mod_courses_lesson")
 }
+
+// ============================================================================
+// mod.learning — Matriculación, progreso, finalización
+// ============================================================================
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum EnrollmentSource {
+  ADMIN
+  CODE
+  INVITATION_LINK
+  PURCHASE
+  IMPORT
+}
+
+model ModLearningEnrollment {
+  id                    String           @id @default(uuid()) @db.Uuid
+  tenantId              String           @map("tenant_id") @db.Uuid
+  userId                String           @map("user_id") @db.Uuid
+  /// ID lógico del curso (sin FK cross-module)
+  courseId              String           @map("course_id") @db.Uuid
+  status                EnrollmentStatus @default(ACTIVE)
+  source                EnrollmentSource @default(ADMIN)
+  completionThreshold   Int              @default(75) @map("completion_threshold")
+  /// Porcentaje de finalización (0-100)
+  progressPercent       Int              @default(0) @map("progress_percent")
+  enrolledAt            DateTime         @default(now()) @map("enrolled_at")
+  startedAt             DateTime?        @map("started_at")
+  completedAt           DateTime?        @map("completed_at")
+  cancelledAt           DateTime?        @map("cancelled_at")
+
+  progress ModLearningProgress[]
+
+  @@unique([tenantId, userId, courseId])
+  @@index([tenantId, courseId, status])
+  @@index([userId, status])
+  @@map("mod_learning_enrollment")
+}
+
+model ModLearningProgress {
+  id                String                @id @default(uuid()) @db.Uuid
+  tenantId          String                @map("tenant_id") @db.Uuid
+  enrollmentId      String                @map("enrollment_id") @db.Uuid
+  /// ID lógico de la lección (sin FK cross-module)
+  lessonId          String                @map("lesson_id") @db.Uuid
+  /// Tiempo total visto/leído en segundos
+  watchedSeconds    Int                   @default(0) @map("watched_seconds")
+  /// Posición exacta para reanudación (segundo dentro del vídeo, scroll en HTML, etc.)
+  resumePositionSec Int                   @default(0) @map("resume_position_sec")
+  completed         Boolean               @default(false)
+  firstAccessedAt   DateTime              @default(now()) @map("first_accessed_at")
+  lastAccessedAt    DateTime              @updatedAt @map("last_accessed_at")
+  completedAt       DateTime?             @map("completed_at")
+
+  enrollment ModLearningEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, lessonId])
+  @@index([tenantId, lessonId])
+  @@map("mod_learning_progress")
+}
+
+model ModLearningInvitation {
+  id          String           @id @default(uuid()) @db.Uuid
+  tenantId    String           @map("tenant_id") @db.Uuid
+  courseId    String           @map("course_id") @db.Uuid
+  /// Código corto para canje manual ("ABCD-1234")
+  code        String
+  /// Token de URL para enlace único compartible
+  token       String           @unique
+  /// Cantidad máxima de matriculaciones que puede crear esta invitación (null = ilimitado)
+  maxUses     Int?             @map("max_uses")
+  usedCount   Int              @default(0) @map("used_count")
+  expiresAt   DateTime?        @map("expires_at")
+  createdById String?          @map("created_by_id") @db.Uuid
+  createdAt   DateTime         @default(now()) @map("created_at")
+  revokedAt   DateTime?        @map("revoked_at")
+
+  @@unique([tenantId, code])
+  @@index([tenantId, courseId])
+  @@map("mod_learning_invitation")
+}

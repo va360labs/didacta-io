@@ -1,0 +1,33 @@
+import { z } from 'zod';
+
+export const enrollByAdminSchema = z.object({
+  userId: z.string().uuid(),
+  courseId: z.string().uuid(),
+});
+export type EnrollByAdminDto = z.infer<typeof enrollByAdminSchema>;
+
+export const enrollByCodeSchema = z.object({
+  code: z.string().min(4).max(40),
+});
+export type EnrollByCodeDto = z.infer<typeof enrollByCodeSchema>;
+
+export const enrollByLinkSchema = z.object({
+  token: z.string().min(8),
+});
+export type EnrollByLinkDto = z.infer<typeof enrollByLinkSchema>;
+
+export const trackProgressSchema = z.object({
+  enrollmentId: z.string().uuid(),
+  lessonId: z.string().uuid(),
+  watchedSeconds: z.number().int().min(0),
+  resumePositionSec: z.number().int().min(0).optional(),
+  completed: z.boolean().optional(),
+});
+export type TrackProgressDto = z.infer<typeof trackProgressSchema>;
+
+export const createInvitationSchema = z.object({
+  courseId: z.string().uuid(),
+  maxUses: z.number().int().positive().optional(),
+  expiresAt: z.string().datetime().optional(),
+});
+export type CreateInvitationDto = z.infer<typeof createInvitationSchema>;
