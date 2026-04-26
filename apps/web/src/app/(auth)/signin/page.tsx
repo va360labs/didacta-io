@@ -17,19 +17,18 @@ export default function SignInPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Iniciar sesión</CardTitle>
-        <CardDescription>Accedé a tu cuenta del tenant.</CardDescription>
+        <CardTitle className="text-2xl">Bienvenido de nuevo</CardTitle>
+        <CardDescription>
+          Ingresá los datos de tu organización para entrar a tu panel.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <SignInForm />
       </CardContent>
-      <CardFooter className="text-sm text-neutral-500">
-        ¿No tenés cuenta?{' '}
-        <Link
-          href="/signup"
-          className="ml-1 font-medium text-neutral-900 underline dark:text-neutral-50"
-        >
-          Registrate
+      <CardFooter className="text-sm text-text-muted">
+        <span>¿Todavía no tenés cuenta?</span>
+        <Link href="/signup" className="ml-2 font-semibold text-brand-700 hover:underline">
+          Crear cuenta
         </Link>
       </CardFooter>
     </Card>

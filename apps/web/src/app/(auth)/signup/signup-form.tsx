@@ -45,7 +45,7 @@ export function SignUpForm() {
       router.push(response.mfaRequired ? '/mfa/setup' : '/');
     } catch (e) {
       if (e instanceof ApiHttpError) setError(e.message);
-      else setError('Error inesperado al crear la cuenta.');
+      else setError('No pudimos crear tu cuenta. Probá de nuevo en unos segundos.');
     } finally {
       setPending(false);
     }
@@ -53,8 +53,10 @@ export function SignUpForm() {
 
   return (
     <form action={onSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="tenantSlug">Tenant</Label>
+      <div className="space-y-1.5">
+        <Label htmlFor="tenantSlug">
+          Organización <span className="text-danger-700">*</span>
+        </Label>
         <Input
           id="tenantSlug"
           name="tenantSlug"
@@ -64,18 +66,22 @@ export function SignUpForm() {
         />
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <Label htmlFor="name">Nombre completo</Label>
-        <Input id="name" name="name" autoComplete="name" />
+        <Input id="name" name="name" autoComplete="name" placeholder="María Pérez" />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
+      <div className="space-y-1.5">
+        <Label htmlFor="email">
+          Email <span className="text-danger-700">*</span>
+        </Label>
         <Input id="email" name="email" type="email" autoComplete="email" required />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="password">Contraseña</Label>
+      <div className="space-y-1.5">
+        <Label htmlFor="password">
+          Contraseña <span className="text-danger-700">*</span>
+        </Label>
         <Input
           id="password"
           name="password"
@@ -84,17 +90,22 @@ export function SignUpForm() {
           minLength={12}
           required
         />
-        <p className="text-xs text-neutral-500">Mínimo 12 caracteres.</p>
+        <p className="text-xs text-text-subtle">
+          Mínimo 12 caracteres. Mezclá mayúsculas, minúsculas, números y un símbolo.
+        </p>
       </div>
 
       {error ? (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+        >
           {error}
-        </p>
+        </div>
       ) : null}
 
-      <Button type="submit" disabled={pending} className="w-full">
-        {pending ? 'Creando…' : 'Crear cuenta'}
+      <Button type="submit" disabled={pending} className="w-full" size="lg">
+        {pending ? 'Creando tu cuenta…' : 'Crear cuenta'}
       </Button>
     </form>
   );

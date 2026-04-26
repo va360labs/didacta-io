@@ -17,18 +17,18 @@ export default function SignUpPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Crear cuenta</CardTitle>
-        <CardDescription>Necesitás el slug del tenant para registrarte.</CardDescription>
+        <CardTitle className="text-2xl">Sumate a tu organización</CardTitle>
+        <CardDescription>
+          Si tenés un código de invitación, completalo en el campo de la organización. Si no, pedí
+          ayuda al admin de tu equipo.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <SignUpForm />
       </CardContent>
-      <CardFooter className="text-sm text-neutral-500">
-        ¿Ya tenés cuenta?{' '}
-        <Link
-          href="/signin"
-          className="ml-1 font-medium text-neutral-900 underline dark:text-neutral-50"
-        >
+      <CardFooter className="text-sm text-text-muted">
+        <span>¿Ya tenés cuenta?</span>
+        <Link href="/signin" className="ml-2 font-semibold text-brand-700 hover:underline">
           Iniciá sesión
         </Link>
       </CardFooter>

@@ -51,7 +51,7 @@ export function SignInForm() {
       if (e instanceof ApiHttpError) {
         setError(e.message);
       } else {
-        setError('Error inesperado al iniciar sesión.');
+        setError('No pudimos completar el ingreso. Probá de nuevo en unos segundos.');
       }
     } finally {
       setPending(false);
@@ -60,8 +60,10 @@ export function SignInForm() {
 
   return (
     <form action={onSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="tenantSlug">Tenant</Label>
+      <div className="space-y-1.5">
+        <Label htmlFor="tenantSlug">
+          Organización <span className="text-danger-700">*</span>
+        </Label>
         <Input
           id="tenantSlug"
           name="tenantSlug"
@@ -69,19 +71,26 @@ export function SignInForm() {
           placeholder="va360"
           required
         />
+        <p className="text-xs text-text-subtle">
+          El nombre corto de tu organización (el que te dieron al darte de alta).
+        </p>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
+      <div className="space-y-1.5">
+        <Label htmlFor="email">
+          Email <span className="text-danger-700">*</span>
+        </Label>
         <Input id="email" name="email" type="email" autoComplete="email" required />
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <Label htmlFor="password">Contraseña</Label>
+          <Label htmlFor="password">
+            Contraseña <span className="text-danger-700">*</span>
+          </Label>
           <Link
             href="/forgot-password"
-            className="text-xs font-medium text-brand-700 hover:underline"
+            className="text-xs font-semibold text-brand-700 hover:underline"
           >
             ¿Olvidaste tu contraseña?
           </Link>
@@ -96,12 +105,15 @@ export function SignInForm() {
       </div>
 
       {error ? (
-        <p role="alert" className="text-sm text-danger-700">
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+        >
           {error}
-        </p>
+        </div>
       ) : null}
 
-      <Button type="submit" disabled={pending} className="w-full">
+      <Button type="submit" disabled={pending} className="w-full" size="lg">
         {pending ? 'Entrando…' : 'Entrar'}
       </Button>
     </form>
