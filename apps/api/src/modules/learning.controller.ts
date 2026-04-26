@@ -48,6 +48,29 @@ export class LearningController {
     return this.registry.getLearningService().listMyEnrollments(user.tenantId, user.sub);
   }
 
+  @Get('courses/:courseId/enrollments')
+  @ApiOperation({
+    summary:
+      'HU-FORM-002: lista de alumnos matriculados en un curso. Solo formador / tenant_admin / super_admin.',
+  })
+  async listEnrollmentsByCourse(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('courseId') courseId: string,
+    @Query('status') status?: 'ACTIVE' | 'COMPLETED' | 'CANCELLED',
+    @Query('limit') limit?: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r))) {
+      throw new UnauthorizedException(
+        'Solo formadores y administradores pueden ver el listado de alumnos.',
+      );
+    }
+    return this.registry.getLearningService().listEnrollmentsByCourse(user.tenantId, courseId, {
+      status,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
   @Post('enrollments')
   @ApiOperation({ summary: 'Enrollar a un usuario por admin' })
   async enrollAdmin(

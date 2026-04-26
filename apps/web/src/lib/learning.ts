@@ -127,6 +127,51 @@ export const learningApi = {
       bearer(),
     );
   },
+
+  /** HU-FORM-002: lista de alumnos matriculados en un curso. */
+  async listEnrollmentsByCourse(
+    courseId: string,
+    options: { status?: EnrollmentStatus; limit?: number } = {},
+  ): Promise<CourseEnrollmentRow[]> {
+    const params = new URLSearchParams();
+    if (options.status) params.set('status', options.status);
+    if (options.limit) params.set('limit', String(options.limit));
+    const qs = params.toString();
+    return apiFetch<CourseEnrollmentRow[]>(
+      `/api/v1/modules/learning/courses/${courseId}/enrollments${qs ? `?${qs}` : ''}`,
+      { method: 'GET' },
+      bearer(),
+    );
+  },
 };
+
+export interface CourseEnrollmentRow {
+  enrollmentId: string;
+  userId: string;
+  userEmail: string | null;
+  userName: string | null;
+  userStatus: 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'DEACTIVATED' | null;
+  lastLoginAt: string | null;
+  status: EnrollmentStatus;
+  progressPercent: number;
+  enrolledAt: string;
+  completedAt: string | null;
+  completionThreshold: number;
+}
+
+export function enrollmentsToCsv(rows: CourseEnrollmentRow[]): string {
+  const escape = (v: string | number | null | undefined) => {
+    if (v === null || v === undefined) return '';
+    const s = String(v).replace(/"/g, '""');
+    return /[",\n]/.test(s) ? `"${s}"` : s;
+  };
+  const header = ['email', 'name', 'status', 'progress_percent', 'enrolled_at', 'completed_at'];
+  const lines = rows.map((r) =>
+    [r.userEmail, r.userName, r.status, r.progressPercent, r.enrolledAt, r.completedAt]
+      .map(escape)
+      .join(','),
+  );
+  return [header.join(','), ...lines].join('\n');
+}
 
 export type { LessonType };

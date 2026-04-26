@@ -140,6 +140,55 @@ export class LearningService {
     });
   }
 
+  /**
+   * HU-FORM-002: lista de matriculaciones de un curso (vista del formador
+   * para ver alumnos).
+   *
+   * Devuelve enrollments + datos del usuario (email, name, lastLoginAt).
+   * NO hace cross-module FK — la consulta join-like se hace acá leyendo
+   * usuarios por IDs lógicos.
+   */
+  async listEnrollmentsByCourse(
+    tenantId: string,
+    courseId: string,
+    options: { status?: 'ACTIVE' | 'COMPLETED' | 'CANCELLED'; limit?: number } = {},
+  ) {
+    const where: Record<string, unknown> = { tenantId, courseId };
+    if (options.status) where.status = options.status;
+
+    const enrollments = await this.prisma.modLearningEnrollment.findMany({
+      where,
+      orderBy: { enrolledAt: 'desc' },
+      take: Math.min(Math.max(options.limit ?? 100, 1), 500),
+    });
+
+    if (enrollments.length === 0) return [];
+
+    const userIds = Array.from(new Set(enrollments.map((e) => e.userId)));
+    const users = await this.prisma.user.findMany({
+      where: { tenantId, id: { in: userIds } },
+      select: { id: true, email: true, name: true, lastLoginAt: true, status: true },
+    });
+    const byId = new Map(users.map((u) => [u.id, u]));
+
+    return enrollments.map((e) => {
+      const u = byId.get(e.userId);
+      return {
+        enrollmentId: e.id,
+        userId: e.userId,
+        userEmail: u?.email ?? null,
+        userName: u?.name ?? null,
+        userStatus: u?.status ?? null,
+        lastLoginAt: u?.lastLoginAt?.toISOString() ?? null,
+        status: e.status,
+        progressPercent: e.progressPercent,
+        enrolledAt: e.enrolledAt.toISOString(),
+        completedAt: e.completedAt?.toISOString() ?? null,
+        completionThreshold: e.completionThreshold,
+      };
+    });
+  }
+
   async createInvitation(tenantId: string, actorId: string | null, dto: CreateInvitationDto) {
     const code = this.generateCode();
     const token = randomBytes(TOKEN_BYTES).toString('base64url');
