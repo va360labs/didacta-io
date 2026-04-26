@@ -42,7 +42,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
-        run: pnpm --filter @learnship/database db:generate
+        run: pnpm --filter @didacta/database db:generate
 
       - name: Format check
         run: pnpm format:check

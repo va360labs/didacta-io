@@ -25,9 +25,9 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: learnship
-          POSTGRES_PASSWORD: learnship
-          POSTGRES_DB: learnship
+          POSTGRES_USER: didacta
+          POSTGRES_PASSWORD: didacta
+          POSTGRES_DB: didacta
         ports:
           - 5432:5432
         options: >-
@@ -37,7 +37,7 @@ jobs:
           --health-retries 10
 
     env:
-      DATABASE_URL: postgresql://learnship:learnship@localhost:5432/learnship?schema=public
+      DATABASE_URL: postgresql://didacta:didacta@localhost:5432/didacta?schema=public
       JWT_SECRET: e2e-test-secret-must-be-at-least-32-chars-long-aaaa
       JWT_REFRESH_SECRET: e2e-refresh-secret-must-be-32-chars-long-bbbb
       NODE_ENV: production
@@ -72,24 +72,24 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
-        run: pnpm --filter @learnship/database db:generate
+        run: pnpm --filter @didacta/database db:generate
 
       - name: Apply migrations
-        run: pnpm --filter @learnship/database db:migrate:deploy
+        run: pnpm --filter @didacta/database db:migrate:deploy
 
       - name: Seed admin user
-        run: pnpm --filter @learnship/database db:seed
+        run: pnpm --filter @didacta/database db:seed
 
       - name: Build workspace
         run: pnpm build
 
       - name: Start API
-        run: pnpm --filter @learnship/api start &
+        run: pnpm --filter @didacta/api start &
         env:
           PORT: 4000
 
       - name: Start Web
-        run: pnpm --filter @learnship/web start &
+        run: pnpm --filter @didacta/web start &
         env:
           PORT: 3000
 
@@ -106,10 +106,10 @@ jobs:
           exit 1
 
       - name: Install Playwright browsers
-        run: pnpm --filter @learnship/e2e exec playwright install --with-deps chromium
+        run: pnpm --filter @didacta/e2e exec playwright install --with-deps chromium
 
       - name: Run E2E
-        run: pnpm --filter @learnship/e2e test:e2e
+        run: pnpm --filter @didacta/e2e test:e2e
 
       - name: Upload Playwright report
         if: always()
