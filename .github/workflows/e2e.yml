@@ -40,6 +40,10 @@ jobs:
       DATABASE_URL: postgresql://didacta:didacta@localhost:5432/didacta?schema=public
       JWT_SECRET: e2e-test-secret-must-be-at-least-32-chars-long-aaaa
       JWT_REFRESH_SECRET: e2e-refresh-secret-must-be-32-chars-long-bbbb
+      # AUTH_SECRET es el nombre canónico que lee apps/api/src/auth/auth.config.ts
+      # (mín. 32 caracteres). El api falla a bootear sin esta env.
+      AUTH_SECRET: e2e-auth-secret-must-be-at-least-32-chars-long-cccc
+      AUTH_URL: http://localhost:4000
       # Master key AES-256-GCM (64 chars hex) para TenantSettings cifrado.
       # Obligatoria en NODE_ENV=production desde el PR A0; sin ella el api no
       # bootea. En CI usamos un valor determinístico — no es secreto real.
