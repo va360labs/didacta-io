@@ -1,4 +1,4 @@
-# @learnship/e2e
+# @didacta/e2e
 
 Tests end-to-end con Playwright. Cubren el **golden path** del alumno: signup → catálogo → matrícula → completar lecciones → certificado.
 
@@ -17,7 +17,7 @@ Tests end-to-end con Playwright. Cubren el **golden path** del alumno: signup �
 | `E2E_ADMIN_EMAIL`    | —                       | **obligatorio** — email del super_admin con MFA-required |
 | `E2E_ADMIN_PASSWORD` | —                       | **obligatorio** — password del super_admin               |
 
-El admin debe existir previamente (lo crea `pnpm --filter @learnship/database db:seed`). El alumno se crea fresh por test con timestamp único.
+El admin debe existir previamente (lo crea `pnpm --filter @didacta/database db:seed`). El alumno se crea fresh por test con timestamp único.
 
 ## Correr local
 
@@ -26,15 +26,15 @@ El admin debe existir previamente (lo crea `pnpm --filter @learnship/database db
 pnpm dev
 
 # 2. (Una vez) Instalar browsers de Playwright
-pnpm --filter @learnship/e2e install-browsers
+pnpm --filter @didacta/e2e install-browsers
 
 # 3. Correr los tests
 E2E_ADMIN_EMAIL=valen@va360labs.com \
 E2E_ADMIN_PASSWORD='tu-password' \
-pnpm --filter @learnship/e2e test
+pnpm --filter @didacta/e2e test
 ```
 
-Para depurar visualmente: `pnpm --filter @learnship/e2e test:headed` o `pnpm --filter @learnship/e2e test:ui`.
+Para depurar visualmente: `pnpm --filter @didacta/e2e test:headed` o `pnpm --filter @didacta/e2e test:ui`.
 
 ## Estructura
 

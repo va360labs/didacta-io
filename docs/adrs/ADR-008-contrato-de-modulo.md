@@ -6,7 +6,7 @@
 
 ## Contexto
 
-LearnShip se construye como monolito modular (ADR-001) con la promesa de que **módulos nuevos se pueden desarrollar en paralelo sin tocar el core ni otros módulos**. Esta promesa solo es real si existe un **contrato de módulo estable, blindado y testeable**.
+Didacta se construye como monolito modular (ADR-001) con la promesa de que **módulos nuevos se pueden desarrollar en paralelo sin tocar el core ni otros módulos**. Esta promesa solo es real si existe un **contrato de módulo estable, blindado y testeable**.
 
 Sin contrato explícito se termina con acoplamientos implícitos (imports cruzados, FKs cross-module, eventos no declarados) que destruyen la modularidad y bloquean el roadmap a los 6-12 meses.
 
@@ -17,7 +17,7 @@ El contrato consta de tres piezas:
 ### 1. Manifest `module.json` declarado programáticamente
 
 ```ts
-import { parseModuleManifest } from '@learnship/core-kernel';
+import { parseModuleManifest } from '@didacta/core-kernel';
 
 export const manifest = parseModuleManifest({
   name: 'mod.courses', // 'core' o 'mod.<kebab>'
@@ -32,12 +32,12 @@ export const manifest = parseModuleManifest({
 });
 ```
 
-Validado en **runtime con Zod** en `@learnship/core-kernel`. Si el manifest es inválido, el core falla al arrancar con errores descriptivos (path + mensaje por cada issue).
+Validado en **runtime con Zod** en `@didacta/core-kernel`. Si el manifest es inválido, el core falla al arrancar con errores descriptivos (path + mensaje por cada issue).
 
-### 2. Interfaz `LearnShipModule`
+### 2. Interfaz `DidactaModule`
 
 ```ts
-interface LearnShipModule {
+interface DidactaModule {
   readonly manifest: ModuleManifest;
   onRegister(ctx: ModuleContext): Promise<void>;
   onEnable(tenantId: string, ctx: ModuleContext): Promise<void>;
@@ -71,7 +71,7 @@ Positivas:
 - **Paralelizable**: `mod.courses`, `mod.learning`, `mod.assessments` pueden desarrollarse por equipos separados si existieran.
 - **Testeable en aislamiento**: el módulo `mod.hello-world` es la prueba de que el contrato funciona end-to-end sin infra real.
 - **Evolucionable**: breaking changes al contrato son posibles con ADR aprobada + major bump del core + migration guide.
-- **Auto-documentado**: `@learnship/core-registry` expone `/api/v1/modules` con todos los módulos registrados y sus manifests.
+- **Auto-documentado**: `@didacta/core-registry` expone `/api/v1/modules` con todos los módulos registrados y sus manifests.
 
 Negativas / riesgos:
 
@@ -83,13 +83,13 @@ Negativas / riesgos:
 
 El contrato es **SemVer estricto**:
 
-- `@learnship/core-kernel` define las interfaces.
+- `@didacta/core-kernel` define las interfaces.
 - Un **major bump** del core obliga a que todos los módulos bump su `coreVersionRequired` y migren según un migration guide publicado.
 - **Deprecación** marcada con JSDoc `@deprecated` al menos una minor antes del remove.
 
 ## Validación automática
 
-El paquete `@learnship/core-registry`:
+El paquete `@didacta/core-registry`:
 
 - Valida `coreVersionRequired` de cada módulo vs versión actual del core.
 - Resuelve dependencias topológicamente (detecta ciclos).

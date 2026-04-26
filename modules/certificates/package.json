@@ -1,5 +1,5 @@
 {
-  "name": "@learnship/mod-certificates",
+  "name": "@didacta/mod-certificates",
   "version": "1.0.0",
   "private": true,
   "description": "Módulo de emisión de certificados PDF tras finalización de cursos (mod.certificates)",
@@ -24,8 +24,8 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@learnship/core-kernel": "workspace:*",
-    "@learnship/database": "workspace:*",
+    "@didacta/core-kernel": "workspace:*",
+    "@didacta/database": "workspace:*",
     "pdfkit": "^0.16.0",
     "zod": "^3.24.1"
   },

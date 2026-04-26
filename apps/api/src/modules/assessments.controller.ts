@@ -21,7 +21,7 @@ import {
   type CreateQuizDto,
   type GradeAttemptDto,
   type UpdateQuizDto,
-} from '@learnship/mod-assessments';
+} from '@didacta/mod-assessments';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';

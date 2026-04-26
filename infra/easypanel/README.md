@@ -1,4 +1,4 @@
-# Easypanel — Deploy de LearnShip
+# Easypanel — Deploy de Didacta
 
 Deploy automático desde el repo. Cada merge a `main` dispara build + deploy del Dockerfile único en la raíz.
 
@@ -6,15 +6,15 @@ Deploy automático desde el repo. Cada merge a `main` dispara build + deploy del
 
 ### Build
 
-- **Source**: GitHub repo `va360labs/learnship`, branch `main`
+- **Source**: GitHub repo `va360labs/didacta`, branch `main`
 - **Builder**: Dockerfile (raíz del repo)
 - **Build context**: raíz del repo
 
 ### Runtime
 
 - **Puertos expuestos**:
-  - `4000` → API (NestJS) → reverse proxy a `https://api.learnship.<dominio>`
-  - `3000` → Web (Next.js) → reverse proxy a `https://learnship.<dominio>`
+  - `4000` → API (NestJS) → reverse proxy a `https://api.didacta.<dominio>`
+  - `3000` → Web (Next.js) → reverse proxy a `https://didacta.<dominio>`
 - **Healthcheck**: ya configurado en el Dockerfile contra `/healthz`
 
 ### Variables de entorno requeridas
@@ -31,7 +31,7 @@ Crear desde el panel "Environment" del servicio. Ver `env.example` en la raíz d
 | `API_PORT`                                                                | `4000`                                                                |
 | `WEB_PORT`                                                                | `3000`                                                                |
 | `AUTH_SECRET`                                                             | string aleatorio largo (Auth.js v5)                                   |
-| `AUTH_URL`                                                                | `https://learnship.<dominio>`                                         |
+| `AUTH_URL`                                                                | `https://didacta.<dominio>`                                           |
 | `ANTHROPIC_API_KEY`                                                       | (Fase 1.C)                                                            |
 | `ZOOM_*`                                                                  | (Fase 1.B)                                                            |
 
@@ -57,10 +57,10 @@ Easypanel permite abrir shell en el contenedor:
 
 ```bash
 # Ver estado de migraciones
-pnpm --filter @learnship/database exec prisma migrate status
+pnpm --filter @didacta/database exec prisma migrate status
 
 # Forzar reaplicación de RLS
-pnpm --filter @learnship/database exec psql "$DATABASE_URL" -f packages/database/prisma/rls.sql
+pnpm --filter @didacta/database exec psql "$DATABASE_URL" -f packages/database/prisma/rls.sql
 
 # Inspeccionar BD
 psql "$DATABASE_URL"

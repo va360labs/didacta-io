@@ -1,4 +1,4 @@
-import { parseModuleManifest, type ModuleManifest } from '@learnship/core-kernel';
+import { parseModuleManifest, type ModuleManifest } from '@didacta/core-kernel';
 
 /**
  * Manifest del módulo `mod.hello-world`. Sirve de plantilla de referencia

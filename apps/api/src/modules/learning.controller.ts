@@ -27,7 +27,7 @@ import {
   type ListInvitationsQueryDto,
   type TrackProgressDto,
   LearningError,
-} from '@learnship/mod-learning';
+} from '@didacta/mod-learning';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';

@@ -24,7 +24,7 @@ import {
   type CreateModuleDto,
   type UpdateCourseDto,
   type UpdateLessonDto,
-} from '@learnship/mod-courses';
+} from '@didacta/mod-courses';
 import { z } from 'zod';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';

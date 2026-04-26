@@ -28,7 +28,7 @@ export function loadAuthConfig(): AuthConfig {
 
   return {
     jwtSecret,
-    jwtIssuer: process.env['AUTH_URL'] ?? 'https://learnship.local',
+    jwtIssuer: process.env['AUTH_URL'] ?? 'https://didacta.local',
     jwtAccessTtlSeconds: 60 * 60, // 1h
     jwtRefreshTtlSeconds: 60 * 60 * 24 * 30, // 30d
     argon2: {
@@ -37,7 +37,7 @@ export function loadAuthConfig(): AuthConfig {
       parallelism: 1,
     },
     totp: {
-      issuer: 'LearnShip',
+      issuer: 'Didacta',
       window: 1,
     },
   };

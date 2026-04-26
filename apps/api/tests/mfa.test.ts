@@ -16,12 +16,12 @@ afterAll(() => {
 describe('MfaService', () => {
   it('genera secret + otpauth url + qr + 10 recovery codes únicos', async () => {
     const service = new MfaService();
-    const setup = await service.generateSetup('test@learnship.test');
+    const setup = await service.generateSetup('test@didacta.test');
 
     expect(setup.secret).toMatch(/^[A-Z2-7]+=*$/);
     expect(setup.otpauthUrl).toContain('otpauth://totp/');
-    expect(setup.otpauthUrl).toContain('LearnShip');
-    expect(setup.otpauthUrl).toContain(encodeURIComponent('test@learnship.test'));
+    expect(setup.otpauthUrl).toContain('Didacta');
+    expect(setup.otpauthUrl).toContain(encodeURIComponent('test@didacta.test'));
     expect(setup.qrCodeDataUrl).toMatch(/^data:image\/png;base64,/);
     expect(setup.recoveryCodes).toHaveLength(10);
     expect(new Set(setup.recoveryCodes).size).toBe(10);

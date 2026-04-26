@@ -6,10 +6,10 @@
 
 ## Contexto
 
-La API pública de LearnShip debe permitir evoluciones incompatibles (breaking changes) sin romper clientes existentes. Cuatro estrategias posibles:
+La API pública de Didacta debe permitir evoluciones incompatibles (breaking changes) sin romper clientes existentes. Cuatro estrategias posibles:
 
 1. **URL path**: `/api/v1/*`, `/api/v2/*`
-2. **Header**: `Accept: application/vnd.learnship.v2+json`
+2. **Header**: `Accept: application/vnd.didacta.v2+json`
 3. **Content negotiation** (variantes de media types)
 4. **Query param**: `?version=2`
 
@@ -22,7 +22,7 @@ Cambios breaking exigen un **major bump** (`/api/v2/`) y un **periodo de desprec
 ```http
 Deprecation: Sun, 01 Mar 2027 00:00:00 GMT
 Sunset: Sun, 01 Sep 2027 00:00:00 GMT
-Link: <https://docs.learnship.dev/migration-v1-v2>; rel="deprecation"
+Link: <https://docs.didacta.dev/migration-v1-v2>; rel="deprecation"
 ```
 
 ## Consecuencias
@@ -37,7 +37,7 @@ Positivas:
 Negativas / riesgos:
 
 - **Mantenimiento de 2 versiones** durante la desprecación: cada endpoint crítico se implementa dos veces. Mitigación: desprecar con tiempo suficiente y comunicar proactivamente.
-- **SDK versionado**: `@learnship/sdk` sigue el mismo SemVer que la API (sdk 1.x ↔ api v1, sdk 2.x ↔ api v2).
+- **SDK versionado**: `@didacta/sdk` sigue el mismo SemVer que la API (sdk 1.x ↔ api v1, sdk 2.x ↔ api v2).
 
 ## Alternativas consideradas
 

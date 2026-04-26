@@ -1,4 +1,4 @@
-# LearnShip — Arquitectura modular
+# Didacta — Arquitectura modular
 
 > **Versión**: 1.0
 > **Fecha**: abril 2026
@@ -9,7 +9,7 @@
 
 ## 1. Objetivo
 
-Este documento define el contrato de módulo de LearnShip. Es el documento más
+Este documento define el contrato de módulo de Didacta. Es el documento más
 importante del proyecto después del PRD, porque garantiza que:
 
 - El core se mantiene mínimo y estable.
@@ -19,7 +19,7 @@ importante del proyecto después del PRD, porque garantiza que:
 - El desarrollo se puede paralelizar.
 - La plataforma puede evolucionar durante años sin deuda estructural.
 
-**Regla de oro**: *si algo no respeta este contrato, no es un módulo de LearnShip*.
+**Regla de oro**: *si algo no respeta este contrato, no es un módulo de Didacta*.
 
 ## 2. Principios
 
@@ -231,7 +231,7 @@ export interface ModuleManifest {
   apiNamespace: string;
 }
 
-export interface LearnShipModule {
+export interface DidactaModule {
   manifest: ModuleManifest;
 
   // Lifecycle

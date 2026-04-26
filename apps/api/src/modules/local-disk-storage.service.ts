@@ -1,6 +1,6 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import type { StorageService } from '@learnship/core-kernel';
+import type { StorageService } from '@didacta/core-kernel';
 
 /**
  * StorageService que persiste en disco bajo `STORAGE_ROOT` (default: ./data/storage).

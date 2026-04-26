@@ -1,5 +1,5 @@
 {
-  "name": "@learnship/core-registry",
+  "name": "@didacta/core-registry",
   "version": "0.0.0",
   "private": true,
   "description": "Module Registry: discovery, validación, resolución de dependencias y lifecycle de módulos",
@@ -24,7 +24,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@learnship/core-kernel": "workspace:*",
+    "@didacta/core-kernel": "workspace:*",
     "semver": "^7.6.3"
   },
   "devDependencies": {

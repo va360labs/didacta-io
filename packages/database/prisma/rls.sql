@@ -1,8 +1,8 @@
 -- ============================================================================
--- LearnShip — Row-Level Security + triggers de append-only
+-- Didacta — Row-Level Security + triggers de append-only
 -- ----------------------------------------------------------------------------
 -- Se aplica después de cada migración Prisma:
---   pnpm --filter @learnship/database db:rls:apply
+--   pnpm --filter @didacta/database db:rls:apply
 --
 -- Cada transacción debe setear `app.current_tenant_id` vía middleware:
 --   SET LOCAL app.current_tenant_id = '<uuid del tenant>';
@@ -86,7 +86,7 @@ CREATE TRIGGER audit_log_no_delete
 -- Jamás debe usarse en request path de usuarios finales.
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'learnship_super') THEN
-    CREATE ROLE learnship_super BYPASSRLS;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'didacta_super') THEN
+    CREATE ROLE didacta_super BYPASSRLS;
   END IF;
 END $$;

@@ -1,8 +1,8 @@
 {
-  "name": "@learnship/core-kernel",
+  "name": "@didacta/core-kernel",
   "version": "0.0.0",
   "private": true,
-  "description": "Contrato de módulo y primitivas del core de LearnShip",
+  "description": "Contrato de módulo y primitivas del core de Didacta",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

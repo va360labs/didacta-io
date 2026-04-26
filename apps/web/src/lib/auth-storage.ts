@@ -1,8 +1,8 @@
 'use client';
 
-const ACCESS_KEY = 'learnship.access_token';
-const REFRESH_KEY = 'learnship.refresh_token';
-const SESSION_KEY = 'learnship.session';
+const ACCESS_KEY = 'didacta.access_token';
+const REFRESH_KEY = 'didacta.refresh_token';
+const SESSION_KEY = 'didacta.session';
 
 export interface StoredSession {
   user: {

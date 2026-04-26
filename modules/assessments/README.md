@@ -1,6 +1,6 @@
 # mod.assessments
 
-Módulo de evaluaciones de LearnShip.
+Módulo de evaluaciones de Didacta.
 
 ## Alcance v0.1 (este package)
 

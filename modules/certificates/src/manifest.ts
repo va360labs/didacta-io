@@ -1,4 +1,4 @@
-import { parseModuleManifest, type ModuleManifest } from '@learnship/core-kernel';
+import { parseModuleManifest, type ModuleManifest } from '@didacta/core-kernel';
 
 export const manifest: ModuleManifest = parseModuleManifest({
   name: 'mod.certificates',

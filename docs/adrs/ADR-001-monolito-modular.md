@@ -6,13 +6,13 @@
 
 ## Contexto
 
-LearnShip debe soportar multi-tenant con módulos activables y evolucionar hacia SaaS. La elección entre monolito modular y microservicios define cómo se construye el sistema durante los próximos años, afecta a costes operacionales, velocidad de iteración y curva de aprendizaje del equipo.
+Didacta debe soportar multi-tenant con módulos activables y evolucionar hacia SaaS. La elección entre monolito modular y microservicios define cómo se construye el sistema durante los próximos años, afecta a costes operacionales, velocidad de iteración y curva de aprendizaje del equipo.
 
 ## Decisión
 
 **Monolito modular**: una sola aplicación desplegable, con módulos separados por _bounded contexts_. NestJS `DynamicModule` como mecanismo de modularización a nivel backend; workspaces pnpm + Turborepo a nivel monorepo.
 
-Los módulos se registran vía `ModuleRegistry` (ver `@learnship/core-registry`) y declaran su contrato en `module.json` (ADR-008).
+Los módulos se registran vía `ModuleRegistry` (ver `@didacta/core-registry`) y declaran su contrato en `module.json` (ADR-008).
 
 ## Consecuencias
 

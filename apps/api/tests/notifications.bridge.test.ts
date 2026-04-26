@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DomainEvent } from '@learnship/core-kernel';
+import type { DomainEvent } from '@didacta/core-kernel';
 import { NotificationsBridge } from '../src/modules/notifications.bridge';
 
 const noopLogger = {

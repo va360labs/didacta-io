@@ -1,11 +1,11 @@
-# @learnship/core-kernel
+# @didacta/core-kernel
 
-Contrato de módulo y primitivas del core de LearnShip. Documento madre: [`docs/ARQUITECTURA-MODULAR.md`](../../docs/ARQUITECTURA-MODULAR.md).
+Contrato de módulo y primitivas del core de Didacta. Documento madre: [`docs/ARQUITECTURA-MODULAR.md`](../../docs/ARQUITECTURA-MODULAR.md).
 
 ## ¿Qué hay aquí?
 
 - **`ModuleManifest`** — tipo y schema Zod del manifest que todo módulo debe declarar.
-- **`LearnShipModule`** — interfaz con el ciclo de vida (`onRegister`, `onEnable`, `onDisable`, `onUninstall`).
+- **`DidactaModule`** — interfaz con el ciclo de vida (`onRegister`, `onEnable`, `onDisable`, `onUninstall`).
 - **`ModuleContext`** — conjunto de servicios que el core provee a cada módulo (eventBus, hookRegistry, storage, auditLog, evidenceVault, notificationHub, i18n, logger, config).
 - **`parseModuleManifest`** — validador runtime que lanza `ModuleManifestValidationError` con detalles si el manifest es inválido.
 
@@ -18,11 +18,7 @@ Contrato de módulo y primitivas del core de LearnShip. Documento madre: [`docs/
 ## Uso
 
 ```ts
-import {
-  parseModuleManifest,
-  type LearnShipModule,
-  type ModuleContext,
-} from '@learnship/core-kernel';
+import { parseModuleManifest, type DidactaModule, type ModuleContext } from '@didacta/core-kernel';
 
 const manifest = parseModuleManifest({
   name: 'mod.courses',
@@ -35,7 +31,7 @@ const manifest = parseModuleManifest({
   eventsEmitted: ['courses.course.created', 'courses.course.published'],
 });
 
-export const coursesModule: LearnShipModule = {
+export const coursesModule: DidactaModule = {
   manifest,
   async onRegister(_ctx: ModuleContext) {
     /* registrar handlers globales */
@@ -55,5 +51,5 @@ export const coursesModule: LearnShipModule = {
 ## Tests
 
 ```bash
-pnpm --filter @learnship/core-kernel test
+pnpm --filter @didacta/core-kernel test
 ```

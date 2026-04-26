@@ -1,4 +1,4 @@
-import type { ModuleContext } from '@learnship/core-kernel';
+import type { ModuleContext } from '@didacta/core-kernel';
 
 /**
  * Service del módulo hello-world. En un módulo real aquí vivirían

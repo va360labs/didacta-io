@@ -1,8 +1,8 @@
 {
-  "name": "@learnship/web",
+  "name": "@didacta/web",
   "version": "0.0.0",
   "private": true,
-  "description": "Frontend Next.js 15 de LearnShip (alumno + admin de tenant)",
+  "description": "Frontend Next.js 15 de Didacta (alumno + admin de tenant)",
   "scripts": {
     "build": "next build",
     "dev": "next dev -p ${WEB_PORT:-3000}",

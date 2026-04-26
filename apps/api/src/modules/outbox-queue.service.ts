@@ -10,7 +10,7 @@ import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleContextFactory } from './module-context.factory';
 
-const QUEUE_NAME = 'learnship.outbox';
+const QUEUE_NAME = 'didacta.outbox';
 
 interface OutboxJobData {
   /** ID de la fila `outbox_event` (BigInt serializado a string para BullMQ). */

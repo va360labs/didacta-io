@@ -1,6 +1,6 @@
 import { Controller, Get, Param, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CertificatesError } from '@learnship/mod-certificates';
+import { CertificatesError } from '@didacta/mod-certificates';
 import type { FastifyReply } from 'fastify';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';

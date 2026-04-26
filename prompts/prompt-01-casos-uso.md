@@ -1,7 +1,7 @@
 # Prompt 01 — Generación de casos de uso e historias de usuario
 
 > **Uso**: copiar y pegar este prompt completo en una nueva sesión de Claude Code
-> (en la raíz del repo `learnship` con los docs ya en su sitio).
+> (en la raíz del repo `didacta` con los docs ya en su sitio).
 >
 > **Precondición**: los siguientes archivos están en el repo:
 > - `docs/PRD.md`
@@ -11,7 +11,7 @@
 
 ---
 
-# Tarea: generar casos de uso e historias de usuario para LearnShip
+# Tarea: generar casos de uso e historias de usuario para Didacta
 
 Eres un Product Engineer senior con experiencia en LMS, cumplimiento Fundae y
 arquitecturas modulares. Tu tarea es leer los documentos del repositorio y generar
@@ -19,7 +19,7 @@ documentación ejecutable que alimente el backlog del proyecto.
 
 ## Contexto
 
-LearnShip es una plataforma LMS modular (documentación completa en `docs/PRD.md`).
+Didacta es una plataforma LMS modular (documentación completa en `docs/PRD.md`).
 Se construye en fases:
 
 - **Fase 0** (2 semanas): Discovery técnico y fundaciones.

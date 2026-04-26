@@ -1,4 +1,4 @@
--- Extensiones Postgres requeridas por LearnShip
+-- Extensiones Postgres requeridas por Didacta
 -- Se ejecuta automáticamente al inicializar el contenedor por primera vez
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

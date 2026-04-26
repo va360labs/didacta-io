@@ -46,7 +46,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <header className="border-b border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950">
         <div className="mx-auto flex max-w-6xl items-center gap-6 p-4">
           <Link href="/" className="text-sm font-semibold tracking-tight">
-            LearnShip
+            Didacta
           </Link>
           <nav className="flex gap-2">
             {NAV.filter((item) => !item.requiresAdmin || isAdminOrFormador).map((item) => {

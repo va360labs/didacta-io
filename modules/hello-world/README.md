@@ -1,6 +1,6 @@
 # mod.hello-world
 
-Módulo de ejemplo. **Usá este módulo como plantilla de referencia para crear módulos nuevos en LearnShip.**
+Módulo de ejemplo. **Usá este módulo como plantilla de referencia para crear módulos nuevos en Didacta.**
 
 ## Qué demuestra
 
@@ -16,7 +16,7 @@ modules/hello-world/
 ├── src/
 │   ├── manifest.ts    # declaración + validación del manifest
 │   ├── service.ts     # lógica de dominio (consume ModuleContext)
-│   └── index.ts       # exporta el LearnShipModule y su service
+│   └── index.ts       # exporta el DidactaModule y su service
 ├── tests/
 │   └── contract.test.ts
 ├── package.json

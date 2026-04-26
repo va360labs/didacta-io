@@ -6,7 +6,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       <div className="w-full max-w-md">
         <header className="mb-6 text-center">
           <p className="text-xs uppercase tracking-widest text-neutral-500">VA360 LABS</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">LearnShip</h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Didacta</h1>
         </header>
         {children}
       </div>

@@ -1,12 +1,12 @@
-# @learnship/web
+# @didacta/web
 
-Frontend Next.js 15 de LearnShip: app unificada de alumno + admin de tenant.
+Frontend Next.js 15 de Didacta: app unificada de alumno + admin de tenant.
 
 ## Arranque en dev
 
 ```bash
 pnpm install
-pnpm --filter @learnship/web dev
+pnpm --filter @didacta/web dev
 # → http://localhost:3000
 ```
 

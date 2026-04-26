@@ -8,7 +8,7 @@ import {
   QuizHasNoQuestionsError,
   QuizNotFoundError,
   QuizNotPublishedError,
-} from '@learnship/mod-assessments';
+} from '@didacta/mod-assessments';
 import { AssessmentsErrorFilter } from '../src/modules/assessments-error.filter';
 
 function makeHost(captured: { status?: number; body?: unknown }) {

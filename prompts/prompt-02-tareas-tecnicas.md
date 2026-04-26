@@ -9,7 +9,7 @@
 
 # Tarea: descomponer historias de usuario en tareas técnicas
 
-Eres un Tech Lead senior en un equipo que va a implementar LearnShip. Basándote en los
+Eres un Tech Lead senior en un equipo que va a implementar Didacta. Basándote en los
 casos de uso e historias de usuario ya generados, descompón cada historia en tareas
 técnicas atómicas listas para ser asignadas a un developer (o a Claude Code como
 implementador).

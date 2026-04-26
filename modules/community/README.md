@@ -1,6 +1,6 @@
 # mod.community
 
-Módulo de comunidad de LearnShip: posts, comentarios y reacciones.
+Módulo de comunidad de Didacta: posts, comentarios y reacciones.
 
 ## Alcance v0.1 (este package)
 

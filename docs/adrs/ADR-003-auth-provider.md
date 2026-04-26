@@ -7,7 +7,7 @@
 
 ## Contexto
 
-LearnShip necesita autenticación con estos requisitos:
+Didacta necesita autenticación con estos requisitos:
 
 - Email + contraseña con argon2id.
 - MFA TOTP obligatorio para `super_admin` y `tenant_admin`.
@@ -27,7 +27,7 @@ La decisión se tomó sin POC, priorizando:
 - **Madurez y bajo riesgo de regresiones**: Auth.js v5 tiene años de adopción masiva, miles de issues resueltos y release estable.
 - **Ecosistema**: documentación amplia, providers pre-construidos (Google, GitHub, Azure AD, etc.) listos para Fase 2.
 - **Evitar dependencia de un proyecto joven**: Better-Auth está en su 1.x, con riesgo de breaking changes.
-- **Integración natural con Next.js 15**: el frontend de LearnShip está sobre App Router; Auth.js v5 fue diseñado precisamente para ese flujo.
+- **Integración natural con Next.js 15**: el frontend de Didacta está sobre App Router; Auth.js v5 fue diseñado precisamente para ese flujo.
 - **Backend-friendly**: con `@auth/core` se puede usar fuera de Next.js (NestJS API).
 
 ## Implementación planificada

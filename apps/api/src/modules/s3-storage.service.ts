@@ -8,7 +8,7 @@ import {
   type S3ClientConfig,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { StorageService } from '@learnship/core-kernel';
+import type { StorageService } from '@didacta/core-kernel';
 
 export interface S3StorageOptions {
   endpoint: string;

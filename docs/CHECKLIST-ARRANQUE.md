@@ -1,4 +1,4 @@
-# LearnShip — Checklist de arranque
+# Didacta — Checklist de arranque
 
 > **Propósito**: asegurar que todo el entorno está listo antes de ejecutar los prompts
 > de Claude Code y empezar a construir el proyecto.
@@ -25,7 +25,7 @@
 - [ ] Acceso administrador a Hetzner Cloud.
 - [ ] Acceso administrador a Easypanel (`easypanel.va360-labs.com` o similar).
 - [ ] Credenciales Zoom: cuenta de pago con acceso a API.
-  - [ ] Crear app "LearnShip Dev" en Zoom Marketplace (Server-to-Server OAuth).
+  - [ ] Crear app "Didacta Dev" en Zoom Marketplace (Server-to-Server OAuth).
   - [ ] Anotar Account ID, Client ID, Client Secret.
 - [ ] API key de Anthropic con créditos (para pruebas de Fase 1.C; no necesario en Fase 0).
 - [ ] Credenciales Brevo SMTP (ya en uso).
@@ -38,11 +38,11 @@
 
 ```bash
 # Desde tu directorio de proyectos
-gh repo create va360-labs/learnship --private \
-  --description "LearnShip - Modular LMS platform (VA360 LABS)" \
+gh repo create va360labs/didacta --private \
+  --description "Didacta - Modular LMS platform (VA360 LABS)" \
   --clone
 
-cd learnship
+cd didacta
 ```
 
 - [ ] Repositorio creado en GitHub como privado.
@@ -53,7 +53,7 @@ cd learnship
 Copiar los siguientes archivos al repo en la estructura indicada:
 
 ```
-learnship/
+didacta/
 ├── deep-research-report.md          # PRD v1 original (referencia normativa)
 ├── docs/
 │   ├── PRD.md                       # v2 nuevo
@@ -84,7 +84,7 @@ git push -u origin main
 
 ### 3.1 Espacio de trabajo
 
-- [ ] Crear un espacio o sección en Notion llamado "LearnShip" (o similar).
+- [ ] Crear un espacio o sección en Notion llamado "Didacta" (o similar).
 - [ ] Asegurar que el MCP de Notion tiene permisos sobre ese espacio.
 - [ ] Verificar desde Claude que el MCP está activo:
   ```
@@ -102,11 +102,11 @@ git push -u origin main
 ### 4.1 Configuración de Easypanel
 
 - [ ] Acceder a Easypanel.
-- [ ] Crear el proyecto `learnship`.
+- [ ] Crear el proyecto `didacta`.
 - [ ] Planificar los 3 entornos (crear solo dev por ahora):
-  - `learnship-dev` — desarrollo con branch `main` auto-deploy.
-  - `learnship-staging` — se crea al acabar Fase 0.
-  - `learnship-prod` — se crea antes del piloto de Fase 1.C.
+  - `didacta-dev` — desarrollo con branch `main` auto-deploy.
+  - `didacta-staging` — se crea al acabar Fase 0.
+  - `didacta-prod` — se crea antes del piloto de Fase 1.C.
 
 ### 4.2 Servicios compartidos locales
 
@@ -136,11 +136,11 @@ evitar sobrecarga de contexto:
 En la raíz del repo, crear `CLAUDE.md` con contexto base del proyecto:
 
 ```markdown
-# LearnShip — Contexto para Claude Code
+# Didacta — Contexto para Claude Code
 
 ## Sobre el proyecto
 
-LearnShip es una plataforma LMS modular propiedad de VA360 LABS S.L.
+Didacta es una plataforma LMS modular propiedad de VA360 LABS S.L.
 Arquitectura: NestJS + Next.js + Postgres (RLS) + Redis + Anthropic API.
 Principio rector: **modularidad extrema**.
 
@@ -187,7 +187,7 @@ Responder por escrito (en un ADR, en Notion, o en un doc de decisiones):
 - [ ] MinIO self-hosted o Hetzner Object Storage para prod? (dev siempre MinIO).
 - [ ] Observabilidad: **Sentry** (SaaS) o **Grafana/Loki/Tempo** (self-hosted)?
   Recomendación Fase 0-1: Sentry; migrar a self-hosted en Fase 2 si escala.
-- [ ] Dominio inicial: `learnship.dev`, `learnship.va360.pro`, u otro?
+- [ ] Dominio inicial: `didacta.dev`, `didacta.va360.pro`, u otro?
 - [ ] Branch strategy: trunk-based con `main` + PRs (recomendado) vs gitflow?
 - [ ] Política de revisión de PRs: ¿autorrevisar está permitido en Fase 0 para ir
   más rápido, o ya desde el principio se exige review externa?
@@ -212,7 +212,7 @@ Una vez completada la checklist:
 ### 7.1 Sesión 1 — Prompt 01
 
 ```bash
-cd learnship
+cd didacta
 claude
 ```
 

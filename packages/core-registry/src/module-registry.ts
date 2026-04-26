@@ -1,5 +1,5 @@
 import semver from 'semver';
-import type { LearnShipModule, ModuleContext, Logger } from '@learnship/core-kernel';
+import type { DidactaModule, ModuleContext, Logger } from '@didacta/core-kernel';
 import { resolveDependencyOrder } from './dependency-resolver.js';
 
 export class CoreVersionMismatchError extends Error {
@@ -37,7 +37,7 @@ interface TenantModuleState {
  * sobre `tenant_module` en BD).
  */
 export class ModuleRegistry {
-  private readonly modules = new Map<string, LearnShipModule>();
+  private readonly modules = new Map<string, DidactaModule>();
   private readonly tenantState = new Map<string, TenantModuleState>();
   private readonly context: ModuleContext;
   private readonly coreVersion: string;
@@ -54,7 +54,7 @@ export class ModuleRegistry {
    * Registra una colección de módulos. Valida versiones, resuelve dependencias
    * y ejecuta `onRegister` en orden topológico.
    */
-  async register(modules: readonly LearnShipModule[]): Promise<void> {
+  async register(modules: readonly DidactaModule[]): Promise<void> {
     if (this.registered) {
       throw new Error('El registry ya fue inicializado. No se pueden registrar módulos dos veces.');
     }
@@ -83,11 +83,11 @@ export class ModuleRegistry {
     this.registered = true;
   }
 
-  getModule(name: string): LearnShipModule | undefined {
+  getModule(name: string): DidactaModule | undefined {
     return this.modules.get(name);
   }
 
-  listModules(): readonly LearnShipModule[] {
+  listModules(): readonly DidactaModule[] {
     return Array.from(this.modules.values());
   }
 
@@ -137,7 +137,7 @@ export class ModuleRegistry {
     });
   }
 
-  private ensureModule(name: string): LearnShipModule {
+  private ensureModule(name: string): DidactaModule {
     const mod = this.modules.get(name);
     if (!mod) throw new Error(`Módulo "${name}" no está registrado`);
     return mod;

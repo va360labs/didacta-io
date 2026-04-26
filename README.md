@@ -1,4 +1,4 @@
-# LearnShip
+# Didacta
 
 > Plataforma LMS modular — VA360 LABS S.L.
 
@@ -8,7 +8,7 @@
 
 ## Sobre el proyecto
 
-LearnShip es una plataforma LMS (Learning Management System) modular, moderna y
+Didacta es una plataforma LMS (Learning Management System) modular, moderna y
 extensible, propiedad de VA360 LABS S.L. Se construye con dos objetivos consecutivos:
 
 1. **Dogfooding**: reemplazar el stack actual de VA360 (LearnDash + FluentCommunity +

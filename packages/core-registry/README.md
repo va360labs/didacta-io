@@ -1,6 +1,6 @@
-# @learnship/core-registry
+# @didacta/core-registry
 
-Module Registry del core. Valida, ordena y coordina el lifecycle de los módulos de LearnShip.
+Module Registry del core. Valida, ordena y coordina el lifecycle de los módulos de Didacta.
 
 ## Responsabilidades
 
@@ -19,9 +19,9 @@ Module Registry del core. Valida, ordena y coordina el lifecycle de los módulos
 ## Uso
 
 ```ts
-import { ModuleRegistry } from '@learnship/core-registry';
-import { coursesModule } from '@learnship/mod-courses';
-import { learningModule } from '@learnship/mod-learning';
+import { ModuleRegistry } from '@didacta/core-registry';
+import { coursesModule } from '@didacta/mod-courses';
+import { learningModule } from '@didacta/mod-learning';
 
 const registry = new ModuleRegistry({
   coreVersion: '1.0.0',
@@ -45,5 +45,5 @@ await registry.enableForTenant('tenant-abc', 'mod.learning');
 ## Tests
 
 ```bash
-pnpm --filter @learnship/core-registry test
+pnpm --filter @didacta/core-registry test
 ```

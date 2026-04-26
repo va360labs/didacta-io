@@ -1,5 +1,5 @@
 {
-  "name": "@learnship/mod-assessments",
+  "name": "@didacta/mod-assessments",
   "version": "0.1.0",
   "private": true,
   "description": "Módulo de evaluaciones: quizzes con auto-corrección de tipos objetivos (mod.assessments)",
@@ -24,8 +24,8 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@learnship/core-kernel": "workspace:*",
-    "@learnship/database": "workspace:*",
+    "@didacta/core-kernel": "workspace:*",
+    "@didacta/database": "workspace:*",
     "zod": "^3.24.1"
   },
   "devDependencies": {

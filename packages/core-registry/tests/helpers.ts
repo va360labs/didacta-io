@@ -1,4 +1,4 @@
-import type { LearnShipModule, ModuleContext, ModuleManifest } from '@learnship/core-kernel';
+import type { DidactaModule, ModuleContext, ModuleManifest } from '@didacta/core-kernel';
 import { vi } from 'vitest';
 
 export function mockContext(): ModuleContext {
@@ -47,7 +47,7 @@ export function buildManifest(overrides: Partial<ModuleManifest> = {}): ModuleMa
   };
 }
 
-export function buildModule(overrides: Partial<ModuleManifest> = {}): LearnShipModule {
+export function buildModule(overrides: Partial<ModuleManifest> = {}): DidactaModule {
   return {
     manifest: buildManifest(overrides),
     onRegister: vi.fn().mockResolvedValue(undefined),

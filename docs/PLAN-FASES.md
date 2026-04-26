@@ -1,4 +1,4 @@
-# LearnShip — Plan de fases
+# Didacta — Plan de fases
 
 > **Versión**: 1.0
 > **Fecha**: abril 2026
@@ -43,12 +43,12 @@ fricción.
 
 ### Entregables
 
-- [ ] Repo monorepo `learnship` creado en GitHub con Turborepo + pnpm workspaces.
+- [ ] Repo monorepo `didacta` creado en GitHub con Turborepo + pnpm workspaces.
 - [ ] Estructura de carpetas completa (`apps/`, `packages/`, `modules/`, `docs/`, `infra/`).
 - [ ] `docker-compose.yml` para dev local: Postgres 16, Redis 7, MinIO, MailHog, MailPit.
 - [ ] Dockerfiles multi-stage para `apps/api` y `apps/web`.
 - [ ] Pipeline CI en GitHub Actions: lint + type-check + test unitario + build.
-- [ ] Entornos en Easypanel: `learnship-dev`, `learnship-staging`, `learnship-prod`.
+- [ ] Entornos en Easypanel: `didacta-dev`, `didacta-staging`, `didacta-prod`.
 - [ ] Prisma schema v1 con todos los modelos core + stubs de modelos de módulos Fase 1.
 - [ ] Migraciones iniciales aplicadas en los 3 entornos.
 - [ ] ADRs iniciales escritas (mínimo 8 — ver lista abajo).
@@ -85,7 +85,7 @@ Un developer puede:
 ## Fase 1.A — CORE + Learning asíncrono
 
 **Duración**: 8 semanas
-**Objetivo de dogfooding**: migrar 1 curso asíncrono de VA360.academy a LearnShip y que 10+ alumnos reales lo terminen.
+**Objetivo de dogfooding**: migrar 1 curso asíncrono de VA360.academy a Didacta y que 10+ alumnos reales lo terminen.
 
 ### Módulos involucrados
 
@@ -126,7 +126,7 @@ Un developer puede:
 ### Criterio de éxito
 
 1 curso real de VA360 (candidato: "Introducción a n8n" o "PotenzIA Fundamentos")
-migrado a LearnShip. 10 alumnos reales completan el curso. Se genera paquete de
+migrado a Didacta. 10 alumnos reales completan el curso. Se genera paquete de
 evidencia completo.
 
 ---

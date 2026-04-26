@@ -1,4 +1,4 @@
-import type { DomainEvent, EventBus, Logger } from '@learnship/core-kernel';
+import type { DomainEvent, EventBus, Logger } from '@didacta/core-kernel';
 import type { PrismaService } from '../prisma/prisma.service';
 
 type AnyEventHandler = (event: DomainEvent<unknown>) => Promise<void> | void;

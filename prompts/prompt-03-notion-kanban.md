@@ -8,10 +8,10 @@
 
 ---
 
-# Tarea: crear la estructura de gestión del proyecto LearnShip en Notion
+# Tarea: crear la estructura de gestión del proyecto Didacta en Notion
 
 Usando el MCP de Notion disponible, crea una estructura de gestión completa que
-albergue todo el backlog del proyecto LearnShip, organizado por fases, módulos y
+albergue todo el backlog del proyecto Didacta, organizado por fases, módulos y
 tipos, con vistas kanban y trazabilidad completa entre casos de uso, historias y
 tareas.
 
@@ -27,11 +27,11 @@ Lee en este orden:
 
 ## Estructura a crear en Notion
 
-### 1. Página raíz: "LearnShip — Proyecto"
+### 1. Página raíz: "Didacta — Proyecto"
 
 Crea una página de Notion en el workspace del usuario. Contenido:
 
-- **Heading 1**: "LearnShip — Plataforma LMS modular"
+- **Heading 1**: "Didacta — Plataforma LMS modular"
 - **Callout** con descripción corta del producto (extraída del resumen ejecutivo del PRD).
 - **Heading 2**: "Documentación"
   - Enlaces a los docs clave (incluir placeholders donde se pegarán después URLs
@@ -50,9 +50,9 @@ Crea una página de Notion en el workspace del usuario. Contenido:
 - **Heading 2**: "Riesgos activos"
   - Lista de riesgos del PRD con owner y mitigación.
 
-### 2. Base de datos: "LearnShip — Casos de uso"
+### 2. Base de datos: "Didacta — Casos de uso"
 
-**Nombre**: `LearnShip — Casos de uso`
+**Nombre**: `Didacta — Casos de uso`
 **Tipo**: database
 
 **Propiedades**:
@@ -75,9 +75,9 @@ Crea una página de Notion en el workspace del usuario. Contenido:
 **Cuerpo de cada página (UC)**: pegar el contenido completo del UC desde los
 ficheros markdown de `docs/casos-uso/`.
 
-### 3. Base de datos: "LearnShip — Historias de usuario"
+### 3. Base de datos: "Didacta — Historias de usuario"
 
-**Nombre**: `LearnShip — Historias de usuario`
+**Nombre**: `Didacta — Historias de usuario`
 
 **Propiedades**:
 
@@ -96,9 +96,9 @@ ficheros markdown de `docs/casos-uso/`.
 
 **Cuerpo de cada página**: pegar la historia completa con escenarios Gherkin.
 
-### 4. Base de datos principal: "LearnShip — Backlog"
+### 4. Base de datos principal: "Didacta — Backlog"
 
-**Nombre**: `LearnShip — Backlog`
+**Nombre**: `Didacta — Backlog`
 
 Esta es la base de datos central donde vive el kanban.
 
@@ -126,9 +126,9 @@ Esta es la base de datos central donde vive el kanban.
 | Github PR | URL | — |
 | Notas | Rich text | — |
 
-### 5. Base de datos: "LearnShip — Reglas de negocio"
+### 5. Base de datos: "Didacta — Reglas de negocio"
 
-**Nombre**: `LearnShip — Reglas de negocio`
+**Nombre**: `Didacta — Reglas de negocio`
 
 **Propiedades**:
 
@@ -144,9 +144,9 @@ Esta es la base de datos central donde vive el kanban.
 
 **Cuerpo**: contenido completo de la regla.
 
-### 6. Base de datos: "LearnShip — ADRs"
+### 6. Base de datos: "Didacta — ADRs"
 
-**Nombre**: `LearnShip — ADRs`
+**Nombre**: `Didacta — ADRs`
 
 **Propiedades**:
 
@@ -161,7 +161,7 @@ Esta es la base de datos central donde vive el kanban.
 
 **Cuerpo**: contenido del ADR (contexto, decisión, consecuencias, alternativas).
 
-### 7. Base de datos: "LearnShip — Decisiones pendientes"
+### 7. Base de datos: "Didacta — Decisiones pendientes"
 
 Para todos los UCs y puntos marcados como `DECISIÓN PENDIENTE`.
 
@@ -177,7 +177,7 @@ Para todos los UCs y puntos marcados como `DECISIÓN PENDIENTE`.
 | Estado | Status | Pendiente, En análisis, Decidida, Bloqueada externamente |
 | Impacto si no se decide | Select | Bajo, Medio, Alto, Crítico |
 
-## Vistas a crear en "LearnShip — Backlog"
+## Vistas a crear en "Didacta — Backlog"
 
 Crear estas vistas (todas sobre la misma base de datos):
 
@@ -202,7 +202,7 @@ Crear estas vistas (todas sobre la misma base de datos):
 
 ### Paso 1: crear infraestructura
 
-1. Crea la página raíz "LearnShip — Proyecto".
+1. Crea la página raíz "Didacta — Proyecto".
 2. Crea las 6 bases de datos como subpáginas.
 3. Define todas las propiedades con los valores correctos.
 4. Configura todas las vistas de la base "Backlog".
@@ -274,7 +274,7 @@ Al terminar, actualiza la página raíz con un resumen:
 Al terminar, entrega al usuario:
 
 ```
-✅ Notion configurado para LearnShip
+✅ Notion configurado para Didacta
 
 📊 Estadísticas:
 - Casos de uso creados: XXX

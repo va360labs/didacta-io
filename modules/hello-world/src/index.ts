@@ -1,12 +1,12 @@
-import type { LearnShipModule, ModuleContext } from '@learnship/core-kernel';
+import type { DidactaModule, ModuleContext } from '@didacta/core-kernel';
 import { manifest } from './manifest.js';
 import { HelloWorldService } from './service.js';
 
 /**
- * Implementación del contrato `LearnShipModule` para mod.hello-world.
+ * Implementación del contrato `DidactaModule` para mod.hello-world.
  * Ver docs/ARQUITECTURA-MODULAR.md §6 para detalles del lifecycle.
  */
-export const helloWorldModule: LearnShipModule = {
+export const helloWorldModule: DidactaModule = {
   manifest,
 
   async onRegister(ctx: ModuleContext) {

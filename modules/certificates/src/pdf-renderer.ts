@@ -30,7 +30,7 @@ export async function renderCertificatePdf(input: CertificateRenderInput): Promi
         margins: { top: 60, bottom: 60, left: 80, right: 80 },
         info: {
           Title: `Certificado #${input.number}`,
-          Author: input.tenantName ?? 'LearnShip',
+          Author: input.tenantName ?? 'Didacta',
           Subject: input.courseTitle,
         },
       });

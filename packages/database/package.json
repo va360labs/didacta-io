@@ -1,8 +1,8 @@
 {
-  "name": "@learnship/database",
+  "name": "@didacta/database",
   "version": "0.0.0",
   "private": true,
-  "description": "Cliente Prisma compartido, schema v1 del core y migraciones de LearnShip",
+  "description": "Cliente Prisma compartido, schema v1 del core y migraciones de Didacta",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

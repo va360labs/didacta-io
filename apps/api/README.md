@@ -1,6 +1,6 @@
-# @learnship/api
+# @didacta/api
 
-Backend NestJS de LearnShip.
+Backend NestJS de Didacta.
 
 ## Arranque en dev
 
@@ -9,7 +9,7 @@ Backend NestJS de LearnShip.
 pnpm install
 docker compose up -d           # levanta postgres, redis, minio, mailpit
 cp env.example .env            # la primera vez
-pnpm --filter @learnship/api dev
+pnpm --filter @didacta/api dev
 ```
 
 - API: http://localhost:4000

@@ -5,7 +5,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { CoursesError } from '@learnship/mod-courses';
+import { CoursesError } from '@didacta/mod-courses';
 import type { FastifyReply } from 'fastify';
 
 const STATUS_BY_CODE: Record<string, number> = {

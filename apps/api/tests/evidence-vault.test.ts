@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { StorageService } from '@learnship/core-kernel';
+import type { StorageService } from '@didacta/core-kernel';
 import { PrismaEvidenceVaultService } from '../src/modules/prisma-evidence-vault.service';
 
 interface EvidenceRow {

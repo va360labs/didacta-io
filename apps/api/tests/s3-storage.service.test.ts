@@ -20,7 +20,7 @@ vi.mock('@aws-sdk/s3-request-presigner', () => ({
 const VALID_OPTS = {
   endpoint: 'https://lab-minio.example.com',
   region: 'us-east-1',
-  bucket: 'learnship',
+  bucket: 'didacta',
   accessKeyId: 'admin',
   secretAccessKey: 'pass',
 };
@@ -38,7 +38,7 @@ describe('S3StorageService', () => {
       expect(out.key).toBe('certs/2026/abc.pdf');
       expect(sendMock).toHaveBeenCalledOnce();
       const cmd = sendMock.mock.calls[0]![0];
-      expect(cmd.input.Bucket).toBe('learnship');
+      expect(cmd.input.Bucket).toBe('didacta');
       expect(cmd.input.Key).toBe('certs/2026/abc.pdf');
       expect(cmd.input.ContentType).toBe('application/pdf');
     });

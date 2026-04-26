@@ -15,7 +15,7 @@ import { TenantContextService } from './tenant-context.service';
  * NOTA: la aplicación de SET LOCAL app.current_tenant_id se hace en
  * cada repository/service que use Prisma. Para garantizar enforcement,
  * el patrón recomendado es envolver la lógica con `withTenantContext`
- * del paquete @learnship/database.
+ * del paquete @didacta/database.
  */
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {

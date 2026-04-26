@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { TenantConfigService } from '@learnship/core-kernel';
+import type { TenantConfigService } from '@didacta/core-kernel';
 import { PrismaNotificationHubService } from '../src/modules/prisma-notification-hub.service';
 import { SmtpAdapterService, type SmtpConfig } from '../src/modules/smtp-adapter.service';
 

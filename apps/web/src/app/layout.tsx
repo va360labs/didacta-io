@@ -4,8 +4,8 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'LearnShip',
-    template: '%s · LearnShip',
+    default: 'Didacta',
+    template: '%s · Didacta',
   },
   description: 'Plataforma LMS modular de VA360 LABS',
   robots: { index: false, follow: false },

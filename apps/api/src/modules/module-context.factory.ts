@@ -7,9 +7,9 @@ import type {
   Logger,
   ModuleContext,
   NotificationHubService,
-} from '@learnship/core-kernel';
+} from '@didacta/core-kernel';
 import { PrismaService } from '../prisma/prisma.service';
-import type { StorageService } from '@learnship/core-kernel';
+import type { StorageService } from '@didacta/core-kernel';
 import { LocalDiskStorageService } from './local-disk-storage.service';
 import { S3StorageService, buildS3StorageFromEnv } from './s3-storage.service';
 import { OutboxQueueService } from './outbox-queue.service';

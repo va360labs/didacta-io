@@ -1,5 +1,5 @@
 // ============================================================================
-// LearnShip — Schema Prisma v1 (Core)
+// Didacta — Schema Prisma v1 (Core)
 // ----------------------------------------------------------------------------
 // Reglas clave:
 // - Toda tabla con datos de negocio incluye `tenantId` + política RLS (ver rls.sql)

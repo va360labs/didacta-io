@@ -1,26 +1,26 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: learnship-postgres
+    container_name: didacta-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-learnship}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-learnship_dev}
-      POSTGRES_DB: ${POSTGRES_DB:-learnship}
+      POSTGRES_USER: ${POSTGRES_USER:-didacta}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-didacta_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-didacta}
     ports:
       - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infra/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-learnship} -d ${POSTGRES_DB:-learnship}']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-didacta} -d ${POSTGRES_DB:-didacta}']
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: learnship-redis
+    container_name: didacta-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
     ports:
@@ -35,12 +35,12 @@ services:
 
   minio:
     image: minio/minio:latest
-    container_name: learnship-minio
+    container_name: didacta-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-learnship}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-learnship_dev}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-didacta}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-didacta_dev}
     ports:
       - '${MINIO_API_PORT:-9000}:9000'
       - '${MINIO_CONSOLE_PORT:-9001}:9001'
@@ -54,21 +54,21 @@ services:
 
   minio-init:
     image: minio/mc:latest
-    container_name: learnship-minio-init
+    container_name: didacta-minio-init
     depends_on:
       minio:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-learnship} ${MINIO_ROOT_PASSWORD:-learnship_dev};
-      mc mb --ignore-existing local/learnship-dev;
-      mc anonymous set download local/learnship-dev;
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-didacta} ${MINIO_ROOT_PASSWORD:-didacta_dev};
+      mc mb --ignore-existing local/didacta-dev;
+      mc anonymous set download local/didacta-dev;
       exit 0;
       "
 
   mailpit:
     image: axllent/mailpit:latest
-    container_name: learnship-mailpit
+    container_name: didacta-mailpit
     restart: unless-stopped
     ports:
       - '${MAILPIT_SMTP_PORT:-1025}:1025'

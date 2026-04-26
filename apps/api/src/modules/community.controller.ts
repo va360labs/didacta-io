@@ -20,7 +20,7 @@ import {
   type CreateCommentDto,
   type CreatePostDto,
   type ListPostsQueryDto,
-} from '@learnship/mod-community';
+} from '@didacta/mod-community';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';

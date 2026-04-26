@@ -1,10 +1,10 @@
-# LearnShip — Contexto para asistentes IA
+# Didacta — Contexto para asistentes IA
 
 > Instrucciones base para Claude Code (o cualquier otro asistente IA) al trabajar en este repositorio.
 
 ## Sobre el proyecto
 
-**LearnShip** es una plataforma LMS modular propiedad de **VA360 LABS S.L.**
+**Didacta** es una plataforma LMS modular propiedad de **VA360 LABS S.L.**
 
 Arquitectura: NestJS 11 + Next.js 15 + PostgreSQL 16 (con Row-Level Security) + Redis 7 + Anthropic API.
 
@@ -22,7 +22,7 @@ Arquitectura: NestJS 11 + Next.js 15 + PostgreSQL 16 (con Row-Level Security) + 
 - **Idioma**: español para commits, comentarios y documentación. Identificadores técnicos (nombres de funciones, variables, tipos, endpoints) en inglés.
 - **Commits**: Conventional Commits obligatorios. Nunca añadir "Co-Authored-By" ni atribuciones a la IA.
 - **Tests**: obligatorios para lógica de negocio. Coverage mínimo 70% en services y handlers.
-- **Contrato de módulo**: respetar en todo cambio a `modules/*`. Si algo no cumple el contrato, no es un módulo de LearnShip.
+- **Contrato de módulo**: respetar en todo cambio a `modules/*`. Si algo no cumple el contrato, no es un módulo de Didacta.
 - **Sin dependencias cruzadas entre módulos**: comunicación solo vía eventos, hooks o APIs públicas del core.
 - **ADRs obligatorias**: para decisiones arquitectónicas no triviales. Ver `docs/adrs/` (cuando exista).
 - **Ramas**: `feat/<descripción-corta>`, `fix/<descripción>`, `chore/<descripción>`, `docs/<descripción>`.

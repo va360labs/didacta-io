@@ -177,8 +177,8 @@ export class TenantSettingsController {
 
     const result = await smtp.send(parsed, {
       to: me.email,
-      subject: 'Prueba de SMTP — LearnShip',
-      text: `Si recibiste este correo, la configuración SMTP de tu tenant en LearnShip funciona correctamente.\n\nTenant: ${tenant?.slug ?? '(desconocido)'}\nFecha: ${new Date().toISOString()}`,
+      subject: 'Prueba de SMTP — Didacta',
+      text: `Si recibiste este correo, la configuración SMTP de tu tenant en Didacta funciona correctamente.\n\nTenant: ${tenant?.slug ?? '(desconocido)'}\nFecha: ${new Date().toISOString()}`,
     });
 
     if (!result.ok) {

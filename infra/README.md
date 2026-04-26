@@ -14,13 +14,13 @@ infra/
 
 ## Stack de desarrollo local (`docker-compose.yml` en la raíz)
 
-| Servicio   | Imagen                   | Puerto(s)  | Uso                                     |
-| ---------- | ------------------------ | ---------- | --------------------------------------- |
-| postgres   | `pgvector/pgvector:pg16` | 5432       | Base de datos con pgvector incluido     |
-| redis      | `redis:7-alpine`         | 6379       | Cache y colas BullMQ                    |
-| minio      | `minio/minio:latest`     | 9000, 9001 | Object storage S3-compatible            |
-| minio-init | `minio/mc:latest`        | -          | Crea bucket `learnship-dev` al arrancar |
-| mailpit    | `axllent/mailpit:latest` | 1025, 8025 | SMTP de captura + UI web de emails      |
+| Servicio   | Imagen                   | Puerto(s)  | Uso                                   |
+| ---------- | ------------------------ | ---------- | ------------------------------------- |
+| postgres   | `pgvector/pgvector:pg16` | 5432       | Base de datos con pgvector incluido   |
+| redis      | `redis:7-alpine`         | 6379       | Cache y colas BullMQ                  |
+| minio      | `minio/minio:latest`     | 9000, 9001 | Object storage S3-compatible          |
+| minio-init | `minio/mc:latest`        | -          | Crea bucket `didacta-dev` al arrancar |
+| mailpit    | `axllent/mailpit:latest` | 1025, 8025 | SMTP de captura + UI web de emails    |
 
 ## Cómo arrancar
 
@@ -42,9 +42,9 @@ docker compose ps
 
 ## Accesos rápidos (dev)
 
-- PostgreSQL: `psql postgresql://learnship:learnship_dev@localhost:5432/learnship`
+- PostgreSQL: `psql postgresql://didacta:didacta_dev@localhost:5432/didacta`
 - Redis CLI: `redis-cli -h localhost -p 6379`
-- MinIO Console: http://localhost:9001 (user: `learnship`, password: `learnship_dev`)
+- MinIO Console: http://localhost:9001 (user: `didacta`, password: `didacta_dev`)
 - MailPit UI: http://localhost:8025
 
 ## Entornos remotos (staging, prod)

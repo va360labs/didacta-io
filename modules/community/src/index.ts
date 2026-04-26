@@ -1,4 +1,4 @@
-import type { LearnShipModule, ModuleContext } from '@learnship/core-kernel';
+import type { DidactaModule, ModuleContext } from '@didacta/core-kernel';
 import { manifest } from './manifest.js';
 
 export { manifest };
@@ -21,7 +21,7 @@ export {
   ReactionTargetMissingError,
 } from './errors.js';
 
-export const communityModule: LearnShipModule = {
+export const communityModule: DidactaModule = {
   manifest,
   async onRegister(ctx: ModuleContext) {
     ctx.logger.info('mod.community: onRegister', { name: manifest.name });

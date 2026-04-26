@@ -53,36 +53,36 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.1037.0
         version: 3.1037.0
+      '@didacta/core-kernel':
+        specifier: workspace:*
+        version: link:../../packages/core-kernel
+      '@didacta/core-registry':
+        specifier: workspace:*
+        version: link:../../packages/core-registry
+      '@didacta/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@didacta/mod-assessments':
+        specifier: workspace:*
+        version: link:../../modules/assessments
+      '@didacta/mod-certificates':
+        specifier: workspace:*
+        version: link:../../modules/certificates
+      '@didacta/mod-community':
+        specifier: workspace:*
+        version: link:../../modules/community
+      '@didacta/mod-courses':
+        specifier: workspace:*
+        version: link:../../modules/courses
+      '@didacta/mod-hello-world':
+        specifier: workspace:*
+        version: link:../../modules/hello-world
+      '@didacta/mod-learning':
+        specifier: workspace:*
+        version: link:../../modules/learning
       '@fastify/static':
         specifier: ^7.0.4
         version: 7.0.4
-      '@learnship/core-kernel':
-        specifier: workspace:*
-        version: link:../../packages/core-kernel
-      '@learnship/core-registry':
-        specifier: workspace:*
-        version: link:../../packages/core-registry
-      '@learnship/database':
-        specifier: workspace:*
-        version: link:../../packages/database
-      '@learnship/mod-assessments':
-        specifier: workspace:*
-        version: link:../../modules/assessments
-      '@learnship/mod-certificates':
-        specifier: workspace:*
-        version: link:../../modules/certificates
-      '@learnship/mod-community':
-        specifier: workspace:*
-        version: link:../../modules/community
-      '@learnship/mod-courses':
-        specifier: workspace:*
-        version: link:../../modules/courses
-      '@learnship/mod-hello-world':
-        specifier: workspace:*
-        version: link:../../modules/hello-world
-      '@learnship/mod-learning':
-        specifier: workspace:*
-        version: link:../../modules/learning
       '@nestjs/common':
         specifier: ^10.4.15
         version: 10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -266,10 +266,10 @@ importers:
 
   modules/assessments:
     dependencies:
-      '@learnship/core-kernel':
+      '@didacta/core-kernel':
         specifier: workspace:*
         version: link:../../packages/core-kernel
-      '@learnship/database':
+      '@didacta/database':
         specifier: workspace:*
         version: link:../../packages/database
       zod:
@@ -288,10 +288,10 @@ importers:
 
   modules/certificates:
     dependencies:
-      '@learnship/core-kernel':
+      '@didacta/core-kernel':
         specifier: workspace:*
         version: link:../../packages/core-kernel
-      '@learnship/database':
+      '@didacta/database':
         specifier: workspace:*
         version: link:../../packages/database
       pdfkit:
@@ -316,10 +316,10 @@ importers:
 
   modules/community:
     dependencies:
-      '@learnship/core-kernel':
+      '@didacta/core-kernel':
         specifier: workspace:*
         version: link:../../packages/core-kernel
-      '@learnship/database':
+      '@didacta/database':
         specifier: workspace:*
         version: link:../../packages/database
       zod:
@@ -338,10 +338,10 @@ importers:
 
   modules/courses:
     dependencies:
-      '@learnship/core-kernel':
+      '@didacta/core-kernel':
         specifier: workspace:*
         version: link:../../packages/core-kernel
-      '@learnship/database':
+      '@didacta/database':
         specifier: workspace:*
         version: link:../../packages/database
       zod:
@@ -360,11 +360,11 @@ importers:
 
   modules/hello-world:
     dependencies:
-      '@learnship/core-kernel':
+      '@didacta/core-kernel':
         specifier: workspace:*
         version: link:../../packages/core-kernel
     devDependencies:
-      '@learnship/core-registry':
+      '@didacta/core-registry':
         specifier: workspace:*
         version: link:../../packages/core-registry
       '@types/node':
@@ -379,10 +379,10 @@ importers:
 
   modules/learning:
     dependencies:
-      '@learnship/core-kernel':
+      '@didacta/core-kernel':
         specifier: workspace:*
         version: link:../../packages/core-kernel
-      '@learnship/database':
+      '@didacta/database':
         specifier: workspace:*
         version: link:../../packages/database
       zod:
@@ -417,7 +417,7 @@ importers:
 
   packages/core-registry:
     dependencies:
-      '@learnship/core-kernel':
+      '@didacta/core-kernel':
         specifier: workspace:*
         version: link:../core-kernel
       semver:

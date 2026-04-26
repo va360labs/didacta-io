@@ -23,7 +23,7 @@ async function bootstrap(): Promise<void> {
   });
 
   const config = new DocumentBuilder()
-    .setTitle('LearnShip API')
+    .setTitle('Didacta API')
     .setDescription('API REST del LMS modular de VA360 LABS')
     .setVersion('v1')
     .addBearerAuth()
@@ -38,7 +38,7 @@ async function bootstrap(): Promise<void> {
   await app.listen(port, '0.0.0.0');
 
   const logger = app.get(Logger);
-  logger.log(`LearnShip API escuchando en http://localhost:${port}`);
+  logger.log(`Didacta API escuchando en http://localhost:${port}`);
   logger.log(`Docs OpenAPI: http://localhost:${port}/api/docs`);
 }
 

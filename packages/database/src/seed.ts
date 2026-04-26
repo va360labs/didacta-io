@@ -10,7 +10,7 @@
  * Uso:
  *   BOOTSTRAP_PASSWORD='miPasswordSegura123!' \
  *   BOOTSTRAP_EMAIL='valen@va360labs.com' \
- *   pnpm --filter @learnship/database db:seed
+ *   pnpm --filter @didacta/database db:seed
  */
 
 import * as argon2 from 'argon2';

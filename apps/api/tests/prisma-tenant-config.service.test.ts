@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { describe, expect, it, beforeEach } from 'vitest';
-import type { AuditLogService } from '@learnship/core-kernel';
-import { Prisma } from '@learnship/database';
+import type { AuditLogService } from '@didacta/core-kernel';
+import { Prisma } from '@didacta/database';
 import { PrismaTenantConfigService } from '../src/modules/prisma-tenant-config.service';
 import { SecretCipherService } from '../src/modules/secret-cipher.service';
 

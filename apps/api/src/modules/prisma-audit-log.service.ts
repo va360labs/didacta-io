@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { AuditLogService } from '@learnship/core-kernel';
+import type { AuditLogService } from '@didacta/core-kernel';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**

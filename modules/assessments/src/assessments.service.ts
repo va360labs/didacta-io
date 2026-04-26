@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { ModuleContext } from '@learnship/core-kernel';
-import type { PrismaClient } from '@learnship/database';
+import type { ModuleContext } from '@didacta/core-kernel';
+import type { PrismaClient } from '@didacta/database';
 import type {
   CreateQuestionDto,
   CreateQuizDto,

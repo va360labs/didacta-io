@@ -1,6 +1,7 @@
 # Estado del proyecto — handoff completo
 
-> **Última actualización**: 2026-04-26 (PR #79 — MinIO/S3 storage con presigned URLs)
+> **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
+> **Última actualización**: 2026-04-26 (PR C0 — rebrand a Didacta)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -8,7 +9,7 @@
 
 ## 1. TL;DR
 
-LearnShip es un LMS multi-tenant modular construido por VA360 LABS S.L. La aplicación es **funcional end-to-end en producción** (Easypanel) y cubre el flujo completo del alumno y del formador.
+Didacta es un LMS multi-tenant modular construido por VA360 LABS S.L. La aplicación es **funcional end-to-end en producción** (Easypanel) y cubre el flujo completo del alumno y del formador.
 
 ### Lo que hace HOY
 
@@ -34,7 +35,7 @@ LearnShip es un LMS multi-tenant modular construido por VA360 LABS S.L. La aplic
 | Auth | JWT con jose, MFA TOTP con otplib, argon2id para passwords | ADR-003 pendiente para Better-Auth o Auth.js v5 |
 | Tests | Vitest + Playwright | 179 unit verdes en CI principal + 5 specs E2E en workflow separado |
 | Observabilidad | Pino + nestjs-pino | OpenTelemetry diferido a Fase 2 |
-| Hosting | Hetzner + Easypanel | `https://lab-learnship.3qntut.easypanel.host` |
+| Hosting | Hetzner + Easypanel | `https://lab-learnship.3qntut.easypanel.host` (legacy hostname pre-rebrand — ver nota en docs/test.env.md) |
 
 ### Métricas de calidad (al cierre del PR #73)
 
@@ -52,16 +53,16 @@ LearnShip es un LMS multi-tenant modular construido por VA360 LABS S.L. La aplic
 - Node.js 22 (usar `nvm use` si tenés `.nvmrc` lectura habilitada)
 - pnpm 10.21.0 (`corepack enable && corepack use pnpm@10.21.0` o `npm i -g pnpm@10.21.0`)
 - Postgres 16 local (Docker o nativo) o conexión a una remota
-- (Opcional) Docker para levantar Postgres: `docker run -d --name learnship-pg -e POSTGRES_USER=learnship -e POSTGRES_PASSWORD=learnship -e POSTGRES_DB=learnship -p 5432:5432 postgres:16`
-- Git + acceso SSH/HTTPS al repo `va360labs/learnship`
+- (Opcional) Docker para levantar Postgres: `docker run -d --name didacta-pg -e POSTGRES_USER=didacta -e POSTGRES_PASSWORD=didacta -e POSTGRES_DB=didacta -p 5432:5432 postgres:16`
+- Git + acceso SSH/HTTPS al repo `va360labs/didacta`
 - (Opcional para deploy/PRs) `gh` CLI autenticado
 
 ### 2.2 Setup de cero
 
 ```bash
 # 1. Clonar y entrar
-git clone https://github.com/va360labs/learnship.git
-cd learnship
+git clone https://github.com/va360labs/didacta.git
+cd didacta
 
 # 2. Activar Node 22 + pnpm
 nvm use
@@ -77,11 +78,11 @@ cp env.example .env
 pnpm install
 
 # 5. Generar Prisma Client + aplicar migraciones + RLS + seed
-pnpm --filter @learnship/database db:generate
-pnpm --filter @learnship/database db:migrate:deploy
-pnpm --filter @learnship/database db:rls:apply         # idempotente
+pnpm --filter @didacta/database db:generate
+pnpm --filter @didacta/database db:migrate:deploy
+pnpm --filter @didacta/database db:rls:apply         # idempotente
 BOOTSTRAP_PASSWORD='tu-password-min-12-chars' \
-  pnpm --filter @learnship/database db:seed
+  pnpm --filter @didacta/database db:seed
 
 # 6. Levantar dev
 pnpm dev      # Turbo levanta web (3000) + api (4000) en watch
@@ -102,11 +103,11 @@ Ver `docs/test.env.md` para el listado completo de variables que pide Easypanel.
 
 ```bash
 # Ejecutar UNA sola vez en el shell de Easypanel:
-pnpm --filter @learnship/database exec prisma migrate resolve --applied 0_init
-pnpm --filter @learnship/database exec prisma migrate resolve --applied 20260425000001_add_fill_in_blank
-pnpm --filter @learnship/database exec prisma migrate resolve --applied 20260425000002_add_open_questions_and_grading
-pnpm --filter @learnship/database exec prisma migrate resolve --applied 20260425000003_add_notifications
-pnpm --filter @learnship/database exec prisma migrate resolve --applied 20260426000001_add_community
+pnpm --filter @didacta/database exec prisma migrate resolve --applied 0_init
+pnpm --filter @didacta/database exec prisma migrate resolve --applied 20260425000001_add_fill_in_blank
+pnpm --filter @didacta/database exec prisma migrate resolve --applied 20260425000002_add_open_questions_and_grading
+pnpm --filter @didacta/database exec prisma migrate resolve --applied 20260425000003_add_notifications
+pnpm --filter @didacta/database exec prisma migrate resolve --applied 20260426000001_add_community
 ```
 
 A partir de ahí, los deploys aplicarán solo migraciones nuevas posteriores. **CRÍTICO**: si el deploy intenta correr el SQL del baseline contra una DB que ya tiene esas tablas, falla. El `migrate resolve --applied` marca como aplicada sin ejecutar el SQL.
@@ -118,12 +119,12 @@ A partir de ahí, los deploys aplicarán solo migraciones nuevas posteriores. **
 ### 3.1 Layout del monorepo
 
 ```
-learnship/
+didacta/
 ├── apps/
 │   ├── api/       # NestJS 10 + Fastify; punto de entrada del backend
 │   ├── web/       # Next.js 15 App Router; UI alumno, formador, admin
 │   └── e2e/       # Playwright; specs end-to-end
-├── modules/       # Módulos de negocio (contrato LearnShipModule)
+├── modules/       # Módulos de negocio (contrato DidactaModule)
 │   ├── assessments/    # mod.assessments — quizzes (6 tipos + grading manual)
 │   ├── certificates/   # mod.certificates — emisión de PDFs idempotente
 │   ├── community/      # mod.community — posts, comments, reacciones (Fase 1.B)
@@ -232,7 +233,7 @@ Wired en `apps/api/src/modules/module-context.factory.ts` y consumido por todos 
 
 | Var | Para qué | Ejemplo / nota |
 |---|---|---|
-| `DATABASE_URL` | Postgres connection string | `postgresql://learnship:learnship@localhost:5432/learnship?schema=public` |
+| `DATABASE_URL` | Postgres connection string | `postgresql://didacta:didacta@localhost:5432/didacta?schema=public` |
 | `JWT_SECRET` | HMAC key para access tokens | mín. 32 chars random |
 | `JWT_REFRESH_SECRET` | HMAC key para refresh tokens | mín. 32 chars random, distinto del anterior |
 | `STORAGE_ROOT` | Path local donde se guardan PDFs y blobs (cuando `STORAGE_DRIVER=local`) | ej. `./.local-storage`. Crear el dir antes de arrancar. |
@@ -523,25 +524,25 @@ tests/
 
 ```bash
 # Aplicar migraciones pendientes (CI / nueva máquina / Easypanel)
-pnpm --filter @learnship/database db:migrate:deploy
+pnpm --filter @didacta/database db:migrate:deploy
 
 # Crear nueva migración tras editar schema.prisma (la aplica al instante en local)
-pnpm --filter @learnship/database db:migrate:dev --name <descripción-corta>
+pnpm --filter @didacta/database db:migrate:dev --name <descripción-corta>
 
 # Reset full (BORRA todo y reaplica desde 0_init)
-pnpm --filter @learnship/database exec prisma migrate reset
+pnpm --filter @didacta/database exec prisma migrate reset
 
 # Re-generar Prisma client tras cambios en schema.prisma
-pnpm --filter @learnship/database db:generate
+pnpm --filter @didacta/database db:generate
 
 # Aplicar políticas RLS (idempotente; correr tras migraciones)
-pnpm --filter @learnship/database db:rls:apply
+pnpm --filter @didacta/database db:rls:apply
 
 # Re-seed (idempotente)
-BOOTSTRAP_PASSWORD='...' pnpm --filter @learnship/database db:seed
+BOOTSTRAP_PASSWORD='...' pnpm --filter @didacta/database db:seed
 
 # Studio
-pnpm --filter @learnship/database exec prisma studio
+pnpm --filter @didacta/database exec prisma studio
 ```
 
 ### 6.4 Marcar baseline como aplicada (Easypanel post-PR #51)
@@ -556,7 +557,7 @@ Ver sección 2.3.
 - **NestJS 10** y NO 11 — `nestjs-pino` no soporta 11 todavía sin pelea.
 - **CommonJS en TODO el monorepo** — NestJS necesita CJS por decoradores. Cualquier `"type": "module"` en un workspace package rompe el build de api con error críptico.
 - **Fastify** sobre Express — más rápido, mejor con TS.
-- **`prisma migrate deploy/dev`** versionado en `packages/database/prisma/migrations/` desde 2026-04-25. Antes era `prisma db push`. Para una nueva máquina: `pnpm --filter @learnship/database db:migrate:deploy`. Para Easypanel: ver sección 2.3.
+- **`prisma migrate deploy/dev`** versionado en `packages/database/prisma/migrations/` desde 2026-04-25. Antes era `prisma db push`. Para una nueva máquina: `pnpm --filter @didacta/database db:migrate:deploy`. Para Easypanel: ver sección 2.3.
 - **JWT con jose + HS256** — ADR pendiente para pasar a RS256 cuando haya rotación de keys.
 - **argon2id** para passwords (no bcrypt, por memory cost).
 
@@ -574,7 +575,7 @@ Ver sección 2.3.
 ### 7.3 Anti-patrones encontrados (gotchas)
 
 - `@UsePipes(...)` a nivel handler valida TODOS los args (incluido `@CurrentUser()`) — usar `@Body(new ZodValidationPipe(...))` en su lugar.
-- Workspace package con `main: dist/index.js` necesita build previo. Sin build de `mod-X`, `apps/api` da `TS2307`. CI lo hace solo (turbo `dependsOn: ['^build']` en typecheck/test). En local, antes del primer typecheck del api, hay que correr `pnpm --filter @learnship/mod-X build` para cada mod nuevo.
+- Workspace package con `main: dist/index.js` necesita build previo. Sin build de `mod-X`, `apps/api` da `TS2307`. CI lo hace solo (turbo `dependsOn: ['^build']` en typecheck/test). En local, antes del primer typecheck del api, hay que correr `pnpm --filter @didacta/mod-X build` para cada mod nuevo.
 - Para descargar PDFs con bearer auth, NO usar `<a href>` (no soporta cabeceras). Hay que hacer fetch → blob → URL.createObjectURL → click programático.
 - pdfkit no requiere fonts externas (Helvetica embebido) ni native deps → ideal Docker.
 - corepack falla con EACCES en Easypanel. Solución: `npm install -g pnpm@10.21.0`.
@@ -629,7 +630,7 @@ Ver sección 2.3.
 Job `Lint · Typecheck · Test · Build`:
 1. Setup pnpm + Node 22
 2. `pnpm install --frozen-lockfile`
-3. `pnpm --filter @learnship/database db:generate`
+3. `pnpm --filter @didacta/database db:generate`
 4. `pnpm format:check`
 5. `pnpm lint`
 6. `pnpm typecheck`
@@ -640,7 +641,7 @@ Ver `.github/workflows/ci.yml`.
 
 ### 9.2 `e2e.yml` — corre en push a main + workflow_dispatch
 
-Levanta Postgres 16 como service container, aplica migraciones (`db:migrate:deploy`), seedea, levanta api+web, instala browsers de Playwright, corre `pnpm --filter @learnship/e2e test:e2e`. Sube reporte HTML como artifact.
+Levanta Postgres 16 como service container, aplica migraciones (`db:migrate:deploy`), seedea, levanta api+web, instala browsers de Playwright, corre `pnpm --filter @didacta/e2e test:e2e`. Sube reporte HTML como artifact.
 
 Ver `.github/workflows/e2e.yml`.
 
@@ -744,21 +745,21 @@ Ver `.github/workflows/e2e.yml`.
 pnpm dev
 
 # Solo el web
-pnpm --filter @learnship/web dev
+pnpm --filter @didacta/web dev
 
 # Solo el api
-pnpm --filter @learnship/api dev
+pnpm --filter @didacta/api dev
 
 # Re-build de un módulo (necesario tras cambiar mod-X y antes del typecheck del api)
-pnpm --filter @learnship/mod-certificates build
+pnpm --filter @didacta/mod-certificates build
 
 # Typecheck/test del monorepo entero (turbo orquesta)
 pnpm typecheck
 pnpm test
 
 # Typecheck/test de un solo paquete
-pnpm --filter @learnship/api typecheck
-pnpm --filter @learnship/mod-assessments test
+pnpm --filter @didacta/api typecheck
+pnpm --filter @didacta/mod-assessments test
 
 # Format check (CRLF en Windows puede ensuciar la salida — ver gotchas)
 pnpm format:check
@@ -767,27 +768,27 @@ pnpm format:check
 pnpm format
 
 # Re-generar Prisma tras cambios en schema.prisma
-pnpm --filter @learnship/database db:generate
+pnpm --filter @didacta/database db:generate
 
 # Crear nueva migration
-pnpm --filter @learnship/database db:migrate:dev --name <descripción>
+pnpm --filter @didacta/database db:migrate:dev --name <descripción>
 
 # Aplicar migrations pendientes
-pnpm --filter @learnship/database db:migrate:deploy
+pnpm --filter @didacta/database db:migrate:deploy
 
 # Re-seed (idempotente)
-BOOTSTRAP_PASSWORD='...' pnpm --filter @learnship/database db:seed
+BOOTSTRAP_PASSWORD='...' pnpm --filter @didacta/database db:seed
 
 # Inspeccionar la BD desde CLI
-pnpm --filter @learnship/database exec prisma studio
+pnpm --filter @didacta/database exec prisma studio
 
 # Correr E2E local (con dev levantado en otra terminal)
 E2E_ADMIN_EMAIL=valen@va360labs.com \
 E2E_ADMIN_PASSWORD='...' \
-pnpm --filter @learnship/e2e test:e2e
+pnpm --filter @didacta/e2e test:e2e
 
 # Ver el reporte HTML de Playwright tras un fail
-pnpm --filter @learnship/e2e exec playwright show-report
+pnpm --filter @didacta/e2e exec playwright show-report
 
 # Crear un PR rápido con gh
 gh pr create --title "..." --body "..."
@@ -811,8 +812,8 @@ gh pr merge <n> --squash --delete-branch
 | Cómo correr E2E en local | sección 12 de este doc + `apps/e2e/README.md` |
 | ADRs (cuando existan) | `docs/adrs/` |
 | Notion (planificación viva) | https://www.notion.so/LMS-Ship-34cb609a124c80aa996bfec23268cad4 |
-| Repo GitHub | https://github.com/va360labs/learnship |
-| App productiva | https://lab-learnship.3qntut.easypanel.host |
+| Repo GitHub | https://github.com/va360labs/didacta |
+| App productiva | https://lab-learnship.3qntut.easypanel.host (legacy URL pre-rebrand) |
 
 ---
 

@@ -16,7 +16,7 @@ El aislamiento multi-tenant es crítico para un SaaS. Tres estrategias posibles:
 
 **RLS con `tenant_id UUID NOT NULL`** en todas las tablas. Políticas aplicadas dinámicamente por bloque `DO $$` que escanea `information_schema.columns` y activa `ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY` en cada tabla con esa columna.
 
-El contexto de tenant se propaga vía `SET LOCAL app.current_tenant_id = '<uuid>'` al inicio de cada transacción. El helper `withTenantContext(prisma, tenantId, cb)` en `@learnship/database` encapsula el patrón.
+El contexto de tenant se propaga vía `SET LOCAL app.current_tenant_id = '<uuid>'` al inicio de cada transacción. El helper `withTenantContext(prisma, tenantId, cb)` en `@didacta/database` encapsula el patrón.
 
 ## Consecuencias
 
@@ -32,7 +32,7 @@ Negativas / riesgos:
 - **Rendimiento con millones de filas** y muchos tenants: debe benchmarkarse en Fase 0 con dataset sintético de ≥100 tenants × 10k filas.
 - **Riesgo de olvido**: si una migración crea tabla con `tenant_id` pero sin política, se filtra data. **Mitigación**: test de CI que verifica RLS en el 100% de tablas con `tenant_id`.
 - **Particionado futuro**: si una tabla supera cientos de millones de filas, se puede particionar por tenant sin cambiar la política.
-- **Rol `learnship_super`** con `BYPASSRLS` necesario para jobs globales. Nunca usar en request path de usuario final.
+- **Rol `didacta_super`** con `BYPASSRLS` necesario para jobs globales. Nunca usar en request path de usuario final.
 
 ## Alternativas consideradas
 

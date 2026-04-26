@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { NotificationHubService, TenantConfigService } from '@learnship/core-kernel';
+import type { NotificationHubService, TenantConfigService } from '@didacta/core-kernel';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
 import { SmtpAdapterService, type SmtpConfig } from './smtp-adapter.service';
@@ -210,8 +210,8 @@ const TEMPLATES: Record<string, TemplateDef> = {
     body: 'Tu intento del quiz "{{quiz}}" fue corregido manualmente. Resultado: {{scorePercent}}% ({{result}}).',
   },
   'admin.smtp.test': {
-    subject: 'Prueba de SMTP — LearnShip',
-    body: 'Si recibiste este correo, la configuración SMTP de tu tenant en LearnShip funciona correctamente.\n\nTenant: {{tenantSlug}}\nFecha: {{timestamp}}',
+    subject: 'Prueba de SMTP — Didacta',
+    body: 'Si recibiste este correo, la configuración SMTP de tu tenant en Didacta funciona correctamente.\n\nTenant: {{tenantSlug}}\nFecha: {{timestamp}}',
   },
 };
 

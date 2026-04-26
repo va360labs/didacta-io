@@ -19,7 +19,7 @@ export type {
 } from './module/manifest.js';
 
 export type {
-  LearnShipModule,
+  DidactaModule,
   ModuleContext,
   Logger,
   EventBus,

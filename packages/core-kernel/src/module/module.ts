@@ -116,10 +116,10 @@ export interface ModuleContext {
 }
 
 /**
- * Contrato que todo módulo de LearnShip debe implementar.
+ * Contrato que todo módulo de Didacta debe implementar.
  * Ver docs/ARQUITECTURA-MODULAR.md §3.3
  */
-export interface LearnShipModule {
+export interface DidactaModule {
   readonly manifest: ModuleManifest;
 
   /** Ejecutado una vez al arrancar la plataforma (antes de activar en ningún tenant). */

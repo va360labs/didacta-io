@@ -1,4 +1,4 @@
-import type { LearnShipModule, ModuleContext, DomainEvent } from '@learnship/core-kernel';
+import type { DidactaModule, ModuleContext, DomainEvent } from '@didacta/core-kernel';
 import { manifest } from './manifest.js';
 import { CertificatesService } from './certificates.service.js';
 
@@ -22,7 +22,7 @@ interface CourseCompletedPayload {
  * El handler de `learning.course.completed` necesita el service para emitir.
  * Por eso el módulo se construye dinámicamente con la instancia del service.
  */
-export function buildCertificatesModule(service: CertificatesService): LearnShipModule {
+export function buildCertificatesModule(service: CertificatesService): DidactaModule {
   return {
     manifest,
 

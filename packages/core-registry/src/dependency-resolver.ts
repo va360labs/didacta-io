@@ -1,5 +1,5 @@
 import semver from 'semver';
-import type { LearnShipModule } from '@learnship/core-kernel';
+import type { DidactaModule } from '@didacta/core-kernel';
 
 export class CircularDependencyError extends Error {
   constructor(public readonly cycle: string[]) {
@@ -40,8 +40,8 @@ export class DependencyVersionMismatchError extends Error {
  * Retorna los módulos en un orden seguro para registro/activación: un módulo
  * siempre aparece después de sus dependencias.
  */
-export function resolveDependencyOrder(modules: readonly LearnShipModule[]): LearnShipModule[] {
-  const moduleMap = new Map<string, LearnShipModule>();
+export function resolveDependencyOrder(modules: readonly DidactaModule[]): DidactaModule[] {
+  const moduleMap = new Map<string, DidactaModule>();
   for (const mod of modules) {
     if (moduleMap.has(mod.manifest.name)) {
       throw new Error(`Módulo duplicado: "${mod.manifest.name}" aparece dos veces`);
@@ -68,7 +68,7 @@ export function resolveDependencyOrder(modules: readonly LearnShipModule[]): Lea
   }
 
   // Topological sort con DFS + detección de ciclos
-  const sorted: LearnShipModule[] = [];
+  const sorted: DidactaModule[] = [];
   const permanent = new Set<string>();
   const temporary = new Set<string>();
   const pathStack: string[] = [];

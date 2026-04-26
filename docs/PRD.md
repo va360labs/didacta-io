@@ -1,4 +1,4 @@
-# LearnShip — Product Requirements Document (PRD)
+# Didacta — Product Requirements Document (PRD)
 
 > **Versión**: 2.0
 > **Fecha**: abril 2026
@@ -19,7 +19,7 @@
 
 ## 1. Resumen ejecutivo
 
-**LearnShip** es una plataforma LMS (Learning Management System) modular, moderna y
+**Didacta** es una plataforma LMS (Learning Management System) modular, moderna y
 extensible, propiedad de **VA360 LABS S.L.**, diseñada con dos objetivos consecutivos:
 
 1. **Dogfooding**: reemplazar el stack actual de VA360 (LearnDash + FluentCommunity +
@@ -126,7 +126,7 @@ descarga paquete de auditoría, verifica evidencias.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    LearnShip Platform                        │
+│                    Didacta Platform                        │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌───────────────────────────────────────────────────────┐  │
 │  │                   CORE (obligatorio)                  │  │
@@ -294,7 +294,7 @@ módulos.
 ### 6.2 Estructura del monorepo
 
 ```
-learnship/
+didacta/
 ├── apps/
 │   ├── api/              # NestJS backend principal
 │   ├── web/              # Next.js frontend (app de alumno + admin de tenant)
@@ -530,7 +530,7 @@ existiendo (no se destruye data) pero no sean accesibles vía API.
 
 ### 13.1 Fase 1.A
 
-- Al menos 1 curso asíncrono real de VA360 migrado y funcionando en LearnShip.
+- Al menos 1 curso asíncrono real de VA360 migrado y funcionando en Didacta.
 - 10+ alumnos reales consumen el curso completo y obtienen certificado.
 - Evidence vault genera paquete exportable de cada alumno.
 

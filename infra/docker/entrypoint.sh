@@ -29,7 +29,7 @@ run_migrations() {
   fi
 
   log "Sincronizando schema con prisma db push…"
-  pnpm --filter @learnship/database exec prisma db push --skip-generate --accept-data-loss
+  pnpm --filter @didacta/database exec prisma db push --skip-generate --accept-data-loss
 
   if command -v psql >/dev/null 2>&1; then
     log "Aplicando políticas RLS…"
@@ -44,21 +44,21 @@ run_migrations() {
 
 start_api() {
   log "Levantando API en :${API_PORT:-4000}…"
-  exec pnpm --filter @learnship/api exec node dist/main.js
+  exec pnpm --filter @didacta/api exec node dist/main.js
 }
 
 start_web() {
   log "Levantando Web en :${WEB_PORT:-3000}…"
-  exec pnpm --filter @learnship/web exec next start -p "${WEB_PORT:-3000}"
+  exec pnpm --filter @didacta/web exec next start -p "${WEB_PORT:-3000}"
 }
 
 start_all() {
   run_migrations
 
   log "Arrancando API y Web en paralelo…"
-  pnpm --filter @learnship/api exec node dist/main.js &
+  pnpm --filter @didacta/api exec node dist/main.js &
   api_pid=$!
-  pnpm --filter @learnship/web exec next start -p "${WEB_PORT:-3000}" &
+  pnpm --filter @didacta/web exec next start -p "${WEB_PORT:-3000}" &
   web_pid=$!
 
   shutdown() {
@@ -81,7 +81,7 @@ case "${1:-start}" in
   api)     run_migrations; start_api ;;
   web)     start_web ;;
   migrate) run_migrations; log "Solo sincronización de schema, salgo."; exit 0 ;;
-  seed)    run_migrations; pnpm --filter @learnship/database db:seed; exit 0 ;;
+  seed)    run_migrations; pnpm --filter @didacta/database db:seed; exit 0 ;;
   shell)   exec bash ;;
   *)       exec "$@" ;;
 esac

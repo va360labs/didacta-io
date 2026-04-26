@@ -1,11 +1,11 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
-import { ModuleRegistry } from '@learnship/core-registry';
-import { assessmentsModule, AssessmentsService } from '@learnship/mod-assessments';
-import { buildCertificatesModule, CertificatesService } from '@learnship/mod-certificates';
-import { communityModule, CommunityService } from '@learnship/mod-community';
-import { coursesModule, CoursesService } from '@learnship/mod-courses';
-import { helloWorldModule } from '@learnship/mod-hello-world';
-import { learningModule, LearningService } from '@learnship/mod-learning';
+import { ModuleRegistry } from '@didacta/core-registry';
+import { assessmentsModule, AssessmentsService } from '@didacta/mod-assessments';
+import { buildCertificatesModule, CertificatesService } from '@didacta/mod-certificates';
+import { communityModule, CommunityService } from '@didacta/mod-community';
+import { coursesModule, CoursesService } from '@didacta/mod-courses';
+import { helloWorldModule } from '@didacta/mod-hello-world';
+import { learningModule, LearningService } from '@didacta/mod-learning';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleContextFactory } from './module-context.factory';
 

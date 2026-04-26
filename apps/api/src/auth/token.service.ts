@@ -31,7 +31,7 @@ export class TokenService {
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(claims.sub)
       .setIssuer(this.config.jwtIssuer)
-      .setAudience('learnship-api')
+      .setAudience('didacta-api')
       .setIssuedAt(issuedAt)
       .setExpirationTime(issuedAt + this.config.jwtAccessTtlSeconds)
       .sign(this.secret);
@@ -43,7 +43,7 @@ export class TokenService {
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(claims.sub)
       .setIssuer(this.config.jwtIssuer)
-      .setAudience('learnship-api')
+      .setAudience('didacta-api')
       .setIssuedAt(issuedAt)
       .setExpirationTime(issuedAt + this.config.jwtRefreshTtlSeconds)
       .sign(this.secret);
@@ -58,7 +58,7 @@ export class TokenService {
   async verifyAccess(token: string): Promise<SessionClaims> {
     const { payload } = await jwtVerify(token, this.secret, {
       issuer: this.config.jwtIssuer,
-      audience: 'learnship-api',
+      audience: 'didacta-api',
     });
     if (payload['kind'] !== 'access') {
       throw new Error('Token no es de tipo access');
@@ -74,7 +74,7 @@ export class TokenService {
   async verifyRefresh(token: string): Promise<{ sub: string; tenantId: string }> {
     const { payload } = await jwtVerify(token, this.secret, {
       issuer: this.config.jwtIssuer,
-      audience: 'learnship-api',
+      audience: 'didacta-api',
     });
     if (payload['kind'] !== 'refresh') {
       throw new Error('Token no es de tipo refresh');

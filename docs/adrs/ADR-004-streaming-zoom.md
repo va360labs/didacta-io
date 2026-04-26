@@ -30,7 +30,7 @@ Positivas:
 Negativas / riesgos:
 
 - **Dependencia de proveedor externo**: si Zoom cambia API (ya sucedió con la transición OAuth App → Server-to-Server), requiere migración.
-- **Costes por seat** en escala: si LearnShip llega a 10k+ usuarios activos, Zoom puede no ser el modelo óptimo.
+- **Costes por seat** en escala: si Didacta llega a 10k+ usuarios activos, Zoom puede no ser el modelo óptimo.
 - **Residencia de datos**: grabaciones pasan por infra de Zoom (US). Evaluar si aplica a requisitos Fundae/RGPD para datos sensibles.
 
 **Plan B documentado**: Fase 3, si el coste o los requisitos lo demandan, implementar `mod.live-streaming-native` con LiveKit. La abstracción `LiveSessionProvider` garantiza swap sin tocar módulos dependientes.

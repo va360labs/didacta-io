@@ -1,5 +1,5 @@
-import type { ModuleContext } from '@learnship/core-kernel';
-import { ModuleRegistry } from '@learnship/core-registry';
+import type { ModuleContext } from '@didacta/core-kernel';
+import { ModuleRegistry } from '@didacta/core-registry';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { helloWorldModule, manifest, HelloWorldService } from '../src/index.js';
 

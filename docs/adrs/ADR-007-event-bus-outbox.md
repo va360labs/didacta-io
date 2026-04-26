@@ -6,7 +6,7 @@
 
 ## Contexto
 
-LearnShip emite eventos de dominio que otros módulos pueden consumir internamente y que también se proyectan como **webhooks externos** (integración principal: n8n). Requisitos:
+Didacta emite eventos de dominio que otros módulos pueden consumir internamente y que también se proyectan como **webhooks externos** (integración principal: n8n). Requisitos:
 
 - Garantía de entrega **at-least-once** con deduplicación por `idempotencyKey`.
 - Eventos atómicos con la transacción de dominio: "si el curso se publica, el evento se emite; si no, no".
@@ -78,6 +78,6 @@ Negativas / riesgos:
 ## Referencias
 
 - `packages/database/prisma/schema.prisma` (modelos `OutboxEvent`, `Webhook`)
-- `@learnship/core-kernel` (interfaz `EventBus`)
+- `@didacta/core-kernel` (interfaz `EventBus`)
 - `docs/PRD.md` §11
 - [Microservices.io – Transactional Outbox](https://microservices.io/patterns/data/transactional-outbox.html)

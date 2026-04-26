@@ -1,4 +1,4 @@
-import type { LearnShipModule, ModuleContext } from '@learnship/core-kernel';
+import type { DidactaModule, ModuleContext } from '@didacta/core-kernel';
 import { manifest } from './manifest.js';
 
 export { manifest };
@@ -27,7 +27,7 @@ export {
   CourseNotPublishedError,
 } from './errors.js';
 
-export const learningModule: LearnShipModule = {
+export const learningModule: DidactaModule = {
   manifest,
   async onRegister(ctx: ModuleContext) {
     ctx.logger.info('mod.learning: onRegister', { name: manifest.name });

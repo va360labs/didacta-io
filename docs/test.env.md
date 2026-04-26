@@ -2,7 +2,21 @@
 
 > **URL del entorno**: https://lab-learnship.3qntut.easypanel.host/
 > **Branch deploy**: `main`
-> **Última actualización**: 2026-04-26
+> **Última actualización**: 2026-04-26 (post-rebrand a Didacta)
+>
+> **Nota sobre nombres legacy**: el entorno Easypanel actual fue creado bajo el
+> nombre antiguo `learnship`. Estos recursos siguen llamándose así hasta que
+> los migres en Easypanel:
+>
+> - Dominio: `lab-learnship.3qntut.easypanel.host`
+> - Servicio Postgres: `lab_pgprueba` con DB `learnship` y usuario `postgres`
+> - Servicio Redis: `lab_learnshipredis`
+> - Servicio MinIO: `lab-minio.3qntut.easypanel.host` con bucket `learnship`
+>
+> No es bloqueante: la app sigue funcionando con esos nombres apuntados desde
+> `DATABASE_URL`, `REDIS_URL`, `S3_*`. Cuando quieras migrar, creás
+> `lab-didacta`, `lab_didactaredis`, bucket `didacta`, hacés `pg_dump` +
+> `pg_restore` y `mc mirror` del bucket, y actualizás las URLs aquí.
 
 Pegá este bloque tal cual en el panel "Environment" del servicio en Easypanel. Las marcadas con `# CAMBIAR` necesitan que rellenes vos según tus servicios internos.
 
@@ -129,7 +143,7 @@ BOOTSTRAP_PASSWORD=1SWsTvJ/oy/xbaN6Q3lWDGTQHX8IOZJg
 
 ## Configuración crítica del dominio en Easypanel
 
-En el panel del servicio LearnShip → **Domains** o **Proxy** del dominio principal:
+En el panel del servicio Didacta → **Domains** o **Proxy** del dominio principal:
 
 | Campo | Valor |
 | --- | --- |
@@ -156,9 +170,9 @@ Antes de configurar la app, asegurate de tener corriendo en el proyecto `lab-lea
 
 Anotá los hostnames internos (Easypanel los muestra en la pestaña del servicio). Los del entorno actual son `lab_pgprueba`, `lab_learnshipredis` y `lab-minio.3qntut.easypanel.host` (ver consola MinIO en `https://console-lab-minio.3qntut.easypanel.host`).
 
-### 2. Configurar el servicio de la app LearnShip
+### 2. Configurar el servicio de la app Didacta
 
-- **Source**: GitHub `va360labs/learnship`, branch `main`
+- **Source**: GitHub `va360labs/didacta`, branch `main`
 - **Builder**: Dockerfile (raíz del repo)
 - **Puerto interno expuesto**: `3000` (Web). El `:4000` (API) se accede por loopback desde Next.js.
 - **Variables**: pegar el bloque de arriba con tus secretos
@@ -172,14 +186,14 @@ Easypanel hace pull + build + run automáticamente. El `entrypoint.sh` corre:
 2. `psql -f rls.sql` (políticas Row-Level Security)
 3. Levanta API y Web en paralelo
 
-Ver logs: deberías ver `LearnShip API escuchando en http://localhost:4000` y `Module registry inicializado`.
+Ver logs: deberías ver `Didacta API escuchando en http://localhost:4000` y `Module registry inicializado`.
 
 ### 4. Bootstrap (una sola vez)
 
-En Easypanel → Console del servicio LearnShip:
+En Easypanel → Console del servicio Didacta:
 
 ```bash
-pnpm --filter @learnship/database db:seed
+pnpm --filter @didacta/database db:seed
 ```
 
 Output esperado:

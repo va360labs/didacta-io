@@ -6,7 +6,7 @@
 
 ## Contexto
 
-LearnShip es TypeScript end-to-end. Necesita un ORM con:
+Didacta es TypeScript end-to-end. Necesita un ORM con:
 
 - Tipos auto-generados compartibles entre backend y frontend.
 - Migraciones versionadas y reproducibles.
@@ -48,9 +48,9 @@ Negativas / riesgos:
 Después de cada migración Prisma:
 
 ```bash
-pnpm --filter @learnship/database db:migrate:dev
-pnpm --filter @learnship/database db:rls:apply   # reaplica políticas RLS
-pnpm --filter @learnship/database db:generate    # regenera cliente tipado
+pnpm --filter @didacta/database db:migrate:dev
+pnpm --filter @didacta/database db:rls:apply   # reaplica políticas RLS
+pnpm --filter @didacta/database db:generate    # regenera cliente tipado
 ```
 
 ## Referencias

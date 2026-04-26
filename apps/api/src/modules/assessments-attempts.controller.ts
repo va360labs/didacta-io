@@ -15,7 +15,7 @@ import {
   submitAttemptSchema,
   type StartAttemptDto,
   type SubmitAttemptDto,
-} from '@learnship/mod-assessments';
+} from '@didacta/mod-assessments';
 import { z } from 'zod';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';

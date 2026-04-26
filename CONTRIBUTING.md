@@ -1,4 +1,4 @@
-# Contribuir a LearnShip
+# Contribuir a Didacta
 
 Guía rápida de flujo de trabajo.
 
@@ -87,7 +87,7 @@ Qué se hace y por qué.
 ## Estructura del repositorio
 
 ```
-learnship/
+didacta/
 ├── apps/              # Aplicaciones desplegables (api, web, super-admin, workers)
 ├── packages/          # Paquetes del core y utilidades (core-kernel, database, sdk, ui)
 ├── modules/           # Módulos de negocio (courses, learning, fundae, ai-tutor, ...)

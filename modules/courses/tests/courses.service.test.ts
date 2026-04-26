@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ModuleContext } from '@learnship/core-kernel';
+import type { ModuleContext } from '@didacta/core-kernel';
 import { CoursesService } from '../src/courses.service';
 import {
   CourseAlreadyPublishedError,

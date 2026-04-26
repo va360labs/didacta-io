@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { EvidenceVaultService, StorageService } from '@learnship/core-kernel';
+import type { EvidenceVaultService, StorageService } from '@didacta/core-kernel';
 import type { PrismaService } from '../prisma/prisma.service';
 
 /**

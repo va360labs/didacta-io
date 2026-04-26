@@ -5,7 +5,7 @@ const ORIGINAL = process.env['AUTH_SECRET'];
 
 beforeAll(() => {
   process.env['AUTH_SECRET'] = 'a'.repeat(64);
-  process.env['AUTH_URL'] = 'https://learnship.test';
+  process.env['AUTH_URL'] = 'https://didacta.test';
 });
 
 afterAll(() => {

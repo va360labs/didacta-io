@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import type { AuditLogService, TenantConfigService } from '@learnship/core-kernel';
-import { Prisma } from '@learnship/database';
+import type { AuditLogService, TenantConfigService } from '@didacta/core-kernel';
+import { Prisma } from '@didacta/database';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecretCipherService } from './secret-cipher.service';
 

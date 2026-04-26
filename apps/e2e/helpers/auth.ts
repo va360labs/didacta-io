@@ -24,10 +24,10 @@ export async function injectSession(
   },
 ): Promise<void> {
   await page.evaluate((data) => {
-    sessionStorage.setItem('learnship.access_token', data.accessToken);
-    if (data.refreshToken) localStorage.setItem('learnship.refresh_token', data.refreshToken);
+    sessionStorage.setItem('didacta.access_token', data.accessToken);
+    if (data.refreshToken) localStorage.setItem('didacta.refresh_token', data.refreshToken);
     sessionStorage.setItem(
-      'learnship.session',
+      'didacta.session',
       JSON.stringify({ user: data.user, mfaRequired: false }),
     );
   }, args);
