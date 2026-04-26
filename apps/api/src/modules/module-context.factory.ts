@@ -7,7 +7,6 @@ import type {
   Logger,
   ModuleContext,
   NotificationHubService,
-  TenantConfigService,
 } from '@learnship/core-kernel';
 import { PrismaService } from '../prisma/prisma.service';
 import { LocalDiskStorageService } from './local-disk-storage.service';
@@ -15,6 +14,22 @@ import { PersistentEventBus } from './persistent-event-bus';
 import { PrismaAuditLogService } from './prisma-audit-log.service';
 import { PrismaEvidenceVaultService } from './prisma-evidence-vault.service';
 import { PrismaNotificationHubService } from './prisma-notification-hub.service';
+import { PrismaTenantConfigService } from './prisma-tenant-config.service';
+import { SecretCipherService } from './secret-cipher.service';
+
+function loadCipherKey(): string {
+  const key = process.env.TENANT_SETTINGS_ENC_KEY;
+  if (!key || key.trim().length === 0) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'TENANT_SETTINGS_ENC_KEY es obligatoria en producción. Generala con: openssl rand -hex 32',
+      );
+    }
+    // Dev fallback: clave determinística para tests/local sin .env (ÚNICAMENTE dev).
+    return '0'.repeat(64);
+  }
+  return key;
+}
 
 type AnyHandler = (ctx: HookContext<unknown>) => Promise<void> | void;
 
@@ -55,25 +70,12 @@ const stubI18n: I18nService = {
   },
 };
 
-class StubTenantConfig implements TenantConfigService {
-  private readonly mem = new Map<string, unknown>();
-  async get<T = unknown>(
-    tenantId: string,
-    moduleName: string,
-    key: string,
-  ): Promise<T | undefined> {
-    return this.mem.get(`${tenantId}:${moduleName}:${key}`) as T | undefined;
-  }
-  async set<T = unknown>(tenantId: string, moduleName: string, key: string, value: T) {
-    this.mem.set(`${tenantId}:${moduleName}:${key}`, value);
-  }
-}
-
 @Injectable()
 export class ModuleContextFactory {
   private readonly hookRegistry = new InMemoryHookRegistry();
-  private readonly tenantConfig = new StubTenantConfig();
   private readonly storage = new LocalDiskStorageService();
+  private readonly cipher = new SecretCipherService(loadCipherKey());
+  private tenantConfig?: PrismaTenantConfigService;
   private eventBus?: PersistentEventBus;
 
   constructor(
@@ -87,6 +89,7 @@ export class ModuleContextFactory {
     const auditLog = new PrismaAuditLogService(this.prisma);
     const evidenceVault = new PrismaEvidenceVaultService(this.prisma, this.storage);
     const notificationHub = new PrismaNotificationHubService(this.prisma, this.pino);
+    this.tenantConfig = new PrismaTenantConfigService(this.prisma, this.cipher, auditLog);
     void stubNotificationHub; // se mantiene exportado para tests; producción usa Prisma.
     return {
       eventBus: this.eventBus,
@@ -104,6 +107,15 @@ export class ModuleContextFactory {
   getNotificationHub(): PrismaNotificationHubService {
     // Útil para handlers internos (bridge) que necesitan el service real.
     return new PrismaNotificationHubService(this.prisma, this.pino);
+  }
+
+  getTenantConfig(): PrismaTenantConfigService {
+    if (!this.tenantConfig) {
+      // Construido lazy si build() todavía no corrió (tests / cargas tempranas).
+      const auditLog = new PrismaAuditLogService(this.prisma);
+      this.tenantConfig = new PrismaTenantConfigService(this.prisma, this.cipher, auditLog);
+    }
+    return this.tenantConfig;
   }
 
   getPrisma(): PrismaService {

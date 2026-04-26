@@ -47,10 +47,46 @@ model Tenant {
   outboxEvents     OutboxEvent[]
   webhooks         Webhook[]
   notifTemplates   NotificationTemplate[]
+  tenantSettings   TenantSetting[]
 
   @@index([slug])
   @@index([status])
   @@map("tenant")
+}
+
+// ============================================================================
+// TENANT SETTINGS — config persistente per-tenant con encryption at-rest.
+// Reemplaza el stub in-memory anterior. Los valores marcados con is_secret se
+// cifran con AES-256-GCM usando TENANT_SETTINGS_ENC_KEY del env. Los no
+// secretos viajan en value_json plano. Cada admin de tenant configura desde
+// /admin/configuracion sus credenciales SMTP, Zoom, etc.
+// ============================================================================
+
+model TenantSetting {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  /// Namespace lógico: "notifications", "zoom", "ai-tutor", "storage", etc.
+  moduleName   String   @map("module_name") @db.VarChar(100)
+  /// Clave dentro del namespace (ej. "smtp", "default-locale").
+  key          String   @db.VarChar(200)
+  /// Si true, el valor es sensible y se cifra (passwords, API keys).
+  isSecret     Boolean  @default(false) @map("is_secret")
+  /// Valor en claro cuando isSecret=false (cualquier JSON).
+  valueJson    Json?    @map("value_json")
+  /// AES-256-GCM ciphertext + IV (12B) + auth tag (16B) cuando isSecret=true.
+  valueCipher  Bytes?   @map("value_cipher")
+  valueIv      Bytes?   @map("value_iv")
+  valueTag     Bytes?   @map("value_tag")
+  /// Quién hizo el último cambio (sin FK cross-module a IAM).
+  updatedById  String?  @map("updated_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, moduleName, key])
+  @@index([tenantId, moduleName])
+  @@map("tenant_setting")
 }
 
 enum TenantStatus {

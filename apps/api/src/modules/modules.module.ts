@@ -19,6 +19,7 @@ import { ModuleRegistryService } from './module-registry.service';
 import { NotificationsBridge } from './notifications.bridge';
 import { NotificationsController } from './notifications.controller';
 import { OutboxRecoveryWorker } from './outbox-recovery.worker';
+import { TenantSettingsController } from './tenant-settings.controller';
 
 @Module({
   imports: [AuthModule],
@@ -32,6 +33,7 @@ import { OutboxRecoveryWorker } from './outbox-recovery.worker';
     NotificationsController,
     FormadorStatsController,
     CommunityController,
+    TenantSettingsController,
   ],
   providers: [
     ModuleContextFactory,

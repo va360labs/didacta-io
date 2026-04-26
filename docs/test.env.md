@@ -2,9 +2,19 @@
 
 > **URL del entorno**: https://lab-learnship.3qntut.easypanel.host/
 > **Branch deploy**: `main`
-> **Última actualización**: 2026-04-25
+> **Última actualización**: 2026-04-26
 
 Pegá este bloque tal cual en el panel "Environment" del servicio en Easypanel. Las marcadas con `# CAMBIAR` necesitan que rellenes vos según tus servicios internos.
+
+## Cambios respecto a la versión anterior (2026-04-25)
+
+- **`DATABASE_URL`** ya viene con el host real (`lab_pgprueba`) y password.
+- **`REDIS_URL`** ya viene con creds reales — habilita BullMQ + outbox dispatcher (PR A1).
+- **`TENANT_SETTINGS_ENC_KEY`** nueva — clave maestra AES-256-GCM para cifrar credenciales que cada admin de tenant pone en su panel (SMTP, Zoom, etc.). **Si la perdés, los settings cifrados son ilegibles.**
+- **`STORAGE_DRIVER` + `S3_*`** apuntan a MinIO interno con presigned URLs (privado por defecto).
+- **`SMTP_*` eliminadas del entorno global**: ahora SMTP se configura por tenant desde el panel `/admin/configuracion`. Si un tenant no lo configura, las notificaciones EMAIL se loguean y no se envían (no rompe).
+- **`ZOOM_*` eliminadas del entorno global**: idem, per-tenant en `mod.zoom-live` (PR B1).
+- **`ANTHROPIC_API_KEY` eliminada del entorno global**: idem, per-tenant en `mod.ai-tutor`/`ai-grader` (Fase 1.C).
 
 ## Bloque listo para copiar
 
@@ -33,57 +43,76 @@ AUTH_SECRET=ae508afa4eb2e2be2faea735df7bfdadff76d5266847d8a6968a6333f4d06c7c
 AUTH_URL=https://lab-learnship.3qntut.easypanel.host
 
 # ============================================================================
-# POSTGRES — usá el servicio Postgres del propio proyecto Easypanel.
-# Asegurate de que la imagen incluya las extensiones uuid-ossp, pgcrypto, vector
-# (pgvector/pgvector:pg16 las trae preinstaladas).
+# TENANT SETTINGS — encryption at-rest de las credenciales per-tenant
 # ============================================================================
-# Hostname interno típico de Easypanel: <project>_<service>
-# Si tu servicio Postgres se llama "postgres", el host suele ser "lab-learnship_postgres".
-# Reemplazá <PG_HOST> y <PG_PASSWORD> por lo que muestre Easypanel en la pestaña del servicio Postgres.
-DATABASE_URL=postgresql://learnship:<PG_PASSWORD>@<PG_HOST>:5432/learnship?schema=public  # CAMBIAR
+# AES-256-GCM. Generada con: openssl rand -hex 32
+# Cada tenant guarda en TenantSettings cosas como SMTP, Zoom, Anthropic key, etc.
+# Esa tabla cifra el `value` con esta key. Si rotás la key sin re-cifrar, todos
+# los settings cifrados quedan ilegibles. Backup obligatorio.
+TENANT_SETTINGS_ENC_KEY=35dd608d52485e803848893bf26b923a2be02dcc5cc2a13bfa512d8e5e853073
+
+# ============================================================================
+# POSTGRES — servicio Postgres interno del proyecto Easypanel
+# ============================================================================
+# Imagen recomendada: pgvector/pgvector:pg16 (incluye uuid-ossp, pgcrypto, vector).
+DATABASE_URL=postgresql://postgres:aa85de758878c03a5966@lab_pgprueba:5432/learnship?schema=public
 
 # ============================================================================
 # REDIS — servicio Redis interno del proyecto Easypanel
+# Habilita BullMQ + outbox dispatcher con reintentos exponenciales
 # ============================================================================
-# Hostname interno típico: lab-learnship_redis
-REDIS_URL=redis://<REDIS_HOST>:6379  # CAMBIAR
+REDIS_URL=redis://default:7227132a9ea83f62d90e@lab_learnshipredis:6379
 
 # ============================================================================
-# OBJECT STORAGE — Hetzner Object Storage (recomendado en prod) o MinIO interno
+# OBJECT STORAGE — MinIO interno de Easypanel (privado, presigned URLs)
 # ============================================================================
-# Opción A: MinIO interno de Easypanel
-S3_ENDPOINT=http://<MINIO_HOST>:9000
+# Driver: 'local' usa disco (dev), 's3' usa MinIO/S3 (prod).
+STORAGE_DRIVER=s3
+
+# Endpoint público (TLS). Si querés latencia menor + sin TLS overhead, cambiá a
+# la URL interna del proyecto (ej. http://lab_learnshipminio:9000) cuando la
+# tengas confirmada en la pestaña del servicio MinIO en Easypanel.
+S3_ENDPOINT=https://lab-minio.3qntut.easypanel.host
 S3_REGION=us-east-1
 S3_BUCKET=learnship
-S3_ACCESS_KEY=CAMBIAR
-S3_SECRET_KEY=CAMBIAR
+# MinIO requiere path-style addressing (no virtual-hosted-style).
+S3_FORCE_PATH_STYLE=true
 
-# Opción B (preferida para staging/prod): Hetzner Object Storage
-# S3_ENDPOINT=https://fsn1.your-objectstorage.com
-# S3_REGION=fsn1
-# S3_BUCKET=learnship-test
-# S3_ACCESS_KEY=CAMBIAR
-# S3_SECRET_KEY=CAMBIAR
+# !!! IMPORTANTE — ROTAR A SERVICE ACCOUNT
+# Estas creds son las del root admin de MinIO. Para producción real, en la
+# consola de MinIO (https://console-lab-minio.3qntut.easypanel.host) creá un
+# Access Key dedicado con policy scoped al bucket `learnship` (s3:GetObject,
+# s3:PutObject, s3:DeleteObject, s3:ListBucket sobre arn:aws:s3:::learnship/*)
+# y reemplazá estas dos vars por ese service account. NO uses root admin en la app.
+S3_ACCESS_KEY=admin
+S3_SECRET_KEY=MasKil0s123!!!
+
+# Tiempo de vida de las presigned URLs (segundos). 900 = 15 min.
+S3_PRESIGNED_TTL_SECONDS=900
+
+# Fallback dev local (ignorado si STORAGE_DRIVER=s3)
+STORAGE_ROOT=./.local-storage
 
 # ============================================================================
-# SMTP — Brevo (ya lo usás en VA360)
+# SMTP — eliminado del entorno global
 # ============================================================================
-SMTP_HOST=smtp-relay.brevo.com
-SMTP_PORT=587
-SMTP_USER=CAMBIAR_TU_LOGIN_BREVO
-SMTP_PASSWORD=CAMBIAR_TU_KEY_BREVO
-SMTP_FROM=noreply@va360labs.com
+# A partir de PR A2 cada admin de tenant configura su SMTP desde
+# /admin/configuracion → Notificaciones. Las creds se guardan cifradas en
+# TenantSettings con TENANT_SETTINGS_ENC_KEY. Si un tenant no configura SMTP,
+# las notificaciones de canal EMAIL se loguean (no rompen el flujo).
 
 # ============================================================================
-# FUTURO — dejar vacías hasta que los módulos correspondientes se activen
+# ZOOM — eliminado del entorno global
 # ============================================================================
-# Anthropic API (Fase 1.C — mod.ai-tutor / ai-grader / ai-content / ai-analytics)
-ANTHROPIC_API_KEY=
+# A partir de PR B1 cada admin de tenant configura sus credenciales Zoom
+# (Server-to-Server OAuth: account_id, client_id, client_secret) desde
+# /admin/configuracion → Aula virtual. Cifradas en TenantSettings.
 
-# Zoom API (Fase 1.B — mod.zoom-live)
-ZOOM_ACCOUNT_ID=
-ZOOM_CLIENT_ID=
-ZOOM_CLIENT_SECRET=
+# ============================================================================
+# ANTHROPIC — eliminado del entorno global
+# ============================================================================
+# Idem cuando arranque mod.ai-tutor / ai-grader / ai-content / ai-analytics
+# (Fase 1.C). Cada tenant trae su propia API key.
 
 # ============================================================================
 # BOOTSTRAP — necesarias SOLO para el primer arranque (correr db:seed una vez).
@@ -109,7 +138,7 @@ En el panel del servicio LearnShip → **Domains** o **Proxy** del dominio princ
 
 **¿Por qué `:3000` y no `:4000`?**
 
-El contenedor expone los dos puertos: `:4000` (API NestJS) y `:3000` (Web Next.js). Easypanel solo proxea uno al dominio público. Apuntá al `:3000` (frontend); Next.js reescribe internamente todo lo que sea `/api/*`, `/healthz`, `/readyz` y `/api/docs` al `:4000` por loopback (\`localhost:4000\`).
+El contenedor expone los dos puertos: `:4000` (API NestJS) y `:3000` (Web Next.js). Easypanel solo proxea uno al dominio público. Apuntá al `:3000` (frontend); Next.js reescribe internamente todo lo que sea `/api/*`, `/healthz`, `/readyz` y `/api/docs` al `:4000` por loopback (`localhost:4000`).
 
 Resultado: el browser hace todo a `https://lab-learnship.3qntut.easypanel.host/...` con same-origin. Sin CORS, sin variables públicas que filtrar.
 
@@ -121,17 +150,17 @@ Antes de configurar la app, asegurate de tener corriendo en el proyecto `lab-lea
 
 | Servicio | Imagen recomendada | Notas |
 |---|---|---|
-| Postgres | `pgvector/pgvector:pg16` | Trae `pgvector` preinstalado. Crear DB `learnship` y usuario `learnship`. |
-| Redis | `redis:7-alpine` | Sin auth en red interna del proyecto. |
-| MinIO (opcional) | `minio/minio:latest` | Bucket `learnship` precreado. |
+| Postgres | `pgvector/pgvector:pg16` | Trae `pgvector` preinstalado. Crear DB `learnship` y usuario `postgres`. |
+| Redis | `redis:7-alpine` | Con auth (la `REDIS_URL` lleva la password). |
+| MinIO | `minio/minio:latest` | Bucket `learnship` precreado. Service account dedicado scoped al bucket. |
 
-Anotá los hostnames internos (Easypanel los muestra en la pestaña del servicio) y reemplazá `<PG_HOST>`, `<PG_PASSWORD>`, `<REDIS_HOST>`, `<MINIO_HOST>` arriba.
+Anotá los hostnames internos (Easypanel los muestra en la pestaña del servicio). Los del entorno actual son `lab_pgprueba`, `lab_learnshipredis` y `lab-minio.3qntut.easypanel.host` (ver consola MinIO en `https://console-lab-minio.3qntut.easypanel.host`).
 
 ### 2. Configurar el servicio de la app LearnShip
 
 - **Source**: GitHub `va360labs/learnship`, branch `main`
 - **Builder**: Dockerfile (raíz del repo)
-- **Puerto interno expuesto**: `4000` (API). El `WEB_PORT=3000` corre en el mismo contenedor pero por ahora solo se proxea al 4000 del nginx interno de Easypanel. Si querés el web también, abrí un segundo dominio apuntando al `:3000`.
+- **Puerto interno expuesto**: `3000` (Web). El `:4000` (API) se accede por loopback desde Next.js.
 - **Variables**: pegar el bloque de arriba con tus secretos
 - **Healthcheck**: ya viene en el Dockerfile contra `/healthz`, no hay que tocar nada
 
@@ -176,16 +205,18 @@ Como sos `super_admin`, MFA es obligatorio. Te llevará a `/mfa/setup`:
 2. **Guardá los 10 recovery codes** que aparecen en el cuadro amarillo (uso único, te salvan si perdés la app TOTP)
 3. Confirmá con el código de 6 dígitos de la app
 
-Caés en `/cursos` (vacío). Para probar el flujo:
+### 6. Configurar SMTP / Zoom / etc. del tenant (post-PR A2)
 
-1. **Mis cursos** → **Nuevo curso** → llenar título + slug (ej. `prueba-1`) → crear
-2. En el editor, **Añadir módulo** → "Introducción"
-3. Dentro del módulo, **Añadir lección** tipo TEXT → "Bienvenida"
-4. Botón **Publicar** (el hook `courses.publish.validate` corre, pero como no hay otros módulos hooked, pasa libre)
-5. Volvé a **Catálogo** → ahí está
-6. Click → matricularte (probá el botón Matricularme; si exige código, generá uno como admin)
-7. Reproducí lecciones → la barra de progreso sube cada 30s
-8. Marcá lecciones como completadas → al cruzar el 75% el evento `learning.course.completed` se loguea (todavía es stub, no emite certificado real hasta `mod.certificates`)
+Una vez deployado el PR A2 (SMTP per-tenant), entrá como `super_admin` o `tenant_admin` a:
+
+`https://lab-learnship.3qntut.easypanel.host/admin/configuracion`
+
+Pestañas previstas:
+- **Notificaciones**: SMTP host, port, user, pass, from. Botón "Probar envío".
+- **Aula virtual** (post-PR B1): Zoom account_id, client_id, client_secret.
+- **Storage** (opcional, override del default): bucket per-tenant si se quiere aislar evidence vault por tenant.
+
+Las creds se guardan cifradas con `TENANT_SETTINGS_ENC_KEY`. Solo `super_admin` y `tenant_admin` pueden leerlas/escribirlas.
 
 ## Verificación rápida sin login
 
@@ -194,21 +225,27 @@ Estas URLs deberían responder sin auth:
 | URL | Esperado |
 |---|---|
 | `https://lab-learnship.3qntut.easypanel.host/healthz` | `200 {"status":"ok",...}` |
-| `https://lab-learnship.3qntut.easypanel.host/readyz` | `200 {"status":"ok",...}` |
+| `https://lab-learnship.3qntut.easypanel.host/readyz` | `200 {"status":"ok","redis":"ok","db":"ok","s3":"ok",...}` |
 | `https://lab-learnship.3qntut.easypanel.host/api/docs` | Swagger UI con todos los endpoints |
 
 ## Si algo falla
 
 - **`/healthz` da 502 o no responde**: Easypanel no termina de levantar. Mirá los logs del contenedor.
+- **`/readyz` da 503 con `redis: "error"`**: la `REDIS_URL` está mal o el servicio Redis está caído. Probá `redis-cli -u $REDIS_URL ping` desde la consola del contenedor.
+- **`/readyz` da 503 con `s3: "error"`**: las creds de MinIO o el endpoint están mal. Probá la consola MinIO `https://console-lab-minio.3qntut.easypanel.host` y verificá que el bucket `learnship` exista.
 - **`/healthz` ok pero login falla con "Tenant no válido"**: el seed no corrió. Repetí paso 4.
 - **MFA setup no carga el QR**: revisá que `AUTH_SECRET` esté seteado y tenga ≥ 32 caracteres.
 - **Crear curso devuelve 500**: probable que la migración Prisma no se aplicó (faltan tablas `mod_courses_*`). Logs del contenedor → buscar errores de Prisma.
-- **El SMTP da timeouts**: las creds de Brevo están mal o el puerto bloqueado. No es bloqueante para login (todavía no se mandan emails).
+- **Notificación EMAIL no llega**: el tenant NO configuró SMTP en `/admin/configuracion`. Es comportamiento esperado: se loguea, no se envía. Configurá SMTP del tenant.
+- **`prisma migrate deploy` da "table already exists"**: la DB tiene el schema pero `_prisma_migrations` no refleja el baseline. Ver `docs/ESTADO.md` sección 2.3 (correr `prisma migrate resolve --applied 0_init` para cada migración pre-baseline).
 
 ## Saneamiento post-prueba
 
 Una vez verificado que el flujo va, **rotá**:
 
 - `AUTH_SECRET` (forzaría re-login a todos los usuarios)
+- `TENANT_SETTINGS_ENC_KEY` — **solo si tenés un mecanismo de re-cifrado**. Sin re-encrypt, perdés todos los settings cifrados (SMTP, Zoom, etc. del tenant).
+- `S3_ACCESS_KEY` / `S3_SECRET_KEY` — pasar de root admin a service account scoped (ver bloque OBJECT STORAGE arriba). **CRÍTICO** antes de considerar prod.
+- Password de Postgres y de Redis (Easypanel → servicio → Settings → Change password).
 - `BOOTSTRAP_PASSWORD` desde la propia UI cuando tengamos cambio de contraseña, o seteando otra y re-corriendo el seed
 - Borrar el bloque BOOTSTRAP_* del entorno una vez confirmado el seed

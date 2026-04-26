@@ -11,5 +11,4 @@ export function createPrismaClient(options?: { logQueries?: boolean }): PrismaCl
   });
 }
 
-export { PrismaClient } from '@prisma/client';
-export type { Prisma } from '@prisma/client';
+export { PrismaClient, Prisma } from '@prisma/client';
