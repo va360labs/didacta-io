@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { CourseStatusBadge } from '@/components/course-status-badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
 import { coursesApi, type Course } from '@/lib/courses';
 
@@ -19,7 +20,13 @@ export default function CatalogPage() {
         if (!aborted) setCourses(data);
       })
       .catch((e) => {
-        if (!aborted) setError(e instanceof ApiHttpError ? e.message : 'Error al cargar catálogo');
+        if (!aborted) {
+          setError(
+            e instanceof ApiHttpError
+              ? e.message
+              : 'No pudimos cargar el catálogo. Probá refrescar la página.',
+          );
+        }
       });
     return () => {
       aborted = true;
@@ -27,49 +34,102 @@ export default function CatalogPage() {
   }, []);
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-8">
       <header>
-        <h1 className="text-3xl font-semibold tracking-tight">Catálogo</h1>
-        <p className="mt-1 text-sm text-neutral-500">Cursos publicados disponibles en tu tenant.</p>
+        <h1 className="font-display text-4xl font-extrabold tracking-tight text-text">
+          Catálogo de cursos
+        </h1>
+        <p className="mt-2 max-w-2xl text-text-muted">
+          Explorá los cursos publicados de tu organización. Hacé clic en uno para ver el detalle y
+          matricularte.
+        </p>
       </header>
 
       {error ? (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          {error}
-        </p>
-      ) : null}
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-danger-700">{error}</p>
+          </CardContent>
+        </Card>
+      ) : courses === null ? (
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="skeleton h-56 w-full" />
+          ))}
+        </div>
+      ) : courses.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
+            <h3 className="font-display text-2xl font-semibold">Aún no hay cursos publicados</h3>
+            <p className="max-w-md text-text-muted">
+              Cuando un formador publique el primer curso, aparecerá acá. Si sos formador, podés
+              empezar a crear uno.
+            </p>
+            <Button asChild className="mt-2">
+              <Link href="/formador/cursos/nuevo">Crear un curso</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {courses.map((c) => (
+            <Link
+              key={c.id}
+              href={`/cursos/${c.slug}` as never}
+              className="group block rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+            >
+              <Card interactive className="flex h-full flex-col overflow-hidden">
+                {/* Thumbnail / cover */}
+                {c.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={c.thumbnailUrl}
+                    alt=""
+                    className="h-40 w-full object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div
+                    className="flex h-40 items-center justify-center text-text-on-brand"
+                    style={{
+                      background: `linear-gradient(135deg, hsl(var(--brand-h) 70% 45%), hsl(var(--brand-h) 78% 22%))`,
+                    }}
+                  >
+                    <span className="font-display text-3xl font-extrabold opacity-30">
+                      {c.title.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                )}
 
-      {courses && courses.length === 0 ? (
-        <p className="text-sm text-neutral-500">No hay cursos publicados todavía.</p>
-      ) : null}
+                <CardContent className="flex flex-1 flex-col gap-3 p-5">
+                  {c.category ? (
+                    <Badge variant="primary" className="w-fit">
+                      {c.category}
+                    </Badge>
+                  ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {(courses ?? []).map((c) => (
-          <Link key={c.id} href={`/cursos/${c.slug}` as never}>
-            <Card className="h-full transition hover:border-neutral-400 dark:hover:border-neutral-600">
-              <CardHeader>
-                <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="text-lg">{c.title}</CardTitle>
-                  <CourseStatusBadge status={c.status} />
-                </div>
-                {c.category ? (
-                  <CardDescription className="mt-1 text-xs uppercase tracking-wider">
-                    {c.category}
-                  </CardDescription>
-                ) : null}
-              </CardHeader>
-              <CardContent>
-                <p className="line-clamp-3 text-sm text-neutral-600 dark:text-neutral-400">
-                  {c.description ?? 'Sin descripción.'}
-                </p>
-                {c.estimatedMinutes ? (
-                  <p className="mt-2 text-xs text-neutral-500">≈ {c.estimatedMinutes} min</p>
-                ) : null}
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
+                  <h3 className="font-display text-lg font-semibold leading-tight text-text group-hover:text-brand-700">
+                    {c.title}
+                  </h3>
+
+                  <p className="line-clamp-3 text-sm text-text-muted leading-relaxed">
+                    {c.description ?? 'Sin descripción.'}
+                  </p>
+
+                  <div className="mt-auto flex items-center gap-3 text-xs text-text-subtle">
+                    {c.estimatedMinutes ? (
+                      <span className="tabular-nums">≈ {c.estimatedMinutes} min</span>
+                    ) : null}
+                    {c.language ? (
+                      <span className="label-uppercase tracking-wider">{c.language}</span>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
