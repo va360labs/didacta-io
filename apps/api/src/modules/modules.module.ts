@@ -21,6 +21,8 @@ import { NotificationsController } from './notifications.controller';
 import { OutboxQueueService } from './outbox-queue.service';
 import { OutboxRecoveryWorker } from './outbox-recovery.worker';
 import { TenantSettingsController } from './tenant-settings.controller';
+import { ThemingController } from './theming.controller';
+import { ThemingErrorFilter } from './theming-error.filter';
 
 @Module({
   imports: [AuthModule],
@@ -35,6 +37,7 @@ import { TenantSettingsController } from './tenant-settings.controller';
     FormadorStatsController,
     CommunityController,
     TenantSettingsController,
+    ThemingController,
   ],
   providers: [
     OutboxQueueService,
@@ -47,6 +50,7 @@ import { TenantSettingsController } from './tenant-settings.controller';
     { provide: APP_FILTER, useClass: LearningErrorFilter },
     { provide: APP_FILTER, useClass: AssessmentsErrorFilter },
     { provide: APP_FILTER, useClass: CommunityErrorFilter },
+    { provide: APP_FILTER, useClass: ThemingErrorFilter },
   ],
   exports: [ModuleRegistryService, OutboxQueueService],
 })

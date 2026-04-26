@@ -6,6 +6,7 @@ import { communityModule, CommunityService } from '@didacta/mod-community';
 import { coursesModule, CoursesService } from '@didacta/mod-courses';
 import { helloWorldModule } from '@didacta/mod-hello-world';
 import { learningModule, LearningService } from '@didacta/mod-learning';
+import { themingModule, ThemingService } from '@didacta/mod-theming';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleContextFactory } from './module-context.factory';
 
@@ -19,6 +20,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private certificates?: CertificatesService;
   private assessments?: AssessmentsService;
   private community?: CommunityService;
+  private theming?: ThemingService;
 
   constructor(
     private readonly factory: ModuleContextFactory,
@@ -35,6 +37,7 @@ export class ModuleRegistryService implements OnModuleInit {
     this.certificates = new CertificatesService(prisma, context);
     this.assessments = new AssessmentsService(prisma, context);
     this.community = new CommunityService(prisma, context);
+    this.theming = new ThemingService(prisma, context);
 
     const certificatesModule = buildCertificatesModule(this.certificates);
 
@@ -45,6 +48,7 @@ export class ModuleRegistryService implements OnModuleInit {
       certificatesModule,
       assessmentsModule,
       communityModule,
+      themingModule,
     ]);
 
     this.pino.log(
@@ -76,6 +80,11 @@ export class ModuleRegistryService implements OnModuleInit {
   getCommunityService(): CommunityService {
     if (!this.community) throw new Error('ModuleRegistry no está inicializado');
     return this.community;
+  }
+
+  getThemingService(): ThemingService {
+    if (!this.theming) throw new Error('ModuleRegistry no está inicializado');
+    return this.theming;
   }
 
   isModuleEnabledForTenant(_tenantId: string, _moduleName: string): boolean {

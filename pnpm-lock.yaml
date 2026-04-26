@@ -80,6 +80,9 @@ importers:
       '@didacta/mod-learning':
         specifier: workspace:*
         version: link:../../modules/learning
+      '@didacta/mod-theming':
+        specifier: workspace:*
+        version: link:../../modules/theming
       '@fastify/static':
         specifier: ^7.0.4
         version: 7.0.4
