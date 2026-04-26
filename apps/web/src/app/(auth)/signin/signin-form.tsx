@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -76,7 +77,15 @@ export function SignInForm() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="password">Contraseña</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="password">Contraseña</Label>
+          <Link
+            href="/forgot-password"
+            className="text-xs font-medium text-brand-700 hover:underline"
+          >
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </div>
         <Input
           id="password"
           name="password"
@@ -87,7 +96,7 @@ export function SignInForm() {
       </div>
 
       {error ? (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="text-sm text-danger-700">
           {error}
         </p>
       ) : null}

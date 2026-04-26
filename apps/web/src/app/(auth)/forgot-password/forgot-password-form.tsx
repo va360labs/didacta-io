@@ -1,0 +1,84 @@
+'use client';
+
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ApiHttpError, apiFetch } from '@/lib/api-client';
+
+interface ForgotResponse {
+  ok: boolean;
+  message: string;
+}
+
+export function ForgotPasswordForm() {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  async function onSubmit(form: FormData) {
+    setError(null);
+    setSuccess(null);
+    setPending(true);
+    try {
+      const response = await apiFetch<ForgotResponse>('/api/v1/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({
+          tenantSlug: String(form.get('tenantSlug')),
+          email: String(form.get('email')),
+        }),
+      });
+      setSuccess(response.message);
+    } catch (e) {
+      setError(
+        e instanceof ApiHttpError ? e.message : 'No pudimos procesar tu pedido. Probá de nuevo.',
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (success) {
+    return (
+      <div role="status" className="space-y-3">
+        <div className="rounded-lg border border-success-200 bg-success-50 p-4">
+          <h4 className="font-semibold text-success-700">Revisá tu email</h4>
+          <p className="mt-1 text-sm text-text">{success}</p>
+        </div>
+        <p className="text-sm text-text-subtle">
+          Si no aparece en pocos minutos, revisá la carpeta de spam o pedí un nuevo enlace.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form action={onSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="tenantSlug">Organización</Label>
+        <Input
+          id="tenantSlug"
+          name="tenantSlug"
+          autoComplete="organization"
+          placeholder="va360"
+          required
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="email">Email</Label>
+        <Input id="email" name="email" type="email" autoComplete="email" required />
+      </div>
+
+      {error ? (
+        <p role="alert" className="text-sm text-danger-700">
+          {error}
+        </p>
+      ) : null}
+
+      <Button type="submit" disabled={pending} className="w-full">
+        {pending ? 'Enviando…' : 'Enviar enlace'}
+      </Button>
+    </form>
+  );
+}

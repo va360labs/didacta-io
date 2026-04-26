@@ -899,3 +899,30 @@ model ModThemingTenantTheme {
 
   @@map("mod_theming_tenant_theme")
 }
+
+// ============================================================================
+// PASSWORD RESET TOKENS — flujo de "olvidé mi contraseña" para self-service.
+// El token raw viaja solo en email; la DB guarda SHA-256 (no se puede recuperar
+// el original aunque se filtre el dump). TTL 1h. Single-use (usedAt).
+// ============================================================================
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  /// SHA-256 hex del token raw. El token raw solo se conoce en el momento de
+  /// crearlo y se entrega por email — nunca se persiste en claro.
+  tokenHash String    @unique @map("token_hash") @db.VarChar(64)
+  /// Vencimiento absoluto (default +1h). Más allá se rechaza con un error
+  /// específico para que la UI pida regenerar.
+  expiresAt DateTime  @map("expires_at")
+  /// Marca de uso (single-use). Al consumirse se invalida.
+  usedAt    DateTime? @map("used_at")
+  /// IP + UA al solicitar para audit log (si llega rate-limit / ataque).
+  requestIp String?   @map("request_ip")
+  requestUa String?   @map("request_ua")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, userId])
+  @@index([expiresAt])
+  @@map("password_reset_token")
+}
