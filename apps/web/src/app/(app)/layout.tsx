@@ -15,6 +15,7 @@ const NAV = [
   { href: '/formador', label: 'Panel formador', requiresAdmin: true, exactMatch: true },
   { href: '/formador/cursos', label: 'Mis cursos', requiresAdmin: true },
   { href: '/admin/configuracion', label: 'Configuración', requiresAdmin: true },
+  { href: '/admin/branding', label: 'Branding', requiresAdmin: true },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
