@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-26 (PR C0 — rebrand a Didacta)
+> **Última actualización**: 2026-04-26 (Bloques 0/A/B/C — sistema de tokens + mod.theming + forgot-password + admin de usuarios)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -15,12 +15,14 @@ Didacta es un LMS multi-tenant modular construido por VA360 LABS S.L. La aplicac
 
 - **Alumno**: registrarse → matricularse (link directo o código de invitación) → consumir lecciones (VIDEO/HTML/PDF/TEXT/QUIZ) → realizar quizzes (4 tipos auto-corregidos + 2 con corrección manual) → completar curso → descargar certificado PDF → ver bandeja de notificaciones in-app → publicar en la comunidad y reaccionar.
 - **Formador / tenant_admin**: dashboard con stats agregadas (`/formador`) → CRUD de cursos con módulos y lecciones → crear/editar/publicar quizzes con 6 tipos de pregunta → corregir manualmente las respuestas abiertas (`/formador/correcciones/[id]`) → reordenar lecciones (▲▼) → eliminar módulos.
-- **Super_admin / tenant_admin**: verificar la integridad de la cadena de auditoría (`GET /audit/verify`).
+- **Super_admin / tenant_admin**: verificar la integridad de la cadena de auditoría (`GET /audit/verify`), gestionar usuarios del tenant (`/admin/usuarios`: invitar, suspender, asignar/quitar rol), personalizar branding visual (`/admin/branding`: hue + saturación HSL → 10 escalones derivados, fuentes whitelist, custom CSS sanitizado).
+- **Self-service**: olvido de contraseña con email vía SMTP per-tenant (`/forgot-password` + `/reset-password?token=...`). Token SHA-256 hasheado en DB, single-use, TTL 1h.
 - **Auth**: signup/signin con JWT (jose + HS256), MFA TOTP obligatorio para roles administrativos, recovery codes.
 - **Audit log**: cadena de hashes por tenant SHA-256, IP + user-agent reales, verificable end-to-end.
 - **Eventos**: EventBus persistente con patrón Transactional Outbox, recovery worker que reprocesa pendientes cada 30s.
-- **Notificaciones**: NotificationHub real con persistencia, canal IN_APP funcional, EMAIL stub que loguea (listo para SMTP).
-- **Storage**: LocalDiskStorageService con `STORAGE_ROOT` env (a sustituir por MinIO/S3 en prod).
+- **Notificaciones**: NotificationHub real con persistencia, canal IN_APP funcional, EMAIL real (PR #77 + reuso en password reset y user invite).
+- **Storage**: S3StorageService (default en prod) o LocalDiskStorageService (dev fallback) según `STORAGE_DRIVER`.
+- **Theming**: cada tenant override `--brand-h` y `--brand-s`; los 10 escalones brand-50..900 y los neutrales tintados se derivan automáticamente. SSR-ready via `TenantThemeProvider` con cache localStorage anti-FOUC.
 
 ### Stack final
 
@@ -37,12 +39,13 @@ Didacta es un LMS multi-tenant modular construido por VA360 LABS S.L. La aplicac
 | Observabilidad | Pino + nestjs-pino | OpenTelemetry diferido a Fase 2 |
 | Hosting | Hetzner + Easypanel | `https://lab-learnship.3qntut.easypanel.host` (legacy hostname pre-rebrand — ver nota en docs/test.env.md) |
 
-### Métricas de calidad (al cierre del PR #73)
+### Métricas de calidad (al cierre de los Bloques 0/A/B/C, sesión 2026-04-26 tarde)
 
-- **~213 tests unitarios verdes** (133 api con +34 nuevos del PR #73 cipher+config + 45 mod.assessments + 17 mod.community + 8 mod.learning + 8 mod.courses + 2 mod.certificates). El conteo crece por PR.
+- **~245 tests unitarios verdes** (189 api con +13 nuevos en password-reset + 45 mod.assessments + 17 mod.community + 16 mod.theming + 8 mod.learning + 8 mod.courses + 2 mod.certificates).
 - **5 specs E2E Playwright**: golden path · quiz alumno · matrícula por código · corrección manual · MFA admin setup.
-- **3 fallos pre-existentes en Windows**: `local-disk-storage.test.ts` falla en Windows porque trata las separators (`\`) como escape de path. Reproduce en `main` también — NO es regresión, es un bug de path handling Windows-only del test, no del código de producción. En macOS pasa limpio.
-- CI verde en los 29 PRs de Fase 1.A + arranque Fase 1.B.
+- **22 paquetes en typecheck** (subió de 21 con el nuevo `@didacta/mod-theming`).
+- **22 rutas Next.js** compilando (subió de 17 con `/forgot-password`, `/reset-password`, `/admin/branding`, `/admin/usuarios`, `/admin/usuarios/[id]`, `/admin/usuarios/invitar`).
+- **3 fallos pre-existentes en Windows**: `local-disk-storage.test.ts` falla por path separators. Reproduce en `main` — bug de test, no de prod.
 
 ---
 
@@ -649,6 +652,31 @@ Ver `.github/workflows/e2e.yml`.
 
 ## 10. Roadmap pendiente
 
+### 10.0 Sesión 2026-04-26 tarde — Foundations visuales + P0 admin (Bloques 0/A/B/C)
+
+Tras el rebrand a Didacta (PR C0), el usuario pidió:
+
+1. Crear `mod.theming` (personalización visual per-tenant) — del brief `docs/diseño/PANTALLAS-DOGFOODING.md` §10.
+2. Cubrir P0 backend faltantes — del mismo brief §2.4-2.5 y §6.2-6.4.
+3. Rediseño visual de las pantallas P0 con principios pixel-perfect.
+
+**Estrategia ejecutada**: stacked PRs lineales en cadena `A → B1 → B2 → B3` y `A → C1 → C2`. Cada PR es chiquito y reviewable. Mergear en orden, los demás se rebasan automático.
+
+| PR | Branch | Bloque | Estado | Resumen |
+|---|---|---|---|---|
+| #85 | `feat/design-tokens-foundation` | A | abierto | Foundation de design tokens (Tailwind 4 `@theme`) + skill global `pixel-perfect-ui`. Refactor componentes shadcn (button con variants primary/secondary/success/destructive/ghost/link, card interactive, input/textarea/select con border-strong y focus shadow, badge con tinted bg + ring-inset, label semibold). Sora + Inter via next/font/google. |
+| #86 | `feat/mod-theming-scaffold` | B1 | abierto | Schema `ModThemingTenantTheme` + migración `20260426000003_add_theming` + módulo `modules/theming/` (manifest, service, DTOs, errors, sanitización CSS, 16 tests). Whitelists de fuentes (8 display + 8 body). |
+| #87 | `feat/mod-theming-api` | B2 | abierto | Endpoints `GET/PUT /modules/theming/me` + `POST .../reset` con role-check. Cliente web `lib/theming.ts` + `TenantThemeProvider` con cache localStorage anti-FOUC. |
+| #88 | `feat/admin-branding-ui` | B3 | abierto | UI `/admin/branding` con preview live: slider HSL gradient, preview de los 10 escalones derivados, selectores de fuente, custom CSS con counter de bytes, footer HTML, panel sticky con tarjeta+botón+badge derivando colores en tiempo real. |
+| #89 | `feat/forgot-reset-password` | C1 | abierto | Tabla `password_reset_token` + migración. Servicio `PasswordResetService` (token raw 32B random hex, DB persiste SHA-256, TTL 1h, single-use, anti user-enumeration). Endpoints `POST /auth/forgot-password` y `POST /auth/reset-password`. UI `/forgot-password` y `/reset-password` (Suspense para Next 15 prerendering). 13 tests nuevos. |
+| #90 | `feat/admin-usuarios-crud-v2` | C2 | abierto | Módulo Nest `admin/` con `AdminUsersService` (list, getDetail, invite con email del C1, setStatus con invalidación de sessions, assignRole/removeRole con whitelist de roles asignables, resendInvite). 7 endpoints REST. UI `/admin/usuarios` (tabla con badges + filtros), `/admin/usuarios/invitar` (form con descripciones contextuales por rol), `/admin/usuarios/[id]` (acceso + roles + sesiones recientes). |
+
+**Skill creada**: `~/.claude/skills/pixel-perfect-ui/SKILL.md` codifica principios Refactoring UI + tipografía exquisita + color HSL + microinteracciones + a11y + UX para no-técnicos + stack-aware (Tailwind 4 + shadcn + Next 15). Auto-loads en cualquier trabajo de UI futuro.
+
+**Pendiente en esta sesión** (en cola):
+- C3: UI `/admin/auditoria` consumiendo `GET /audit/verify` ya existente.
+- D1-D8: rediseño visual aplicando tokens a todas las pantallas P0 del brief.
+
 ### 10.1 Plan A — Infra externa habilitada el 2026-04-26 (Redis y MinIO ya provistos en Easypanel)
 
 | PR | Item | Estado | Notas |
@@ -735,6 +763,22 @@ Ver `.github/workflows/e2e.yml`.
 | #75 | feat(events): BullMQ outbox dispatcher con Redis (PR A1) | merged |
 | #77 | feat(notifications): adapter SMTP per-tenant con nodemailer (PR A2) | merged |
 | #79 | feat(storage): MinIO/S3 backend con presigned URLs (PR A3) | merged |
+| #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
+| #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
+| #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-26 tarde (Bloques 0/A/B/C — sistema visual + P0 admin) — TODOS ABIERTOS
+
+| PR | Título | Estado | Base |
+|---|---|---|---|
+| #85 | feat(web): foundation de design tokens + skill pixel-perfect-ui (PR A) | open | main |
+| #86 | feat(theming): scaffold mod.theming v0.1 + schema + tests (PR B1) | open | feat/design-tokens-foundation |
+| #87 | feat(theming): API endpoints + SSR-ready theme injection (PR B2) | open | feat/mod-theming-scaffold |
+| #88 | feat(web): UI /admin/branding con preview live (PR B3) | open | feat/mod-theming-api |
+| #89 | feat(auth): forgot-password + reset-password con SMTP per-tenant (PR C1) | open | feat/design-tokens-foundation |
+| #90 | feat(admin): CRUD de usuarios del tenant + UI completa (PR C2) | open | feat/forgot-reset-password |
+
+**Cómo mergear**: en orden secuencial. Mergear #85 primero → main; los siguientes se rebasan automático. Después #86 → #87 → #88. En paralelo se puede mergear #89 → #90 (no dependen del Bloque B).
 
 ---
 
