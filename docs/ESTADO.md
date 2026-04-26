@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-26 (Bloques 0/A/B/C — sistema de tokens + mod.theming + forgot-password + admin de usuarios)
+> **Última actualización**: 2026-04-26 tarde (Bloques 0/A/B/C/D completos — sistema visual + mod.theming + P0 admin + rediseño visual completo de pantallas P0)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -767,18 +767,37 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
 
-### Sesión 2026-04-26 tarde (Bloques 0/A/B/C — sistema visual + P0 admin) — TODOS ABIERTOS
+### Sesión 2026-04-26 tarde (Bloques 0/A/B/C/D) — TODOS MERGEADOS
 
-| PR | Título | Estado | Base |
-|---|---|---|---|
-| #85 | feat(web): foundation de design tokens + skill pixel-perfect-ui (PR A) | open | main |
-| #86 | feat(theming): scaffold mod.theming v0.1 + schema + tests (PR B1) | open | feat/design-tokens-foundation |
-| #87 | feat(theming): API endpoints + SSR-ready theme injection (PR B2) | open | feat/mod-theming-scaffold |
-| #88 | feat(web): UI /admin/branding con preview live (PR B3) | open | feat/mod-theming-api |
-| #89 | feat(auth): forgot-password + reset-password con SMTP per-tenant (PR C1) | open | feat/design-tokens-foundation |
-| #90 | feat(admin): CRUD de usuarios del tenant + UI completa (PR C2) | open | feat/forgot-reset-password |
+| PR | Título | Estado |
+|---|---|---|
+| #85 | feat(web): foundation de design tokens + skill pixel-perfect-ui (PR A) | merged |
+| #86 | feat(theming): scaffold mod.theming v0.1 + schema + tests (PR B1) | merged |
+| #92 | feat(theming): API endpoints + SSR-ready theme injection (PR B2) | merged |
+| #93 | feat(web): UI /admin/branding con preview live (PR B3) | merged |
+| #94 | feat(auth): forgot-password + reset-password con SMTP per-tenant (PR C1) | merged |
+| #95 | feat(admin): CRUD de usuarios del tenant + UI completa (PR C2) | merged |
+| #96 | feat(admin): UI /admin/auditoria con verificación de cadena + filtros + export CSV (PR C3) | merged |
+| #91 | docs(estado): cierre de Bloques 0/A/B/C | merged |
+| #97 | feat(web): rediseño visual de signin / signup / auth layout (PR D1) | merged |
+| #98 | feat(web): rediseño catálogo + detalle de curso (PR D2) | merged |
+| #99 | feat(web): rediseño player de lección — REDISEÑO MAYOR (PR D3) | merged |
+| #100 | feat(web): rediseño quiz player con resultado hero + estados visuales (PR D4) | merged |
+| #101 | feat(web): rediseño certificados + notificaciones (PR D5) | merged |
+| #102 | feat(web): rediseño formador + admin con tokens y tabs (PR D6+D7+D8) | merged |
 
-**Cómo mergear**: en orden secuencial. Mergear #85 primero → main; los siguientes se rebasan automático. Después #86 → #87 → #88. En paralelo se puede mergear #89 → #90 (no dependen del Bloque B).
+**14 PRs cerrados en una corrida**. La main ahora tiene:
+- Sistema de design tokens HSL escalables consumido por todos los componentes shadcn.
+- mod.theming v0.1 funcional end-to-end con UI `/admin/branding`.
+- Self-service de forgot/reset password con SMTP per-tenant.
+- CRUD completo de usuarios admin (`/admin/usuarios`) + audit log UI (`/admin/auditoria`).
+- Rediseño visual aplicando skill `pixel-perfect-ui` a todas las pantallas P0 del brief de dogfooding.
+
+**Pendiente** (follow-ups, no entró en esta sesión):
+- D7-bis: editor del curso (`/formador/cursos/[id]`) y editor de quiz (`/formador/quizzes/[id]`) — drag/drop reordenable que merece PR dedicado.
+- D7-ter: detalle de corrección manual (`/formador/correcciones/[id]`) — form de grading por respuesta abierta.
+- MFA setup/verify rediseño (D1.5) — flow largo con QR + recovery codes.
+- Mobile testing real device + E2E specs nuevos para los flujos rediseñados.
 
 ---
 
