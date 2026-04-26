@@ -3,20 +3,20 @@ import type { HTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium',
+  'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums leading-tight',
   {
     variants: {
       variant: {
-        default:
-          'border-transparent bg-neutral-900 text-neutral-50 dark:bg-neutral-50 dark:text-neutral-900',
-        outline:
-          'border-neutral-200 text-neutral-700 dark:border-neutral-800 dark:text-neutral-300',
-        success:
-          'border-transparent bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-100',
-        warning:
-          'border-transparent bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100',
-        muted:
-          'border-transparent bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300',
+        // Brand
+        default: 'bg-brand-500 text-text-on-brand',
+        primary: 'bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200',
+        // Outline neutral
+        outline: 'bg-surface text-text-muted ring-1 ring-inset ring-border-strong',
+        // Estados semánticos
+        success: 'bg-success-50 text-success-700 ring-1 ring-inset ring-success-200',
+        warning: 'bg-warning-50 text-warning-700 ring-1 ring-inset ring-warning-200',
+        danger: 'bg-danger-50 text-danger-700 ring-1 ring-inset ring-danger-100',
+        muted: 'bg-surface-3 text-text-muted',
       },
     },
     defaultVariants: { variant: 'default' },

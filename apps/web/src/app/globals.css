@@ -1,26 +1,337 @@
 @import 'tailwindcss';
 
+/* =====================================================================
+ * Didacta — Design Tokens
+ *
+ * Sistema de tokens basado en docs/design-system/didacta_guia_identidad_visual.md
+ * Diseñado para que mod.theming pueda override solo las variables raíz
+ * (--brand-h, --brand-s, --color-logo, etc.) y propagar a todo el sistema.
+ *
+ * Principios aplicados (skill pixel-perfect-ui):
+ *  - Color en HSL escalable (no hex hardcoded).
+ *  - Saturación mayor en extremos de luminancia para evitar grises muertos.
+ *  - Neutrales tintados al brand hue (no gris puro).
+ *  - Escala tipográfica modular ratio 1.25.
+ *  - Sombras multi-capa, sutiles.
+ *  - Easing curves naturales (no linear).
+ * ===================================================================== */
+
 @theme {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  /* -------------------------------------------------------------------
+   * Brand hue/saturation — variables raíz override por mod.theming.
+   * ------------------------------------------------------------------- */
+  --brand-h: 213;
+  --brand-s: 70%;
+
+  /* -------------------------------------------------------------------
+   * Brand scale — derivada de hue/saturation, alineada a paleta Didacta:
+   *   #0D1B2A azul noche  → brand-900
+   *   #1E5AA8 azul confianza → brand-500
+   *   #2E7DCE azul equilibrio → brand-400
+   * ------------------------------------------------------------------- */
+  --color-brand-50: hsl(var(--brand-h), 90%, 96%);
+  --color-brand-100: hsl(var(--brand-h), 85%, 92%);
+  --color-brand-200: hsl(var(--brand-h), 80%, 84%);
+  --color-brand-300: hsl(var(--brand-h), 75%, 72%);
+  --color-brand-400: hsl(var(--brand-h), 70%, 58%);
+  --color-brand-500: hsl(var(--brand-h), 70%, 45%);
+  --color-brand-600: hsl(var(--brand-h), 72%, 38%);
+  --color-brand-700: hsl(var(--brand-h), 75%, 30%);
+  --color-brand-800: hsl(var(--brand-h), 78%, 22%);
+  --color-brand-900: hsl(var(--brand-h), 80%, 14%);
+
+  /* -------------------------------------------------------------------
+   * Success (verde crecimiento Didacta) — #18B5A8.
+   * ------------------------------------------------------------------- */
+  --color-success-50: hsl(174 70% 95%);
+  --color-success-100: hsl(174 70% 88%);
+  --color-success-200: hsl(174 72% 78%);
+  --color-success-400: hsl(174 75% 55%);
+  --color-success-500: hsl(174 78% 40%);
+  --color-success-600: hsl(174 80% 32%);
+  --color-success-700: hsl(174 82% 24%);
+
+  /* -------------------------------------------------------------------
+   * Warning (coral energía Didacta) — #FF6F61. Usar con moderación.
+   * ------------------------------------------------------------------- */
+  --color-warning-50: hsl(7 100% 96%);
+  --color-warning-100: hsl(7 100% 92%);
+  --color-warning-200: hsl(7 100% 84%);
+  --color-warning-400: hsl(7 100% 75%);
+  --color-warning-500: hsl(7 100% 69%);
+  --color-warning-600: hsl(7 90% 58%);
+  --color-warning-700: hsl(7 85% 48%);
+
+  /* -------------------------------------------------------------------
+   * Danger — color funcional para errores, NO de marca. #DC2626.
+   * ------------------------------------------------------------------- */
+  --color-danger-50: hsl(0 86% 97%);
+  --color-danger-100: hsl(0 86% 92%);
+  --color-danger-500: hsl(0 72% 50%);
+  --color-danger-600: hsl(0 75% 42%);
+  --color-danger-700: hsl(0 78% 34%);
+
+  /* -------------------------------------------------------------------
+   * Neutrales tintados al brand-h (evitan gris puro muerto).
+   * Para texto, fondos, bordes y superficies.
+   * ------------------------------------------------------------------- */
+  --color-bg: hsl(var(--brand-h), 30%, 99%);
+  --color-bg-subtle: hsl(var(--brand-h), 30%, 97%);
+  --color-surface: hsl(0, 0%, 100%);
+  --color-surface-2: hsl(var(--brand-h), 25%, 98%);
+  --color-surface-3: hsl(var(--brand-h), 22%, 96%);
+
+  --color-border: hsl(var(--brand-h), 20%, 92%);
+  --color-border-strong: hsl(var(--brand-h), 20%, 84%);
+
+  --color-text: hsl(var(--brand-h), 35%, 12%);
+  --color-text-muted: hsl(var(--brand-h), 15%, 45%);
+  --color-text-subtle: hsl(var(--brand-h), 12%, 60%);
+  --color-text-disabled: hsl(var(--brand-h), 10%, 75%);
+  --color-text-on-brand: hsl(0, 0%, 100%);
+
+  /* -------------------------------------------------------------------
+   * Compatibilidad con shadcn/ui — algunas variables que esperan los
+   * componentes existentes del proyecto.
+   * ------------------------------------------------------------------- */
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text);
+
+  /* -------------------------------------------------------------------
+   * Tipografía — Sora display, Inter body.
+   * Las font-family reales se inyectan vía next/font en layout.tsx.
+   * ------------------------------------------------------------------- */
+  --font-sans: var(--font-inter), 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-sora), 'Sora', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+
+  /* -------------------------------------------------------------------
+   * Escala tipográfica — ratio 1.25 (Major Third).
+   * Tokens: text-{xs,sm,base,lg,xl,2xl,3xl,4xl,5xl}.
+   * ------------------------------------------------------------------- */
+  --text-xs: 0.75rem; /* 12px */
+  --text-xs--line-height: 1rem; /* 16px */
+  --text-sm: 0.875rem; /* 14px */
+  --text-sm--line-height: 1.25rem; /* 20px */
+  --text-base: 1rem; /* 16px */
+  --text-base--line-height: 1.5rem; /* 24px */
+  --text-lg: 1.125rem; /* 18px */
+  --text-lg--line-height: 1.75rem; /* 28px */
+  --text-xl: 1.375rem; /* 22px — H4 */
+  --text-xl--line-height: 1.875rem; /* 30px */
+  --text-2xl: 1.75rem; /* 28px — H3 */
+  --text-2xl--line-height: 2.25rem; /* 36px */
+  --text-3xl: 2.25rem; /* 36px — H2 */
+  --text-3xl--line-height: 2.75rem; /* 44px */
+  --text-4xl: 3rem; /* 48px — H1 */
+  --text-4xl--line-height: 3.5rem; /* 56px */
+  --text-5xl: 3.75rem; /* 60px — Hero */
+  --text-5xl--line-height: 4rem; /* 64px */
+
+  /* -------------------------------------------------------------------
+   * Radii — bordes redondeados Didacta (12-20px en cards).
+   * ------------------------------------------------------------------- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-card: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* -------------------------------------------------------------------
+   * Sombras multi-capa — alpha basado en azul noche para integrarse al brand.
+   * ------------------------------------------------------------------- */
+  --shadow-xs: 0 1px 2px rgba(13, 27, 42, 0.04);
+  --shadow-sm: 0 1px 2px rgba(13, 27, 42, 0.04), 0 2px 4px rgba(13, 27, 42, 0.02);
+  --shadow-md: 0 1px 2px rgba(13, 27, 42, 0.04), 0 4px 12px rgba(13, 27, 42, 0.05);
+  --shadow-lg: 0 2px 4px rgba(13, 27, 42, 0.06), 0 12px 24px rgba(13, 27, 42, 0.08);
+  --shadow-xl: 0 4px 8px rgba(13, 27, 42, 0.08), 0 24px 48px rgba(13, 27, 42, 0.1);
+  --shadow-focus: 0 0 0 3px hsl(var(--brand-h) 70% 45% / 0.18);
+
+  /* -------------------------------------------------------------------
+   * Easing — naturales, no linear ni el "ease" default.
+   * ------------------------------------------------------------------- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* -------------------------------------------------------------------
+   * Z-index scale — evitar valores arbitrarios sueltos.
+   * ------------------------------------------------------------------- */
+  --z-base: 0;
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-overlay: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+  --z-tooltip: 60;
 }
 
-:root {
-  --color-background: #ffffff;
-  --color-foreground: #0a0a0a;
-}
+/* =====================================================================
+ * Base
+ * ===================================================================== */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: #0a0a0a;
-    --color-foreground: #fafafa;
-  }
+html,
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
 }
 
 body {
-  background: var(--color-background);
-  color: var(--color-foreground);
   font-family: var(--font-sans);
+  font-feature-settings:
+    'cv11',
+    /* Inter ligaduras estilísticas */ 'ss01',
+    'ss03';
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  font-size: var(--text-base);
+  line-height: var(--text-base--line-height);
+}
+
+/* Headings — Sora display + tracking negativo (skill pixel-perfect-ui §2.3). */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+h1 {
+  font-size: var(--text-4xl);
+  line-height: var(--text-4xl--line-height);
+  font-weight: 800;
+}
+
+h2 {
+  font-size: var(--text-3xl);
+  line-height: var(--text-3xl--line-height);
+  font-weight: 700;
+  letter-spacing: -0.018em;
+}
+
+h3 {
+  font-size: var(--text-2xl);
+  line-height: var(--text-2xl--line-height);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+h4 {
+  font-size: var(--text-xl);
+  line-height: var(--text-xl--line-height);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-family: var(--font-sans);
+}
+
+/* Numbers tabulares en tablas y stats — sin esto los números bailan. */
+table,
+.tabular-nums,
+[data-numeric] {
+  font-feature-settings: 'tnum', 'lnum';
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* All-caps labels: tracking positivo. */
+.label-uppercase {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+/* Focus visible siempre — accesibilidad NO negociable. */
+*:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Selección — color brand sutil. */
+::selection {
+  background-color: hsl(var(--brand-h) 70% 90%);
+  color: var(--color-brand-900);
+}
+
+/* Scrollbar styling sutil — webkit only (Firefox usa scrollbar-color en utility). */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: var(--radius-full);
+  border: 3px solid var(--color-bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--brand-h), 15%, 70%);
+}
+
+/* prefers-reduced-motion — respetar siempre (skill pixel-perfect-ui §5.3). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =====================================================================
+ * Component utilities — clases reutilizables que componen los tokens.
+ * ===================================================================== */
+
+/* Skeleton loader — preferido sobre spinners (skill §5.4). */
+@keyframes pulse-skeleton {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.skeleton {
+  background-color: var(--color-surface-3);
+  border-radius: var(--radius-md);
+  animation: pulse-skeleton 1.6s var(--ease-in-out) infinite;
+}
+
+/* Card surface helper (para cuando shadcn Card no aplica directamente). */
+.card-surface {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Container responsive principal. */
+.didacta-container {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: 1rem;
+  max-width: 80rem; /* 1280px */
+}
+
+@media (min-width: 640px) {
+  .didacta-container {
+    padding-inline: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .didacta-container {
+    padding-inline: 2rem;
+  }
 }

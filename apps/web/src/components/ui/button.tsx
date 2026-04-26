@@ -4,24 +4,38 @@ import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 disabled:pointer-events-none disabled:opacity-50 dark:focus-visible:ring-neutral-300',
+  [
+    'inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold',
+    'transition-[background-color,box-shadow,transform] duration-150 ease-out',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+    'active:translate-y-px',
+    'disabled:pointer-events-none disabled:opacity-50',
+  ].join(' '),
   {
     variants: {
       variant: {
-        default:
-          'bg-neutral-900 text-neutral-50 hover:bg-neutral-900/90 dark:bg-neutral-50 dark:text-neutral-900 dark:hover:bg-neutral-50/90',
+        primary: 'bg-brand-500 text-text-on-brand shadow-sm hover:bg-brand-600 active:bg-brand-700',
+        secondary:
+          'bg-surface text-text border border-border-strong hover:bg-surface-2 hover:border-border-strong',
+        success:
+          'bg-success-500 text-text-on-brand shadow-sm hover:bg-success-600 active:bg-success-700',
+        destructive:
+          'bg-danger-500 text-text-on-brand shadow-sm hover:bg-danger-600 active:bg-danger-700',
+        ghost: 'text-text hover:bg-surface-3',
+        link: 'text-brand-500 underline-offset-4 hover:underline',
+        // Alias para compat con código existente que usa "default" | "outline".
+        default: 'bg-brand-500 text-text-on-brand shadow-sm hover:bg-brand-600 active:bg-brand-700',
         outline:
-          'border border-neutral-200 bg-white hover:bg-neutral-100 dark:border-neutral-800 dark:bg-neutral-950 dark:hover:bg-neutral-800',
-        ghost: 'hover:bg-neutral-100 dark:hover:bg-neutral-800',
-        destructive: 'bg-red-600 text-neutral-50 hover:bg-red-600/90',
+          'bg-surface text-text border border-border-strong hover:bg-surface-2 hover:border-border-strong',
       },
       size: {
-        default: 'h-10 px-4 py-2',
-        sm: 'h-9 px-3',
-        lg: 'h-11 px-8',
+        sm: 'h-8 px-3 text-sm rounded-md gap-1.5',
+        default: 'h-10 px-5 text-[0.9375rem] rounded-lg',
+        lg: 'h-12 px-6 text-base rounded-lg',
+        icon: 'h-10 w-10 rounded-lg',
       },
     },
-    defaultVariants: { variant: 'default', size: 'default' },
+    defaultVariants: { variant: 'primary', size: 'default' },
   },
 );
 
@@ -39,3 +53,5 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   },
 );
 Button.displayName = 'Button';
+
+export { buttonVariants };
