@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PersistentEventBus } from '../src/modules/persistent-event-bus';
+import { PersistentEventBus, type OutboxDispatcher } from '../src/modules/persistent-event-bus';
 
 interface OutboxRow {
   id: bigint;
@@ -77,10 +77,27 @@ function makeFakePrisma() {
           .filter((r) => r.processedAt === null)
           .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
       },
+      async findUnique(args: { where: { id: bigint } }): Promise<OutboxRow | null> {
+        return rows.get(args.where.id) ?? null;
+      },
     },
     _rows: rows,
   };
   return prisma;
+}
+
+function makeFakeDispatcher(): OutboxDispatcher & { enqueued: bigint[]; enabled: boolean } {
+  const state = {
+    enqueued: [] as bigint[],
+    enabled: true,
+    isEnabled() {
+      return state.enabled;
+    },
+    async enqueue(id: bigint) {
+      state.enqueued.push(id);
+    },
+  };
+  return state;
 }
 
 const silentLogger = {
@@ -180,5 +197,121 @@ describe('PersistentEventBus', () => {
     expect(ok).toHaveBeenCalledOnce();
     const row = [...prisma._rows.values()][0];
     expect(row.processedAt).toBeInstanceOf(Date);
+  });
+
+  describe('con OutboxDispatcher async (BullMQ)', () => {
+    it('publish encola en lugar de despachar in-process cuando dispatcher.enabled=true', async () => {
+      const dispatcher = makeFakeDispatcher();
+      const bus = new PersistentEventBus(prisma as never, silentLogger, dispatcher);
+      const handler = vi.fn(async () => {});
+      bus.subscribe('learning.course.completed', handler);
+
+      await bus.publish(makeEvent('learning.course.completed', {}, 'idem-q'));
+
+      expect(handler).not.toHaveBeenCalled(); // delegó a la queue
+      expect(dispatcher.enqueued).toHaveLength(1);
+      const row = [...prisma._rows.values()][0];
+      expect(row.processedAt).toBeNull(); // queda pendiente hasta que el worker lo procese
+    });
+
+    it('dispatcher.enabled=false hace fallback a in-process', async () => {
+      const dispatcher = makeFakeDispatcher();
+      dispatcher.enabled = false;
+      const bus = new PersistentEventBus(prisma as never, silentLogger, dispatcher);
+      const handler = vi.fn(async () => {});
+      bus.subscribe('learning.course.completed', handler);
+
+      await bus.publish(makeEvent('learning.course.completed', {}, 'idem-noq'));
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(dispatcher.enqueued).toHaveLength(0);
+    });
+
+    it('si enqueue falla, fallback a dispatch in-process (no perdemos el evento)', async () => {
+      const dispatcher: OutboxDispatcher = {
+        isEnabled: () => true,
+        enqueue: async () => {
+          throw new Error('redis caído');
+        },
+      };
+      const bus = new PersistentEventBus(prisma as never, silentLogger, dispatcher);
+      const handler = vi.fn(async () => {});
+      bus.subscribe('learning.course.completed', handler);
+
+      await bus.publish(makeEvent('learning.course.completed', {}, 'idem-fail'));
+
+      expect(handler).toHaveBeenCalledOnce();
+      const row = [...prisma._rows.values()][0];
+      expect(row.processedAt).toBeInstanceOf(Date);
+    });
+
+    it('processOutboxId ejecuta los handlers para una fila pendiente', async () => {
+      const dispatcher = makeFakeDispatcher();
+      const bus = new PersistentEventBus(prisma as never, silentLogger, dispatcher);
+      const handler = vi.fn(async () => {});
+      bus.subscribe('learning.course.completed', handler);
+
+      await bus.publish(makeEvent('learning.course.completed', {}, 'idem-proc'));
+      const [row] = [...prisma._rows.values()];
+      expect(row.processedAt).toBeNull();
+
+      // Simulamos al worker BullMQ levantando el job
+      await bus.processOutboxId(row.id);
+
+      expect(handler).toHaveBeenCalledOnce();
+      expect(row.processedAt).toBeInstanceOf(Date);
+    });
+
+    it('processOutboxId es idempotente: no re-ejecuta si processedAt ya está', async () => {
+      const dispatcher = makeFakeDispatcher();
+      const bus = new PersistentEventBus(prisma as never, silentLogger, dispatcher);
+      const handler = vi.fn(async () => {});
+      bus.subscribe('learning.course.completed', handler);
+
+      await bus.publish(makeEvent('learning.course.completed', {}, 'idem-i'));
+      const [row] = [...prisma._rows.values()];
+      await bus.processOutboxId(row.id);
+      expect(handler).toHaveBeenCalledTimes(1);
+
+      await bus.processOutboxId(row.id);
+      expect(handler).toHaveBeenCalledTimes(1); // no se llamó de nuevo
+    });
+
+    it('processOutboxId lanza si los handlers fallan (BullMQ aplica backoff)', async () => {
+      const dispatcher = makeFakeDispatcher();
+      const bus = new PersistentEventBus(prisma as never, silentLogger, dispatcher);
+      bus.subscribe('learning.course.completed', async () => {
+        throw new Error('boom');
+      });
+
+      await bus.publish(makeEvent('learning.course.completed', {}, 'idem-throw'));
+      const [row] = [...prisma._rows.values()];
+
+      await expect(bus.processOutboxId(row.id)).rejects.toThrow(/outbox dispatch falló/);
+      expect(row.processedAt).toBeNull();
+      expect(row.processingAttempts).toBe(1);
+    });
+
+    it('recoverPending reencola pendientes a la queue (no despacha local)', async () => {
+      const dispatcher = makeFakeDispatcher();
+      const bus = new PersistentEventBus(prisma as never, silentLogger, dispatcher);
+      const handler = vi.fn(async () => {});
+      bus.subscribe('learning.course.completed', handler);
+
+      // Publicamos con dispatcher off (simulamos Redis caído al momento)
+      dispatcher.enabled = false;
+      bus.subscribe('learning.course.completed', async () => {
+        throw new Error('first fail');
+      });
+      await bus.publish(makeEvent('learning.course.completed', {}, 'idem-rec-q'));
+      const [row] = [...prisma._rows.values()];
+      expect(row.processedAt).toBeNull();
+
+      // Ahora Redis vuelve, recoverPending debería reencolar (no procesar local)
+      dispatcher.enabled = true;
+      const result = await bus.recoverPending();
+      expect(result.processed).toBe(1);
+      expect(dispatcher.enqueued).toEqual([row.id]);
+    });
   });
 });

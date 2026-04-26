@@ -1,7 +1,15 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, HttpCode, HttpStatus, Res } from '@nestjs/common';
+import {
+  ApiOkResponse,
+  ApiOperation,
+  ApiServiceUnavailableResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import type { FastifyReply } from 'fastify';
+import { OutboxQueueService } from '../modules/outbox-queue.service';
+import { PrismaService } from '../prisma/prisma.service';
 
-interface HealthResponse {
+interface LivenessResponse {
   status: 'ok';
   service: string;
   version: string;
@@ -9,15 +17,61 @@ interface HealthResponse {
   timestamp: string;
 }
 
+interface ReadinessResponse extends LivenessResponse {
+  checks: {
+    db: 'ok' | 'error';
+    redis: 'ok' | 'disabled' | 'error';
+  };
+}
+
 @ApiTags('Health')
 @Controller()
 export class HealthController {
   private readonly startedAt = Date.now();
 
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly outboxQueue: OutboxQueueService,
+  ) {}
+
   @Get('healthz')
   @ApiOperation({ summary: 'Liveness probe' })
   @ApiOkResponse({ description: 'El servicio está vivo.' })
-  healthz(): HealthResponse {
+  healthz(): LivenessResponse {
+    return this.liveness();
+  }
+
+  @Get('readyz')
+  @ApiOperation({
+    summary: 'Readiness probe — verifica DB y Redis. 503 si alguna dependencia falla.',
+  })
+  @ApiOkResponse({ description: 'El servicio está listo para aceptar tráfico.' })
+  @ApiServiceUnavailableResponse({ description: 'Una o más dependencias están degradadas.' })
+  async readyz(@Res({ passthrough: true }) reply: FastifyReply): Promise<ReadinessResponse> {
+    const liveness = this.liveness();
+    const [dbOk, redisStatus] = await Promise.all([this.checkDb(), this.checkRedis()]);
+    const allOk = dbOk && (redisStatus === 'ok' || redisStatus === 'disabled');
+
+    if (!allOk) {
+      reply.code(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    return {
+      ...liveness,
+      checks: {
+        db: dbOk ? 'ok' : 'error',
+        redis: redisStatus,
+      },
+    };
+  }
+
+  @Get('livez')
+  @HttpCode(HttpStatus.OK)
+  livez(): LivenessResponse {
+    return this.liveness();
+  }
+
+  private liveness(): LivenessResponse {
     return {
       status: 'ok',
       service: 'api',
@@ -27,10 +81,17 @@ export class HealthController {
     };
   }
 
-  @Get('readyz')
-  @ApiOperation({ summary: 'Readiness probe' })
-  @ApiOkResponse({ description: 'El servicio está listo para aceptar tráfico.' })
-  readyz(): HealthResponse {
-    return this.healthz();
+  private async checkDb(): Promise<boolean> {
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async checkRedis(): Promise<'ok' | 'disabled' | 'error'> {
+    if (!this.outboxQueue.isEnabled()) return 'disabled';
+    return (await this.outboxQueue.ping()) ? 'ok' : 'error';
   }
 }

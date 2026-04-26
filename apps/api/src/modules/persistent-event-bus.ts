@@ -4,18 +4,32 @@ import type { PrismaService } from '../prisma/prisma.service';
 type AnyEventHandler = (event: DomainEvent<unknown>) => Promise<void> | void;
 
 /**
+ * Adaptador opcional de despacho asíncrono. Si está presente y `isEnabled()`
+ * devuelve true, `publish()` encola en lugar de despachar in-process. La
+ * implementación real es `OutboxQueueService` con BullMQ + Redis.
+ */
+export interface OutboxDispatcher {
+  isEnabled(): boolean;
+  enqueue(outboxId: bigint): Promise<void>;
+}
+
+/**
  * EventBus persistente: aplica patrón Transactional Outbox.
  *
  * Flujo:
  *  1. publish() persiste el evento en `outbox_event` (idempotencyKey lo deduplica).
- *  2. Inmediatamente despacha a subscribers locales en el mismo proceso.
- *     - Si TODOS los handlers se ejecutan OK -> marca processed_at = now().
- *     - Si alguno falla -> deja processed_at = null + incrementa attempts + guarda lastError.
- *  3. OutboxRecoveryWorker (al startup y periódicamente) reprocesa pendientes.
+ *  2a. Si hay dispatcher async (BullMQ + Redis): encola un job con el outboxId.
+ *      El worker (en este mismo proceso o en otro) llama processOutboxId(),
+ *      que ejecuta los handlers locales y marca processed/failed. Reintentos
+ *      exponenciales nativos de BullMQ.
+ *  2b. Sin dispatcher (dev local sin Redis): despacha in-process inmediatamente.
+ *      - Si todos los handlers OK → marca processed_at.
+ *      - Si alguno falla → deja processed_at = null + incrementa attempts.
+ *  3. OutboxRecoveryWorker (failsafe) reencola cada N min outbox rows que
+ *     siguen pendientes (cobertura para Redis caído al momento de publish).
  *
- * Cuando llegue Redis a la infra, se reemplaza el dispatch in-process por una
- * cola BullMQ sin tocar el contrato. La tabla outbox sigue siendo la única
- * fuente de verdad — no se pierden eventos.
+ * La tabla outbox sigue siendo la única fuente de verdad — no se pierden
+ * eventos ni con BullMQ ni sin él.
  */
 export class PersistentEventBus implements EventBus {
   private readonly handlers = new Map<string, Set<AnyEventHandler>>();
@@ -23,6 +37,7 @@ export class PersistentEventBus implements EventBus {
   constructor(
     private readonly prisma: PrismaService,
     private readonly logger: Logger,
+    private readonly dispatcher?: OutboxDispatcher,
   ) {}
 
   async publish<TPayload>(event: DomainEvent<TPayload>): Promise<void> {
@@ -55,6 +70,22 @@ export class PersistentEventBus implements EventBus {
       return;
     }
 
+    if (this.dispatcher?.isEnabled()) {
+      try {
+        await this.dispatcher.enqueue(persisted.id);
+        return;
+      } catch (err) {
+        // Si Redis falló al encolar, no perdemos el evento: la tabla outbox
+        // tiene la fila con processedAt=null. El recovery worker lo reencola
+        // en su próximo barrido. Mientras tanto, hacemos un fallback síncrono
+        // para no perder despacho cuando Redis tiene un hiccup.
+        this.logger.error('falló enqueue a BullMQ, fallback in-process', {
+          outboxId: persisted.id.toString(),
+          err: (err as Error).message,
+        });
+      }
+    }
+
     await this.dispatchLocal(persisted.id, event);
   }
 
@@ -75,8 +106,45 @@ export class PersistentEventBus implements EventBus {
   }
 
   /**
+   * Procesa un evento del outbox por su ID. Lo invoca el Worker BullMQ.
+   * Idempotente: si la fila ya fue procesada, no hace nada.
+   *
+   * Lanza error si los handlers fallan, para que BullMQ aplique el backoff
+   * exponencial y reintente. La fila outbox queda marcada con attempts +1.
+   */
+  async processOutboxId(outboxId: bigint): Promise<void> {
+    const row = await this.prisma.outboxEvent.findUnique({
+      where: { id: outboxId },
+    });
+    if (!row) {
+      this.logger.warn('processOutboxId: fila no encontrada', {
+        outboxId: outboxId.toString(),
+      });
+      return;
+    }
+    if (row.processedAt) {
+      // Idempotencia: ya procesado.
+      return;
+    }
+    const event: DomainEvent<unknown> = {
+      name: row.eventName,
+      version: row.payloadVersion,
+      data: row.payload as unknown,
+      metadata: row.metadata as unknown as DomainEvent['metadata'],
+    };
+    const ok = await this.runHandlers(row.id, event);
+    if (!ok) {
+      throw new Error(`outbox dispatch falló (id=${outboxId.toString()})`);
+    }
+  }
+
+  /**
    * Reprocesa eventos pendientes (processedAt IS NULL). Llamado por el
    * OutboxRecoveryWorker al startup y en intervalos.
+   *
+   * Si hay dispatcher async habilitado, reencola los pendientes a la cola
+   * (failsafe para casos de Redis caído al momento del publish original).
+   * Sin dispatcher, los procesa in-process.
    */
   async recoverPending(limit = 50): Promise<{ processed: number; failed: number }> {
     const pending = await this.prisma.outboxEvent.findMany({
@@ -89,15 +157,28 @@ export class PersistentEventBus implements EventBus {
     let failed = 0;
 
     for (const row of pending) {
-      const event: DomainEvent<unknown> = {
-        name: row.eventName,
-        version: row.payloadVersion,
-        data: row.payload as unknown,
-        metadata: row.metadata as unknown as DomainEvent['metadata'],
-      };
-      const ok = await this.runHandlers(row.id, event);
-      if (ok) processed++;
-      else failed++;
+      if (this.dispatcher?.isEnabled()) {
+        try {
+          await this.dispatcher.enqueue(row.id);
+          processed++;
+        } catch (err) {
+          failed++;
+          this.logger.error('recovery: falló re-enqueue', {
+            outboxId: row.id.toString(),
+            err: (err as Error).message,
+          });
+        }
+      } else {
+        const event: DomainEvent<unknown> = {
+          name: row.eventName,
+          version: row.payloadVersion,
+          data: row.payload as unknown,
+          metadata: row.metadata as unknown as DomainEvent['metadata'],
+        };
+        const ok = await this.runHandlers(row.id, event);
+        if (ok) processed++;
+        else failed++;
+      }
     }
 
     if (pending.length > 0) {
@@ -105,6 +186,7 @@ export class PersistentEventBus implements EventBus {
         size: pending.length,
         processed,
         failed,
+        viaQueue: this.dispatcher?.isEnabled() ?? false,
       });
     }
     return { processed, failed };
@@ -121,8 +203,6 @@ export class PersistentEventBus implements EventBus {
     const set = this.handlers.get(event.name);
     if (!set || set.size === 0) {
       // Sin subscribers locales aún -> marcamos procesado igualmente.
-      // Si más adelante se registra un handler, el evento ya fue al outbox y
-      // puede inspeccionarse, pero no lo retransmitimos retroactivamente.
       await this.markProcessed(outboxId);
       return true;
     }

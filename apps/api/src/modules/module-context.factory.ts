@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import type {
   HookContext,
@@ -10,6 +10,7 @@ import type {
 } from '@learnship/core-kernel';
 import { PrismaService } from '../prisma/prisma.service';
 import { LocalDiskStorageService } from './local-disk-storage.service';
+import { OutboxQueueService } from './outbox-queue.service';
 import { PersistentEventBus } from './persistent-event-bus';
 import { PrismaAuditLogService } from './prisma-audit-log.service';
 import { PrismaEvidenceVaultService } from './prisma-evidence-vault.service';
@@ -81,11 +82,13 @@ export class ModuleContextFactory {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pino: PinoLogger,
+    @Inject(forwardRef(() => OutboxQueueService))
+    private readonly outboxQueue: OutboxQueueService,
   ) {}
 
   build(): ModuleContext {
     const adaptedLogger = this.adaptLogger(this.pino);
-    this.eventBus = new PersistentEventBus(this.prisma, adaptedLogger);
+    this.eventBus = new PersistentEventBus(this.prisma, adaptedLogger, this.outboxQueue);
     const auditLog = new PrismaAuditLogService(this.prisma);
     const evidenceVault = new PrismaEvidenceVaultService(this.prisma, this.storage);
     const notificationHub = new PrismaNotificationHubService(this.prisma, this.pino);

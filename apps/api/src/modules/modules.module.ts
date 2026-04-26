@@ -18,6 +18,7 @@ import { ModuleContextFactory } from './module-context.factory';
 import { ModuleRegistryService } from './module-registry.service';
 import { NotificationsBridge } from './notifications.bridge';
 import { NotificationsController } from './notifications.controller';
+import { OutboxQueueService } from './outbox-queue.service';
 import { OutboxRecoveryWorker } from './outbox-recovery.worker';
 import { TenantSettingsController } from './tenant-settings.controller';
 
@@ -36,6 +37,7 @@ import { TenantSettingsController } from './tenant-settings.controller';
     TenantSettingsController,
   ],
   providers: [
+    OutboxQueueService,
     ModuleContextFactory,
     ModuleRegistryService,
     OutboxRecoveryWorker,
@@ -46,6 +48,6 @@ import { TenantSettingsController } from './tenant-settings.controller';
     { provide: APP_FILTER, useClass: AssessmentsErrorFilter },
     { provide: APP_FILTER, useClass: CommunityErrorFilter },
   ],
-  exports: [ModuleRegistryService],
+  exports: [ModuleRegistryService, OutboxQueueService],
 })
 export class ModulesModule {}

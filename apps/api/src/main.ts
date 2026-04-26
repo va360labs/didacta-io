@@ -14,8 +14,12 @@ async function bootstrap(): Promise<void> {
 
   app.useLogger(app.get(Logger));
 
+  // Habilita lifecycle hooks (onModuleDestroy) para cerrar limpio la conexión
+  // de BullMQ + Redis cuando el contenedor recibe SIGTERM (Easypanel deploy).
+  app.enableShutdownHooks();
+
   app.setGlobalPrefix('api/v1', {
-    exclude: ['healthz', 'readyz', 'api/docs'],
+    exclude: ['healthz', 'readyz', 'livez', 'api/docs'],
   });
 
   const config = new DocumentBuilder()

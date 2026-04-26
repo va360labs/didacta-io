@@ -1,31 +1,37 @@
 import { Injectable, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleRegistryService } from './module-registry.service';
+import { OutboxQueueService } from './outbox-queue.service';
 
 /**
- * Reprocesa eventos pendientes en outbox_event al arranque y periódicamente.
+ * Failsafe del outbox: reencola/reprocesa eventos pendientes (processedAt=null).
  *
- * Tras un crash o un fallo de handler, los eventos quedan con processedAt=null.
- * Este worker garantiza que se vuelvan a despachar cuando los handlers locales
- * estén disponibles.
+ * Con BullMQ + Redis activos: el dispatcher principal corre on-publish, así que
+ * este worker pasa a ser una red de seguridad para casos en que Redis estuvo
+ * caído al momento de publish original. Intervalo: 5 min.
+ *
+ * Sin BullMQ (dev local sin Redis): mantiene el comportamiento original de
+ * reprocesar in-process. Intervalo: 30 s para feedback rápido.
  */
 @Injectable()
 export class OutboxRecoveryWorker implements OnApplicationBootstrap, OnModuleDestroy {
   private interval?: NodeJS.Timeout;
-  private intervalMs = 30_000;
 
   constructor(
     private readonly registry: ModuleRegistryService,
+    private readonly queue: OutboxQueueService,
     private readonly logger: PinoLogger,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    // Primer barrido al arrancar.
+    // Primer barrido al arrancar (cubre eventos quedados de un crash anterior).
     await this.runOnce();
-    // Programado periódico.
+    // Intervalo más laxo cuando BullMQ está activo: el dispatcher principal
+    // corre on-publish, este es solo failsafe.
+    const intervalMs = this.queue.isEnabled() ? 5 * 60_000 : 30_000;
     this.interval = setInterval(() => {
       void this.runOnce();
-    }, this.intervalMs);
+    }, intervalMs);
   }
 
   onModuleDestroy(): void {
