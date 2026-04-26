@@ -860,3 +860,42 @@ model ModAssessmentsAnswer {
   @@index([tenantId, attemptId])
   @@map("mod_assessments_answer")
 }
+
+// ============================================================================
+// MOD.THEMING — branding y personalización visual per-tenant.
+// Un único registro por tenant. Override de tokens de design (hue/saturation),
+// logo, favicon, fuentes y custom CSS sanitizado. Consumido en SSR por el
+// layout root para inyectar variables CSS y propagar a todos los componentes.
+// Ver docs/diseño/PANTALLAS-DOGFOODING.md §10 (mod.theming).
+// ============================================================================
+model ModThemingTenantTheme {
+  id                  String   @id @default(uuid()) @db.Uuid
+  tenantId            String   @unique @map("tenant_id") @db.Uuid
+
+  /// URL pública (S3) del logo principal del tenant. Usado en header y emails.
+  logoUrl             String?  @map("logo_url")
+  /// URL del favicon (suele ser cuadrado, 32x32 o 512x512 para PWA).
+  faviconUrl          String?  @map("favicon_url")
+
+  /// Hue HSL del color primario (0-360). Default 213 (azul confianza Didacta).
+  brandHue            Int      @default(213) @map("brand_hue")
+  /// Saturation del color primario (0-100). Default 70.
+  brandSaturation     Int      @default(70) @map("brand_saturation")
+
+  /// Familia tipográfica display (titulares). Whitelist ['Sora','Inter','Manrope','Space Grotesk','DM Sans','Plus Jakarta Sans'].
+  displayFontFamily   String   @default("Sora") @map("display_font_family")
+  /// Familia tipográfica body. Whitelist ['Inter','Manrope','DM Sans','IBM Plex Sans','Source Sans 3','Plus Jakarta Sans'].
+  bodyFontFamily      String   @default("Inter") @map("body_font_family")
+
+  /// CSS adicional sanitizado (solo CSS variables y selectores seguros).
+  /// Limitado a 16 KB. Se inyecta tras los tokens base.
+  customCss           String?  @map("custom_css")
+
+  /// HTML del footer custom (sanitizado). Solo etiquetas básicas: a, p, span, br.
+  footerHtml          String?  @map("footer_html")
+
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("mod_theming_tenant_theme")
+}
