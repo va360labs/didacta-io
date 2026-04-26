@@ -43,7 +43,7 @@ jobs:
       # Master key AES-256-GCM (64 chars hex) para TenantSettings cifrado.
       # Obligatoria en NODE_ENV=production desde el PR A0; sin ella el api no
       # bootea. En CI usamos un valor determinístico — no es secreto real.
-      TENANT_SETTINGS_ENC_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+      TENANT_SETTINGS_ENC_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
       NODE_ENV: production
       PORT: 4000
       WEB_PORT: 3000
