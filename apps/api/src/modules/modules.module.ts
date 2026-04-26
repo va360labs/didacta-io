@@ -52,6 +52,6 @@ import { ThemingErrorFilter } from './theming-error.filter';
     { provide: APP_FILTER, useClass: CommunityErrorFilter },
     { provide: APP_FILTER, useClass: ThemingErrorFilter },
   ],
-  exports: [ModuleRegistryService, OutboxQueueService],
+  exports: [ModuleRegistryService, OutboxQueueService, ModuleContextFactory],
 })
 export class ModulesModule {}
