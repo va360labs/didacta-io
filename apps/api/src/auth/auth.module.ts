@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaTenantConfigService } from '../modules/prisma-tenant-config.service';
 import { SecretCipherService } from '../modules/secret-cipher.service';
@@ -45,11 +46,22 @@ function loadCipherKey(): string {
     JwtAuthGuard,
     JwtOrApiKeyGuard,
     PrismaAuditLogService,
-    PrismaTenantConfigService,
     SmtpAdapterService,
     {
       provide: SecretCipherService,
       useFactory: () => new SecretCipherService(loadCipherKey()),
+    },
+    // PrismaTenantConfigService recibe AuditLogService (interface del kernel)
+    // como tercer arg. NestJS DI no puede resolver una interface, así que
+    // construimos manualmente con useFactory para inyectar la impl concreta.
+    {
+      provide: PrismaTenantConfigService,
+      inject: [PrismaService, SecretCipherService, PrismaAuditLogService],
+      useFactory: (
+        prisma: PrismaService,
+        cipher: SecretCipherService,
+        auditLog: PrismaAuditLogService,
+      ) => new PrismaTenantConfigService(prisma, cipher, auditLog),
     },
   ],
   exports: [
