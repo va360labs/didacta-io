@@ -1,6 +1,6 @@
 # Estado del proyecto — handoff completo
 
-> **Última actualización**: 2026-04-26 (PR #77 — SMTP per-tenant con nodemailer)
+> **Última actualización**: 2026-04-26 (PR #79 — MinIO/S3 storage con presigned URLs)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -156,7 +156,7 @@ Orden de registro = orden topológico resuelto por `core-registry` desde `depend
 | `EventBus` | `PersistentEventBus` + `OutboxQueueService` (BullMQ + Redis) — PR #75 | Outbox pattern persistente. Publish upserta en `outbox_event` y encola job a BullMQ. Worker (mismo proceso por ahora) ejecuta handlers con reintentos exponenciales (5 attempts, backoff 1s base, concurrencia 5). Si Redis cae al publish → fallback síncrono. `OutboxRecoveryWorker` failsafe cada 5 min reencola pendientes. Sin Redis → comportamiento legacy in-process (compat dev). |
 | `AuditLogService` | `PrismaAuditLogService` | Cadena de hashes por tenant (SHA-256). Endpoint `GET /audit/verify` valida la cadena. |
 | `EvidenceVaultService` | `PrismaEvidenceVaultService` | SHA-256 del contenido + storage backend. Idempotente por hash. |
-| `StorageService` | `LocalDiskStorageService` | Lee/escribe en `STORAGE_ROOT` env. **Pendiente** sustituir por MinIO/S3 para multi-instancia. |
+| `StorageService` | `S3StorageService` (default en prod) o `LocalDiskStorageService` (dev fallback) — PR #79 | S3 con AWS SDK v3 + MinIO endpoint custom + forcePathStyle. Presigned URLs (TTL default 900s) — bucket privado, browser baja directo sin pasar por Node. Driver: `STORAGE_DRIVER=local\|s3` o autodetección por presencia de S3_*. |
 | `NotificationHubService` | `PrismaNotificationHubService` | Persiste en `notification`. Canal IN_APP funcional. EMAIL loguea (listo para SMTP). WEBHOOK no implementado. |
 | `HookRegistry` | `InMemoryHookRegistry` | Hooks dinámicos para extensión cross-module (ej. `courses.publish.validate`). |
 | `I18nService` | Stub | Devuelve la key sin traducir. **Pendiente** wire real cuando llegue i18n. |
@@ -655,7 +655,7 @@ Ver `.github/workflows/e2e.yml`.
 | **A0** | `feat(core): TenantSettings persistente con encryption at-rest` | ✅ **MERGED #73** | Reemplaza el stub. Habilita SMTP/Zoom/etc per-tenant. AES-256-GCM, audit log, UI `/admin/configuracion`. |
 | **A1** | `feat(events): BullMQ outbox dispatcher con Redis` | ✅ **MERGED #75** | Queue + Worker BullMQ. Reintentos exponenciales nativos. /readyz chequea DB y Redis. enableShutdownHooks para SIGTERM limpio. |
 | **A2** | `feat(notifications): adapter SMTP per-tenant con nodemailer` | ✅ **MERGED #77** | Canal EMAIL real. Lee `notifications.smtp` cifrado per-tenant. Endpoint POST `/tenant-settings/notifications/smtp/test`. UI con botón "Probar envío". |
-| A3 | `feat(storage): MinIO/S3 backend con presigned URLs` | ⏭ next | `@aws-sdk/client-s3` con endpoint custom + path-style. Bucket `learnship`. Presigned URLs TTL 15min. |
+| **A3** | `feat(storage): MinIO/S3 backend con presigned URLs` | ✅ **MERGED #79** | `S3StorageService` con AWS SDK v3, forcePathStyle, presigned URLs TTL configurable (default 900s). Driver selector `STORAGE_DRIVER`. /readyz chequea S3. |
 
 ### 10.2 Plan B — Mods grandes con dependencia de A0 (TenantSettings)
 
@@ -733,6 +733,7 @@ Ver `.github/workflows/e2e.yml`.
 | #73 | feat(core): TenantSettings persistente con encryption at-rest (PR A0) | merged |
 | #75 | feat(events): BullMQ outbox dispatcher con Redis (PR A1) | merged |
 | #77 | feat(notifications): adapter SMTP per-tenant con nodemailer (PR A2) | merged |
+| #79 | feat(storage): MinIO/S3 backend con presigned URLs (PR A3) | merged |
 
 ---
 
