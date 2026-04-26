@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { QuizPlayer } from '@/components/quiz-player';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
 import type { CourseLesson } from '@/lib/courses';
@@ -17,9 +18,21 @@ interface Props {
 
 const TICK_SEC = 30;
 
+const LESSON_TYPE_META: Record<string, { label: string; icon: string }> = {
+  VIDEO: { label: 'Video', icon: '▶' },
+  HTML: { label: 'Lectura', icon: '📖' },
+  PDF: { label: 'Documento PDF', icon: '📄' },
+  TEXT: { label: 'Texto', icon: '✍' },
+  QUIZ: { label: 'Quiz', icon: '✓' },
+};
+
 /**
- * Player simple por tipo de lección. Reporta deltas de tiempo cada 30s
- * y permite marcar la lección como completada manualmente.
+ * Player de lección rediseñado: aplica skill pixel-perfect-ui con jerarquía
+ * tipográfica clara, badge de tipo de lección, CTAs primarios, estado
+ * "completada" con celebración sutil, errores que ayudan en panel propio.
+ *
+ * Reporta deltas de tiempo cada 30s al backend (solo cuando la pestaña
+ * está visible) y permite marcar la lección como completada manualmente.
  */
 export function LessonPlayer({
   lesson,
@@ -45,13 +58,16 @@ export function LessonPlayer({
         });
         if (typeof result.progressPercent === 'number') onProgress?.(result.progressPercent);
       } catch (e) {
-        setError(e instanceof ApiHttpError ? e.message : 'Error al guardar progreso');
+        setError(
+          e instanceof ApiHttpError
+            ? e.message
+            : 'No pudimos guardar tu progreso. Tus minutos quedan registrados localmente.',
+        );
       }
     },
     [enrollmentId, lesson.id, onProgress],
   );
 
-  // Tick automático: por cada 30s con la pestaña activa, suma 30s al watchedSeconds
   useEffect(() => {
     if (completed) return;
     tickRef.current = setInterval(() => {
@@ -75,46 +91,61 @@ export function LessonPlayer({
     }
   }
 
-  // En lecciones QUIZ, el "marcar como completada" no es manual: lo dispara el
-  // bridge en backend cuando el alumno aprueba (assessments.attempt.passed).
+  // En lecciones QUIZ, "completada" no es manual — lo dispara el bridge
+  // en backend cuando el alumno aprueba (assessments.attempt.passed).
   const showManualCompleteButton = lesson.type !== 'QUIZ';
+  const meta = LESSON_TYPE_META[lesson.type] ?? { label: lesson.type, icon: '·' };
 
   return (
-    <article className="space-y-4">
-      <header className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-widest text-neutral-500">{lesson.type}</p>
-          <h3 className="text-lg font-semibold tracking-tight">{lesson.title}</h3>
+    <article className="overflow-hidden rounded-card border border-border bg-surface shadow-sm">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-surface-2 px-6 py-4">
+        <div className="space-y-1.5">
+          <Badge variant="outline" className="gap-1.5">
+            <span aria-hidden="true">{meta.icon}</span>
+            {meta.label}
+          </Badge>
+          <h2 className="font-display text-2xl font-bold tracking-tight text-text">
+            {lesson.title}
+          </h2>
           {lesson.durationMinutes ? (
-            <p className="text-xs text-neutral-500">{lesson.durationMinutes} min estimados</p>
+            <p className="text-sm text-text-subtle tabular-nums">
+              ⏱ {lesson.durationMinutes} min estimados
+            </p>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
           {completed ? (
-            <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-900 dark:bg-green-950 dark:text-green-100">
+            <Badge variant="success" className="gap-1.5">
+              <span aria-hidden="true">✓</span>
               Completada
-            </span>
+            </Badge>
           ) : showManualCompleteButton ? (
-            <Button onClick={markCompleted} disabled={pending} size="sm">
+            <Button onClick={markCompleted} disabled={pending} variant="success">
               {pending ? 'Guardando…' : 'Marcar como completada'}
             </Button>
           ) : null}
         </div>
       </header>
 
-      <LessonContent
-        lesson={lesson}
-        resumeAt={initialResumePositionSec}
-        onTick={sendDelta}
-        enrollmentId={enrollmentId}
-        onQuizPassed={() => setCompleted(true)}
-      />
+      <div className="px-6 py-6">
+        <LessonContent
+          lesson={lesson}
+          resumeAt={initialResumePositionSec}
+          onTick={sendDelta}
+          enrollmentId={enrollmentId}
+          onQuizPassed={() => setCompleted(true)}
+        />
 
-      {error ? (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          {error}
-        </p>
-      ) : null}
+        {error ? (
+          <div
+            role="alert"
+            className="mt-4 rounded-lg border border-warning-200 bg-warning-50 p-3 text-sm text-warning-700"
+          >
+            <p className="font-semibold">No se sincronizó tu progreso</p>
+            <p className="mt-0.5">{error}</p>
+          </div>
+        ) : null}
+      </div>
     </article>
   );
 }
@@ -122,7 +153,6 @@ export function LessonPlayer({
 function LessonContent({
   lesson,
   resumeAt,
-  onTick: _onTick,
   enrollmentId,
   onQuizPassed,
 }: {
@@ -136,12 +166,12 @@ function LessonContent({
 
   if (lesson.type === 'VIDEO') {
     const url = typeof content['videoUrl'] === 'string' ? content['videoUrl'] : '';
-    if (!url) return <Empty hint="Falta videoUrl en el contenido de la lección." />;
+    if (!url) return <Empty hint="Falta el video. Pedile al formador que lo cargue." />;
     return (
       <video
         controls
         preload="metadata"
-        className="w-full rounded-md border border-neutral-200 dark:border-neutral-800"
+        className="w-full rounded-lg border border-border bg-text"
         // eslint-disable-next-line jsx-a11y/media-has-caption
         src={url}
         onLoadedMetadata={(e) => {
@@ -154,9 +184,10 @@ function LessonContent({
 
   if (lesson.type === 'HTML') {
     const html = typeof content['html'] === 'string' ? content['html'] : '';
+    if (!html) return <Empty hint="Esta lectura está vacía." />;
     return (
       <div
-        className="prose prose-neutral dark:prose-invert"
+        className="prose prose-slate max-w-none prose-headings:font-display prose-a:text-brand-700"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );
@@ -164,21 +195,22 @@ function LessonContent({
 
   if (lesson.type === 'PDF') {
     const url = typeof content['pdfUrl'] === 'string' ? content['pdfUrl'] : '';
-    if (!url) return <Empty hint="Falta pdfUrl en el contenido de la lección." />;
+    if (!url) return <Empty hint="Falta el PDF. Pedile al formador que lo suba." />;
     return (
       <iframe
         src={url}
         title={lesson.title}
-        className="h-[70dvh] w-full rounded-md border border-neutral-200 dark:border-neutral-800"
+        className="h-[72dvh] w-full rounded-lg border border-border"
       />
     );
   }
 
   if (lesson.type === 'TEXT') {
     const text = typeof content['text'] === 'string' ? content['text'] : '';
+    if (!text) return <Empty hint="Esta lección de texto está vacía." />;
     return (
-      <div className="rounded-md border border-neutral-200 p-4 dark:border-neutral-800">
-        <p className="whitespace-pre-wrap text-sm leading-relaxed">{text || 'Sin contenido.'}</p>
+      <div className="prose prose-slate max-w-none">
+        <p className="whitespace-pre-wrap leading-relaxed text-text">{text}</p>
       </div>
     );
   }
@@ -187,7 +219,7 @@ function LessonContent({
     const quizId = typeof content['quizId'] === 'string' ? content['quizId'] : '';
     if (!quizId) {
       return (
-        <Empty hint="Esta lección está marcada como QUIZ pero el formador aún no vinculó un quiz." />
+        <Empty hint="Esta lección está marcada como Quiz pero el formador aún no vinculó las preguntas." />
       );
     }
     return (
@@ -200,12 +232,12 @@ function LessonContent({
     );
   }
 
-  return <Empty hint={`Tipo "${lesson.type}" no soportado.`} />;
+  return <Empty hint={`Tipo de lección "${lesson.type}" no soportado todavía.`} />;
 }
 
 function Empty({ hint }: { hint: string }) {
   return (
-    <div className="rounded-md border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700">
+    <div className="rounded-lg border border-dashed border-border-strong bg-surface-2 px-6 py-12 text-center text-sm text-text-muted">
       {hint}
     </div>
   );
