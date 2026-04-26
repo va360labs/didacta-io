@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -6,6 +7,7 @@ import {
   Get,
   NotFoundException,
   Param,
+  Post,
   Put,
   UnauthorizedException,
   UseGuards,
@@ -17,6 +19,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { SessionClaims } from '../auth/token.service';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { ModuleContextFactory } from './module-context.factory';
+import { PrismaService } from '../prisma/prisma.service';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
@@ -53,7 +56,10 @@ function validateParam(name: string, value: string) {
 @Controller('tenant-settings')
 @UseGuards(JwtAuthGuard)
 export class TenantSettingsController {
-  constructor(private readonly modules: ModuleContextFactory) {}
+  constructor(
+    private readonly modules: ModuleContextFactory,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -130,5 +136,54 @@ export class TenantSettingsController {
     const svc = this.modules.getTenantConfig();
     await svc.delete(claims.tenantId, validScope, validKey, { actorId: claims.sub });
     return { ok: true };
+  }
+
+  @Post('notifications/smtp/test')
+  @ApiOperation({
+    summary:
+      'Envía un email de prueba al admin actual con la config SMTP guardada del tenant. Útil para validar credenciales antes de poner el sistema a enviar de verdad.',
+  })
+  async testSmtp(@CurrentUser() user: SessionClaims | undefined) {
+    const claims = requireAdmin(user);
+    const config = this.modules.getTenantConfig();
+    const smtp = this.modules.getSmtpAdapter();
+
+    const raw = await config.get(claims.tenantId, 'notifications', 'smtp');
+    if (!raw) {
+      throw new BadRequestException('SMTP no configurado para este tenant');
+    }
+
+    let parsed;
+    try {
+      parsed = smtp.parseConfig(raw);
+    } catch (err) {
+      throw new BadRequestException(
+        `Config SMTP inválida: ${(err as Error).message.slice(0, 200)}`,
+      );
+    }
+
+    const me = await this.prisma.user.findUnique({
+      where: { id: claims.sub },
+      select: { email: true, tenantId: true },
+    });
+    if (!me || me.tenantId !== claims.tenantId) {
+      throw new BadRequestException('No se pudo resolver tu email del tenant');
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: claims.tenantId },
+      select: { slug: true },
+    });
+
+    const result = await smtp.send(parsed, {
+      to: me.email,
+      subject: 'Prueba de SMTP — LearnShip',
+      text: `Si recibiste este correo, la configuración SMTP de tu tenant en LearnShip funciona correctamente.\n\nTenant: ${tenant?.slug ?? '(desconocido)'}\nFecha: ${new Date().toISOString()}`,
+    });
+
+    if (!result.ok) {
+      throw new BadRequestException(`SMTP falló: ${result.error ?? 'sin detalle'}`);
+    }
+    return { ok: true, sentTo: me.email, messageId: result.messageId };
   }
 }

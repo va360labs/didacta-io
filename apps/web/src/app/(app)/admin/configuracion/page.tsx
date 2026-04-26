@@ -21,6 +21,8 @@ export default function ConfiguracionPage() {
   const [smtp, setSmtp] = useState<SmtpDraft>(EMPTY_SMTP);
   const [smtpStatus, setSmtpStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [smtpError, setSmtpError] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [testMessage, setTestMessage] = useState<string | null>(null);
 
   async function reload() {
     try {
@@ -70,6 +72,21 @@ export default function ConfiguracionPage() {
       await reload();
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No se pudo eliminar');
+    }
+  }
+
+  async function handleTestSmtp() {
+    setTestStatus('sending');
+    setTestMessage(null);
+    try {
+      const result = await tenantSettingsApi.testSmtp();
+      setTestStatus('sent');
+      setTestMessage(`Email enviado a ${result.sentTo}. Revisá tu bandeja.`);
+    } catch (e) {
+      setTestStatus('error');
+      setTestMessage(
+        e instanceof ApiHttpError ? e.message : 'No se pudo enviar el email de prueba',
+      );
     }
   }
 
@@ -152,6 +169,14 @@ export default function ConfiguracionPage() {
             <Button type="submit" disabled={smtpStatus === 'saving'}>
               {smtpStatus === 'saving' ? 'Guardando…' : 'Guardar SMTP'}
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleTestSmtp}
+              disabled={testStatus === 'sending'}
+            >
+              {testStatus === 'sending' ? 'Enviando…' : 'Probar envío'}
+            </Button>
             {smtpStatus === 'saved' && (
               <span className="text-sm text-emerald-600 dark:text-emerald-400">
                 ✓ Guardado cifrado.
@@ -159,6 +184,12 @@ export default function ConfiguracionPage() {
             )}
             {smtpStatus === 'error' && smtpError && (
               <span className="text-sm text-red-600 dark:text-red-400">{smtpError}</span>
+            )}
+            {testStatus === 'sent' && testMessage && (
+              <span className="text-sm text-emerald-600 dark:text-emerald-400">{testMessage}</span>
+            )}
+            {testStatus === 'error' && testMessage && (
+              <span className="text-sm text-red-600 dark:text-red-400">{testMessage}</span>
             )}
           </div>
         </form>

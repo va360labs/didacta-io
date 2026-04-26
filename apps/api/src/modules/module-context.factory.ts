@@ -17,6 +17,7 @@ import { PrismaEvidenceVaultService } from './prisma-evidence-vault.service';
 import { PrismaNotificationHubService } from './prisma-notification-hub.service';
 import { PrismaTenantConfigService } from './prisma-tenant-config.service';
 import { SecretCipherService } from './secret-cipher.service';
+import { SmtpAdapterService } from './smtp-adapter.service';
 
 function loadCipherKey(): string {
   const key = process.env.TENANT_SETTINGS_ENC_KEY;
@@ -76,6 +77,7 @@ export class ModuleContextFactory {
   private readonly hookRegistry = new InMemoryHookRegistry();
   private readonly storage = new LocalDiskStorageService();
   private readonly cipher = new SecretCipherService(loadCipherKey());
+  private readonly smtp = new SmtpAdapterService();
   private tenantConfig?: PrismaTenantConfigService;
   private eventBus?: PersistentEventBus;
 
@@ -91,8 +93,13 @@ export class ModuleContextFactory {
     this.eventBus = new PersistentEventBus(this.prisma, adaptedLogger, this.outboxQueue);
     const auditLog = new PrismaAuditLogService(this.prisma);
     const evidenceVault = new PrismaEvidenceVaultService(this.prisma, this.storage);
-    const notificationHub = new PrismaNotificationHubService(this.prisma, this.pino);
     this.tenantConfig = new PrismaTenantConfigService(this.prisma, this.cipher, auditLog);
+    const notificationHub = new PrismaNotificationHubService(
+      this.prisma,
+      this.pino,
+      this.tenantConfig,
+      this.smtp,
+    );
     void stubNotificationHub; // se mantiene exportado para tests; producción usa Prisma.
     return {
       eventBus: this.eventBus,
@@ -109,7 +116,16 @@ export class ModuleContextFactory {
 
   getNotificationHub(): PrismaNotificationHubService {
     // Útil para handlers internos (bridge) que necesitan el service real.
-    return new PrismaNotificationHubService(this.prisma, this.pino);
+    return new PrismaNotificationHubService(
+      this.prisma,
+      this.pino,
+      this.getTenantConfig(),
+      this.smtp,
+    );
+  }
+
+  getSmtpAdapter(): SmtpAdapterService {
+    return this.smtp;
   }
 
   getTenantConfig(): PrismaTenantConfigService {

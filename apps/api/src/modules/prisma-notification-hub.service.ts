@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import type { NotificationHubService } from '@learnship/core-kernel';
+import type { NotificationHubService, TenantConfigService } from '@learnship/core-kernel';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
+import { SmtpAdapterService, type SmtpConfig } from './smtp-adapter.service';
 
 /**
  * Implementación real del NotificationHub: persiste cada notificación en
@@ -10,10 +11,12 @@ import { PrismaService } from '../prisma/prisma.service';
  * Estado de los adapters:
  * - **IN_APP**: implementado. La notificación se persiste y queda visible
  *   en `/notificaciones` para el alumno hasta que la marca como leída.
- * - **EMAIL**: stub que loguea. Cuando llegue SMTP en Fase 1.B se
- *   reemplaza este branch por un cliente nodemailer/resend/ses sin tocar
- *   ni el contrato ni el resto del codebase.
- * - **WEBHOOK**: aún sin adapter (defer hasta que haya un caso real).
+ * - **EMAIL**: implementado **per-tenant** desde PR #A2. Lee la config SMTP
+ *   cifrada de `tenant_setting` (módulo `notifications`, key `smtp`) vía
+ *   `TenantConfigService` y envía con `nodemailer`. Si el tenant no
+ *   configuró SMTP, la notificación queda con `failedAt` y
+ *   `failureReason='smtp_not_configured'` y se loguea — NO rompe el flujo.
+ * - **WEBHOOK**: aún sin adapter (defer hasta caso real).
  *
  * El método `send` es siempre exitoso desde el punto de vista del caller
  * (no rethrow): los fallos del adapter se persisten en `failedAt` +
@@ -24,6 +27,8 @@ export class PrismaNotificationHubService implements NotificationHubService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly logger: PinoLogger,
+    private readonly tenantConfig?: TenantConfigService,
+    private readonly smtp?: SmtpAdapterService,
   ) {}
 
   async send(notification: {
@@ -31,7 +36,7 @@ export class PrismaNotificationHubService implements NotificationHubService {
     channel: 'email' | 'in-app' | 'webhook';
     templateKey: string;
     locale: string;
-    to: string; // userId para in-app/email; URL para webhook
+    to: string;
     variables: Record<string, unknown>;
   }): Promise<void> {
     const channel = this.mapChannel(notification.channel);
@@ -46,45 +51,120 @@ export class PrismaNotificationHubService implements NotificationHubService {
         subject: rendered.subject ?? null,
         body: rendered.body,
         metadata: notification.variables as never,
-        // Para IN_APP: entregar = persistir, así que sentAt se rellena ya.
         sentAt: channel === 'IN_APP' ? new Date() : null,
       },
     });
 
     if (channel === 'IN_APP') {
-      // Nada más que hacer: el alumno la verá al hacer GET /me/notifications.
       return;
     }
 
     if (channel === 'EMAIL') {
-      // Adapter stub: log estructurado. Reemplazar por SMTP/Resend cuando
-      // exista la infra. Si quisiéramos simular fallos para pruebas, podríamos
-      // condicionar por tenantId o por una env var.
-      this.logger.log(
-        {
-          notificationId: created.id,
-          tenantId: notification.tenantId,
-          userId: notification.to,
-          subject: rendered.subject,
-        },
-        '[email-stub] notificación serializada — pendiente adapter SMTP',
-      );
-      await this.prisma.notification.update({
-        where: { id: created.id },
-        data: { sentAt: new Date() },
+      await this.sendEmail({
+        notificationId: created.id,
+        tenantId: notification.tenantId,
+        userId: notification.to,
+        subject: rendered.subject ?? '(sin asunto)',
+        body: rendered.body,
       });
       return;
     }
 
     // WEBHOOK: no implementado todavía.
-    await this.prisma.notification.update({
-      where: { id: created.id },
-      data: { failedAt: new Date(), failureReason: 'webhook_adapter_not_implemented' },
-    });
+    await this.markFailed(created.id, 'webhook_adapter_not_implemented');
     this.logger.warn(
       { notificationId: created.id, channel },
       'NotificationHub: canal webhook aún sin adapter',
     );
+  }
+
+  private async sendEmail(args: {
+    notificationId: string;
+    tenantId: string;
+    userId: string;
+    subject: string;
+    body: string;
+  }): Promise<void> {
+    if (!this.tenantConfig || !this.smtp) {
+      // El hub se construyó en modo legacy (sin TenantConfig) — log y skip.
+      // No debería pasar en producción tras PR #A2; lo dejamos como guardia.
+      await this.markFailed(args.notificationId, 'smtp_not_configured');
+      this.logger.warn(
+        { notificationId: args.notificationId },
+        'EMAIL skip: NotificationHub sin tenantConfig/smtp adapter inyectados',
+      );
+      return;
+    }
+
+    const rawConfig = await this.tenantConfig.get(args.tenantId, 'notifications', 'smtp');
+    if (!rawConfig) {
+      await this.markFailed(args.notificationId, 'smtp_not_configured');
+      this.logger.log(
+        { notificationId: args.notificationId, tenantId: args.tenantId },
+        'EMAIL skip: el tenant no configuró SMTP en /admin/configuracion',
+      );
+      return;
+    }
+
+    let config: SmtpConfig;
+    try {
+      config = this.smtp.parseConfig(rawConfig);
+    } catch (err) {
+      await this.markFailed(
+        args.notificationId,
+        `smtp_config_invalid:${(err as Error).message.slice(0, 200)}`,
+      );
+      this.logger.warn(
+        { notificationId: args.notificationId, tenantId: args.tenantId },
+        'EMAIL skip: la config SMTP del tenant no es válida',
+      );
+      return;
+    }
+
+    const recipientEmail = await this.resolveUserEmail(args.tenantId, args.userId);
+    if (!recipientEmail) {
+      await this.markFailed(args.notificationId, 'recipient_email_not_found');
+      return;
+    }
+
+    const result = await this.smtp.send(config, {
+      to: recipientEmail,
+      subject: args.subject,
+      text: args.body,
+    });
+
+    if (result.ok) {
+      await this.prisma.notification.update({
+        where: { id: args.notificationId },
+        data: { sentAt: new Date() },
+      });
+      this.logger.log(
+        {
+          notificationId: args.notificationId,
+          tenantId: args.tenantId,
+          messageId: result.messageId,
+        },
+        'EMAIL enviado',
+      );
+    } else {
+      await this.markFailed(args.notificationId, `smtp_send_failed:${result.error ?? 'unknown'}`);
+    }
+  }
+
+  private async resolveUserEmail(tenantId: string, userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, tenantId: true },
+    });
+    if (!user || user.tenantId !== tenantId) return null;
+    return user.email;
+  }
+
+  private async markFailed(notificationId: string, reason: string): Promise<void> {
+    await this.prisma.notification.update({
+      where: { id: notificationId },
+      data: { failedAt: new Date(), failureReason: reason.slice(0, 500) },
+    });
   }
 
   private mapChannel(channel: 'email' | 'in-app' | 'webhook'): 'EMAIL' | 'IN_APP' | 'WEBHOOK' {
@@ -104,14 +184,6 @@ interface TemplateDef {
   body: string;
 }
 
-/**
- * Catálogo de plantillas en memoria (v0.1). Sustituible por una tabla
- * `notification_template` por tenant cuando un cliente quiera personalizar
- * los textos. Por ahora, el código define la versión canónica en español.
- *
- * Cualquier `{{variable}}` se sustituye por `variables[variable]?.toString()`.
- * Si la variable no viene, se reemplaza por cadena vacía sin error.
- */
 const TEMPLATES: Record<string, TemplateDef> = {
   'enrollment.created': {
     subject: 'Te matriculaste en {{course}}',
@@ -136,6 +208,10 @@ const TEMPLATES: Record<string, TemplateDef> = {
   'attempt.graded': {
     subject: 'El formador corrigió tu quiz',
     body: 'Tu intento del quiz "{{quiz}}" fue corregido manualmente. Resultado: {{scorePercent}}% ({{result}}).',
+  },
+  'admin.smtp.test': {
+    subject: 'Prueba de SMTP — LearnShip',
+    body: 'Si recibiste este correo, la configuración SMTP de tu tenant en LearnShip funciona correctamente.\n\nTenant: {{tenantSlug}}\nFecha: {{timestamp}}',
   },
 };
 

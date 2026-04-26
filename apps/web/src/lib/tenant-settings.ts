@@ -64,4 +64,11 @@ export const tenantSettingsApi = {
       withAuth(),
     );
   },
+  async testSmtp(): Promise<{ ok: true; sentTo: string; messageId?: string }> {
+    return apiFetch<{ ok: true; sentTo: string; messageId?: string }>(
+      '/api/v1/tenant-settings/notifications/smtp/test',
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
 };
