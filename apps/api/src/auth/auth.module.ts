@@ -5,6 +5,7 @@ import { PrismaTenantConfigService } from '../modules/prisma-tenant-config.servi
 import { SecretCipherService } from '../modules/secret-cipher.service';
 import { SmtpAdapterService } from '../modules/smtp-adapter.service';
 import { ApiKeyController } from './api-key.controller';
+import { MeController } from './me.controller';
 import { JwtOrApiKeyGuard } from './api-key.guard';
 import { ApiKeyService } from './api-key.service';
 import { AuthController } from './auth.controller';
@@ -35,7 +36,7 @@ function loadCipherKey(): string {
 }
 
 @Module({
-  controllers: [AuthController, MfaController, ApiKeyController],
+  controllers: [AuthController, MfaController, ApiKeyController, MeController],
   providers: [
     AuthService,
     PasswordResetService,

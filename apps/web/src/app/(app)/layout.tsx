@@ -19,6 +19,7 @@ const NAV = [
   { href: '/admin/branding', label: 'Branding', requiresAdmin: true },
   { href: '/admin/auditoria', label: 'Auditoría', requiresAdmin: true },
   { href: '/admin/tenants', label: 'Tenants', requiresSuperAdmin: true },
+  { href: '/cuenta', label: 'Mi cuenta' },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {

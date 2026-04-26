@@ -173,6 +173,11 @@ model User {
   mfaRecoveryCodes String[] @default([]) @map("mfa_recovery_codes")
   status        UserStatus @default(ACTIVE)
   locale        String    @default("es-ES")
+  /// IANA timezone, ej. "America/Argentina/Buenos_Aires" o "Europe/Madrid".
+  /// Usado para mostrar timestamps localmente. Default UTC.
+  timezone      String    @default("UTC") @map("timezone")
+  /// URL pública (S3/CDN) del avatar del usuario. Null = usar iniciales.
+  avatarUrl     String?   @map("avatar_url")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
