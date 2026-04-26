@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-26 tarde (Bloques 0/A/B/C/D completos — sistema visual + mod.theming + P0 admin + rediseño visual completo de pantallas P0)
+> **Última actualización**: 2026-04-26 noche (Sprint 1 inmediato — tenant transparente + super_admin tenants + perfil usuario + listado alumnos por curso, según historias Notion-as-bible)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,51 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-26 noche — Sprint 1 inmediato (Notion-as-bible)
+
+Tras descubrir que el roadmap real vive en Notion (database "LMS Ship — Work Items"),
+no en el brief de dogfooding, hicimos gap analysis y arrancamos el Sprint 1 con
+las historias P0/P1 más críticas pendientes.
+
+| PR | Historia Notion | Tipo | Prioridad |
+|---|---|---|---|
+| #111 | HU-SA-001 + LMS-110 (tenant transparente + super_admin tenants) | Historia + Tarea | P0 |
+| #112 | HU-USR-001 (perfil + seguridad del usuario) — creada en Notion | Historia | P1 |
+| #113 | HU-FORM-002 (listado alumnos por curso) — creada en Notion | Historia | P1 |
+
+Workflow establecido: **Notion como única fuente de verdad** de las historias.
+Antes de cada PR se lee la historia, se actualiza estado a "En curso", al
+mergear se marca "Hecho". Las historias que faltan en Notion se crean con
+criterios Gherkin completos antes de implementar.
+
+Cambios funcionales clave:
+
+- **Tenant transparente**: el alumno ya NO escribe el slug en signin/signup.
+  El sistema resuelve por Host header (tabla `tenant_domain`) o por email
+  único entre tenants. Si email matchea múltiples → selector de candidatos.
+- **Super_admin CRUD de tenants**: `/admin/tenants` con crear (alta + admin
+  + dominio + email de bienvenida), suspender (invalida sessions de TODO
+  el tenant), añadir/quitar dominios.
+- **Perfil del usuario**: `/cuenta` (avatar URL, nombre, idioma,
+  timezone IANA) + `/cuenta/seguridad` (cambiar password con verificación
+  de actual + invalidación de sessions, listado de sessions activas con
+  revocación selectiva o total, link a MFA setup).
+- **Listado de alumnos por curso**: `/formador/cursos/[id]/alumnos` con
+  tabla sortable por nombre/progreso/fecha, filtros por status, stats
+  agregadas, export CSV.
+
+Schemas nuevos:
+- `tenant_domain` (HU-SA-001/LMS-110) con índice parcial UNIQUE para 1
+  primary por tenant.
+- `user.timezone` + `user.avatar_url` (HU-USR-001).
+
+Despliegue post-merge:
+1. `pnpm --filter @didacta/database db:migrate:deploy` aplica migraciones
+   `20260426000005_add_tenant_domain` y `20260427000001_add_user_profile_fields`.
+2. Re-correr seed con `BOOTSTRAP_DOMAINS='localhost,lab-learnship.3qntut.easypanel.host'`
+   para sembrar los hosts del tenant del bootstrap.
+3. Smoke: signin sin tenant slug → debería identificar tenant por host.
 
 ### Sesión 2026-04-26 tarde (Bloques 0/A/B/C/D) — TODOS MERGEADOS
 
