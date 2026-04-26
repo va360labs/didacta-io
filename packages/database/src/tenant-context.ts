@@ -1,4 +1,9 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
+
+type TransactionClient = Omit<
+  PrismaClient,
+  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
+>;
 
 /**
  * Ejecuta una operación dentro de una transacción con `app.current_tenant_id`
@@ -10,15 +15,10 @@ import type { PrismaClient } from '@prisma/client';
 export async function withTenantContext<T>(
   prisma: PrismaClient,
   tenantId: string,
-  callback: (
-    tx: Omit<
-      PrismaClient,
-      '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
-    >,
-  ) => Promise<T>,
+  callback: (tx: TransactionClient) => Promise<T>,
 ): Promise<T> {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.$executeRawUnsafe(`SET LOCAL app.current_tenant_id = '${tenantId}'`);
-    return callback(tx);
+    return callback(tx as TransactionClient);
   });
 }
