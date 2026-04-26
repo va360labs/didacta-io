@@ -103,14 +103,18 @@ jobs:
 
       - name: Wait for services
         run: |
-          for i in {1..40}; do
-            if curl -sf http://localhost:3000/api/v1/health > /dev/null; then
-              echo "API up"
+          # API liveness: el endpoint canónico es /healthz (no /api/v1/health).
+          # Probamos contra el api directamente (4000) y el web (3000) en
+          # paralelo para no avanzar si alguno no respondió.
+          for i in {1..60}; do
+            if curl -sf http://localhost:4000/healthz > /dev/null \
+              && curl -sf http://localhost:3000 > /dev/null; then
+              echo "API + Web up"
               exit 0
             fi
             sleep 2
           done
-          echo "Services no respondieron"
+          echo "Services no respondieron tras 120s"
           exit 1
 
       - name: Install Playwright browsers
