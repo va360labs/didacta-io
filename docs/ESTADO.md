@@ -1,6 +1,6 @@
 # Estado del proyecto — handoff completo
 
-> **Última actualización**: 2026-04-26 (sesión maratón: 28 PRs cerrados consecutivos #44–#71)
+> **Última actualización**: 2026-04-26 (PR #73 — TenantSettings persistente con encryption at-rest)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -36,12 +36,12 @@ LearnShip es un LMS multi-tenant modular construido por VA360 LABS S.L. La aplic
 | Observabilidad | Pino + nestjs-pino | OpenTelemetry diferido a Fase 2 |
 | Hosting | Hetzner + Easypanel | `https://lab-learnship.3qntut.easypanel.host` |
 
-### Métricas de calidad (al cierre de la sesión)
+### Métricas de calidad (al cierre del PR #73)
 
-- **179 tests unitarios verdes** (96 api + 45 mod.assessments + 17 mod.community + 15 core-registry + 4 mod.hello-world + 2 mod.certificates).
+- **~213 tests unitarios verdes** (133 api con +34 nuevos del PR #73 cipher+config + 45 mod.assessments + 17 mod.community + 8 mod.learning + 8 mod.courses + 2 mod.certificates). El conteo crece por PR.
 - **5 specs E2E Playwright**: golden path · quiz alumno · matrícula por código · corrección manual · MFA admin setup.
-- **3 fallos pre-existentes en Windows**: `local-disk-storage.test.ts` falla en Windows porque trata las separators (`\`) como escape de path. Reproduce en `main` también — NO es regresión, es un bug de path handling Windows-only del test, no del código de producción.
-- CI verde en cada uno de los 28 PRs de esta sesión.
+- **3 fallos pre-existentes en Windows**: `local-disk-storage.test.ts` falla en Windows porque trata las separators (`\`) como escape de path. Reproduce en `main` también — NO es regresión, es un bug de path handling Windows-only del test, no del código de producción. En macOS pasa limpio.
+- CI verde en los 29 PRs de Fase 1.A + arranque Fase 1.B.
 
 ---
 
@@ -160,7 +160,7 @@ Orden de registro = orden topológico resuelto por `core-registry` desde `depend
 | `NotificationHubService` | `PrismaNotificationHubService` | Persiste en `notification`. Canal IN_APP funcional. EMAIL loguea (listo para SMTP). WEBHOOK no implementado. |
 | `HookRegistry` | `InMemoryHookRegistry` | Hooks dinámicos para extensión cross-module (ej. `courses.publish.validate`). |
 | `I18nService` | Stub | Devuelve la key sin traducir. **Pendiente** wire real cuando llegue i18n. |
-| `TenantConfigService` | `StubTenantConfig` (in-memory Map) | Sin persistencia. Cuando alguien necesite per-tenant config persistente, persistir en DB. |
+| `TenantConfigService` | `PrismaTenantConfigService` (PR #73) | Persistente en `tenant_setting` con encryption at-rest AES-256-GCM (`SecretCipherService`). Audit log en cada cambio. UI `/admin/configuracion`. Habilita SMTP/Zoom/etc per-tenant sin tocar env globales. |
 
 Wired en `apps/api/src/modules/module-context.factory.ts` y consumido por todos los módulos vía `ModuleContext`.
 
@@ -235,7 +235,8 @@ Wired en `apps/api/src/modules/module-context.factory.ts` y consumido por todos 
 | `DATABASE_URL` | Postgres connection string | `postgresql://learnship:learnship@localhost:5432/learnship?schema=public` |
 | `JWT_SECRET` | HMAC key para access tokens | mín. 32 chars random |
 | `JWT_REFRESH_SECRET` | HMAC key para refresh tokens | mín. 32 chars random, distinto del anterior |
-| `STORAGE_ROOT` | Path local donde se guardan PDFs y blobs | ej. `./.local-storage`. Crear el dir antes de arrancar. |
+| `STORAGE_ROOT` | Path local donde se guardan PDFs y blobs (cuando `STORAGE_DRIVER=local`) | ej. `./.local-storage`. Crear el dir antes de arrancar. |
+| `TENANT_SETTINGS_ENC_KEY` | AES-256-GCM master key para cifrar settings per-tenant marcados con `is_secret`. Generar con `openssl rand -hex 32`. **Backup obligatorio.** En `NODE_ENV=production` boot falla si falta; en dev usa fallback determinístico. | 64 chars hex |
 
 ### 4.2 Bootstrap del seed
 
@@ -516,6 +517,7 @@ tests/
 | 3 | `20260425000002_add_open_questions_and_grading` | Añade `SHORT_ANSWER`/`LONG_ANSWER` al enum, `PENDING_REVIEW`/`GRADED` al status enum, `graded_at`/`graded_by_id` (Attempt) y `graded_feedback` (Answer). |
 | 4 | `20260425000003_add_notifications` | Tabla `notification` con índices. |
 | 5 | `20260426000001_add_community` | Tablas `mod_community_post/comment/reaction` con FKs intra-módulo. |
+| 6 | `20260426000002_add_tenant_settings` | Tabla `tenant_setting` (tenant_id, module_name, key, is_secret, value_json \| value_cipher/iv/tag). Habilita config per-tenant cifrada. |
 
 ### 6.3 Comandos útiles de DB
 
@@ -646,20 +648,21 @@ Ver `.github/workflows/e2e.yml`.
 
 ## 10. Roadmap pendiente
 
-### 10.1 Bloqueados por infra externa
+### 10.1 Plan A — Infra externa habilitada el 2026-04-26 (Redis y MinIO ya provistos en Easypanel)
 
-| # | Item | Bloqueo | Esfuerzo cuando se desbloquee |
+| PR | Item | Estado | Notas |
 |---|---|---|---|
-| 1 | `mod.outbox` real con BullMQ + Redis | **Redis en Easypanel** | 1 sesión |
-| 2 | MinIO/S3 storage para producción (sustituir `LocalDiskStorageService`) | **S3 / MinIO** | 1 sesión |
-| 3 | Adapter SMTP real en NotificationHub (sustituir el branch `EMAIL` por nodemailer/resend/ses) | **SMTP** | < 1 sesión (el contrato ya está listo) |
+| **A0** | `feat(core): TenantSettings persistente con encryption at-rest` | ✅ **MERGED #73** | Reemplaza el stub. Habilita SMTP/Zoom/etc per-tenant. AES-256-GCM, audit log, UI `/admin/configuracion`. |
+| A1 | `feat(core): BullMQ outbox dispatcher con Redis` | ⏭ next | `bullmq` lib npm + Worker que reemplaza el dispatch in-process. Redis URL ya en env. |
+| A2 | `feat(notifications): adapter SMTP per-tenant` | ⏭ después de A1 | `nodemailer` lee config cifrada del tenant via TenantSettings. Si no configurada → log + skip (no rompe). |
+| A3 | `feat(storage): MinIO/S3 backend con presigned URLs` | ⏭ después de A2 | `@aws-sdk/client-s3` con endpoint custom + path-style. Bucket `learnship`. Presigned URLs TTL 15min. |
 
-### 10.2 Bloqueados por planning con stakeholder
+### 10.2 Plan B — Mods grandes con dependencia de A0 (TenantSettings)
 
-| # | Item | Por qué bloqueado | Decisión necesaria |
-|---|---|---|---|
-| 4 | `mod.zoom-live` | Aula virtual con Zoom API + SDK Web | Credenciales Zoom + decisión entre webinar y meeting |
-| 5 | `mod.fundae` | Cumplimiento sectorial Fundae (RD 694/2017) | Conocimiento profundo de Fundae (cómo funciona, qué exige el SEPE, formatos de export) |
+| PR | Item | Notas |
+|---|---|---|
+| B1 | `feat(mod.zoom-live): scaffold + Zoom OAuth Server-to-Server` | Lee `zoom.{accountId,clientId,clientSecret}` cifrados del TenantSettings. CRUD live sessions, link de assist, embed Zoom Web SDK. |
+| B2 | `feat(mod.fundae): cumplimiento RD 694/2017` | Investigar requisitos SEPE primero (acción formativa, grupo, participante, asistencia, export XML). |
 
 ### 10.3 Polish posible sin bloqueo (priorizar bajo demanda)
 
@@ -722,6 +725,12 @@ Ver `.github/workflows/e2e.yml`.
 | #69 | feat(community): endpoints HTTP del módulo community (PR B) | merged |
 | #70 | feat(community): UI alumno (lista + detalle + reacciones) (PR C) | merged |
 | #71 | docs(estado): cierre de mod.community v0.1 (Fase 1.B arrancada) | merged |
+
+### Sesión 2026-04-26 (Plan A — fundación per-tenant config)
+
+| PR | Título | Estado |
+|---|---|---|
+| #73 | feat(core): TenantSettings persistente con encryption at-rest (PR A0) | merged |
 
 ---
 
