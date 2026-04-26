@@ -1,6 +1,6 @@
 # Estado del proyecto — handoff completo
 
-> **Última actualización**: 2026-04-26 (PR #75 — BullMQ outbox dispatcher con Redis)
+> **Última actualización**: 2026-04-26 (PR #77 — SMTP per-tenant con nodemailer)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -654,8 +654,8 @@ Ver `.github/workflows/e2e.yml`.
 |---|---|---|---|
 | **A0** | `feat(core): TenantSettings persistente con encryption at-rest` | ✅ **MERGED #73** | Reemplaza el stub. Habilita SMTP/Zoom/etc per-tenant. AES-256-GCM, audit log, UI `/admin/configuracion`. |
 | **A1** | `feat(events): BullMQ outbox dispatcher con Redis` | ✅ **MERGED #75** | Queue + Worker BullMQ. Reintentos exponenciales nativos. /readyz chequea DB y Redis. enableShutdownHooks para SIGTERM limpio. |
-| A2 | `feat(notifications): adapter SMTP per-tenant` | ⏭ next | `nodemailer` lee config cifrada del tenant via TenantSettings. Si no configurada → log + skip (no rompe). |
-| A3 | `feat(storage): MinIO/S3 backend con presigned URLs` | ⏭ después de A2 | `@aws-sdk/client-s3` con endpoint custom + path-style. Bucket `learnship`. Presigned URLs TTL 15min. |
+| **A2** | `feat(notifications): adapter SMTP per-tenant con nodemailer` | ✅ **MERGED #77** | Canal EMAIL real. Lee `notifications.smtp` cifrado per-tenant. Endpoint POST `/tenant-settings/notifications/smtp/test`. UI con botón "Probar envío". |
+| A3 | `feat(storage): MinIO/S3 backend con presigned URLs` | ⏭ next | `@aws-sdk/client-s3` con endpoint custom + path-style. Bucket `learnship`. Presigned URLs TTL 15min. |
 
 ### 10.2 Plan B — Mods grandes con dependencia de A0 (TenantSettings)
 
@@ -732,6 +732,7 @@ Ver `.github/workflows/e2e.yml`.
 |---|---|---|
 | #73 | feat(core): TenantSettings persistente con encryption at-rest (PR A0) | merged |
 | #75 | feat(events): BullMQ outbox dispatcher con Redis (PR A1) | merged |
+| #77 | feat(notifications): adapter SMTP per-tenant con nodemailer (PR A2) | merged |
 
 ---
 
