@@ -1,8 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import {
   assessmentsApi,
@@ -26,6 +29,15 @@ type ViewState =
   | { kind: 'attempt'; quiz: QuizAlumnoView; attempt: AttemptSummary }
   | { kind: 'result'; quiz: QuizAlumnoView; attempt: AttemptSummary };
 
+const QUESTION_TYPE_HINT: Record<string, string> = {
+  SINGLE_CHOICE: 'Una respuesta correcta',
+  MULTIPLE_CHOICE: 'Una o más respuestas correctas',
+  TRUE_FALSE: 'Verdadero o falso',
+  FILL_IN_BLANK: 'Rellená el hueco',
+  SHORT_ANSWER: 'Respuesta corta · revisión manual',
+  LONG_ANSWER: 'Respuesta extensa · revisión manual',
+};
+
 export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) {
   const [state, setState] = useState<ViewState>({ kind: 'loading' });
   const [pending, setPending] = useState(false);
@@ -46,7 +58,10 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
     } catch (e) {
       setState({
         kind: 'error',
-        message: e instanceof ApiHttpError ? e.message : 'No se pudo cargar el quiz',
+        message:
+          e instanceof ApiHttpError
+            ? e.message
+            : 'No pudimos cargar el quiz. Probá refrescar la página.',
       });
     }
   }, [quizId]);
@@ -66,7 +81,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
     } catch (e) {
       setState({
         kind: 'error',
-        message: e instanceof ApiHttpError ? e.message : 'No se pudo iniciar el intento',
+        message: e instanceof ApiHttpError ? e.message : 'No pudimos iniciar tu intento.',
       });
     } finally {
       setPending(false);
@@ -96,7 +111,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
     } catch (e) {
       setState({
         kind: 'error',
-        message: e instanceof ApiHttpError ? e.message : 'Error al enviar el intento',
+        message: e instanceof ApiHttpError ? e.message : 'No pudimos enviar tus respuestas.',
       });
     } finally {
       setPending(false);
@@ -114,60 +129,94 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
     });
   }
 
-  if (state.kind === 'loading') return <p className="text-sm text-neutral-500">Cargando quiz…</p>;
+  if (state.kind === 'loading') {
+    return (
+      <div className="space-y-3">
+        <div className="skeleton h-32 w-full" />
+        <div className="skeleton h-64 w-full" />
+      </div>
+    );
+  }
+
   if (state.kind === 'empty')
     return (
-      <Empty hint="Esta lección está marcada como QUIZ pero aún no tiene un quiz vinculado. Pídele al formador que lo asocie." />
-    );
-  if (state.kind === 'error')
-    return (
-      <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-        {state.message}
-      </p>
+      <Empty hint="Esta lección está marcada como Quiz pero el formador aún no vinculó las preguntas." />
     );
 
+  if (state.kind === 'error') {
+    return (
+      <div
+        role="alert"
+        className="rounded-lg border border-danger-100 bg-danger-50 p-4 text-sm text-danger-700"
+      >
+        {state.message}
+      </div>
+    );
+  }
+
   if (state.kind === 'idle') {
-    const lastSubmitted = state.attempts.find((a) => a.status === 'SUBMITTED');
-    const submittedCount = state.attempts.filter((a) => a.status === 'SUBMITTED').length;
+    const lastSubmitted = state.attempts.find(
+      (a) => a.status === 'SUBMITTED' || a.status === 'GRADED',
+    );
+    const submittedCount = state.attempts.filter(
+      (a) => a.status === 'SUBMITTED' || a.status === 'GRADED',
+    ).length;
     const reachedLimit =
       state.quiz.maxAttempts !== null && submittedCount >= state.quiz.maxAttempts;
+    const hasPendingReview = state.attempts.some((a) => a.status === 'PENDING_REVIEW');
 
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">{state.quiz.title}</CardTitle>
+          <CardTitle>{state.quiz.title}</CardTitle>
           <CardDescription>
-            {state.quiz.questions.length} preguntas · umbral{' '}
-            <strong>{state.quiz.passThreshold}%</strong>
+            {state.quiz.questions.length} pregunta{state.quiz.questions.length === 1 ? '' : 's'} ·
+            umbral <strong className="text-text">{state.quiz.passThreshold}%</strong>
             {state.quiz.timeLimitMinutes ? ` · ${state.quiz.timeLimitMinutes} min` : ''}
             {state.quiz.maxAttempts ? ` · máx. ${state.quiz.maxAttempts} intentos` : ''}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           {state.quiz.description ? (
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">
-              {state.quiz.description}
-            </p>
+            <p className="text-sm text-text-muted leading-relaxed">{state.quiz.description}</p>
           ) : null}
-          {lastSubmitted ? (
-            <p
-              className={`text-sm ${
+
+          {hasPendingReview ? (
+            <div className="rounded-lg border border-brand-200 bg-brand-50 p-3 text-sm">
+              <p className="font-semibold text-brand-700">Tu intento está en revisión</p>
+              <p className="mt-0.5 text-text">
+                El formador está corrigiendo tus respuestas abiertas. Te avisaremos cuando esté
+                listo.
+              </p>
+            </div>
+          ) : lastSubmitted ? (
+            <div
+              className={
                 lastSubmitted.passed
-                  ? 'text-green-700 dark:text-green-400'
-                  : 'text-amber-700 dark:text-amber-400'
-              }`}
+                  ? 'rounded-lg border border-success-200 bg-success-50 p-3 text-sm'
+                  : 'rounded-lg border border-warning-200 bg-warning-50 p-3 text-sm'
+              }
             >
-              Último intento: {lastSubmitted.scorePercent ?? 0}%{' '}
-              {lastSubmitted.passed ? '· APROBADO ✓' : '· no aprobado'}
-            </p>
+              <p
+                className={
+                  lastSubmitted.passed
+                    ? 'font-semibold text-success-700'
+                    : 'font-semibold text-warning-700'
+                }
+              >
+                Último intento: {lastSubmitted.scorePercent ?? 0}%{' '}
+                {lastSubmitted.passed ? '· aprobado' : '· no aprobado'}
+              </p>
+            </div>
           ) : null}
+
           {reachedLimit ? (
-            <p className="text-sm text-amber-700 dark:text-amber-400">
-              Has alcanzado el máximo de intentos permitidos.
-            </p>
+            <div className="rounded-lg border border-warning-200 bg-warning-50 p-3 text-sm text-warning-700">
+              Alcanzaste el máximo de intentos permitidos.
+            </div>
           ) : (
-            <Button onClick={handleStart} disabled={pending}>
-              {pending ? 'Iniciando…' : lastSubmitted ? 'Reintentar' : 'Iniciar quiz'}
+            <Button onClick={handleStart} disabled={pending} size="lg">
+              {pending ? 'Iniciando…' : lastSubmitted ? 'Reintentar quiz' : 'Empezar quiz'}
             </Button>
           )}
         </CardContent>
@@ -179,44 +228,48 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">{state.quiz.title}</CardTitle>
+          <CardTitle>{state.quiz.title}</CardTitle>
           <CardDescription>
-            Responde todas las preguntas y envía. Umbral de aprobación: {state.quiz.passThreshold}%.
+            Respondé todas las preguntas y enviá. Umbral de aprobación:{' '}
+            <strong className="text-text">{state.quiz.passThreshold}%</strong>.
             {state.attempt.expiresAt
-              ? ` Tiempo límite hasta ${new Date(state.attempt.expiresAt).toLocaleTimeString()}.`
+              ? ` Tenés tiempo hasta las ${new Date(state.attempt.expiresAt).toLocaleTimeString('es-AR')}.`
               : ''}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-8">
           {state.quiz.questions.map((q, idx) => (
-            <fieldset key={q.id} className="space-y-2">
-              <legend className="text-sm font-medium">
-                {idx + 1}. {q.prompt}
-                <span className="ml-2 text-xs text-neutral-500">
-                  ({q.points} pt{q.points === 1 ? '' : 's'} ·{' '}
-                  {q.type === 'MULTIPLE_CHOICE'
-                    ? 'múltiples respuestas'
-                    : q.type === 'FILL_IN_BLANK'
-                      ? 'rellena el hueco'
-                      : 'una respuesta'}
-                  )
+            <fieldset key={q.id} className="space-y-3">
+              <legend className="block w-full">
+                <span className="font-display text-base font-semibold text-text">
+                  <span className="text-text-subtle tabular-nums">
+                    {String(idx + 1).padStart(2, '0')}.
+                  </span>{' '}
+                  {q.prompt}
+                </span>
+                <span className="mt-1 flex flex-wrap items-center gap-2">
+                  <Badge variant="muted" className="text-[10px]">
+                    {QUESTION_TYPE_HINT[q.type] ?? q.type}
+                  </Badge>
+                  <span className="text-xs text-text-subtle">
+                    {q.points} pt{q.points === 1 ? '' : 's'}
+                  </span>
                 </span>
               </legend>
+
               {q.type === 'FILL_IN_BLANK' ? (
-                <input
+                <Input
                   type="text"
                   value={textAnswers[q.id] ?? ''}
                   onChange={(e) => setTextAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                  placeholder="Escribe tu respuesta…"
-                  className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                  placeholder="Escribí tu respuesta…"
                 />
               ) : q.type === 'SHORT_ANSWER' || q.type === 'LONG_ANSWER' ? (
-                <textarea
-                  rows={q.type === 'LONG_ANSWER' ? 6 : 2}
+                <Textarea
+                  rows={q.type === 'LONG_ANSWER' ? 8 : 3}
                   value={textAnswers[q.id] ?? ''}
                   onChange={(e) => setTextAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                  placeholder="Escribe tu respuesta… (la corregirá manualmente el formador)"
-                  className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                  placeholder="Escribí tu respuesta — el formador la corregirá manualmente."
                 />
               ) : (
                 <div className="space-y-1">
@@ -225,15 +278,20 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
                     return (
                       <label
                         key={o.id}
-                        className="flex cursor-pointer items-center gap-2 rounded-md p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                        className={
+                          checked
+                            ? 'flex cursor-pointer items-center gap-3 rounded-md border border-brand-200 bg-brand-50 p-3 transition-colors'
+                            : 'flex cursor-pointer items-center gap-3 rounded-md border border-border bg-surface p-3 transition-colors hover:border-border-strong hover:bg-surface-2'
+                        }
                       >
                         <input
                           type={q.type === 'MULTIPLE_CHOICE' ? 'checkbox' : 'radio'}
                           name={`q-${q.id}`}
                           checked={checked}
                           onChange={(e) => setSelected(q, o.id, e.target.checked)}
+                          className="h-4 w-4 accent-brand-500"
                         />
-                        <span className="text-sm">{o.label}</span>
+                        <span className="text-sm leading-relaxed">{o.label}</span>
                       </label>
                     );
                   })}
@@ -241,7 +299,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
               )}
             </fieldset>
           ))}
-          <Button onClick={handleSubmit} disabled={pending}>
+          <Button onClick={handleSubmit} disabled={pending} size="lg" className="w-full sm:w-auto">
             {pending ? 'Enviando…' : 'Enviar respuestas'}
           </Button>
         </CardContent>
@@ -251,29 +309,58 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
 
   // result
   const a = state.attempt;
+  const isPendingReview = a.status === 'PENDING_REVIEW';
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">
-          Resultado · {a.scorePercent ?? 0}% {a.passed ? '✓' : '✗'}
-        </CardTitle>
-        <CardDescription>
-          {a.scoreEarned ?? 0} de {a.scoreMax ?? 0} puntos · umbral {state.quiz.passThreshold}%
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p
-          className={`text-sm font-medium ${
-            a.passed ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'
-          }`}
+      <CardContent className="p-8 text-center">
+        {/* Hero icon + title — color depende del estado */}
+        <div
+          className={
+            isPendingReview
+              ? 'mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-brand-50 text-brand-700 text-3xl'
+              : a.passed
+                ? 'mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-success-50 text-success-700 text-3xl'
+                : 'mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-warning-50 text-warning-700 text-3xl'
+          }
+          aria-hidden="true"
         >
-          {a.passed
-            ? '¡Aprobado! La lección queda marcada como completada automáticamente.'
-            : 'No alcanzaste el umbral. Puedes reintentar si el quiz lo permite.'}
+          {isPendingReview ? '⏳' : a.passed ? '✓' : '↻'}
+        </div>
+
+        <h3 className="font-display mt-4 text-2xl font-bold tracking-tight">
+          {isPendingReview
+            ? 'En revisión por tu formador'
+            : a.passed
+              ? '¡Lo lograste!'
+              : 'No alcanzaste el umbral'}
+        </h3>
+
+        {!isPendingReview ? (
+          <p className="mt-2 text-text-muted">
+            <span className="font-display text-4xl font-extrabold text-text tabular-nums">
+              {a.scorePercent ?? 0}%
+            </span>
+            <span className="ml-2 text-sm">
+              ({a.scoreEarned ?? 0} de {a.scoreMax ?? 0} puntos · umbral {state.quiz.passThreshold}
+              %)
+            </span>
+          </p>
+        ) : null}
+
+        <p className="mt-4 text-sm text-text-muted leading-relaxed max-w-md mx-auto">
+          {isPendingReview
+            ? 'Tu intento contiene respuestas abiertas. Cuando el formador termine de corregir, vas a poder ver el resultado y, si aprobaste, la lección queda completada automáticamente.'
+            : a.passed
+              ? 'La lección queda marcada como completada. Si era la última que te faltaba, tu certificado se está emitiendo en este momento.'
+              : 'Si el quiz lo permite, podés reintentar. Repasá las lecciones anteriores y volvé cuando estés listo.'}
         </p>
-        <Button variant="outline" size="sm" onClick={() => void load()} disabled={pending}>
-          Volver al quiz
-        </Button>
+
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <Button variant="secondary" onClick={() => void load()} disabled={pending}>
+            Volver al quiz
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -281,7 +368,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
 
 function Empty({ hint }: { hint: string }) {
   return (
-    <div className="rounded-md border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700">
+    <div className="rounded-lg border border-dashed border-border-strong bg-surface-2 px-6 py-12 text-center text-sm text-text-muted">
       {hint}
     </div>
   );
