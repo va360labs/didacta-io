@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { HealthController } from '../src/health/health.controller';
+import { ModuleContextFactory } from '../src/modules/module-context.factory';
 import { OutboxQueueService } from '../src/modules/outbox-queue.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
@@ -26,11 +27,21 @@ const fakeOutboxQueue = {
   },
 };
 
+const fakeModuleFactoryLocalStorage = {
+  isS3Storage() {
+    return false;
+  },
+  getStorage() {
+    return {};
+  },
+};
+
 @Module({
   controllers: [HealthController],
   providers: [
     { provide: PrismaService, useValue: fakePrisma },
     { provide: OutboxQueueService, useValue: fakeOutboxQueue },
+    { provide: ModuleContextFactory, useValue: fakeModuleFactoryLocalStorage },
   ],
 })
 class HealthAppModule {}
@@ -66,7 +77,41 @@ describe('Health endpoints (e2e)', () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.status).toBe('ok');
-    expect(body.checks).toEqual({ db: 'ok', redis: 'disabled' });
+    expect(body.checks).toEqual({ db: 'ok', redis: 'disabled', storage: 'local' });
+  });
+
+  it('/readyz devuelve 503 cuando S3 está habilitado pero falla el ping', async () => {
+    const fakeS3Factory = {
+      isS3Storage: () => true,
+      getStorage: () => ({ ping: async () => false }),
+    };
+
+    @Module({
+      controllers: [HealthController],
+      providers: [
+        { provide: PrismaService, useValue: fakePrisma },
+        { provide: OutboxQueueService, useValue: fakeOutboxQueue },
+        { provide: ModuleContextFactory, useValue: fakeS3Factory },
+      ],
+    })
+    class BrokenS3AppModule {}
+
+    const brokenApp = await NestFactory.create<NestFastifyApplication>(
+      BrokenS3AppModule,
+      new FastifyAdapter(),
+      { logger: false },
+    );
+    brokenApp.setGlobalPrefix('api/v1', { exclude: ['healthz', 'readyz', 'livez'] });
+    await brokenApp.init();
+    await brokenApp.getHttpAdapter().getInstance().ready();
+
+    try {
+      const response = await brokenApp.inject({ method: 'GET', url: '/readyz' });
+      expect(response.statusCode).toBe(503);
+      expect(response.json().checks.storage).toBe('error');
+    } finally {
+      await brokenApp.close();
+    }
   });
 
   it('/readyz devuelve 503 cuando la DB falla', async () => {
@@ -81,6 +126,7 @@ describe('Health endpoints (e2e)', () => {
       providers: [
         { provide: PrismaService, useValue: failingPrisma },
         { provide: OutboxQueueService, useValue: fakeOutboxQueue },
+        { provide: ModuleContextFactory, useValue: fakeModuleFactoryLocalStorage },
       ],
     })
     class FailingAppModule {}
@@ -119,6 +165,7 @@ describe('Health endpoints (e2e)', () => {
       providers: [
         { provide: PrismaService, useValue: fakePrisma },
         { provide: OutboxQueueService, useValue: brokenRedis },
+        { provide: ModuleContextFactory, useValue: fakeModuleFactoryLocalStorage },
       ],
     })
     class BrokenRedisAppModule {}

@@ -6,6 +6,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
+import { ModuleContextFactory } from '../modules/module-context.factory';
 import { OutboxQueueService } from '../modules/outbox-queue.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -21,6 +22,7 @@ interface ReadinessResponse extends LivenessResponse {
   checks: {
     db: 'ok' | 'error';
     redis: 'ok' | 'disabled' | 'error';
+    storage: 'ok' | 'local' | 'error';
   };
 }
 
@@ -32,6 +34,7 @@ export class HealthController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly outboxQueue: OutboxQueueService,
+    private readonly modules: ModuleContextFactory,
   ) {}
 
   @Get('healthz')
@@ -49,8 +52,15 @@ export class HealthController {
   @ApiServiceUnavailableResponse({ description: 'Una o más dependencias están degradadas.' })
   async readyz(@Res({ passthrough: true }) reply: FastifyReply): Promise<ReadinessResponse> {
     const liveness = this.liveness();
-    const [dbOk, redisStatus] = await Promise.all([this.checkDb(), this.checkRedis()]);
-    const allOk = dbOk && (redisStatus === 'ok' || redisStatus === 'disabled');
+    const [dbOk, redisStatus, storageStatus] = await Promise.all([
+      this.checkDb(),
+      this.checkRedis(),
+      this.checkStorage(),
+    ]);
+    const allOk =
+      dbOk &&
+      (redisStatus === 'ok' || redisStatus === 'disabled') &&
+      (storageStatus === 'ok' || storageStatus === 'local');
 
     if (!allOk) {
       reply.code(HttpStatus.SERVICE_UNAVAILABLE);
@@ -61,6 +71,7 @@ export class HealthController {
       checks: {
         db: dbOk ? 'ok' : 'error',
         redis: redisStatus,
+        storage: storageStatus,
       },
     };
   }
@@ -93,5 +104,12 @@ export class HealthController {
   private async checkRedis(): Promise<'ok' | 'disabled' | 'error'> {
     if (!this.outboxQueue.isEnabled()) return 'disabled';
     return (await this.outboxQueue.ping()) ? 'ok' : 'error';
+  }
+
+  private async checkStorage(): Promise<'ok' | 'local' | 'error'> {
+    if (!this.modules.isS3Storage()) return 'local';
+    const storage = this.modules.getStorage();
+    if (!storage.ping) return 'local';
+    return (await storage.ping()) ? 'ok' : 'error';
   }
 }

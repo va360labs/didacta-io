@@ -9,7 +9,9 @@ import type {
   NotificationHubService,
 } from '@learnship/core-kernel';
 import { PrismaService } from '../prisma/prisma.service';
+import type { StorageService } from '@learnship/core-kernel';
 import { LocalDiskStorageService } from './local-disk-storage.service';
+import { S3StorageService, buildS3StorageFromEnv } from './s3-storage.service';
 import { OutboxQueueService } from './outbox-queue.service';
 import { PersistentEventBus } from './persistent-event-bus';
 import { PrismaAuditLogService } from './prisma-audit-log.service';
@@ -31,6 +33,32 @@ function loadCipherKey(): string {
     return '0'.repeat(64);
   }
   return key;
+}
+
+/**
+ * Selecciona el storage backend según `STORAGE_DRIVER`. `s3` requiere las
+ * S3_* vars (endpoint, bucket, creds). `local` usa el disco bajo
+ * `STORAGE_ROOT`. Sin var explícita: si las S3_* están completas → s3,
+ * sino → local.
+ */
+function buildStorage(): StorageService & {
+  /** Solo presente si el driver activo es S3. Permite check de health. */
+  ping?: () => Promise<boolean>;
+} {
+  const driver = process.env['STORAGE_DRIVER'];
+  if (driver === 'local') {
+    return new LocalDiskStorageService();
+  }
+  const s3 = buildS3StorageFromEnv();
+  if (s3) {
+    return s3;
+  }
+  if (driver === 's3') {
+    throw new Error(
+      'STORAGE_DRIVER=s3 pero faltan S3_ENDPOINT/S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY',
+    );
+  }
+  return new LocalDiskStorageService();
 }
 
 type AnyHandler = (ctx: HookContext<unknown>) => Promise<void> | void;
@@ -75,7 +103,7 @@ const stubI18n: I18nService = {
 @Injectable()
 export class ModuleContextFactory {
   private readonly hookRegistry = new InMemoryHookRegistry();
-  private readonly storage = new LocalDiskStorageService();
+  private readonly storage = buildStorage();
   private readonly cipher = new SecretCipherService(loadCipherKey());
   private readonly smtp = new SmtpAdapterService();
   private tenantConfig?: PrismaTenantConfigService;
@@ -126,6 +154,15 @@ export class ModuleContextFactory {
 
   getSmtpAdapter(): SmtpAdapterService {
     return this.smtp;
+  }
+
+  /** Devuelve el storage activo. Si es S3 expone también `ping()` para health. */
+  getStorage(): StorageService & { ping?: () => Promise<boolean> } {
+    return this.storage;
+  }
+
+  isS3Storage(): boolean {
+    return this.storage instanceof S3StorageService;
   }
 
   getTenantConfig(): PrismaTenantConfigService {
