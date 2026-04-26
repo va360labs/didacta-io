@@ -1,7 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ApiHttpError } from '@/lib/api-client';
 import { tenantSettingsApi, type TenantSettingMetadata } from '@/lib/tenant-settings';
 
@@ -15,9 +20,45 @@ interface SmtpDraft {
 
 const EMPTY_SMTP: SmtpDraft = { host: '', port: '587', user: '', password: '', from: '' };
 
+type TabKey = 'notifications' | 'aula-virtual' | 'storage' | 'branding' | 'plantillas' | 'raw';
+
+const TABS: Array<{ key: TabKey; label: string; description: string }> = [
+  {
+    key: 'notifications',
+    label: 'Notificaciones',
+    description: 'Servidor SMTP saliente para emails transaccionales.',
+  },
+  {
+    key: 'aula-virtual',
+    label: 'Aula virtual',
+    description: 'Credenciales Zoom para sesiones síncronas (próximamente con mod.zoom-live).',
+  },
+  {
+    key: 'storage',
+    label: 'Storage',
+    description: 'Backend de archivos (S3 o disco local) configurado vía variables de entorno.',
+  },
+  {
+    key: 'branding',
+    label: 'Branding',
+    description: 'Personalización visual de tu organización.',
+  },
+  {
+    key: 'plantillas',
+    label: 'Plantillas',
+    description: 'Override del copy de las notificaciones (próximamente).',
+  },
+  {
+    key: 'raw',
+    label: 'Todos los settings',
+    description: 'Vista cruda de los valores guardados con flag de cifrado.',
+  },
+];
+
 export default function ConfiguracionPage() {
   const [items, setItems] = useState<TenantSettingMetadata[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<TabKey>('notifications');
   const [smtp, setSmtp] = useState<SmtpDraft>(EMPTY_SMTP);
   const [smtpStatus, setSmtpStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [smtpError, setSmtpError] = useState<string | null>(null);
@@ -29,7 +70,11 @@ export default function ConfiguracionPage() {
       setItems(await tenantSettingsApi.listAll());
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudo cargar la configuración');
+      setError(
+        e instanceof ApiHttpError
+          ? e.message
+          : 'No pudimos cargar la configuración. Probá refrescar la página.',
+      );
     }
   }
 
@@ -44,7 +89,7 @@ export default function ConfiguracionPage() {
     try {
       const port = Number(smtp.port);
       if (!Number.isInteger(port) || port < 1 || port > 65535) {
-        throw new Error('Puerto inválido (1–65535)');
+        throw new Error('El puerto debe ser un número entre 1 y 65535.');
       }
       await tenantSettingsApi.upsert('notifications', 'smtp', {
         isSecret: true,
@@ -61,17 +106,22 @@ export default function ConfiguracionPage() {
       await reload();
     } catch (e) {
       setSmtpStatus('error');
-      setSmtpError(e instanceof Error ? e.message : 'Error desconocido');
+      setSmtpError(e instanceof Error ? e.message : 'No pudimos guardar la configuración SMTP.');
     }
   }
 
   async function handleDelete(scope: string, key: string) {
-    if (!confirm(`¿Eliminar ${scope}.${key}? Si era una credencial, dejará de funcionar.`)) return;
+    if (
+      !confirm(
+        `¿Eliminar ${scope}.${key}? Si era una credencial, la integración asociada va a dejar de funcionar.`,
+      )
+    )
+      return;
     try {
       await tenantSettingsApi.remove(scope, key);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudo eliminar');
+      setError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar el setting.');
     }
   }
 
@@ -85,184 +135,308 @@ export default function ConfiguracionPage() {
     } catch (e) {
       setTestStatus('error');
       setTestMessage(
-        e instanceof ApiHttpError ? e.message : 'No se pudo enviar el email de prueba',
+        e instanceof ApiHttpError
+          ? e.message
+          : 'No pudimos enviar el email de prueba. Verificá los datos.',
       );
     }
   }
 
-  if (error)
-    return (
-      <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-        {error}
-      </p>
-    );
-  if (!items) return <p className="text-sm text-neutral-500">Cargando…</p>;
-
   return (
-    <section className="space-y-8">
+    <section className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Configuración del tenant</h1>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+        <h1 className="font-display text-3xl font-bold tracking-tight">Configuración del tenant</h1>
+        <p className="mt-1 max-w-3xl text-text-muted">
           Credenciales y preferencias de los módulos para tu organización. Los secretos se almacenan
           cifrados (AES-256-GCM) y nunca se devuelven en claro desde la API.
         </p>
       </header>
 
-      <article className="rounded-md border border-neutral-200 p-6 dark:border-neutral-800">
-        <h2 className="text-lg font-semibold">Notificaciones · SMTP</h2>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-          Servidor saliente para enviar correos. Si no configurás esto, las notificaciones por email
-          se loguean pero no se envían.
-        </p>
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+        >
+          {error}
+        </div>
+      ) : null}
 
-        <form onSubmit={handleSaveSmtp} className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Field label="Host">
-            <input
-              required
-              value={smtp.host}
-              onChange={(e) => setSmtp({ ...smtp, host: e.target.value })}
-              placeholder="smtp-relay.brevo.com"
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-            />
-          </Field>
-          <Field label="Puerto">
-            <input
-              required
-              value={smtp.port}
-              onChange={(e) => setSmtp({ ...smtp, port: e.target.value })}
-              placeholder="587"
-              inputMode="numeric"
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-            />
-          </Field>
-          <Field label="Usuario">
-            <input
-              required
-              value={smtp.user}
-              onChange={(e) => setSmtp({ ...smtp, user: e.target.value })}
-              autoComplete="off"
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-            />
-          </Field>
-          <Field label="Contraseña">
-            <input
-              required
-              type="password"
-              value={smtp.password}
-              onChange={(e) => setSmtp({ ...smtp, password: e.target.value })}
-              autoComplete="new-password"
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-            />
-          </Field>
-          <Field label="Remitente (From)">
-            <input
-              required
-              type="email"
-              value={smtp.from}
-              onChange={(e) => setSmtp({ ...smtp, from: e.target.value })}
-              placeholder="noreply@tu-dominio.com"
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-            />
-          </Field>
-
-          <div className="sm:col-span-2 flex items-center gap-3">
-            <Button type="submit" disabled={smtpStatus === 'saving'}>
-              {smtpStatus === 'saving' ? 'Guardando…' : 'Guardar SMTP'}
-            </Button>
-            <Button
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-1 border-b border-border" role="tablist">
+        {TABS.map((t) => {
+          const isActive = tab === t.key;
+          return (
+            <button
+              key={t.key}
               type="button"
-              variant="outline"
-              onClick={handleTestSmtp}
-              disabled={testStatus === 'sending'}
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setTab(t.key)}
+              className={
+                isActive
+                  ? 'relative px-4 py-2.5 text-sm font-semibold text-brand-700 transition-colors'
+                  : 'relative px-4 py-2.5 text-sm font-medium text-text-muted hover:text-text transition-colors'
+              }
             >
-              {testStatus === 'sending' ? 'Enviando…' : 'Probar envío'}
-            </Button>
-            {smtpStatus === 'saved' && (
-              <span className="text-sm text-emerald-600 dark:text-emerald-400">
-                ✓ Guardado cifrado.
-              </span>
-            )}
-            {smtpStatus === 'error' && smtpError && (
-              <span className="text-sm text-red-600 dark:text-red-400">{smtpError}</span>
-            )}
-            {testStatus === 'sent' && testMessage && (
-              <span className="text-sm text-emerald-600 dark:text-emerald-400">{testMessage}</span>
-            )}
-            {testStatus === 'error' && testMessage && (
-              <span className="text-sm text-red-600 dark:text-red-400">{testMessage}</span>
-            )}
-          </div>
-        </form>
-      </article>
+              {t.label}
+              {isActive ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute -bottom-px left-3 right-3 h-0.5 rounded-full bg-brand-500"
+                />
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
 
-      <article className="rounded-md border border-neutral-200 p-6 dark:border-neutral-800">
-        <h2 className="text-lg font-semibold">Todos los settings</h2>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-          Vista cruda de los valores guardados. Los secretos muestran <code>•••</code> sin
-          posibilidad de leerlos.
-        </p>
+      {tab === 'notifications' ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Notificaciones · SMTP</CardTitle>
+            <CardDescription>
+              Servidor saliente para enviar emails. Si no configurás esto, las notificaciones
+              quedarán registradas pero no se enviarán.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSaveSmtp} className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="smtp-host">Host</Label>
+                <Input
+                  id="smtp-host"
+                  required
+                  value={smtp.host}
+                  onChange={(e) => setSmtp({ ...smtp, host: e.target.value })}
+                  placeholder="smtp-relay.brevo.com"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="smtp-port">Puerto</Label>
+                <Input
+                  id="smtp-port"
+                  required
+                  inputMode="numeric"
+                  value={smtp.port}
+                  onChange={(e) => setSmtp({ ...smtp, port: e.target.value })}
+                  placeholder="587"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="smtp-user">Usuario</Label>
+                <Input
+                  id="smtp-user"
+                  required
+                  autoComplete="off"
+                  value={smtp.user}
+                  onChange={(e) => setSmtp({ ...smtp, user: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="smtp-pass">Contraseña</Label>
+                <Input
+                  id="smtp-pass"
+                  required
+                  type="password"
+                  autoComplete="new-password"
+                  value={smtp.password}
+                  onChange={(e) => setSmtp({ ...smtp, password: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="smtp-from">Remitente (From)</Label>
+                <Input
+                  id="smtp-from"
+                  required
+                  type="email"
+                  value={smtp.from}
+                  onChange={(e) => setSmtp({ ...smtp, from: e.target.value })}
+                  placeholder="noreply@tu-dominio.com"
+                />
+              </div>
 
-        {items.length === 0 ? (
-          <p className="mt-4 rounded-md border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500 dark:border-neutral-700">
-            Aún no configuraste nada.
-          </p>
-        ) : (
-          <table className="mt-4 w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-neutral-500">
-              <tr>
-                <th className="py-2">Módulo</th>
-                <th className="py-2">Clave</th>
-                <th className="py-2">Tipo</th>
-                <th className="py-2">Actualizado</th>
-                <th className="py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it) => (
-                <tr
-                  key={`${it.moduleName}/${it.key}`}
-                  className="border-t border-neutral-100 dark:border-neutral-800"
+              <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+                <Button type="submit" disabled={smtpStatus === 'saving'}>
+                  {smtpStatus === 'saving' ? 'Guardando…' : 'Guardar SMTP'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleTestSmtp}
+                  disabled={testStatus === 'sending'}
                 >
-                  <td className="py-2 font-mono text-xs">{it.moduleName}</td>
-                  <td className="py-2 font-mono text-xs">{it.key}</td>
-                  <td className="py-2 text-xs">
-                    {it.isSecret ? (
-                      <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                        secreto •••
-                      </span>
-                    ) : (
-                      <span className="rounded bg-neutral-100 px-2 py-0.5 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
-                        plano
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2 text-xs text-neutral-500">
-                    {new Date(it.updatedAt).toLocaleString()}
-                  </td>
-                  <td className="py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(it.moduleName, it.key)}
-                      className="text-xs text-red-600 underline decoration-dotted hover:decoration-solid dark:text-red-400"
-                    >
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </article>
-    </section>
-  );
-}
+                  {testStatus === 'sending' ? 'Enviando…' : 'Probar envío'}
+                </Button>
+                {smtpStatus === 'saved' ? (
+                  <span className="text-sm text-success-700">✓ Guardado cifrado.</span>
+                ) : null}
+                {smtpStatus === 'error' && smtpError ? (
+                  <span className="text-sm text-danger-700">{smtpError}</span>
+                ) : null}
+                {testStatus === 'sent' && testMessage ? (
+                  <span className="text-sm text-success-700">{testMessage}</span>
+                ) : null}
+                {testStatus === 'error' && testMessage ? (
+                  <span className="text-sm text-danger-700">{testMessage}</span>
+                ) : null}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      ) : null}
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block text-sm">
-      <span className="mb-1 block font-medium text-neutral-700 dark:text-neutral-300">{label}</span>
-      {children}
-    </label>
+      {tab === 'aula-virtual' ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Aula virtual · Zoom</CardTitle>
+            <CardDescription>
+              Configurá las credenciales Server-to-Server de Zoom para crear sesiones síncronas
+              vinculadas a tus cursos.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg border border-dashed border-border-strong bg-surface-2 p-8 text-center">
+              <Badge variant="warning" className="mb-3">
+                Próximamente
+              </Badge>
+              <p className="text-sm text-text-muted">
+                La integración con Zoom llega con el módulo <code>mod.zoom-live</code> en la próxima
+                fase. Mientras tanto, configurá las sesiones manualmente.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {tab === 'storage' ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Storage</CardTitle>
+            <CardDescription>
+              El backend de archivos se selecciona vía variables de entorno del servidor (no es
+              configurable per-tenant todavía).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <p className="text-text-muted">
+              Estado actual: <strong className="text-text">controlado por env</strong> (
+              <code>STORAGE_DRIVER</code>). Si tu organización necesita un bucket S3 propio, hablá
+              con el equipo de plataforma.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {tab === 'branding' ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Branding</CardTitle>
+            <CardDescription>
+              La personalización visual (logo, color, fuentes, custom CSS) se gestiona en una
+              pantalla dedicada con preview live.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link href="/admin/branding">Ir a Branding →</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {tab === 'plantillas' ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Plantillas de notificación</CardTitle>
+            <CardDescription>
+              Override del copy de cada notificación enviada por la plataforma.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg border border-dashed border-border-strong bg-surface-2 p-8 text-center">
+              <Badge variant="warning" className="mb-3">
+                Próximamente
+              </Badge>
+              <p className="text-sm text-text-muted">
+                Por ahora se usan las plantillas default de Didacta. Vas a poder customizarlas
+                pronto.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {tab === 'raw' ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Todos los settings</CardTitle>
+            <CardDescription>
+              Vista cruda de los valores guardados. Los secretos muestran <code>•••</code> sin
+              posibilidad de leerlos.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {items === null ? (
+              <div className="space-y-2">
+                <div className="skeleton h-10 w-full" />
+                <div className="skeleton h-10 w-full" />
+              </div>
+            ) : items.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border-strong bg-surface-2 p-8 text-center text-sm text-text-muted">
+                Aún no configuraste nada en este tenant.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left">
+                    <tr className="border-b border-border text-xs uppercase tracking-wide text-text-muted">
+                      <th className="py-2 pr-4 font-semibold">Módulo</th>
+                      <th className="py-2 pr-4 font-semibold">Clave</th>
+                      <th className="py-2 pr-4 font-semibold">Tipo</th>
+                      <th className="py-2 pr-4 font-semibold">Actualizado</th>
+                      <th className="py-2 text-right" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((it) => (
+                      <tr
+                        key={`${it.moduleName}/${it.key}`}
+                        className="border-b border-border last:border-0 hover:bg-surface-2"
+                      >
+                        <td className="py-2 pr-4 font-mono text-xs">{it.moduleName}</td>
+                        <td className="py-2 pr-4 font-mono text-xs">{it.key}</td>
+                        <td className="py-2 pr-4">
+                          {it.isSecret ? (
+                            <Badge variant="warning">secreto •••</Badge>
+                          ) : (
+                            <Badge variant="muted">plano</Badge>
+                          )}
+                        </td>
+                        <td className="py-2 pr-4 text-xs text-text-subtle tabular-nums">
+                          {new Date(it.updatedAt).toLocaleDateString('es-AR', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </td>
+                        <td className="py-2 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(it.moduleName, it.key)}
+                            className="text-xs font-semibold text-danger-700 hover:underline"
+                          >
+                            Eliminar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+    </section>
   );
 }
