@@ -50,6 +50,29 @@ async function main() {
   });
   console.info(`[seed] Tenant ${tenant.slug} (${tenant.id}) listo`);
 
+  // 1.b TenantDomains — mapeo Host header → tenant para login transparente.
+  // Sembramos los hosts donde el bootstrap tenant es accesible: localhost (dev),
+  // dominio prod legacy de Easypanel, y el slug.didacta.local (futuro).
+  // Cualquier domain extra se gestiona desde /admin/tenants (super_admin).
+  const defaultDomains = (process.env['BOOTSTRAP_DOMAINS'] ?? 'localhost,127.0.0.1')
+    .split(',')
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean);
+
+  for (const [idx, hostname] of defaultDomains.entries()) {
+    await prisma.tenantDomain.upsert({
+      where: { hostname },
+      update: { tenantId: tenant.id, isVerified: true },
+      create: {
+        tenantId: tenant.id,
+        hostname,
+        isPrimary: idx === 0,
+        isVerified: true,
+      },
+    });
+  }
+  console.info(`[seed] ${defaultDomains.length} dominios sembrados para ${tenant.slug}`);
+
   // 2. Roles del sistema
   for (const role of SYSTEM_ROLES) {
     await prisma.role.upsert({

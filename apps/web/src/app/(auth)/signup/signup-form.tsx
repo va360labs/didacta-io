@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { useTenantContext } from '@/lib/tenant-context';
 
 interface AuthResponse {
   tokens: { accessToken: string; refreshToken: string; expiresIn: number };
@@ -24,6 +25,7 @@ interface AuthResponse {
 
 export function SignUpForm() {
   const router = useRouter();
+  const { loading: tenantLoading, tenant } = useTenantContext();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -31,10 +33,11 @@ export function SignUpForm() {
     setError(null);
     setPending(true);
     try {
+      const tenantSlug = tenant?.slug ?? (form.get('tenantSlug')?.toString().trim() || undefined);
       const response = await apiFetch<AuthResponse>('/api/v1/auth/signup', {
         method: 'POST',
         body: JSON.stringify({
-          tenantSlug: String(form.get('tenantSlug')),
+          tenantSlug,
           email: String(form.get('email')),
           password: String(form.get('password')),
           name: form.get('name') ? String(form.get('name')) : undefined,
@@ -51,20 +54,41 @@ export function SignUpForm() {
     }
   }
 
+  if (tenantLoading) {
+    return (
+      <div className="space-y-3">
+        <div className="skeleton h-10 w-full" />
+        <div className="skeleton h-10 w-full" />
+        <div className="skeleton h-10 w-full" />
+        <div className="skeleton h-10 w-full" />
+      </div>
+    );
+  }
+
   return (
     <form action={onSubmit} className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="tenantSlug">
-          Organización <span className="text-danger-700">*</span>
-        </Label>
-        <Input
-          id="tenantSlug"
-          name="tenantSlug"
-          autoComplete="organization"
-          placeholder="va360"
-          required
-        />
-      </div>
+      {tenant ? (
+        <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
+          <span className="text-text-muted">Te registrás en</span>{' '}
+          <strong className="text-brand-700">{tenant.name}</strong>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Label htmlFor="tenantSlug">
+            Organización <span className="text-danger-700">*</span>
+          </Label>
+          <Input
+            id="tenantSlug"
+            name="tenantSlug"
+            autoComplete="organization"
+            placeholder="va360"
+            required
+          />
+          <p className="text-xs text-text-subtle">
+            Pedíle a tu admin el nombre corto de tu organización.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <Label htmlFor="name">Nombre completo</Label>

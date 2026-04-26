@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { useTenantContext } from '@/lib/tenant-context';
 
 interface AuthResponse {
   tokens: { accessToken: string; refreshToken: string; expiresIn: number };
@@ -23,19 +24,28 @@ interface AuthResponse {
   };
 }
 
+interface AmbiguousTenantError {
+  code: 'AMBIGUOUS_TENANT';
+  candidateSlugs: string[];
+  message: string;
+}
+
 export function SignInForm() {
   const router = useRouter();
+  const { loading: tenantLoading, tenant } = useTenantContext();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [tenantCandidates, setTenantCandidates] = useState<string[] | null>(null);
 
   async function onSubmit(form: FormData) {
     setError(null);
     setPending(true);
     try {
+      const tenantSlug = tenant?.slug ?? (form.get('tenantSlug')?.toString().trim() || undefined);
       const response = await apiFetch<AuthResponse>('/api/v1/auth/signin', {
         method: 'POST',
         body: JSON.stringify({
-          tenantSlug: String(form.get('tenantSlug')),
+          tenantSlug,
           email: String(form.get('email')),
           password: String(form.get('password')),
         }),
@@ -49,7 +59,14 @@ export function SignInForm() {
       }
     } catch (e) {
       if (e instanceof ApiHttpError) {
-        setError(e.message);
+        // Caso especial: el email pertenece a varios tenants → mostrar selector.
+        const issuesAny = (e as { issues?: unknown }).issues as AmbiguousTenantError | undefined;
+        if (issuesAny && (issuesAny as { candidateSlugs?: string[] }).candidateSlugs) {
+          setTenantCandidates((issuesAny as { candidateSlugs: string[] }).candidateSlugs);
+          setError('Tu email pertenece a más de una organización. Elegí cuál querés usar:');
+        } else {
+          setError(e.message);
+        }
       } else {
         setError('No pudimos completar el ingreso. Probá de nuevo en unos segundos.');
       }
@@ -58,23 +75,61 @@ export function SignInForm() {
     }
   }
 
+  // Estado de carga inicial (evita flash de campo "Organización" innecesario).
+  if (tenantLoading) {
+    return (
+      <div className="space-y-3">
+        <div className="skeleton h-10 w-full" />
+        <div className="skeleton h-10 w-full" />
+        <div className="skeleton h-10 w-full" />
+      </div>
+    );
+  }
+
   return (
     <form action={onSubmit} className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="tenantSlug">
-          Organización <span className="text-danger-700">*</span>
-        </Label>
-        <Input
-          id="tenantSlug"
-          name="tenantSlug"
-          autoComplete="organization"
-          placeholder="va360"
-          required
-        />
-        <p className="text-xs text-text-subtle">
-          El nombre corto de tu organización (el que te dieron al darte de alta).
-        </p>
-      </div>
+      {/* Si el host está mapeado a un tenant, mostramos su nombre y omitimos
+          el campo "Organización". Si no hay tenant, mostramos el campo
+          (dev local sin domain configurado, o multi-tenant). */}
+      {tenant ? (
+        <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
+          <span className="text-text-muted">Iniciás sesión en</span>{' '}
+          <strong className="text-brand-700">{tenant.name}</strong>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Label htmlFor="tenantSlug">
+            Organización <span className="text-text-subtle text-xs">(opcional)</span>
+          </Label>
+          <Input
+            id="tenantSlug"
+            name="tenantSlug"
+            autoComplete="organization"
+            placeholder="Si tu admin te dio un nombre corto, escribilo aquí"
+          />
+          <p className="text-xs text-text-subtle">
+            Si no lo sabés, dejá vacío — intentamos identificar tu organización por tu email.
+          </p>
+        </div>
+      )}
+
+      {tenantCandidates && tenantCandidates.length > 0 ? (
+        <div className="space-y-1.5">
+          <Label htmlFor="tenantSlugSelect">Elegí tu organización</Label>
+          <select
+            id="tenantSlugSelect"
+            name="tenantSlug"
+            required
+            className="flex h-10 w-full rounded-lg bg-surface px-3.5 py-2 pr-9 text-[0.9375rem] text-text border border-border-strong"
+          >
+            {tenantCandidates.map((slug) => (
+              <option key={slug} value={slug}>
+                {slug}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
       <div className="space-y-1.5">
         <Label htmlFor="email">

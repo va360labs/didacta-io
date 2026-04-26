@@ -192,7 +192,7 @@ function makeService() {
 describe('PasswordResetService.request', () => {
   it('genera un token cuando el user existe y está activo', async () => {
     const { service, prisma } = makeService();
-    const result = await service.request('va360', 'valen@va360.com');
+    const result = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
     expect(result).not.toBeNull();
     expect(result?.userId).toBe('user-1');
     expect(result?.userName).toBe('Valentín');
@@ -204,29 +204,29 @@ describe('PasswordResetService.request', () => {
 
   it('devuelve null sin crear token si el user no existe (anti user enumeration)', async () => {
     const { service, prisma } = makeService();
-    const result = await service.request('va360', 'inexistente@va360.com');
+    const result = await service.request({ tenantSlug: 'va360', email: 'inexistente@va360.com' });
     expect(result).toBeNull();
     expect(prisma.tokens).toHaveLength(0);
   });
 
   it('devuelve null si el user está suspendido', async () => {
     const { service, prisma } = makeService();
-    const result = await service.request('va360', 'suspendido@va360.com');
+    const result = await service.request({ tenantSlug: 'va360', email: 'suspendido@va360.com' });
     expect(result).toBeNull();
     expect(prisma.tokens).toHaveLength(0);
   });
 
   it('devuelve null si el tenant está suspendido', async () => {
     const { service, prisma } = makeService();
-    const result = await service.request('suspendida', 'valen@va360.com');
+    const result = await service.request({ tenantSlug: 'suspendida', email: 'valen@va360.com' });
     expect(result).toBeNull();
     expect(prisma.tokens).toHaveLength(0);
   });
 
   it('invalida tokens previos no usados al pedir uno nuevo', async () => {
     const { service, prisma } = makeService();
-    const a = await service.request('va360', 'valen@va360.com');
-    const b = await service.request('va360', 'valen@va360.com');
+    const a = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
+    const b = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
     expect(a).not.toBeNull();
     expect(b).not.toBeNull();
     // Ambos rows existen, el primero tiene usedAt seteado por la invalidación.
@@ -238,7 +238,7 @@ describe('PasswordResetService.request', () => {
   it('expira en 60 minutos por default', async () => {
     const { service, prisma } = makeService();
     const before = Date.now();
-    await service.request('va360', 'valen@va360.com');
+    await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
     const expiresAt = prisma.tokens[0].expiresAt.getTime();
     expect(expiresAt - before).toBeGreaterThanOrEqual(59 * 60_000);
     expect(expiresAt - before).toBeLessThanOrEqual(61 * 60_000);
@@ -248,7 +248,7 @@ describe('PasswordResetService.request', () => {
 describe('PasswordResetService.reset', () => {
   it('cambia la password y marca el token como usado', async () => {
     const { service, prisma } = makeService();
-    const result = await service.request('va360', 'valen@va360.com');
+    const result = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
     expect(result).not.toBeNull();
     await service.reset(result!.rawToken, 'NuevaPasswordSegura123');
     expect(prisma.users[0].passwordHash).toBe('argon2:NuevaPasswordSegura123');
@@ -264,7 +264,7 @@ describe('PasswordResetService.reset', () => {
 
   it('rechaza un token ya usado (single-use)', async () => {
     const { service } = makeService();
-    const result = await service.request('va360', 'valen@va360.com');
+    const result = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
     await service.reset(result!.rawToken, 'NuevaPasswordSegura123');
     await expect(service.reset(result!.rawToken, 'OtraPasswordSegura123')).rejects.toBeInstanceOf(
       UnauthorizedException,
@@ -273,7 +273,7 @@ describe('PasswordResetService.reset', () => {
 
   it('rechaza un token expirado', async () => {
     const { service, prisma } = makeService();
-    const result = await service.request('va360', 'valen@va360.com');
+    const result = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
     // Forzamos expiración manualmente.
     prisma.tokens[0].expiresAt = new Date(Date.now() - 1000);
     await expect(service.reset(result!.rawToken, 'NuevaPasswordSegura123')).rejects.toBeInstanceOf(

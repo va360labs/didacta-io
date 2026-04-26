@@ -45,8 +45,7 @@ export class PasswordResetService {
    * que el endpoint pueda responder genérico (anti user enumeration).
    */
   async request(
-    tenantSlug: string,
-    email: string,
+    args: { email: string; tenantSlug?: string; resolvedTenantId?: string },
     ctx: ClientContext = NO_CLIENT_CONTEXT,
   ): Promise<{
     rawToken: string;
@@ -54,11 +53,11 @@ export class PasswordResetService {
     userName: string | null;
     tenantId: string;
   } | null> {
-    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-    if (!tenant || tenant.status !== 'ACTIVE') return null;
+    const tenant = await this.resolveTenant(args);
+    if (!tenant) return null;
 
     const user = await this.prisma.user.findUnique({
-      where: { tenantId_email: { tenantId: tenant.id, email } },
+      where: { tenantId_email: { tenantId: tenant.id, email: args.email } },
     });
     if (!user || user.status !== 'ACTIVE') return null;
 
@@ -153,12 +152,11 @@ export class PasswordResetService {
    * responde 200 (anti user-enumeration). El detalle queda en logs.
    */
   async requestAndSendEmail(
-    tenantSlug: string,
-    email: string,
+    args: { email: string; tenantSlug?: string; resolvedTenantId?: string },
     webBaseUrl: string,
     ctx: ClientContext = NO_CLIENT_CONTEXT,
   ): Promise<void> {
-    const result = await this.request(tenantSlug, email, ctx);
+    const result = await this.request(args, ctx);
     if (!result) return;
 
     let smtpRaw: unknown;
@@ -197,7 +195,7 @@ export class PasswordResetService {
       webBaseUrl,
     );
     const sendResult = await this.smtp.send(config, {
-      to: email,
+      to: args.email,
       subject,
       text,
       html,
@@ -214,6 +212,42 @@ export class PasswordResetService {
   /** SHA-256 hex del token raw — formato consistente con la columna VARCHAR(64). */
   private hashToken(raw: string): string {
     return createHash('sha256').update(raw, 'utf8').digest('hex');
+  }
+
+  /**
+   * Resolución de tenant para flujos de password reset. Misma estrategia
+   * que AuthService: resolvedTenantId > tenantSlug > email-único entre tenants.
+   * Si hay múltiples matches por email, devuelve null (response genérico
+   * anti user-enumeration).
+   */
+  private async resolveTenant(args: {
+    email: string;
+    tenantSlug?: string;
+    resolvedTenantId?: string;
+  }) {
+    if (args.resolvedTenantId) {
+      const t = await this.prisma.tenant.findUnique({
+        where: { id: args.resolvedTenantId },
+      });
+      if (t && t.status === 'ACTIVE') return t;
+    }
+    if (args.tenantSlug) {
+      const t = await this.prisma.tenant.findUnique({ where: { slug: args.tenantSlug } });
+      if (t && t.status === 'ACTIVE') return t;
+      return null;
+    }
+    const matches = await this.prisma.user.findMany({
+      where: {
+        email: args.email,
+        deletedAt: null,
+        status: 'ACTIVE',
+        tenant: { status: 'ACTIVE' },
+      },
+      include: { tenant: true },
+      take: 2,
+    });
+    if (matches.length === 1) return matches[0]!.tenant;
+    return null;
   }
 
   /** Genera el subject + cuerpos del email de reset. */

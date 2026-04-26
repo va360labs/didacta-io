@@ -48,10 +48,40 @@ model Tenant {
   webhooks         Webhook[]
   notifTemplates   NotificationTemplate[]
   tenantSettings   TenantSetting[]
+  domains          TenantDomain[]
 
   @@index([slug])
   @@index([status])
   @@map("tenant")
+}
+
+// ============================================================================
+// TENANT DOMAINS — mapeo Host → tenant para login transparente.
+// Cada tenant puede tener múltiples dominios (subdominio default + custom).
+// El middleware de tenancy lee el Host header del request, busca aquí, y
+// resuelve el tenant correspondiente. Esto permite que el alumno NO escriba
+// el slug en signin/signup — la URL le dice todo.
+// Ver HU-SA-001 + LMS-110 (Notion).
+// ============================================================================
+model TenantDomain {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  /// Host completo en lowercase, sin puerto ni path.
+  /// Ejemplos: "aprende.va360labs.com", "didacta.local", "localhost".
+  hostname   String   @unique @db.VarChar(253)
+  /// El primary identifica el dominio canónico para emails y enlaces.
+  /// Solo uno por tenant tiene `isPrimary=true`.
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  /// Para custom domains de clientes: requiere validación DNS antes de activar.
+  /// `localhost` y dominios default del seed nacen verified=true.
+  isVerified Boolean  @default(false) @map("is_verified")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_domain")
 }
 
 // ============================================================================

@@ -167,7 +167,11 @@ export class AdminUsersService {
 
     // Enviar email de "definí tu contraseña" reusando el flujo de reset.
     try {
-      await this.passwordReset.requestAndSendEmail(tenant.slug, dto.email, webBaseUrl, ctx);
+      await this.passwordReset.requestAndSendEmail(
+        { email: dto.email, resolvedTenantId: tenantId },
+        webBaseUrl,
+        ctx,
+      );
     } catch (err) {
       this.logger.warn(
         { err, userId: user.id },
@@ -313,7 +317,11 @@ export class AdminUsersService {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new NotFoundException('Tenant no encontrado.');
 
-    await this.passwordReset.requestAndSendEmail(tenant.slug, user.email, webBaseUrl, ctx);
+    await this.passwordReset.requestAndSendEmail(
+      { email: user.email, resolvedTenantId: tenantId },
+      webBaseUrl,
+      ctx,
+    );
 
     await this.auditLog.record({
       tenantId,

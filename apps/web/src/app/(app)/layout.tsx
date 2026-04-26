@@ -18,6 +18,7 @@ const NAV = [
   { href: '/admin/configuracion', label: 'Configuración', requiresAdmin: true },
   { href: '/admin/branding', label: 'Branding', requiresAdmin: true },
   { href: '/admin/auditoria', label: 'Auditoría', requiresAdmin: true },
+  { href: '/admin/tenants', label: 'Tenants', requiresSuperAdmin: true },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -39,6 +40,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const isAdminOrFormador = session.user.roles.some((r) =>
     ['super_admin', 'tenant_admin', 'formador'].includes(r),
   );
+  const isSuperAdmin = session.user.roles.includes('super_admin');
 
   function logout() {
     authStorage.clear();
@@ -57,7 +59,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               Didacta
             </Link>
             <nav className="flex gap-1">
-              {NAV.filter((item) => !item.requiresAdmin || isAdminOrFormador).map((item) => {
+              {NAV.filter((item) => {
+                if (item.requiresSuperAdmin && !isSuperAdmin) return false;
+                if (item.requiresAdmin && !isAdminOrFormador) return false;
+                return true;
+              }).map((item) => {
                 const isActive = item.exactMatch
                   ? pathname === item.href
                   : (pathname?.startsWith(item.href) ?? false);

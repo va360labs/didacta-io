@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
+import { useTenantContext } from '@/lib/tenant-context';
 
 interface ForgotResponse {
   ok: boolean;
@@ -12,6 +13,7 @@ interface ForgotResponse {
 }
 
 export function ForgotPasswordForm() {
+  const { loading: tenantLoading, tenant } = useTenantContext();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -21,12 +23,10 @@ export function ForgotPasswordForm() {
     setSuccess(null);
     setPending(true);
     try {
+      const tenantSlug = tenant?.slug ?? (form.get('tenantSlug')?.toString().trim() || undefined);
       const response = await apiFetch<ForgotResponse>('/api/v1/auth/forgot-password', {
         method: 'POST',
-        body: JSON.stringify({
-          tenantSlug: String(form.get('tenantSlug')),
-          email: String(form.get('email')),
-        }),
+        body: JSON.stringify({ tenantSlug, email: String(form.get('email')) }),
       });
       setSuccess(response.message);
     } catch (e) {
@@ -52,21 +52,40 @@ export function ForgotPasswordForm() {
     );
   }
 
+  if (tenantLoading) {
+    return (
+      <div className="space-y-3">
+        <div className="skeleton h-10 w-full" />
+        <div className="skeleton h-10 w-full" />
+      </div>
+    );
+  }
+
   return (
     <form action={onSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="tenantSlug">Organización</Label>
-        <Input
-          id="tenantSlug"
-          name="tenantSlug"
-          autoComplete="organization"
-          placeholder="va360"
-          required
-        />
-      </div>
+      {tenant ? (
+        <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
+          <span className="text-text-muted">Recuperás contraseña para</span>{' '}
+          <strong className="text-brand-700">{tenant.name}</strong>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Label htmlFor="tenantSlug">
+            Organización <span className="text-text-subtle text-xs">(opcional)</span>
+          </Label>
+          <Input
+            id="tenantSlug"
+            name="tenantSlug"
+            autoComplete="organization"
+            placeholder="va360"
+          />
+        </div>
+      )}
 
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
+      <div className="space-y-1.5">
+        <Label htmlFor="email">
+          Email <span className="text-danger-700">*</span>
+        </Label>
         <Input id="email" name="email" type="email" autoComplete="email" required />
       </div>
 

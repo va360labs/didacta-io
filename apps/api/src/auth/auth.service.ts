@@ -6,6 +6,16 @@ import { PasswordService } from './password.service';
 import { TokenService, type SignedTokens } from './token.service';
 import type { SigninDto, SignupDto } from './dto';
 
+export class AmbiguousTenantError extends UnauthorizedException {
+  constructor(public readonly candidateSlugs: string[]) {
+    super({
+      message: 'Tu email pertenece a más de una organización. Indicá cuál querés usar.',
+      candidateSlugs,
+      code: 'AMBIGUOUS_TENANT',
+    });
+  }
+}
+
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
 const NO_CLIENT_CONTEXT: ClientContext = { ip: null, userAgent: null };
@@ -33,10 +43,20 @@ export class AuthService {
     private readonly auditLog: PrismaAuditLogService,
   ) {}
 
-  async signup(dto: SignupDto, ctx: ClientContext = NO_CLIENT_CONTEXT): Promise<AuthResult> {
-    const tenant = await this.prisma.tenant.findUnique({ where: { slug: dto.tenantSlug } });
-    if (!tenant || tenant.status !== 'ACTIVE') {
-      throw new UnauthorizedException('Tenant no válido o no activo');
+  async signup(
+    dto: SignupDto,
+    ctx: ClientContext = NO_CLIENT_CONTEXT,
+    resolvedTenantId?: string,
+  ): Promise<AuthResult> {
+    const tenant = await this.resolveTenantForRequest({
+      explicitSlug: dto.tenantSlug,
+      resolvedTenantId,
+      email: dto.email,
+    });
+    if (!tenant) {
+      throw new UnauthorizedException(
+        'No pudimos identificar tu organización. Probá desde el enlace que te dio el admin o pedí ayuda.',
+      );
     }
 
     const existing = await this.prisma.user.findUnique({
@@ -97,9 +117,17 @@ export class AuthService {
     };
   }
 
-  async signin(dto: SigninDto, ctx: ClientContext = NO_CLIENT_CONTEXT): Promise<AuthResult> {
-    const tenant = await this.prisma.tenant.findUnique({ where: { slug: dto.tenantSlug } });
-    if (!tenant || tenant.status !== 'ACTIVE') {
+  async signin(
+    dto: SigninDto,
+    ctx: ClientContext = NO_CLIENT_CONTEXT,
+    resolvedTenantId?: string,
+  ): Promise<AuthResult> {
+    const tenant = await this.resolveTenantForRequest({
+      explicitSlug: dto.tenantSlug,
+      resolvedTenantId,
+      email: dto.email,
+    });
+    if (!tenant) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
@@ -207,5 +235,53 @@ export class AuthService {
    */
   shouldRequireMfa(roles: readonly string[], _mfaEnabled: boolean): boolean {
     return roles.some((r) => ADMIN_ROLES.has(r));
+  }
+
+  /**
+   * Resuelve el tenant del request siguiendo HU-SA-001 + LMS-110:
+   *   1. Si el caller pasó un `resolvedTenantId` (resuelto del Host header
+   *      por el controller), úsalo si está activo.
+   *   2. Si el body trae `explicitSlug` (legacy / link de invitación), úsalo.
+   *   3. Si no, fallback email-first: buscar el email entre tenants ACTIVE.
+   *      - Match único: usar ese tenant.
+   *      - Match múltiple: throw AmbiguousTenantError con la lista.
+   *      - Sin match: null (el caller decide cómo responder).
+   */
+  private async resolveTenantForRequest(args: {
+    explicitSlug?: string;
+    resolvedTenantId?: string;
+    email: string;
+  }) {
+    if (args.resolvedTenantId) {
+      const t = await this.prisma.tenant.findUnique({
+        where: { id: args.resolvedTenantId },
+      });
+      if (t && t.status === 'ACTIVE') return t;
+    }
+
+    if (args.explicitSlug) {
+      const t = await this.prisma.tenant.findUnique({
+        where: { slug: args.explicitSlug },
+      });
+      if (t && t.status === 'ACTIVE') return t;
+      return null;
+    }
+
+    // Fallback email-first: ¿este email existe en uno o varios tenants?
+    const matches = await this.prisma.user.findMany({
+      where: {
+        email: args.email,
+        deletedAt: null,
+        status: 'ACTIVE',
+        tenant: { status: 'ACTIVE' },
+      },
+      include: { tenant: true },
+      take: 5,
+    });
+
+    if (matches.length === 0) return null;
+    if (matches.length === 1) return matches[0]!.tenant;
+
+    throw new AmbiguousTenantError(matches.map((m) => m.tenant.slug));
   }
 }
