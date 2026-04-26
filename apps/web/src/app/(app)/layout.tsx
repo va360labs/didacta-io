@@ -14,6 +14,7 @@ const NAV = [
   { href: '/mis-certificados', label: 'Mis certificados' },
   { href: '/formador', label: 'Panel formador', requiresAdmin: true, exactMatch: true },
   { href: '/formador/cursos', label: 'Mis cursos', requiresAdmin: true },
+  { href: '/admin/usuarios', label: 'Usuarios', requiresAdmin: true },
   { href: '/admin/configuracion', label: 'Configuración', requiresAdmin: true },
   { href: '/admin/branding', label: 'Branding', requiresAdmin: true },
 ];

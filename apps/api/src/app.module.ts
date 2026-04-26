@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
+import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { ModulesModule } from './modules/modules.module';
@@ -31,6 +32,7 @@ import { TenancyModule } from './tenancy/tenancy.module';
     }),
     PrismaModule,
     AuthModule,
+    AdminModule,
     TenancyModule,
     ModulesModule,
     HealthModule,
