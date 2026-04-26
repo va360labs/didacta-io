@@ -126,4 +126,76 @@ export class PrismaAuditLogService implements AuditLogService {
 
     return { valid: true, totalEntries: rows.length, firstBrokenId: null, brokenAt: null };
   }
+
+  /**
+   * Listado de entradas para el panel /admin/auditoria. Soporta filtros por
+   * actor, acción, tipo de recurso y rango de fechas. Devuelve hasta `limit`
+   * (default 100, máximo 500) ordenadas por timestamp desc.
+   *
+   * NO devuelve los hashes en el listado para no ensuciar la UI; el panel
+   * tiene un botón separado "Verificar cadena" que llama a verifyChain.
+   */
+  async list(
+    tenantId: string,
+    filters: {
+      actorId?: string;
+      action?: string;
+      resourceType?: string;
+      dateFrom?: Date;
+      dateTo?: Date;
+      limit?: number;
+    },
+  ): Promise<
+    Array<{
+      id: string;
+      actorId: string | null;
+      action: string;
+      resourceType: string;
+      resourceId: string;
+      metadata: unknown;
+      ip: string | null;
+      userAgent: string | null;
+      timestamp: Date;
+    }>
+  > {
+    const where: Record<string, unknown> = { tenantId };
+    if (filters.actorId) where.actorId = filters.actorId;
+    if (filters.action) where.action = { contains: filters.action };
+    if (filters.resourceType) where.resourceType = filters.resourceType;
+    if (filters.dateFrom || filters.dateTo) {
+      where.timestamp = {};
+      if (filters.dateFrom) (where.timestamp as Record<string, unknown>).gte = filters.dateFrom;
+      if (filters.dateTo) (where.timestamp as Record<string, unknown>).lte = filters.dateTo;
+    }
+
+    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
+    const rows = await this.prisma.auditLog.findMany({
+      where,
+      orderBy: { timestamp: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        actorId: true,
+        action: true,
+        resourceType: true,
+        resourceId: true,
+        metadata: true,
+        ip: true,
+        userAgent: true,
+        timestamp: true,
+      },
+    });
+
+    return rows.map((r) => ({
+      id: r.id.toString(),
+      actorId: r.actorId,
+      action: r.action,
+      resourceType: r.resourceType,
+      resourceId: r.resourceId,
+      metadata: r.metadata,
+      ip: r.ip,
+      userAgent: r.userAgent,
+      timestamp: r.timestamp,
+    }));
+  }
 }
