@@ -1,6 +1,6 @@
 # Estado del proyecto — handoff completo
 
-> **Última actualización**: 2026-04-26 (PR #73 — TenantSettings persistente con encryption at-rest)
+> **Última actualización**: 2026-04-26 (PR #75 — BullMQ outbox dispatcher con Redis)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -153,7 +153,7 @@ Orden de registro = orden topológico resuelto por `core-registry` desde `depend
 
 | Servicio | Implementación | Wiring |
 |---|---|---|
-| `EventBus` | `PersistentEventBus` (apps/api/src/modules/persistent-event-bus.ts) | Outbox pattern: persiste en `outbox_event` + dispatch in-process. `OutboxRecoveryWorker` reprocesa pendientes cada 30s. |
+| `EventBus` | `PersistentEventBus` + `OutboxQueueService` (BullMQ + Redis) — PR #75 | Outbox pattern persistente. Publish upserta en `outbox_event` y encola job a BullMQ. Worker (mismo proceso por ahora) ejecuta handlers con reintentos exponenciales (5 attempts, backoff 1s base, concurrencia 5). Si Redis cae al publish → fallback síncrono. `OutboxRecoveryWorker` failsafe cada 5 min reencola pendientes. Sin Redis → comportamiento legacy in-process (compat dev). |
 | `AuditLogService` | `PrismaAuditLogService` | Cadena de hashes por tenant (SHA-256). Endpoint `GET /audit/verify` valida la cadena. |
 | `EvidenceVaultService` | `PrismaEvidenceVaultService` | SHA-256 del contenido + storage backend. Idempotente por hash. |
 | `StorageService` | `LocalDiskStorageService` | Lee/escribe en `STORAGE_ROOT` env. **Pendiente** sustituir por MinIO/S3 para multi-instancia. |
@@ -653,8 +653,8 @@ Ver `.github/workflows/e2e.yml`.
 | PR | Item | Estado | Notas |
 |---|---|---|---|
 | **A0** | `feat(core): TenantSettings persistente con encryption at-rest` | ✅ **MERGED #73** | Reemplaza el stub. Habilita SMTP/Zoom/etc per-tenant. AES-256-GCM, audit log, UI `/admin/configuracion`. |
-| A1 | `feat(core): BullMQ outbox dispatcher con Redis` | ⏭ next | `bullmq` lib npm + Worker que reemplaza el dispatch in-process. Redis URL ya en env. |
-| A2 | `feat(notifications): adapter SMTP per-tenant` | ⏭ después de A1 | `nodemailer` lee config cifrada del tenant via TenantSettings. Si no configurada → log + skip (no rompe). |
+| **A1** | `feat(events): BullMQ outbox dispatcher con Redis` | ✅ **MERGED #75** | Queue + Worker BullMQ. Reintentos exponenciales nativos. /readyz chequea DB y Redis. enableShutdownHooks para SIGTERM limpio. |
+| A2 | `feat(notifications): adapter SMTP per-tenant` | ⏭ next | `nodemailer` lee config cifrada del tenant via TenantSettings. Si no configurada → log + skip (no rompe). |
 | A3 | `feat(storage): MinIO/S3 backend con presigned URLs` | ⏭ después de A2 | `@aws-sdk/client-s3` con endpoint custom + path-style. Bucket `learnship`. Presigned URLs TTL 15min. |
 
 ### 10.2 Plan B — Mods grandes con dependencia de A0 (TenantSettings)
@@ -731,6 +731,7 @@ Ver `.github/workflows/e2e.yml`.
 | PR | Título | Estado |
 |---|---|---|
 | #73 | feat(core): TenantSettings persistente con encryption at-rest (PR A0) | merged |
+| #75 | feat(events): BullMQ outbox dispatcher con Redis (PR A1) | merged |
 
 ---
 
