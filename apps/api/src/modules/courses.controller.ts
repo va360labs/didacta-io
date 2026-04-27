@@ -221,6 +221,33 @@ export class CoursesController {
     }
   }
 
+  @Post('lessons/:lessonId/move-to-module')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Mover una lección a otro módulo (cross-module drop)' })
+  async moveLessonToModule(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('lessonId') lessonId: string,
+    @Body(
+      new ZodValidationPipe(
+        z.object({
+          targetModuleId: z.string().uuid(),
+          position: z.number().int().min(0).optional(),
+        }),
+      ),
+    )
+    body: { targetModuleId: string; position?: number },
+  ) {
+    if (!user) throw new UnauthorizedException();
+    try {
+      await this.registry
+        .getCoursesService()
+        .moveLessonToModule(user.tenantId, user.sub, lessonId, body.targetModuleId, body.position);
+      return { moved: true };
+    } catch (error) {
+      throw this.translate(error);
+    }
+  }
+
   @Post('modules/:moduleId/reorder-lessons')
   @HttpCode(200)
   @ApiOperation({ summary: 'Reordenar lecciones del módulo (bulk, drag & drop)' })

@@ -305,6 +305,11 @@ export function CourseEditor({
   );
 }
 
+/**
+ * Lista de lecciones de un módulo. Vive dentro del `DndContext` global del
+ * `ModuleList`, así que aquí solo declaramos un `SortableContext` con los IDs
+ * de las lecciones — el reorden y cross-module drop los maneja el padre.
+ */
 function LessonList({
   moduleId,
   lessons,
@@ -322,72 +327,29 @@ function LessonList({
   onDelete: (lessonId: string, title: string) => Promise<void>;
   onChange: () => Promise<void>;
 }) {
-  const [optimistic, setOptimistic] = useState<CourseLesson[]>(lessons);
-  const [reorderError, setReorderError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setOptimistic(lessons);
-  }, [lessons]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIdx = optimistic.findIndex((l) => l.id === active.id);
-    const newIdx = optimistic.findIndex((l) => l.id === over.id);
-    if (oldIdx === -1 || newIdx === -1) return;
-    const reordered = arrayMove(optimistic, oldIdx, newIdx);
-    setOptimistic(reordered);
-    setReorderError(null);
-    try {
-      await coursesApi.reorderLessons(
-        moduleId,
-        reordered.map((l) => l.id),
-      );
-      await onChange();
-    } catch (e) {
-      setReorderError(
-        e instanceof ApiHttpError ? e.message : 'No pudimos reordenar las lecciones.',
-      );
-      await onChange();
-    }
-  }
-
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={optimistic.map((l) => l.id)} strategy={verticalListSortingStrategy}>
-        <ul className="divide-y divide-border-soft">
-          {optimistic.map((l) => (
-            <LessonRow
-              key={l.id}
-              lesson={l}
-              isEditing={editingLessonId === l.id}
-              pending={pending}
-              onToggleEdit={() => onToggleEdit(l.id)}
-              onDelete={() => onDelete(l.id, l.title)}
-              onChange={onChange}
-            />
-          ))}
-        </ul>
-      </SortableContext>
-      {reorderError ? (
-        <p
-          role="alert"
-          className="border-t border-border-soft bg-danger-50 px-4 py-2 text-xs text-danger-700"
-        >
-          {reorderError}
-        </p>
-      ) : null}
-    </DndContext>
+    <SortableContext items={lessons.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+      <ul className="divide-y divide-border-soft">
+        {lessons.map((l) => (
+          <LessonRow
+            key={l.id}
+            lesson={l}
+            moduleId={moduleId}
+            isEditing={editingLessonId === l.id}
+            pending={pending}
+            onToggleEdit={() => onToggleEdit(l.id)}
+            onDelete={() => onDelete(l.id, l.title)}
+            onChange={onChange}
+          />
+        ))}
+      </ul>
+    </SortableContext>
   );
 }
 
 function LessonRow({
   lesson,
+  moduleId,
   isEditing,
   pending,
   onToggleEdit,
@@ -395,14 +357,19 @@ function LessonRow({
   onChange,
 }: {
   lesson: CourseLesson;
+  moduleId: string;
   isEditing: boolean;
   pending: boolean;
   onToggleEdit: () => void;
   onDelete: () => Promise<void>;
   onChange: () => Promise<void>;
 }) {
+  // `data.moduleId` permite al onDragEnd global del ModuleList saber a qué
+  // sección pertenece esta lección y decidir si es reorden interno o
+  // cross-module drop.
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: lesson.id,
+    data: { type: 'lesson', moduleId },
   });
   const iconName = LESSON_TYPE_ICON[lesson.type] ?? 'book';
   const wrapperStyle = {
@@ -686,6 +653,24 @@ function PublishChecklist({
  * - Si la API falla, refresca para recuperar el orden correcto y propaga
  *   un mensaje al editor padre.
  */
+/**
+ * Wrapper único de DnD para módulos + lecciones del curso.
+ *
+ * Filosofía:
+ * - UN solo `DndContext` para que el cross-module drop funcione (arrastrar
+ *   una lección de la sección A a la B).
+ * - State local optimistic con la jerarquía completa (módulos + lecciones)
+ *   para que el reorden se vea instantáneo.
+ * - `active.data.current.type` distingue 'module' vs 'lesson' en `onDragEnd`.
+ *
+ * Casos en `onDragEnd`:
+ * 1. module → module: `reorderModules`.
+ * 2. lesson → lesson en el MISMO módulo: `reorderLessons` solo de ese módulo.
+ * 3. lesson → lesson en OTRO módulo: `moveLessonToModule` con la posición
+ *    relativa dentro del módulo destino.
+ * 4. lesson → module (drop sobre header de un módulo, no sobre lección):
+ *    `moveLessonToModule` con position al final.
+ */
 function ModuleList({
   modules,
   courseId,
@@ -699,7 +684,6 @@ function ModuleList({
 }) {
   const [optimistic, setOptimistic] = useState<CourseModule[]>(modules);
 
-  // Sincroniza al refetch externo (ej. añadir / eliminar sección).
   useEffect(() => {
     setOptimistic(modules);
   }, [modules]);
@@ -712,19 +696,107 @@ function ModuleList({
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIdx = optimistic.findIndex((m) => m.id === active.id);
-    const newIdx = optimistic.findIndex((m) => m.id === over.id);
-    if (oldIdx === -1 || newIdx === -1) return;
-    const reordered = arrayMove(optimistic, oldIdx, newIdx);
-    setOptimistic(reordered);
-    try {
-      await coursesApi.reorderModules(
-        courseId,
-        reordered.map((m) => m.id),
+
+    const activeType = active.data.current?.type as 'module' | 'lesson' | undefined;
+    const overType = over.data.current?.type as 'module' | 'lesson' | undefined;
+
+    // Caso 1: reordenar módulos.
+    if (activeType === 'module' && overType === 'module') {
+      const oldIdx = optimistic.findIndex((m) => m.id === active.id);
+      const newIdx = optimistic.findIndex((m) => m.id === over.id);
+      if (oldIdx === -1 || newIdx === -1) return;
+      const reordered = arrayMove(optimistic, oldIdx, newIdx);
+      setOptimistic(reordered);
+      try {
+        await coursesApi.reorderModules(
+          courseId,
+          reordered.map((m) => m.id),
+        );
+        await onChange();
+      } catch (e) {
+        onError(e instanceof ApiHttpError ? e.message : 'No pudimos reordenar las secciones.');
+        await onChange();
+      }
+      return;
+    }
+
+    // Caso 2-4: lección.
+    if (activeType !== 'lesson') return;
+
+    const sourceModuleId = active.data.current?.moduleId as string | undefined;
+    if (!sourceModuleId) return;
+
+    let targetModuleId: string | undefined;
+    let targetLessonId: string | undefined;
+    if (overType === 'lesson') {
+      targetModuleId = over.data.current?.moduleId as string | undefined;
+      targetLessonId = String(over.id);
+    } else if (overType === 'module') {
+      // Drop sobre la card del módulo (no sobre una lección concreta) → al final.
+      targetModuleId = String(over.id);
+    }
+    if (!targetModuleId) return;
+
+    if (sourceModuleId === targetModuleId) {
+      // Mismo módulo → reorden interno.
+      const moduleIdx = optimistic.findIndex((m) => m.id === sourceModuleId);
+      if (moduleIdx === -1) return;
+      const lessons = optimistic[moduleIdx]!.lessons;
+      const oldIdx = lessons.findIndex((l) => l.id === active.id);
+      const newIdx = targetLessonId
+        ? lessons.findIndex((l) => l.id === targetLessonId)
+        : lessons.length - 1;
+      if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
+      const reorderedLessons = arrayMove(lessons, oldIdx, newIdx);
+      const next = [...optimistic];
+      next[moduleIdx] = { ...next[moduleIdx]!, lessons: reorderedLessons };
+      setOptimistic(next);
+      try {
+        await coursesApi.reorderLessons(
+          sourceModuleId,
+          reorderedLessons.map((l) => l.id),
+        );
+        await onChange();
+      } catch (e) {
+        onError(e instanceof ApiHttpError ? e.message : 'No pudimos reordenar las lecciones.');
+        await onChange();
+      }
+      return;
+    }
+
+    // Cross-module: la lección cambia de sección.
+    const sourceIdx = optimistic.findIndex((m) => m.id === sourceModuleId);
+    const targetIdx = optimistic.findIndex((m) => m.id === targetModuleId);
+    if (sourceIdx === -1 || targetIdx === -1) return;
+    const sourceLessons = optimistic[sourceIdx]!.lessons;
+    const lessonToMove = sourceLessons.find((l) => l.id === active.id);
+    if (!lessonToMove) return;
+
+    const newSourceLessons = sourceLessons.filter((l) => l.id !== active.id);
+    const targetLessons = optimistic[targetIdx]!.lessons;
+    let insertAt = targetLessons.length;
+    if (targetLessonId) {
+      insertAt = Math.max(
+        0,
+        targetLessons.findIndex((l) => l.id === targetLessonId),
       );
+    }
+    const newTargetLessons = [
+      ...targetLessons.slice(0, insertAt),
+      { ...lessonToMove, moduleId: targetModuleId },
+      ...targetLessons.slice(insertAt),
+    ];
+
+    const next = [...optimistic];
+    next[sourceIdx] = { ...next[sourceIdx]!, lessons: newSourceLessons };
+    next[targetIdx] = { ...next[targetIdx]!, lessons: newTargetLessons };
+    setOptimistic(next);
+
+    try {
+      await coursesApi.moveLessonToModule(String(active.id), targetModuleId, insertAt);
       await onChange();
     } catch (e) {
-      onError(e instanceof ApiHttpError ? e.message : 'No pudimos reordenar las secciones.');
+      onError(e instanceof ApiHttpError ? e.message : 'No pudimos mover la lección.');
       await onChange();
     }
   }
@@ -756,8 +828,12 @@ function ModuleBlock({
   const [showAddLesson, setShowAddLesson] = useState(false);
 
   // Sortable state — el handle es el `<button>` con icon `grip` del header.
+  // `data.type='module'` permite al `onDragEnd` global distinguir módulos vs
+  // lecciones, y soportar drop de una lección sobre la card del módulo
+  // (cross-module al final del módulo destino).
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: courseModule.id,
+    data: { type: 'module' },
   });
 
   async function handleAddLesson(form: FormData) {

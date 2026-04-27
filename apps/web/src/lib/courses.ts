@@ -159,6 +159,21 @@ export const coursesApi = {
     );
   },
 
+  async moveLessonToModule(
+    lessonId: string,
+    targetModuleId: string,
+    position?: number,
+  ): Promise<void> {
+    await apiFetch<{ moved: true }>(
+      `/api/v1/modules/courses/lessons/${lessonId}/move-to-module`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ targetModuleId, ...(position !== undefined ? { position } : {}) }),
+      },
+      withAuth(),
+    );
+  },
+
   async reorderLessons(moduleId: string, lessonIds: string[]): Promise<void> {
     await apiFetch<{ reordered: true }>(
       `/api/v1/modules/courses/modules/${moduleId}/reorder-lessons`,

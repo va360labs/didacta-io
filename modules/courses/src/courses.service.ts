@@ -237,6 +237,125 @@ export class CoursesService {
   }
 
   /**
+   * Mueve una lección de su módulo actual a otro, insertándola en `position`
+   * dentro del módulo destino. Si `position` es `undefined`, la coloca al final.
+   *
+   * Garantiza:
+   * - Tenant isolation: la lección, el módulo origen y el destino tienen que
+   *   ser del mismo tenant.
+   * - El curso tiene que ser el mismo (por ahora; mover lecciones entre cursos
+   *   distintos es otro caso).
+   * - El unique `(moduleId, position)` no se corrompe: igual que `reorderLessons`,
+   *   pasamos las lecciones afectadas por posiciones temporales negativas y luego
+   *   las reasignamos.
+   *
+   * Necesario para cross-module drag & drop en el constructor.
+   */
+  async moveLessonToModule(
+    tenantId: string,
+    actorId: string | null,
+    lessonId: string,
+    targetModuleId: string,
+    position?: number,
+  ) {
+    const lesson = await this.prisma.modCoursesLesson.findFirst({
+      where: { tenantId, id: lessonId, deletedAt: null },
+      include: { module: { select: { id: true, courseId: true } } },
+    });
+    if (!lesson) throw new CourseNotFoundError(lessonId);
+
+    const targetModule = await this.prisma.modCoursesModule.findFirst({
+      where: { tenantId, id: targetModuleId, deletedAt: null },
+    });
+    if (!targetModule) throw new CourseNotFoundError(targetModuleId);
+
+    if (lesson.module.courseId !== targetModule.courseId) {
+      throw new CourseNotFoundError(
+        `los módulos pertenecen a cursos distintos; mover entre cursos no está soportado`,
+      );
+    }
+
+    if (lesson.moduleId === targetModuleId) {
+      // Mismo módulo: delegamos a la operación de reorden con la nueva posición.
+      const siblings = await this.prisma.modCoursesLesson.findMany({
+        where: { tenantId, moduleId: targetModuleId, deletedAt: null },
+        orderBy: { position: 'asc' },
+        select: { id: true },
+      });
+      const ids = siblings.map((s) => s.id).filter((id) => id !== lessonId);
+      const insertAt = Math.max(0, Math.min(position ?? ids.length, ids.length));
+      ids.splice(insertAt, 0, lessonId);
+      await this.reorderLessons(tenantId, actorId, targetModuleId, ids);
+      return;
+    }
+
+    // Calculamos el nuevo orden del módulo destino.
+    const destSiblings = await this.prisma.modCoursesLesson.findMany({
+      where: { tenantId, moduleId: targetModuleId, deletedAt: null },
+      orderBy: { position: 'asc' },
+      select: { id: true },
+    });
+    const destIds = destSiblings.map((s) => s.id);
+    const insertAt = Math.max(0, Math.min(position ?? destIds.length, destIds.length));
+    destIds.splice(insertAt, 0, lessonId);
+
+    // Y el del módulo origen tras quitarla.
+    const sourceSiblings = await this.prisma.modCoursesLesson.findMany({
+      where: { tenantId, moduleId: lesson.moduleId, deletedAt: null, NOT: { id: lessonId } },
+      orderBy: { position: 'asc' },
+      select: { id: true },
+    });
+    const sourceIds = sourceSiblings.map((s) => s.id);
+
+    // 1. Mover la lección al destino con position temporal y actualizar moduleId.
+    // 2. Compactar destino con posiciones temporales negativas y luego definitivas.
+    // 3. Compactar origen igual.
+    await this.prisma.$transaction([
+      // Saca la lección a una posición segura (-1) y le cambia el módulo.
+      this.prisma.modCoursesLesson.update({
+        where: { id: lessonId },
+        data: { moduleId: targetModuleId, position: -999_999 },
+      }),
+      // Posiciones temporales negativas para el destino.
+      ...destIds.map((id, idx) =>
+        this.prisma.modCoursesLesson.update({
+          where: { id },
+          data: { position: -(idx + 1) * 1000 },
+        }),
+      ),
+      // Posiciones temporales negativas para el origen.
+      ...sourceIds.map((id, idx) =>
+        this.prisma.modCoursesLesson.update({
+          where: { id },
+          data: { position: -(idx + 1) * 1000 - 500_000 },
+        }),
+      ),
+    ]);
+
+    await this.prisma.$transaction([
+      ...destIds.map((id, idx) =>
+        this.prisma.modCoursesLesson.update({
+          where: { id },
+          data: { position: idx },
+        }),
+      ),
+      ...sourceIds.map((id, idx) =>
+        this.prisma.modCoursesLesson.update({
+          where: { id },
+          data: { position: idx },
+        }),
+      ),
+    ]);
+
+    await this.publish(tenantId, actorId, 'courses.lesson.moved-to-module', {
+      lessonId,
+      fromModuleId: lesson.moduleId,
+      toModuleId: targetModuleId,
+      position: insertAt,
+    });
+  }
+
+  /**
    * Reordena las lecciones de un módulo en bulk según la lista provista.
    *
    * `lessonIds` debe contener exactamente los IDs de las lecciones activas del
