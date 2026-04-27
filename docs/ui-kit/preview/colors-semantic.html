@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: var(--didacta-font-body); color: var(--didacta-ink-700); }
+  .card { box-sizing: border-box; padding: 20px 24px; }
+  .row { display: flex; gap: 12px; }
+  .item { flex: 1; border: 1px solid var(--didacta-border); border-radius: 12px; padding: 14px; min-height: 96px; display: flex; flex-direction: column; gap: 8px; background: #fff; }
+  .dot { width: 22px; height: 22px; border-radius: 999px; }
+  .name { font-family: var(--didacta-font-display); font-weight: 700; font-size: 14px; color: var(--didacta-night); }
+  .hex { font-size: 12px; color: var(--didacta-ink-400); }
+  .use { font-size: 12px; color: var(--didacta-ink-500); line-height: 1.4; }
+  .label { font-size: 12px; color: var(--didacta-ink-400); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="label">Semantic colors</div>
+  <div class="row">
+    <div class="item"><div class="dot" style="background:#18B5A8"></div><div class="name">Éxito</div><div class="hex">#18B5A8</div><div class="use">Curso completado · evaluación aprobada</div></div>
+    <div class="item"><div class="dot" style="background:#2E7DCE"></div><div class="name">Información</div><div class="hex">#2E7DCE</div><div class="use">Ayuda · novedades · mensajes</div></div>
+    <div class="item"><div class="dot" style="background:#FF6F61"></div><div class="name">Aviso</div><div class="hex">#FF6F61</div><div class="use">Atención requerida · entrega pendiente</div></div>
+    <div class="item"><div class="dot" style="background:#DC2626"></div><div class="name">Error</div><div class="hex">#DC2626</div><div class="use">Errores funcionales</div></div>
+    <div class="item" style="background:#F1F3F5; border-color:#E2E8F0;"><div class="dot" style="background:#94A3B8"></div><div class="name" style="color:#94A3B8;">Deshabilitado</div><div class="hex">#94A3B8</div><div class="use">Estado inactivo</div></div>
+  </div>
+</div>
+</body>
+</html>

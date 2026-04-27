@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  html, body { margin: 0; padding: 0; background: #F8FAFC; }
+  body { font-family: 'Inter'; color: var(--didacta-ink-700); padding: 22px 24px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 1; height: 24px; }
+  .dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+  .label { font-size: 12px; color: var(--didacta-ink-400); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div class="label">Badges &amp; status pills</div>
+<div class="row">
+  <span class="badge" style="background:#E6F7F5; color:#0F8077;"><span class="dot"></span>Completado</span>
+  <span class="badge" style="background:#E8F1FB; color:#1E5AA8;"><span class="dot"></span>En curso</span>
+  <span class="badge" style="background:#FFEDEA; color:#C8473A;"><span class="dot"></span>Pendiente</span>
+  <span class="badge" style="background:#FEE7E7; color:#B91C1C;"><span class="dot"></span>Vencido</span>
+  <span class="badge" style="background:#F1F3F5; color:#475569;">Borrador</span>
+  <span class="badge" style="background:#0D1B2A; color:#fff;">Premium</span>
+  <span class="badge" style="background:#FFEDEA; color:#C8473A;">Nuevo</span>
+  <span class="badge" style="background:#E8F1FB; color:#1E5AA8;">Sugerido por Didacta</span>
+  <span class="badge" style="background:#F1F3F5; color:#475569;">Intermedio</span>
+</div>
+</body>
+</html>

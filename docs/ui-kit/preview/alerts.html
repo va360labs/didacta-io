@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../colors_and_type.css" />
+<style>
+  html, body { margin: 0; padding: 0; background: #F8FAFC; }
+  body { font-family: 'Inter'; color: #1F2A3A; padding: 20px; }
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+  .alert { display: flex; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid; align-items: flex-start; }
+  .alert .ic { width: 20px; height: 20px; border-radius: 999px; flex-shrink: 0; margin-top: 2px; display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 700; font-family: 'Sora'; }
+  .alert .body { font-size: 13px; line-height: 1.4; }
+  .alert .ttl { font-weight: 600; color: #0D1B2A; }
+  .success { background: #E6F7F5; border-color: #B7E8E2; }
+  .success .ic { background: #18B5A8; }
+  .info    { background: #E8F1FB; border-color: #BFD7F0; }
+  .info .ic { background: #2E7DCE; }
+  .warn    { background: #FFEDEA; border-color: #FFCEC7; }
+  .warn .ic { background: #FF6F61; }
+  .err     { background: #FEE7E7; border-color: #F8C7C7; }
+  .err .ic { background: #DC2626; }
+</style>
+</head>
+<body>
+<div class="stack">
+  <div class="alert success"><div class="ic">✓</div><div class="body"><div class="ttl">Curso completado</div>Tu certificado ya está disponible para descargar.</div></div>
+  <div class="alert info"><div class="ic">i</div><div class="body"><div class="ttl">Sugerido por Didacta</div>Hemos preparado una ruta basada en tu progreso reciente.</div></div>
+  <div class="alert warn"><div class="ic">!</div><div class="body"><div class="ttl">Entrega pendiente</div>Revisa la configuración antes de activar la ruta.</div></div>
+  <div class="alert err"><div class="ic">×</div><div class="body"><div class="ttl">No hemos podido guardar los cambios</div>Revisa tu conexión y vuelve a intentarlo.</div></div>
+</div>
+</body>
+</html>

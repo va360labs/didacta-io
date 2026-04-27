@@ -12,3 +12,6 @@ pnpm-lock.yaml
 docs/**/*.md
 prompts/**/*.md
 !docs/adrs/**/*.md
+
+# UI kit aportado por el usuario — material de referencia, no código del proyecto.
+docs/ui-kit/**

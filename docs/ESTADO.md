@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (SCORM API runtime + auto-completion — follow-up HU-FOR-002)
+> **Última actualización**: 2026-04-27 (UI kit Didacta · foundation — sidebar + shell + iconos)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,40 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — UI kit Didacta · foundation (sidebar + shell + iconos)
+
+Implementación de la **fase 1** del UI kit oficial Didacta documentado en
+`docs/ui-kit/`. Aplica el shell visual (sidebar persistente Azul noche
++ main canvas claro) sin tocar el contenido de las páginas individuales —
+preserva todo el comportamiento existente.
+
+Cambios:
+
+- **Brand assets** copiados a `apps/web/public/brand/` (anagrama, logo,
+  logo-blanco) servidos por Next desde rutas `/brand/*`.
+- **`Icon` component** inline con stroke 1.75px rounded caps, replica el
+  set Lucide-style del UI kit. Sin librería externa.
+- **`AppSidebar`**: oscuro `#0D1B2A` con anagrama 36×36 + wordmark Sora,
+  grupos uppercase 0.08em, item activo con border `rgba(46,125,206,0.32)`
+  y bg `rgba(46,125,206,0.18)`, footer con avatar gradiente Azul
+  equilibrio → Verde crecimiento, badge coral para items con
+  notificaciones pendientes.
+- **`(app)/layout.tsx`** reescrito: sidebar persistente + canvas
+  `bg-bg-subtle`, mini-toolbar sticky-top con NotificationsBell (sin
+  título global porque cada page renderiza su `<h1>` propio).
+  Agrupación de navegación según rol: Aprendizaje · Formador ·
+  Administración · Mi cuenta.
+
+**Las páginas internas no se tocan**. El visual cambia en el chrome
+(sidebar + frame), no en el contenido.
+
+**Pendiente — fases siguientes del UI kit**:
+
+- Fase 2: alinear primitives shadcn (Card, Button, Badge, Input) con los
+  hex Didacta exactos en lugar de los HSL aproximados actuales.
+- Fase 3: rediseño página por página (dashboards, catálogo, course
+  detail, lesson player) siguiendo specs del UI kit.
 
 ### Sesión 2026-04-27 — SCORM API runtime + auto-completion (follow-up HU-FOR-002)
 

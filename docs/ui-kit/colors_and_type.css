@@ -1,0 +1,159 @@
+/* =============================================================
+   Didacta — Colors & Type tokens
+   Plataforma educativa modular, abierta y preparada para escalar.
+   ============================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ---------- Brand colors ---------- */
+  --didacta-night:        #0D1B2A; /* Azul noche profundo  */
+  --didacta-trust:        #1E5AA8; /* Azul confianza       */
+  --didacta-balance:      #2E7DCE; /* Azul equilibrio      */
+  --didacta-growth:       #18B5A8; /* Verde crecimiento    */
+  --didacta-coral:        #FF6F61; /* Coral energía        */
+  --didacta-surface:      #F1F3F5; /* Gris claro neutro    */
+  --didacta-white:        #FFFFFF;
+
+  /* ---------- Extended neutrals (derived) ---------- */
+  --didacta-ink-900:      #0D1B2A;
+  --didacta-ink-700:      #1F2A3A;
+  --didacta-ink-500:      #475569;
+  --didacta-ink-400:      #64748B;
+  --didacta-ink-300:      #94A3B8;
+  --didacta-border:       #D7DEE8;
+  --didacta-border-soft:  #E2E8F0;
+  --didacta-bg-soft:      #F8FAFC;
+
+  /* ---------- Semantic ---------- */
+  --didacta-success:      #18B5A8;
+  --didacta-info:         #2E7DCE;
+  --didacta-warning:      #FF6F61;
+  --didacta-danger:       #DC2626;
+
+  --didacta-success-bg:   #E6F7F5;
+  --didacta-info-bg:      #E8F1FB;
+  --didacta-warning-bg:   #FFEDEA;
+  --didacta-danger-bg:    #FEE7E7;
+
+  /* Disabled */
+  --didacta-disabled-bg:    #F1F3F5;
+  --didacta-disabled-fg:    #94A3B8;
+  --didacta-disabled-border:#E2E8F0;
+
+  /* ---------- Typography ---------- */
+  --didacta-font-display: 'Sora', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --didacta-font-body:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Semantic type sizes (px / line-height) */
+  --didacta-h1-size: 48px;  --didacta-h1-lh: 56px;  --didacta-h1-weight: 800;
+  --didacta-h2-size: 36px;  --didacta-h2-lh: 44px;  --didacta-h2-weight: 700;
+  --didacta-h3-size: 28px;  --didacta-h3-lh: 36px;  --didacta-h3-weight: 600;
+  --didacta-h4-size: 22px;  --didacta-h4-lh: 30px;  --didacta-h4-weight: 600;
+  --didacta-body-lg-size: 18px; --didacta-body-lg-lh: 28px;
+  --didacta-body-size:    16px; --didacta-body-lh:    24px;
+  --didacta-small-size:   14px; --didacta-small-lh:   20px;
+  --didacta-caption-size: 12px; --didacta-caption-lh: 16px; --didacta-caption-weight: 500;
+
+  /* ---------- Radius ---------- */
+  --didacta-radius-sm: 6px;
+  --didacta-radius-md: 8px;
+  --didacta-radius-lg: 12px;
+  --didacta-radius-xl: 20px;
+  --didacta-radius-pill: 999px;
+
+  /* ---------- Spacing scale (4px base) ---------- */
+  --didacta-space-1: 4px;
+  --didacta-space-2: 8px;
+  --didacta-space-3: 12px;
+  --didacta-space-4: 16px;
+  --didacta-space-5: 20px;
+  --didacta-space-6: 24px;
+  --didacta-space-8: 32px;
+  --didacta-space-10: 40px;
+  --didacta-space-12: 48px;
+  --didacta-space-16: 64px;
+
+  /* ---------- Shadows (sutiles) ---------- */
+  --didacta-shadow-xs: 0 1px 2px rgba(13, 27, 42, 0.04);
+  --didacta-shadow-sm: 0 1px 3px rgba(13, 27, 42, 0.06), 0 1px 2px rgba(13, 27, 42, 0.04);
+  --didacta-shadow-md: 0 4px 12px rgba(13, 27, 42, 0.06), 0 2px 4px rgba(13, 27, 42, 0.04);
+  --didacta-shadow-lg: 0 12px 32px rgba(13, 27, 42, 0.08), 0 4px 8px rgba(13, 27, 42, 0.04);
+  --didacta-focus-ring: 0 0 0 3px rgba(30, 90, 168, 0.25);
+}
+
+/* =============================================================
+   Semantic element styles
+   ============================================================= */
+
+.didacta-h1, h1.didacta {
+  font-family: var(--didacta-font-display);
+  font-weight: var(--didacta-h1-weight);
+  font-size: var(--didacta-h1-size);
+  line-height: var(--didacta-h1-lh);
+  color: var(--didacta-night);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.didacta-h2, h2.didacta {
+  font-family: var(--didacta-font-display);
+  font-weight: var(--didacta-h2-weight);
+  font-size: var(--didacta-h2-size);
+  line-height: var(--didacta-h2-lh);
+  color: var(--didacta-night);
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+.didacta-h3, h3.didacta {
+  font-family: var(--didacta-font-display);
+  font-weight: var(--didacta-h3-weight);
+  font-size: var(--didacta-h3-size);
+  line-height: var(--didacta-h3-lh);
+  color: var(--didacta-night);
+  margin: 0;
+}
+.didacta-h4, h4.didacta {
+  font-family: var(--didacta-font-body);
+  font-weight: var(--didacta-h4-weight);
+  font-size: var(--didacta-h4-size);
+  line-height: var(--didacta-h4-lh);
+  color: var(--didacta-night);
+  margin: 0;
+}
+.didacta-body-lg {
+  font-family: var(--didacta-font-body);
+  font-size: var(--didacta-body-lg-size);
+  line-height: var(--didacta-body-lg-lh);
+  color: var(--didacta-ink-700);
+}
+.didacta-body, p.didacta {
+  font-family: var(--didacta-font-body);
+  font-size: var(--didacta-body-size);
+  line-height: var(--didacta-body-lh);
+  color: var(--didacta-ink-700);
+  margin: 0;
+}
+.didacta-small {
+  font-family: var(--didacta-font-body);
+  font-size: var(--didacta-small-size);
+  line-height: var(--didacta-small-lh);
+  color: var(--didacta-ink-500);
+}
+.didacta-caption {
+  font-family: var(--didacta-font-body);
+  font-weight: var(--didacta-caption-weight);
+  font-size: var(--didacta-caption-size);
+  line-height: var(--didacta-caption-lh);
+  color: var(--didacta-ink-400);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* Helper: brand body baseline */
+.didacta-base {
+  font-family: var(--didacta-font-body);
+  color: var(--didacta-ink-700);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
