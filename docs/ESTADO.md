@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (batch 2 de E2E — T-1A-018 progreso 8→11 specs)
+> **Última actualización**: 2026-04-27 (batch 3 de E2E — T-1A-018 progreso 11→14 specs)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,22 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — Batch 3 de E2E nuevos (T-1A-018 progreso 11 → 14)
+
+Tres specs nuevos cubriendo theming, admin/usuarios y notificaciones:
+
+- **`theming.spec.ts`** (mod.theming): GET → PUT (cambia hue) → GET
+  vuelve a confirmar → reset → defaults restaurados. Segundo test:
+  brandHue fuera de rango → 400.
+- **`admin-users-invite.spec.ts`** (PR #95): invitar formador → listar
+  con search → suspender → quitar rol formador. Segundo test: invite
+  duplicado → 409.
+- **`notifications-bell.spec.ts`** (PR #61 + #62): completar curso
+  genera notificaciones IN_APP del alumno; mark-all-read marca todas
+  leídas.
+
+Suite E2E ahora: 14 specs (70% del DoD de T-1A-018). Faltan ~6 más.
 
 ### Sesión 2026-04-27 — Batch 2 de E2E nuevos (T-1A-018 progreso 8 → 11)
 
