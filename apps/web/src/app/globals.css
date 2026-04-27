@@ -301,6 +301,33 @@ table,
   background: hsl(var(--brand-h), 15%, 70%);
 }
 
+/* Scrollbar fina y disimulada — para superficies oscuras (sidebar) o
+ * contextos donde el scrollbar global de 12px queda sobredimensionado.
+ * Solo visible al hover; en reposo casi imperceptible. */
+.scrollbar-thin-dark {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+.scrollbar-thin-dark::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-thin-dark::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin-dark::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  border: 0;
+  transition: background-color 0.15s var(--ease-out);
+}
+.scrollbar-thin-dark:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
+.scrollbar-thin-dark::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
 /* prefers-reduced-motion — respetar siempre (skill pixel-perfect-ui §5.3). */
 @media (prefers-reduced-motion: reduce) {
   *,

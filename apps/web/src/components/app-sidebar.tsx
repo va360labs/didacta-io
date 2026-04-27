@@ -63,7 +63,7 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
         </span>
       </Link>
 
-      <nav className="flex-1 space-y-4 overflow-y-auto">
+      <nav className="scrollbar-thin-dark flex-1 space-y-4 overflow-y-auto">
         {groups.map((group) => (
           <div key={group.label}>
             <div className="px-2.5 pb-2 pt-3.5 text-[11px] font-medium uppercase text-white/40 tracking-[0.08em]">
