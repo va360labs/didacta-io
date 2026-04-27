@@ -37,7 +37,8 @@ export type IconName =
   | 'user'
   | 'cog'
   | 'building'
-  | 'palette';
+  | 'palette'
+  | 'alert';
 
 interface Props extends Omit<SVGProps<SVGSVGElement>, 'name'> {
   name: IconName;
@@ -238,6 +239,14 @@ export function Icon({ name, size = 20, strokeWidth = 1.75, className, ...rest }
           <circle cx="8.5" cy="7.5" r="1.5" />
           <circle cx="6.5" cy="12.5" r="1.5" />
           <path d="M12 22a10 10 0 1 1 10-10 4 4 0 0 1-4 4h-2a2 2 0 0 0-1 4 2 2 0 0 1-3 2Z" />
+        </svg>
+      );
+    case 'alert':
+      return (
+        <svg {...common}>
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
         </svg>
       );
   }

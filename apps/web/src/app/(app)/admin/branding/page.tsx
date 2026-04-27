@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Icon } from '@/components/icon';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -461,7 +462,10 @@ export default function BrandingPage() {
         <div className="flex items-center justify-between gap-4 lg:col-span-3">
           <div className="text-sm">
             {status === 'saved' ? (
-              <span className="font-semibold text-success-700">✓ Cambios guardados</span>
+              <span className="inline-flex items-center gap-1.5 font-semibold text-success-700">
+                <Icon name="check" size={16} />
+                Cambios guardados
+              </span>
             ) : status === 'error' && error ? (
               <span className="font-semibold text-danger-700">{error}</span>
             ) : (

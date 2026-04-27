@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
@@ -76,10 +77,14 @@ export default function CorreccionesPage() {
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
             <div
-              className="flex h-20 w-20 items-center justify-center rounded-full bg-success-50 text-success-700 text-3xl"
               aria-hidden="true"
+              className="grid h-20 w-20 place-items-center rounded-2xl"
+              style={{
+                background: 'var(--didacta-success-bg)',
+                color: 'var(--didacta-success-fg)',
+              }}
             >
-              ✓
+              <Icon name="check" size={36} />
             </div>
             <h3 className="font-display text-xl font-semibold">Estás al día</h3>
             <p className="max-w-md text-text-muted">

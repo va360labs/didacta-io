@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -110,8 +111,15 @@ export default function AuditoriaPage() {
           <CardContent className="p-6">
             {verifyResult.valid ? (
               <div className="flex items-start gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success-50 text-success-700">
-                  ✓
+                <div
+                  aria-hidden="true"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full"
+                  style={{
+                    background: 'var(--didacta-success-bg)',
+                    color: 'var(--didacta-success-fg)',
+                  }}
+                >
+                  <Icon name="check" size={20} />
                 </div>
                 <div>
                   <h3 className="font-display text-lg font-semibold text-success-700">
@@ -125,8 +133,15 @@ export default function AuditoriaPage() {
               </div>
             ) : (
               <div className="flex items-start gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger-50 text-danger-700">
-                  !
+                <div
+                  aria-hidden="true"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full"
+                  style={{
+                    background: 'var(--didacta-err-bg)',
+                    color: 'var(--didacta-err-fg)',
+                  }}
+                >
+                  <Icon name="alert" size={20} />
                 </div>
                 <div>
                   <h3 className="font-display text-lg font-semibold text-danger-700">
@@ -216,11 +231,12 @@ export default function AuditoriaPage() {
       </Card>
 
       {error ? (
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-danger-700">{error}</p>
-          </CardContent>
-        </Card>
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+        >
+          {error}
+        </div>
       ) : entries === null ? (
         <div className="space-y-3">
           <div className="skeleton h-16 w-full" />
