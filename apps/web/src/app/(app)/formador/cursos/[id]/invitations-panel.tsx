@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Icon } from '@/components/icon';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,6 +15,7 @@ export function InvitationsPanel({ courseId }: { courseId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [justCreated, setJustCreated] = useState<Invitation | null>(null);
+  const [copied, setCopied] = useState(false);
 
   async function reload() {
     try {
@@ -31,6 +34,7 @@ export function InvitationsPanel({ courseId }: { courseId: string }) {
     setPending(true);
     setError(null);
     setJustCreated(null);
+    setCopied(false);
     try {
       const maxUsesValue = form.get('maxUses');
       const expiresAtValue = form.get('expiresAt');
@@ -64,29 +68,45 @@ export function InvitationsPanel({ courseId }: { courseId: string }) {
   async function copy(text: string) {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Invitaciones</CardTitle>
-        <CardDescription>
-          Generá códigos para que alumnos se matriculen sin abrir auto-matriculación pública.
-        </CardDescription>
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
+            style={{
+              background: 'var(--didacta-info-bg)',
+              color: 'var(--didacta-info-fg)',
+            }}
+          >
+            <Icon name="users" size={18} />
+          </span>
+          <div className="min-w-0">
+            <CardTitle className="text-base">Invitaciones</CardTitle>
+            <CardDescription>
+              Generá códigos para que alumnos se matriculen sin abrir auto-matriculación pública.
+            </CardDescription>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <form
           action={handleCreate}
-          className="grid gap-2 rounded-md border border-dashed border-neutral-300 p-3 sm:grid-cols-12 dark:border-neutral-700"
+          className="grid gap-3 rounded-lg border border-dashed border-border-strong bg-surface-2 p-4 sm:grid-cols-12"
         >
-          <div className="sm:col-span-4">
+          <div className="space-y-1.5 sm:col-span-4">
             <Label htmlFor={`maxUses-${courseId}`} className="text-xs">
               Usos máx. (vacío = ilimitado)
             </Label>
             <Input id={`maxUses-${courseId}`} name="maxUses" type="number" min={1} />
           </div>
-          <div className="sm:col-span-6">
+          <div className="space-y-1.5 sm:col-span-6">
             <Label htmlFor={`expiresAt-${courseId}`} className="text-xs">
               Expira (opcional)
             </Label>
@@ -94,65 +114,95 @@ export function InvitationsPanel({ courseId }: { courseId: string }) {
           </div>
           <div className="flex items-end sm:col-span-2">
             <Button type="submit" size="sm" disabled={pending} className="w-full">
+              <Icon name="plus" size={14} />
               Generar
             </Button>
           </div>
         </form>
 
         {error ? (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          <div
+            role="alert"
+            className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+          >
             {error}
-          </p>
+          </div>
         ) : null}
 
         {justCreated ? (
-          <div className="rounded-md border border-green-300 bg-green-50 p-3 text-sm dark:border-green-800 dark:bg-green-950">
-            <p className="font-medium text-green-900 dark:text-green-100">
-              Código generado: <code className="ml-2 font-mono">{justCreated.code}</code>
-            </p>
-            <p className="mt-1 text-xs text-green-800 dark:text-green-200">
-              Guardalo y compartilo. El token URL para link directo:
-            </p>
-            <code className="mt-1 block break-all rounded bg-white p-2 text-xs dark:bg-neutral-900">
+          <div
+            className="rounded-lg p-4 text-sm"
+            style={{
+              background: 'var(--didacta-success-bg)',
+              color: 'var(--didacta-success-fg)',
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <Icon name="check" size={16} />
+              <p className="font-semibold">Código generado</p>
+            </div>
+            <p className="mt-2 font-mono text-base font-bold tracking-wider">{justCreated.code}</p>
+            <p className="mt-2 text-xs opacity-80">Token URL para link directo:</p>
+            <code className="mt-1 block break-all rounded-md bg-white p-2 text-xs text-text">
               {justCreated.token}
             </code>
             <Button
               size="sm"
               variant="outline"
-              className="mt-2"
+              className="mt-3"
               onClick={() => void copy(justCreated.code)}
             >
-              Copiar código
+              {copied ? '✓ Copiado' : 'Copiar código'}
             </Button>
           </div>
         ) : null}
 
         {invitations && invitations.length === 0 ? (
-          <p className="text-sm text-neutral-500">No hay invitaciones activas.</p>
+          <p className="rounded-md border border-dashed border-border-soft px-4 py-6 text-center text-sm text-text-subtle">
+            No hay invitaciones activas.
+          </p>
         ) : null}
 
         {invitations && invitations.length > 0 ? (
-          <ul className="space-y-1 text-sm">
-            {invitations.map((inv) => (
-              <li
-                key={inv.id}
-                className="flex items-center justify-between rounded-md border border-neutral-200 px-3 py-2 dark:border-neutral-800"
-              >
-                <div>
-                  <code className="font-mono">{inv.code}</code>
-                  <span className="ml-3 text-xs text-neutral-500">
-                    Usos: {inv.usedCount}
-                    {inv.maxUses ? ` / ${inv.maxUses}` : ' (ilimitado)'}
-                    {inv.expiresAt
-                      ? ` · expira ${new Date(inv.expiresAt).toLocaleString('es-ES')}`
-                      : ''}
-                  </span>
-                </div>
-                <Button size="sm" variant="ghost" onClick={() => void handleRevoke(inv.id)}>
-                  Revocar
-                </Button>
-              </li>
-            ))}
+          <ul className="divide-y divide-border-soft rounded-lg border border-border-soft">
+            {invitations.map((inv) => {
+              const expired = inv.expiresAt && new Date(inv.expiresAt).getTime() < Date.now();
+              const exhausted = inv.maxUses && inv.usedCount >= inv.maxUses;
+              return (
+                <li
+                  key={inv.id}
+                  className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <code className="font-mono text-sm font-semibold text-text">{inv.code}</code>
+                      {expired ? <Badge variant="muted">Expirada</Badge> : null}
+                      {exhausted ? <Badge variant="muted">Agotada</Badge> : null}
+                    </div>
+                    <p className="mt-0.5 text-xs text-text-subtle">
+                      Usos: {inv.usedCount}
+                      {inv.maxUses ? ` / ${inv.maxUses}` : ' (ilimitado)'}
+                      {inv.expiresAt
+                        ? ` · expira ${new Date(inv.expiresAt).toLocaleString('es-ES')}`
+                        : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => void copy(inv.code)}
+                      aria-label="Copiar código"
+                    >
+                      Copiar
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => void handleRevoke(inv.id)}>
+                      Revocar
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         ) : null}
       </CardContent>

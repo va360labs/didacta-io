@@ -82,6 +82,7 @@
   --color-surface-3: hsl(var(--brand-h), 22%, 96%);
 
   --color-border: hsl(var(--brand-h), 20%, 92%);
+  --color-border-soft: hsl(var(--brand-h), 22%, 94%);
   --color-border-strong: hsl(var(--brand-h), 20%, 84%);
 
   --color-text: hsl(var(--brand-h), 35%, 12%);

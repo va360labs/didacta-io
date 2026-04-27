@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { CourseStatusBadge } from '@/components/course-status-badge';
+import { Icon } from '@/components/icon';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,6 +22,15 @@ const LESSON_TYPES: { value: LessonType; label: string }[] = [
   { value: 'TEXT', label: 'Texto' },
   { value: 'QUIZ', label: 'Quiz' },
 ];
+
+const LESSON_TYPE_LABEL: Record<LessonType, string> = {
+  VIDEO: 'Vídeo',
+  HTML: 'HTML',
+  PDF: 'PDF',
+  TEXT: 'Texto',
+  QUIZ: 'Quiz',
+  SCORM: 'SCORM',
+};
 
 interface PublishError {
   message: string;
@@ -73,20 +84,23 @@ export function CourseEditor({
     await withRefresh(() => coursesApi.archive(initial.id));
   }
 
+  const totalLessons = initial.modules.reduce((acc, m) => acc + m.lessons.length, 0);
+
   return (
     <section className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{initial.title}</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            slug: {initial.slug}
-            {initial.category ? ` · ${initial.category}` : ''}
+          <h1 className="font-display text-3xl font-bold tracking-tight">{initial.title}</h1>
+          <p className="mt-1 text-sm text-text-muted">
+            <span className="font-mono">/{initial.slug}</span>
+            {initial.category ? <span> · {initial.category}</span> : null}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <CourseStatusBadge status={initial.status} />
           {initial.status === 'DRAFT' ? (
             <Button onClick={handlePublish} disabled={pending}>
+              <Icon name="check" size={16} />
               Publicar
             </Button>
           ) : null}
@@ -99,42 +113,54 @@ export function CourseEditor({
       </header>
 
       {error ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p role="alert" className="text-sm font-medium text-red-700 dark:text-red-400">
-              {error.message}
-            </p>
-            {error.reasons && error.reasons.length > 0 ? (
-              <ul className="mt-2 list-disc pl-4 text-sm text-red-700 dark:text-red-400">
-                {error.reasons.map((r, idx) => (
-                  <li key={`${r}-${idx}`}>{r}</li>
-                ))}
-              </ul>
-            ) : null}
-          </CardContent>
-        </Card>
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-4 text-sm text-danger-700"
+        >
+          <p className="font-semibold">{error.message}</p>
+          {error.reasons && error.reasons.length > 0 ? (
+            <ul className="mt-2 list-disc space-y-0.5 pl-5">
+              {error.reasons.map((r, idx) => (
+                <li key={`${r}-${idx}`}>{r}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
       ) : null}
 
       <CertificateTemplateCard course={initial} onChange={onChange} />
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Estructura</CardTitle>
-          <CardDescription>
-            {initial.modules.length} módulos ·{' '}
-            {initial.modules.reduce((acc, m) => acc + m.lessons.length, 0)} lecciones
-          </CardDescription>
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <CardTitle className="text-base">Estructura</CardTitle>
+              <CardDescription>
+                {initial.modules.length} {initial.modules.length === 1 ? 'módulo' : 'módulos'} ·{' '}
+                {totalLessons} {totalLessons === 1 ? 'lección' : 'lecciones'}
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {initial.modules.map((m) => (
-            <ModuleBlock key={m.id} courseModule={m} onChange={onChange} />
-          ))}
+          {initial.modules.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border-strong px-4 py-8 text-center text-sm text-text-muted">
+              Todavía no hay módulos. Empezá creando el primero abajo ↓
+            </div>
+          ) : (
+            initial.modules.map((m) => (
+              <ModuleBlock key={m.id} courseModule={m} onChange={onChange} />
+            ))
+          )}
 
           <form
             action={handleAddModule}
-            className="space-y-3 rounded-md border border-dashed border-neutral-300 p-4 dark:border-neutral-700"
+            className="space-y-3 rounded-lg border border-dashed border-border-strong bg-surface-2 p-4"
           >
-            <p className="text-sm font-medium">Añadir módulo</p>
+            <p className="flex items-center gap-2 text-sm font-semibold text-text">
+              <Icon name="plus" size={16} />
+              Añadir módulo
+            </p>
             <div className="grid gap-2 sm:grid-cols-3">
               <Input name="title" required placeholder="Título del módulo" />
               <Input
@@ -144,7 +170,7 @@ export function CourseEditor({
               />
             </div>
             <Button type="submit" size="sm" disabled={pending} variant="outline">
-              Añadir módulo
+              Crear módulo
             </Button>
           </form>
         </CardContent>
@@ -204,80 +230,119 @@ function ModuleBlock({
   }
 
   return (
-    <div className="rounded-md border border-neutral-200 p-4 dark:border-neutral-800">
-      <header className="mb-3 flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium">{courseModule.title}</p>
+    <div className="rounded-lg border border-border bg-surface p-4">
+      <header className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-display text-base font-semibold leading-tight text-text">
+            {courseModule.title}
+          </p>
           {courseModule.description ? (
-            <p className="text-xs text-neutral-500">{courseModule.description}</p>
+            <p className="mt-0.5 text-xs text-text-muted">{courseModule.description}</p>
           ) : null}
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-neutral-500">{courseModule.lessons.length} lecciones</span>
+          <span className="text-xs text-text-subtle">
+            {courseModule.lessons.length}{' '}
+            {courseModule.lessons.length === 1 ? 'lección' : 'lecciones'}
+          </span>
           <button
             type="button"
             onClick={handleDeleteModule}
             disabled={pending}
-            className="text-xs text-red-600 underline decoration-dotted hover:decoration-solid"
+            className="text-xs font-semibold text-danger-700 hover:underline disabled:opacity-50"
           >
             Eliminar módulo
           </button>
         </div>
       </header>
 
-      <ul className="mb-3 space-y-2 text-sm">
-        {courseModule.lessons.map((l, idx) => (
-          <li key={l.id} className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span>
-                <span className="mr-2 inline-block min-w-[3rem] rounded bg-neutral-100 px-1.5 py-0.5 text-center text-[10px] uppercase tracking-wider text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
-                  {l.type}
-                </span>
-                {l.title}
-              </span>
-              <div className="flex items-center gap-3">
-                {l.durationMinutes ? (
-                  <span className="text-xs text-neutral-500">{l.durationMinutes} min</span>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => handleMoveLesson(l.id, 'up')}
-                  disabled={pending || idx === 0}
-                  className="text-xs disabled:opacity-30"
-                  aria-label="Mover arriba"
-                  title="Mover arriba"
-                >
-                  ▲
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleMoveLesson(l.id, 'down')}
-                  disabled={pending || idx === courseModule.lessons.length - 1}
-                  className="text-xs disabled:opacity-30"
-                  aria-label="Mover abajo"
-                  title="Mover abajo"
-                >
-                  ▼
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditingLessonId(editingLessonId === l.id ? null : l.id)}
-                  className="text-xs underline decoration-dotted hover:decoration-solid"
-                >
-                  {editingLessonId === l.id ? 'Cerrar' : 'Editar contenido'}
-                </button>
+      {courseModule.lessons.length > 0 ? (
+        <ul className="mb-3 divide-y divide-border-soft rounded-md border border-border-soft bg-surface-2">
+          {courseModule.lessons.map((l, idx) => (
+            <li key={l.id}>
+              <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
+                <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                  <Badge variant="info" className="font-mono text-[10px] tracking-wider">
+                    {LESSON_TYPE_LABEL[l.type] ?? l.type}
+                  </Badge>
+                  <span className="truncate text-sm text-text">{l.title}</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  {l.durationMinutes ? (
+                    <span className="tabular-nums text-xs text-text-subtle">
+                      {l.durationMinutes} min
+                    </span>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => handleMoveLesson(l.id, 'up')}
+                    disabled={pending || idx === 0}
+                    className="rounded p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-text disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+                    aria-label="Mover arriba"
+                    title="Mover arriba"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="m18 15-6-6-6 6" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMoveLesson(l.id, 'down')}
+                    disabled={pending || idx === courseModule.lessons.length - 1}
+                    className="rounded p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-text disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+                    aria-label="Mover abajo"
+                    title="Mover abajo"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingLessonId(editingLessonId === l.id ? null : l.id)}
+                    className="text-xs font-semibold text-brand-600 hover:underline"
+                  >
+                    {editingLessonId === l.id ? 'Cerrar' : 'Editar'}
+                  </button>
+                </div>
               </div>
-            </div>
-            {editingLessonId === l.id ? (
-              <LessonContentEditor
-                lesson={l}
-                onUpdated={onChange}
-                onCancel={() => setEditingLessonId(null)}
-              />
-            ) : null}
-          </li>
-        ))}
-      </ul>
+              {editingLessonId === l.id ? (
+                <div className="border-t border-border-soft bg-surface px-3 py-3">
+                  <LessonContentEditor
+                    lesson={l}
+                    onUpdated={onChange}
+                    onCancel={() => setEditingLessonId(null)}
+                  />
+                </div>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mb-3 rounded-md border border-dashed border-border-soft bg-surface-2 px-3 py-3 text-center text-xs text-text-subtle">
+          Sin lecciones. Añadí la primera abajo ↓
+        </p>
+      )}
 
       <form action={handleAddLesson} className="grid gap-2 sm:grid-cols-12">
         <div className="sm:col-span-2">
@@ -363,17 +428,31 @@ function CertificateTemplateCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Plantilla de certificado</CardTitle>
-        <CardDescription>
-          Si no elegís ninguna, se usa la default del tenant
-          {defaultName ? (
-            <>
-              {' '}
-              (actualmente: <strong>{defaultName}</strong>)
-            </>
-          ) : null}
-          .
-        </CardDescription>
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
+            style={{
+              background: 'var(--didacta-info-bg)',
+              color: 'var(--didacta-info-fg)',
+            }}
+          >
+            <Icon name="award" size={18} />
+          </span>
+          <div className="min-w-0">
+            <CardTitle className="text-base">Plantilla de certificado</CardTitle>
+            <CardDescription>
+              Si no elegís ninguna, se usa la default del tenant
+              {defaultName ? (
+                <>
+                  {' '}
+                  (actualmente: <strong>{defaultName}</strong>)
+                </>
+              ) : null}
+              .
+            </CardDescription>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="flex flex-wrap items-end gap-3">
         <div className="min-w-64 flex-1 space-y-1.5">
