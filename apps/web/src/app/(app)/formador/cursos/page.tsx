@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { CourseStatusBadge } from '@/components/course-status-badge';
+import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
@@ -55,48 +56,80 @@ export default function FormadorCoursesPage() {
       {courses === null ? (
         <div className="grid gap-4 md:grid-cols-2">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="skeleton h-32 w-full" />
+            <div key={i} className="skeleton h-44 w-full" />
           ))}
         </div>
       ) : courses.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
+            <div
+              aria-hidden="true"
+              className="grid h-20 w-20 place-items-center rounded-2xl"
+              style={{
+                background: 'var(--didacta-info-bg)',
+                color: 'var(--didacta-info-fg)',
+              }}
+            >
+              <Icon name="book" size={40} />
+            </div>
             <h3 className="font-display text-2xl font-semibold">Aún no tenés cursos</h3>
             <p className="max-w-md text-text-muted">
-              Empezá creando tu primer curso. Vas a poder añadir módulos, lecciones, quizzes y
+              Empezá creando tu primer curso. Vas a poder añadir secciones, lecciones, quizzes y
               certificados después.
             </p>
             <Button asChild className="mt-2">
-              <Link href="/formador/cursos/nuevo">Crear mi primer curso</Link>
+              <Link href="/formador/cursos/nuevo">
+                <Icon name="plus" size={16} />
+                Crear mi primer curso
+              </Link>
             </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-5 md:grid-cols-2">
           {courses.map((c) => (
             <Link
               key={c.id}
               href={`/formador/cursos/${c.id}` as never}
               className="block rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
             >
-              <Card interactive className="h-full">
-                <CardContent className="space-y-3 p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="font-display text-lg font-semibold leading-tight">{c.title}</h3>
-                    <CourseStatusBadge status={c.status} />
+              <Card interactive className="h-full overflow-hidden p-0">
+                <div
+                  className="relative flex items-center justify-between px-5 py-4 text-white"
+                  style={{
+                    background: 'linear-gradient(135deg, #0D1B2A 0%, #1E5AA8 100%)',
+                  }}
+                >
+                  <div className="min-w-0">
+                    <p className="label-uppercase text-white/60">{c.category ?? 'Sin categoría'}</p>
+                    <h3
+                      className="mt-1 line-clamp-2 font-display text-lg font-bold leading-tight"
+                      style={{ letterSpacing: '-0.01em' }}
+                    >
+                      {c.title}
+                    </h3>
                   </div>
-                  <p className="text-xs text-text-subtle font-mono">/{c.slug}</p>
-                  <p className="line-clamp-2 text-sm text-text-muted leading-relaxed">
+                  <CourseStatusBadge status={c.status} />
+                </div>
+                <CardContent className="space-y-3 p-5">
+                  <p className="font-mono text-xs text-text-subtle">/{c.slug}</p>
+                  <p className="line-clamp-2 text-sm leading-relaxed text-text-muted">
                     {c.description ?? 'Sin descripción todavía.'}
                   </p>
-                  <p className="text-xs text-text-subtle tabular-nums">
-                    Actualizado{' '}
-                    {new Date(c.updatedAt).toLocaleDateString('es-AR', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </p>
+                  <div className="flex items-center justify-between border-t border-border-soft pt-3 text-xs text-text-subtle">
+                    <span className="tabular-nums">
+                      Actualizado{' '}
+                      {new Date(c.updatedAt).toLocaleDateString('es-AR', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </span>
+                    <span className="inline-flex items-center gap-1 font-semibold text-brand-600">
+                      Editar
+                      <Icon name="arrow-right" size={14} />
+                    </span>
+                  </div>
                 </CardContent>
               </Card>
             </Link>
