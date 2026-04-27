@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (UI kit Didacta · detalle de curso · hero gradient)
+> **Última actualización**: 2026-04-27 (UI kit Didacta · comunidad · feed + sidebar)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,23 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — UI kit Didacta · comunidad (feed + sidebar)
+
+Aplica `Community.jsx` del UI kit a `/comunidad`.
+
+- Layout 2-col `1fr / 280px`: feed central + sidebar de actividad / tags.
+- Header con CTA "Nueva conversación" que toggle el form en lugar de
+  tenerlo siempre visible (menos ruido en la primera carga).
+- Filtros tipo chip con tag activo sobre fondo Azul noche y resto en
+  surface clara.
+- ThreadCard con avatar gradient Azul confianza → Verde crecimiento,
+  badges de tags, título Sora 18/600, body line-clamp 2 y footer "Ver
+  conversación". Hover lift heredado del Card interactive.
+- Sidebar derecha: "Tu actividad" con counts (publicaciones / respuestas /
+  reconocimientos) y "Tags activos" con chip de color por tag y count.
+- Tiempo relativo (`hace 2h`, `hace 3d`, etc.) en lugar de timestamp
+  absoluto.
 
 ### Sesión 2026-04-27 — UI kit Didacta · detalle de curso (hero gradient)
 
