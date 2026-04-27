@@ -22,6 +22,7 @@ import { NotificationsBridge } from './notifications.bridge';
 import { NotificationsController } from './notifications.controller';
 import { OutboxQueueService } from './outbox-queue.service';
 import { OutboxRecoveryWorker } from './outbox-recovery.worker';
+import { ScormLearningBridge } from './scorm-learning.bridge';
 import { TenantModulesService } from './tenant-modules.service';
 import { TenantModulesErrorFilter } from './tenant-modules-error.filter';
 import { TenantSettingsController } from './tenant-settings.controller';
@@ -50,6 +51,7 @@ import { ThemingErrorFilter } from './theming-error.filter';
     OutboxRecoveryWorker,
     AssessmentsLearningBridge,
     NotificationsBridge,
+    ScormLearningBridge,
     TenantModulesService,
     ModuleAccessInterceptor,
     { provide: APP_INTERCEPTOR, useExisting: ModuleAccessInterceptor },

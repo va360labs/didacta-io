@@ -3,7 +3,11 @@ import { manifest } from './manifest.js';
 
 export { manifest };
 export { LearningService } from './learning.service.js';
-export { ScormService, type ScormPackageMetadata } from './scorm.service.js';
+export {
+  ScormService,
+  type ScormPackageMetadata,
+  type ScormAttemptState,
+} from './scorm.service.js';
 export { parseScormManifest, ScormManifestError } from './scorm-parser.js';
 export {
   enrollByAdminSchema,

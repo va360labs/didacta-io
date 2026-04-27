@@ -702,6 +702,32 @@ model ModLearningScormPackage {
   @@map("mod_learning_scorm_package")
 }
 
+/// Persistencia del state SCORM (cmi.*) por (tenant, user, lesson).
+/// 1:1 con la combinación user+lesson — al iniciar una sesión SCORM se hace
+/// upsert para reanudar el state previo. Sin FK cross-module: userId y
+/// lessonId son UUID lógicos.
+model ModLearningScormAttempt {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  lessonId         String   @map("lesson_id") @db.Uuid
+  packageId        String   @map("package_id") @db.Uuid
+  /// Diccionario completo cmi.* (location, suspend_data, score, completion_status, etc.).
+  cmiData          Json     @default("{}") @map("cmi_data")
+  /// Atajo para indexar/filtrar sin parsear el blob: derivado de cmi.completion_status.
+  completionStatus String?  @map("completion_status")
+  /// Atajo: cmi.score.scaled (0..1) o cmi.core.score.raw escalado.
+  scoreScaled      Float?   @map("score_scaled")
+  startedAt        DateTime @default(now()) @map("started_at")
+  lastAccessedAt   DateTime @default(now()) @map("last_accessed_at")
+  completedAt      DateTime? @map("completed_at")
+
+  @@unique([userId, lessonId])
+  @@index([tenantId, userId])
+  @@index([tenantId, lessonId])
+  @@map("mod_learning_scorm_attempt")
+}
+
 // ============================================================================
 // mod.certificates — Plantillas y emisión de certificados PDF
 // ============================================================================

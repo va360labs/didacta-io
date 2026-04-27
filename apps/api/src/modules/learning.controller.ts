@@ -221,6 +221,36 @@ export class LearningController {
     if (!user) throw new UnauthorizedException();
     return this.registry.getScormService().getPackage(user.tenantId, lessonId);
   }
+
+  @Post('lessons/:lessonId/scorm/attempt')
+  @ApiOperation({
+    summary:
+      'Inicia o reanuda el attempt SCORM del alumno para esta lección. Devuelve cmi state previo o vacío.',
+  })
+  async startScormAttempt(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('lessonId') lessonId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getScormService().getOrCreateAttempt(user.tenantId, user.sub, lessonId);
+  }
+
+  @Post('lessons/:lessonId/scorm/commit')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Persiste el cmi state del attempt SCORM. Si completion_status indica done, dispara bridge a learning.trackProgress.',
+  })
+  async commitScormAttempt(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('lessonId') lessonId: string,
+    @Body() body: { cmiData?: Record<string, string> },
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry
+      .getScormService()
+      .commitAttempt(user.tenantId, user.sub, lessonId, body.cmiData ?? {});
+  }
 }
 
 export { LearningError };

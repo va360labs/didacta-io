@@ -23,6 +23,18 @@ function withAuth(): string {
   return token;
 }
 
+export interface ScormAttemptState {
+  id: string;
+  lessonId: string;
+  packageId: string;
+  cmiData: Record<string, string>;
+  completionStatus: string | null;
+  scoreScaled: number | null;
+  startedAt: string;
+  lastAccessedAt: string;
+  completedAt: string | null;
+}
+
 export const scormApi = {
   async get(lessonId: string): Promise<ScormPackageWithUrl> {
     return apiFetch<ScormPackageWithUrl>(
@@ -38,6 +50,20 @@ export const scormApi = {
     return apiFetch<ScormPackageMetadata>(
       `/api/v1/modules/learning/lessons/${encodeURIComponent(lessonId)}/scorm`,
       { method: 'POST', body: JSON.stringify(payload) },
+      withAuth(),
+    );
+  },
+  async startAttempt(lessonId: string): Promise<ScormAttemptState> {
+    return apiFetch<ScormAttemptState>(
+      `/api/v1/modules/learning/lessons/${encodeURIComponent(lessonId)}/scorm/attempt`,
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
+  async commit(lessonId: string, cmiData: Record<string, string>): Promise<ScormAttemptState> {
+    return apiFetch<ScormAttemptState>(
+      `/api/v1/modules/learning/lessons/${encodeURIComponent(lessonId)}/scorm/commit`,
+      { method: 'POST', body: JSON.stringify({ cmiData }) },
       withAuth(),
     );
   },

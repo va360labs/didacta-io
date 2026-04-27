@@ -241,31 +241,70 @@ function LessonContent({
 
 function ScormFrame({ lessonId, title }: { lessonId: string; title: string }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [initialCmi, setInitialCmi] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    import('@/lib/scorm')
-      .then(({ scormApi }) => scormApi.get(lessonId))
-      .then((meta) => {
-        if (!cancelled) setUrl(meta.entrySignedUrl);
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setError(
-            e instanceof ApiHttpError
-              ? e.message
-              : 'No pudimos cargar el paquete SCORM. Pedile al formador que lo suba.',
-          );
-        }
-      });
+    type Bridge = ReturnType<typeof import('@/components/scorm-api-bridge').createScormBridge>;
+    let bridge: Bridge | null = null;
+    let autoCommitTimer: ReturnType<typeof setInterval> | null = null;
+
+    (async () => {
+      try {
+        const { scormApi } = await import('@/lib/scorm');
+        const { createScormBridge } = await import('@/components/scorm-api-bridge');
+
+        const [meta, attempt] = await Promise.all([
+          scormApi.get(lessonId),
+          scormApi.startAttempt(lessonId),
+        ]);
+        if (cancelled) return;
+
+        setUrl(meta.entrySignedUrl);
+        setInitialCmi(attempt.cmiData);
+
+        // Mount window.API antes de que el iframe arranque.
+        bridge = createScormBridge({
+          initialCmi: attempt.cmiData,
+          onCommit: async (cmi) => {
+            try {
+              await scormApi.commit(lessonId, cmi);
+            } catch {
+              // Silencioso: la próxima llamada lo reintenta.
+            }
+          },
+        });
+        bridge.attach(window);
+
+        // Auto-commit cada 30s mientras la pestaña esté visible (red de seguridad
+        // por si el SCO se olvida de hacer LMSCommit).
+        autoCommitTimer = setInterval(() => {
+          if (document.visibilityState !== 'visible') return;
+          // window.API está montado; releer cmi vía LMSGetValue no es trivial,
+          // confiamos en que el bridge guardó cada SetValue. Disparamos un commit
+          // pidiéndole al SCO que lo haga si aún no lo hizo.
+          window.API?.LMSCommit('');
+        }, 30_000);
+      } catch (e) {
+        if (cancelled) return;
+        setError(
+          e instanceof ApiHttpError
+            ? e.message
+            : 'No pudimos cargar el paquete SCORM. Pedile al formador que lo suba.',
+        );
+      }
+    })();
+
     return () => {
       cancelled = true;
+      if (autoCommitTimer) clearInterval(autoCommitTimer);
+      bridge?.detach();
     };
   }, [lessonId]);
 
   if (error) return <Empty hint={error} />;
-  if (!url) return <div className="skeleton h-[72dvh] w-full rounded-lg" />;
+  if (!url || !initialCmi) return <div className="skeleton h-[72dvh] w-full rounded-lg" />;
   return (
     <iframe
       src={url}

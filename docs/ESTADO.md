@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (super_admin override de módulos — follow-up HU-TA-002)
+> **Última actualización**: 2026-04-27 (SCORM API runtime + auto-completion — follow-up HU-FOR-002)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,53 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — SCORM API runtime + auto-completion (follow-up HU-FOR-002)
+
+Cierre del follow-up "tracking SCORM API runtime" de HU-FOR-002. Ahora el
+alumno completa SCORM **automáticamente** cuando el SCO marca
+`cmi.core.lesson_status=passed/completed` o `cmi.completion_status=completed`.
+
+Cambios:
+
+- **Migración** `20260427000004_add_scorm_attempt`: tabla
+  `mod_learning_scorm_attempt` (1:1 con user+lesson) que persiste cmi.*
+  state para reanudación entre sesiones, con atajos `completionStatus` y
+  `scoreScaled` para indexar/filtrar.
+- **`ScormService.getOrCreateAttempt`**: devuelve cmi state previo o uno
+  vacío para reanudación. Toca `lastAccessedAt`.
+- **`ScormService.commitAttempt`**: persiste cmi merge, extrae
+  completion + score (1.2 vs 2004), y si transiciona a completed emite
+  evento `scorm.attempt.completed` (idempotente — solo en la primera
+  transición).
+- **Endpoints** `POST /modules/learning/lessons/:id/scorm/attempt` y
+  `POST /modules/learning/lessons/:id/scorm/commit`.
+- **`ScormLearningBridge`**: suscribe a `scorm.attempt.completed`,
+  resuelve enrollment activo del alumno y llama
+  `LearningService.trackProgress(completed=true)`. Igual que el bridge
+  de assessments — flujo completo automático: SCORM passed → lección
+  completada → progressPercent → enrollment.COMPLETED → certificado
+  emitido.
+- **Frontend `scorm-api-bridge.ts`**: implementación de **`window.API`**
+  (SCORM 1.2 completo) y **`window.API_1484_11`** (SCORM 2004 mínimo —
+  Initialize/Terminate/GetValue/SetValue/Commit). Mapea cada operación
+  a una llamada al server vía `scormApi.commit()` con auto-flush.
+- **Lesson player** SCORM mejorado: monta el bridge antes del iframe,
+  inyecta cmi state inicial desde `startAttempt`, auto-commit cada 30s
+  como red de seguridad, detach en unmount.
+
+**Tests**: 9 nuevos del runtime (getOrCreate idempotente, commit con
+SCORM 1.2 lesson_status, SCORM 2004 completion_status, score raw/max,
+score scaled, idempotente en re-completion, error si no hay attempt).
+
+**Limitaciones conocidas (follow-ups)**:
+
+- **Cross-origin**: si los assets se sirven desde S3 con CORS restrictivo,
+  el iframe no puede acceder a `window.parent.API`. Solución: proxy
+  same-origin via `/api/v1/scorm-assets/...` o configurar CORS del bucket.
+  En dev (LocalDiskStorage same-origin) funciona OK.
+- **SCORM 2004 secuenciación + interactions** quedan no implementados.
+- **GC** de assets de paquetes previos al reemplazar.
 
 ### Sesión 2026-04-27 — Super_admin operando módulos en otro tenant (follow-up HU-TA-002)
 

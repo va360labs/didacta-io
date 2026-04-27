@@ -9,6 +9,18 @@ import {
 } from './errors.js';
 import { parseScormManifest, ScormManifestError } from './scorm-parser.js';
 
+export interface ScormAttemptState {
+  id: string;
+  lessonId: string;
+  packageId: string;
+  cmiData: Record<string, string>;
+  completionStatus: string | null;
+  scoreScaled: number | null;
+  startedAt: string;
+  lastAccessedAt: string;
+  completedAt: string | null;
+}
+
 const MAX_PACKAGE_BYTES = 100 * 1024 * 1024; // 100 MiB descomprimido
 const MAX_FILE_COUNT = 5_000;
 
@@ -168,6 +180,135 @@ export class ScormService {
     return { ...this.toMetadata(pkg), entrySignedUrl };
   }
 
+  // -----------------------------------------------------------------------
+  // Runtime API: persistencia de cmi.* + bridge a learning.trackProgress.
+  // -----------------------------------------------------------------------
+
+  /**
+   * Devuelve el attempt actual del alumno para esa lección, creándolo si no
+   * existe. Reanuda el state previo (cmi.suspend_data, lesson_location, etc.).
+   */
+  async getOrCreateAttempt(
+    tenantId: string,
+    userId: string,
+    lessonId: string,
+  ): Promise<ScormAttemptState> {
+    const pkg = await this.prisma.modLearningScormPackage.findUnique({
+      where: { lessonId },
+    });
+    if (!pkg || pkg.tenantId !== tenantId) {
+      throw new ScormPackageNotFoundError();
+    }
+
+    const existing = await this.prisma.modLearningScormAttempt.findUnique({
+      where: { userId_lessonId: { userId, lessonId } },
+    });
+    if (existing) {
+      // Touch lastAccessedAt para reanudación.
+      const touched = await this.prisma.modLearningScormAttempt.update({
+        where: { id: existing.id },
+        data: { lastAccessedAt: new Date() },
+      });
+      return this.toAttemptState(touched);
+    }
+
+    const created = await this.prisma.modLearningScormAttempt.create({
+      data: {
+        tenantId,
+        userId,
+        lessonId,
+        packageId: pkg.id,
+        cmiData: {} as never,
+      },
+    });
+    return this.toAttemptState(created);
+  }
+
+  /**
+   * Persiste el cmi state. Si `cmiData.cmi.core.lesson_status` o
+   * `cmi.completion_status` indican completado/aprobado, marca completedAt y
+   * emite evento `scorm.attempt.completed` para que el bridge en apps/api
+   * trigeree `LearningService.trackProgress(completed=true)`.
+   */
+  async commitAttempt(
+    tenantId: string,
+    userId: string,
+    lessonId: string,
+    cmiData: Record<string, string>,
+  ): Promise<ScormAttemptState> {
+    const existing = await this.prisma.modLearningScormAttempt.findUnique({
+      where: { userId_lessonId: { userId, lessonId } },
+    });
+    if (!existing || existing.tenantId !== tenantId) {
+      throw new ScormPackageNotFoundError();
+    }
+
+    const completionStatus = extractCompletionStatus(cmiData);
+    const scoreScaled = extractScoreScaled(cmiData);
+    const isComplete = completionStatus === 'completed' || completionStatus === 'passed';
+    const wasComplete = !!existing.completedAt;
+
+    const updated = await this.prisma.modLearningScormAttempt.update({
+      where: { id: existing.id },
+      data: {
+        cmiData: cmiData as never,
+        completionStatus,
+        scoreScaled,
+        lastAccessedAt: new Date(),
+        ...(isComplete && !wasComplete ? { completedAt: new Date() } : {}),
+      },
+    });
+
+    if (isComplete && !wasComplete) {
+      await this.ctx.eventBus.publish({
+        name: 'scorm.attempt.completed',
+        version: 1,
+        data: {
+          attemptId: updated.id,
+          lessonId,
+          userId,
+          packageId: updated.packageId,
+          completionStatus,
+          scoreScaled,
+        },
+        metadata: {
+          tenantId,
+          userId,
+          timestamp: new Date().toISOString(),
+          traceId: randomUUID(),
+          idempotencyKey: `scorm.attempt.completed:${updated.id}`,
+        },
+      });
+    }
+
+    return this.toAttemptState(updated);
+  }
+
+  private toAttemptState(row: {
+    id: string;
+    lessonId: string;
+    packageId: string;
+    cmiData: unknown;
+    completionStatus: string | null;
+    scoreScaled: number | null;
+    startedAt: Date;
+    lastAccessedAt: Date;
+    completedAt: Date | null;
+  }): ScormAttemptState {
+    const cmiData = (row.cmiData ?? {}) as Record<string, string>;
+    return {
+      id: row.id,
+      lessonId: row.lessonId,
+      packageId: row.packageId,
+      cmiData,
+      completionStatus: row.completionStatus,
+      scoreScaled: row.scoreScaled,
+      startedAt: row.startedAt.toISOString(),
+      lastAccessedAt: row.lastAccessedAt.toISOString(),
+      completedAt: row.completedAt?.toISOString() ?? null,
+    };
+  }
+
   private async ensureLessonIsScorm(tenantId: string, lessonId: string): Promise<void> {
     const lesson = await this.prisma.modCoursesLesson.findFirst({
       where: { tenantId, id: lessonId, deletedAt: null },
@@ -199,6 +340,51 @@ export class ScormService {
       uploadedAt: row.uploadedAt.toISOString(),
     };
   }
+}
+
+/**
+ * Extrae el completion_status canónico del cmi state.
+ *  - SCORM 1.2: cmi.core.lesson_status (passed/completed/failed/...).
+ *  - SCORM 2004: cmi.completion_status (completed/incomplete/...) +
+ *    cmi.success_status (passed/failed). Damos prioridad al success
+ *    cuando es passed/failed (más informativo).
+ */
+function extractCompletionStatus(cmi: Record<string, string>): string | null {
+  const v12 = cmi['cmi.core.lesson_status'];
+  if (typeof v12 === 'string' && v12.length > 0) return v12.toLowerCase();
+  const success2004 = cmi['cmi.success_status'];
+  if (typeof success2004 === 'string' && (success2004 === 'passed' || success2004 === 'failed')) {
+    return success2004;
+  }
+  const v2004 = cmi['cmi.completion_status'];
+  if (typeof v2004 === 'string' && v2004.length > 0) return v2004.toLowerCase();
+  return null;
+}
+
+/**
+ * Extrae el score escalado [0..1].
+ *  - SCORM 1.2: cmi.core.score.raw / cmi.core.score.max → ratio.
+ *  - SCORM 2004: cmi.score.scaled (ya escalado).
+ */
+function extractScoreScaled(cmi: Record<string, string>): number | null {
+  const scaled2004 = parseFloatSafe(cmi['cmi.score.scaled']);
+  if (scaled2004 !== null) return clamp01(scaled2004);
+  const raw = parseFloatSafe(cmi['cmi.core.score.raw']);
+  const max = parseFloatSafe(cmi['cmi.core.score.max']);
+  if (raw !== null && max !== null && max > 0) return clamp01(raw / max);
+  return null;
+}
+
+function parseFloatSafe(v: string | undefined): number | null {
+  if (typeof v !== 'string' || v.length === 0) return null;
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function clamp01(n: number): number {
+  if (n < 0) return 0;
+  if (n > 1) return 1;
+  return n;
 }
 
 function guessContentType(path: string): string {
