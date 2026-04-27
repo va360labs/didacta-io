@@ -103,7 +103,7 @@ export default function FormadorCoursesPage() {
                   <div className="min-w-0">
                     <p className="label-uppercase text-white/60">{c.category ?? 'Sin categoría'}</p>
                     <h3
-                      className="mt-1 line-clamp-2 font-display text-lg font-bold leading-tight"
+                      className="mt-1 line-clamp-2 font-display text-lg font-bold leading-tight text-white"
                       style={{ letterSpacing: '-0.01em' }}
                     >
                       {c.title}

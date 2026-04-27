@@ -205,6 +205,22 @@ export class CoursesController {
     }
   }
 
+  @Delete('lessons/:lessonId')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Eliminar lección (soft delete; preserva progreso histórico)' })
+  async deleteLesson(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('lessonId') lessonId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    try {
+      await this.registry.getCoursesService().deleteLesson(user.tenantId, user.sub, lessonId);
+      return { deleted: true };
+    } catch (error) {
+      throw this.translate(error);
+    }
+  }
+
   private translate(error: unknown): unknown {
     if (error instanceof CoursesError) {
       const map: Record<string, number> = {

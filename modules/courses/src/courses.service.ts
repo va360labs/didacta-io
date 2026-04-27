@@ -290,6 +290,28 @@ export class CoursesService {
     return updated;
   }
 
+  /**
+   * Soft-delete de una lección. No borra el registro: solo marca `deletedAt`,
+   * para preservar progreso histórico (`mod_learning_progress`) y permitir
+   * auditoría posterior. Al desaparecer del listado, deja de mostrarse a alumnos.
+   */
+  async deleteLesson(tenantId: string, actorId: string | null, lessonId: string) {
+    const lesson = await this.prisma.modCoursesLesson.findFirst({
+      where: { tenantId, id: lessonId, deletedAt: null },
+    });
+    if (!lesson) throw new CourseNotFoundError(lessonId);
+
+    await this.prisma.modCoursesLesson.update({
+      where: { id: lessonId },
+      data: { deletedAt: new Date() },
+    });
+
+    await this.publish(tenantId, actorId, 'courses.lesson.deleted', {
+      lessonId,
+      moduleId: lesson.moduleId,
+    });
+  }
+
   async publishCourse(tenantId: string, actorId: string | null, courseId: string) {
     const course = await this.requireCourse(tenantId, courseId);
     if (course.status === 'PUBLISHED') throw new CourseAlreadyPublishedError(courseId);

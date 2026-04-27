@@ -118,8 +118,10 @@ export function CourseEditor({
                   </span>
                 ) : null}
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight">{initial.title}</h1>
-              <p className="mt-1 text-sm font-mono text-white/60">/{initial.slug}</p>
+              <h1 className="font-display text-3xl font-bold tracking-tight text-white">
+                {initial.title}
+              </h1>
+              <p className="mt-1 font-mono text-sm text-white/60">/{initial.slug}</p>
               {initial.description ? (
                 <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/85">
                   {initial.description}
@@ -360,6 +362,21 @@ function ModuleBlock({
     }
   }
 
+  async function handleDeleteLesson(lessonId: string, lessonTitle: string) {
+    const confirmed = window.confirm(
+      `¿Eliminar la lección "${lessonTitle}"? Es soft-delete: los datos se conservan y el progreso histórico de los alumnos no se pierde, pero dejará de mostrarse.`,
+    );
+    if (!confirmed) return;
+    setPending(true);
+    try {
+      await coursesApi.deleteLesson(lessonId);
+      if (editingLessonId === lessonId) setEditingLessonId(null);
+      await onChange();
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function handleDeleteModule() {
     const confirmed = window.confirm(
       `¿Eliminar la sección "${courseModule.title}" y sus ${courseModule.lessons.length} lecciones? Esto es soft-delete: los datos se conservan pero dejarán de mostrarse.`,
@@ -524,6 +541,16 @@ function ModuleBlock({
                     >
                       <Icon name="edit" size={13} />
                       {isEditing ? 'Cerrar' : 'Editar'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteLesson(l.id, l.title)}
+                      disabled={pending}
+                      aria-label={`Eliminar lección ${l.title}`}
+                      title="Eliminar lección"
+                      className="rounded p-1.5 text-text-disabled transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:opacity-50"
+                    >
+                      <Icon name="trash" size={14} />
                     </button>
                   </div>
                 </div>

@@ -141,7 +141,9 @@ export function QuizEditor({
                   </span>
                 )}
               </div>
-              <h1 className="font-display text-3xl font-bold tracking-tight">{initial.title}</h1>
+              <h1 className="font-display text-3xl font-bold tracking-tight text-white">
+                {initial.title}
+              </h1>
               {initial.description ? (
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/85">
                   {initial.description}

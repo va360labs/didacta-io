@@ -151,6 +151,14 @@ export const coursesApi = {
     );
   },
 
+  async deleteLesson(lessonId: string): Promise<void> {
+    await apiFetch<{ deleted: true }>(
+      `/api/v1/modules/courses/lessons/${lessonId}`,
+      { method: 'DELETE' },
+      withAuth(),
+    );
+  },
+
   async update(
     courseId: string,
     input: {
