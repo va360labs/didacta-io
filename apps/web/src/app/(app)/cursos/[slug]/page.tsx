@@ -305,53 +305,58 @@ export default function CourseAlumnoPage() {
         </Card>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-        <nav className="space-y-4 lg:max-h-[72dvh] lg:overflow-auto lg:pr-2">
-          {course.modules.map((m, idx) => (
-            <div key={m.id}>
-              <h4 className="label-uppercase mb-2 flex items-center gap-2 text-text-muted">
-                <span className="tabular-nums text-text-subtle">
-                  {String(idx + 1).padStart(2, '0')}
-                </span>
-                {m.title}
-              </h4>
-              <ul className="space-y-0.5">
-                {m.lessons.map((l) => {
-                  const isActive = activeLessonId === l.id;
-                  const isDone = progressByLesson[l.id];
-                  return (
-                    <li key={l.id}>
-                      <button
-                        type="button"
-                        onClick={() => setActiveLessonId(l.id)}
-                        className={
-                          isActive
-                            ? 'flex w-full items-center gap-2 rounded-md bg-brand-50 px-3 py-2 text-left text-sm font-semibold text-brand-700'
-                            : 'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-text hover:bg-surface-3'
-                        }
-                      >
-                        <span
-                          className={
-                            isDone
-                              ? 'flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-500 text-[10px] text-white'
-                              : 'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border-strong text-[10px] text-text-subtle'
-                          }
-                          aria-hidden="true"
-                        >
-                          {isDone ? '✓' : ''}
-                        </span>
-                        <span className="flex-1 truncate">{l.title}</span>
-                        <Badge variant="muted" className="shrink-0 text-[10px]">
-                          {LESSON_TYPE_LABEL[l.type] ?? l.type}
-                        </Badge>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </nav>
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+        <Card className="self-start lg:max-h-[78dvh] lg:overflow-auto p-0">
+          <CardContent className="p-5">
+            <h3 className="font-display text-base font-semibold text-text">Contenido</h3>
+            <p className="mt-0.5 text-xs text-text-muted">
+              {allLessons.length} lecció{allLessons.length === 1 ? 'n' : 'nes'} ·{' '}
+              {Object.values(progressByLesson).filter(Boolean).length} completadas
+            </p>
+
+            <nav className="mt-4 space-y-5">
+              {course.modules.map((m, idx) => (
+                <div key={m.id}>
+                  <h4 className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+                    <span className="tabular-nums text-text-subtle">
+                      {String(idx + 1).padStart(2, '0')}
+                    </span>
+                    <span className="flex-1 normal-case tracking-normal text-text">{m.title}</span>
+                  </h4>
+                  <ul className="space-y-0.5">
+                    {m.lessons.map((l, lessonIdx) => {
+                      const isActive = activeLessonId === l.id;
+                      const isDone = progressByLesson[l.id];
+                      return (
+                        <li key={l.id}>
+                          <button
+                            type="button"
+                            onClick={() => setActiveLessonId(l.id)}
+                            className={
+                              isActive
+                                ? 'flex w-full items-center gap-3 rounded-[10px] border border-[rgba(46,125,206,0.32)] bg-[var(--didacta-info-bg)] px-3 py-2.5 text-left text-sm font-semibold text-[var(--didacta-info-fg)]'
+                                : 'flex w-full items-center gap-3 rounded-[10px] border border-transparent px-3 py-2.5 text-left text-sm text-text transition-colors hover:bg-surface-3'
+                            }
+                          >
+                            <LessonAvatar
+                              done={!!isDone}
+                              active={isActive}
+                              number={lessonIdx + 1}
+                            />
+                            <span className="flex-1 truncate">{l.title}</span>
+                            <Badge variant="muted" className="shrink-0 text-[10px]">
+                              {LESSON_TYPE_LABEL[l.type] ?? l.type}
+                            </Badge>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </nav>
+          </CardContent>
+        </Card>
 
         <main>
           {!enrollment ? (
@@ -390,5 +395,52 @@ export default function CourseAlumnoPage() {
         </main>
       </div>
     </section>
+  );
+}
+
+/**
+ * Avatar de lección estilo Didacta (CourseDetail.jsx > step):
+ *  - done → círculo verde crecimiento con check.
+ *  - active → círculo Azul confianza con número.
+ *  - todo → círculo gris claro con número apagado.
+ */
+function LessonAvatar({
+  done,
+  active,
+  number,
+}: {
+  done: boolean;
+  active: boolean;
+  number: number;
+}) {
+  if (done) {
+    return (
+      <span
+        aria-hidden="true"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-white"
+        style={{ background: 'var(--didacta-growth)' }}
+      >
+        <Icon name="check" size={14} />
+      </span>
+    );
+  }
+  if (active) {
+    return (
+      <span
+        aria-hidden="true"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full font-display text-[12px] font-bold text-white"
+        style={{ background: 'var(--didacta-trust)' }}
+      >
+        {number}
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--didacta-surface)] font-display text-[12px] font-bold text-text-subtle"
+    >
+      {number}
+    </span>
   );
 }
