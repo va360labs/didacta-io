@@ -28,6 +28,24 @@ function requireTenantAdmin(user: SessionClaims | undefined): SessionClaims {
   return user;
 }
 
+/**
+ * Resuelve el tenantId sobre el que operar.
+ * - tenant_admin: solo puede operar sobre su propio tenant. Si pasa
+ *   ?tenantId distinto al suyo → 403.
+ * - super_admin: puede pasar ?tenantId=<otro> para operar sobre cualquier
+ *   tenant. Sin query param → opera sobre el suyo.
+ */
+function resolveTargetTenant(user: SessionClaims, queryTenantId?: string): string {
+  if (!queryTenantId) return user.tenantId;
+  if (queryTenantId === user.tenantId) return queryTenantId;
+  if (!user.roles.includes('super_admin')) {
+    throw new ForbiddenException(
+      'Solo super_admin puede operar módulos en otro tenant. Omití ?tenantId para usar el tuyo.',
+    );
+  }
+  return queryTenantId;
+}
+
 @ApiTags('Admin · Módulos')
 @ApiBearerAuth()
 @Controller('admin/modules')
@@ -38,40 +56,45 @@ export class AdminModulesController {
   @Get()
   @ApiOperation({
     summary:
-      'Listar módulos disponibles para mi tenant con su estado (enabled/disabled) y dependencias.',
+      'Listar módulos disponibles para mi tenant (o ?tenantId=<otro> si soy super_admin) con su estado y dependencias.',
   })
-  async list(@CurrentUser() user: SessionClaims | undefined) {
+  async list(@CurrentUser() user: SessionClaims | undefined, @Query('tenantId') tenantId?: string) {
     const u = requireTenantAdmin(user);
-    return this.service.list(u.tenantId);
+    const target = resolveTargetTenant(u, tenantId);
+    return this.service.list(target);
   }
 
   @Post(':name/enable')
   @ApiOperation({
-    summary: 'Activar un módulo en mi tenant. Idempotente si ya estaba activo.',
+    summary: 'Activar un módulo. Idempotente. ?tenantId=<otro> requiere super_admin.',
   })
   async enable(
     @Req() req: FastifyRequest,
     @CurrentUser() user: SessionClaims | undefined,
     @Param('name') name: string,
+    @Query('tenantId') tenantId?: string,
   ) {
     const u = requireTenantAdmin(user);
-    return this.service.enable(u.tenantId, name, u.sub, extractClientContext(req));
+    const target = resolveTargetTenant(u, tenantId);
+    return this.service.enable(target, name, u.sub, extractClientContext(req));
   }
 
   @Post(':name/disable')
   @ApiOperation({
     summary:
-      'Desactivar un módulo en mi tenant. Si otros módulos activos dependen de él, requiere ?force=true (cascada).',
+      'Desactivar un módulo. ?force=true cascade en dependientes activos. ?tenantId=<otro> requiere super_admin.',
   })
   async disable(
     @Req() req: FastifyRequest,
     @CurrentUser() user: SessionClaims | undefined,
     @Param('name') name: string,
     @Query('force') force?: string,
+    @Query('tenantId') tenantId?: string,
   ) {
     const u = requireTenantAdmin(user);
+    const target = resolveTargetTenant(u, tenantId);
     return this.service.disable(
-      u.tenantId,
+      target,
       name,
       u.sub,
       { force: force === 'true' },

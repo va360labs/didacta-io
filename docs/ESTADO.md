@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (HU-FOR-002 SCORM 1.2/2004 — Fase 1.A 100% cerrada)
+> **Última actualización**: 2026-04-27 (super_admin override de módulos — follow-up HU-TA-002)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,26 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — Super_admin operando módulos en otro tenant (follow-up HU-TA-002)
+
+Cierre del último follow-up documentado de HU-TA-002.
+
+- **Endpoints `/admin/modules`** ahora aceptan opcional `?tenantId=<id>`:
+  - `tenant_admin`: solo puede operar sobre su propio tenant. Si pasa
+    `?tenantId` distinto al suyo → 403.
+  - `super_admin`: puede pasar `?tenantId=<otro>` para operar sobre
+    cualquier tenant. Sin query param → opera sobre el suyo.
+- **UI** en `/admin/configuracion` → tab Módulos: si el user es
+  super_admin y hay >1 tenant en el sistema, aparece un panel amarillo
+  con selector "operar sobre tenant: (el mío) | <otros>". Al cambiar,
+  la lista de módulos se recarga para ese tenant y los toggles aplican
+  allí.
+- Cliente `adminModulesApi.list/enable/disable` extendidos con
+  parámetro opcional `tenantId`.
+
+Implementación 100% backward-compatible: tenant_admins siguen viendo
+exactamente lo mismo. Solo el super_admin tiene la capacidad nueva.
 
 ### Sesión 2026-04-27 — HU-FOR-002 SCORM 1.2/2004 (cierra Fase 1.A)
 

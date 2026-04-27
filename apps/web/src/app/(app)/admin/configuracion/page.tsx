@@ -8,7 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { adminModulesApi, type TenantModuleListItem } from '@/lib/admin-modules';
+import { adminTenantsApi, type TenantListItem } from '@/lib/admin-tenants';
 import { ApiHttpError } from '@/lib/api-client';
+import { authStorage } from '@/lib/auth-storage';
 import { tenantSettingsApi, type TenantSettingMetadata } from '@/lib/tenant-settings';
 
 interface SmtpDraft {
@@ -464,10 +466,17 @@ function ModulesTab() {
     name: string;
     dependents: string[];
   } | null>(null);
+  const [tenants, setTenants] = useState<TenantListItem[] | null>(null);
+  const [targetTenantId, setTargetTenantId] = useState<string | undefined>(undefined);
 
-  async function reload() {
+  const isSuperAdmin = (() => {
+    const session = authStorage.getSession();
+    return session?.user.roles.includes('super_admin') ?? false;
+  })();
+
+  async function reload(tenantId = targetTenantId) {
     try {
-      setItems(await adminModulesApi.list());
+      setItems(await adminModulesApi.list(tenantId));
       setError(null);
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los módulos.');
@@ -475,20 +484,34 @@ function ModulesTab() {
   }
 
   useEffect(() => {
-    void reload();
-  }, []);
+    void reload(targetTenantId);
+  }, [targetTenantId]);
+
+  // Carga lista de tenants para el selector de super_admin (lazy, solo si tiene rol).
+  useEffect(() => {
+    if (!isSuperAdmin || tenants !== null) return;
+    const token = authStorage.getAccessToken();
+    if (!token) {
+      setTenants([]);
+      return;
+    }
+    adminTenantsApi
+      .list(token)
+      .then(setTenants)
+      .catch(() => setTenants([]));
+  }, [isSuperAdmin, tenants]);
 
   async function toggle(item: TenantModuleListItem, force = false) {
     setBusy(item.name);
     setError(null);
     try {
       if (item.enabled) {
-        await adminModulesApi.disable(item.name, { force });
+        await adminModulesApi.disable(item.name, { force, tenantId: targetTenantId });
       } else {
-        await adminModulesApi.enable(item.name);
+        await adminModulesApi.enable(item.name, targetTenantId);
       }
       setConfirmCascade(null);
-      await reload();
+      await reload(targetTenantId);
     } catch (e) {
       if (e instanceof ApiHttpError && e.status === 409) {
         const dependents = extractDependents(e);
@@ -512,6 +535,27 @@ function ModulesTab() {
 
   return (
     <div className="space-y-3">
+      {isSuperAdmin && tenants && tenants.length > 1 ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-warning-200 bg-warning-50/40 p-3 text-sm">
+          <span className="font-semibold text-warning-900">Modo super_admin:</span>
+          <label className="inline-flex items-center gap-2">
+            <span className="text-text-muted">operar sobre tenant</span>
+            <select
+              className="rounded border border-border-strong bg-surface px-2 py-1 text-sm"
+              value={targetTenantId ?? ''}
+              onChange={(e) => setTargetTenantId(e.target.value || undefined)}
+            >
+              <option value="">(el mío)</option>
+              {tenants.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} · {t.slug}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
+
       {error ? (
         <div
           role="alert"
