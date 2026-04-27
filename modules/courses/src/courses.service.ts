@@ -237,6 +237,120 @@ export class CoursesService {
   }
 
   /**
+   * Reordena las lecciones de un módulo en bulk según la lista provista.
+   *
+   * `lessonIds` debe contener exactamente los IDs de las lecciones activas del
+   * módulo (ni más ni menos). El orden de la lista define las nuevas
+   * posiciones (0..n-1). Esto desbloquea drag & drop en el editor del curso.
+   *
+   * Implementación en dos pasadas para esquivar el unique `(moduleId, position)`:
+   * 1. Pasar todas las lecciones a posiciones temporales negativas (offset por
+   *    índice) en una transacción.
+   * 2. Setearlas a las posiciones definitivas en otra transacción.
+   * Es transaccional, idempotente y no corrompe el orden si falla a mitad.
+   */
+  async reorderLessons(
+    tenantId: string,
+    actorId: string | null,
+    moduleId: string,
+    lessonIds: string[],
+  ) {
+    const courseModule = await this.prisma.modCoursesModule.findFirst({
+      where: { tenantId, id: moduleId, deletedAt: null },
+    });
+    if (!courseModule) throw new CourseNotFoundError(moduleId);
+
+    const lessons = await this.prisma.modCoursesLesson.findMany({
+      where: { tenantId, moduleId, deletedAt: null },
+      select: { id: true },
+    });
+    const existingIds = new Set(lessons.map((l) => l.id));
+    if (lessonIds.length !== existingIds.size) {
+      throw new CourseNotFoundError(
+        `reorder esperaba ${existingIds.size} lecciones, recibió ${lessonIds.length}`,
+      );
+    }
+    for (const id of lessonIds) {
+      if (!existingIds.has(id)) {
+        throw new CourseNotFoundError(`lección ${id} no pertenece al módulo ${moduleId}`);
+      }
+    }
+
+    await this.prisma.$transaction(
+      lessonIds.map((id, idx) =>
+        this.prisma.modCoursesLesson.update({
+          where: { id },
+          data: { position: -(idx + 1) * 1000 },
+        }),
+      ),
+    );
+    await this.prisma.$transaction(
+      lessonIds.map((id, idx) =>
+        this.prisma.modCoursesLesson.update({
+          where: { id },
+          data: { position: idx },
+        }),
+      ),
+    );
+
+    await this.publish(tenantId, actorId, 'courses.lessons.reordered', {
+      moduleId,
+      lessonIds,
+    });
+  }
+
+  /**
+   * Reordena los módulos de un curso en bulk. Mismo patrón que
+   * `reorderLessons` pero a nivel de módulo.
+   */
+  async reorderModules(
+    tenantId: string,
+    actorId: string | null,
+    courseId: string,
+    moduleIds: string[],
+  ) {
+    await this.requireCourse(tenantId, courseId);
+
+    const modules = await this.prisma.modCoursesModule.findMany({
+      where: { tenantId, courseId, deletedAt: null },
+      select: { id: true },
+    });
+    const existingIds = new Set(modules.map((m) => m.id));
+    if (moduleIds.length !== existingIds.size) {
+      throw new CourseNotFoundError(
+        `reorder esperaba ${existingIds.size} módulos, recibió ${moduleIds.length}`,
+      );
+    }
+    for (const id of moduleIds) {
+      if (!existingIds.has(id)) {
+        throw new CourseNotFoundError(`módulo ${id} no pertenece al curso ${courseId}`);
+      }
+    }
+
+    await this.prisma.$transaction(
+      moduleIds.map((id, idx) =>
+        this.prisma.modCoursesModule.update({
+          where: { id },
+          data: { position: -(idx + 1) * 1000 },
+        }),
+      ),
+    );
+    await this.prisma.$transaction(
+      moduleIds.map((id, idx) =>
+        this.prisma.modCoursesModule.update({
+          where: { id },
+          data: { position: idx },
+        }),
+      ),
+    );
+
+    await this.publish(tenantId, actorId, 'courses.modules.reordered', {
+      courseId,
+      moduleIds,
+    });
+  }
+
+  /**
    * Soft-delete del módulo y de todas sus lecciones (cascade lógico).
    * No borra registros: solo marca `deletedAt`. El curso sigue publicado y
    * el resto de módulos quedan intactos.

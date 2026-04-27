@@ -2,6 +2,23 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { CourseStatusBadge } from '@/components/course-status-badge';
 import { Icon, type IconName } from '@/components/icon';
 import { Button } from '@/components/ui/button';
@@ -12,7 +29,13 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { certificateTemplatesApi, type CertificateTemplate } from '@/lib/certificates';
-import { coursesApi, type CourseDetail, type CourseModule, type LessonType } from '@/lib/courses';
+import {
+  coursesApi,
+  type CourseDetail,
+  type CourseLesson,
+  type CourseModule,
+  type LessonType,
+} from '@/lib/courses';
 import { LessonContentEditor } from './lesson-content-editor';
 
 const LESSON_TYPES: { value: LessonType; label: string }[] = [
@@ -267,21 +290,193 @@ export function CourseEditor({
               </p>
             </div>
           ) : (
-            initial.modules.map((m, idx) => (
-              <ModuleBlock
-                key={m.id}
-                courseModule={m}
-                index={idx}
-                totalModules={initial.modules.length}
-                onChange={onChange}
-              />
-            ))
+            <ModuleList
+              modules={initial.modules}
+              courseId={initial.id}
+              onChange={onChange}
+              onError={(msg) => setError({ message: msg })}
+            />
           )}
 
           <AddModuleForm onAddModule={handleAddModule} pending={pending} />
         </CardContent>
       </Card>
     </section>
+  );
+}
+
+function LessonList({
+  moduleId,
+  lessons,
+  editingLessonId,
+  pending,
+  onToggleEdit,
+  onDelete,
+  onChange,
+}: {
+  moduleId: string;
+  lessons: CourseLesson[];
+  editingLessonId: string | null;
+  pending: boolean;
+  onToggleEdit: (lessonId: string) => void;
+  onDelete: (lessonId: string, title: string) => Promise<void>;
+  onChange: () => Promise<void>;
+}) {
+  const [optimistic, setOptimistic] = useState<CourseLesson[]>(lessons);
+  const [reorderError, setReorderError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOptimistic(lessons);
+  }, [lessons]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = optimistic.findIndex((l) => l.id === active.id);
+    const newIdx = optimistic.findIndex((l) => l.id === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
+    const reordered = arrayMove(optimistic, oldIdx, newIdx);
+    setOptimistic(reordered);
+    setReorderError(null);
+    try {
+      await coursesApi.reorderLessons(
+        moduleId,
+        reordered.map((l) => l.id),
+      );
+      await onChange();
+    } catch (e) {
+      setReorderError(
+        e instanceof ApiHttpError ? e.message : 'No pudimos reordenar las lecciones.',
+      );
+      await onChange();
+    }
+  }
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={optimistic.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+        <ul className="divide-y divide-border-soft">
+          {optimistic.map((l) => (
+            <LessonRow
+              key={l.id}
+              lesson={l}
+              isEditing={editingLessonId === l.id}
+              pending={pending}
+              onToggleEdit={() => onToggleEdit(l.id)}
+              onDelete={() => onDelete(l.id, l.title)}
+              onChange={onChange}
+            />
+          ))}
+        </ul>
+      </SortableContext>
+      {reorderError ? (
+        <p
+          role="alert"
+          className="border-t border-border-soft bg-danger-50 px-4 py-2 text-xs text-danger-700"
+        >
+          {reorderError}
+        </p>
+      ) : null}
+    </DndContext>
+  );
+}
+
+function LessonRow({
+  lesson,
+  isEditing,
+  pending,
+  onToggleEdit,
+  onDelete,
+  onChange,
+}: {
+  lesson: CourseLesson;
+  isEditing: boolean;
+  pending: boolean;
+  onToggleEdit: () => void;
+  onDelete: () => Promise<void>;
+  onChange: () => Promise<void>;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: lesson.id,
+  });
+  const iconName = LESSON_TYPE_ICON[lesson.type] ?? 'book';
+  const wrapperStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={wrapperStyle}
+      className={isDragging ? 'relative z-10 bg-surface shadow-lg ring-1 ring-brand-200' : ''}
+    >
+      <div
+        className={
+          isEditing
+            ? 'flex flex-wrap items-center gap-3 bg-surface-2 px-4 py-2.5'
+            : 'group flex flex-wrap items-center gap-3 px-4 py-2.5 hover:bg-surface-2'
+        }
+      >
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={`Arrastrar para reordenar la lección ${lesson.title}`}
+          title="Arrastrar para reordenar"
+          className="cursor-grab touch-none rounded p-0.5 text-text-disabled transition-colors hover:bg-surface-3 hover:text-text-muted active:cursor-grabbing"
+        >
+          <Icon name="grip" size={16} />
+        </button>
+        <span
+          aria-hidden="true"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg"
+          style={{
+            background: 'var(--didacta-neutral-bg)',
+            color: 'var(--didacta-neutral-fg)',
+          }}
+        >
+          <Icon name={iconName} size={15} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-text">{lesson.title}</p>
+          <p className="text-xs text-text-subtle">
+            {LESSON_TYPE_LABEL[lesson.type] ?? lesson.type}
+            {lesson.durationMinutes ? ` · ${lesson.durationMinutes} min` : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={onToggleEdit}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-brand-600 transition-colors hover:bg-brand-50"
+          >
+            <Icon name="edit" size={13} />
+            {isEditing ? 'Cerrar' : 'Editar'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void onDelete()}
+            disabled={pending}
+            aria-label={`Eliminar lección ${lesson.title}`}
+            title="Eliminar lección"
+            className="rounded p-1.5 text-text-disabled transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:opacity-50"
+          >
+            <Icon name="trash" size={14} />
+          </button>
+        </div>
+      </div>
+      {isEditing ? (
+        <div className="border-t border-border-soft bg-surface px-4 py-4">
+          <LessonContentEditor lesson={lesson} onUpdated={onChange} onCancel={onToggleEdit} />
+        </div>
+      ) : null}
+    </li>
   );
 }
 
@@ -481,20 +676,89 @@ function PublishChecklist({
   );
 }
 
+/**
+ * Wrapper DnD para la lista de módulos del curso.
+ *
+ * - Usa state local optimistic para que el reorden se vea instantáneo, y
+ *   llama a `coursesApi.reorderModules` con la lista final.
+ * - Tras la respuesta del backend, llama a `onChange()` para resync con la
+ *   verdad del servidor (que puede haber renumerado posiciones).
+ * - Si la API falla, refresca para recuperar el orden correcto y propaga
+ *   un mensaje al editor padre.
+ */
+function ModuleList({
+  modules,
+  courseId,
+  onChange,
+  onError,
+}: {
+  modules: CourseModule[];
+  courseId: string;
+  onChange: () => Promise<void>;
+  onError: (msg: string) => void;
+}) {
+  const [optimistic, setOptimistic] = useState<CourseModule[]>(modules);
+
+  // Sincroniza al refetch externo (ej. añadir / eliminar sección).
+  useEffect(() => {
+    setOptimistic(modules);
+  }, [modules]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = optimistic.findIndex((m) => m.id === active.id);
+    const newIdx = optimistic.findIndex((m) => m.id === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
+    const reordered = arrayMove(optimistic, oldIdx, newIdx);
+    setOptimistic(reordered);
+    try {
+      await coursesApi.reorderModules(
+        courseId,
+        reordered.map((m) => m.id),
+      );
+      await onChange();
+    } catch (e) {
+      onError(e instanceof ApiHttpError ? e.message : 'No pudimos reordenar las secciones.');
+      await onChange();
+    }
+  }
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={optimistic.map((m) => m.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-4">
+          {optimistic.map((m, idx) => (
+            <ModuleBlock key={m.id} courseModule={m} index={idx} onChange={onChange} />
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
 function ModuleBlock({
   courseModule,
   index,
-  totalModules,
   onChange,
 }: {
   courseModule: CourseModule;
   index: number;
-  totalModules: number;
   onChange: () => Promise<void>;
 }) {
   const [pending, setPending] = useState(false);
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [showAddLesson, setShowAddLesson] = useState(false);
+
+  // Sortable state — el handle es el `<button>` con icon `grip` del header.
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: courseModule.id,
+  });
 
   async function handleAddLesson(form: FormData) {
     setPending(true);
@@ -507,16 +771,6 @@ function ModuleBlock({
           : undefined,
       });
       setShowAddLesson(false);
-      await onChange();
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function handleMoveLesson(lessonId: string, direction: 'up' | 'down') {
-    setPending(true);
-    try {
-      await coursesApi.moveLesson(lessonId, direction);
       await onChange();
     } finally {
       setPending(false);
@@ -555,16 +809,32 @@ function ModuleBlock({
   const moduleLabel = `${index + 1}`.padStart(2, '0');
   const moduleMinutes = courseModule.lessons.reduce((s, l) => s + (l.durationMinutes ?? 0), 0);
 
+  const wrapperStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-surface">
+    <div
+      ref={setNodeRef}
+      style={wrapperStyle}
+      className={
+        isDragging
+          ? 'overflow-hidden rounded-xl border border-brand-300 bg-surface opacity-70 shadow-xl ring-2 ring-brand-200'
+          : 'overflow-hidden rounded-xl border border-border bg-surface'
+      }
+    >
       <header className="flex flex-wrap items-start gap-3 border-b border-border-soft bg-surface-2 px-4 py-3">
-        <span
-          aria-hidden="true"
-          className="cursor-grab text-text-disabled transition-colors hover:text-text-muted"
-          title="Arrastrar para reordenar (próximamente)"
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label="Arrastrar para reordenar la sección"
+          title="Arrastrar para reordenar"
+          className="cursor-grab touch-none rounded p-0.5 text-text-disabled transition-colors hover:bg-surface-3 hover:text-text-muted active:cursor-grabbing"
         >
           <Icon name="grip" size={18} />
-        </span>
+        </button>
         <span
           aria-hidden="true"
           className="grid h-7 w-7 shrink-0 place-items-center rounded-md font-display text-xs font-bold tabular-nums"
@@ -613,121 +883,15 @@ function ModuleBlock({
       </header>
 
       {courseModule.lessons.length > 0 ? (
-        <ul className="divide-y divide-border-soft">
-          {courseModule.lessons.map((l, idx) => {
-            const iconName = LESSON_TYPE_ICON[l.type] ?? 'book';
-            const isEditing = editingLessonId === l.id;
-            return (
-              <li key={l.id}>
-                <div
-                  className={
-                    isEditing
-                      ? 'flex flex-wrap items-center gap-3 bg-surface-2 px-4 py-2.5'
-                      : 'group flex flex-wrap items-center gap-3 px-4 py-2.5 hover:bg-surface-2'
-                  }
-                >
-                  <span
-                    aria-hidden="true"
-                    className="cursor-grab text-text-disabled transition-colors hover:text-text-muted"
-                    title="Arrastrar para reordenar (próximamente)"
-                  >
-                    <Icon name="grip" size={16} />
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg"
-                    style={{
-                      background: 'var(--didacta-neutral-bg)',
-                      color: 'var(--didacta-neutral-fg)',
-                    }}
-                  >
-                    <Icon name={iconName} size={15} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-text">{l.title}</p>
-                    <p className="text-xs text-text-subtle">
-                      {LESSON_TYPE_LABEL[l.type] ?? l.type}
-                      {l.durationMinutes ? ` · ${l.durationMinutes} min` : ''}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-0.5">
-                    <button
-                      type="button"
-                      onClick={() => handleMoveLesson(l.id, 'up')}
-                      disabled={pending || idx === 0}
-                      className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-3 hover:text-text disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
-                      aria-label="Mover arriba"
-                      title="Mover arriba"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="m18 15-6-6-6 6" />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleMoveLesson(l.id, 'down')}
-                      disabled={pending || idx === courseModule.lessons.length - 1}
-                      className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-3 hover:text-text disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
-                      aria-label="Mover abajo"
-                      title="Mover abajo"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="m6 9 6 6 6-6" />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditingLessonId(isEditing ? null : l.id)}
-                      className="ml-1 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-brand-600 transition-colors hover:bg-brand-50"
-                    >
-                      <Icon name="edit" size={13} />
-                      {isEditing ? 'Cerrar' : 'Editar'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteLesson(l.id, l.title)}
-                      disabled={pending}
-                      aria-label={`Eliminar lección ${l.title}`}
-                      title="Eliminar lección"
-                      className="rounded p-1.5 text-text-disabled transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:opacity-50"
-                    >
-                      <Icon name="trash" size={14} />
-                    </button>
-                  </div>
-                </div>
-                {isEditing ? (
-                  <div className="border-t border-border-soft bg-surface px-4 py-4">
-                    <LessonContentEditor
-                      lesson={l}
-                      onUpdated={onChange}
-                      onCancel={() => setEditingLessonId(null)}
-                    />
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+        <LessonList
+          moduleId={courseModule.id}
+          lessons={courseModule.lessons}
+          editingLessonId={editingLessonId}
+          pending={pending}
+          onToggleEdit={(id) => setEditingLessonId(editingLessonId === id ? null : id)}
+          onDelete={handleDeleteLesson}
+          onChange={onChange}
+        />
       ) : (
         <p className="border-b border-border-soft bg-surface-2 px-4 py-6 text-center text-xs italic text-text-subtle">
           Sin lecciones todavía. Añadí la primera abajo.

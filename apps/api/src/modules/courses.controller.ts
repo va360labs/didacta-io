@@ -221,6 +221,46 @@ export class CoursesController {
     }
   }
 
+  @Post('modules/:moduleId/reorder-lessons')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Reordenar lecciones del módulo (bulk, drag & drop)' })
+  async reorderLessons(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('moduleId') moduleId: string,
+    @Body(new ZodValidationPipe(z.object({ lessonIds: z.array(z.string().uuid()).min(1) })))
+    body: { lessonIds: string[] },
+  ) {
+    if (!user) throw new UnauthorizedException();
+    try {
+      await this.registry
+        .getCoursesService()
+        .reorderLessons(user.tenantId, user.sub, moduleId, body.lessonIds);
+      return { reordered: true };
+    } catch (error) {
+      throw this.translate(error);
+    }
+  }
+
+  @Post(':id/reorder-modules')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Reordenar módulos del curso (bulk, drag & drop)' })
+  async reorderModules(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(z.object({ moduleIds: z.array(z.string().uuid()).min(1) })))
+    body: { moduleIds: string[] },
+  ) {
+    if (!user) throw new UnauthorizedException();
+    try {
+      await this.registry
+        .getCoursesService()
+        .reorderModules(user.tenantId, user.sub, id, body.moduleIds);
+      return { reordered: true };
+    } catch (error) {
+      throw this.translate(error);
+    }
+  }
+
   private translate(error: unknown): unknown {
     if (error instanceof CoursesError) {
       const map: Record<string, number> = {
