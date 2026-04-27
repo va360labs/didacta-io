@@ -68,6 +68,14 @@ export const fundaeApi = {
     );
   },
 
+  async countParticipants(id: string): Promise<{ total: number }> {
+    return apiFetch<{ total: number }>(
+      `/api/v1/modules/fundae/actions/${id}/participants/count`,
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
   /**
    * Devuelve la URL del XML para descarga (con auth bearer en query como
    * fallback, por si no se puede usar header). Lo más simple: el browser

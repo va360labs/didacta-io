@@ -35,13 +35,28 @@ const MODALIDAD_LABEL: Record<Modalidad, string> = {
 
 export default function FundaePage() {
   const [actions, setActions] = useState<FundaeAction[] | null>(null);
+  const [participantCounts, setParticipantCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
 
   async function reload() {
     try {
       setError(null);
-      setActions(await fundaeApi.list());
+      const list = await fundaeApi.list();
+      setActions(list);
+      // Cuenta de participantes en paralelo solo para acciones con curso vinculado.
+      const withCourse = list.filter((a) => a.courseId);
+      const entries = await Promise.all(
+        withCourse.map(async (a) => {
+          try {
+            const { total } = await fundaeApi.countParticipants(a.id);
+            return [a.id, total] as const;
+          } catch {
+            return [a.id, 0] as const;
+          }
+        }),
+      );
+      setParticipantCounts(Object.fromEntries(entries));
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las acciones.');
     }
@@ -170,6 +185,12 @@ export default function FundaePage() {
                       {STATUS_LABEL[a.status]}
                     </Badge>
                     <Badge variant="muted">{MODALIDAD_LABEL[a.modalidad]}</Badge>
+                    {a.courseId ? (
+                      <Badge variant="info">
+                        <Icon name="users" size={12} />
+                        {participantCounts[a.id] ?? 0} participantes
+                      </Badge>
+                    ) : null}
                   </div>
                   <p className="font-display text-base font-semibold leading-tight text-text">
                     {a.nombre}

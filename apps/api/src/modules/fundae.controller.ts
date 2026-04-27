@@ -97,6 +97,17 @@ export class FundaeController {
     return { archived: true };
   }
 
+  @Get('actions/:id/participants/count')
+  @ApiOperation({
+    summary:
+      'Cuenta los participantes (matriculaciones activas) del curso vinculado a una acción Fundae.',
+  })
+  async countParticipants(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    const u = this.requireAdmin(user);
+    const total = await this.registry.getFundaeService().countParticipants(u.tenantId, id);
+    return { total };
+  }
+
   @Get('actions/:id/export.xml')
   @ApiOperation({
     summary:

@@ -14,7 +14,7 @@ import {
   CourseNotInTenantError,
   FechasInvalidasError,
 } from './errors.js';
-import { buildActionXml } from './xml-export.js';
+import { buildActionXml, type ParticipantSnapshot } from './xml-export.js';
 
 export class FundaeService {
   constructor(
@@ -159,12 +159,82 @@ export class FundaeService {
    */
   async generateXml(tenantId: string, actorId: string | null, id: string): Promise<string> {
     const action = await this.get(tenantId, id);
-    const xml = buildActionXml(action);
+    const participants = action.courseId
+      ? await this.collectParticipants(tenantId, action.courseId, action.horasFormacion)
+      : [];
+    const xml = buildActionXml(action, participants);
     await this.publish(tenantId, actorId, 'fundae.export.generated', {
       actionId: action.id,
+      participantsCount: participants.length,
       bytes: Buffer.byteLength(xml, 'utf8'),
     });
     return xml;
+  }
+
+  /**
+   * Cuenta participantes (matriculaciones activas) del curso vinculado a una
+   * acción. Devuelve solo el total para uso del UI; el detalle completo se
+   * consigue vía `collectParticipants` durante el export.
+   */
+  async countParticipants(tenantId: string, actionId: string): Promise<number> {
+    const action = await this.get(tenantId, actionId);
+    if (!action.courseId) return 0;
+    return this.prisma.modLearningEnrollment.count({
+      where: { tenantId, courseId: action.courseId, status: { not: 'CANCELLED' } },
+    });
+  }
+
+  /**
+   * Resuelve los participantes de una acción Fundae a partir del curso
+   * vinculado:
+   *  - Lista enrollments NO cancelados.
+   *  - Hace JOIN con `User` para obtener nombre + email + DNI futuro.
+   *  - Mapea `progressPercent` y `status` a horas asistidas y resultado.
+   *
+   * El cálculo de horas asistidas es una **estimación**: hours × progressPct/100.
+   * Cuando tengamos `mod_learning_session_log` con minutos reales por sesión,
+   * podremos sustituir esto por la suma exacta. El admin puede corregir
+   * manualmente en el XML antes de subir.
+   */
+  private async collectParticipants(
+    tenantId: string,
+    courseId: string,
+    totalHours: number,
+  ): Promise<ParticipantSnapshot[]> {
+    const enrollments = await this.prisma.modLearningEnrollment.findMany({
+      where: { tenantId, courseId, status: { not: 'CANCELLED' } },
+      orderBy: { enrolledAt: 'asc' },
+    });
+    if (enrollments.length === 0) return [];
+
+    const userIds = enrollments.map((e) => e.userId);
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, email: true, name: true },
+    });
+    const userById = new Map(users.map((u) => [u.id, u]));
+
+    return enrollments.map((e) => {
+      const user = userById.get(e.userId);
+      const horasAsistidas = roundHours((totalHours * (e.progressPercent ?? 0)) / 100);
+      const passed = e.completedAt !== null && (e.progressPercent ?? 0) >= e.completionThreshold;
+      const failed = e.status === 'CANCELLED' || (e.completedAt !== null && !passed);
+      const resultado: ParticipantSnapshot['resultado'] = passed
+        ? 'APTO'
+        : failed
+          ? 'NO_APTO'
+          : 'EN_CURSO';
+      return {
+        userId: e.userId,
+        nombre: user?.name ?? null,
+        email: user?.email ?? '',
+        dni: null, // futuro: campo del perfil del usuario
+        horasAsistidas,
+        resultado,
+        enrolledAt: e.enrolledAt.toISOString(),
+        completedAt: e.completedAt?.toISOString() ?? null,
+      };
+    });
   }
 
   // ------------------- helpers -------------------
@@ -188,6 +258,14 @@ export class FundaeService {
       },
     });
   }
+}
+
+/**
+ * Redondea horas a 0.5 más cercano. Fundae acepta decimales pero el formato
+ * habitual es de media hora.
+ */
+function roundHours(value: number): number {
+  return Math.round(value * 2) / 2;
 }
 
 function toView(row: {

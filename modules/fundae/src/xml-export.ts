@@ -1,22 +1,30 @@
 import type { ActionView } from './dto.js';
 
+export interface ParticipantSnapshot {
+  userId: string;
+  nombre: string | null;
+  email: string;
+  /** DNI/NIE si está registrado. v0.2: futuro campo del perfil del usuario. */
+  dni: string | null;
+  /** Estimación = horasFormacion × progressPercent / 100. */
+  horasAsistidas: number;
+  resultado: 'APTO' | 'NO_APTO' | 'EN_CURSO';
+  enrolledAt: string;
+  completedAt: string | null;
+}
+
 /**
  * Genera el XML de presentación Fundae para una acción formativa.
  *
- * **Disclaimer**: Esta es la versión v0.1 del export — un esqueleto que
- * incluye los campos básicos esperados por el formato Fundae. La spec real
- * tiene muchas más etiquetas (participantes, módulos, evaluación, evidencias)
- * y validaciones de negocio que se irán cubriendo en iteraciones siguientes
- * conforme tengamos casos reales contra el sistema oficial de la fundación.
- *
- * El consumidor del XML es:
- *  - Inicialmente un humano (admin de RRHH) que descarga, revisa y sube a
- *    Fundae manualmente.
- *  - A futuro, integración API directa con la fundación.
+ * v0.2: incluye `<participantes>` cuando se provee la lista. Sigue el
+ * formato estándar (DNI, nombre, horas, resultado).
  *
  * Escapa los valores para evitar inyección XML.
  */
-export function buildActionXml(action: ActionView): string {
+export function buildActionXml(
+  action: ActionView,
+  participants: ParticipantSnapshot[] = [],
+): string {
   const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<accionFormativa xmlns="https://www.fundae.es/schemas/accion/v1">',
@@ -31,6 +39,24 @@ export function buildActionXml(action: ActionView): string {
   if (action.cifCentro) lines.push(`  <cifCentro>${escapeXml(action.cifCentro)}</cifCentro>`);
   lines.push(`  <estado>${action.status}</estado>`);
   lines.push(`  <generadoEn>${new Date().toISOString()}</generadoEn>`);
+
+  if (participants.length > 0) {
+    lines.push(`  <participantes total="${participants.length}">`);
+    for (const p of participants) {
+      lines.push('    <participante>');
+      lines.push(`      <userId>${escapeXml(p.userId)}</userId>`);
+      if (p.dni) lines.push(`      <dni>${escapeXml(p.dni)}</dni>`);
+      if (p.nombre) lines.push(`      <nombre>${escapeXml(p.nombre)}</nombre>`);
+      lines.push(`      <email>${escapeXml(p.email)}</email>`);
+      lines.push(`      <horasAsistidas>${p.horasAsistidas}</horasAsistidas>`);
+      lines.push(`      <resultado>${p.resultado}</resultado>`);
+      lines.push(`      <enrolledAt>${p.enrolledAt}</enrolledAt>`);
+      if (p.completedAt) lines.push(`      <completedAt>${p.completedAt}</completedAt>`);
+      lines.push('    </participante>');
+    }
+    lines.push('  </participantes>');
+  }
+
   lines.push('</accionFormativa>');
   return lines.join('\n');
 }
