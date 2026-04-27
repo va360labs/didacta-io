@@ -44,6 +44,45 @@ export const updateSessionSchema = z.object({
 });
 export type UpdateSessionDto = z.infer<typeof updateSessionSchema>;
 
+/**
+ * Schema mínimo del payload de webhook que nos interesa procesar.
+ * Zoom envía mucho más, pero solo extraemos lo que afecta al status.
+ *
+ * Eventos soportados v0.1:
+ *  - `meeting.started` → `STARTED`
+ *  - `meeting.ended` → `ENDED`
+ *
+ * Otros eventos (`meeting.participant_joined`, `recording.completed`,
+ * etc.) se persisten como `IGNORED` y no provocan cambios; los
+ * dejamos en la tabla por trazabilidad y para iteraciones futuras.
+ */
+export const webhookEventSchema = z.object({
+  /**
+   * UUID del evento generado por Zoom. Usado para idempotencia (Zoom
+   * reintenta hasta 3 veces si no recibimos 2xx en 3s).
+   */
+  event_id: z.string().min(1),
+  event: z.string().min(1),
+  /** Timestamp epoch ms. */
+  event_ts: z.number().int().optional(),
+  payload: z
+    .object({
+      account_id: z.string().optional(),
+      object: z
+        .object({
+          /** Numérico en JSON; Zoom usa number pero serializamos como string. */
+          id: z.union([z.string(), z.number()]).optional(),
+          uuid: z.string().optional(),
+          host_email: z.string().optional(),
+          start_time: z.string().optional(),
+          end_time: z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+});
+export type ZoomWebhookEvent = z.infer<typeof webhookEventSchema>;
+
 export interface SessionView {
   id: string;
   tenantId: string;

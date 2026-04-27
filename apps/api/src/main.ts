@@ -9,7 +9,10 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({ trustProxy: true }),
-    { bufferLogs: true },
+    // `rawBody: true` expone `req.rawBody` (Buffer) en cada request; lo
+    // necesita el webhook de Zoom para verificar HMAC sobre el body
+    // exacto recibido (no el JSON re-serializado).
+    { bufferLogs: true, rawBody: true },
   );
 
   app.useLogger(app.get(Logger));

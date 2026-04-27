@@ -1076,6 +1076,27 @@ model ModZoomSession {
   @@map("mod_zoom_session")
 }
 
+/// Registro de eventos webhook recibidos de Zoom para idempotencia.
+/// Zoom reintenta cada evento hasta 3 veces si no recibe 2xx en 3s, así
+/// que necesitamos detectar duplicados por `event_id` antes de aplicar
+/// el efecto. `result` indica cómo se procesó (OK, IGNORED si no
+/// matcheaba ninguna sesión, ERROR si falló al actualizar).
+model ModZoomWebhookEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  eventId      String   @unique @map("event_id")
+  eventType    String   @map("event_type")
+  meetingId    String?  @map("meeting_id")
+  sessionId    String?  @map("session_id") @db.Uuid
+  tenantId     String?  @map("tenant_id") @db.Uuid
+  receivedAt   DateTime @default(now()) @map("received_at")
+  result       String   @default("OK") /// OK | IGNORED | ERROR
+  errorMessage String?  @map("error_message")
+
+  @@index([meetingId], map: "mod_zoom_webhook_event_meeting_idx")
+  @@index([sessionId], map: "mod_zoom_webhook_event_session_idx")
+  @@map("mod_zoom_webhook_event")
+}
+
 // ============================================================================
 // MOD.FUNDAE — acciones formativas para subvenciones Fundae España.
 // `codigo_accion` único por tenant. Fechas como TEXT YYYY-MM-DD para

@@ -6,6 +6,7 @@ import {
   type SessionView,
   type UpdateSessionDto,
   type SessionStatus,
+  type ZoomWebhookEvent,
 } from './dto.js';
 import {
   CourseNotInTenantError,
@@ -217,6 +218,90 @@ export class ZoomLiveService {
     });
 
     await this.publish(tenantId, actorId, 'zoom.session.cancelled', { sessionId });
+  }
+
+  /**
+   * Procesa un evento de webhook de Zoom (validación de firma ya hecha por
+   * el controller). Devuelve el resultado de la operación:
+   *  - `OK`: se aplicó un cambio de status.
+   *  - `IGNORED`: evento conocido pero no relevante (no es started/ended,
+   *    o el meeting no matchea ninguna sesión nuestra).
+   *  - `DUPLICATE`: el `event_id` ya estaba procesado (Zoom reintenta).
+   *  - `ERROR`: fallo al persistir; el controller responderá 5xx para que
+   *    Zoom reintente.
+   *
+   * Es idempotente por `event_id`: registramos cada evento recibido en
+   * `mod_zoom_webhook_event` con UNIQUE en esa columna; un segundo intento
+   * con el mismo id devuelve DUPLICATE sin re-aplicar el efecto.
+   */
+  async handleWebhookEvent(
+    event: ZoomWebhookEvent,
+  ): Promise<{ result: 'OK' | 'IGNORED' | 'DUPLICATE' | 'ERROR'; sessionId?: string }> {
+    // Idempotencia: el unique index en event_id rechaza duplicados.
+    const existing = await this.prisma.modZoomWebhookEvent.findUnique({
+      where: { eventId: event.event_id },
+    });
+    if (existing) {
+      this.ctx.logger.info('mod.zoom-live: webhook duplicado, ignorado', {
+        eventId: event.event_id,
+        eventType: event.event,
+      });
+      return { result: 'DUPLICATE' };
+    }
+
+    const meetingId = event.payload?.object?.id ? String(event.payload.object.id) : null;
+    const session = meetingId
+      ? await this.prisma.modZoomSession.findFirst({
+          where: { zoomMeetingId: meetingId },
+        })
+      : null;
+
+    let nextStatus: SessionStatus | null = null;
+    if (event.event === 'meeting.started') nextStatus = 'STARTED';
+    else if (event.event === 'meeting.ended') nextStatus = 'ENDED';
+
+    let result: 'OK' | 'IGNORED' | 'ERROR' = 'OK';
+    let errorMessage: string | undefined;
+
+    if (!session || !nextStatus) {
+      result = 'IGNORED';
+    } else {
+      try {
+        await this.prisma.modZoomSession.update({
+          where: { id: session.id },
+          data: { status: nextStatus },
+        });
+        await this.publish(
+          session.tenantId,
+          null, // origen externo: no hay actorId
+          nextStatus === 'STARTED' ? 'zoom.session.started' : 'zoom.session.ended',
+          { sessionId: session.id, meetingId },
+        );
+      } catch (e) {
+        result = 'ERROR';
+        errorMessage = e instanceof Error ? e.message : String(e);
+        this.ctx.logger.error('mod.zoom-live: error aplicando webhook', {
+          eventId: event.event_id,
+          eventType: event.event,
+          error: errorMessage,
+        });
+      }
+    }
+
+    await this.prisma.modZoomWebhookEvent.create({
+      data: {
+        id: randomUUID(),
+        eventId: event.event_id,
+        eventType: event.event,
+        meetingId,
+        sessionId: session?.id ?? null,
+        tenantId: session?.tenantId ?? null,
+        result,
+        errorMessage: errorMessage ?? null,
+      },
+    });
+
+    return { result, ...(session ? { sessionId: session.id } : {}) };
   }
 
   // ------------------- helpers -------------------

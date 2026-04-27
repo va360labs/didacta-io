@@ -44,3 +44,14 @@ export class ZoomApiError extends ZoomLiveError {
     super('ZOOM_API_ERROR', `Error hablando con Zoom: ${reason}`);
   }
 }
+
+/**
+ * Lanzado cuando la firma del webhook (`X-Zm-Signature`) no valida contra
+ * el secret configurado. Equivale a un 401: rechazamos el evento sin
+ * tocar la base de datos.
+ */
+export class InvalidWebhookSignatureError extends ZoomLiveError {
+  constructor() {
+    super('ZOOM_INVALID_WEBHOOK_SIGNATURE', 'Firma de webhook inválida.');
+  }
+}

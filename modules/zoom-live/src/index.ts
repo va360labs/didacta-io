@@ -7,19 +7,23 @@ export {
   createSessionSchema,
   sessionStatusSchema,
   updateSessionSchema,
+  webhookEventSchema,
   type CreateSessionDto,
   type SessionStatus,
   type SessionView,
   type UpdateSessionDto,
+  type ZoomWebhookEvent,
 } from './dto.js';
 export {
   CourseNotInTenantError,
+  InvalidWebhookSignatureError,
   LessonNotInCourseError,
   SessionAlreadyEndedError,
   SessionNotFoundError,
   ZoomApiError,
   ZoomLiveError,
 } from './errors.js';
+export { verifyZoomSignature } from './webhook-signature.js';
 export {
   buildZoomApiClient,
   RealZoomApiClient,

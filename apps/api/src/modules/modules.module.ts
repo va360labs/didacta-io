@@ -30,6 +30,7 @@ import { ThemingController } from './theming.controller';
 import { ThemingErrorFilter } from './theming-error.filter';
 import { ZoomLiveController } from './zoom-live.controller';
 import { ZoomLiveErrorFilter } from './zoom-live-error.filter';
+import { ZoomWebhookController } from './zoom-webhook.controller';
 import { FundaeController } from './fundae.controller';
 import { FundaeErrorFilter } from './fundae-error.filter';
 import { CommunityDigestWorker } from './community-digest.worker';
@@ -49,6 +50,7 @@ import { CommunityDigestWorker } from './community-digest.worker';
     TenantSettingsController,
     ThemingController,
     ZoomLiveController,
+    ZoomWebhookController,
     FundaeController,
   ],
   providers: [

@@ -21,10 +21,25 @@ interface SessionRow {
   updatedAt: Date;
 }
 
+interface WebhookEventRow {
+  id: string;
+  eventId: string;
+  eventType: string;
+  meetingId: string | null;
+  sessionId: string | null;
+  tenantId: string | null;
+  receivedAt: Date;
+  result: string;
+  errorMessage: string | null;
+}
+
 function makeFakePrisma(courses: { id: string; tenantId: string }[] = []) {
   const sessions: SessionRow[] = [];
+  const webhookEvents: WebhookEventRow[] = [];
 
   return {
+    _sessions: sessions,
+    _webhookEvents: webhookEvents,
     modZoomSession: {
       async findMany(args: {
         where: { tenantId: string; courseId?: string; status?: string };
@@ -36,9 +51,15 @@ function makeFakePrisma(courses: { id: string; tenantId: string }[] = []) {
           .filter((s) => (args.where.status ? s.status === args.where.status : true))
           .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
       },
-      async findFirst(args: { where: { tenantId: string; id: string } }) {
+      async findFirst(args: { where: { tenantId?: string; id?: string; zoomMeetingId?: string } }) {
         return (
-          sessions.find((s) => s.tenantId === args.where.tenantId && s.id === args.where.id) ?? null
+          sessions.find((s) => {
+            if (args.where.tenantId && s.tenantId !== args.where.tenantId) return false;
+            if (args.where.id && s.id !== args.where.id) return false;
+            if (args.where.zoomMeetingId && s.zoomMeetingId !== args.where.zoomMeetingId)
+              return false;
+            return true;
+          }) ?? null
         );
       },
       async create(args: { data: SessionRow }) {
@@ -61,6 +82,16 @@ function makeFakePrisma(courses: { id: string; tenantId: string }[] = []) {
         return (
           courses.find((c) => c.id === args.where.id && c.tenantId === args.where.tenantId) ?? null
         );
+      },
+    },
+    modZoomWebhookEvent: {
+      async findUnique(args: { where: { eventId: string } }) {
+        return webhookEvents.find((e) => e.eventId === args.where.eventId) ?? null;
+      },
+      async create(args: { data: Omit<WebhookEventRow, 'receivedAt'> }) {
+        const row: WebhookEventRow = { ...args.data, receivedAt: new Date() };
+        webhookEvents.push(row);
+        return row;
       },
     },
   };
@@ -182,5 +213,120 @@ describe('ZoomLiveService', () => {
     const ctx = makeCtx();
     const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
     await expect(service.get(TENANT, 'no-existe')).rejects.toBeInstanceOf(SessionNotFoundError);
+  });
+});
+
+describe('ZoomLiveService.handleWebhookEvent', () => {
+  it('aplica meeting.started → status STARTED y emite zoom.session.started', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await service.create(TENANT, ACTOR, {
+      topic: 'Test',
+      startTime: '2026-05-15T10:00:00-03:00',
+      durationMinutes: 60,
+      hostEmail: 'h@x.com',
+      timezone: 'UTC',
+    });
+
+    const out = await service.handleWebhookEvent({
+      event_id: 'evt-1',
+      event: 'meeting.started',
+      payload: { object: { id: created.zoomMeetingId! } },
+    });
+
+    expect(out.result).toBe('OK');
+    expect(out.sessionId).toBe(created.id);
+    const after = await service.get(TENANT, created.id);
+    expect(after.status).toBe('STARTED');
+    expect(ctx.events.map((e) => e.name)).toContain('zoom.session.started');
+  });
+
+  it('aplica meeting.ended → status ENDED', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await service.create(TENANT, ACTOR, {
+      topic: 'Test',
+      startTime: '2026-05-15T10:00:00-03:00',
+      durationMinutes: 60,
+      hostEmail: 'h@x.com',
+      timezone: 'UTC',
+    });
+
+    const out = await service.handleWebhookEvent({
+      event_id: 'evt-2',
+      event: 'meeting.ended',
+      payload: { object: { id: created.zoomMeetingId! } },
+    });
+
+    expect(out.result).toBe('OK');
+    const after = await service.get(TENANT, created.id);
+    expect(after.status).toBe('ENDED');
+    expect(ctx.events.map((e) => e.name)).toContain('zoom.session.ended');
+  });
+
+  it('idempotente: el mismo event_id no se aplica dos veces', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await service.create(TENANT, ACTOR, {
+      topic: 'Test',
+      startTime: '2026-05-15T10:00:00-03:00',
+      durationMinutes: 60,
+      hostEmail: 'h@x.com',
+      timezone: 'UTC',
+    });
+
+    const first = await service.handleWebhookEvent({
+      event_id: 'evt-dup',
+      event: 'meeting.started',
+      payload: { object: { id: created.zoomMeetingId! } },
+    });
+    const second = await service.handleWebhookEvent({
+      event_id: 'evt-dup',
+      event: 'meeting.started',
+      payload: { object: { id: created.zoomMeetingId! } },
+    });
+
+    expect(first.result).toBe('OK');
+    expect(second.result).toBe('DUPLICATE');
+    // El evento se emitió una sola vez.
+    const startedEvents = ctx.events.filter((e) => e.name === 'zoom.session.started');
+    expect(startedEvents).toHaveLength(1);
+  });
+
+  it('IGNORED si no hay sesión local con ese meetingId', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const out = await service.handleWebhookEvent({
+      event_id: 'evt-3',
+      event: 'meeting.started',
+      payload: { object: { id: 'meeting-desconocido' } },
+    });
+    expect(out.result).toBe('IGNORED');
+  });
+
+  it('IGNORED si el event_type no es started/ended', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await service.create(TENANT, ACTOR, {
+      topic: 'Test',
+      startTime: '2026-05-15T10:00:00-03:00',
+      durationMinutes: 60,
+      hostEmail: 'h@x.com',
+      timezone: 'UTC',
+    });
+    const out = await service.handleWebhookEvent({
+      event_id: 'evt-4',
+      event: 'meeting.participant_joined',
+      payload: { object: { id: created.zoomMeetingId! } },
+    });
+    expect(out.result).toBe('IGNORED');
+    // Persiste el evento pero no toca status.
+    const after = await service.get(TENANT, created.id);
+    expect(after.status).toBe('SCHEDULED');
   });
 });
