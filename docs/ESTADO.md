@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (batch 1 de E2E — T-1A-018 progreso 5→8 specs)
+> **Última actualización**: 2026-04-27 (batch 2 de E2E — T-1A-018 progreso 8→11 specs)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,24 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — Batch 2 de E2E nuevos (T-1A-018 progreso 8 → 11)
+
+Tres specs nuevos ejercitando el core de Fase 1.A:
+
+- **`audit-verify.spec.ts`**: `GET /audit/verify` devuelve cadena
+  válida; `GET /audit/entries?limit=N` lista entradas; bearer inválido
+  → 401/403.
+- **`admin-tenants.spec.ts`** (HU-SA-001): list → create → suspend →
+  reactivate. Skipea automáticamente si el seed user no es super_admin
+  (sólo válida con seed correcto). Segundo test: rechaza slug
+  uppercase con 400.
+- **`formador-students.spec.ts`** (HU-FORM-002): bootstrap completo,
+  alumno completa lección, formador consulta
+  `/modules/learning/courses/:id/students` y verifica que el alumno
+  aparece con progreso ≥ 75 y status ACTIVE/COMPLETED.
+
+Suite E2E ahora: 11 specs. Faltan ~9 más para llegar al DoD de 20+.
 
 ### Sesión 2026-04-27 — Batch 1 de E2E nuevos (T-1A-018 progreso)
 
