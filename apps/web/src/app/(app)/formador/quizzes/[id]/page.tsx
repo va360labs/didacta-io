@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
 import { assessmentsApi, type QuizFormadorView } from '@/lib/assessments';
 import { QuizEditor } from './quiz-editor';
@@ -28,20 +29,34 @@ export default function QuizEditorPage() {
 
   if (error)
     return (
-      <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-        {error}
-      </p>
+      <div className="space-y-4">
+        <Button asChild variant="ghost" className="self-start">
+          <Link href="/formador/cursos">← Volver a mis cursos</Link>
+        </Button>
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+        >
+          {error}
+        </div>
+      </div>
     );
-  if (!quiz) return <p className="text-sm text-neutral-500">Cargando…</p>;
+
+  if (!quiz)
+    return (
+      <div className="space-y-4">
+        <div className="skeleton h-8 w-32" />
+        <div className="skeleton h-32 w-full" />
+        <div className="skeleton h-64 w-full" />
+        <div className="skeleton h-64 w-full" />
+      </div>
+    );
 
   return (
     <div className="space-y-4">
-      <Link
-        href="/formador/cursos"
-        className="text-xs text-neutral-500 underline decoration-dotted hover:decoration-solid"
-      >
-        ← Volver a mis cursos
-      </Link>
+      <Button asChild variant="ghost" className="self-start">
+        <Link href="/formador/cursos">← Volver a mis cursos</Link>
+      </Button>
       <QuizEditor initial={quiz} onChange={reload} />
     </div>
   );
