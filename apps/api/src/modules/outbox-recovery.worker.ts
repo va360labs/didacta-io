@@ -1,6 +1,7 @@
 import { Injectable, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleRegistryService } from './module-registry.service';
+import { OutboxMetrics } from './outbox.metrics';
 import { OutboxQueueService } from './outbox-queue.service';
 
 /**
@@ -21,6 +22,7 @@ export class OutboxRecoveryWorker implements OnApplicationBootstrap, OnModuleDes
     private readonly registry: ModuleRegistryService,
     private readonly queue: OutboxQueueService,
     private readonly logger: PinoLogger,
+    private readonly metrics: OutboxMetrics,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -41,10 +43,13 @@ export class OutboxRecoveryWorker implements OnApplicationBootstrap, OnModuleDes
   private async runOnce(): Promise<void> {
     try {
       const result = await this.registry.recoverOutbox();
+      this.metrics.recordSweep('success');
+      this.metrics.recordRecoveryEvents(result.processed, result.failed);
       if (result.processed > 0 || result.failed > 0) {
         this.logger.log(result, 'outbox recovery sweep');
       }
     } catch (error) {
+      this.metrics.recordSweep('error');
       this.logger.error({ err: error }, 'outbox recovery sweep falló');
     }
   }

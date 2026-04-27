@@ -38,6 +38,7 @@ import {
   CommunityDigestMetrics,
   communityDigestMetricsProviders,
 } from './community-digest.metrics';
+import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
 
 @Module({
   imports: [AuthModule],
@@ -60,6 +61,8 @@ import {
   providers: [
     ...communityDigestMetricsProviders,
     CommunityDigestMetrics,
+    ...outboxMetricsProviders,
+    OutboxMetrics,
     OutboxQueueService,
     ModuleContextFactory,
     ModuleRegistryService,

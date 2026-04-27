@@ -9,6 +9,7 @@ import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleContextFactory } from './module-context.factory';
+import { OutboxMetrics } from './outbox.metrics';
 
 const QUEUE_NAME = 'didacta.outbox';
 
@@ -43,6 +44,7 @@ export class OutboxQueueService implements OnApplicationBootstrap, OnModuleDestr
     @Inject(forwardRef(() => ModuleContextFactory))
     private readonly factory: ModuleContextFactory,
     private readonly logger: PinoLogger,
+    private readonly metrics: OutboxMetrics,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -86,9 +88,18 @@ export class OutboxQueueService implements OnApplicationBootstrap, OnModuleDestr
     this.worker = new Worker<OutboxJobData>(
       QUEUE_NAME,
       async (job) => {
-        const eventBus = this.factory.getEventBus();
-        const outboxId = BigInt(job.data.outboxId);
-        await eventBus.processOutboxId(outboxId);
+        const start = process.hrtime.bigint();
+        try {
+          const eventBus = this.factory.getEventBus();
+          const outboxId = BigInt(job.data.outboxId);
+          await eventBus.processOutboxId(outboxId);
+        } finally {
+          // Sea cual sea el resultado, mide la duración. BullMQ solo emite
+          // 'completed' tras éxito, así que el histograma del 'failed' lo
+          // observamos desde aquí mismo.
+          const elapsed = Number(process.hrtime.bigint() - start) / 1e9;
+          this.metrics.recordDispatchDuration(elapsed);
+        }
       },
       {
         connection: this.workerConnection,
@@ -97,12 +108,14 @@ export class OutboxQueueService implements OnApplicationBootstrap, OnModuleDestr
     );
 
     this.worker.on('failed', (job, err) => {
+      this.metrics.recordDispatchFailed();
       this.logger.error(
         { jobId: job?.id, attemptsMade: job?.attemptsMade, err: err.message },
         'outbox dispatch job falló',
       );
     });
     this.worker.on('completed', (job) => {
+      this.metrics.recordDispatchCompleted();
       this.logger.debug({ jobId: job.id }, 'outbox dispatch job completado');
     });
 
