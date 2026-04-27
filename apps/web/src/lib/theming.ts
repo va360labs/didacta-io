@@ -18,6 +18,8 @@ const CACHE_KEY = 'didacta.theme.v1';
 export interface TenantTheme {
   tenantId: string;
   logoUrl: string | null;
+  /** True si el logo se subió al storage del tenant (vs URL externa). */
+  logoUploaded: boolean;
   faviconUrl: string | null;
   brandHue: number;
   brandSaturation: number;
@@ -52,6 +54,19 @@ export const themingApi = {
   },
   async reset(bearer: string): Promise<TenantTheme> {
     return apiFetch<TenantTheme>('/modules/theming/me/reset', { method: 'POST' }, bearer);
+  },
+  async uploadLogo(
+    bearer: string,
+    input: { data: string; filename: string; contentType: string },
+  ): Promise<TenantTheme> {
+    return apiFetch<TenantTheme>(
+      '/modules/theming/me/logo',
+      { method: 'POST', body: JSON.stringify(input) },
+      bearer,
+    );
+  },
+  async removeLogo(bearer: string): Promise<TenantTheme> {
+    return apiFetch<TenantTheme>('/modules/theming/me/logo', { method: 'DELETE' }, bearer);
   },
 };
 

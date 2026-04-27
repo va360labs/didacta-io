@@ -6,14 +6,18 @@ export { ThemingService } from './theming.service.js';
 export {
   ALLOWED_BODY_FONTS,
   ALLOWED_DISPLAY_FONTS,
+  ALLOWED_LOGO_MIME_TYPES,
   DEFAULT_THEME,
   MAX_CUSTOM_CSS_BYTES,
   MAX_FOOTER_HTML_BYTES,
+  MAX_LOGO_BYTES,
   updateThemeSchema,
+  uploadLogoSchema,
   type BodyFont,
   type DisplayFont,
   type ThemeSnapshot,
   type UpdateThemeDto,
+  type UploadLogoDto,
 } from './dto.js';
 export {
   CustomCssTooLargeError,
@@ -22,6 +26,8 @@ export {
   InvalidHueError,
   InvalidSaturationError,
   InvalidUrlError,
+  LogoNotFoundError,
+  LogoTooLargeError,
   ThemingError,
   UnsupportedFontError,
 } from './errors.js';

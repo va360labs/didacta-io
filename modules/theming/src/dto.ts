@@ -35,17 +35,28 @@ export const ALLOWED_BODY_FONTS = [
 export const MAX_CUSTOM_CSS_BYTES = 16 * 1024;
 export const MAX_FOOTER_HTML_BYTES = 4 * 1024;
 
-const httpsUrl = z
+/**
+ * URLs de branding aceptan:
+ *  - `https://...` (URL externa pegada por el admin).
+ *  - `/api/v1/...` (endpoint público del backend que sirve el logo subido).
+ *
+ * Vetamos `http://` (mixed content), `javascript:`, `data:` y demás esquemas
+ * raros. Es el equivalente a `httpsUrl` previo + permitir relative paths del
+ * propio backend para servir logos del storage.
+ */
+const safeImageUrl = z
   .string()
-  .url()
-  .refine((u) => u.startsWith('https://'), {
-    message: 'La URL debe usar https',
-  });
+  .min(1)
+  .max(2048)
+  .refine(
+    (u) => u.startsWith('https://') || u.startsWith('/api/v1/'),
+    'La URL debe ser https:// o un endpoint relativo /api/v1/...',
+  );
 
 export const updateThemeSchema = z
   .object({
-    logoUrl: httpsUrl.nullable().optional(),
-    faviconUrl: httpsUrl.nullable().optional(),
+    logoUrl: safeImageUrl.nullable().optional(),
+    faviconUrl: safeImageUrl.nullable().optional(),
     brandHue: z.number().int().min(0).max(360).optional(),
     brandSaturation: z.number().int().min(0).max(100).optional(),
     displayFontFamily: z.enum(ALLOWED_DISPLAY_FONTS).optional(),
@@ -54,6 +65,30 @@ export const updateThemeSchema = z
     footerHtml: z.string().max(MAX_FOOTER_HTML_BYTES).nullable().optional(),
   })
   .strict();
+
+/**
+ * Tipos MIME aceptados para el logo. PNG y JPG son universales; SVG se acepta
+ * porque escala y no pixela, y WebP por compatibilidad moderna.
+ */
+export const ALLOWED_LOGO_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/svg+xml',
+  'image/webp',
+] as const;
+
+/** 2 MB máximo. Un logo serio rara vez pasa de 200 KB. */
+export const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+
+export const uploadLogoSchema = z.object({
+  /** Contenido del archivo en base64 (sin el prefijo data:). */
+  data: z.string().min(1),
+  /** Nombre original del archivo, solo para auditoría / extensión. */
+  filename: z.string().min(1).max(256),
+  contentType: z.enum(ALLOWED_LOGO_MIME_TYPES),
+});
+
+export type UploadLogoDto = z.infer<typeof uploadLogoSchema>;
 
 export type UpdateThemeDto = z.infer<typeof updateThemeSchema>;
 
@@ -66,6 +101,8 @@ export type BodyFont = (typeof ALLOWED_BODY_FONTS)[number];
 export interface ThemeSnapshot {
   tenantId: string;
   logoUrl: string | null;
+  /** True si el logo actual fue subido por el uploader del panel. */
+  logoUploaded: boolean;
   faviconUrl: string | null;
   brandHue: number;
   brandSaturation: number;

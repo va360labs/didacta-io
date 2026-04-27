@@ -1,7 +1,26 @@
-import { Body, Controller, Get, Post, Put, UnauthorizedException, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Put,
+  Res,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { updateThemeSchema, type UpdateThemeDto } from '@didacta/mod-theming';
-import { CurrentUser } from '../auth/decorators';
+import {
+  LogoNotFoundError,
+  updateThemeSchema,
+  uploadLogoSchema,
+  type UpdateThemeDto,
+  type UploadLogoDto,
+} from '@didacta/mod-theming';
+import type { FastifyReply } from 'fastify';
+import { CurrentUser, Public } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
@@ -52,5 +71,60 @@ export class ThemingController {
       throw new UnauthorizedException('Solo administradores pueden resetear el theme.');
     }
     return this.registry.getThemingService().reset(user.tenantId);
+  }
+
+  @Post('me/logo')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Sube un logo (PNG/JPG/SVG/WebP, max 2 MB) al storage del tenant y actualiza el theme. Solo administradores.',
+  })
+  async uploadLogo(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(uploadLogoSchema)) dto: UploadLogoDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
+      throw new UnauthorizedException('Solo administradores pueden subir el logo.');
+    }
+    return this.registry.getThemingService().uploadLogo(user.tenantId, dto);
+  }
+
+  @Delete('me/logo')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Elimina el logo subido del tenant (limpia blob + columnas). Solo administradores.',
+  })
+  async removeLogo(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
+      throw new UnauthorizedException('Solo administradores pueden eliminar el logo.');
+    }
+    return this.registry.getThemingService().removeLogo(user.tenantId);
+  }
+
+  @Get('tenants/:tenantId/logo')
+  @Public()
+  @ApiOperation({
+    summary:
+      'Sirve el logo subido del tenant. Endpoint público porque tiene que renderizarse en signin/signup antes de auth.',
+  })
+  async getPublicLogo(
+    @Param('tenantId') tenantId: string,
+    @Res({ passthrough: false }) reply: FastifyReply,
+  ) {
+    try {
+      const { buffer, mimeType } = await this.registry.getThemingService().getLogoBlob(tenantId);
+      void reply
+        .header('Content-Type', mimeType)
+        .header('Cache-Control', 'public, max-age=300, must-revalidate')
+        .send(buffer);
+    } catch (e) {
+      if (e instanceof LogoNotFoundError) {
+        void reply.status(404).send({ error: 'logo_not_found' });
+        return;
+      }
+      throw e;
+    }
   }
 }

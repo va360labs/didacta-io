@@ -318,15 +318,21 @@ export default function BrandingPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Logos</CardTitle>
+              <CardTitle>Logo y favicon</CardTitle>
               <CardDescription>
-                Pegá la URL pública (https) del logo y favicon. La subida directa con el gestor de
-                archivos llegará en una versión posterior.
+                Subí el logo del tenant directamente al storage o pegá una URL externa (https).
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-5">
+              <LogoUploader
+                currentLogoUrl={form.logoUrl}
+                isUploaded={theme?.logoUploaded ?? false}
+                onUploaded={(url) => setForm((f) => f && { ...f, logoUrl: url })}
+                onRemoved={() => setForm((f) => f && { ...f, logoUrl: '' })}
+              />
+
               <div>
-                <Label htmlFor="logoUrl">URL del logo principal</Label>
+                <Label htmlFor="logoUrl">URL del logo (alternativa)</Label>
                 <Input
                   id="logoUrl"
                   type="url"
@@ -335,6 +341,9 @@ export default function BrandingPage() {
                   onChange={(e) => setForm((f) => f && { ...f, logoUrl: e.target.value })}
                   className="mt-1.5"
                 />
+                <p className="mt-1 text-xs text-text-subtle">
+                  Si pegás aquí una URL externa pisará el logo subido (al guardar).
+                </p>
               </div>
               <div>
                 <Label htmlFor="faviconUrl">URL del favicon</Label>
@@ -481,4 +490,147 @@ export default function BrandingPage() {
       </form>
     </div>
   );
+}
+
+const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
+const MAX_BYTES = 2 * 1024 * 1024;
+
+function LogoUploader({
+  currentLogoUrl,
+  isUploaded,
+  onUploaded,
+  onRemoved,
+}: {
+  currentLogoUrl: string;
+  isUploaded: boolean;
+  onUploaded: (url: string) => void;
+  onRemoved: () => void;
+}) {
+  const [busy, setBusy] = useState<'upload' | 'remove' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleUpload(file: File) {
+    setError(null);
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setError('Formato no soportado. Subí PNG, JPG, SVG o WebP.');
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      setError('El archivo supera los 2 MB.');
+      return;
+    }
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    setBusy('upload');
+    try {
+      const buf = await file.arrayBuffer();
+      const data = bufferToBase64(buf);
+      const updated = await themingApi.uploadLogo(token, {
+        data,
+        filename: file.name,
+        contentType: file.type,
+      });
+      themeCache.save(updated);
+      if (updated.logoUrl) onUploaded(updated.logoUrl);
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No pudimos subir el logo.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleRemove() {
+    if (!confirm('¿Eliminar el logo subido? Volverás al wordmark Didacta.')) return;
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    setBusy('remove');
+    setError(null);
+    try {
+      const updated = await themingApi.removeLogo(token);
+      themeCache.save(updated);
+      onRemoved();
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar el logo.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const showPreview = isUploaded && currentLogoUrl;
+
+  return (
+    <div className="space-y-3">
+      <Label>Logo subido</Label>
+      {showPreview ? (
+        <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-surface-2 p-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={currentLogoUrl}
+            alt="Logo subido del tenant"
+            className="h-12 max-w-[200px] object-contain"
+          />
+          <div className="flex flex-1 items-center justify-between gap-2">
+            <p className="text-xs text-text-muted">
+              El logo está subido en el storage del tenant. Para cambiarlo, subí otro archivo.
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleRemove}
+              disabled={busy !== null}
+            >
+              {busy === 'remove' ? 'Eliminando…' : 'Eliminar'}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      <label
+        className={
+          busy === 'upload'
+            ? 'block cursor-wait rounded-lg border-2 border-dashed border-border-strong bg-surface-2 p-6 text-center opacity-60'
+            : 'block cursor-pointer rounded-lg border-2 border-dashed border-border-strong bg-surface-2 p-6 text-center transition-colors hover:border-brand-300 hover:bg-brand-50'
+        }
+      >
+        <p className="text-sm font-semibold text-text">
+          {busy === 'upload'
+            ? 'Subiendo…'
+            : showPreview
+              ? 'Reemplazar logo'
+              : 'Subir logo al storage'}
+        </p>
+        <p className="mt-1 text-xs text-text-muted">
+          PNG, JPG, SVG o WebP. Máximo 2 MB. Arrastrá o hacé clic para seleccionar.
+        </p>
+        <input
+          type="file"
+          accept={ALLOWED_TYPES.join(',')}
+          disabled={busy !== null}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void handleUpload(file);
+            e.target.value = '';
+          }}
+          className="sr-only"
+        />
+      </label>
+
+      {error ? (
+        <div className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700">
+          {error}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function bufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
 }

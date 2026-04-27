@@ -966,8 +966,17 @@ model ModThemingTenantTheme {
   id                  String   @id @default(uuid()) @db.Uuid
   tenantId            String   @unique @map("tenant_id") @db.Uuid
 
-  /// URL pública (S3) del logo principal del tenant. Usado en header y emails.
+  /// URL pública del logo principal del tenant. Usado en header y emails.
+  /// Si `logoStorageKey` está set, esto apunta al endpoint público de
+  /// branding del backend; si no, puede ser una URL externa pegada por el admin.
   logoUrl             String?  @map("logo_url")
+  /// Key del blob en el StorageService (S3 o disco) cuando el logo se subió
+  /// vía el uploader del panel de branding. NULL si el admin pegó una URL
+  /// externa directamente.
+  logoStorageKey      String?  @map("logo_storage_key")
+  /// MIME type del logo subido (image/png, image/svg+xml, etc.). Necesario
+  /// para servir el blob con el Content-Type correcto desde el endpoint público.
+  logoMimeType        String?  @map("logo_mime_type")
   /// URL del favicon (suele ser cuadrado, 32x32 o 512x512 para PWA).
   faviconUrl          String?  @map("favicon_url")
 

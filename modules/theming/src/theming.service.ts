@@ -3,9 +3,11 @@ import type { PrismaClient } from '@didacta/database';
 import {
   ALLOWED_BODY_FONTS,
   ALLOWED_DISPLAY_FONTS,
+  ALLOWED_LOGO_MIME_TYPES,
   DEFAULT_THEME,
   MAX_CUSTOM_CSS_BYTES,
   MAX_FOOTER_HTML_BYTES,
+  MAX_LOGO_BYTES,
   type ThemeSnapshot,
   type UpdateThemeDto,
 } from './dto.js';
@@ -15,6 +17,8 @@ import {
   FooterHtmlTooLargeError,
   InvalidHueError,
   InvalidSaturationError,
+  LogoNotFoundError,
+  LogoTooLargeError,
   UnsupportedFontError,
 } from './errors.js';
 
@@ -91,14 +95,20 @@ export class ThemingService {
 
   /**
    * Restaura el theme a los defaults Didacta. No borra el registro — limpia
-   * los campos para que el tenant use los valores base.
+   * los campos para que el tenant use los valores base. También borra el
+   * logo del storage si fue subido por el uploader.
    */
   async reset(tenantId: string): Promise<ThemeSnapshot> {
-    await this.getOrCreate(tenantId);
+    const current = await this.getOrCreate(tenantId);
+    if (current.logoUploaded) {
+      await this.deleteLogoBlob(tenantId);
+    }
     const updated = await this.prisma.modThemingTenantTheme.update({
       where: { tenantId },
       data: {
         logoUrl: null,
+        logoStorageKey: null,
+        logoMimeType: null,
         faviconUrl: null,
         brandHue: DEFAULT_THEME.brandHue,
         brandSaturation: DEFAULT_THEME.brandSaturation,
@@ -110,6 +120,123 @@ export class ThemingService {
     });
     this.ctx.logger.info('mod.theming: theme reset to defaults', { tenantId });
     return this.toSnapshot(updated);
+  }
+
+  /**
+   * Sube un logo al storage y lo asocia al theme del tenant. Si ya había uno
+   * subido previamente, lo borra primero del storage para no acumular blobs
+   * huérfanos.
+   *
+   * Garantías:
+   * - El blob entra en `tenants/{tenantId}/branding/logo` (key estable). Como
+   *   el endpoint público sirve por tenantId y añade `?v=updatedAt`, el cache
+   *   se invalida solo al subir uno nuevo.
+   * - Tipos MIME validados contra whitelist (`ALLOWED_LOGO_MIME_TYPES`).
+   * - Tamaño validado (`MAX_LOGO_BYTES`).
+   * - `logoUrl` se setea a un endpoint relativo del backend para que el front
+   *   pueda renderizarlo sin presigning recurrente.
+   */
+  async uploadLogo(
+    tenantId: string,
+    input: { data: string; filename: string; contentType: string },
+  ): Promise<ThemeSnapshot> {
+    if (!ALLOWED_LOGO_MIME_TYPES.includes(input.contentType as never)) {
+      throw new UnsupportedFontError(input.contentType, ALLOWED_LOGO_MIME_TYPES);
+    }
+
+    const buffer = Buffer.from(input.data, 'base64');
+    if (buffer.length > MAX_LOGO_BYTES) {
+      throw new LogoTooLargeError(MAX_LOGO_BYTES);
+    }
+
+    const current = await this.getOrCreate(tenantId);
+    if (current.logoUploaded) {
+      await this.deleteLogoBlob(tenantId).catch(() => {
+        // Best-effort: si el blob anterior ya no existe en storage, seguimos.
+      });
+    }
+
+    const storageKey = `tenants/${tenantId}/branding/logo`;
+    await this.ctx.storage.upload(storageKey, buffer, input.contentType);
+
+    // Cache-buster basado en timestamp para que el browser refresque al cambiar.
+    const publicUrl = `/api/v1/modules/theming/tenants/${tenantId}/logo?v=${Date.now()}`;
+
+    const updated = await this.prisma.modThemingTenantTheme.update({
+      where: { tenantId },
+      data: {
+        logoUrl: publicUrl,
+        logoStorageKey: storageKey,
+        logoMimeType: input.contentType,
+      },
+    });
+
+    await this.ctx.eventBus.publish({
+      name: 'theming.logo.uploaded',
+      version: 1,
+      data: { tenantId, contentType: input.contentType, size: buffer.length },
+      metadata: {
+        tenantId,
+        timestamp: new Date().toISOString(),
+        traceId: `${tenantId}:logo:${Date.now()}`,
+        idempotencyKey: `theming.logo.uploaded:${tenantId}:${Date.now()}`,
+      },
+    });
+    this.ctx.logger.info('mod.theming: logo uploaded', {
+      tenantId,
+      size: buffer.length,
+      contentType: input.contentType,
+    });
+
+    return this.toSnapshot(updated);
+  }
+
+  /**
+   * Devuelve el blob del logo del tenant para servir desde el endpoint
+   * público. Lanza `LogoNotFoundError` si no hay logo subido (puede haber
+   * `logoUrl` apuntando a una URL externa, en cuyo caso este método no aplica).
+   */
+  async getLogoBlob(tenantId: string): Promise<{ buffer: Buffer; mimeType: string }> {
+    const theme = await this.prisma.modThemingTenantTheme.findUnique({
+      where: { tenantId },
+    });
+    if (!theme || !theme.logoStorageKey || !theme.logoMimeType) {
+      throw new LogoNotFoundError();
+    }
+    const buffer = await this.ctx.storage.download(theme.logoStorageKey);
+    return { buffer, mimeType: theme.logoMimeType };
+  }
+
+  /**
+   * Borra el logo subido (blob + columnas). Si el theme tenía un `logoUrl`
+   * externo, también se limpia para que la UI vuelva a mostrar el wordmark.
+   */
+  async removeLogo(tenantId: string): Promise<ThemeSnapshot> {
+    const current = await this.getOrCreate(tenantId);
+    if (current.logoUploaded) {
+      await this.deleteLogoBlob(tenantId).catch(() => {
+        // Best-effort.
+      });
+    }
+    const updated = await this.prisma.modThemingTenantTheme.update({
+      where: { tenantId },
+      data: {
+        logoUrl: null,
+        logoStorageKey: null,
+        logoMimeType: null,
+      },
+    });
+    this.ctx.logger.info('mod.theming: logo removed', { tenantId });
+    return this.toSnapshot(updated);
+  }
+
+  private async deleteLogoBlob(tenantId: string): Promise<void> {
+    const theme = await this.prisma.modThemingTenantTheme.findUnique({
+      where: { tenantId },
+    });
+    if (theme?.logoStorageKey) {
+      await this.ctx.storage.delete(theme.logoStorageKey);
+    }
   }
 
   // -------------------- helpers privados --------------------
@@ -151,6 +278,7 @@ export class ThemingService {
   private toSnapshot(row: {
     tenantId: string;
     logoUrl: string | null;
+    logoStorageKey: string | null;
     faviconUrl: string | null;
     brandHue: number;
     brandSaturation: number;
@@ -163,6 +291,7 @@ export class ThemingService {
     return {
       tenantId: row.tenantId,
       logoUrl: row.logoUrl,
+      logoUploaded: row.logoStorageKey !== null,
       faviconUrl: row.faviconUrl,
       brandHue: row.brandHue,
       brandSaturation: row.brandSaturation,

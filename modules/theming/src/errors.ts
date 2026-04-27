@@ -64,3 +64,18 @@ export class InvalidUrlError extends ThemingError {
     super('THEMING_INVALID_URL', `La URL de "${field}" no es válida o no usa https.`);
   }
 }
+
+export class LogoTooLargeError extends ThemingError {
+  constructor(maxBytes: number) {
+    super(
+      'THEMING_LOGO_TOO_LARGE',
+      `El logo excede el máximo permitido de ${(maxBytes / 1024 / 1024).toFixed(1)} MB.`,
+    );
+  }
+}
+
+export class LogoNotFoundError extends ThemingError {
+  constructor() {
+    super('THEMING_LOGO_NOT_FOUND', 'Este tenant no tiene un logo subido.');
+  }
+}
