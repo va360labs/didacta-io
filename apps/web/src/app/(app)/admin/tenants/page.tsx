@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -55,11 +56,12 @@ export default function TenantsPage() {
       </header>
 
       {error ? (
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-danger-700">{error}</p>
-          </CardContent>
-        </Card>
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+        >
+          {error}
+        </div>
       ) : items === null ? (
         <div className="space-y-3">
           <div className="skeleton h-24 w-full" />
@@ -84,30 +86,48 @@ export default function TenantsPage() {
             >
               <Card interactive>
                 <CardHeader>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <CardTitle className="text-lg">{t.name}</CardTitle>
+                  <div className="flex items-start gap-3">
+                    <span
+                      aria-hidden="true"
+                      className="grid h-10 w-10 shrink-0 place-items-center rounded-lg"
+                      style={{
+                        background: 'var(--didacta-info-bg)',
+                        color: 'var(--didacta-info-fg)',
+                      }}
+                    >
+                      <Icon name="building" size={20} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <CardTitle className="text-lg leading-tight">{t.name}</CardTitle>
                       <CardDescription className="font-mono text-xs">/{t.slug}</CardDescription>
                     </div>
                     <Badge variant={VARIANT[t.status]}>{STATUS_LABELS[t.status]}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="flex flex-wrap gap-1">
-                    {t.domains.map((d) => (
-                      <Badge
-                        key={d.hostname}
-                        variant={d.isPrimary ? 'primary' : 'muted'}
-                        className="font-mono text-[10px]"
-                      >
-                        {d.hostname}
-                        {d.isPrimary ? ' · primary' : ''}
-                      </Badge>
-                    ))}
-                  </div>
-                  <div className="flex gap-4 text-xs text-text-subtle tabular-nums">
-                    <span>{t.userCount} usuarios</span>
-                    <span>{t.courseCount} cursos</span>
+                  {t.domains.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {t.domains.map((d) => (
+                        <Badge
+                          key={d.hostname}
+                          variant={d.isPrimary ? 'primary' : 'muted'}
+                          className="font-mono text-[10px]"
+                        >
+                          {d.hostname}
+                          {d.isPrimary ? ' · primary' : ''}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="flex gap-5 text-xs text-text-muted tabular-nums">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Icon name="users" size={14} />
+                      {t.userCount} {t.userCount === 1 ? 'usuario' : 'usuarios'}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Icon name="book" size={14} />
+                      {t.courseCount} {t.courseCount === 1 ? 'curso' : 'cursos'}
+                    </span>
                   </div>
                 </CardContent>
               </Card>

@@ -25,6 +25,15 @@ const STATUS_VARIANT: Record<UserStatus, 'success' | 'warning' | 'muted' | 'dang
   DEACTIVATED: 'muted',
 };
 
+function userInitials(name: string | null, email: string): string {
+  return (name ?? email)
+    .split(/[\s.@]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
 export default function UsuariosPage() {
   const [users, setUsers] = useState<UserListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -127,11 +136,12 @@ export default function UsuariosPage() {
       </Card>
 
       {error ? (
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-danger-700">{error}</p>
-          </CardContent>
-        </Card>
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+        >
+          {error}
+        </div>
       ) : users === null ? (
         <div className="space-y-3">
           <div className="skeleton h-16 w-full" />
@@ -178,16 +188,29 @@ export default function UsuariosPage() {
                     <td className="px-6 py-3">
                       <Link
                         href={`/admin/usuarios/${u.id}` as never}
-                        className="block font-semibold text-text hover:text-brand-700"
+                        className="flex items-center gap-3 hover:text-brand-700"
                       >
-                        {u.name ?? u.email}
+                        <span
+                          aria-hidden="true"
+                          className="grid h-9 w-9 shrink-0 place-items-center rounded-full font-display text-xs font-bold text-white"
+                          style={{
+                            background: 'linear-gradient(135deg, #2E7DCE 0%, #18B5A8 100%)',
+                          }}
+                        >
+                          {userInitials(u.name, u.email) || '·'}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-text">{u.name ?? u.email}</p>
+                          {u.name ? (
+                            <p className="truncate text-xs text-text-subtle">{u.email}</p>
+                          ) : null}
+                        </div>
                       </Link>
-                      {u.name ? <span className="text-xs text-text-subtle">{u.email}</span> : null}
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-1">
                         {u.roles.length === 0 ? (
-                          <span className="text-xs text-text-subtle">Sin rol</span>
+                          <span className="text-xs italic text-text-subtle">Sin rol</span>
                         ) : (
                           u.roles.map((r) => (
                             <Badge key={r} variant="muted">
@@ -200,11 +223,13 @@ export default function UsuariosPage() {
                     <td className="px-3 py-3">
                       <Badge variant={STATUS_VARIANT[u.status]}>{STATUS_LABELS[u.status]}</Badge>
                     </td>
-                    <td className="px-3 py-3 text-xs">
+                    <td className="px-3 py-3">
                       {u.mfaEnabled ? (
-                        <span className="text-success-700">Activo</span>
+                        <Badge variant="success" dot>
+                          Activo
+                        </Badge>
                       ) : (
-                        <span className="text-text-subtle">No</span>
+                        <Badge variant="muted">No</Badge>
                       )}
                     </td>
                     <td className="px-6 py-3 text-right text-xs text-text-muted tabular-nums">
