@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
+import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -49,6 +51,10 @@ export default function NuevoTenantPage() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
+      <Button asChild variant="ghost" className="self-start">
+        <Link href="/admin/tenants">← Volver al listado</Link>
+      </Button>
+
       <header>
         <h1 className="font-display text-3xl font-bold tracking-tight">Crear tenant</h1>
         <p className="mt-1 text-text-muted">
@@ -58,11 +64,25 @@ export default function NuevoTenantPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Datos de la organización</CardTitle>
-          <CardDescription>
-            Tras crearla, el primer admin recibirá un email con un enlace para definir su contraseña
-            y acceder.
-          </CardDescription>
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
+              style={{
+                background: 'var(--didacta-info-bg)',
+                color: 'var(--didacta-info-fg)',
+              }}
+            >
+              <Icon name="building" size={18} />
+            </span>
+            <div className="min-w-0">
+              <CardTitle>Datos de la organización</CardTitle>
+              <CardDescription>
+                Tras crearla, el primer admin recibirá un email con un enlace para definir su
+                contraseña y acceder.
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-5">
@@ -140,12 +160,15 @@ export default function NuevoTenantPage() {
             </div>
 
             {error ? (
-              <p role="alert" className="text-sm text-danger-700">
+              <div
+                role="alert"
+                className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+              >
                 {error}
-              </p>
+              </div>
             ) : null}
 
-            <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
+            <div className="flex items-center justify-end gap-3 border-t border-border-soft pt-4">
               <Button type="button" variant="ghost" onClick={() => router.back()}>
                 Cancelar
               </Button>

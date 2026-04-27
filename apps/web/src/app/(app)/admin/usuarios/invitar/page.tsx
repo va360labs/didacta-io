@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
+import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -45,6 +47,10 @@ export default function InvitarPage() {
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6">
+      <Button asChild variant="ghost" className="self-start">
+        <Link href="/admin/usuarios">← Volver al listado</Link>
+      </Button>
+
       <header>
         <h1 className="font-display text-3xl font-bold tracking-tight">Invitar persona</h1>
         <p className="mt-1 text-text-muted">
@@ -54,10 +60,24 @@ export default function InvitarPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Datos del nuevo usuario</CardTitle>
-          <CardDescription>
-            El email tiene que ser único en tu organización. El rol se puede cambiar después.
-          </CardDescription>
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
+              style={{
+                background: 'var(--didacta-info-bg)',
+                color: 'var(--didacta-info-fg)',
+              }}
+            >
+              <Icon name="user" size={18} />
+            </span>
+            <div className="min-w-0">
+              <CardTitle>Datos del nuevo usuario</CardTitle>
+              <CardDescription>
+                El email tiene que ser único en tu organización. El rol se puede cambiar después.
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
@@ -114,12 +134,15 @@ export default function InvitarPage() {
             </div>
 
             {error ? (
-              <p role="alert" className="text-sm text-danger-700">
+              <div
+                role="alert"
+                className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+              >
                 {error}
-              </p>
+              </div>
             ) : null}
 
-            <div className="flex items-center justify-end gap-3 pt-2">
+            <div className="flex items-center justify-end gap-3 border-t border-border-soft pt-4">
               <Button type="button" variant="ghost" onClick={() => router.back()}>
                 Cancelar
               </Button>

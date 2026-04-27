@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
+import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -155,7 +156,8 @@ export default function CertificateTemplatesPage() {
           </p>
         </div>
         <Button type="button" onClick={startCreate} disabled={showForm}>
-          + Nueva plantilla
+          <Icon name="plus" size={16} />
+          Nueva plantilla
         </Button>
       </header>
 
@@ -278,40 +280,65 @@ export default function CertificateTemplatesPage() {
         </div>
       ) : items.length === 0 ? (
         <Card>
-          <CardContent className="p-8 text-center text-sm text-text-muted">
-            Aún no creaste ninguna plantilla. La primera que marques como default se aplicará a
-            todos los cursos del tenant.
+          <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
+            <div
+              aria-hidden="true"
+              className="grid h-20 w-20 place-items-center rounded-2xl"
+              style={{
+                background: 'var(--didacta-info-bg)',
+                color: 'var(--didacta-info-fg)',
+              }}
+            >
+              <Icon name="award" size={40} />
+            </div>
+            <h3 className="font-display text-2xl font-semibold">Aún no hay plantillas</h3>
+            <p className="max-w-md text-text-muted">
+              La primera que marques como <strong>default</strong> se aplicará a todos los cursos
+              del tenant que no tengan una asignada.
+            </p>
+            <Button type="button" onClick={startCreate} className="mt-2">
+              <Icon name="plus" size={16} />
+              Crear mi primera plantilla
+            </Button>
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-3">
           {items.map((t) => (
             <Card key={t.id}>
-              <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4">
+              <CardContent className="flex flex-wrap items-start gap-4 p-4">
+                <span
+                  aria-hidden="true"
+                  className="grid h-12 w-12 shrink-0 place-items-center rounded-xl text-white"
+                  style={{ background: t.primaryColor }}
+                >
+                  <Icon name="award" size={22} />
+                </span>
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-base font-semibold">{t.name}</h3>
-                    {t.isDefault ? <Badge variant="success">Default</Badge> : null}
+                    <h3 className="font-display text-base font-semibold leading-tight text-text">
+                      {t.name}
+                    </h3>
+                    {t.isDefault ? (
+                      <Badge variant="success" dot>
+                        Default
+                      </Badge>
+                    ) : null}
                   </div>
                   <p className="line-clamp-2 text-sm text-text-muted">{t.body}</p>
-                  <p className="text-xs text-text-subtle">
-                    Color{' '}
-                    <span
-                      aria-hidden="true"
-                      className="ml-1 inline-block h-3 w-3 rounded-full align-middle ring-1 ring-border"
-                      style={{ backgroundColor: t.primaryColor }}
-                    />{' '}
+                  <p className="flex flex-wrap items-center gap-1 text-xs text-text-subtle">
                     <span className="font-mono">{t.primaryColor}</span>
-                    {t.signerName ? <> · firma {t.signerName}</> : null}
+                    {t.signerName ? <span>· firma {t.signerName}</span> : null}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   {!t.isDefault ? (
                     <Button
                       type="button"
                       variant="secondary"
                       onClick={() => handleSetDefault(t)}
                       disabled={busy}
+                      size="sm"
                     >
                       Marcar default
                     </Button>
@@ -321,16 +348,20 @@ export default function CertificateTemplatesPage() {
                     variant="secondary"
                     onClick={() => startEdit(t)}
                     disabled={busy}
+                    size="sm"
                   >
+                    <Icon name="edit" size={13} />
                     Editar
                   </Button>
                   <Button
                     type="button"
                     variant="ghost"
+                    size="sm"
                     onClick={() => handleDelete(t)}
                     disabled={busy || t.isDefault}
                     title={t.isDefault ? 'No se puede eliminar la plantilla default.' : undefined}
                   >
+                    <Icon name="trash" size={13} />
                     Eliminar
                   </Button>
                 </div>
