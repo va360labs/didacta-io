@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { Icon, type IconName } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,13 +13,31 @@ import { coursesApi, type CourseLesson, type LessonType } from '@/lib/courses';
 import { scormApi, type ScormPackageMetadata } from '@/lib/scorm';
 
 const HELP_BY_TYPE: Record<LessonType, string> = {
-  VIDEO: 'URL del vídeo (mp4, webm, m3u8). Ideal: hosted en MinIO/Hetzner.',
-  HTML: 'HTML inline que se renderiza en el player. Useful para slides o microcopy.',
+  VIDEO: 'URL del vídeo (mp4, webm, m3u8). Ideal: hosteado en MinIO/Hetzner.',
+  HTML: 'HTML inline que se renderiza en el player. Útil para slides o microcopy.',
   PDF: 'URL del PDF. Se muestra en iframe a 70dvh.',
   TEXT: 'Texto plano largo. Se preservan saltos de línea.',
-  QUIZ: 'Crea un nuevo quiz o vincula uno existente por ID. El editor del quiz vive en /formador/quizzes/<id>.',
+  QUIZ: 'Crea un nuevo quiz o vinculá uno existente por ID. El editor del quiz vive en /formador/quizzes/<id>.',
   SCORM:
     'Subí el ZIP del paquete SCORM 1.2 / 2004. El sistema lo descomprime, parsea imsmanifest.xml y lo sirve por iframe.',
+};
+
+const TYPE_ICON: Record<LessonType, IconName> = {
+  VIDEO: 'play',
+  HTML: 'code',
+  PDF: 'file',
+  TEXT: 'book',
+  QUIZ: 'help',
+  SCORM: 'package',
+};
+
+const TYPE_LABEL: Record<LessonType, string> = {
+  VIDEO: 'Vídeo',
+  HTML: 'HTML',
+  PDF: 'PDF',
+  TEXT: 'Texto',
+  QUIZ: 'Quiz',
+  SCORM: 'SCORM',
 };
 
 export function LessonContentEditor({
@@ -62,8 +81,6 @@ export function LessonContentEditor({
       case 'QUIZ':
         return { quizId };
       case 'SCORM':
-        // El paquete vive en mod_learning_scorm_package; el content de la
-        // lesson queda como flag de presencia.
         return content;
     }
   }
@@ -87,79 +104,103 @@ export function LessonContentEditor({
   }
 
   return (
-    <div className="space-y-3 rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-900">
-      <p className="text-xs uppercase tracking-wider text-neutral-500">
-        Editando lección · {lesson.type}
-      </p>
-
-      <div className="space-y-1">
-        <Label htmlFor={`title-${lesson.id}`}>Título</Label>
-        <Input
-          id={`title-${lesson.id}`}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-        />
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border-soft pb-3">
+        <span
+          aria-hidden="true"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-md"
+          style={{
+            background: 'var(--didacta-info-bg)',
+            color: 'var(--didacta-info-fg)',
+          }}
+        >
+          <Icon name={TYPE_ICON[lesson.type]} size={14} />
+        </span>
+        <p className="label-uppercase text-text-muted">Editando · {TYPE_LABEL[lesson.type]}</p>
       </div>
 
-      <div className="space-y-1">
-        <Label htmlFor={`duration-${lesson.id}`}>Duración estimada (min)</Label>
-        <Input
-          id={`duration-${lesson.id}`}
-          type="number"
-          min={1}
-          value={duration}
-          onChange={(e) => setDuration(e.target.value)}
-        />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label htmlFor={`title-${lesson.id}`}>Título</Label>
+          <Input
+            id={`title-${lesson.id}`}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`duration-${lesson.id}`}>Duración (min)</Label>
+          <Input
+            id={`duration-${lesson.id}`}
+            type="number"
+            min={1}
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
+            placeholder="—"
+          />
+        </div>
       </div>
 
       {lesson.type === 'VIDEO' && (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <Label htmlFor={`videoUrl-${lesson.id}`}>URL del vídeo</Label>
           <Input
             id={`videoUrl-${lesson.id}`}
             type="url"
             value={videoUrl}
             onChange={(e) => setVideoUrl(e.target.value)}
-            placeholder="https://..."
+            placeholder="https://video.ejemplo.com/leccion.mp4"
           />
+          {videoUrl ? (
+            <p className="text-xs text-text-subtle">
+              Se reproduce con el `&lt;video&gt;` nativo. Para HLS asegurate de servir el manifest
+              `.m3u8`.
+            </p>
+          ) : null}
         </div>
       )}
 
       {lesson.type === 'PDF' && (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <Label htmlFor={`pdfUrl-${lesson.id}`}>URL del PDF</Label>
           <Input
             id={`pdfUrl-${lesson.id}`}
             type="url"
             value={pdfUrl}
             onChange={(e) => setPdfUrl(e.target.value)}
-            placeholder="https://..."
+            placeholder="https://docs.ejemplo.com/material.pdf"
           />
         </div>
       )}
 
       {lesson.type === 'HTML' && (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <Label htmlFor={`html-${lesson.id}`}>HTML</Label>
           <Textarea
             id={`html-${lesson.id}`}
             rows={8}
             value={html}
             onChange={(e) => setHtml(e.target.value)}
-            placeholder="<p>...</p>"
+            placeholder="<p>Tu contenido en HTML…</p>"
+            className="font-mono text-xs"
           />
+          <p className="text-xs text-text-subtle">
+            El HTML se sanitiza en el servidor. Etiquetas seguras permitidas (p, h2-h6, ul, ol, li,
+            a, img, strong, em, code, pre).
+          </p>
         </div>
       )}
 
       {lesson.type === 'TEXT' && (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <Label htmlFor={`text-${lesson.id}`}>Texto</Label>
           <Textarea
             id={`text-${lesson.id}`}
             rows={8}
             value={text}
             onChange={(e) => setText(e.target.value)}
+            placeholder="Escribí el contenido de la lección…"
           />
         </div>
       )}
@@ -170,17 +211,23 @@ export function LessonContentEditor({
 
       {lesson.type === 'SCORM' && <ScormUploader lessonId={lesson.id} />}
 
-      <p className="text-xs text-neutral-500">{HELP_BY_TYPE[lesson.type]}</p>
+      <div className="flex items-start gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-text-muted">
+        <Icon name="sparkles" size={14} className="mt-0.5 shrink-0 text-brand-500" />
+        <p>{HELP_BY_TYPE[lesson.type]}</p>
+      </div>
 
       {error ? (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+        >
           {error}
-        </p>
+        </div>
       ) : null}
 
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2 border-t border-border-soft pt-3">
         <Button size="sm" onClick={handleSave} disabled={pending}>
-          {pending ? 'Guardando…' : 'Guardar'}
+          {pending ? 'Guardando…' : 'Guardar cambios'}
         </Button>
         <Button size="sm" variant="ghost" onClick={onCancel} disabled={pending}>
           Cancelar
@@ -223,37 +270,61 @@ function QuizLink({
   return (
     <div className="space-y-2">
       <Label htmlFor={`quizId-${lessonId}`}>Quiz vinculado</Label>
-      <div className="flex gap-2">
-        <Input
-          id={`quizId-${lessonId}`}
-          value={quizId}
-          onChange={(e) => setQuizId(e.target.value)}
-          placeholder="UUID del quiz (mod.assessments)"
-        />
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={handleCreate}
-          disabled={creating || quizId.length > 0}
-        >
-          {creating ? 'Creando…' : 'Crear nuevo'}
-        </Button>
-      </div>
       {quizId ? (
-        <Link
-          href={`/formador/quizzes/${quizId}`}
-          className="inline-block text-xs underline decoration-dotted hover:decoration-solid"
-        >
-          → Editar este quiz
-        </Link>
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2">
+          <span
+            aria-hidden="true"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-md"
+            style={{
+              background: 'var(--didacta-info-bg)',
+              color: 'var(--didacta-info-fg)',
+            }}
+          >
+            <Icon name="help" size={16} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-text">Quiz vinculado</p>
+            <code className="block truncate font-mono text-xs text-text-subtle">{quizId}</code>
+          </div>
+          <Button asChild size="sm" variant="outline">
+            <Link href={`/formador/quizzes/${quizId}` as never}>
+              <Icon name="edit" size={13} />
+              Editar
+            </Link>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setQuizId('')}
+            aria-label="Desvincular quiz"
+          >
+            Desvincular
+          </Button>
+        </div>
       ) : (
-        <p className="text-xs text-neutral-500">
-          Crea uno nuevo o pega el UUID de un quiz existente.
-        </p>
+        <div className="space-y-2 rounded-lg border-2 border-dashed border-border-strong bg-surface-2 p-4">
+          <p className="text-sm text-text-muted">
+            Esta lección no tiene quiz todavía. Podés crear uno nuevo o pegar el UUID de uno
+            existente.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" onClick={handleCreate} disabled={creating}>
+              <Icon name="plus" size={14} />
+              {creating ? 'Creando…' : 'Crear nuevo quiz'}
+            </Button>
+            <Input
+              id={`quizId-${lessonId}`}
+              value={quizId}
+              onChange={(e) => setQuizId(e.target.value)}
+              placeholder="…o pegá el UUID de un quiz existente"
+              className="flex-1 min-w-[240px]"
+            />
+          </div>
+        </div>
       )}
       {createError ? (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="text-sm text-danger-700">
           {createError}
         </p>
       ) : null}
@@ -300,37 +371,85 @@ function ScormUploader({ lessonId }: { lessonId: string }) {
   }
 
   return (
-    <div className="space-y-2 rounded-md border border-dashed border-neutral-300 p-3 dark:border-neutral-700">
+    <div className="space-y-3">
       <Label htmlFor={`scorm-${lessonId}`}>Paquete SCORM (.zip)</Label>
-      <input
-        id={`scorm-${lessonId}`}
-        type="file"
-        accept=".zip,application/zip"
-        disabled={busy}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) void handleUpload(file);
-        }}
-        className="block text-sm"
-      />
+
       {metadata ? (
-        <div className="rounded bg-surface-2 p-2 text-xs text-text-muted">
-          <p>
-            <strong>Paquete actual:</strong> SCORM {metadata.version} · entry{' '}
-            <code className="font-mono">{metadata.entryPath}</code> ·{' '}
-            {(metadata.size / (1024 * 1024)).toFixed(1)} MiB
-          </p>
-          <p className="mt-1 text-text-subtle">
-            Subido el {new Date(metadata.uploadedAt).toLocaleString('es-ES')}
-          </p>
+        <div className="flex flex-wrap items-start gap-3 rounded-lg border border-border bg-surface-2 p-3">
+          <span
+            aria-hidden="true"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg"
+            style={{
+              background: 'var(--didacta-info-bg)',
+              color: 'var(--didacta-info-fg)',
+            }}
+          >
+            <Icon name="package" size={20} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-text">SCORM {metadata.version}</p>
+            <p className="mt-0.5 truncate text-xs text-text-muted">
+              entry: <code className="font-mono">{metadata.entryPath}</code>
+            </p>
+            <p className="text-xs text-text-subtle tabular-nums">
+              {(metadata.size / (1024 * 1024)).toFixed(1)} MiB · subido el{' '}
+              {new Date(metadata.uploadedAt).toLocaleDateString('es-AR', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+              })}
+            </p>
+          </div>
         </div>
-      ) : (
-        <p className="text-xs text-text-subtle">
-          Aún no subiste paquete. Subí un .zip que contenga imsmanifest.xml en la raíz.
+      ) : null}
+
+      <label
+        className={
+          busy
+            ? 'block cursor-wait rounded-lg border-2 border-dashed border-border-strong bg-surface-2 p-6 text-center opacity-60'
+            : 'block cursor-pointer rounded-lg border-2 border-dashed border-border-strong bg-surface-2 p-6 text-center transition-colors hover:border-brand-300 hover:bg-brand-50'
+        }
+        htmlFor={`scorm-${lessonId}`}
+      >
+        <div className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-lg text-text-muted">
+          <Icon name="package" size={24} />
+        </div>
+        <p className="text-sm font-semibold text-text">
+          {busy ? 'Subiendo paquete…' : metadata ? 'Reemplazar paquete' : 'Subir paquete SCORM'}
         </p>
-      )}
-      {success ? <p className="text-xs text-success-700">{success}</p> : null}
-      {error ? <p className="text-xs text-danger-700">{error}</p> : null}
+        <p className="mt-1 text-xs text-text-muted">
+          Arrastra o hacé clic para seleccionar un archivo .zip con `imsmanifest.xml` en la raíz.
+        </p>
+        <input
+          id={`scorm-${lessonId}`}
+          type="file"
+          accept=".zip,application/zip"
+          disabled={busy}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void handleUpload(file);
+          }}
+          className="sr-only"
+        />
+      </label>
+
+      {success ? (
+        <div
+          className="flex items-center gap-2 rounded-md p-2 text-xs"
+          style={{
+            background: 'var(--didacta-success-bg)',
+            color: 'var(--didacta-success-fg)',
+          }}
+        >
+          <Icon name="check" size={14} />
+          {success}
+        </div>
+      ) : null}
+      {error ? (
+        <div className="rounded-md border border-danger-100 bg-danger-50 p-2 text-xs text-danger-700">
+          {error}
+        </div>
+      ) : null}
     </div>
   );
 }
