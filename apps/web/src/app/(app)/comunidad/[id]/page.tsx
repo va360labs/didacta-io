@@ -26,6 +26,8 @@ export default function PostDetailPage() {
   const [replyTarget, setReplyTarget] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState('');
   const myUserId = authStorage.getSession()?.user.id;
+  const myRoles = authStorage.getSession()?.user.roles ?? [];
+  const canModerate = myRoles.includes('super_admin') || myRoles.includes('tenant_admin');
 
   async function reload() {
     if (!params?.id) return;
@@ -68,6 +70,60 @@ export default function PostDetailPage() {
       setError(err instanceof ApiHttpError ? err.message : 'No pudimos publicar la respuesta.');
     } finally {
       setPending(false);
+    }
+  }
+
+  async function handleModeratePost() {
+    if (!post) return;
+    const isHidden = post.hiddenAt !== null;
+    if (isHidden) {
+      if (!window.confirm('¿Restaurar este post? Volverá a ser visible para los alumnos.')) return;
+      setPending(true);
+      try {
+        await communityApi.moderatePost(post.id, false);
+        await reload();
+      } catch (err) {
+        setError(err instanceof ApiHttpError ? err.message : 'No pudimos restaurar el post.');
+      } finally {
+        setPending(false);
+      }
+    } else {
+      const reason = window.prompt('Motivo de ocultar el post (opcional):') ?? undefined;
+      setPending(true);
+      try {
+        await communityApi.moderatePost(post.id, true, reason || undefined);
+        await reload();
+      } catch (err) {
+        setError(err instanceof ApiHttpError ? err.message : 'No pudimos ocultar el post.');
+      } finally {
+        setPending(false);
+      }
+    }
+  }
+
+  async function handleModerateComment(commentId: string, isHidden: boolean) {
+    if (isHidden) {
+      if (!window.confirm('¿Restaurar este comentario?')) return;
+      setPending(true);
+      try {
+        await communityApi.moderateComment(commentId, false);
+        await reload();
+      } catch (err) {
+        setError(err instanceof ApiHttpError ? err.message : 'No pudimos restaurar.');
+      } finally {
+        setPending(false);
+      }
+    } else {
+      const reason = window.prompt('Motivo de ocultar el comentario (opcional):') ?? undefined;
+      setPending(true);
+      try {
+        await communityApi.moderateComment(commentId, true, reason || undefined);
+        await reload();
+      } catch (err) {
+        setError(err instanceof ApiHttpError ? err.message : 'No pudimos ocultar.');
+      } finally {
+        setPending(false);
+      }
     }
   }
 
@@ -195,7 +251,17 @@ export default function PostDetailPage() {
                   </Badge>
                 ))}
                 <span className="text-xs text-text-subtle">{relTime(post.createdAt)}</span>
+                {post.hiddenAt ? (
+                  <Badge variant="warning" dot>
+                    Oculto
+                  </Badge>
+                ) : null}
               </div>
+              {post.hiddenAt && post.hiddenReason ? (
+                <p className="mt-2 rounded-md bg-warning-50 px-3 py-1.5 text-xs text-warning-700">
+                  Motivo: {post.hiddenReason}
+                </p>
+              ) : null}
               <h1
                 className="font-display mt-3 text-3xl font-bold leading-tight text-text"
                 style={{ letterSpacing: '-0.02em' }}
@@ -227,6 +293,18 @@ export default function PostDetailPage() {
                     </button>
                   );
                 })}
+                {canModerate ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleModeratePost}
+                    disabled={pending}
+                    className="ml-auto"
+                  >
+                    {post.hiddenAt ? 'Restaurar post' : 'Ocultar post'}
+                  </Button>
+                ) : null}
                 {isAuthor ? (
                   <Button
                     type="button"
@@ -234,7 +312,11 @@ export default function PostDetailPage() {
                     size="sm"
                     onClick={handleDeletePost}
                     disabled={pending}
-                    className="ml-auto text-danger-700 hover:bg-danger-50"
+                    className={
+                      canModerate
+                        ? 'text-danger-700 hover:bg-danger-50'
+                        : 'ml-auto text-danger-700 hover:bg-danger-50'
+                    }
                   >
                     Eliminar post
                   </Button>

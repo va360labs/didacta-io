@@ -41,11 +41,21 @@ export class CommunityService {
     return post;
   }
 
-  async listPosts(tenantId: string, query: ListPostsQueryDto) {
+  /**
+   * Lista posts del tenant. Si `viewer.canModerate` es true (super_admin /
+   * tenant_admin), devuelve también los ocultos para que la moderación
+   * pueda revisarlos. Resto de usuarios ven solo los visibles.
+   */
+  async listPosts(
+    tenantId: string,
+    query: ListPostsQueryDto,
+    viewer: { canModerate: boolean } = { canModerate: false },
+  ) {
     return this.prisma.modCommunityPost.findMany({
       where: {
         tenantId,
         deletedAt: null,
+        ...(viewer.canModerate ? {} : { hiddenAt: null }),
         ...(query.courseId !== undefined ? { courseId: query.courseId } : {}),
         ...(query.authorId !== undefined ? { authorId: query.authorId } : {}),
         ...(query.tag !== undefined ? { tags: { has: query.tag } } : {}),
@@ -55,12 +65,24 @@ export class CommunityService {
     });
   }
 
-  async getPostDetail(tenantId: string, postId: string) {
+  async getPostDetail(
+    tenantId: string,
+    postId: string,
+    viewer: { canModerate: boolean } = { canModerate: false },
+  ) {
     const post = await this.prisma.modCommunityPost.findFirst({
-      where: { id: postId, tenantId, deletedAt: null },
+      where: {
+        id: postId,
+        tenantId,
+        deletedAt: null,
+        ...(viewer.canModerate ? {} : { hiddenAt: null }),
+      },
       include: {
         comments: {
-          where: { deletedAt: null },
+          where: {
+            deletedAt: null,
+            ...(viewer.canModerate ? {} : { hiddenAt: null }),
+          },
           orderBy: { createdAt: 'asc' },
         },
         reactions: true,
@@ -135,6 +157,81 @@ export class CommunityService {
       where: { id: commentId },
       data: { deletedAt: new Date() },
     });
+  }
+
+  /**
+   * Oculta o restaura un post. Solo super_admin / tenant_admin (el caller
+   * debe verificar el rol vía decorador o pipe). Si `hidden=true` setea
+   * `hiddenAt`, `hiddenById`, `hiddenReason`. Si `hidden=false` los limpia.
+   */
+  async moderatePost(
+    tenantId: string,
+    moderatorId: string,
+    postId: string,
+    args: { hidden: boolean; reason?: string },
+  ) {
+    const post = await this.prisma.modCommunityPost.findFirst({
+      where: { id: postId, tenantId, deletedAt: null },
+    });
+    if (!post) throw new PostNotFoundError();
+
+    const updated = await this.prisma.modCommunityPost.update({
+      where: { id: postId },
+      data: args.hidden
+        ? {
+            hiddenAt: new Date(),
+            hiddenById: moderatorId,
+            hiddenReason: args.reason ?? null,
+          }
+        : {
+            hiddenAt: null,
+            hiddenById: null,
+            hiddenReason: null,
+          },
+    });
+
+    await this.publish(
+      tenantId,
+      moderatorId,
+      args.hidden ? 'community.post.hidden' : 'community.post.unhidden',
+      { postId, reason: args.reason ?? null },
+    );
+    return updated;
+  }
+
+  async moderateComment(
+    tenantId: string,
+    moderatorId: string,
+    commentId: string,
+    args: { hidden: boolean; reason?: string },
+  ) {
+    const comment = await this.prisma.modCommunityComment.findFirst({
+      where: { id: commentId, tenantId, deletedAt: null },
+    });
+    if (!comment) throw new CommentNotFoundError();
+
+    const updated = await this.prisma.modCommunityComment.update({
+      where: { id: commentId },
+      data: args.hidden
+        ? {
+            hiddenAt: new Date(),
+            hiddenById: moderatorId,
+            hiddenReason: args.reason ?? null,
+          }
+        : {
+            hiddenAt: null,
+            hiddenById: null,
+            hiddenReason: null,
+          },
+    });
+
+    await this.publish(
+      tenantId,
+      moderatorId,
+      args.hidden ? 'community.comment.hidden' : 'community.comment.unhidden',
+      { commentId, reason: args.reason ?? null },
+    );
+    return updated;
   }
 
   /**

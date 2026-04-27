@@ -24,6 +24,12 @@ export const createCommentSchema = z.object({
 });
 export type CreateCommentDto = z.infer<typeof createCommentSchema>;
 
+export const moderationActionSchema = z.object({
+  hidden: z.boolean(),
+  reason: z.string().min(1).max(500).optional(),
+});
+export type ModerationActionDto = z.infer<typeof moderationActionSchema>;
+
 export const addReactionSchema = z
   .object({
     postId: z.string().uuid().optional(),

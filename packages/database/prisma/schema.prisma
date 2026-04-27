@@ -431,6 +431,14 @@ model ModCommunityPost {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
+  /// Moderación: timestamp + actor + razón. Si `hiddenAt != null`, el post
+  /// queda invisible para alumnos pero la fila se preserva (vs `deletedAt`,
+  /// que es soft-delete por el autor). El admin puede revertir clearando
+  /// las tres columnas.
+  hiddenAt     DateTime? @map("hidden_at")
+  hiddenById   String?   @map("hidden_by_id") @db.Uuid
+  hiddenReason String?   @map("hidden_reason")
+
   comments  ModCommunityComment[]
   reactions ModCommunityReaction[]
 
@@ -452,6 +460,11 @@ model ModCommunityComment {
   parentCommentId String? @map("parent_comment_id") @db.Uuid
   createdAt DateTime  @default(now()) @map("created_at")
   deletedAt DateTime? @map("deleted_at")
+
+  /// Moderación, mismo patrón que `ModCommunityPost`.
+  hiddenAt     DateTime? @map("hidden_at")
+  hiddenById   String?   @map("hidden_by_id") @db.Uuid
+  hiddenReason String?   @map("hidden_reason")
 
   post      ModCommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
   parent    ModCommunityComment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)

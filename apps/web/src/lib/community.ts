@@ -13,6 +13,10 @@ export interface Post {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+  /** Set por moderador. Solo aparece en respuestas si el viewer es admin. */
+  hiddenAt: string | null;
+  hiddenById: string | null;
+  hiddenReason: string | null;
 }
 
 export interface Comment {
@@ -26,6 +30,9 @@ export interface Comment {
   parentCommentId: string | null;
   createdAt: string;
   deletedAt: string | null;
+  hiddenAt: string | null;
+  hiddenById: string | null;
+  hiddenReason: string | null;
 }
 
 export interface Reaction {
@@ -101,6 +108,26 @@ export const communityApi = {
     await apiFetch<{ deleted: true }>(
       `/api/v1/modules/community/comments/${id}`,
       { method: 'DELETE' },
+      withAuth(),
+    );
+  },
+  async moderatePost(postId: string, hidden: boolean, reason?: string): Promise<Post> {
+    return apiFetch<Post>(
+      `/api/v1/modules/community/posts/${postId}/moderate`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ hidden, ...(reason ? { reason } : {}) }),
+      },
+      withAuth(),
+    );
+  },
+  async moderateComment(commentId: string, hidden: boolean, reason?: string): Promise<Comment> {
+    return apiFetch<Comment>(
+      `/api/v1/modules/community/comments/${commentId}/moderate`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ hidden, ...(reason ? { reason } : {}) }),
+      },
       withAuth(),
     );
   },

@@ -16,10 +16,13 @@ import {
   createCommentSchema,
   createPostSchema,
   listPostsQuerySchema,
+  moderationActionSchema,
+  NotModeratorError,
   type AddReactionDto,
   type CreateCommentDto,
   type CreatePostDto,
   type ListPostsQueryDto,
+  type ModerationActionDto,
 } from '@didacta/mod-community';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -69,14 +72,18 @@ export class CommunityController {
     @Query(new ZodValidationPipe(listPostsQuerySchema)) query: ListPostsQueryDto,
   ) {
     if (!user) throw new UnauthorizedException();
-    return this.registry.getCommunityService().listPosts(user.tenantId, query);
+    return this.registry
+      .getCommunityService()
+      .listPosts(user.tenantId, query, { canModerate: canModerate(user) });
   }
 
   @Get('posts/:id')
   @ApiOperation({ summary: 'Detalle del post (incluye comments + reactions)' })
   async getPost(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
     if (!user) throw new UnauthorizedException();
-    return this.registry.getCommunityService().getPostDetail(user.tenantId, id);
+    return this.registry
+      .getCommunityService()
+      .getPostDetail(user.tenantId, id, { canModerate: canModerate(user) });
   }
 
   @Delete('posts/:id')
@@ -127,4 +134,40 @@ export class CommunityController {
     await this.registry.getCommunityService().removeReaction(user.tenantId, user.sub, id);
     return { deleted: true };
   }
+
+  @Post('posts/:id/moderate')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Ocultar o restaurar un post. Solo super_admin / tenant_admin.',
+  })
+  async moderatePost(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(moderationActionSchema)) dto: ModerationActionDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!canModerate(user)) throw new NotModeratorError();
+    return this.registry.getCommunityService().moderatePost(user.tenantId, user.sub, id, dto);
+  }
+
+  @Post('comments/:id/moderate')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Ocultar o restaurar un comentario. Solo super_admin / tenant_admin.',
+  })
+  async moderateComment(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(moderationActionSchema)) dto: ModerationActionDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!canModerate(user)) throw new NotModeratorError();
+    return this.registry.getCommunityService().moderateComment(user.tenantId, user.sub, id, dto);
+  }
+}
+
+const MODERATOR_ROLES = new Set(['super_admin', 'tenant_admin']);
+
+function canModerate(user: SessionClaims): boolean {
+  return user.roles.some((r) => MODERATOR_ROLES.has(r));
 }

@@ -49,3 +49,9 @@ export class ParentCommentMismatchError extends CommunityError {
     super('PARENT_COMMENT_MISMATCH', 'El comentario padre no pertenece al post indicado.');
   }
 }
+
+export class NotModeratorError extends CommunityError {
+  constructor() {
+    super('NOT_MODERATOR', 'Solo super_admin y tenant_admin pueden ocultar o restaurar contenido.');
+  }
+}

@@ -15,6 +15,7 @@ const STATUS_BY_CODE: Record<string, number> = {
   NOT_AUTHOR: HttpStatus.FORBIDDEN,
   NESTED_REPLIES_TOO_DEEP: HttpStatus.UNPROCESSABLE_ENTITY,
   PARENT_COMMENT_MISMATCH: HttpStatus.UNPROCESSABLE_ENTITY,
+  NOT_MODERATOR: HttpStatus.FORBIDDEN,
 };
 
 @Catch(CommunityError)
