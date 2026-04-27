@@ -3,11 +3,13 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { LessonPlayer } from '@/components/lesson-player';
+import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 import { ApiHttpError } from '@/lib/api-client';
 import { certificatesApi, type Certificate } from '@/lib/certificates';
 import { coursesApi, type CourseDetail, type CourseLesson } from '@/lib/courses';
@@ -153,31 +155,120 @@ export default function CourseAlumnoPage() {
         ← Volver al catálogo
       </Button>
 
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-3">
-          {course.category ? (
-            <Badge variant="primary" className="w-fit">
-              {course.category}
-            </Badge>
-          ) : null}
-          <h1 className="font-display text-4xl font-extrabold tracking-tight text-text">
-            {course.title}
-          </h1>
-          <p className="max-w-3xl text-text-muted leading-relaxed">
-            {course.description ?? 'Este curso aún no tiene descripción.'}
-          </p>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-text-subtle">
-            {course.estimatedMinutes ? (
-              <span className="tabular-nums">≈ {course.estimatedMinutes} min</span>
+      {/* Hero — replica el spec del UI kit (CourseDetail.jsx): dos paneles
+          (info izquierda + cover gradient derecha) + footer con progreso. */}
+      <Card className="overflow-hidden p-0">
+        <div className="grid gap-0 lg:grid-cols-[1.4fr_1fr]">
+          <div className="flex flex-col gap-4 p-8">
+            {course.category ? (
+              <Badge variant="info" className="w-fit">
+                {course.category}
+                {course.language ? ` · ${course.language}` : ''}
+              </Badge>
             ) : null}
-            {course.language ? <span className="label-uppercase">{course.language}</span> : null}
-            <span>
-              {course.modules.length} módulo{course.modules.length === 1 ? '' : 's'} ·{' '}
-              {allLessons.length} lecció{allLessons.length === 1 ? 'n' : 'nes'}
-            </span>
+            <h1
+              className="font-display text-3xl font-extrabold leading-[1.1] text-text lg:text-4xl"
+              style={{ letterSpacing: '-0.02em' }}
+            >
+              {course.title}
+            </h1>
+            <p className="max-w-2xl text-base leading-relaxed text-text-muted">
+              {course.description ?? 'Este curso aún no tiene descripción.'}
+            </p>
+            <div className="flex flex-wrap gap-x-7 gap-y-2 text-sm text-text-muted">
+              <div>
+                <strong className="font-display text-text">{course.modules.length}</strong> módulo
+                {course.modules.length === 1 ? '' : 's'}
+              </div>
+              <div>
+                <strong className="font-display text-text">{allLessons.length}</strong> lecció
+                {allLessons.length === 1 ? 'n' : 'nes'}
+              </div>
+              {course.estimatedMinutes ? (
+                <div>
+                  <strong className="font-display text-text tabular-nums">
+                    {course.estimatedMinutes}
+                  </strong>{' '}
+                  min de contenido
+                </div>
+              ) : null}
+            </div>
+            {enrollment ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {enrollment.status === 'COMPLETED' && certificate ? (
+                  <Button
+                    variant="success"
+                    onClick={handleDownloadCertificate}
+                    disabled={downloadingCert}
+                  >
+                    {downloadingCert ? 'Descargando…' : 'Descargar certificado'}
+                  </Button>
+                ) : (
+                  <Button variant="primary">Continuar curso</Button>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Cover panel con gradient + book motif */}
+          <div
+            className="relative flex min-h-[260px] items-end justify-end p-6"
+            style={{
+              background: 'linear-gradient(135deg, #0D1B2A 0%, #1E5AA8 100%)',
+            }}
+          >
+            <svg
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 h-full w-full opacity-25"
+              viewBox="0 0 200 200"
+              preserveAspectRatio="none"
+            >
+              <path d="M0 140 Q100 90 200 140 L200 200 L0 200 Z" fill="rgba(255,255,255,.18)" />
+              <path
+                d="M0 160 Q100 110 200 160"
+                stroke="rgba(255,255,255,.4)"
+                strokeWidth="1.5"
+                fill="none"
+              />
+              <path
+                d="M0 180 Q100 130 200 180"
+                stroke="rgba(255,255,255,.3)"
+                strokeWidth="1.5"
+                fill="none"
+              />
+            </svg>
+            <div className="relative z-10 flex items-center gap-3 text-white">
+              <div className="grid h-14 w-14 place-items-center rounded-full bg-white/95 text-[#1E5AA8]">
+                <Icon name="play" size={26} />
+              </div>
+              <div>
+                <div className="text-xs opacity-85">Vista previa</div>
+                <div className="font-display text-base font-semibold">
+                  {allLessons[0]?.title ?? 'Empezá por la primera lección'}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </header>
+
+        {enrollment ? (
+          <div className="border-t border-border-soft bg-bg-subtle px-8 py-5">
+            <div className="mb-2 flex justify-between text-sm font-semibold">
+              <span className="text-text">
+                {enrollment.status === 'COMPLETED' ? '¡Curso completado!' : 'Tu progreso'}
+              </span>
+              <span className="tabular-nums text-[var(--didacta-success-fg)]">
+                {progressPct}% · meta {enrollment.completionThreshold}%
+              </span>
+            </div>
+            <Progress
+              value={progressPct}
+              tone={enrollment.status === 'COMPLETED' ? 'success' : 'info'}
+              label={`Progreso ${progressPct}%`}
+            />
+          </div>
+        ) : null}
+      </Card>
 
       {error ? (
         <div
@@ -212,47 +303,7 @@ export default function CourseAlumnoPage() {
             </form>
           </CardContent>
         </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">
-                  {enrollment.status === 'COMPLETED' ? '¡Completaste este curso!' : 'Tu progreso'}
-                </CardTitle>
-                <CardDescription>
-                  {enrollment.status === 'COMPLETED'
-                    ? certificate
-                      ? `Certificado ${certificate.number} listo para descargar.`
-                      : 'Tu certificado se está emitiendo. Refrescá en unos segundos.'
-                    : `${progressPct}% completado · meta de finalización: ${enrollment.completionThreshold}%`}
-                </CardDescription>
-              </div>
-              {enrollment.status === 'COMPLETED' && certificate ? (
-                <Button
-                  variant="success"
-                  onClick={handleDownloadCertificate}
-                  disabled={downloadingCert}
-                >
-                  {downloadingCert ? 'Descargando…' : 'Descargar certificado'}
-                </Button>
-              ) : null}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-surface-3">
-              <div
-                className="h-full rounded-full bg-success-500 transition-[width] duration-500 ease-out"
-                style={{ width: `${progressPct}%` }}
-                role="progressbar"
-                aria-valuenow={progressPct}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
         <nav className="space-y-4 lg:max-h-[72dvh] lg:overflow-auto lg:pr-2">

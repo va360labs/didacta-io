@@ -47,3 +47,7 @@ Thumbs.db
 
 # TypeScript build info
 *.tsbuildinfo
+
+# Temp commit / PR body files (used for multi-line messages)
+.commit-msg.txt
+.pr-body.md

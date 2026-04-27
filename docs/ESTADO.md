@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (UI kit Didacta · catálogo — CourseCard + Progress)
+> **Última actualización**: 2026-04-27 (UI kit Didacta · detalle de curso · hero gradient)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,23 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — UI kit Didacta · detalle de curso (hero gradient)
+
+Aplica el spec de `CourseDetail.jsx` al hero del detalle de curso `/cursos/[slug]`.
+
+- Hero card de dos paneles:
+  - Izquierda: badge categoría/idioma · título Sora 4xl tracking
+    -0.02em · descripción · meta (módulos / lecciones / minutos) ·
+    CTA "Continuar curso" o "Descargar certificado".
+  - Derecha: cover gradient azul noche → azul confianza con SVG book
+    motif sutil, círculo blanco con play icon + título de la primera
+    lección como vista previa.
+- Footer del hero con bg surface y barra `Progress` mostrando
+  progreso del alumno + meta de finalización.
+- Card "Tu progreso" antigua eliminada (queda integrada en el hero).
+- El navigator de lecciones en sidebar y el `LessonPlayer` no se
+  tocan.
 
 ### Sesión 2026-04-27 — UI kit Didacta · catálogo (CourseCard + Progress)
 
