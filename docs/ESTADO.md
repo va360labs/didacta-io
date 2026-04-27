@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (batch 3 de E2E — T-1A-018 progreso 11→14 specs)
+> **Última actualización**: 2026-04-27 (batch 4 de E2E — T-1A-018 progreso 14→17 specs)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,20 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — Batch 4 de E2E nuevos (T-1A-018 progreso 14 → 17)
+
+- **`tenant-settings.spec.ts`** (PR #73): upsert plain + secret →
+  getOne diferencia (secret oculto) → list incluye ambos → delete →
+  GET 404. Cubre el flow encryption AES-256-GCM at-rest.
+- **`course-lifecycle.spec.ts`**: crear DRAFT → publish sin lecciones
+  rechaza con 4xx → añadir módulo+lección → publish OK → archive.
+  Segundo test: slug duplicado en mismo tenant → 4xx.
+- **`audit-filters.spec.ts`**: filtros `resourceType=user` solo
+  devuelve entries de user; filtro `dateFrom` solo devuelve entries
+  posteriores al timestamp.
+
+Suite E2E: 17 specs (85% del DoD). Faltan ~3 más para 20+.
 
 ### Sesión 2026-04-27 — Batch 3 de E2E nuevos (T-1A-018 progreso 11 → 14)
 
