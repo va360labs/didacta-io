@@ -14,6 +14,7 @@ export {
 } from './dto.js';
 export {
   CourseNotInTenantError,
+  LessonNotInCourseError,
   SessionAlreadyEndedError,
   SessionNotFoundError,
   ZoomApiError,

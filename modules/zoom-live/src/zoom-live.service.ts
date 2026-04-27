@@ -9,6 +9,7 @@ import {
 } from './dto.js';
 import {
   CourseNotInTenantError,
+  LessonNotInCourseError,
   SessionAlreadyEndedError,
   SessionNotFoundError,
 } from './errors.js';
@@ -32,12 +33,13 @@ export class ZoomLiveService {
 
   async list(
     tenantId: string,
-    opts: { courseId?: string; status?: SessionStatus } = {},
+    opts: { courseId?: string; lessonId?: string; status?: SessionStatus } = {},
   ): Promise<SessionView[]> {
     const rows = await this.prisma.modZoomSession.findMany({
       where: {
         tenantId,
         ...(opts.courseId ? { courseId: opts.courseId } : {}),
+        ...(opts.lessonId ? { lessonId: opts.lessonId } : {}),
         ...(opts.status ? { status: opts.status } : {}),
       },
       orderBy: { startTime: 'desc' },
@@ -79,6 +81,21 @@ export class ZoomLiveService {
       if (!course) throw new CourseNotInTenantError(dto.courseId);
     }
 
+    // lessonId requiere courseId y la lección debe pertenecer a ese curso.
+    if (dto.lessonId) {
+      if (!dto.courseId) throw new LessonNotInCourseError();
+      const lesson = await this.prisma.modCoursesLesson.findFirst({
+        where: {
+          id: dto.lessonId,
+          tenantId,
+          deletedAt: null,
+          module: { courseId: dto.courseId, deletedAt: null },
+        },
+        select: { id: true },
+      });
+      if (!lesson) throw new LessonNotInCourseError();
+    }
+
     const meeting = await this.api.createMeeting({
       hostEmail: dto.hostEmail,
       topic: dto.topic,
@@ -93,6 +110,7 @@ export class ZoomLiveService {
         id: randomUUID(),
         tenantId,
         courseId: dto.courseId ?? null,
+        lessonId: dto.lessonId ?? null,
         topic: dto.topic,
         description: dto.description ?? null,
         status: 'SCHEDULED',
@@ -208,6 +226,7 @@ export class ZoomLiveService {
       id: string;
       tenantId: string;
       courseId: string | null;
+      lessonId: string | null;
       topic: string;
       description: string | null;
       status: string;
@@ -227,6 +246,7 @@ export class ZoomLiveService {
       id: row.id,
       tenantId: row.tenantId,
       courseId: row.courseId,
+      lessonId: row.lessonId,
       topic: row.topic,
       description: row.description,
       status: row.status as SessionStatus,

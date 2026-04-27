@@ -8,6 +8,7 @@ export interface ZoomSession {
   id: string;
   tenantId: string;
   courseId: string | null;
+  lessonId: string | null;
   topic: string;
   description: string | null;
   status: SessionStatus;
@@ -30,9 +31,12 @@ function withAuth(): string {
 }
 
 export const zoomLiveApi = {
-  async list(opts: { courseId?: string; status?: SessionStatus } = {}): Promise<ZoomSession[]> {
+  async list(
+    opts: { courseId?: string; lessonId?: string; status?: SessionStatus } = {},
+  ): Promise<ZoomSession[]> {
     const params = new URLSearchParams();
     if (opts.courseId) params.set('courseId', opts.courseId);
+    if (opts.lessonId) params.set('lessonId', opts.lessonId);
     if (opts.status) params.set('status', opts.status);
     const qs = params.toString();
     return apiFetch<ZoomSession[]>(
@@ -52,6 +56,7 @@ export const zoomLiveApi = {
 
   async create(input: {
     courseId?: string | null;
+    lessonId?: string | null;
     topic: string;
     startTime: string;
     durationMinutes: number;

@@ -14,6 +14,7 @@ import { ApiHttpError } from '@/lib/api-client';
 import { certificatesApi, type Certificate } from '@/lib/certificates';
 import { coursesApi, type CourseDetail, type CourseLesson } from '@/lib/courses';
 import { learningApi, type Enrollment } from '@/lib/learning';
+import { zoomLiveApi, type ZoomSession } from '@/lib/zoom-live';
 
 const LESSON_TYPE_LABEL: Record<string, string> = {
   VIDEO: 'Video',
@@ -33,6 +34,7 @@ export default function CourseAlumnoPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [certificate, setCertificate] = useState<Certificate | null>(null);
+  const [zoomSessions, setZoomSessions] = useState<ZoomSession[]>([]);
   const [downloadingCert, setDownloadingCert] = useState(false);
 
   const reload = useCallback(async () => {
@@ -64,6 +66,15 @@ export default function CourseAlumnoPage() {
         }
       } else {
         setCertificate(null);
+      }
+
+      // Sesiones síncronas Zoom del curso (incluye libres y por lección).
+      // Si el módulo está deshabilitado, el endpoint devuelve 403 y silenciamos.
+      try {
+        const sessions = await zoomLiveApi.list({ courseId: detail.id });
+        setZoomSessions(sessions);
+      } catch {
+        setZoomSessions([]);
       }
     } catch (e) {
       setError(
@@ -279,6 +290,8 @@ export default function CourseAlumnoPage() {
         </div>
       ) : null}
 
+      {enrollment ? <UpcomingZoomBanner sessions={zoomSessions} /> : null}
+
       {!enrollment ? (
         <Card>
           <CardHeader>
@@ -442,5 +455,70 @@ function LessonAvatar({
     >
       {number}
     </span>
+  );
+}
+
+/**
+ * Banner discreto que muestra la próxima sesión Zoom del curso
+ * (programada en los próximos 30 días). Si no hay, no renderiza nada.
+ */
+function UpcomingZoomBanner({ sessions }: { sessions: ZoomSession[] }) {
+  const now = Date.now();
+  const next = sessions
+    .filter((s) => s.status === 'SCHEDULED' || s.status === 'STARTED')
+    .filter((s) => new Date(s.startTime).getTime() > now - 60 * 60 * 1000) // tolerancia 1h
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
+
+  if (!next) return null;
+
+  const start = new Date(next.startTime);
+  const startsIn = start.getTime() - now;
+  const isLive =
+    next.status === 'STARTED' || (startsIn > -60 * 60 * 1000 && startsIn < 30 * 60 * 1000);
+
+  return (
+    <Card>
+      <CardContent className="flex flex-wrap items-center gap-4 p-4">
+        <span
+          aria-hidden="true"
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-xl"
+          style={{
+            background: isLive ? 'var(--didacta-success-bg)' : 'var(--didacta-info-bg)',
+            color: isLive ? 'var(--didacta-success-fg)' : 'var(--didacta-info-fg)',
+          }}
+        >
+          <Icon name="calendar" size={22} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-display text-base font-semibold text-text">{next.topic}</p>
+            {isLive ? (
+              <Badge variant="success" dot>
+                En vivo
+              </Badge>
+            ) : (
+              <Badge variant="info">Próxima sesión</Badge>
+            )}
+          </div>
+          <p className="text-sm tabular-nums text-text-muted">
+            {start.toLocaleString('es-AR', {
+              timeZone: next.timezone,
+              day: '2-digit',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}{' '}
+            · {next.durationMinutes} min · host {next.hostEmail}
+          </p>
+        </div>
+        {next.joinUrl ? (
+          <Button asChild size="sm">
+            <a href={next.joinUrl} target="_blank" rel="noopener noreferrer">
+              {isLive ? 'Unirme ahora' : 'Unirme'}
+            </a>
+          </Button>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }

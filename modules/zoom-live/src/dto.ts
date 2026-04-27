@@ -18,6 +18,9 @@ export type SessionStatus = z.infer<typeof sessionStatusSchema>;
 export const createSessionSchema = z.object({
   /** UUID del curso al que se vincula. NULL = sesión libre del tenant. */
   courseId: z.string().uuid().nullable().optional(),
+  /** UUID de una lección concreta del curso. Si está set, courseId también
+   * tiene que estar set y la lección debe pertenecer a ese curso. */
+  lessonId: z.string().uuid().nullable().optional(),
   topic: z.string().min(1).max(200),
   /** ISO 8601 con zona. Ej: "2026-05-15T10:00:00-03:00". */
   startTime: z.string().datetime({ offset: true }),
@@ -45,6 +48,7 @@ export interface SessionView {
   id: string;
   tenantId: string;
   courseId: string | null;
+  lessonId: string | null;
   topic: string;
   description: string | null;
   status: SessionStatus;

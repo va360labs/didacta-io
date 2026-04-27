@@ -1053,6 +1053,10 @@ model ModZoomSession {
   id              String   @id @default(uuid()) @db.Uuid
   tenantId        String   @map("tenant_id") @db.Uuid
   courseId        String?  @map("course_id") @db.Uuid
+  /// UUID de la lección concreta del curso a la que está vinculada esta
+  /// sesión. NULL = sesión libre del curso. Permite mostrar el botón
+  /// "Unirse" en el detalle de la lección.
+  lessonId        String?  @map("lesson_id") @db.Uuid
   topic           String
   description     String?
   status          String   @default("SCHEDULED") /// SCHEDULED | STARTED | ENDED | CANCELLED
@@ -1068,6 +1072,7 @@ model ModZoomSession {
 
   @@index([tenantId, startTime(sort: Desc)], map: "mod_zoom_session_tenant_idx")
   @@index([courseId], map: "mod_zoom_session_course_idx")
+  @@index([lessonId], map: "mod_zoom_session_lesson_idx")
   @@map("mod_zoom_session")
 }
 

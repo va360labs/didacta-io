@@ -234,6 +234,7 @@ function CreateSessionForm({
         timezone: String(form.get('timezone') ?? tzGuess),
         description: form.get('description') ? String(form.get('description')) : undefined,
         courseId: form.get('courseId') ? String(form.get('courseId')) : undefined,
+        lessonId: form.get('lessonId') ? String(form.get('lessonId')) : undefined,
       });
       await onCreated();
     } catch (e) {
@@ -321,14 +322,29 @@ function CreateSessionForm({
               <Input id="timezone" name="timezone" defaultValue={tzGuess} required />
             </div>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="courseId">UUID del curso (opcional)</Label>
-            <Input
-              id="courseId"
-              name="courseId"
-              placeholder="Pegalo desde /formador/cursos/{id}"
-              className="font-mono"
-            />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="courseId">UUID del curso (opcional)</Label>
+              <Input
+                id="courseId"
+                name="courseId"
+                placeholder="Pegalo desde /formador/cursos/{id}"
+                className="font-mono"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="lessonId">UUID de la lección (opcional)</Label>
+              <Input
+                id="lessonId"
+                name="lessonId"
+                placeholder="Para vincular a una lección concreta"
+                className="font-mono"
+              />
+              <p className="text-xs text-text-subtle">
+                Requiere `courseId`. La sesión aparecerá en el detalle de esa lección para los
+                alumnos matriculados.
+              </p>
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="description">Agenda / notas (opcional)</Label>

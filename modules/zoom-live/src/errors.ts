@@ -26,6 +26,19 @@ export class CourseNotInTenantError extends ZoomLiveError {
   }
 }
 
+/**
+ * Lanzado cuando se intenta vincular `lessonId` a una sesión cuyo `courseId`
+ * no contiene esa lección (o cuando hay `lessonId` sin `courseId`).
+ */
+export class LessonNotInCourseError extends ZoomLiveError {
+  constructor() {
+    super(
+      'ZOOM_LESSON_NOT_IN_COURSE',
+      'La lección indicada no pertenece al curso, o falta el courseId.',
+    );
+  }
+}
+
 export class ZoomApiError extends ZoomLiveError {
   constructor(reason: string) {
     super('ZOOM_API_ERROR', `Error hablando con Zoom: ${reason}`);

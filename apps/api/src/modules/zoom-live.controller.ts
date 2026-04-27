@@ -30,6 +30,7 @@ const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
 
 const listQuerySchema = z.object({
   courseId: z.string().uuid().optional(),
+  lessonId: z.string().uuid().optional(),
   status: sessionStatusSchema.optional(),
 });
 
