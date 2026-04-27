@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
+import { Icon } from '@/components/icon';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -187,9 +189,10 @@ export default function SeguridadPage() {
               </p>
             ) : null}
             {pwSuccess ? (
-              <p className="text-sm text-success-700">
-                ✓ Contraseña actualizada. Te redirigimos a iniciar sesión otra vez…
-              </p>
+              <div className="inline-flex items-center gap-2 rounded-lg bg-[var(--didacta-success-bg)] px-3 py-2 text-sm font-semibold text-[var(--didacta-success-fg)]">
+                <Icon name="check" size={16} />
+                Contraseña actualizada. Te redirigimos a iniciar sesión otra vez…
+              </div>
             ) : null}
             <Button type="submit" disabled={pending}>
               {pending ? 'Guardando…' : 'Cambiar contraseña'}
@@ -224,25 +227,37 @@ export default function SeguridadPage() {
           ) : sessions.length === 0 ? (
             <p className="text-sm text-text-subtle">No tenés sesiones activas registradas.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="divide-y divide-border-soft">
               {sessions.map((s) => (
                 <li
                   key={s.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm first:pt-0 last:pb-0"
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-mono text-xs text-text-subtle truncate">
-                      {s.userAgent ?? 'Dispositivo desconocido'}
-                    </p>
-                    <p className="text-xs text-text-muted tabular-nums">
-                      iniciada {relTime(s.createdAt)} · IP {s.ip ?? '—'}
-                    </p>
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <span
+                      aria-hidden="true"
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
+                      style={{
+                        background: 'var(--didacta-info-bg)',
+                        color: 'var(--didacta-info-fg)',
+                      }}
+                    >
+                      <Icon name="lock" size={16} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-text">
+                        {parseUserAgent(s.userAgent)}
+                      </p>
+                      <p className="mt-0.5 text-xs tabular-nums text-text-subtle">
+                        Iniciada {relTime(s.createdAt)} · IP {s.ip ?? '—'}
+                      </p>
+                    </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleRevoke(s.id)}
                     disabled={busy === `rm-${s.id}`}
-                    className="text-xs font-semibold text-danger-700 hover:underline"
+                    className="text-xs font-semibold text-danger-700 transition-colors hover:underline"
                   >
                     Cerrar sesión
                   </button>
@@ -254,19 +269,64 @@ export default function SeguridadPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Autenticación de dos factores (MFA)</CardTitle>
-          <CardDescription>
-            Para roles administrativos es obligatorio. Para alumnos y formadores es opcional pero
-            recomendado.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-wrap items-start gap-4 p-6">
+          <span
+            aria-hidden="true"
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl"
+            style={{
+              background: 'var(--didacta-info-bg)',
+              color: 'var(--didacta-info-fg)',
+            }}
+          >
+            <Icon name="shield" size={24} />
+          </span>
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-display text-lg font-semibold text-text">
+                Autenticación de dos factores (MFA)
+              </h3>
+              <Badge variant="warning" dot>
+                Recomendado
+              </Badge>
+            </div>
+            <p className="text-sm leading-relaxed text-text-muted">
+              Obligatorio para super_admin y tenant_admin. Opcional pero muy recomendado para
+              alumnos y formadores — añade una capa extra contra contraseñas robadas.
+            </p>
+          </div>
           <Button asChild>
-            <Link href="/mfa/setup">Configurar MFA</Link>
+            <Link href="/mfa/setup">
+              <Icon name="lock" size={16} />
+              Configurar MFA
+            </Link>
           </Button>
         </CardContent>
       </Card>
     </div>
   );
+}
+
+function parseUserAgent(ua: string | null): string {
+  if (!ua) return 'Dispositivo desconocido';
+  // Heurística simple — extrae OS y browser comunes.
+  const browser =
+    /Edg\/(\d+)/.exec(ua)?.[0] ||
+    /Chrome\/(\d+)/.exec(ua)?.[0] ||
+    /Firefox\/(\d+)/.exec(ua)?.[0] ||
+    /Safari\/(\d+)/.exec(ua)?.[0];
+  const os = /Windows NT/.test(ua)
+    ? 'Windows'
+    : /Mac OS X/.test(ua)
+      ? 'macOS'
+      : /Linux/.test(ua)
+        ? 'Linux'
+        : /Android/.test(ua)
+          ? 'Android'
+          : /iPhone|iPad/.test(ua)
+            ? 'iOS'
+            : null;
+  if (browser && os) return `${browser} en ${os}`;
+  if (browser) return browser;
+  if (os) return os;
+  return ua.length > 60 ? ua.slice(0, 57) + '…' : ua;
 }
