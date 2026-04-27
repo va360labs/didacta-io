@@ -302,28 +302,7 @@ export default function ConfiguracionPage() {
 
       {tab === 'modules' ? <ModulesTab /> : null}
 
-      {tab === 'aula-virtual' ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Aula virtual · Zoom</CardTitle>
-            <CardDescription>
-              Configurá las credenciales Server-to-Server de Zoom para crear sesiones síncronas
-              vinculadas a tus cursos.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-lg border border-dashed border-border-strong bg-surface-2 p-8 text-center">
-              <Badge variant="warning" className="mb-3">
-                Próximamente
-              </Badge>
-              <p className="text-sm text-text-muted">
-                La integración con Zoom llega con el módulo <code>mod.zoom-live</code> en la próxima
-                fase. Mientras tanto, configurá las sesiones manualmente.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
+      {tab === 'aula-virtual' ? <ZoomCredentialsCard /> : null}
 
       {tab === 'storage' ? (
         <Card>
@@ -455,6 +434,111 @@ export default function ConfiguracionPage() {
         </Card>
       ) : null}
     </section>
+  );
+}
+
+function ZoomCredentialsCard() {
+  const [draft, setDraft] = useState({ accountId: '', clientId: '', clientSecret: '' });
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+
+  async function handleSave(e: FormEvent) {
+    e.preventDefault();
+    setStatus('saving');
+    setErrMsg(null);
+    try {
+      await tenantSettingsApi.upsert('zoom-live', 'credentials', {
+        isSecret: true,
+        value: {
+          accountId: draft.accountId.trim(),
+          clientId: draft.clientId.trim(),
+          clientSecret: draft.clientSecret,
+        },
+      });
+      setStatus('saved');
+      setDraft((s) => ({ ...s, clientSecret: '' }));
+    } catch (e) {
+      setStatus('error');
+      setErrMsg(e instanceof ApiHttpError ? e.message : 'No pudimos guardar las credenciales.');
+    }
+  }
+
+  async function handleClear() {
+    if (!confirm('¿Borrar las credenciales Zoom S2S? Las sesiones nuevas caerán al stub.')) return;
+    setStatus('saving');
+    setErrMsg(null);
+    try {
+      await tenantSettingsApi.remove('zoom-live', 'credentials');
+      setStatus('saved');
+      setDraft({ accountId: '', clientId: '', clientSecret: '' });
+    } catch (e) {
+      setStatus('error');
+      setErrMsg(e instanceof ApiHttpError ? e.message : 'No pudimos borrar las credenciales.');
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Aula virtual · Zoom Server-to-Server</CardTitle>
+        <CardDescription>
+          Pegá las credenciales Server-to-Server OAuth de tu cuenta Zoom. Se guardan cifradas
+          (AES-256-GCM) y nunca se devuelven en claro. Si las dejás vacías, el módulo cae al stub de
+          desarrollo.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSave} className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="zoom-account">Account ID</Label>
+            <Input
+              id="zoom-account"
+              required
+              value={draft.accountId}
+              onChange={(e) => setDraft({ ...draft, accountId: e.target.value })}
+              className="font-mono"
+              autoComplete="off"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="zoom-client">Client ID</Label>
+            <Input
+              id="zoom-client"
+              required
+              value={draft.clientId}
+              onChange={(e) => setDraft({ ...draft, clientId: e.target.value })}
+              className="font-mono"
+              autoComplete="off"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="zoom-secret">Client Secret</Label>
+            <Input
+              id="zoom-secret"
+              required
+              type="password"
+              value={draft.clientSecret}
+              onChange={(e) => setDraft({ ...draft, clientSecret: e.target.value })}
+              autoComplete="new-password"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+            <Button type="submit" disabled={status === 'saving'}>
+              {status === 'saving' ? 'Guardando…' : 'Guardar credenciales'}
+            </Button>
+            <Button type="button" variant="ghost" onClick={handleClear}>
+              Borrar credenciales
+            </Button>
+            {status === 'saved' ? (
+              <span className="text-sm text-success-700">✓ Guardado cifrado.</span>
+            ) : null}
+            {status === 'error' && errMsg ? (
+              <span className="text-sm text-danger-700">{errMsg}</span>
+            ) : null}
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 

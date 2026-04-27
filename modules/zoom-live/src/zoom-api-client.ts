@@ -56,31 +56,168 @@ export class StubZoomApiClient implements ZoomApiClient {
   }
 }
 
+export interface ZoomS2SCredentials {
+  accountId: string;
+  clientId: string;
+  clientSecret: string;
+}
+
 /**
- * Cliente real (placeholder). Si se construye sin credenciales, todas las
- * operaciones lanzan `ZoomApiError`. La implementación viva llega en el PR
- * de integración Zoom S2S.
+ * Cliente real Zoom Server-to-Server OAuth.
+ *
+ * Flow:
+ *  1. POST `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=...`
+ *     con `Authorization: Basic base64(clientId:clientSecret)` → devuelve
+ *     access token con TTL 60 min. Cacheamos en memoria con expiry para no
+ *     pedirlo en cada call.
+ *  2. POST `https://api.zoom.us/v2/users/{hostEmail}/meetings` con bearer
+ *     token y body `{ topic, type: 2 (scheduled), start_time, duration,
+ *     timezone, agenda }` → devuelve `{ id, join_url, start_url }`.
+ *
+ * **Tipo 2 = scheduled meeting**. Otros tipos: 1 instant, 3 recurring no
+ * fixed time, 8 recurring fixed time. Para Didacta usamos solo 2 en v0.2.
+ *
+ * Errores HTTP de Zoom se traducen a `ZoomApiError` con el mensaje legible.
+ * Token rotation: si recibimos 401 Invalid token, limpiamos el cache y
+ * reintentamos UNA vez antes de propagar el error.
  */
 export class RealZoomApiClient implements ZoomApiClient {
-  constructor(
-    private readonly _opts: {
-      accountId: string;
-      clientId: string;
-      clientSecret: string;
-    },
-  ) {}
+  private cachedToken?: { token: string; expiresAt: number };
 
-  async createMeeting(): Promise<ZoomMeetingCreateResult> {
-    throw new ZoomApiError('Integración Zoom S2S no implementada todavía (placeholder).');
+  constructor(private readonly creds: ZoomS2SCredentials) {}
+
+  async createMeeting(input: ZoomMeetingCreateInput): Promise<ZoomMeetingCreateResult> {
+    const body = {
+      topic: input.topic,
+      type: 2, // scheduled
+      start_time: input.startTime,
+      duration: input.durationMinutes,
+      timezone: input.timezone,
+      agenda: input.description ?? undefined,
+      settings: {
+        join_before_host: false,
+        waiting_room: true,
+        approval_type: 2, // no registration required
+      },
+    };
+    const res = await this.zoomFetch(`/users/${encodeURIComponent(input.hostEmail)}/meetings`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    const json = (await res.json()) as {
+      id: number;
+      join_url: string;
+      start_url: string;
+    };
+    return {
+      meetingId: String(json.id),
+      joinUrl: json.join_url,
+      startUrl: json.start_url,
+    };
   }
 
-  async deleteMeeting(): Promise<void> {
-    throw new ZoomApiError('Integración Zoom S2S no implementada todavía (placeholder).');
+  async deleteMeeting(meetingId: string): Promise<void> {
+    await this.zoomFetch(`/meetings/${encodeURIComponent(meetingId)}`, {
+      method: 'DELETE',
+    });
   }
 
-  async updateMeeting(): Promise<void> {
-    throw new ZoomApiError('Integración Zoom S2S no implementada todavía (placeholder).');
+  async updateMeeting(meetingId: string, patch: Partial<ZoomMeetingCreateInput>): Promise<void> {
+    const body: Record<string, unknown> = {};
+    if (patch.topic !== undefined) body['topic'] = patch.topic;
+    if (patch.startTime !== undefined) body['start_time'] = patch.startTime;
+    if (patch.durationMinutes !== undefined) body['duration'] = patch.durationMinutes;
+    if (patch.timezone !== undefined) body['timezone'] = patch.timezone;
+    if (patch.description !== undefined) body['agenda'] = patch.description;
+    if (Object.keys(body).length === 0) return;
+    await this.zoomFetch(`/meetings/${encodeURIComponent(meetingId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
   }
+
+  // ---- internals ----
+
+  private async getAccessToken(): Promise<string> {
+    if (this.cachedToken && Date.now() < this.cachedToken.expiresAt) {
+      return this.cachedToken.token;
+    }
+    const basic = Buffer.from(`${this.creds.clientId}:${this.creds.clientSecret}`).toString(
+      'base64',
+    );
+    const url = `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${encodeURIComponent(
+      this.creds.accountId,
+    )}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${basic}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new ZoomApiError(`OAuth token request failed (${res.status}): ${text.slice(0, 200)}`);
+    }
+    const json = (await res.json()) as { access_token: string; expires_in: number };
+    // 60s de margen para evitar usar un token a punto de expirar.
+    this.cachedToken = {
+      token: json.access_token,
+      expiresAt: Date.now() + (json.expires_in - 60) * 1000,
+    };
+    return json.access_token;
+  }
+
+  private async zoomFetch(path: string, init: RequestInit): Promise<Response> {
+    const doFetch = async (token: string): Promise<Response> =>
+      fetch(`https://api.zoom.us/v2${path}`, {
+        ...init,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          ...(init.headers ?? {}),
+        },
+      });
+
+    let token = await this.getAccessToken();
+    let res = await doFetch(token);
+
+    // Token rotation: si Zoom dice "invalid token", refresh y reintenta una vez.
+    if (res.status === 401) {
+      this.cachedToken = undefined;
+      token = await this.getAccessToken();
+      res = await doFetch(token);
+    }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new ZoomApiError(
+        `Zoom API ${init.method ?? 'GET'} ${path} → ${res.status}: ${text.slice(0, 200)}`,
+      );
+    }
+    return res;
+  }
+}
+
+/**
+ * Factory: si el tenant tiene credenciales válidas, devuelve `RealZoomApiClient`.
+ * Si no, `StubZoomApiClient`. Validación es estructural; Zoom solo dice si
+ * son válidas en el primer call (que se traduce a `ZoomApiError`).
+ */
+export function buildZoomApiClient(creds: unknown): ZoomApiClient {
+  if (
+    creds &&
+    typeof creds === 'object' &&
+    'accountId' in creds &&
+    'clientId' in creds &&
+    'clientSecret' in creds &&
+    typeof (creds as ZoomS2SCredentials).accountId === 'string' &&
+    typeof (creds as ZoomS2SCredentials).clientId === 'string' &&
+    typeof (creds as ZoomS2SCredentials).clientSecret === 'string'
+  ) {
+    return new RealZoomApiClient(creds as ZoomS2SCredentials);
+  }
+  return new StubZoomApiClient();
 }
 
 /**

@@ -13,22 +13,39 @@ import {
   SessionAlreadyEndedError,
   SessionNotFoundError,
 } from './errors.js';
-import { StubZoomApiClient, type ZoomApiClient } from './zoom-api-client.js';
+import { buildZoomApiClient, StubZoomApiClient, type ZoomApiClient } from './zoom-api-client.js';
 
 export class ZoomLiveService {
-  private readonly api: ZoomApiClient;
+  /**
+   * Cliente fijo inyectado en el constructor (override para tests). Si es
+   * undefined, `clientFor(tenantId)` resuelve uno por tenant leyendo
+   * `tenant_settings` con clave `zoom-live.credentials`.
+   */
+  private readonly fixedApi?: ZoomApiClient;
 
   constructor(
     private readonly prisma: PrismaClient,
     private readonly ctx: ModuleContext,
-    /**
-     * Cliente Zoom inyectable. En prod vendrá de un factory que lee
-     * `tenant_settings` y construye `RealZoomApiClient` por tenant. En dev
-     * y tests usamos el stub determinístico.
-     */
     api?: ZoomApiClient,
   ) {
-    this.api = api ?? new StubZoomApiClient();
+    this.fixedApi = api;
+  }
+
+  /**
+   * Resuelve el cliente Zoom para un tenant concreto. Si tiene credenciales
+   * S2S configuradas vía `tenant_settings`, usa `RealZoomApiClient`; si no,
+   * cae al stub determinístico para no romper el flujo en dev.
+   *
+   * No cacheamos el cliente (las credenciales pueden rotarse en caliente
+   * desde el panel de configuración del tenant).
+   */
+  private async clientFor(tenantId: string): Promise<ZoomApiClient> {
+    if (this.fixedApi) return this.fixedApi;
+    if (!this.ctx.config) return new StubZoomApiClient();
+    const creds = await this.ctx.config
+      .get<unknown>(tenantId, 'zoom-live', 'credentials')
+      .catch(() => undefined);
+    return buildZoomApiClient(creds);
   }
 
   async list(
@@ -96,7 +113,8 @@ export class ZoomLiveService {
       if (!lesson) throw new LessonNotInCourseError();
     }
 
-    const meeting = await this.api.createMeeting({
+    const api = await this.clientFor(tenantId);
+    const meeting = await api.createMeeting({
       hostEmail: dto.hostEmail,
       topic: dto.topic,
       startTime: dto.startTime,
@@ -152,7 +170,8 @@ export class ZoomLiveService {
     }
 
     if (existing.zoomMeetingId) {
-      await this.api.updateMeeting(existing.zoomMeetingId, {
+      const api = await this.clientFor(tenantId);
+      await api.updateMeeting(existing.zoomMeetingId, {
         ...(dto.topic !== undefined ? { topic: dto.topic } : {}),
         ...(dto.startTime !== undefined ? { startTime: dto.startTime } : {}),
         ...(dto.durationMinutes !== undefined ? { durationMinutes: dto.durationMinutes } : {}),
@@ -188,7 +207,8 @@ export class ZoomLiveService {
     if (existing.status === 'ENDED') throw new SessionAlreadyEndedError();
 
     if (existing.zoomMeetingId) {
-      await this.api.deleteMeeting(existing.zoomMeetingId);
+      const api = await this.clientFor(tenantId);
+      await api.deleteMeeting(existing.zoomMeetingId);
     }
 
     await this.prisma.modZoomSession.update({

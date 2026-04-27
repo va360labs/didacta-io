@@ -21,11 +21,13 @@ export {
   ZoomLiveError,
 } from './errors.js';
 export {
+  buildZoomApiClient,
   RealZoomApiClient,
   StubZoomApiClient,
   type ZoomApiClient,
   type ZoomMeetingCreateInput,
   type ZoomMeetingCreateResult,
+  type ZoomS2SCredentials,
 } from './zoom-api-client.js';
 
 export const zoomLiveModule: DidactaModule = {
