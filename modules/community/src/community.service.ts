@@ -33,6 +33,7 @@ export class CommunityService {
         tags: dto.tags ?? [],
       },
     });
+    await this.persistMentions(tenantId, author.id, dto.body, { postId: post.id });
     await this.publish(tenantId, author.id, 'community.post.created', {
       postId: post.id,
       authorId: author.id,
@@ -138,6 +139,7 @@ export class CommunityService {
         parentCommentId: dto.parentCommentId ?? null,
       },
     });
+    await this.persistMentions(tenantId, author.id, dto.body, { commentId: comment.id });
     await this.publish(tenantId, author.id, 'community.comment.created', {
       commentId: comment.id,
       postId,
@@ -295,7 +297,116 @@ export class CommunityService {
     await this.prisma.modCommunityReaction.delete({ where: { id: reactionId } });
   }
 
+  /**
+   * Devuelve las menciones del usuario, más recientes primero, con el handle
+   * y el postId / commentId para que el cliente pueda navegar.
+   */
+  async listMyMentions(
+    tenantId: string,
+    userId: string,
+    limit: number = 50,
+  ): Promise<
+    Array<{
+      id: string;
+      postId: string | null;
+      commentId: string | null;
+      mentionedHandle: string;
+      authorId: string;
+      createdAt: Date;
+    }>
+  > {
+    return this.prisma.modCommunityMention.findMany({
+      where: { tenantId, mentionedUserId: userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
   // -------------------- helpers --------------------
+
+  /**
+   * Parsea el body buscando `@handle`, resuelve cada handle a un user del
+   * tenant y persiste filas en `mod_community_mention`. Best-effort: si una
+   * mención no resuelve a un usuario real, se ignora silenciosamente.
+   *
+   * Handle = todo lo que está antes del `@` en el email (ej. juan@x.com → "juan").
+   * Si dos usuarios del tenant tienen el mismo handle, se usa el primero
+   * encontrado por orden alfabético de email — caso raro pero documentado.
+   */
+  private async persistMentions(
+    tenantId: string,
+    authorId: string,
+    body: string,
+    target: { postId?: string; commentId?: string },
+  ): Promise<void> {
+    const handles = parseMentionHandles(body);
+    if (handles.length === 0) return;
+
+    // Buscamos los users del tenant cuyo email empieza por alguno de los
+    // handles (case-insensitive). Una sola query con OR.
+    const users = await this.prisma.user.findMany({
+      where: {
+        tenantId,
+        OR: handles.map((h) => ({
+          email: { startsWith: `${h}@`, mode: 'insensitive' },
+        })),
+      },
+      select: { id: true, email: true },
+      orderBy: { email: 'asc' },
+    });
+
+    // Mapeo handle → primer userId que matchea (evita ambiguity).
+    const byHandle = new Map<string, string>();
+    for (const u of users) {
+      const h = u.email.split('@')[0]?.toLowerCase();
+      if (!h || byHandle.has(h)) continue;
+      byHandle.set(h, u.id);
+    }
+
+    const rowsToCreate = handles
+      .map((h) => {
+        const userId = byHandle.get(h.toLowerCase());
+        if (!userId || userId === authorId) return null; // no auto-mention
+        return {
+          tenantId,
+          postId: target.postId ?? null,
+          commentId: target.commentId ?? null,
+          mentionedUserId: userId,
+          mentionedHandle: h,
+          authorId,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+
+    if (rowsToCreate.length === 0) return;
+
+    await this.prisma.modCommunityMention.createMany({ data: rowsToCreate });
+
+    // Notifica vía NotificationHub al mencionado (in-app + email si está configurado).
+    for (const m of rowsToCreate) {
+      await this.ctx.notificationHub
+        .send({
+          tenantId,
+          channel: 'in-app',
+          templateKey: 'community.mention',
+          locale: 'es-ES',
+          to: m.mentionedUserId,
+          variables: {
+            authorId,
+            postId: m.postId,
+            commentId: m.commentId,
+            handle: m.mentionedHandle,
+          },
+        })
+        .catch((err: unknown) => {
+          this.ctx.logger.warn('mod.community: notify mention failed', {
+            tenantId,
+            mentionedUserId: m.mentionedUserId,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        });
+    }
+  }
 
   private async publish(
     tenantId: string,
@@ -316,4 +427,24 @@ export class CommunityService {
       },
     });
   }
+}
+
+/**
+ * Extrae handles únicos del body. Reconoce `@handle` precedido por inicio de
+ * línea, espacio o un caracter de puntuación común. Permite letras, números,
+ * `_`, `.`, `-`. Devuelve handles deduplicados en orden de aparición.
+ */
+export function parseMentionHandles(body: string): string[] {
+  const matches = body.matchAll(/(?:^|[\s(.,;:!?[\]{}<>])@([A-Za-z0-9._-]+)/g);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const m of matches) {
+    const handle = m[1];
+    if (!handle) continue;
+    const key = handle.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(handle);
+  }
+  return out;
 }

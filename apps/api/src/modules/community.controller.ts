@@ -135,6 +135,15 @@ export class CommunityController {
     return { deleted: true };
   }
 
+  @Get('mentions/me')
+  @ApiOperation({
+    summary: 'Lista las últimas menciones recibidas por el usuario actual.',
+  })
+  async listMyMentions(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getCommunityService().listMyMentions(user.tenantId, user.sub);
+  }
+
   @Post('posts/:id/moderate')
   @HttpCode(200)
   @ApiOperation({

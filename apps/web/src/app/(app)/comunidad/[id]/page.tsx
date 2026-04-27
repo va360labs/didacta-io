@@ -269,7 +269,7 @@ export default function PostDetailPage() {
                 {post.title}
               </h1>
               <p className="mt-3 whitespace-pre-wrap text-base leading-relaxed text-text">
-                {post.body}
+                <BodyWithMentions body={post.body} />
               </p>
               <div className="mt-5 flex flex-wrap items-center gap-2">
                 {EMOJIS.map((e) => {
@@ -380,6 +380,54 @@ export default function PostDetailPage() {
         />
       </div>
     </section>
+  );
+}
+
+/**
+ * Renderiza el body resaltando cada `@handle` con un chip Azul confianza
+ * sutil. Usa el mismo regex que el parser del backend para que el resaltado
+ * y la persistencia estén alineados.
+ */
+function BodyWithMentions({ body }: { body: string }) {
+  const parts: Array<{ type: 'text' | 'mention'; value: string }> = [];
+  const regex = /(?:^|[\s(.,;:!?[\]{}<>])@([A-Za-z0-9._-]+)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(body)) !== null) {
+    const handle = match[1];
+    if (!handle) continue;
+    const fullMatchStart = match.index;
+    const handleStart = body.indexOf(`@${handle}`, fullMatchStart);
+    if (handleStart === -1) continue;
+    if (handleStart > lastIndex) {
+      parts.push({ type: 'text', value: body.slice(lastIndex, handleStart) });
+    }
+    parts.push({ type: 'mention', value: `@${handle}` });
+    lastIndex = handleStart + handle.length + 1;
+  }
+  if (lastIndex < body.length) {
+    parts.push({ type: 'text', value: body.slice(lastIndex) });
+  }
+
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.type === 'mention' ? (
+          <span
+            key={i}
+            className="rounded px-0.5 font-semibold"
+            style={{
+              background: 'var(--didacta-info-bg)',
+              color: 'var(--didacta-info-fg)',
+            }}
+          >
+            {p.value}
+          </span>
+        ) : (
+          <span key={i}>{p.value}</span>
+        ),
+      )}
+    </>
   );
 }
 
@@ -605,7 +653,7 @@ function CommentBody({
           ) : null}
         </div>
         <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-text">
-          {comment.body}
+          <BodyWithMentions body={comment.body} />
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {EMOJIS.map((e) => {

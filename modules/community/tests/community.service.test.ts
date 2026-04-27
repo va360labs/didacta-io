@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CommunityService } from '../src/community.service.js';
+import { CommunityService, parseMentionHandles } from '../src/community.service.js';
 import {
   CommentNotFoundError,
   NotAuthorError,
@@ -396,5 +396,30 @@ describe('CommunityService.removeReaction', () => {
     const svc = new CommunityService(prisma as never, trackingCtx([]));
     const r = await svc.addReaction('t1', 'u1', { postId: 'p', emoji: '👍' });
     await expect(svc.removeReaction('t1', 'otro', r.id)).rejects.toBeInstanceOf(NotAuthorError);
+  });
+});
+
+describe('parseMentionHandles', () => {
+  it('extrae handles únicos del body', () => {
+    expect(parseMentionHandles('Hola @juan, ¿cómo estás?')).toEqual(['juan']);
+    expect(parseMentionHandles('@maria @pedro y @maria de nuevo')).toEqual(['maria', 'pedro']);
+    expect(parseMentionHandles('email@dominio.com no es mención')).toEqual([]);
+    expect(parseMentionHandles('(@ana) [@bea] @carlos.j')).toEqual(['ana', 'bea', 'carlos.j']);
+    expect(parseMentionHandles('sin menciones aquí')).toEqual([]);
+    expect(parseMentionHandles('')).toEqual([]);
+  });
+
+  it('case-insensitive en la deduplicación pero preserva el casing original', () => {
+    // El primer matching gana en casing.
+    expect(parseMentionHandles('@Juan dice hola @juan')).toEqual(['Juan']);
+  });
+
+  it('acepta letras, números, guion bajo, punto y guion', () => {
+    expect(parseMentionHandles('@user_123 @user.name @user-name @other')).toEqual([
+      'user_123',
+      'user.name',
+      'user-name',
+      'other',
+    ]);
   });
 });

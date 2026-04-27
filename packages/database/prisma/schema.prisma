@@ -447,6 +447,27 @@ model ModCommunityPost {
   @@map("mod_community_post")
 }
 
+/// Menciones en posts y comments. Una mención apunta a UN usuario y a UN
+/// recurso (post o comment). Se persisten al crear el contenido vía parser
+/// del body. Sirve para listar "mis menciones" rápido y para notificar.
+model ModCommunityMention {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  postId      String?  @map("post_id") @db.Uuid
+  commentId   String?  @map("comment_id") @db.Uuid
+  mentionedUserId String @map("mentioned_user_id") @db.Uuid
+  /// Handle textual usado al mencionar (ej. "juan" si email = juan@example.com).
+  /// Snapshot para que cambios futuros del email no rompan la mención histórica.
+  mentionedHandle String @map("mentioned_handle")
+  authorId    String   @map("author_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, mentionedUserId, createdAt])
+  @@index([postId])
+  @@index([commentId])
+  @@map("mod_community_mention")
+}
+
 model ModCommunityComment {
   id        String    @id @default(uuid()) @db.Uuid
   tenantId  String    @map("tenant_id") @db.Uuid

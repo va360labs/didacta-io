@@ -121,6 +121,19 @@ export const communityApi = {
       withAuth(),
     );
   },
+  async listMyMentions(): Promise<
+    Array<{
+      id: string;
+      postId: string | null;
+      commentId: string | null;
+      mentionedHandle: string;
+      authorId: string;
+      createdAt: string;
+    }>
+  > {
+    return apiFetch('/api/v1/modules/community/mentions/me', { method: 'GET' }, withAuth());
+  },
+
   async moderateComment(commentId: string, hidden: boolean, reason?: string): Promise<Comment> {
     return apiFetch<Comment>(
       `/api/v1/modules/community/comments/${commentId}/moderate`,
