@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -60,7 +61,10 @@ export default function MisCertificadosPage() {
   return (
     <section className="space-y-8">
       <header>
-        <h1 className="font-display text-4xl font-extrabold tracking-tight text-text">
+        <h1
+          className="font-display text-4xl font-extrabold tracking-tight text-text"
+          style={{ letterSpacing: '-0.02em' }}
+        >
           Mis certificados
         </h1>
         <p className="mt-2 max-w-2xl text-text-muted">
@@ -88,10 +92,14 @@ export default function MisCertificadosPage() {
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
             <div
-              className="flex h-20 w-20 items-center justify-center rounded-full bg-brand-50 text-brand-700 text-3xl"
               aria-hidden="true"
+              className="flex h-20 w-20 items-center justify-center rounded-2xl"
+              style={{
+                background: 'var(--didacta-info-bg)',
+                color: 'var(--didacta-info-fg)',
+              }}
             >
-              🎓
+              <Icon name="award" size={40} />
             </div>
             <h3 className="font-display text-2xl font-semibold">Aún no tenés certificados</h3>
             <p className="max-w-md text-text-muted">
@@ -107,23 +115,48 @@ export default function MisCertificadosPage() {
           {certs.map((cert) => {
             const courseTitle = cert.snapshot?.courseTitle ?? 'Curso';
             return (
-              <Card key={cert.id} className="flex h-full flex-col overflow-hidden">
+              <Card key={cert.id} className="flex h-full flex-col overflow-hidden p-0">
+                {/* Cover institucional Azul noche con award icon prominente */}
                 <div
-                  className="flex items-center justify-center px-6 py-8 text-text-on-brand"
+                  className="relative flex flex-col items-center justify-center px-6 py-8 text-white"
                   style={{
-                    background: `linear-gradient(135deg, hsl(var(--brand-h) 80% 22%), hsl(var(--brand-h) 70% 45%))`,
+                    background: 'linear-gradient(135deg, #0D1B2A 0%, #1E5AA8 100%)',
                   }}
                 >
-                  <div className="text-center">
-                    <p className="label-uppercase opacity-80">Certificado de finalización</p>
-                    <p className="mt-2 font-mono text-lg font-semibold tabular-nums">
-                      {cert.number}
-                    </p>
+                  {/* Book motif sutil */}
+                  <svg
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-12 w-full opacity-25"
+                    viewBox="0 0 200 60"
+                    preserveAspectRatio="none"
+                  >
+                    <path d="M0 40 Q100 0 200 40 L200 60 L0 60 Z" fill="rgba(255,255,255,.18)" />
+                    <path
+                      d="M0 50 Q100 10 200 50"
+                      stroke="rgba(255,255,255,.4)"
+                      strokeWidth="1.5"
+                      fill="none"
+                    />
+                  </svg>
+
+                  <div className="relative z-10 flex flex-col items-center gap-2">
+                    <div
+                      aria-hidden="true"
+                      className="grid h-12 w-12 place-items-center rounded-full bg-white/15 text-white"
+                    >
+                      <Icon name="award" size={28} />
+                    </div>
+                    <p className="label-uppercase text-white/70">Certificado de finalización</p>
+                    <p className="font-display text-2xl font-bold tabular-nums">{cert.number}</p>
                   </div>
                 </div>
+
                 <CardContent className="flex flex-1 flex-col gap-4 p-6">
                   <div>
-                    <h3 className="font-display text-xl font-bold leading-tight text-text">
+                    <h3
+                      className="font-display text-xl font-bold leading-tight text-text"
+                      style={{ letterSpacing: '-0.01em' }}
+                    >
                       {courseTitle}
                     </h3>
                     <p className="mt-1.5 text-sm text-text-subtle">
@@ -135,9 +168,10 @@ export default function MisCertificadosPage() {
                       onClick={() => handleDownload(cert)}
                       disabled={downloadingId === cert.id}
                     >
+                      <Icon name="award" size={16} />
                       {downloadingId === cert.id ? 'Descargando…' : 'Descargar PDF'}
                     </Button>
-                    <Badge variant="success" className="ml-auto">
+                    <Badge variant="premium" dot className="ml-auto">
                       Verificado
                     </Badge>
                   </div>

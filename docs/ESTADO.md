@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (UI kit Didacta · comunidad · feed + sidebar)
+> **Última actualización**: 2026-04-27 (UI kit Didacta · certificados · cover institucional)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,20 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — UI kit Didacta · certificados (cover institucional)
+
+Aplica spec Didacta a `/mis-certificados`.
+
+- Cover de cada certificate card en gradient Azul noche → Azul confianza
+  (#0D1B2A → #1E5AA8) con SVG book motif sutil + icon award en círculo
+  blanco translúcido, label "Certificado de finalización" + número
+  Sora 24/700.
+- Card body con título Sora + fecha + CTA "Descargar PDF" con icon
+  award + badge `premium` (variant nueva — Azul noche fondo) con dot:
+  "Verificado".
+- Empty state sin emoji 🎓 (la guía Didacta lo prohíbe en chrome) —
+  reemplazado por icon award en chip Azul confianza translúcido.
 
 ### Sesión 2026-04-27 — UI kit Didacta · comunidad (feed + sidebar)
 
