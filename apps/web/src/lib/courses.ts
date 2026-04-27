@@ -164,6 +164,8 @@ export const coursesApi = {
     input: {
       title?: string;
       description?: string | null;
+      category?: string | null;
+      estimatedMinutes?: number | null;
       certificateTemplateId?: string | null;
     },
   ): Promise<Course> {

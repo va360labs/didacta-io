@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { CourseStatusBadge } from '@/components/course-status-badge';
 import { Icon, type IconName } from '@/components/icon';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { certificateTemplatesApi, type CertificateTemplate } from '@/lib/certificates';
 import { coursesApi, type CourseDetail, type CourseModule, type LessonType } from '@/lib/courses';
@@ -54,6 +55,7 @@ export function CourseEditor({
 }) {
   const [error, setError] = useState<PublishError | null>(null);
   const [pending, setPending] = useState(false);
+  const [editingMetadata, setEditingMetadata] = useState(false);
 
   async function withRefresh(action: () => Promise<unknown>) {
     setError(null);
@@ -129,6 +131,16 @@ export function CourseEditor({
               ) : null}
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-white hover:bg-white/10"
+                onClick={() => setEditingMetadata((v) => !v)}
+                aria-expanded={editingMetadata}
+              >
+                <Icon name="edit" size={16} />
+                {editingMetadata ? 'Cerrar' : 'Editar'}
+              </Button>
               <Button asChild variant="ghost" className="text-white hover:bg-white/10">
                 <Link href={`/cursos/${initial.slug}` as never}>
                   <Icon name="eye" size={16} />
@@ -176,6 +188,18 @@ export function CourseEditor({
           </div>
         </div>
       </Card>
+
+      {/* === Editor de metadatos (toggleable) === */}
+      {editingMetadata ? (
+        <MetadataEditor
+          course={initial}
+          onSaved={async () => {
+            await onChange();
+            setEditingMetadata(false);
+          }}
+          onCancel={() => setEditingMetadata(false)}
+        />
+      ) : null}
 
       {/* === Checklist de publicación (sólo si DRAFT) === */}
       {initial.status === 'DRAFT' ? (
@@ -258,6 +282,143 @@ export function CourseEditor({
         </CardContent>
       </Card>
     </section>
+  );
+}
+
+function MetadataEditor({
+  course,
+  onSaved,
+  onCancel,
+}: {
+  course: CourseDetail;
+  onSaved: () => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState(course.title);
+  const [description, setDescription] = useState(course.description ?? '');
+  const [category, setCategory] = useState(course.category ?? '');
+  const [estimatedMinutes, setEstimatedMinutes] = useState(
+    course.estimatedMinutes ? String(course.estimatedMinutes) : '',
+  );
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setPending(true);
+    setError(null);
+    try {
+      await coursesApi.update(course.id, {
+        title: title.trim(),
+        description: description.trim() ? description.trim() : null,
+        category: category.trim() ? category.trim() : null,
+        estimatedMinutes: estimatedMinutes ? Number(estimatedMinutes) : null,
+      });
+      await onSaved();
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar los cambios.');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
+            style={{
+              background: 'var(--didacta-info-bg)',
+              color: 'var(--didacta-info-fg)',
+            }}
+          >
+            <Icon name="edit" size={18} />
+          </span>
+          <div className="min-w-0">
+            <CardTitle className="text-base">Editar metadatos del curso</CardTitle>
+            <CardDescription>
+              El slug y el idioma no se pueden cambiar tras la creación. Para limpiar un campo
+              opcional, dejalo vacío.
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="meta-title">
+              Título <span className="text-danger-700">*</span>
+            </Label>
+            <Input
+              id="meta-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={160}
+              required
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="meta-description">Descripción</Label>
+            <Textarea
+              id="meta-description"
+              rows={4}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={2000}
+              placeholder="¿De qué trata este curso? ¿A quién está dirigido?"
+            />
+            <p className="text-xs text-text-subtle">
+              Aparece en el catálogo y bajo el cover del curso.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="meta-category">Categoría</Label>
+              <Input
+                id="meta-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                maxLength={60}
+                placeholder="Ej: Tecnología"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="meta-estimated">Duración estimada (min)</Label>
+              <Input
+                id="meta-estimated"
+                type="number"
+                min={1}
+                value={estimatedMinutes}
+                onChange={(e) => setEstimatedMinutes(e.target.value)}
+                placeholder="Ej: 90"
+              />
+            </div>
+          </div>
+
+          {error ? (
+            <div
+              role="alert"
+              className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+            >
+              {error}
+            </div>
+          ) : null}
+
+          <div className="flex items-center gap-2 border-t border-border-soft pt-4">
+            <Button type="submit" disabled={pending || !title.trim()}>
+              {pending ? 'Guardando…' : 'Guardar cambios'}
+            </Button>
+            <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 

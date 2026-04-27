@@ -21,7 +21,14 @@ export const createCourseSchema = z.object({
 });
 export type CreateCourseDto = z.infer<typeof createCourseSchema>;
 
-export const updateCourseSchema = createCourseSchema.partial().extend({
+export const updateCourseSchema = z.object({
+  // Slug y language no se pueden cambiar tras la creación.
+  title: z.string().min(1).max(160).optional(),
+  // null = limpiar el campo. Solo afecta a campos opcionales.
+  description: z.string().max(2000).nullable().optional(),
+  thumbnailUrl: z.string().url().nullable().optional(),
+  estimatedMinutes: z.number().int().positive().nullable().optional(),
+  category: z.string().max(60).nullable().optional(),
   status: courseStatusSchema.optional(),
   /// UUID de la plantilla de certificado preferida. null = usar default del tenant.
   certificateTemplateId: z.string().uuid().nullable().optional(),

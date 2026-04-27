@@ -77,7 +77,6 @@ export class CoursesService {
         ...(dto.title !== undefined ? { title: dto.title } : {}),
         ...(dto.description !== undefined ? { description: dto.description } : {}),
         ...(dto.thumbnailUrl !== undefined ? { thumbnailUrl: dto.thumbnailUrl } : {}),
-        ...(dto.language !== undefined ? { language: dto.language } : {}),
         ...(dto.estimatedMinutes !== undefined ? { estimatedMinutes: dto.estimatedMinutes } : {}),
         ...(dto.category !== undefined ? { category: dto.category } : {}),
         ...(dto.certificateTemplateId !== undefined
