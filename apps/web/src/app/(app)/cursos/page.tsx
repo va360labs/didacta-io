@@ -2,31 +2,48 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { CourseCard, type CourseCardData } from '@/components/course-card';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
 import { coursesApi, type Course } from '@/lib/courses';
+import { learningApi, type Enrollment } from '@/lib/learning';
+
+interface EnrollmentInfo {
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  progressPercent: number;
+}
 
 export default function CatalogPage() {
   const [courses, setCourses] = useState<Course[] | null>(null);
+  const [enrollments, setEnrollments] = useState<Map<string, EnrollmentInfo>>(new Map());
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let aborted = false;
-    void coursesApi
-      .list({ status: 'PUBLISHED' })
-      .then((data) => {
-        if (!aborted) setCourses(data);
+    void Promise.all([
+      coursesApi.list({ status: 'PUBLISHED' }),
+      learningApi.listMine().catch((): Enrollment[] => []),
+    ])
+      .then(([list, mine]) => {
+        if (aborted) return;
+        setCourses(list);
+        setEnrollments(
+          new Map(
+            mine.map((e: Enrollment) => [
+              e.courseId,
+              { status: e.status, progressPercent: e.progressPercent },
+            ]),
+          ),
+        );
       })
       .catch((e) => {
-        if (!aborted) {
-          setError(
-            e instanceof ApiHttpError
-              ? e.message
-              : 'No pudimos cargar el catálogo. Probá refrescar la página.',
-          );
-        }
+        if (aborted) return;
+        setError(
+          e instanceof ApiHttpError
+            ? e.message
+            : 'No pudimos cargar el catálogo. Probá refrescar la página.',
+        );
       });
     return () => {
       aborted = true;
@@ -36,7 +53,10 @@ export default function CatalogPage() {
   return (
     <section className="space-y-8">
       <header>
-        <h1 className="font-display text-4xl font-extrabold tracking-tight text-text">
+        <h1
+          className="font-display text-4xl font-extrabold tracking-tight text-text"
+          style={{ letterSpacing: '-0.02em' }}
+        >
           Catálogo de cursos
         </h1>
         <p className="mt-2 max-w-2xl text-text-muted">
@@ -52,9 +72,9 @@ export default function CatalogPage() {
           </CardContent>
         </Card>
       ) : courses === null ? (
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="skeleton h-56 w-full" />
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+            <div key={i} className="skeleton h-64 w-full" />
           ))}
         </div>
       ) : courses.length === 0 ? (
@@ -71,63 +91,23 @@ export default function CatalogPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {courses.map((c) => (
-            <Link
-              key={c.id}
-              href={`/cursos/${c.slug}` as never}
-              className="group block rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-            >
-              <Card interactive className="flex h-full flex-col overflow-hidden">
-                {/* Thumbnail / cover */}
-                {c.thumbnailUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={c.thumbnailUrl}
-                    alt=""
-                    className="h-40 w-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div
-                    className="flex h-40 items-center justify-center text-text-on-brand"
-                    style={{
-                      background: `linear-gradient(135deg, hsl(var(--brand-h) 70% 45%), hsl(var(--brand-h) 78% 22%))`,
-                    }}
-                  >
-                    <span className="font-display text-3xl font-extrabold opacity-30">
-                      {c.title.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                )}
-
-                <CardContent className="flex flex-1 flex-col gap-3 p-5">
-                  {c.category ? (
-                    <Badge variant="primary" className="w-fit">
-                      {c.category}
-                    </Badge>
-                  ) : null}
-
-                  <h3 className="font-display text-lg font-semibold leading-tight text-text group-hover:text-brand-700">
-                    {c.title}
-                  </h3>
-
-                  <p className="line-clamp-3 text-sm text-text-muted leading-relaxed">
-                    {c.description ?? 'Sin descripción.'}
-                  </p>
-
-                  <div className="mt-auto flex items-center gap-3 text-xs text-text-subtle">
-                    {c.estimatedMinutes ? (
-                      <span className="tabular-nums">≈ {c.estimatedMinutes} min</span>
-                    ) : null}
-                    {c.language ? (
-                      <span className="label-uppercase tracking-wider">{c.language}</span>
-                    ) : null}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {courses.map((c) => {
+            const enrollment = enrollments.get(c.id);
+            const data: CourseCardData = {
+              id: c.id,
+              slug: c.slug,
+              title: c.title,
+              description: c.description,
+              category: c.category,
+              estimatedMinutes: c.estimatedMinutes,
+              language: c.language,
+              thumbnailUrl: c.thumbnailUrl,
+              progressPercent: enrollment?.progressPercent ?? null,
+              status: enrollment?.status ?? null,
+            };
+            return <CourseCard key={c.id} course={data} />;
+          })}
         </div>
       )}
     </section>

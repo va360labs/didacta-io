@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (UI kit Didacta · primitives — StatCard + Badge premium)
+> **Última actualización**: 2026-04-27 (UI kit Didacta · catálogo — CourseCard + Progress)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,20 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — UI kit Didacta · catálogo (CourseCard + Progress)
+
+Fase 3 del UI kit aplicado al catálogo.
+
+- `Progress` primitivo nuevo siguiendo `Primitives.jsx > Progress`
+  (track `#F1F3F5`, fill tone, h 8px, role progressbar accesible).
+- `CourseCard` reutilizable siguiendo `CourseCard.jsx`: cover 110px
+  con gradient Didacta + book motif sutil + badge de estado, body
+  con categoría/idioma + título Sora 18/700 + descripción + progreso
+  + CTA contextual (Empezar / Continuar / Certificado).
+- Catálogo `/cursos` rediseñado: carga en paralelo cursos +
+  enrollments propios para resolver progreso del alumno. Grid 2/3/4
+  columnas según viewport.
 
 ### Sesión 2026-04-27 — UI kit Didacta · primitives (StatCard + Badge premium + tokens)
 
