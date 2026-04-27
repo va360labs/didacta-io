@@ -108,6 +108,27 @@ export default function CertificateTemplatesPage() {
     }
   }
 
+  async function handlePreview() {
+    setBusy(true);
+    setError(null);
+    try {
+      const payload: CertificateTemplateInput = {
+        ...draft,
+        logoUrl: draft.logoUrl ? draft.logoUrl : null,
+        signerName: draft.signerName || null,
+        signerTitle: draft.signerTitle || null,
+      };
+      const blob = await certificateTemplatesApi.preview(payload);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No pudimos generar el preview.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleDelete(t: CertificateTemplate) {
     if (!confirm(`¿Eliminar la plantilla "${t.name}"?`)) return;
     setBusy(true);
@@ -232,6 +253,14 @@ export default function CertificateTemplatesPage() {
               <div className="flex flex-wrap gap-2 sm:col-span-2">
                 <Button type="submit" disabled={busy}>
                   {busy ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear plantilla'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handlePreview}
+                  disabled={busy || !draft.name || !draft.body}
+                >
+                  Vista previa PDF
                 </Button>
                 <Button type="button" variant="ghost" onClick={cancel} disabled={busy}>
                   Cancelar

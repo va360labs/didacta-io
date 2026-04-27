@@ -91,6 +91,25 @@ export class CertificatesController {
     return this.registry.getCertificatesService().createTemplate(u.tenantId, dto);
   }
 
+  @Post('templates/preview')
+  @ApiOperation({
+    summary:
+      'Renderiza un PDF preview con los datos del draft (alumno/curso dummy). NO persiste nada.',
+  })
+  async previewTemplate(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(createTemplateSchema)) dto: CreateTemplateDto,
+    @Res() reply: FastifyReply,
+  ) {
+    const u = requireTemplateEditor(user);
+    const pdf = await this.registry.getCertificatesService().renderTemplatePreview(u.tenantId, dto);
+    void reply
+      .header('Content-Type', 'application/pdf')
+      .header('Content-Disposition', 'inline; filename="preview.pdf"')
+      .header('Content-Length', String(pdf.length))
+      .send(pdf);
+  }
+
   @Patch('templates/:id')
   @ApiOperation({ summary: 'Actualizar plantilla. Solo los campos presentes se modifican.' })
   async updateTemplate(

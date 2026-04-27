@@ -88,6 +88,29 @@ export const certificateTemplatesApi = {
       bearer(),
     );
   },
+
+  /**
+   * Renderiza un PDF preview con los datos del draft sin persistir.
+   * Devuelve un Blob (application/pdf) que el caller abre en otra pestaña.
+   */
+  async preview(input: CertificateTemplateInput): Promise<Blob> {
+    const token = bearer();
+    const res = await fetch('/api/v1/modules/certificates/templates/preview', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      throw new ApiHttpError({
+        message: `No se pudo generar el preview (${res.status})`,
+        status: res.status,
+      });
+    }
+    return res.blob();
+  },
 };
 
 export const certificatesApi = {

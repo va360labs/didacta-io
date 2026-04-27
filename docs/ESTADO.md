@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (logo en certificados — follow-up HU-FOR-004)
+> **Última actualización**: 2026-04-27 (vista previa PDF de plantillas — follow-up HU-FOR-004)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,17 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — Vista previa de plantillas (follow-up de HU-FOR-004)
+
+- **`POST /modules/certificates/templates/preview`**: recibe el draft y
+  devuelve el PDF dummy generado con datos de ejemplo (alumno = "Alumna
+  de Ejemplo", curso = "Curso de Ejemplo", number = "PREVIEW"). Reusa el
+  fetch de logo del service. NO persiste nada.
+- **UI**: botón "Vista previa PDF" en el form de templates al lado de
+  Guardar. Click → llama al endpoint, recibe blob, abre en nueva pestaña
+  con `URL.createObjectURL`.
+- Cierra el segundo follow-up de HU-FOR-004.
 
 ### Sesión 2026-04-27 — Logo en certificados (follow-up de HU-FOR-004)
 

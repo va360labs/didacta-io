@@ -269,6 +269,28 @@ export class CertificatesService {
     });
   }
 
+  /**
+   * Renderiza un PDF dummy con los datos provistos en el draft, sin
+   * persistir nada. Útil para que el formador vea un preview antes de
+   * guardar la plantilla.
+   */
+  async renderTemplatePreview(tenantId: string, draft: TemplateInput): Promise<Buffer> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    const logoData = draft.logoUrl ? await this.fetchLogo(draft.logoUrl) : undefined;
+    return renderCertificatePdf({
+      number: 'PREVIEW',
+      studentName: 'Alumna de Ejemplo',
+      courseTitle: 'Curso de Ejemplo',
+      issuedAt: new Date(),
+      body: draft.body,
+      primaryColor: draft.primaryColor,
+      signerName: draft.signerName ?? null,
+      signerTitle: draft.signerTitle ?? null,
+      tenantName: tenant?.name,
+      logoData,
+    });
+  }
+
   async deleteTemplate(tenantId: string, templateId: string) {
     const t = await this.getTemplate(tenantId, templateId);
     if (t.isDefault) throw new TemplateIsDefaultError();
