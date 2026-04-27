@@ -139,7 +139,11 @@ function setup(modules: DidactaModule[], tenantExists = true) {
     record: vi.fn(async () => {}),
   } as never;
 
-  const service = new TenantModulesService(prisma, registryService, factory, auditLog);
+  const accessCache = {
+    invalidate: vi.fn(),
+  } as never;
+
+  const service = new TenantModulesService(prisma, registryService, factory, auditLog, accessCache);
 
   return {
     service,
@@ -149,6 +153,7 @@ function setup(modules: DidactaModule[], tenantExists = true) {
     disableForTenant,
     publish,
     auditLog,
+    accessCache,
   };
 }
 

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { ClientContext } from '../auth/client-context';
 import { PrismaAuditLogService } from './prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ModuleAccessInterceptor } from './module-access.interceptor';
 import { ModuleRegistryService } from './module-registry.service';
 import { ModuleContextFactory } from './module-context.factory';
 import type { DidactaModule } from '@didacta/core-kernel';
@@ -61,6 +62,7 @@ export class TenantModulesService {
     private readonly registry: ModuleRegistryService,
     private readonly factory: ModuleContextFactory,
     private readonly auditLog: PrismaAuditLogService,
+    private readonly accessCache: ModuleAccessInterceptor,
   ) {}
 
   async list(tenantId: string): Promise<TenantModuleListItem[]> {
@@ -121,6 +123,8 @@ export class TenantModulesService {
       data: { tenantId, moduleName, version: moduleRow.version },
       metadata: this.eventMeta(tenantId, actorId),
     });
+
+    this.accessCache.invalidate(tenantId, moduleName);
 
     return this.findOne(tenantId, moduleName);
   }
@@ -188,6 +192,11 @@ export class TenantModulesService {
       data: { tenantId, moduleName, cascade: activeDependents },
       metadata: this.eventMeta(tenantId, actorId),
     });
+
+    this.accessCache.invalidate(tenantId, moduleName);
+    for (const depName of activeDependents) {
+      this.accessCache.invalidate(tenantId, depName);
+    }
 
     return this.findOne(tenantId, moduleName);
   }

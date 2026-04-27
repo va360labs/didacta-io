@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (HU-TA-003 — dashboard tenant_admin)
+> **Última actualización**: 2026-04-27 (module access guard runtime — follow-up HU-TA-002)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,43 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — Module access guard (follow-up de HU-TA-002)
+
+Cierre del follow-up que quedaba documentado en HU-TA-002: el guard runtime
+que bloquea endpoints de módulos desactivados.
+
+- **`ModuleAccessInterceptor`** (NestJS interceptor global): lee la URL del
+  request, extrae el segment del path `/modules/<segment>/...`, lo mapea al
+  nombre del módulo via `manifest.apiNamespace`, y consulta el estado en
+  `tenant_module`. Si el módulo está desactivado para el tenant actual,
+  responde 403 con mensaje claro.
+- **Implementación como interceptor (no guard)**: los APP_GUARD globales
+  corren antes que los `@UseGuards(JwtAuthGuard)` de cada controller, así
+  que un guard global no tendría `request.user.tenantId`. Los interceptors
+  corren después, con el request ya enriquecido. Throw desde
+  `intercept()` rechaza el request igual que un guard.
+- **Cache in-memory** por (tenantId, moduleName) → boolean con TTL 30s.
+  Evita golpear DB en cada request. `TenantModulesService` invalida la
+  cache tras enable/disable (incluida la cascada) para evitar ventana de
+  inconsistencia.
+- **Paths fuera de `/modules/<segment>` no se ven afectados**: admin, auth,
+  me, healthz, audit, formador-stats, etc. siguen funcionando aunque el
+  módulo correspondiente esté desactivado.
+- **Ruta sin user (pre-auth)**: deja pasar — JwtAuthGuard ya rechazaría si
+  el endpoint requería auth.
+- **Default conservador**: si el módulo no tiene fila en `module` (caso
+  raro durante boot) → permite. Si no hay fila en `tenant_module` → usa
+  `enabledByDefault` (true para los 7 módulos sembrados al boot).
+
+**Tests**: 8 nuevos del interceptor (paths no-modules, segment desconocido,
+sin user, enabledByDefault sin row, fila disabled → 403, cache 30s,
+invalidate específico, mapeo correcto via apiNamespace). El test del
+service se actualizó para inyectar el cache mock.
+
+Con esto, el ciclo completo de "modularidad visible al cliente" queda
+operativo: el toggle persiste, audita, emite evento, y bloquea endpoints
+en runtime.
 
 ### Sesión 2026-04-27 — HU-TA-003 (dashboard tenant_admin con métricas)
 

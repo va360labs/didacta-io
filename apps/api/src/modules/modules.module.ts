@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthModule } from '../auth/auth.module';
 import { AssessmentsController } from './assessments.controller';
 import { AssessmentsAttemptsController } from './assessments-attempts.controller';
@@ -15,6 +15,7 @@ import { CoursesErrorFilter } from './courses-error.filter';
 import { FormadorStatsController } from './formador-stats.controller';
 import { LearningController } from './learning.controller';
 import { LearningErrorFilter } from './learning-error.filter';
+import { ModuleAccessInterceptor } from './module-access.interceptor';
 import { ModuleContextFactory } from './module-context.factory';
 import { ModuleRegistryService } from './module-registry.service';
 import { NotificationsBridge } from './notifications.bridge';
@@ -50,6 +51,8 @@ import { ThemingErrorFilter } from './theming-error.filter';
     AssessmentsLearningBridge,
     NotificationsBridge,
     TenantModulesService,
+    ModuleAccessInterceptor,
+    { provide: APP_INTERCEPTOR, useExisting: ModuleAccessInterceptor },
     { provide: APP_FILTER, useClass: CoursesErrorFilter },
     { provide: APP_FILTER, useClass: LearningErrorFilter },
     { provide: APP_FILTER, useClass: AssessmentsErrorFilter },
@@ -58,6 +61,12 @@ import { ThemingErrorFilter } from './theming-error.filter';
     { provide: APP_FILTER, useClass: ThemingErrorFilter },
     { provide: APP_FILTER, useClass: TenantModulesErrorFilter },
   ],
-  exports: [ModuleRegistryService, OutboxQueueService, ModuleContextFactory, TenantModulesService],
+  exports: [
+    ModuleRegistryService,
+    OutboxQueueService,
+    ModuleContextFactory,
+    TenantModulesService,
+    ModuleAccessInterceptor,
+  ],
 })
 export class ModulesModule {}
