@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (HU-FOR-004 — plantillas custom de certificado)
+> **Última actualización**: 2026-04-27 (HU-TA-003 — dashboard tenant_admin)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,25 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — HU-TA-003 (dashboard tenant_admin con métricas)
+
+Historia Notion **HU-TA-003 / LMS-73** (P2, Fase 1.A) cerrada. Limpia el "En
+curso" residual que quedaba sin PR asociado.
+
+- **Endpoint** `GET /admin/stats?range=all|7d|30d` con guard
+  tenant_admin/super_admin. Devuelve activeUsers, coursesPublished,
+  totalEnrollments, certificatesIssued, completionRate.
+- **Página `/admin`** con cards + selector de rango (Histórico / 30d / 7d).
+  Atajos a usuarios / configuración / branding / auditoría.
+- **Comportamiento del rango**: solo aplica a métricas temporales
+  (matriculaciones nuevas, certificados emitidos). Usuarios activos y
+  cursos publicados son siempre snapshot actual.
+- **`completionRate`** = completed / total \* 100, redondeado. Si
+  `total === 0` devuelve 0 (evita división por cero).
+- **5 unit tests** del service: range=all sin filter, range=30d gte ~30d
+  atrás (con tolerance), completionRate calc, división por cero, payload
+  shape.
 
 ### Sesión 2026-04-27 — HU-FOR-004 (plantillas custom de certificado)
 
