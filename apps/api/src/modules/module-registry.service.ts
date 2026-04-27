@@ -7,6 +7,7 @@ import { coursesModule, CoursesService } from '@didacta/mod-courses';
 import { helloWorldModule } from '@didacta/mod-hello-world';
 import { learningModule, LearningService, ScormService } from '@didacta/mod-learning';
 import { themingModule, ThemingService } from '@didacta/mod-theming';
+import { zoomLiveModule, ZoomLiveService } from '@didacta/mod-zoom-live';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleContextFactory } from './module-context.factory';
 
@@ -21,6 +22,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private assessments?: AssessmentsService;
   private community?: CommunityService;
   private theming?: ThemingService;
+  private zoomLive?: ZoomLiveService;
   private scorm?: ScormService;
 
   constructor(
@@ -39,6 +41,7 @@ export class ModuleRegistryService implements OnModuleInit {
     this.assessments = new AssessmentsService(prisma, context);
     this.community = new CommunityService(prisma, context);
     this.theming = new ThemingService(prisma, context);
+    this.zoomLive = new ZoomLiveService(prisma, context);
     this.scorm = new ScormService(prisma, context);
 
     const certificatesModule = buildCertificatesModule(this.certificates);
@@ -51,6 +54,7 @@ export class ModuleRegistryService implements OnModuleInit {
       assessmentsModule,
       communityModule,
       themingModule,
+      zoomLiveModule,
     ]);
 
     await this.persistManifests();
@@ -127,6 +131,11 @@ export class ModuleRegistryService implements OnModuleInit {
   getThemingService(): ThemingService {
     if (!this.theming) throw new Error('ModuleRegistry no está inicializado');
     return this.theming;
+  }
+
+  getZoomLiveService(): ZoomLiveService {
+    if (!this.zoomLive) throw new Error('ModuleRegistry no está inicializado');
+    return this.zoomLive;
   }
 
   getScormService(): ScormService {

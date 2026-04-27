@@ -108,6 +108,7 @@ function buildGroups({
     items: [
       { href: '/formador', label: 'Panel', icon: 'home', exactMatch: true },
       { href: '/formador/cursos', label: 'Mis cursos', icon: 'book' },
+      { href: '/formador/aula-virtual', label: 'Aula virtual', icon: 'calendar' },
       { href: '/formador/correcciones', label: 'Correcciones', icon: 'check' },
       { href: '/formador/certificados/templates', label: 'Plantillas certificado', icon: 'award' },
     ],

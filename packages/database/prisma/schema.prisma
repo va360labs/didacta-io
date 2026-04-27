@@ -1004,6 +1004,33 @@ model ModThemingTenantTheme {
 }
 
 // ============================================================================
+// MOD.ZOOM-LIVE — sesiones síncronas Zoom asociadas opcionalmente a un curso.
+// El stub de Zoom API guarda meetingId y URLs reales (placeholder en dev).
+// startUrl solo se devuelve al host/admin; alumnos ven solo joinUrl.
+// ============================================================================
+model ModZoomSession {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  courseId        String?  @map("course_id") @db.Uuid
+  topic           String
+  description     String?
+  status          String   @default("SCHEDULED") /// SCHEDULED | STARTED | ENDED | CANCELLED
+  startTime       DateTime @map("start_time")
+  durationMinutes Int      @map("duration_minutes")
+  timezone        String
+  hostEmail       String   @map("host_email")
+  zoomMeetingId   String?  @map("zoom_meeting_id")
+  joinUrl         String?  @map("join_url")
+  startUrl        String?  @map("start_url")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId, startTime(sort: Desc)], map: "mod_zoom_session_tenant_idx")
+  @@index([courseId], map: "mod_zoom_session_course_idx")
+  @@map("mod_zoom_session")
+}
+
+// ============================================================================
 // PASSWORD RESET TOKENS — flujo de "olvidé mi contraseña" para self-service.
 // El token raw viaja solo en email; la DB guarda SHA-256 (no se puede recuperar
 // el original aunque se filtre el dump). TTL 1h. Single-use (usedAt).

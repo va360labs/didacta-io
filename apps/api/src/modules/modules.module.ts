@@ -28,6 +28,8 @@ import { TenantModulesErrorFilter } from './tenant-modules-error.filter';
 import { TenantSettingsController } from './tenant-settings.controller';
 import { ThemingController } from './theming.controller';
 import { ThemingErrorFilter } from './theming-error.filter';
+import { ZoomLiveController } from './zoom-live.controller';
+import { ZoomLiveErrorFilter } from './zoom-live-error.filter';
 
 @Module({
   imports: [AuthModule],
@@ -43,6 +45,7 @@ import { ThemingErrorFilter } from './theming-error.filter';
     CommunityController,
     TenantSettingsController,
     ThemingController,
+    ZoomLiveController,
   ],
   providers: [
     OutboxQueueService,
@@ -61,6 +64,7 @@ import { ThemingErrorFilter } from './theming-error.filter';
     { provide: APP_FILTER, useClass: CertificatesErrorFilter },
     { provide: APP_FILTER, useClass: CommunityErrorFilter },
     { provide: APP_FILTER, useClass: ThemingErrorFilter },
+    { provide: APP_FILTER, useClass: ZoomLiveErrorFilter },
     { provide: APP_FILTER, useClass: TenantModulesErrorFilter },
   ],
   exports: [
