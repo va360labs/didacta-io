@@ -54,6 +54,10 @@ export default function CuentaPage() {
   const [digestOptOut, setDigestOptOut] = useState(false);
   const [digestPending, setDigestPending] = useState(false);
   const [digestSaved, setDigestSaved] = useState(false);
+  // Si el módulo community está deshabilitado para el tenant, el endpoint
+  // devuelve 403 y ocultamos la card directamente (no tiene sentido
+  // mostrarle al usuario un toggle que no funciona).
+  const [digestAvailable, setDigestAvailable] = useState(true);
 
   async function reload() {
     const token = authStorage.getAccessToken();
@@ -66,12 +70,16 @@ export default function CuentaPage() {
       setLocale(p.locale);
       setTimezone(p.timezone);
       setAvatarUrl(p.avatarUrl ?? '');
-      // Cargar preferencias en paralelo, sin bloquear si falla.
+      // Cargar preferencias en paralelo. Si community está deshabilitado en
+      // el tenant, el endpoint devuelve 403 y ocultamos la card.
       try {
         const prefs = await communityApi.getMyPreferences();
         setDigestOptOut(prefs.digestOptOut);
-      } catch {
-        // Community puede estar deshabilitado en este tenant; ignoramos.
+        setDigestAvailable(true);
+      } catch (e) {
+        if (e instanceof ApiHttpError && (e.status === 403 || e.status === 404)) {
+          setDigestAvailable(false);
+        }
       }
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar tu perfil.');
@@ -274,40 +282,42 @@ export default function CuentaPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Notificaciones</CardTitle>
-          <CardDescription>
-            Controlá qué emails y avisos recibís de la plataforma. Los avisos críticos (seguridad,
-            cuenta) se envían siempre.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <label className="flex items-start gap-3 rounded-lg border border-border-soft p-4 transition hover:border-border-strong">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 rounded border-border-strong"
-              checked={!digestOptOut}
-              disabled={digestPending}
-              onChange={(e) => void handleDigestToggle(!e.target.checked)}
-            />
-            <span className="flex-1 space-y-1">
-              <span className="block font-medium text-text">Resumen semanal de comunidad</span>
-              <span className="block text-sm text-text-muted">
-                Email cada lunes con tus menciones y respuestas de la semana. Si lo desactivás, no
-                recibirás este resumen pero seguís viendo todo en{' '}
-                <Link href="/comunidad" className="underline">
-                  Comunidad
-                </Link>
-                .
+      {digestAvailable ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Notificaciones</CardTitle>
+            <CardDescription>
+              Controlá qué emails y avisos recibís de la plataforma. Los avisos críticos (seguridad,
+              cuenta) se envían siempre.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <label className="flex items-start gap-3 rounded-lg border border-border-soft p-4 transition hover:border-border-strong">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-border-strong"
+                checked={!digestOptOut}
+                disabled={digestPending}
+                onChange={(e) => void handleDigestToggle(!e.target.checked)}
+              />
+              <span className="flex-1 space-y-1">
+                <span className="block font-medium text-text">Resumen semanal de comunidad</span>
+                <span className="block text-sm text-text-muted">
+                  Email cada lunes con tus menciones y respuestas de la semana. Si lo desactivás, no
+                  recibirás este resumen pero seguís viendo todo en{' '}
+                  <Link href="/comunidad" className="underline">
+                    Comunidad
+                  </Link>
+                  .
+                </span>
+                {digestSaved ? (
+                  <span className="block text-xs font-semibold text-success-700">✓ Guardado</span>
+                ) : null}
               </span>
-              {digestSaved ? (
-                <span className="block text-xs font-semibold text-success-700">✓ Guardado</span>
-              ) : null}
-            </span>
-          </label>
-        </CardContent>
-      </Card>
+            </label>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
