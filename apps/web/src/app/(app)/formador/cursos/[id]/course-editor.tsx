@@ -3,8 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { CourseStatusBadge } from '@/components/course-status-badge';
-import { Icon } from '@/components/icon';
-import { Badge } from '@/components/ui/badge';
+import { Icon, type IconName } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -30,6 +29,15 @@ const LESSON_TYPE_LABEL: Record<LessonType, string> = {
   TEXT: 'Texto',
   QUIZ: 'Quiz',
   SCORM: 'SCORM',
+};
+
+const LESSON_TYPE_ICON: Record<LessonType, IconName> = {
+  VIDEO: 'play',
+  HTML: 'code',
+  PDF: 'file',
+  TEXT: 'book',
+  QUIZ: 'help',
+  SCORM: 'package',
 };
 
 interface PublishError {
@@ -85,109 +93,245 @@ export function CourseEditor({
   }
 
   const totalLessons = initial.modules.reduce((acc, m) => acc + m.lessons.length, 0);
+  const totalMinutes = initial.modules.reduce(
+    (acc, m) => acc + m.lessons.reduce((s, l) => s + (l.durationMinutes ?? 0), 0),
+    0,
+  );
 
   return (
     <section className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">{initial.title}</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            <span className="font-mono">/{initial.slug}</span>
-            {initial.category ? <span> · {initial.category}</span> : null}
-          </p>
+      {/* === Hero del curso === */}
+      <Card className="overflow-hidden p-0">
+        <div
+          className="relative px-6 py-7 text-white"
+          style={{
+            background: 'linear-gradient(135deg, #0D1B2A 0%, #1E5AA8 100%)',
+          }}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <CourseStatusBadge status={initial.status} />
+                {initial.category ? (
+                  <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-semibold text-white">
+                    {initial.category}
+                  </span>
+                ) : null}
+              </div>
+              <h1 className="font-display text-3xl font-bold tracking-tight">{initial.title}</h1>
+              <p className="mt-1 text-sm font-mono text-white/60">/{initial.slug}</p>
+              {initial.description ? (
+                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/85">
+                  {initial.description}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Button asChild variant="ghost" className="text-white hover:bg-white/10">
+                <Link href={`/cursos/${initial.slug}` as never}>
+                  <Icon name="eye" size={16} />
+                  Vista previa
+                </Link>
+              </Button>
+              {initial.status === 'DRAFT' ? (
+                <Button onClick={handlePublish} disabled={pending}>
+                  <Icon name="check" size={16} />
+                  Publicar
+                </Button>
+              ) : null}
+              {initial.status !== 'ARCHIVED' ? (
+                <Button onClick={handleArchive} variant="outline" disabled={pending}>
+                  Archivar
+                </Button>
+              ) : null}
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <CourseStatusBadge status={initial.status} />
-          {initial.status === 'DRAFT' ? (
-            <Button onClick={handlePublish} disabled={pending}>
-              <Icon name="check" size={16} />
-              Publicar
-            </Button>
-          ) : null}
-          {initial.status !== 'ARCHIVED' ? (
-            <Button onClick={handleArchive} variant="outline" disabled={pending}>
-              Archivar
-            </Button>
-          ) : null}
-        </div>
-      </header>
 
+        {/* Métricas */}
+        <div className="grid grid-cols-3 divide-x divide-border-soft border-t border-border bg-surface-2">
+          <div className="p-4 text-center">
+            <p className="font-display text-2xl font-bold tabular-nums text-text">
+              {initial.modules.length}
+            </p>
+            <p className="text-xs font-medium text-text-muted">
+              {initial.modules.length === 1 ? 'sección' : 'secciones'}
+            </p>
+          </div>
+          <div className="p-4 text-center">
+            <p className="font-display text-2xl font-bold tabular-nums text-text">{totalLessons}</p>
+            <p className="text-xs font-medium text-text-muted">
+              {totalLessons === 1 ? 'lección' : 'lecciones'}
+            </p>
+          </div>
+          <div className="p-4 text-center">
+            <p className="font-display text-2xl font-bold tabular-nums text-text">
+              {totalMinutes > 0 ? `${totalMinutes}` : '—'}
+            </p>
+            <p className="text-xs font-medium text-text-muted">
+              {totalMinutes > 0 ? 'minutos totales' : 'sin duración'}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* === Checklist de publicación (sólo si DRAFT) === */}
+      {initial.status === 'DRAFT' ? (
+        <PublishChecklist course={initial} totalLessons={totalLessons} />
+      ) : null}
+
+      {/* === Error de publicación === */}
       {error ? (
         <div
           role="alert"
           className="rounded-lg border border-danger-100 bg-danger-50 p-4 text-sm text-danger-700"
         >
-          <p className="font-semibold">{error.message}</p>
-          {error.reasons && error.reasons.length > 0 ? (
-            <ul className="mt-2 list-disc space-y-0.5 pl-5">
-              {error.reasons.map((r, idx) => (
-                <li key={`${r}-${idx}`}>{r}</li>
-              ))}
-            </ul>
-          ) : null}
+          <div className="flex items-start gap-2.5">
+            <Icon name="alert" size={18} className="shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">{error.message}</p>
+              {error.reasons && error.reasons.length > 0 ? (
+                <ul className="mt-2 list-disc space-y-0.5 pl-5">
+                  {error.reasons.map((r, idx) => (
+                    <li key={`${r}-${idx}`}>{r}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          </div>
         </div>
       ) : null}
 
+      {/* === Plantilla de certificado === */}
       <CertificateTemplateCard course={initial} onChange={onChange} />
 
+      {/* === Estructura del curso === */}
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
-              <CardTitle className="text-base">Estructura</CardTitle>
+              <CardTitle>Contenido del curso</CardTitle>
               <CardDescription>
-                {initial.modules.length} {initial.modules.length === 1 ? 'módulo' : 'módulos'} ·{' '}
-                {totalLessons} {totalLessons === 1 ? 'lección' : 'lecciones'}
+                Organizá tu curso en secciones (módulos) y dentro de cada sección, lecciones.
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {initial.modules.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border-strong px-4 py-8 text-center text-sm text-text-muted">
-              Todavía no hay módulos. Empezá creando el primero abajo ↓
+            <div className="rounded-2xl border-2 border-dashed border-border-strong bg-surface-2 px-6 py-12 text-center">
+              <div
+                aria-hidden="true"
+                className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl"
+                style={{
+                  background: 'var(--didacta-info-bg)',
+                  color: 'var(--didacta-info-fg)',
+                }}
+              >
+                <Icon name="book" size={28} />
+              </div>
+              <h3 className="font-display text-lg font-semibold text-text">
+                Empezá creando tu primera sección
+              </h3>
+              <p className="mx-auto mt-1 max-w-md text-sm text-text-muted">
+                Las secciones agrupan lecciones relacionadas. Por ejemplo:{' '}
+                <span className="font-semibold">Fundamentos</span>,{' '}
+                <span className="font-semibold">Práctica</span>, o{' '}
+                <span className="font-semibold">Evaluación final</span>.
+              </p>
             </div>
           ) : (
-            initial.modules.map((m) => (
-              <ModuleBlock key={m.id} courseModule={m} onChange={onChange} />
+            initial.modules.map((m, idx) => (
+              <ModuleBlock
+                key={m.id}
+                courseModule={m}
+                index={idx}
+                totalModules={initial.modules.length}
+                onChange={onChange}
+              />
             ))
           )}
 
-          <form
-            action={handleAddModule}
-            className="space-y-3 rounded-lg border border-dashed border-border-strong bg-surface-2 p-4"
-          >
-            <p className="flex items-center gap-2 text-sm font-semibold text-text">
-              <Icon name="plus" size={16} />
-              Añadir módulo
-            </p>
-            <div className="grid gap-2 sm:grid-cols-3">
-              <Input name="title" required placeholder="Título del módulo" />
-              <Input
-                name="description"
-                placeholder="Descripción (opcional)"
-                className="sm:col-span-2"
-              />
-            </div>
-            <Button type="submit" size="sm" disabled={pending} variant="outline">
-              Crear módulo
-            </Button>
-          </form>
+          <AddModuleForm onAddModule={handleAddModule} pending={pending} />
         </CardContent>
       </Card>
     </section>
   );
 }
 
+function PublishChecklist({
+  course,
+  totalLessons,
+}: {
+  course: CourseDetail;
+  totalLessons: number;
+}) {
+  const checks = [
+    { ok: course.title.trim().length > 0, label: 'Título del curso' },
+    { ok: !!course.description?.trim(), label: 'Descripción' },
+    { ok: course.modules.length > 0, label: 'Al menos una sección' },
+    { ok: totalLessons > 0, label: 'Al menos una lección' },
+  ];
+  const allDone = checks.every((c) => c.ok);
+
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
+            style={{
+              background: allDone ? 'var(--didacta-success-bg)' : 'var(--didacta-info-bg)',
+              color: allDone ? 'var(--didacta-success-fg)' : 'var(--didacta-info-fg)',
+            }}
+          >
+            <Icon name={allDone ? 'check' : 'sparkles'} size={18} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-display text-base font-semibold text-text">
+              {allDone ? 'Listo para publicar' : 'Antes de publicar'}
+            </h3>
+            <p className="mt-0.5 text-xs text-text-muted">
+              {allDone
+                ? 'Todos los requisitos están cumplidos. Podés publicar cuando quieras.'
+                : 'Completá estos elementos para que tu curso esté listo:'}
+            </p>
+            <ul className="mt-3 space-y-1.5">
+              {checks.map((c, i) => (
+                <li key={i} className="flex items-center gap-2 text-sm">
+                  <Icon
+                    name={c.ok ? 'check' : 'circle'}
+                    size={16}
+                    className={c.ok ? 'text-success-700' : 'text-text-disabled'}
+                  />
+                  <span className={c.ok ? 'text-text-muted line-through' : 'text-text'}>
+                    {c.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ModuleBlock({
   courseModule,
+  index,
+  totalModules,
   onChange,
 }: {
   courseModule: CourseModule;
+  index: number;
+  totalModules: number;
   onChange: () => Promise<void>;
 }) {
   const [pending, setPending] = useState(false);
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+  const [showAddLesson, setShowAddLesson] = useState(false);
 
   async function handleAddLesson(form: FormData) {
     setPending(true);
@@ -199,6 +343,7 @@ function ModuleBlock({
           ? Number(form.get('durationMinutes'))
           : undefined,
       });
+      setShowAddLesson(false);
       await onChange();
     } finally {
       setPending(false);
@@ -217,7 +362,7 @@ function ModuleBlock({
 
   async function handleDeleteModule() {
     const confirmed = window.confirm(
-      `¿Eliminar el módulo "${courseModule.title}" y sus ${courseModule.lessons.length} lecciones? Esto es soft-delete: los datos se conservan pero dejarán de mostrarse.`,
+      `¿Eliminar la sección "${courseModule.title}" y sus ${courseModule.lessons.length} lecciones? Esto es soft-delete: los datos se conservan pero dejarán de mostrarse.`,
     );
     if (!confirmed) return;
     setPending(true);
@@ -229,147 +374,282 @@ function ModuleBlock({
     }
   }
 
+  const moduleLabel = `${index + 1}`.padStart(2, '0');
+  const moduleMinutes = courseModule.lessons.reduce((s, l) => s + (l.durationMinutes ?? 0), 0);
+
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
-      <header className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
+    <div className="overflow-hidden rounded-xl border border-border bg-surface">
+      <header className="flex flex-wrap items-start gap-3 border-b border-border-soft bg-surface-2 px-4 py-3">
+        <span
+          aria-hidden="true"
+          className="cursor-grab text-text-disabled transition-colors hover:text-text-muted"
+          title="Arrastrar para reordenar (próximamente)"
+        >
+          <Icon name="grip" size={18} />
+        </span>
+        <span
+          aria-hidden="true"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-md font-display text-xs font-bold tabular-nums"
+          style={{
+            background: 'var(--didacta-info-bg)',
+            color: 'var(--didacta-info-fg)',
+          }}
+        >
+          {moduleLabel}
+        </span>
+        <div className="min-w-0 flex-1">
           <p className="font-display text-base font-semibold leading-tight text-text">
             {courseModule.title}
           </p>
           {courseModule.description ? (
-            <p className="mt-0.5 text-xs text-text-muted">{courseModule.description}</p>
+            <p className="mt-0.5 line-clamp-1 text-xs text-text-muted">
+              {courseModule.description}
+            </p>
           ) : null}
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-text-subtle">
+        <div className="flex items-center gap-3 text-xs text-text-muted">
+          <span className="tabular-nums">
             {courseModule.lessons.length}{' '}
             {courseModule.lessons.length === 1 ? 'lección' : 'lecciones'}
           </span>
+          {moduleMinutes > 0 ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="inline-flex items-center gap-1 tabular-nums">
+                <Icon name="clock" size={12} />
+                {moduleMinutes} min
+              </span>
+            </>
+          ) : null}
           <button
             type="button"
             onClick={handleDeleteModule}
             disabled={pending}
-            className="text-xs font-semibold text-danger-700 hover:underline disabled:opacity-50"
+            aria-label="Eliminar sección"
+            title="Eliminar sección"
+            className="rounded p-1 text-text-disabled transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:opacity-50"
           >
-            Eliminar módulo
+            <Icon name="trash" size={16} />
           </button>
         </div>
       </header>
 
       {courseModule.lessons.length > 0 ? (
-        <ul className="mb-3 divide-y divide-border-soft rounded-md border border-border-soft bg-surface-2">
-          {courseModule.lessons.map((l, idx) => (
-            <li key={l.id}>
-              <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
-                <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                  <Badge variant="info" className="font-mono text-[10px] tracking-wider">
-                    {LESSON_TYPE_LABEL[l.type] ?? l.type}
-                  </Badge>
-                  <span className="truncate text-sm text-text">{l.title}</span>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  {l.durationMinutes ? (
-                    <span className="tabular-nums text-xs text-text-subtle">
-                      {l.durationMinutes} min
-                    </span>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => handleMoveLesson(l.id, 'up')}
-                    disabled={pending || idx === 0}
-                    className="rounded p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-text disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
-                    aria-label="Mover arriba"
-                    title="Mover arriba"
+        <ul className="divide-y divide-border-soft">
+          {courseModule.lessons.map((l, idx) => {
+            const iconName = LESSON_TYPE_ICON[l.type] ?? 'book';
+            const isEditing = editingLessonId === l.id;
+            return (
+              <li key={l.id}>
+                <div
+                  className={
+                    isEditing
+                      ? 'flex flex-wrap items-center gap-3 bg-surface-2 px-4 py-2.5'
+                      : 'group flex flex-wrap items-center gap-3 px-4 py-2.5 hover:bg-surface-2'
+                  }
+                >
+                  <span
+                    aria-hidden="true"
+                    className="cursor-grab text-text-disabled transition-colors hover:text-text-muted"
+                    title="Arrastrar para reordenar (próximamente)"
                   >
-                    <svg
-                      aria-hidden="true"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                    <Icon name="grip" size={16} />
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg"
+                    style={{
+                      background: 'var(--didacta-neutral-bg)',
+                      color: 'var(--didacta-neutral-fg)',
+                    }}
+                  >
+                    <Icon name={iconName} size={15} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-text">{l.title}</p>
+                    <p className="text-xs text-text-subtle">
+                      {LESSON_TYPE_LABEL[l.type] ?? l.type}
+                      {l.durationMinutes ? ` · ${l.durationMinutes} min` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => handleMoveLesson(l.id, 'up')}
+                      disabled={pending || idx === 0}
+                      className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-3 hover:text-text disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+                      aria-label="Mover arriba"
+                      title="Mover arriba"
                     >
-                      <path d="m18 15-6-6-6 6" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleMoveLesson(l.id, 'down')}
-                    disabled={pending || idx === courseModule.lessons.length - 1}
-                    className="rounded p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-text disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
-                    aria-label="Mover abajo"
-                    title="Mover abajo"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                      <svg
+                        aria-hidden="true"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m18 15-6-6-6 6" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveLesson(l.id, 'down')}
+                      disabled={pending || idx === courseModule.lessons.length - 1}
+                      className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-3 hover:text-text disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+                      aria-label="Mover abajo"
+                      title="Mover abajo"
                     >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingLessonId(editingLessonId === l.id ? null : l.id)}
-                    className="text-xs font-semibold text-brand-600 hover:underline"
-                  >
-                    {editingLessonId === l.id ? 'Cerrar' : 'Editar'}
-                  </button>
+                      <svg
+                        aria-hidden="true"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingLessonId(isEditing ? null : l.id)}
+                      className="ml-1 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-brand-600 transition-colors hover:bg-brand-50"
+                    >
+                      <Icon name="edit" size={13} />
+                      {isEditing ? 'Cerrar' : 'Editar'}
+                    </button>
+                  </div>
                 </div>
-              </div>
-              {editingLessonId === l.id ? (
-                <div className="border-t border-border-soft bg-surface px-3 py-3">
-                  <LessonContentEditor
-                    lesson={l}
-                    onUpdated={onChange}
-                    onCancel={() => setEditingLessonId(null)}
-                  />
-                </div>
-              ) : null}
-            </li>
-          ))}
+                {isEditing ? (
+                  <div className="border-t border-border-soft bg-surface px-4 py-4">
+                    <LessonContentEditor
+                      lesson={l}
+                      onUpdated={onChange}
+                      onCancel={() => setEditingLessonId(null)}
+                    />
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       ) : (
-        <p className="mb-3 rounded-md border border-dashed border-border-soft bg-surface-2 px-3 py-3 text-center text-xs text-text-subtle">
-          Sin lecciones. Añadí la primera abajo ↓
+        <p className="border-b border-border-soft bg-surface-2 px-4 py-6 text-center text-xs italic text-text-subtle">
+          Sin lecciones todavía. Añadí la primera abajo.
         </p>
       )}
 
-      <form action={handleAddLesson} className="grid gap-2 sm:grid-cols-12">
-        <div className="sm:col-span-2">
-          <Label htmlFor={`type-${courseModule.id}`} className="sr-only">
-            Tipo
-          </Label>
-          <Select id={`type-${courseModule.id}`} name="type" required defaultValue="TEXT">
-            {LESSON_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <Input name="title" placeholder="Título de la lección" required className="sm:col-span-7" />
-        <Input
-          name="durationMinutes"
-          type="number"
-          min={1}
-          placeholder="min"
-          className="sm:col-span-1"
-        />
-        <Button type="submit" size="sm" disabled={pending} className="sm:col-span-2">
-          Añadir
-        </Button>
-      </form>
+      {showAddLesson ? (
+        <form action={handleAddLesson} className="border-t border-border-soft bg-surface-2 p-4">
+          <div className="grid gap-2 sm:grid-cols-12">
+            <div className="sm:col-span-2">
+              <Label htmlFor={`type-${courseModule.id}`} className="sr-only">
+                Tipo
+              </Label>
+              <Select id={`type-${courseModule.id}`} name="type" required defaultValue="TEXT">
+                {LESSON_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <Input
+              name="title"
+              placeholder="Título de la lección"
+              required
+              autoFocus
+              className="sm:col-span-7"
+            />
+            <Input
+              name="durationMinutes"
+              type="number"
+              min={1}
+              placeholder="min"
+              className="sm:col-span-1"
+            />
+            <Button type="submit" size="sm" disabled={pending} className="sm:col-span-2">
+              Crear
+            </Button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAddLesson(false)}
+            className="mt-2 text-xs font-semibold text-text-muted hover:text-text"
+          >
+            Cancelar
+          </button>
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowAddLesson(true)}
+          className="flex w-full items-center justify-center gap-1.5 border-t border-border-soft bg-surface px-4 py-3 text-sm font-semibold text-text-muted transition-colors hover:bg-surface-2 hover:text-brand-700"
+        >
+          <Icon name="plus" size={16} />
+          Añadir lección
+        </button>
+      )}
     </div>
+  );
+}
+
+function AddModuleForm({
+  onAddModule,
+  pending,
+}: {
+  onAddModule: (form: FormData) => Promise<void>;
+  pending: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-strong bg-surface-2 px-4 py-4 text-sm font-semibold text-text-muted transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+      >
+        <Icon name="plus" size={18} />
+        Añadir sección
+      </button>
+    );
+  }
+
+  async function handle(form: FormData) {
+    await onAddModule(form);
+    setOpen(false);
+  }
+
+  return (
+    <form
+      action={handle}
+      className="space-y-3 rounded-xl border border-brand-200 bg-brand-50/40 p-4"
+    >
+      <p className="flex items-center gap-2 text-sm font-semibold text-text">
+        <Icon name="plus" size={16} />
+        Nueva sección
+      </p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Input name="title" required autoFocus placeholder="Título de la sección" />
+        <Input name="description" placeholder="Descripción (opcional)" className="sm:col-span-2" />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button type="submit" size="sm" disabled={pending}>
+          Crear sección
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          Cancelar
+        </Button>
+      </div>
+    </form>
   );
 }
 
