@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -105,9 +106,12 @@ export default function TenantDetailPage() {
         <Button variant="ghost" asChild className="self-start">
           <Link href="/admin/tenants">← Volver al listado</Link>
         </Button>
-        <Card>
-          <CardContent className="p-6 text-danger-700">{error}</CardContent>
-        </Card>
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+        >
+          {error}
+        </div>
       </div>
     );
   }
@@ -128,23 +132,52 @@ export default function TenantDetailPage() {
         <Link href="/admin/tenants">← Volver al listado</Link>
       </Button>
 
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">{tenant.name}</h1>
-          <p className="mt-1 font-mono text-sm text-text-muted">/{tenant.slug}</p>
-          <div className="mt-2 flex items-center gap-2">
-            <Badge variant={VARIANT[tenant.status]}>{STATUS_LABELS[tenant.status]}</Badge>
-            <span className="text-xs text-text-subtle tabular-nums">
-              creado{' '}
-              {new Date(tenant.createdAt).toLocaleDateString('es-AR', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric',
-              })}
-            </span>
+      {/* === Hero === */}
+      <Card>
+        <CardContent className="flex flex-wrap items-start gap-4 p-5">
+          <span
+            aria-hidden="true"
+            className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl"
+            style={{
+              background: 'var(--didacta-info-bg)',
+              color: 'var(--didacta-info-fg)',
+            }}
+          >
+            <Icon name="building" size={28} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-3xl font-bold tracking-tight">{tenant.name}</h1>
+            <p className="mt-0.5 font-mono text-sm text-text-muted">/{tenant.slug}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Badge variant={VARIANT[tenant.status]} dot>
+                {STATUS_LABELS[tenant.status]}
+              </Badge>
+              <span className="text-xs tabular-nums text-text-subtle">
+                Creado{' '}
+                {new Date(tenant.createdAt).toLocaleDateString('es-AR', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </span>
+            </div>
           </div>
-        </div>
-      </header>
+          <div className="flex shrink-0 gap-5 text-text">
+            <div className="text-center">
+              <p className="font-display text-3xl font-bold tabular-nums">{tenant.userCount}</p>
+              <p className="label-uppercase text-text-muted">
+                {tenant.userCount === 1 ? 'usuario' : 'usuarios'}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="font-display text-3xl font-bold tabular-nums">{tenant.courseCount}</p>
+              <p className="label-uppercase text-text-muted">
+                {tenant.courseCount === 1 ? 'curso' : 'cursos'}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {error ? (
         <div
@@ -155,84 +188,98 @@ export default function TenantDetailPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Acceso</CardTitle>
-            <CardDescription>
-              Suspender bloquea el login de todos los usuarios y cierra sus sesiones.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {tenant.status !== 'ACTIVE' ? (
-              <Button onClick={() => handleStatus('ACTIVE')} disabled={busy === 'status'}>
-                Reactivar tenant
-              </Button>
-            ) : null}
-            {tenant.status !== 'SUSPENDED' ? (
-              <Button
-                variant="destructive"
-                onClick={() => handleStatus('SUSPENDED')}
-                disabled={busy === 'status'}
-              >
-                Suspender
-              </Button>
-            ) : null}
-            {tenant.status !== 'ARCHIVED' ? (
-              <Button
-                variant="ghost"
-                onClick={() => handleStatus('ARCHIVED')}
-                disabled={busy === 'status'}
-              >
-                Archivar
-              </Button>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Estadísticas</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="label-uppercase text-text-muted">Usuarios</p>
-              <p className="font-display mt-1 text-3xl font-extrabold tabular-nums">
-                {tenant.userCount}
-              </p>
-            </div>
-            <div>
-              <p className="label-uppercase text-text-muted">Cursos</p>
-              <p className="font-display mt-1 text-3xl font-extrabold tabular-nums">
-                {tenant.courseCount}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
+      {/* === Acceso === */}
       <Card>
         <CardHeader>
-          <CardTitle>Dominios</CardTitle>
-          <CardDescription>
-            Hosts donde este tenant resuelve. Cada signin/signup desde el host correspondiente
-            identifica el tenant automáticamente.
-          </CardDescription>
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
+              style={{
+                background: 'var(--didacta-info-bg)',
+                color: 'var(--didacta-info-fg)',
+              }}
+            >
+              <Icon name="lock" size={18} />
+            </span>
+            <div className="min-w-0">
+              <CardTitle className="text-base">Acceso</CardTitle>
+              <CardDescription>
+                Suspender bloquea el login de todos los usuarios y cierra sus sesiones.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2.5">
+          {tenant.status !== 'ACTIVE' ? (
+            <Button onClick={() => handleStatus('ACTIVE')} disabled={busy === 'status'}>
+              <Icon name="check" size={16} />
+              Reactivar tenant
+            </Button>
+          ) : null}
+          {tenant.status !== 'SUSPENDED' ? (
+            <Button
+              variant="destructive"
+              onClick={() => handleStatus('SUSPENDED')}
+              disabled={busy === 'status'}
+            >
+              <Icon name="lock" size={16} />
+              Suspender
+            </Button>
+          ) : null}
+          {tenant.status !== 'ARCHIVED' ? (
+            <Button
+              variant="ghost"
+              onClick={() => handleStatus('ARCHIVED')}
+              disabled={busy === 'status'}
+            >
+              Archivar
+            </Button>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      {/* === Dominios === */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
+              style={{
+                background: 'var(--didacta-info-bg)',
+                color: 'var(--didacta-info-fg)',
+              }}
+            >
+              <Icon name="route" size={18} />
+            </span>
+            <div className="min-w-0">
+              <CardTitle className="text-base">Dominios</CardTitle>
+              <CardDescription>
+                Hosts donde este tenant resuelve. Cada signin/signup desde el host correspondiente
+                identifica el tenant automáticamente.
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <ul className="space-y-2">
+          <ul className="divide-y divide-border-soft rounded-lg border border-border-soft">
             {tenant.domains.map((d) => (
               <li
                 key={d.hostname}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
               >
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm">{d.hostname}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <code className="font-mono text-sm font-semibold text-text">{d.hostname}</code>
                   {d.isPrimary ? <Badge variant="primary">primary</Badge> : null}
                   {d.isVerified ? (
-                    <Badge variant="success">verificado</Badge>
+                    <Badge variant="success" dot>
+                      Verificado
+                    </Badge>
                   ) : (
-                    <Badge variant="warning">pendiente</Badge>
+                    <Badge variant="warning" dot>
+                      Pendiente
+                    </Badge>
                   )}
                 </div>
                 {!d.isPrimary ? (
@@ -240,22 +287,26 @@ export default function TenantDetailPage() {
                     type="button"
                     onClick={() => handleRemoveDomain(d.hostname)}
                     disabled={busy === `rm-${d.hostname}`}
-                    className="text-xs font-semibold text-danger-700 hover:underline"
+                    aria-label={`Quitar dominio ${d.hostname}`}
+                    title={`Quitar dominio ${d.hostname}`}
+                    className="rounded p-1.5 text-text-disabled transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:opacity-50"
                   >
-                    Quitar
+                    <Icon name="trash" size={16} />
                   </button>
                 ) : null}
               </li>
             ))}
           </ul>
-          <div className="flex gap-2 pt-2 border-t border-border">
+          <div className="flex flex-wrap gap-2 border-t border-border-soft pt-3">
             <Input
               value={newDomain}
               onChange={(e) => setNewDomain(e.target.value)}
               placeholder="otro-dominio.com"
-              className="flex-1 font-mono"
+              className="min-w-[220px] flex-1 font-mono"
+              aria-label="Nuevo dominio"
             />
             <Button onClick={handleAddDomain} disabled={busy === 'add-domain' || !newDomain.trim()}>
+              <Icon name="plus" size={14} />
               Añadir dominio
             </Button>
           </div>

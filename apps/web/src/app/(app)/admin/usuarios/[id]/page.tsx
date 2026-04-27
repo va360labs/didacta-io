@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,9 +27,17 @@ const STATUS_VARIANT: Record<UserStatus, 'success' | 'warning' | 'muted' | 'dang
   DEACTIVATED: 'muted',
 };
 
+function userInitials(name: string | null, email: string): string {
+  return (name ?? email)
+    .split(/[\s.@]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const [user, setUser] = useState<UserDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -125,14 +134,15 @@ export default function UserDetailPage() {
   if (error && !user) {
     return (
       <div className="flex flex-col gap-4">
-        <Button variant="ghost" asChild>
+        <Button variant="ghost" asChild className="self-start">
           <Link href="/admin/usuarios">← Volver al listado</Link>
         </Button>
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-danger-700">{error}</p>
-          </CardContent>
-        </Card>
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+        >
+          {error}
+        </div>
       </div>
     );
   }
@@ -153,40 +163,76 @@ export default function UserDetailPage() {
         <Link href="/admin/usuarios">← Volver al listado</Link>
       </Button>
 
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">
-            {user.name ?? user.email}
-          </h1>
-          <p className="mt-1 text-text-muted">{user.email}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Badge variant={STATUS_VARIANT[user.status]}>{STATUS_LABELS[user.status]}</Badge>
-            {user.mfaEnabled ? <Badge variant="success">MFA activo</Badge> : null}
-            {user.emailVerified ? null : <Badge variant="warning">Email sin verificar</Badge>}
+      {/* === Hero del usuario === */}
+      <Card>
+        <CardContent className="flex flex-wrap items-start gap-4 p-5">
+          <div
+            aria-hidden="true"
+            className="grid h-16 w-16 shrink-0 place-items-center rounded-full font-display text-xl font-bold text-white"
+            style={{
+              background: 'linear-gradient(135deg, #2E7DCE 0%, #18B5A8 100%)',
+            }}
+          >
+            {userInitials(user.name, user.email) || '·'}
           </div>
-        </div>
-      </header>
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-3xl font-bold tracking-tight">
+              {user.name ?? user.email}
+            </h1>
+            <p className="mt-0.5 text-sm text-text-muted">{user.email}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Badge variant={STATUS_VARIANT[user.status]} dot>
+                {STATUS_LABELS[user.status]}
+              </Badge>
+              {user.mfaEnabled ? (
+                <Badge variant="success" dot>
+                  MFA activo
+                </Badge>
+              ) : (
+                <Badge variant="muted">MFA desactivado</Badge>
+              )}
+              {user.emailVerified ? null : <Badge variant="warning">Email sin verificar</Badge>}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {error ? (
         <div
           role="alert"
-          className="rounded-lg border border-danger-100 bg-danger-50 p-4 text-sm text-danger-700"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
         >
           {error}
         </div>
       ) : null}
 
       <div className="grid gap-6 md:grid-cols-2">
+        {/* === Acceso === */}
         <Card>
           <CardHeader>
-            <CardTitle>Acceso</CardTitle>
-            <CardDescription>
-              Suspender invalida sus sesiones activas y bloquea el signin.
-            </CardDescription>
+            <div className="flex items-start gap-3">
+              <span
+                aria-hidden="true"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
+                style={{
+                  background: 'var(--didacta-info-bg)',
+                  color: 'var(--didacta-info-fg)',
+                }}
+              >
+                <Icon name="lock" size={18} />
+              </span>
+              <div className="min-w-0">
+                <CardTitle className="text-base">Acceso</CardTitle>
+                <CardDescription>
+                  Suspender invalida sus sesiones activas y bloquea el signin.
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3">
+          <CardContent className="flex flex-col gap-2.5">
             {user.status !== 'ACTIVE' ? (
               <Button onClick={() => handleStatusChange('ACTIVE')} disabled={busy === 'status'}>
+                <Icon name="check" size={16} />
                 Reactivar acceso
               </Button>
             ) : null}
@@ -196,54 +242,89 @@ export default function UserDetailPage() {
                 onClick={() => handleStatusChange('SUSPENDED')}
                 disabled={busy === 'status'}
               >
+                <Icon name="lock" size={16} />
                 Suspender acceso
               </Button>
             ) : null}
             <Button variant="secondary" onClick={handleResend} disabled={busy === 'resend'}>
-              {busy === 'resend'
-                ? 'Enviando…'
-                : resendStatus === 'sent'
-                  ? '✓ Email reenviado'
-                  : 'Reenviar email para definir contraseña'}
+              {busy === 'resend' ? (
+                'Enviando…'
+              ) : resendStatus === 'sent' ? (
+                <>
+                  <Icon name="check" size={16} />
+                  Email reenviado
+                </>
+              ) : (
+                'Reenviar email para definir contraseña'
+              )}
             </Button>
           </CardContent>
         </Card>
 
+        {/* === Roles === */}
         <Card>
           <CardHeader>
-            <CardTitle>Roles</CardTitle>
-            <CardDescription>
-              Determinan a qué pantallas y acciones tiene acceso esta persona.
-            </CardDescription>
+            <div className="flex items-start gap-3">
+              <span
+                aria-hidden="true"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
+                style={{
+                  background: 'var(--didacta-info-bg)',
+                  color: 'var(--didacta-info-fg)',
+                }}
+              >
+                <Icon name="shield" size={18} />
+              </span>
+              <div className="min-w-0">
+                <CardTitle className="text-base">Roles</CardTitle>
+                <CardDescription>
+                  Determinan a qué pantallas y acciones tiene acceso esta persona.
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {user.roles.length === 0 ? (
-                <span className="text-sm text-text-subtle">Sin rol asignado.</span>
+                <p className="text-sm italic text-text-subtle">Sin rol asignado.</p>
               ) : (
                 user.roles.map((r) => (
                   <span
                     key={r}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-3 px-3 py-1 text-sm"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1 text-sm font-semibold text-text"
                   >
                     {ROLE_LABELS[r as AssignableRole] ?? r}
                     <button
                       type="button"
                       onClick={() => handleRemoveRole(r)}
                       disabled={busy === `role-rm-${r}`}
-                      className="text-text-subtle hover:text-danger-700"
+                      className="rounded-full p-0.5 text-text-disabled transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:opacity-50"
                       aria-label={`Quitar rol ${r}`}
+                      title={`Quitar rol ${r}`}
                     >
-                      ×
+                      <svg
+                        aria-hidden="true"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
                     </button>
                   </span>
                 ))
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 border-t border-border-soft pt-3">
               <Select
                 value={newRole}
                 onChange={(e) => setNewRole(e.target.value as AssignableRole)}
+                aria-label="Rol a añadir"
               >
                 {ASSIGNABLE_ROLES.map((r) => (
                   <option key={r} value={r}>
@@ -252,6 +333,7 @@ export default function UserDetailPage() {
                 ))}
               </Select>
               <Button onClick={handleAssignRole} disabled={busy === 'role-add'}>
+                <Icon name="plus" size={14} />
                 Añadir
               </Button>
             </div>
@@ -259,28 +341,57 @@ export default function UserDetailPage() {
         </Card>
       </div>
 
+      {/* === Sesiones recientes === */}
       <Card>
         <CardHeader>
-          <CardTitle>Sesiones recientes</CardTitle>
-          <CardDescription>
-            Últimas {user.recentSessions.length} sesiones registradas.
-          </CardDescription>
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
+              style={{
+                background: 'var(--didacta-info-bg)',
+                color: 'var(--didacta-info-fg)',
+              }}
+            >
+              <Icon name="clock" size={18} />
+            </span>
+            <div className="min-w-0">
+              <CardTitle className="text-base">Sesiones recientes</CardTitle>
+              <CardDescription>
+                Últimas {user.recentSessions.length} sesiones registradas.
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {user.recentSessions.length === 0 ? (
-            <p className="text-sm text-text-subtle">Sin sesiones registradas.</p>
+            <p className="rounded-md border border-dashed border-border-soft px-4 py-6 text-center text-sm text-text-subtle">
+              Sin sesiones registradas.
+            </p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="divide-y divide-border-soft rounded-lg border border-border-soft">
               {user.recentSessions.map((s) => (
                 <li
                   key={s.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
                 >
-                  <span className="tabular-nums text-text-muted">
-                    Iniciada: {new Date(s.createdAt).toLocaleString('es-AR')}
+                  <span className="tabular-nums text-text">
+                    Iniciada{' '}
+                    {new Date(s.createdAt).toLocaleString('es-AR', {
+                      day: '2-digit',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
                   </span>
-                  <span className="tabular-nums text-text-subtle">
-                    Vence: {new Date(s.expiresAt).toLocaleString('es-AR')}
+                  <span className="tabular-nums text-xs text-text-subtle">
+                    Vence{' '}
+                    {new Date(s.expiresAt).toLocaleString('es-AR', {
+                      day: '2-digit',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
                   </span>
                 </li>
               ))}
