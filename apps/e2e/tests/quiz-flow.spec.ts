@@ -50,7 +50,7 @@ test.describe('mod.assessments — flujo del alumno', () => {
 
     // 3) El QuizPlayer debe mostrar la portada del quiz
     await expect(page.getByText('Quiz E2E')).toBeVisible({ timeout: 10_000 });
-    await page.getByRole('button', { name: 'Iniciar quiz' }).click();
+    await page.getByRole('button', { name: /Empezar quiz|Reintentar quiz/ }).click();
 
     // 4) Marcar la opción correcta y enviar
     // El input es radio (SINGLE_CHOICE); lo identificamos por su value (option id)
@@ -58,15 +58,15 @@ test.describe('mod.assessments — flujo del alumno', () => {
       .locator(`input[type="radio"][value="${correctOptionId}"]`)
       .check()
       .catch(async () => {
-        // Si el input no expone value=optionId, probamos por label del partner Input
+        // Fallback por label del partner Input.
         await page.getByLabel('4').check();
       });
 
     await page.getByRole('button', { name: 'Enviar respuestas' }).click();
 
-    // 5) Pantalla de resultado
+    // 5) Pantalla de resultado: el header muestra `<score>%` + `· aprobado`.
     await expect(page.getByText(/100%/)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/¡Aprobado!/)).toBeVisible();
+    await expect(page.getByText('· aprobado')).toBeVisible();
 
     // 6) Refrescar y verificar que el curso quedó completado por el bridge
     await page.reload();
