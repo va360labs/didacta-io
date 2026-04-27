@@ -213,6 +213,15 @@ const TEMPLATES: Record<string, TemplateDef> = {
     subject: 'Prueba de SMTP — Didacta',
     body: 'Si recibiste este correo, la configuración SMTP de tu tenant en Didacta funciona correctamente.\n\nTenant: {{tenantSlug}}\nFecha: {{timestamp}}',
   },
+  'community.mention': {
+    subject: 'Te mencionaron en la comunidad',
+    body: '@{{handle}} te mencionó en un {{#commentId}}comentario{{/commentId}}{{#postId}}post{{/postId}}. Entrá a la app para ver el hilo completo.',
+  },
+  'community.digest.weekly': {
+    subject:
+      'Tu resumen semanal de la comunidad ({{mentionsCount}} menciones · {{repliesCount}} respuestas)',
+    body: 'Esta semana en la comunidad:\n\n· {{mentionsCount}} mención(es) nueva(s)\n· {{repliesCount}} respuesta(s) en hilos donde participaste\n\nEntrá a Didacta y revisá /comunidad/menciones para verlas todas. Desde el resumen anterior: {{sinceIso}}.',
+  },
 };
 
 function renderTemplate(key: string, variables: Record<string, unknown>): RenderedTemplate {

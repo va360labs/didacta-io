@@ -32,6 +32,7 @@ import { ZoomLiveController } from './zoom-live.controller';
 import { ZoomLiveErrorFilter } from './zoom-live-error.filter';
 import { FundaeController } from './fundae.controller';
 import { FundaeErrorFilter } from './fundae-error.filter';
+import { CommunityDigestWorker } from './community-digest.worker';
 
 @Module({
   imports: [AuthModule],
@@ -55,6 +56,7 @@ import { FundaeErrorFilter } from './fundae-error.filter';
     ModuleContextFactory,
     ModuleRegistryService,
     OutboxRecoveryWorker,
+    CommunityDigestWorker,
     AssessmentsLearningBridge,
     NotificationsBridge,
     ScormLearningBridge,

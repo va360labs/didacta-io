@@ -333,6 +333,115 @@ export class CommunityService {
   }
 
   /**
+   * Genera el digest semanal de actividad de un usuario:
+   *  - Menciones recibidas desde `since` (createdAt > since).
+   *  - Respuestas nuevas (comments con createdAt > since) en hilos donde el
+   *    usuario fue autor del post o de algún comment anterior.
+   *
+   * Devuelve estructuras simples listas para inyectar en una plantilla email.
+   * Si no hay nada, ambas listas quedan vacías y el caller decide si vale la
+   * pena mandar el email.
+   */
+  async buildDigest(
+    tenantId: string,
+    userId: string,
+    since: Date,
+  ): Promise<{
+    mentions: Array<{
+      postId: string | null;
+      commentId: string | null;
+      handle: string;
+      authorId: string;
+      createdAt: Date;
+    }>;
+    replies: Array<{
+      postId: string;
+      commentId: string;
+      authorId: string;
+      authorDisplayName: string | null;
+      bodyExcerpt: string;
+      createdAt: Date;
+    }>;
+  }> {
+    const mentionsRows = await this.prisma.modCommunityMention.findMany({
+      where: {
+        tenantId,
+        mentionedUserId: userId,
+        createdAt: { gt: since },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const mentions = mentionsRows.map((m) => ({
+      postId: m.postId,
+      commentId: m.commentId,
+      handle: m.mentionedHandle,
+      authorId: m.authorId,
+      createdAt: m.createdAt,
+    }));
+
+    // Posts donde el usuario participó (autor del post o autor de un comment).
+    const myPostIds = new Set<string>();
+    const ownPosts = await this.prisma.modCommunityPost.findMany({
+      where: { tenantId, authorId: userId, deletedAt: null, hiddenAt: null },
+      select: { id: true },
+    });
+    for (const p of ownPosts) myPostIds.add(p.id);
+    const commentedPosts = await this.prisma.modCommunityComment.findMany({
+      where: { tenantId, authorId: userId, deletedAt: null },
+      select: { postId: true },
+      distinct: ['postId'],
+    });
+    for (const c of commentedPosts) myPostIds.add(c.postId);
+
+    let replies: Array<{
+      postId: string;
+      commentId: string;
+      authorId: string;
+      authorDisplayName: string | null;
+      bodyExcerpt: string;
+      createdAt: Date;
+    }> = [];
+    if (myPostIds.size > 0) {
+      const newComments = await this.prisma.modCommunityComment.findMany({
+        where: {
+          tenantId,
+          postId: { in: [...myPostIds] },
+          createdAt: { gt: since },
+          deletedAt: null,
+          hiddenAt: null,
+          NOT: { authorId: userId }, // no contamos las propias
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      });
+      replies = newComments.map((c) => ({
+        postId: c.postId,
+        commentId: c.id,
+        authorId: c.authorId,
+        authorDisplayName: c.authorDisplayName,
+        bodyExcerpt: c.body.length > 200 ? `${c.body.slice(0, 197)}…` : c.body,
+        createdAt: c.createdAt,
+      }));
+    }
+
+    return { mentions, replies };
+  }
+
+  /**
+   * Lista los IDs de los users ACTIVE de cada tenant. Útil para el job de
+   * digest que itera sobre todos. Limit razonable para evitar OOM si un
+   * tenant tiene 100k+ users (raro en este producto).
+   */
+  async listActiveUsersForDigest(): Promise<Array<{ tenantId: string; userId: string }>> {
+    const rows = await this.prisma.user.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, tenantId: true },
+      take: 50_000,
+    });
+    return rows.map((r) => ({ tenantId: r.tenantId, userId: r.id }));
+  }
+
+  /**
    * Devuelve las menciones del usuario, más recientes primero, con el handle
    * y el postId / commentId para que el cliente pueda navegar.
    */

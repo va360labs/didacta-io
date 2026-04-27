@@ -30,6 +30,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { PrismaService } from '../prisma/prisma.service';
 import type { SessionClaims } from '../auth/token.service';
+import { CommunityDigestWorker } from './community-digest.worker';
 import { ModuleRegistryService } from './module-registry.service';
 
 @ApiTags('Modules · Community')
@@ -40,6 +41,7 @@ export class CommunityController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly prisma: PrismaService,
+    private readonly digest: CommunityDigestWorker,
   ) {}
 
   private async authorOf(user: SessionClaims): Promise<{ id: string; displayName: string | null }> {
@@ -157,6 +159,21 @@ export class CommunityController {
   async listMyMentions(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
     return this.registry.getCommunityService().listMyMentions(user.tenantId, user.sub);
+  }
+
+  @Post('digest/run-now')
+  @HttpCode(202)
+  @ApiOperation({
+    summary:
+      'Encola un job de digest semanal manual para todos los usuarios. Solo super_admin (test/QA).',
+  })
+  async runDigestNow(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.includes('super_admin')) {
+      throw new UnauthorizedException('Solo super_admin puede disparar el digest manualmente.');
+    }
+    await this.digest.triggerNow();
+    return { enqueued: true };
   }
 
   @Post('posts/:id/moderate')
