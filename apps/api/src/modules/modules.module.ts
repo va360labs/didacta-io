@@ -30,6 +30,8 @@ import { ThemingController } from './theming.controller';
 import { ThemingErrorFilter } from './theming-error.filter';
 import { ZoomLiveController } from './zoom-live.controller';
 import { ZoomLiveErrorFilter } from './zoom-live-error.filter';
+import { FundaeController } from './fundae.controller';
+import { FundaeErrorFilter } from './fundae-error.filter';
 
 @Module({
   imports: [AuthModule],
@@ -46,6 +48,7 @@ import { ZoomLiveErrorFilter } from './zoom-live-error.filter';
     TenantSettingsController,
     ThemingController,
     ZoomLiveController,
+    FundaeController,
   ],
   providers: [
     OutboxQueueService,
@@ -65,6 +68,7 @@ import { ZoomLiveErrorFilter } from './zoom-live-error.filter';
     { provide: APP_FILTER, useClass: CommunityErrorFilter },
     { provide: APP_FILTER, useClass: ThemingErrorFilter },
     { provide: APP_FILTER, useClass: ZoomLiveErrorFilter },
+    { provide: APP_FILTER, useClass: FundaeErrorFilter },
     { provide: APP_FILTER, useClass: TenantModulesErrorFilter },
   ],
   exports: [

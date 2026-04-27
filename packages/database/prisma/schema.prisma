@@ -1072,6 +1072,35 @@ model ModZoomSession {
 }
 
 // ============================================================================
+// MOD.FUNDAE — acciones formativas para subvenciones Fundae España.
+// `codigo_accion` único por tenant. Fechas como TEXT YYYY-MM-DD para
+// preservar el formato del input sin convertir a UTC. El XML de export
+// se genera on-demand desde estas filas.
+// ============================================================================
+model ModFundaeAction {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  courseId        String?  @map("course_id") @db.Uuid
+  codigoAccion    String   @map("codigo_accion")
+  nombre          String
+  modalidad       String /// PRESENCIAL | TELEFORMACION | MIXTA
+  horasFormacion  Float    @map("horas_formacion")
+  fechaInicio     String   @map("fecha_inicio") /// YYYY-MM-DD
+  fechaFin        String   @map("fecha_fin") /// YYYY-MM-DD
+  lugar           String?
+  cifCentro       String?  @map("cif_centro")
+  notas           String?
+  status          String   @default("DRAFT") /// DRAFT | ACTIVE | CLOSED | ARCHIVED
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, codigoAccion], map: "mod_fundae_action_codigo_per_tenant_idx")
+  @@index([tenantId, fechaInicio(sort: Desc)], map: "mod_fundae_action_tenant_inicio_idx")
+  @@index([courseId], map: "mod_fundae_action_course_idx")
+  @@map("mod_fundae_action")
+}
+
+// ============================================================================
 // PASSWORD RESET TOKENS — flujo de "olvidé mi contraseña" para self-service.
 // El token raw viaja solo en email; la DB guarda SHA-256 (no se puede recuperar
 // el original aunque se filtre el dump). TTL 1h. Single-use (usedAt).
