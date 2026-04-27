@@ -176,4 +176,20 @@ export const communityApi = {
       withAuth(),
     );
   },
+
+  async getMyPreferences(): Promise<{ digestOptOut: boolean }> {
+    return apiFetch<{ digestOptOut: boolean }>(
+      '/api/v1/modules/community/me/preferences',
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
+  async updateMyPreferences(patch: { digestOptOut?: boolean }): Promise<{ digestOptOut: boolean }> {
+    return apiFetch<{ digestOptOut: boolean }>(
+      '/api/v1/modules/community/me/preferences',
+      { method: 'PUT', body: JSON.stringify(patch) },
+      withAuth(),
+    );
+  },
 };

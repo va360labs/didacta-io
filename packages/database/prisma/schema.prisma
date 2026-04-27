@@ -468,6 +468,21 @@ model ModCommunityMention {
   @@map("mod_community_mention")
 }
 
+/// Preferencias de notificación por usuario de community.
+/// v0.1: solo `digestOptOut`. Estructura abierta para sumar prefs sin
+/// nuevas migraciones (la fila se upsert siempre).
+model ModCommunityUserPref {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  digestOptOut  Boolean  @default(false) @map("digest_opt_out")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, userId], map: "mod_community_user_pref_tenant_user_key")
+  @@map("mod_community_user_pref")
+}
+
 model ModCommunityComment {
   id        String    @id @default(uuid()) @db.Uuid
   tenantId  String    @map("tenant_id") @db.Uuid

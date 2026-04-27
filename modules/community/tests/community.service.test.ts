@@ -423,3 +423,130 @@ describe('parseMentionHandles', () => {
     ]);
   });
 });
+
+interface UserPrefRow {
+  id: string;
+  tenantId: string;
+  userId: string;
+  digestOptOut: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface UserRow {
+  id: string;
+  tenantId: string;
+  status: string;
+}
+
+function makePrefsPrisma(opts: { users: UserRow[]; prefs?: UserPrefRow[] } = { users: [] }) {
+  const prefs: UserPrefRow[] = opts.prefs ?? [];
+  const users = opts.users;
+
+  return {
+    user: {
+      async findMany(args: { where: { status?: string }; select?: unknown; take?: number }) {
+        return users
+          .filter((u) => (args.where.status ? u.status === args.where.status : true))
+          .slice(0, args.take ?? 50_000);
+      },
+    },
+    modCommunityUserPref: {
+      async findMany(args: {
+        where: {
+          digestOptOut?: boolean;
+          userId?: { in: string[] };
+        };
+        select?: unknown;
+      }) {
+        return prefs.filter((p) => {
+          if (args.where.digestOptOut !== undefined && p.digestOptOut !== args.where.digestOptOut)
+            return false;
+          if (args.where.userId?.in && !args.where.userId.in.includes(p.userId)) return false;
+          return true;
+        });
+      },
+      async findUnique(args: { where: { tenantId_userId: { tenantId: string; userId: string } } }) {
+        const k = args.where.tenantId_userId;
+        return prefs.find((p) => p.tenantId === k.tenantId && p.userId === k.userId) ?? null;
+      },
+      async upsert(args: {
+        where: { tenantId_userId: { tenantId: string; userId: string } };
+        create: UserPrefRow;
+        update: Partial<UserPrefRow>;
+      }) {
+        const k = args.where.tenantId_userId;
+        const idx = prefs.findIndex((p) => p.tenantId === k.tenantId && p.userId === k.userId);
+        if (idx === -1) {
+          const row: UserPrefRow = {
+            ...args.create,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+          prefs.push(row);
+          return row;
+        }
+        prefs[idx] = { ...prefs[idx]!, ...args.update, updatedAt: new Date() };
+        return prefs[idx]!;
+      },
+    },
+    _prefs: prefs,
+  };
+}
+
+describe('CommunityService preferences', () => {
+  it('getUserPreferences devuelve defaults si no hay fila', async () => {
+    const prisma = makePrefsPrisma({ users: [] });
+    const ctx = { eventBus: { publish: async () => {} } } as never;
+    const svc = new CommunityService(prisma as never, ctx);
+    const out = await svc.getUserPreferences('t1', 'u1');
+    expect(out).toEqual({ digestOptOut: false });
+  });
+
+  it('updateUserPreferences hace upsert correctamente (create + update)', async () => {
+    const prisma = makePrefsPrisma({ users: [] });
+    const ctx = { eventBus: { publish: async () => {} } } as never;
+    const svc = new CommunityService(prisma as never, ctx);
+
+    // Primer call: create.
+    const after1 = await svc.updateUserPreferences('t1', 'u1', { digestOptOut: true });
+    expect(after1).toEqual({ digestOptOut: true });
+    expect(prisma._prefs).toHaveLength(1);
+
+    // Segundo: update.
+    const after2 = await svc.updateUserPreferences('t1', 'u1', { digestOptOut: false });
+    expect(after2).toEqual({ digestOptOut: false });
+    expect(prisma._prefs).toHaveLength(1); // upsert, no segunda fila
+  });
+
+  it('listActiveUsersForDigest excluye usuarios con digestOptOut=true', async () => {
+    const prisma = makePrefsPrisma({
+      users: [
+        { id: 'u1', tenantId: 't1', status: 'ACTIVE' },
+        { id: 'u2', tenantId: 't1', status: 'ACTIVE' },
+        { id: 'u3', tenantId: 't1', status: 'INACTIVE' }, // ya filtrado por status
+      ],
+      prefs: [
+        {
+          id: 'p1',
+          tenantId: 't1',
+          userId: 'u2',
+          digestOptOut: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+    });
+    const ctx = { eventBus: { publish: async () => {} } } as never;
+    const svc = new CommunityService(prisma as never, ctx);
+    const out = await svc.listActiveUsersForDigest();
+    expect(out).toEqual([{ tenantId: 't1', userId: 'u1' }]);
+  });
+
+  it('listActiveUsersForDigest devuelve [] si no hay usuarios activos', async () => {
+    const prisma = makePrefsPrisma({ users: [] });
+    const ctx = { eventBus: { publish: async () => {} } } as never;
+    const svc = new CommunityService(prisma as never, ctx);
+    expect(await svc.listActiveUsersForDigest()).toEqual([]);
+  });
+});

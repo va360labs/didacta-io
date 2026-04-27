@@ -9,11 +9,13 @@ export {
   createPostSchema,
   listPostsQuerySchema,
   moderationActionSchema,
+  userPreferencesSchema,
   type AddReactionDto,
   type CreateCommentDto,
   type CreatePostDto,
   type ListPostsQueryDto,
   type ModerationActionDto,
+  type UserPreferencesDto,
 } from './dto.js';
 export {
   CommentNotFoundError,

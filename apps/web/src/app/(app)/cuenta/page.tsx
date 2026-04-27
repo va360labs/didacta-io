@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { communityApi } from '@/lib/community';
 import { LOCALE_OPTIONS, meApi, TIMEZONE_OPTIONS, type UserProfile } from '@/lib/me';
 
 function humanRole(role: string): string {
@@ -50,6 +51,9 @@ export default function CuentaPage() {
   const [locale, setLocale] = useState('es-AR');
   const [timezone, setTimezone] = useState('UTC');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [digestOptOut, setDigestOptOut] = useState(false);
+  const [digestPending, setDigestPending] = useState(false);
+  const [digestSaved, setDigestSaved] = useState(false);
 
   async function reload() {
     const token = authStorage.getAccessToken();
@@ -62,8 +66,31 @@ export default function CuentaPage() {
       setLocale(p.locale);
       setTimezone(p.timezone);
       setAvatarUrl(p.avatarUrl ?? '');
+      // Cargar preferencias en paralelo, sin bloquear si falla.
+      try {
+        const prefs = await communityApi.getMyPreferences();
+        setDigestOptOut(prefs.digestOptOut);
+      } catch {
+        // Community puede estar deshabilitado en este tenant; ignoramos.
+      }
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar tu perfil.');
+    }
+  }
+
+  async function handleDigestToggle(next: boolean) {
+    setDigestPending(true);
+    setDigestSaved(false);
+    try {
+      const r = await communityApi.updateMyPreferences({ digestOptOut: next });
+      setDigestOptOut(r.digestOptOut);
+      setDigestSaved(true);
+      setTimeout(() => setDigestSaved(false), 2500);
+    } catch {
+      // Revertir en caso de fallo.
+      setDigestOptOut(!next);
+    } finally {
+      setDigestPending(false);
     }
   }
 
@@ -244,6 +271,41 @@ export default function CuentaPage() {
               </Button>
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Notificaciones</CardTitle>
+          <CardDescription>
+            Controlá qué emails y avisos recibís de la plataforma. Los avisos críticos (seguridad,
+            cuenta) se envían siempre.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <label className="flex items-start gap-3 rounded-lg border border-border-soft p-4 transition hover:border-border-strong">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-border-strong"
+              checked={!digestOptOut}
+              disabled={digestPending}
+              onChange={(e) => void handleDigestToggle(!e.target.checked)}
+            />
+            <span className="flex-1 space-y-1">
+              <span className="block font-medium text-text">Resumen semanal de comunidad</span>
+              <span className="block text-sm text-text-muted">
+                Email cada lunes con tus menciones y respuestas de la semana. Si lo desactivás, no
+                recibirás este resumen pero seguís viendo todo en{' '}
+                <Link href="/comunidad" className="underline">
+                  Comunidad
+                </Link>
+                .
+              </span>
+              {digestSaved ? (
+                <span className="block text-xs font-semibold text-success-700">✓ Guardado</span>
+              ) : null}
+            </span>
+          </label>
         </CardContent>
       </Card>
 

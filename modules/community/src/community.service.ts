@@ -438,7 +438,56 @@ export class CommunityService {
       select: { id: true, tenantId: true },
       take: 50_000,
     });
-    return rows.map((r) => ({ tenantId: r.tenantId, userId: r.id }));
+    if (rows.length === 0) return [];
+
+    // Filtra los que han optado por NO recibir el digest. Vamos contra la
+    // tabla de prefs: si no hay fila, default = recibir (false).
+    const optedOut = await this.prisma.modCommunityUserPref.findMany({
+      where: { digestOptOut: true, userId: { in: rows.map((r) => r.id) } },
+      select: { tenantId: true, userId: true },
+    });
+    const optedOutKey = new Set(optedOut.map((p) => `${p.tenantId}::${p.userId}`));
+
+    return rows
+      .filter((r) => !optedOutKey.has(`${r.tenantId}::${r.id}`))
+      .map((r) => ({ tenantId: r.tenantId, userId: r.id }));
+  }
+
+  /**
+   * Devuelve las preferencias de notificación del usuario. Si nunca tocó
+   * ninguna, devuelve los defaults (todo opt-in: digestOptOut = false).
+   * No crea fila al leer; solo el upsert de `updateUserPreferences` lo hace.
+   */
+  async getUserPreferences(tenantId: string, userId: string): Promise<{ digestOptOut: boolean }> {
+    const row = await this.prisma.modCommunityUserPref.findUnique({
+      where: { tenantId_userId: { tenantId, userId } },
+    });
+    return { digestOptOut: row?.digestOptOut ?? false };
+  }
+
+  /**
+   * Upsert de las preferencias del usuario. La estructura está pensada
+   * para añadir más campos sin migración: solo se actualizan las claves
+   * presentes en el patch.
+   */
+  async updateUserPreferences(
+    tenantId: string,
+    userId: string,
+    patch: { digestOptOut?: boolean },
+  ): Promise<{ digestOptOut: boolean }> {
+    const row = await this.prisma.modCommunityUserPref.upsert({
+      where: { tenantId_userId: { tenantId, userId } },
+      create: {
+        id: randomUUID(),
+        tenantId,
+        userId,
+        digestOptOut: patch.digestOptOut ?? false,
+      },
+      update: {
+        ...(patch.digestOptOut !== undefined ? { digestOptOut: patch.digestOptOut } : {}),
+      },
+    });
+    return { digestOptOut: row.digestOptOut };
   }
 
   /**

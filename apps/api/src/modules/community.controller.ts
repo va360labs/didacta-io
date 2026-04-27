@@ -6,6 +6,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Put,
   Query,
   UnauthorizedException,
   UseGuards,
@@ -18,11 +19,13 @@ import {
   listPostsQuerySchema,
   moderationActionSchema,
   NotModeratorError,
+  userPreferencesSchema,
   type AddReactionDto,
   type CreateCommentDto,
   type CreatePostDto,
   type ListPostsQueryDto,
   type ModerationActionDto,
+  type UserPreferencesDto,
 } from '@didacta/mod-community';
 import { z } from 'zod';
 import { CurrentUser } from '../auth/decorators';
@@ -159,6 +162,29 @@ export class CommunityController {
   async listMyMentions(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
     return this.registry.getCommunityService().listMyMentions(user.tenantId, user.sub);
+  }
+
+  @Get('me/preferences')
+  @ApiOperation({
+    summary:
+      'Devuelve las preferencias de notificación del usuario (digest opt-out, etc). Defaults si nunca tocó nada.',
+  })
+  async getMyPreferences(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getCommunityService().getUserPreferences(user.tenantId, user.sub);
+  }
+
+  @Put('me/preferences')
+  @ApiOperation({
+    summary:
+      'Actualiza las preferencias de notificación del usuario. Solo se modifican las claves enviadas.',
+  })
+  async updateMyPreferences(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(userPreferencesSchema)) dto: UserPreferencesDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getCommunityService().updateUserPreferences(user.tenantId, user.sub, dto);
   }
 
   @Post('digest/run-now')

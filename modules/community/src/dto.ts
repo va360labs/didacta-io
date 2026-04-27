@@ -46,3 +46,9 @@ export const addReactionSchema = z
     }
   });
 export type AddReactionDto = z.infer<typeof addReactionSchema>;
+
+export const userPreferencesSchema = z.object({
+  /** True = no recibir el email digest semanal. Default: false (recibirlo). */
+  digestOptOut: z.boolean().optional(),
+});
+export type UserPreferencesDto = z.infer<typeof userPreferencesSchema>;
