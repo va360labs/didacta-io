@@ -4,6 +4,7 @@ import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
+import { MetricsAuthController } from './modules/metrics-auth.controller';
 import { ModulesModule } from './modules/modules.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { TenancyModule } from './tenancy/tenancy.module';
@@ -33,9 +34,12 @@ import { TenancyModule } from './tenancy/tenancy.module';
     }),
     // Expone /metrics con default metrics + las custom registradas en
     // los módulos. El path se excluye del prefijo global en main.ts.
+    // Usamos `MetricsAuthController` para opcionalmente exigir Bearer token
+    // si `METRICS_TOKEN` está set en env (deploys expuestos a Internet).
     PrometheusModule.register({
       defaultMetrics: { enabled: true },
       defaultLabels: { app: 'didacta-api' },
+      controller: MetricsAuthController,
     }),
     PrismaModule,
     AuthModule,
