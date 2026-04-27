@@ -9,6 +9,10 @@ export {
   CertificatesError,
   CertificateNotFoundError,
   CertificateAlreadyIssuedError,
+  TemplateNotFoundError,
+  TemplateNameTakenError,
+  TemplateInUseError,
+  TemplateIsDefaultError,
 } from './errors.js';
 
 interface CourseCompletedPayload {

@@ -2,7 +2,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { ModuleContext } from '@didacta/core-kernel';
 import type { PrismaClient } from '@didacta/database';
 import { renderCertificatePdf } from './pdf-renderer.js';
-import { CertificateNotFoundError } from './errors.js';
+import {
+  CertificateNotFoundError,
+  TemplateInUseError,
+  TemplateIsDefaultError,
+  TemplateNameTakenError,
+  TemplateNotFoundError,
+} from './errors.js';
 
 export interface IssueCertificateInput {
   tenantId: string;
@@ -10,6 +16,18 @@ export interface IssueCertificateInput {
   userId: string;
   courseId: string;
 }
+
+export interface TemplateInput {
+  name: string;
+  body: string;
+  primaryColor?: string;
+  logoUrl?: string | null;
+  signerName?: string | null;
+  signerTitle?: string | null;
+  isDefault?: boolean;
+}
+
+export interface TemplateUpdateInput extends Partial<TemplateInput> {}
 
 export class CertificatesService {
   constructor(
@@ -32,20 +50,19 @@ export class CertificatesService {
     });
     if (existing) return existing;
 
-    const [user, course, tenant, template] = await Promise.all([
+    const [user, course, tenant] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: input.userId } }),
       this.prisma.modCoursesCourse.findFirst({
         where: { tenantId: input.tenantId, id: input.courseId },
       }),
       this.prisma.tenant.findUnique({ where: { id: input.tenantId } }),
-      this.prisma.modCertificatesTemplate.findFirst({
-        where: { tenantId: input.tenantId, isDefault: true },
-      }),
     ]);
 
     if (!user || !course || !tenant) {
       throw new CertificateNotFoundError();
     }
+
+    const template = await this.getEffectiveTemplate(input.tenantId, course.certificateTemplateId);
 
     const number = await this.allocateNumber(input.tenantId);
     const issuedAt = new Date();
@@ -153,6 +170,129 @@ export class CertificatesService {
       studentName: snapshot.studentName ?? 'Alumno',
       courseTitle: snapshot.courseTitle ?? 'Curso',
       issuedAt: snapshot.issuedAt ? new Date(snapshot.issuedAt) : cert.issuedAt,
+    });
+  }
+
+  // -----------------------------------------------------------------------
+  // HU-FOR-004 — CRUD de plantillas de certificado por tenant.
+  // -----------------------------------------------------------------------
+
+  async listTemplates(tenantId: string) {
+    return this.prisma.modCertificatesTemplate.findMany({
+      where: { tenantId },
+      orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+    });
+  }
+
+  async getTemplate(tenantId: string, templateId: string) {
+    const t = await this.prisma.modCertificatesTemplate.findFirst({
+      where: { tenantId, id: templateId },
+    });
+    if (!t) throw new TemplateNotFoundError();
+    return t;
+  }
+
+  async createTemplate(tenantId: string, dto: TemplateInput) {
+    const dup = await this.prisma.modCertificatesTemplate.findFirst({
+      where: { tenantId, name: dto.name },
+    });
+    if (dup) throw new TemplateNameTakenError(dto.name);
+
+    return this.prisma.$transaction(async (tx) => {
+      if (dto.isDefault) {
+        await tx.modCertificatesTemplate.updateMany({
+          where: { tenantId, isDefault: true },
+          data: { isDefault: false },
+        });
+      }
+      return tx.modCertificatesTemplate.create({
+        data: {
+          tenantId,
+          name: dto.name,
+          body: dto.body,
+          primaryColor: dto.primaryColor ?? '#0f172a',
+          logoUrl: dto.logoUrl ?? null,
+          signerName: dto.signerName ?? null,
+          signerTitle: dto.signerTitle ?? null,
+          isDefault: dto.isDefault ?? false,
+        },
+      });
+    });
+  }
+
+  async updateTemplate(tenantId: string, templateId: string, dto: TemplateUpdateInput) {
+    await this.getTemplate(tenantId, templateId);
+
+    if (dto.name) {
+      const dup = await this.prisma.modCertificatesTemplate.findFirst({
+        where: { tenantId, name: dto.name, id: { not: templateId } },
+      });
+      if (dup) throw new TemplateNameTakenError(dto.name);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      if (dto.isDefault === true) {
+        await tx.modCertificatesTemplate.updateMany({
+          where: { tenantId, isDefault: true, id: { not: templateId } },
+          data: { isDefault: false },
+        });
+      }
+      return tx.modCertificatesTemplate.update({
+        where: { id: templateId },
+        data: {
+          ...(dto.name !== undefined ? { name: dto.name } : {}),
+          ...(dto.body !== undefined ? { body: dto.body } : {}),
+          ...(dto.primaryColor !== undefined ? { primaryColor: dto.primaryColor } : {}),
+          ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl } : {}),
+          ...(dto.signerName !== undefined ? { signerName: dto.signerName } : {}),
+          ...(dto.signerTitle !== undefined ? { signerTitle: dto.signerTitle } : {}),
+          ...(dto.isDefault !== undefined ? { isDefault: dto.isDefault } : {}),
+        },
+      });
+    });
+  }
+
+  async setDefaultTemplate(tenantId: string, templateId: string) {
+    await this.getTemplate(tenantId, templateId);
+    return this.prisma.$transaction(async (tx) => {
+      await tx.modCertificatesTemplate.updateMany({
+        where: { tenantId, isDefault: true },
+        data: { isDefault: false },
+      });
+      return tx.modCertificatesTemplate.update({
+        where: { id: templateId },
+        data: { isDefault: true },
+      });
+    });
+  }
+
+  async deleteTemplate(tenantId: string, templateId: string) {
+    const t = await this.getTemplate(tenantId, templateId);
+    if (t.isDefault) throw new TemplateIsDefaultError();
+
+    const inUse = await this.prisma.modCoursesCourse.count({
+      where: { tenantId, certificateTemplateId: templateId },
+    });
+    if (inUse > 0) throw new TemplateInUseError(inUse);
+
+    await this.prisma.modCertificatesTemplate.delete({ where: { id: templateId } });
+  }
+
+  /**
+   * Devuelve la plantilla efectiva para emitir un certificado.
+   * Jerarquía: si el curso tiene `certificateTemplateId` asignado y el
+   * template existe en el mismo tenant → ése. Si no, la `isDefault` del
+   * tenant. Si no hay default → null (el renderer cae al hardcoded).
+   */
+  async getEffectiveTemplate(tenantId: string, courseTemplateId: string | null) {
+    if (courseTemplateId) {
+      const t = await this.prisma.modCertificatesTemplate.findFirst({
+        where: { tenantId, id: courseTemplateId },
+      });
+      if (t) return t;
+    }
+    return this.prisma.modCertificatesTemplate.findFirst({
+      where: { tenantId, isDefault: true },
     });
   }
 

@@ -61,6 +61,16 @@ export class CoursesService {
     dto: UpdateCourseDto,
   ) {
     await this.requireCourse(tenantId, courseId);
+    if (dto.certificateTemplateId) {
+      const tpl = await this.prisma.modCertificatesTemplate.findFirst({
+        where: { tenantId, id: dto.certificateTemplateId },
+      });
+      if (!tpl) {
+        throw new CourseNotFoundError(
+          `Plantilla de certificado ${dto.certificateTemplateId} no existe en este tenant.`,
+        );
+      }
+    }
     const updated = await this.prisma.modCoursesCourse.update({
       where: { id: courseId },
       data: {
@@ -70,6 +80,9 @@ export class CoursesService {
         ...(dto.language !== undefined ? { language: dto.language } : {}),
         ...(dto.estimatedMinutes !== undefined ? { estimatedMinutes: dto.estimatedMinutes } : {}),
         ...(dto.category !== undefined ? { category: dto.category } : {}),
+        ...(dto.certificateTemplateId !== undefined
+          ? { certificateTemplateId: dto.certificateTemplateId }
+          : {}),
       },
     });
     await this.publish(tenantId, actorId, 'courses.course.updated', { courseId });

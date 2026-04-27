@@ -531,6 +531,10 @@ model ModCoursesCourse {
   status           CourseStatus @default(DRAFT)
   category         String?
   createdById      String?      @map("created_by_id") @db.Uuid
+  /// Template de certificado preferido para este curso. Si null, se usa el
+  /// default del tenant (mod_certificates_template.is_default = true).
+  /// Sin @relation cross-module: es UUID lógico.
+  certificateTemplateId String? @map("certificate_template_id") @db.Uuid
   createdAt        DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
   publishedAt      DateTime?    @map("published_at")
@@ -541,6 +545,7 @@ model ModCoursesCourse {
   @@unique([tenantId, slug])
   @@index([tenantId, status])
   @@index([tenantId, category])
+  @@index([certificateTemplateId])
   @@map("mod_courses_course")
 }
 

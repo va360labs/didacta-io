@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (HU-TA-002 — toggle de módulos por tenant)
+> **Última actualización**: 2026-04-27 (HU-FOR-004 — plantillas custom de certificado)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,55 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — HU-FOR-004 (plantillas custom de certificado)
+
+Historia Notion **HU-FOR-004 / LMS-68** (P1, Fase 1.A) cerrada. El formador ya
+puede personalizar plantillas de certificado por tenant y asignarlas curso a
+curso desde el editor.
+
+Cambios funcionales:
+
+- **`/formador/certificados/templates`**: nueva página con CRUD completo de
+  plantillas (nombre, body con `{{alumno}}/{{curso}}/{{fecha}}/{{numero}}`,
+  primaryColor hex, logoUrl opcional, signerName + signerTitle, isDefault).
+  La default se marca con badge y se desmarca automáticamente cuando se
+  asigna otra (transacción atómica).
+- **Editor del curso**: card "Plantilla de certificado" con dropdown que
+  lista las del tenant + opción "Por defecto del tenant". El cambio se
+  persiste vía `PUT /modules/courses/:id` con `certificateTemplateId`.
+- **`getEffectiveTemplate(tenantId, courseTemplateId)`** del service:
+  resuelve la jerarquía curso → default tenant → null. Llamado al emitir.
+
+Backend:
+
+- Migración `20260427000002_add_course_certificate_template`: añade
+  `certificate_template_id UUID NULL` a `mod_courses_course` (sin FK
+  cross-module — es UUID lógico).
+- `CertificatesService` extendido: `listTemplates`, `getTemplate`,
+  `createTemplate`, `updateTemplate`, `setDefaultTemplate`, `deleteTemplate`,
+  `getEffectiveTemplate`. Errores tipados nuevos:
+  `TEMPLATE_NOT_FOUND`, `TEMPLATE_NAME_TAKEN`, `TEMPLATE_IN_USE`,
+  `TEMPLATE_IS_DEFAULT`.
+- Endpoints HTTP: `GET /modules/certificates/templates`,
+  `POST/PATCH/DELETE /:id`, `POST /:id/set-default`. Guard formador o
+  tenant_admin.
+- `CertificatesErrorFilter` mapea los nuevos códigos a HTTP (404/409).
+- `mod.courses.updateCourse` valida que el `certificateTemplateId` pertenezca
+  al tenant antes de persistir.
+
+**Tests**: 15 unit del CRUD + dependencias en `mod-certificates`
+(create/update con isDefault atomic, delete bloqueado por default o por
+curso en uso, getEffectiveTemplate con jerarquía, name-taken,
+not-found).
+
+**Pendiente para PR posterior**:
+
+- Embed real del logo en el PDF (descarga URL → buffer → image en pdfkit
+  con timeout). Hoy `logoUrl` se persiste pero el renderer aún no lo
+  consume.
+- Uploader de logo al storage del tenant (en lugar de URL pública).
+- Vista previa del PDF en la página de templates antes de guardar.
 
 ### Sesión 2026-04-27 — HU-TA-002 (toggle de módulos por tenant)
 

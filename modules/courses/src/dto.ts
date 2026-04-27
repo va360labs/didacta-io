@@ -23,6 +23,8 @@ export type CreateCourseDto = z.infer<typeof createCourseSchema>;
 
 export const updateCourseSchema = createCourseSchema.partial().extend({
   status: courseStatusSchema.optional(),
+  /// UUID de la plantilla de certificado preferida. null = usar default del tenant.
+  certificateTemplateId: z.string().uuid().nullable().optional(),
 });
 export type UpdateCourseDto = z.infer<typeof updateCourseSchema>;
 

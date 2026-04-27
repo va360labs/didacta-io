@@ -7,6 +7,7 @@ import { AssessmentsErrorFilter } from './assessments-error.filter';
 import { AssessmentsLearningBridge } from './assessments-learning.bridge';
 import { AuditController } from './audit.controller';
 import { CertificatesController } from './certificates.controller';
+import { CertificatesErrorFilter } from './certificates-error.filter';
 import { CommunityController } from './community.controller';
 import { CommunityErrorFilter } from './community-error.filter';
 import { CoursesController } from './courses.controller';
@@ -52,6 +53,7 @@ import { ThemingErrorFilter } from './theming-error.filter';
     { provide: APP_FILTER, useClass: CoursesErrorFilter },
     { provide: APP_FILTER, useClass: LearningErrorFilter },
     { provide: APP_FILTER, useClass: AssessmentsErrorFilter },
+    { provide: APP_FILTER, useClass: CertificatesErrorFilter },
     { provide: APP_FILTER, useClass: CommunityErrorFilter },
     { provide: APP_FILTER, useClass: ThemingErrorFilter },
     { provide: APP_FILTER, useClass: TenantModulesErrorFilter },

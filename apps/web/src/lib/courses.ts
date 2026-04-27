@@ -15,6 +15,7 @@ export interface Course {
   estimatedMinutes: number | null;
   status: CourseStatus;
   category: string | null;
+  certificateTemplateId: string | null;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -146,6 +147,21 @@ export const coursesApi = {
     await apiFetch<{ deleted: true }>(
       `/api/v1/modules/courses/modules/${moduleId}`,
       { method: 'DELETE' },
+      withAuth(),
+    );
+  },
+
+  async update(
+    courseId: string,
+    input: {
+      title?: string;
+      description?: string | null;
+      certificateTemplateId?: string | null;
+    },
+  ): Promise<Course> {
+    return apiFetch<Course>(
+      `/api/v1/modules/courses/${courseId}`,
+      { method: 'PUT', body: JSON.stringify(input) },
       withAuth(),
     );
   },

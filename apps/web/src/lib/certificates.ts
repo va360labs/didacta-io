@@ -28,6 +28,68 @@ function bearer(): string {
   return token;
 }
 
+export interface CertificateTemplate {
+  id: string;
+  tenantId: string;
+  name: string;
+  body: string;
+  primaryColor: string;
+  logoUrl: string | null;
+  signerName: string | null;
+  signerTitle: string | null;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CertificateTemplateInput {
+  name: string;
+  body: string;
+  primaryColor?: string;
+  logoUrl?: string | null;
+  signerName?: string | null;
+  signerTitle?: string | null;
+  isDefault?: boolean;
+}
+
+export const certificateTemplatesApi = {
+  async list(): Promise<CertificateTemplate[]> {
+    return apiFetch<CertificateTemplate[]>(
+      '/api/v1/modules/certificates/templates',
+      { method: 'GET' },
+      bearer(),
+    );
+  },
+  async create(dto: CertificateTemplateInput): Promise<CertificateTemplate> {
+    return apiFetch<CertificateTemplate>(
+      '/api/v1/modules/certificates/templates',
+      { method: 'POST', body: JSON.stringify(dto) },
+      bearer(),
+    );
+  },
+  async update(id: string, dto: Partial<CertificateTemplateInput>): Promise<CertificateTemplate> {
+    return apiFetch<CertificateTemplate>(
+      `/api/v1/modules/certificates/templates/${id}`,
+      { method: 'PATCH', body: JSON.stringify(dto) },
+      bearer(),
+    );
+  },
+  async setDefault(id: string): Promise<CertificateTemplate> {
+    return apiFetch<CertificateTemplate>(
+      `/api/v1/modules/certificates/templates/${id}/set-default`,
+      { method: 'POST', body: '{}' },
+      bearer(),
+    );
+  },
+  async remove(id: string): Promise<{ ok: true }> {
+    return apiFetch<{ ok: true }>(
+      `/api/v1/modules/certificates/templates/${id}`,
+      { method: 'DELETE' },
+      bearer(),
+    );
+  },
+};
+
 export const certificatesApi = {
   async listMine(): Promise<Certificate[]> {
     return apiFetch<Certificate[]>('/api/v1/modules/certificates/me', { method: 'GET' }, bearer());

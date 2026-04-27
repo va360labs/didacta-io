@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { CourseStatusBadge } from '@/components/course-status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
+import { certificateTemplatesApi, type CertificateTemplate } from '@/lib/certificates';
 import { coursesApi, type CourseDetail, type CourseModule, type LessonType } from '@/lib/courses';
 import { LessonContentEditor } from './lesson-content-editor';
 
@@ -112,6 +114,8 @@ export function CourseEditor({
           </CardContent>
         </Card>
       ) : null}
+
+      <CertificateTemplateCard course={initial} onChange={onChange} />
 
       <Card>
         <CardHeader>
@@ -301,5 +305,106 @@ function ModuleBlock({
         </Button>
       </form>
     </div>
+  );
+}
+
+function CertificateTemplateCard({
+  course,
+  onChange,
+}: {
+  course: CourseDetail;
+  onChange: () => Promise<void>;
+}) {
+  const [templates, setTemplates] = useState<CertificateTemplate[] | null>(null);
+  const [selected, setSelected] = useState<string>(course.certificateTemplateId ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelected(course.certificateTemplateId ?? '');
+  }, [course.certificateTemplateId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    certificateTemplatesApi
+      .list()
+      .then((res) => {
+        if (!cancelled) setTemplates(res);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar plantillas.');
+          setTemplates([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleSave() {
+    setBusy(true);
+    setError(null);
+    try {
+      await coursesApi.update(course.id, {
+        certificateTemplateId: selected ? selected : null,
+      });
+      await onChange();
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar la plantilla.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const dirty = (course.certificateTemplateId ?? '') !== selected;
+  const defaultName = templates?.find((t) => t.isDefault)?.name;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Plantilla de certificado</CardTitle>
+        <CardDescription>
+          Si no elegís ninguna, se usa la default del tenant
+          {defaultName ? (
+            <>
+              {' '}
+              (actualmente: <strong>{defaultName}</strong>)
+            </>
+          ) : null}
+          .
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-wrap items-end gap-3">
+        <div className="min-w-64 flex-1 space-y-1.5">
+          <Label htmlFor="cert-template">Plantilla</Label>
+          <Select
+            id="cert-template"
+            value={selected}
+            onChange={(e) => setSelected(e.target.value)}
+            disabled={templates === null}
+          >
+            <option value="">Por defecto del tenant</option>
+            {(templates ?? []).map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+                {t.isDefault ? ' (default)' : ''}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <Button type="button" onClick={handleSave} disabled={!dirty || busy}>
+          {busy ? 'Guardando…' : 'Guardar'}
+        </Button>
+        <Button asChild variant="ghost">
+          <Link href="/formador/certificados/templates">Gestionar plantillas →</Link>
+        </Button>
+        {error ? (
+          <p role="alert" className="basis-full text-sm text-danger-700">
+            {error}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
