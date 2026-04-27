@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { ModulesModule } from '../modules/modules.module';
+import { AdminModulesController } from './admin-modules.controller';
 import { AdminTenantsController } from './admin-tenants.controller';
 import { AdminTenantsService } from './admin-tenants.service';
 import { AdminUsersController } from './admin-users.controller';
@@ -7,14 +9,16 @@ import { AdminUsersService } from './admin-users.service';
 
 /**
  * Módulo administrativo: agrupa controllers y services destinados al panel
- * /admin/* (gestión de usuarios, roles, tenants, auditoría, branding, etc.).
+ * /admin/* (gestión de usuarios, roles, tenants, auditoría, branding, módulos).
  *
  * Importa AuthModule para reusar PrismaAuditLogService, PrismaTenantConfigService,
  * SmtpAdapterService y PasswordResetService sin duplicar providers.
+ *
+ * Importa ModulesModule para reusar TenantModulesService (HU-TA-002).
  */
 @Module({
-  imports: [AuthModule],
-  controllers: [AdminUsersController, AdminTenantsController],
+  imports: [AuthModule, ModulesModule],
+  controllers: [AdminUsersController, AdminTenantsController, AdminModulesController],
   providers: [AdminUsersService, AdminTenantsService],
   exports: [AdminUsersService, AdminTenantsService],
 })

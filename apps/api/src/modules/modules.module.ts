@@ -20,6 +20,8 @@ import { NotificationsBridge } from './notifications.bridge';
 import { NotificationsController } from './notifications.controller';
 import { OutboxQueueService } from './outbox-queue.service';
 import { OutboxRecoveryWorker } from './outbox-recovery.worker';
+import { TenantModulesService } from './tenant-modules.service';
+import { TenantModulesErrorFilter } from './tenant-modules-error.filter';
 import { TenantSettingsController } from './tenant-settings.controller';
 import { ThemingController } from './theming.controller';
 import { ThemingErrorFilter } from './theming-error.filter';
@@ -46,12 +48,14 @@ import { ThemingErrorFilter } from './theming-error.filter';
     OutboxRecoveryWorker,
     AssessmentsLearningBridge,
     NotificationsBridge,
+    TenantModulesService,
     { provide: APP_FILTER, useClass: CoursesErrorFilter },
     { provide: APP_FILTER, useClass: LearningErrorFilter },
     { provide: APP_FILTER, useClass: AssessmentsErrorFilter },
     { provide: APP_FILTER, useClass: CommunityErrorFilter },
     { provide: APP_FILTER, useClass: ThemingErrorFilter },
+    { provide: APP_FILTER, useClass: TenantModulesErrorFilter },
   ],
-  exports: [ModuleRegistryService, OutboxQueueService, ModuleContextFactory],
+  exports: [ModuleRegistryService, OutboxQueueService, ModuleContextFactory, TenantModulesService],
 })
 export class ModulesModule {}

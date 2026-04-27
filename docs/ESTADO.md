@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-26 noche (Sprint 1 inmediato — tenant transparente + super_admin tenants + perfil usuario + listado alumnos por curso, según historias Notion-as-bible)
+> **Última actualización**: 2026-04-27 (HU-TA-002 — toggle de módulos por tenant)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,52 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — HU-TA-002 (toggle de módulos por tenant)
+
+Historia Notion **HU-TA-002 / LMS-64** (P0, Fase 1.A) cerrada. El `tenant_admin`
+ahora puede activar/desactivar módulos del producto desde
+`/admin/configuracion` → tab "Módulos".
+
+Cambios funcionales:
+
+- **Persistencia real**: `ModuleRegistryService` siembra la tabla `module` con
+  los manifests de los 7 módulos cargados al boot (idempotente, upsert por
+  nombre con version + displayName + description + manifest JSON).
+- **`TenantModulesService`**: list (estado efectivo = fila en `tenant_module`
+  o `enabledByDefault`), enable (registry + upsert + audit + evento
+  `tenant.module.enabled`), disable con validación de dependientes activos
+  (chequea `manifest.dependencies.modules`, no las opcionales).
+- **Cascada con confirmación**: si tratás de desactivar un módulo del que
+  dependen otros activos, la API responde 409 con
+  `code: MODULE_HAS_ACTIVE_DEPENDENTS` + `details.dependents`. La UI muestra
+  un panel de confirmación; al confirmar manda `?force=true` y se desactivan
+  todos en cascada.
+- **Endpoints HTTP** `tenant_admin` o `super_admin`:
+  `GET /admin/modules`, `POST /admin/modules/:name/enable`,
+  `POST /admin/modules/:name/disable[?force=true]`.
+- **UI**: nueva tab "Módulos" en `/admin/configuracion` con cards (nombre,
+  versión, descripción, estado, deps, dependents) + toggle.
+- **Audit log + eventos** en cada toggle (`admin.module.enabled` /
+  `admin.module.disabled`).
+
+**Tests**: 13 unit del `TenantModulesService` con prisma fake (list, enable
+idempotente, disable con/sin force, dependents detectados, cascade audit
+con metadata, optionalModules ignoradas).
+
+**Pendiente para PR posterior** (deliberadamente fuera de scope):
+
+- **Guard runtime que bloquee endpoints de módulos desactivados**. Hoy el
+  estado se persiste pero no se chequea en cada request. El Gherkin del
+  escenario 1 dice "endpoints `/api/v1/modules/community/*` responden 200
+  cuando se activa" — implica que cuando NO está activado deberían responder
+  403/404. Implementarlo ahora rompería los tenants existentes (todos los
+  módulos arrancan con `enabledByDefault: true` para preservar
+  funcionalidad). El guard requiere: (a) hook en cada controller, (b)
+  cache para no consultar DB en cada request, (c) decisión sobre el código
+  HTTP de respuesta (404 "no existe" vs 403 "no activo"). Issue separado.
+- **Per-tenant default override desde `/admin/configuracion` Module catalog**
+  (super_admin ve catálogo completo, tenant_admin solo los suyos).
 
 ### Sesión 2026-04-26 noche — Sprint 1 inmediato (Notion-as-bible)
 

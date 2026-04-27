@@ -51,10 +51,50 @@ export class ModuleRegistryService implements OnModuleInit {
       themingModule,
     ]);
 
+    await this.persistManifests();
+
     this.pino.log(
       { modules: this.registry.listModules().map((m) => m.manifest.name) },
       'Module registry inicializado',
     );
+  }
+
+  /**
+   * Hace upsert por nombre en `module` con los manifests cargados al boot.
+   * Idempotente: actualiza versión / displayName / description si cambian
+   * entre deploys. La fila persiste el catálogo de módulos disponibles que
+   * usa el panel de tenant_admin para permitir activar/desactivar.
+   */
+  private async persistManifests(): Promise<void> {
+    if (!this.registry) return;
+    const prisma = this.factory.getPrisma();
+    for (const mod of this.registry.listModules()) {
+      const m = mod.manifest;
+      await prisma.module.upsert({
+        where: { name: m.name },
+        update: {
+          version: m.version,
+          displayName: m.displayName,
+          description: m.description ?? null,
+          enabledByDefault: true,
+          manifest: m as unknown as object,
+        },
+        create: {
+          name: m.name,
+          version: m.version,
+          displayName: m.displayName,
+          description: m.description ?? null,
+          enabledByDefault: true,
+          manifest: m as unknown as object,
+        },
+      });
+    }
+  }
+
+  /** Expone el registry para uso de servicios admin (TenantModulesService). */
+  getRegistry() {
+    if (!this.registry) throw new Error('ModuleRegistry no está inicializado');
+    return this.registry;
   }
 
   getCoursesService(): CoursesService {

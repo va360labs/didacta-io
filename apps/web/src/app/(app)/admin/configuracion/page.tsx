@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { adminModulesApi, type TenantModuleListItem } from '@/lib/admin-modules';
 import { ApiHttpError } from '@/lib/api-client';
 import { tenantSettingsApi, type TenantSettingMetadata } from '@/lib/tenant-settings';
 
@@ -20,13 +21,25 @@ interface SmtpDraft {
 
 const EMPTY_SMTP: SmtpDraft = { host: '', port: '587', user: '', password: '', from: '' };
 
-type TabKey = 'notifications' | 'aula-virtual' | 'storage' | 'branding' | 'plantillas' | 'raw';
+type TabKey =
+  | 'notifications'
+  | 'modules'
+  | 'aula-virtual'
+  | 'storage'
+  | 'branding'
+  | 'plantillas'
+  | 'raw';
 
 const TABS: Array<{ key: TabKey; label: string; description: string }> = [
   {
     key: 'notifications',
     label: 'Notificaciones',
     description: 'Servidor SMTP saliente para emails transaccionales.',
+  },
+  {
+    key: 'modules',
+    label: 'Módulos',
+    description: 'Activá o desactivá módulos del producto para tu organización.',
   },
   {
     key: 'aula-virtual',
@@ -285,6 +298,8 @@ export default function ConfiguracionPage() {
         </Card>
       ) : null}
 
+      {tab === 'modules' ? <ModulesTab /> : null}
+
       {tab === 'aula-virtual' ? (
         <Card>
           <CardHeader>
@@ -439,4 +454,150 @@ export default function ConfiguracionPage() {
       ) : null}
     </section>
   );
+}
+
+function ModulesTab() {
+  const [items, setItems] = useState<TenantModuleListItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [confirmCascade, setConfirmCascade] = useState<{
+    name: string;
+    dependents: string[];
+  } | null>(null);
+
+  async function reload() {
+    try {
+      setItems(await adminModulesApi.list());
+      setError(null);
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los módulos.');
+    }
+  }
+
+  useEffect(() => {
+    void reload();
+  }, []);
+
+  async function toggle(item: TenantModuleListItem, force = false) {
+    setBusy(item.name);
+    setError(null);
+    try {
+      if (item.enabled) {
+        await adminModulesApi.disable(item.name, { force });
+      } else {
+        await adminModulesApi.enable(item.name);
+      }
+      setConfirmCascade(null);
+      await reload();
+    } catch (e) {
+      if (e instanceof ApiHttpError && e.status === 409) {
+        const dependents = extractDependents(e);
+        setConfirmCascade({ name: item.name, dependents });
+      } else {
+        setError(e instanceof ApiHttpError ? e.message : 'No pudimos actualizar el módulo.');
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (items === null) {
+    return (
+      <div className="space-y-2">
+        <div className="skeleton h-24 w-full" />
+        <div className="skeleton h-24 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+        >
+          {error}
+        </div>
+      ) : null}
+
+      {items.map((item) => (
+        <Card key={item.name}>
+          <CardContent className="flex flex-wrap items-start justify-between gap-4 p-4">
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-semibold">{item.displayName}</h3>
+                <Badge variant="muted" className="font-mono text-[11px]">
+                  {item.name}@{item.version}
+                </Badge>
+                {item.enabled ? (
+                  <Badge variant="success">Activo</Badge>
+                ) : (
+                  <Badge variant="muted">Desactivado</Badge>
+                )}
+              </div>
+              {item.description ? (
+                <p className="text-sm text-text-muted">{item.description}</p>
+              ) : null}
+              {item.dependencies.length > 0 ? (
+                <p className="text-xs text-text-subtle">
+                  Depende de: <span className="font-mono">{item.dependencies.join(', ')}</span>
+                </p>
+              ) : null}
+              {item.dependents.length > 0 ? (
+                <p className="text-xs text-text-subtle">
+                  Usado por: <span className="font-mono">{item.dependents.join(', ')}</span>
+                </p>
+              ) : null}
+            </div>
+            <Button
+              type="button"
+              variant={item.enabled ? 'secondary' : 'primary'}
+              onClick={() => toggle(item)}
+              disabled={busy !== null}
+            >
+              {busy === item.name ? '…' : item.enabled ? 'Desactivar' : 'Activar'}
+            </Button>
+          </CardContent>
+        </Card>
+      ))}
+
+      {confirmCascade ? (
+        <div
+          role="alertdialog"
+          className="rounded-lg border border-warning-200 bg-warning-50 p-4 text-sm"
+        >
+          <p className="font-semibold text-warning-900">
+            Hay módulos activos que dependen de{' '}
+            <span className="font-mono">{confirmCascade.name}</span>:
+          </p>
+          <p className="mt-1 font-mono text-warning-800">{confirmCascade.dependents.join(', ')}</p>
+          <p className="mt-2 text-warning-800">
+            Si confirmás, se desactivarán también esos módulos en cascada.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                const item = items.find((i) => i.name === confirmCascade.name);
+                if (item) void toggle(item, true);
+              }}
+            >
+              Desactivar en cascada
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setConfirmCascade(null)}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function extractDependents(err: ApiHttpError): string[] {
+  const anyErr = err as unknown as { details?: { dependents?: unknown } };
+  const list = anyErr.details?.dependents;
+  return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : [];
 }
