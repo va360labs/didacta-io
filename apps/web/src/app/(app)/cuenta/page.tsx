@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
+import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +12,25 @@ import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { LOCALE_OPTIONS, meApi, TIMEZONE_OPTIONS, type UserProfile } from '@/lib/me';
+
+function humanRole(role: string): string {
+  switch (role) {
+    case 'super_admin':
+      return 'Super admin';
+    case 'tenant_admin':
+      return 'Admin';
+    case 'formador':
+      return 'Formador';
+    case 'alumno':
+      return 'Alumno';
+    case 'auditor':
+      return 'Auditor';
+    case 'empresa_manager':
+      return 'Manager';
+    default:
+      return role;
+  }
+}
 
 function getInitials(name: string | null, email: string): string {
   const source = (name ?? email.split('@')[0] ?? '').trim();
@@ -96,25 +116,46 @@ export default function CuentaPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-center gap-4">
+      <header className="flex flex-wrap items-center gap-5">
         <div
-          className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-500 text-text-on-brand text-xl font-bold"
+          aria-hidden="true"
+          className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full font-display text-xl font-bold text-white"
           style={
             profile.avatarUrl
-              ? { backgroundImage: `url(${profile.avatarUrl})`, backgroundSize: 'cover' }
-              : undefined
+              ? {
+                  backgroundImage: `url(${profile.avatarUrl})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }
+              : { background: 'linear-gradient(135deg, #2E7DCE 0%, #18B5A8 100%)' }
           }
         >
           {profile.avatarUrl ? null : getInitials(profile.name, profile.email)}
         </div>
-        <div className="flex-1">
-          <h1 className="font-display text-3xl font-bold tracking-tight">
+        <div className="min-w-0 flex-1">
+          <h1
+            className="font-display text-3xl font-bold tracking-tight"
+            style={{ letterSpacing: '-0.02em' }}
+          >
             {profile.name ?? profile.email}
           </h1>
-          <p className="text-text-muted">{profile.email}</p>
+          <p className="mt-0.5 text-text-muted">{profile.email}</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {profile.roles.map((r) => (
+              <Badge
+                key={r}
+                variant={r === 'super_admin' || r === 'tenant_admin' ? 'premium' : 'info'}
+              >
+                {humanRole(r)}
+              </Badge>
+            ))}
+          </div>
         </div>
         <Button variant="secondary" asChild>
-          <Link href="/cuenta/seguridad">Seguridad</Link>
+          <Link href="/cuenta/seguridad">
+            <Icon name="lock" size={16} />
+            Seguridad
+          </Link>
         </Button>
       </header>
 
@@ -210,30 +251,22 @@ export default function CuentaPage() {
         <CardHeader>
           <CardTitle className="text-base">Información de la cuenta</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
+        <CardContent className="grid gap-4 text-sm sm:grid-cols-3">
           <div>
-            <p className="text-text-subtle">Roles</p>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {profile.roles.map((r) => (
-                <Badge key={r} variant="muted">
-                  {r}
-                </Badge>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="text-text-subtle">MFA</p>
-            <p>
+            <p className="label-uppercase text-text-muted">MFA</p>
+            <div className="mt-1.5">
               {profile.mfaEnabled ? (
-                <Badge variant="success">Activo</Badge>
+                <Badge variant="success" dot>
+                  Activo
+                </Badge>
               ) : (
                 <Badge variant="muted">No configurado</Badge>
               )}
-            </p>
+            </div>
           </div>
           <div>
-            <p className="text-text-subtle">Creada</p>
-            <p className="tabular-nums">
+            <p className="label-uppercase text-text-muted">Cuenta creada</p>
+            <p className="mt-1.5 tabular-nums">
               {new Date(profile.createdAt).toLocaleDateString('es-AR', {
                 day: '2-digit',
                 month: 'long',
@@ -242,8 +275,8 @@ export default function CuentaPage() {
             </p>
           </div>
           <div>
-            <p className="text-text-subtle">Último login</p>
-            <p className="tabular-nums">
+            <p className="label-uppercase text-text-muted">Último login</p>
+            <p className="mt-1.5 tabular-nums">
               {profile.lastLoginAt ? new Date(profile.lastLoginAt).toLocaleString('es-AR') : '—'}
             </p>
           </div>

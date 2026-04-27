@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Icon, type IconName } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
 import { notificationsApi, type Notification } from '@/lib/notifications';
 
 const TEMPLATE_LABEL: Record<string, string> = {
@@ -16,13 +18,24 @@ const TEMPLATE_LABEL: Record<string, string> = {
   'assessments.attempt.graded': 'Tu intento fue corregido',
 };
 
-const TEMPLATE_ICON: Record<string, string> = {
-  'learning.enrollment.created': '✎',
-  'learning.course.completed': '✓',
-  'certificates.issued': '🎓',
-  'assessments.attempt.passed': '✓',
-  'assessments.attempt.failed': '↻',
-  'assessments.attempt.graded': '★',
+interface IconSpec {
+  name: IconName;
+  tone: 'info' | 'success' | 'warn';
+}
+
+const TEMPLATE_ICON: Record<string, IconSpec> = {
+  'learning.enrollment.created': { name: 'book', tone: 'info' },
+  'learning.course.completed': { name: 'check', tone: 'success' },
+  'certificates.issued': { name: 'award', tone: 'success' },
+  'assessments.attempt.passed': { name: 'check', tone: 'success' },
+  'assessments.attempt.failed': { name: 'trending', tone: 'warn' },
+  'assessments.attempt.graded': { name: 'sparkles', tone: 'info' },
+};
+
+const TONE_STYLES: Record<IconSpec['tone'], { bg: string; fg: string }> = {
+  info: { bg: 'var(--didacta-info-bg)', fg: 'var(--didacta-info-fg)' },
+  success: { bg: 'var(--didacta-success-bg)', fg: 'var(--didacta-success-fg)' },
+  warn: { bg: 'var(--didacta-warn-bg)', fg: 'var(--didacta-warn-fg)' },
 };
 
 function formatRelative(iso: string): string {
@@ -128,10 +141,14 @@ export default function NotificacionesPage() {
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
             <div
-              className="flex h-20 w-20 items-center justify-center rounded-full bg-brand-50 text-brand-700 text-3xl"
               aria-hidden="true"
+              className="flex h-16 w-16 items-center justify-center rounded-2xl"
+              style={{
+                background: 'var(--didacta-info-bg)',
+                color: 'var(--didacta-info-fg)',
+              }}
             >
-              🔔
+              <Icon name="bell" size={30} />
             </div>
             <h3 className="font-display text-xl font-semibold">No hay notificaciones</h3>
             <p className="max-w-md text-text-muted">
@@ -141,43 +158,45 @@ export default function NotificacionesPage() {
           </CardContent>
         </Card>
       ) : (
-        <ul className="space-y-2">
-          {(notifications ?? []).map((n) => {
-            const isUnread = !n.readAt;
-            const label = TEMPLATE_LABEL[n.templateKey] ?? n.subject ?? n.templateKey;
-            const icon = TEMPLATE_ICON[n.templateKey] ?? '·';
-            return (
-              <li key={n.id}>
-                <article
-                  className={
-                    isUnread
-                      ? 'flex items-start gap-4 rounded-lg border border-brand-200 bg-brand-50/40 p-4 transition-colors'
-                      : 'flex items-start gap-4 rounded-lg border border-border bg-surface p-4 transition-colors'
-                  }
+        <Card className="p-0">
+          <ul>
+            {(notifications ?? []).map((n, idx) => {
+              const isUnread = !n.readAt;
+              const label = TEMPLATE_LABEL[n.templateKey] ?? n.subject ?? n.templateKey;
+              const spec = TEMPLATE_ICON[n.templateKey] ?? {
+                name: 'bell' as const,
+                tone: 'info' as const,
+              };
+              const style = TONE_STYLES[spec.tone];
+              return (
+                <li
+                  key={n.id}
+                  className={cn(
+                    'flex items-start gap-4 px-5 py-4 transition-colors',
+                    idx > 0 ? 'border-t border-border-soft' : '',
+                    isUnread ? 'bg-[var(--didacta-info-bg)]/40' : 'bg-surface',
+                  )}
                 >
                   <div
-                    className={
-                      isUnread
-                        ? 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-700 text-lg'
-                        : 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-3 text-text-muted text-lg'
-                    }
                     aria-hidden="true"
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+                    style={{ background: style.bg, color: style.fg }}
                   >
-                    {icon}
+                    <Icon name={spec.name} size={18} />
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline gap-2">
                       <p className="font-semibold text-text">{label}</p>
                       {isUnread ? (
-                        <Badge variant="primary" className="text-[10px]">
+                        <Badge variant="info" dot className="text-[10px]">
                           Nueva
                         </Badge>
                       ) : null}
                     </div>
                     {n.body ? (
-                      <p className="mt-1 text-sm text-text-muted leading-relaxed">{n.body}</p>
+                      <p className="mt-1 text-sm leading-relaxed text-text-muted">{n.body}</p>
                     ) : null}
-                    <p className="mt-2 text-xs text-text-subtle tabular-nums">
+                    <p className="mt-1.5 text-xs text-text-subtle tabular-nums">
                       {formatRelative(n.createdAt)}
                     </p>
                   </div>
@@ -186,16 +205,16 @@ export default function NotificacionesPage() {
                       type="button"
                       onClick={() => handleMarkRead(n.id)}
                       disabled={pending}
-                      className="text-xs font-semibold text-brand-700 hover:underline shrink-0"
+                      className="shrink-0 text-xs font-semibold text-[var(--didacta-info-fg)] transition-colors hover:underline"
                     >
                       Marcar leída
                     </button>
                   ) : null}
-                </article>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
       )}
     </section>
   );
