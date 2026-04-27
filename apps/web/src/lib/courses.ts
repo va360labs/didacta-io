@@ -2,7 +2,7 @@ import { ApiHttpError, apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
 
 export type CourseStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
-export type LessonType = 'VIDEO' | 'HTML' | 'PDF' | 'TEXT' | 'QUIZ';
+export type LessonType = 'VIDEO' | 'HTML' | 'PDF' | 'TEXT' | 'QUIZ' | 'SCORM';
 
 export interface Course {
   id: string;

@@ -232,7 +232,48 @@ function LessonContent({
     );
   }
 
+  if (lesson.type === 'SCORM') {
+    return <ScormFrame lessonId={lesson.id} title={lesson.title} />;
+  }
+
   return <Empty hint={`Tipo de lección "${lesson.type}" no soportado todavía.`} />;
+}
+
+function ScormFrame({ lessonId, title }: { lessonId: string; title: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    import('@/lib/scorm')
+      .then(({ scormApi }) => scormApi.get(lessonId))
+      .then((meta) => {
+        if (!cancelled) setUrl(meta.entrySignedUrl);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(
+            e instanceof ApiHttpError
+              ? e.message
+              : 'No pudimos cargar el paquete SCORM. Pedile al formador que lo suba.',
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lessonId]);
+
+  if (error) return <Empty hint={error} />;
+  if (!url) return <div className="skeleton h-[72dvh] w-full rounded-lg" />;
+  return (
+    <iframe
+      src={url}
+      title={title}
+      sandbox="allow-scripts allow-forms allow-same-origin"
+      className="h-[72dvh] w-full rounded-lg border border-border"
+    />
+  );
 }
 
 function Empty({ hint }: { hint: string }) {

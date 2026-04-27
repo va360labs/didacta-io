@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const lessonTypeSchema = z.enum(['VIDEO', 'HTML', 'PDF', 'TEXT', 'QUIZ']);
+export const lessonTypeSchema = z.enum(['VIDEO', 'HTML', 'PDF', 'TEXT', 'QUIZ', 'SCORM']);
 
 export const courseStatusSchema = z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']);
 

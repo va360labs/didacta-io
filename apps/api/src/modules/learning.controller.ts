@@ -1,7 +1,9 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   Param,
@@ -28,11 +30,29 @@ import {
   type TrackProgressDto,
   LearningError,
 } from '@didacta/mod-learning';
+import { z } from 'zod';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
 import { ModuleRegistryService } from './module-registry.service';
+
+const SCORM_EDITOR_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
+const MAX_SCORM_BASE64_BYTES = 100 * 1024 * 1024 * 1.4; // 140 MiB de base64 ≈ 100 MiB binarios
+
+const uploadScormSchema = z.object({
+  data: z.string().min(1),
+  filename: z.string().min(1).max(200),
+});
+type UploadScormDto = z.infer<typeof uploadScormSchema>;
+
+function requireScormEditor(user: SessionClaims | undefined): SessionClaims {
+  if (!user) throw new UnauthorizedException();
+  if (!user.roles.some((r) => SCORM_EDITOR_ROLES.has(r))) {
+    throw new ForbiddenException('Esta acción requiere rol formador o admin.');
+  }
+  return user;
+}
 
 @ApiTags('Modules · Learning')
 @ApiBearerAuth()
@@ -159,6 +179,47 @@ export class LearningController {
     if (!user) throw new UnauthorizedException();
     await this.registry.getLearningService().revokeInvitation(user.tenantId, id);
     return { revoked: true };
+  }
+
+  // -----------------------------------------------------------------------
+  // HU-FOR-002 — SCORM upload + metadata.
+  // -----------------------------------------------------------------------
+
+  @Post('lessons/:lessonId/scorm')
+  @ApiOperation({
+    summary:
+      'Subir paquete SCORM (1.2 / 2004) para una lección de tipo SCORM. Body: { data: base64, filename }.',
+  })
+  async uploadScorm(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('lessonId') lessonId: string,
+    @Body(new ZodValidationPipe(uploadScormSchema)) dto: UploadScormDto,
+  ) {
+    const u = requireScormEditor(user);
+    if (dto.data.length > MAX_SCORM_BASE64_BYTES) {
+      throw new BadRequestException('Paquete demasiado grande');
+    }
+    let buf: Buffer;
+    try {
+      buf = Buffer.from(dto.data, 'base64');
+    } catch {
+      throw new BadRequestException('data debe ser base64 válido');
+    }
+    return this.registry
+      .getScormService()
+      .uploadPackage(u.tenantId, lessonId, u.sub, { zipData: buf, filename: dto.filename });
+  }
+
+  @Get('lessons/:lessonId/scorm')
+  @ApiOperation({
+    summary: 'Metadata del paquete SCORM de la lección + signed URL del entry para el iframe.',
+  })
+  async getScorm(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('lessonId') lessonId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getScormService().getPackage(user.tenantId, lessonId);
   }
 }
 

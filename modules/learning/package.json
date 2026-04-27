@@ -26,9 +26,12 @@
   "dependencies": {
     "@didacta/core-kernel": "workspace:*",
     "@didacta/database": "workspace:*",
+    "adm-zip": "^0.5.16",
+    "fast-xml-parser": "^4.5.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
     "@types/node": "^22.10.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

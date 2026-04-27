@@ -34,3 +34,24 @@ export class CourseNotPublishedError extends LearningError {
     super('COURSE_NOT_PUBLISHED', 'El curso no está publicado');
   }
 }
+
+export class ScormPackageInvalidError extends LearningError {
+  constructor(reason: string) {
+    super('SCORM_PACKAGE_INVALID', `Paquete SCORM inválido: ${reason}`);
+  }
+}
+
+export class ScormLessonTypeMismatchError extends LearningError {
+  constructor() {
+    super(
+      'SCORM_LESSON_TYPE_MISMATCH',
+      'La lección no es de tipo SCORM. Cambiá el tipo antes de subir el paquete.',
+    );
+  }
+}
+
+export class ScormPackageNotFoundError extends LearningError {
+  constructor() {
+    super('SCORM_PACKAGE_NOT_FOUND', 'No hay paquete SCORM asociado a esta lección');
+  }
+}

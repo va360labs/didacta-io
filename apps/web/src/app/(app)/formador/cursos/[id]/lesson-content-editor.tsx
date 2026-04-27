@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { assessmentsApi } from '@/lib/assessments';
 import { coursesApi, type CourseLesson, type LessonType } from '@/lib/courses';
+import { scormApi, type ScormPackageMetadata } from '@/lib/scorm';
 
 const HELP_BY_TYPE: Record<LessonType, string> = {
   VIDEO: 'URL del vídeo (mp4, webm, m3u8). Ideal: hosted en MinIO/Hetzner.',
@@ -16,6 +17,8 @@ const HELP_BY_TYPE: Record<LessonType, string> = {
   PDF: 'URL del PDF. Se muestra en iframe a 70dvh.',
   TEXT: 'Texto plano largo. Se preservan saltos de línea.',
   QUIZ: 'Crea un nuevo quiz o vincula uno existente por ID. El editor del quiz vive en /formador/quizzes/<id>.',
+  SCORM:
+    'Subí el ZIP del paquete SCORM 1.2 / 2004. El sistema lo descomprime, parsea imsmanifest.xml y lo sirve por iframe.',
 };
 
 export function LessonContentEditor({
@@ -58,6 +61,10 @@ export function LessonContentEditor({
         return { text };
       case 'QUIZ':
         return { quizId };
+      case 'SCORM':
+        // El paquete vive en mod_learning_scorm_package; el content de la
+        // lesson queda como flag de presencia.
+        return content;
     }
   }
 
@@ -161,6 +168,8 @@ export function LessonContentEditor({
         <QuizLink lessonId={lesson.id} lessonTitle={title} quizId={quizId} setQuizId={setQuizId} />
       )}
 
+      {lesson.type === 'SCORM' && <ScormUploader lessonId={lesson.id} />}
+
       <p className="text-xs text-neutral-500">{HELP_BY_TYPE[lesson.type]}</p>
 
       {error ? (
@@ -250,4 +259,89 @@ function QuizLink({
       ) : null}
     </div>
   );
+}
+
+function ScormUploader({ lessonId }: { lessonId: string }) {
+  const [metadata, setMetadata] = useState<ScormPackageMetadata | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    scormApi
+      .get(lessonId)
+      .then((m) => {
+        if (!cancelled) setMetadata(m);
+      })
+      .catch(() => {
+        // 404 esperado si todavía no se subió ningún paquete.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lessonId]);
+
+  async function handleUpload(file: File) {
+    setBusy(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const buf = await file.arrayBuffer();
+      const data = bufferToBase64(buf);
+      const res = await scormApi.upload(lessonId, { data, filename: file.name });
+      setMetadata(res);
+      setSuccess(`Subido OK (${(res.size / (1024 * 1024)).toFixed(1)} MiB).`);
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No pudimos subir el paquete.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border border-dashed border-neutral-300 p-3 dark:border-neutral-700">
+      <Label htmlFor={`scorm-${lessonId}`}>Paquete SCORM (.zip)</Label>
+      <input
+        id={`scorm-${lessonId}`}
+        type="file"
+        accept=".zip,application/zip"
+        disabled={busy}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleUpload(file);
+        }}
+        className="block text-sm"
+      />
+      {metadata ? (
+        <div className="rounded bg-surface-2 p-2 text-xs text-text-muted">
+          <p>
+            <strong>Paquete actual:</strong> SCORM {metadata.version} · entry{' '}
+            <code className="font-mono">{metadata.entryPath}</code> ·{' '}
+            {(metadata.size / (1024 * 1024)).toFixed(1)} MiB
+          </p>
+          <p className="mt-1 text-text-subtle">
+            Subido el {new Date(metadata.uploadedAt).toLocaleString('es-ES')}
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-text-subtle">
+          Aún no subiste paquete. Subí un .zip que contenga imsmanifest.xml en la raíz.
+        </p>
+      )}
+      {success ? <p className="text-xs text-success-700">{success}</p> : null}
+      {error ? <p className="text-xs text-danger-700">{error}</p> : null}
+    </div>
+  );
+}
+
+function bufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const slice = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...slice);
+  }
+  return btoa(binary);
 }

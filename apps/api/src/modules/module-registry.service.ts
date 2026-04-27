@@ -5,7 +5,7 @@ import { buildCertificatesModule, CertificatesService } from '@didacta/mod-certi
 import { communityModule, CommunityService } from '@didacta/mod-community';
 import { coursesModule, CoursesService } from '@didacta/mod-courses';
 import { helloWorldModule } from '@didacta/mod-hello-world';
-import { learningModule, LearningService } from '@didacta/mod-learning';
+import { learningModule, LearningService, ScormService } from '@didacta/mod-learning';
 import { themingModule, ThemingService } from '@didacta/mod-theming';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleContextFactory } from './module-context.factory';
@@ -21,6 +21,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private assessments?: AssessmentsService;
   private community?: CommunityService;
   private theming?: ThemingService;
+  private scorm?: ScormService;
 
   constructor(
     private readonly factory: ModuleContextFactory,
@@ -38,6 +39,7 @@ export class ModuleRegistryService implements OnModuleInit {
     this.assessments = new AssessmentsService(prisma, context);
     this.community = new CommunityService(prisma, context);
     this.theming = new ThemingService(prisma, context);
+    this.scorm = new ScormService(prisma, context);
 
     const certificatesModule = buildCertificatesModule(this.certificates);
 
@@ -125,6 +127,11 @@ export class ModuleRegistryService implements OnModuleInit {
   getThemingService(): ThemingService {
     if (!this.theming) throw new Error('ModuleRegistry no está inicializado');
     return this.theming;
+  }
+
+  getScormService(): ScormService {
+    if (!this.scorm) throw new Error('ModuleRegistry no está inicializado');
+    return this.scorm;
   }
 
   isModuleEnabledForTenant(_tenantId: string, _moduleName: string): boolean {

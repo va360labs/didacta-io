@@ -517,6 +517,7 @@ enum LessonType {
   PDF
   TEXT
   QUIZ
+  SCORM
 }
 
 model ModCoursesCourse {
@@ -672,6 +673,33 @@ model ModLearningInvitation {
   @@unique([tenantId, code])
   @@index([tenantId, courseId])
   @@map("mod_learning_invitation")
+}
+
+/// HU-FOR-002 — Paquete SCORM importado para una lección de tipo SCORM.
+/// Sin FK cross-module: lessonId es UUID lógico de mod_courses_lesson.
+/// El paquete se descomprime al subir y los assets se guardan en storage
+/// bajo `scorm/{tenantId}/{packageId}/`. `entryPath` es la ruta relativa
+/// dentro del paquete que sirve como entry del iframe (típicamente
+/// "index.html" o lo que indique el imsmanifest.xml).
+model ModLearningScormPackage {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  lessonId      String   @unique @map("lesson_id") @db.Uuid
+  /// "1.2" | "2004" — derivado del schemaversion del manifest.
+  version       String
+  /// Path relativo al asset que se carga primero en el player.
+  entryPath     String   @map("entry_path")
+  /// Prefijo del storage donde están los assets (ej. "scorm/{tenantId}/{packageId}/").
+  storagePrefix String   @map("storage_prefix")
+  /// Manifest parseado (organizations, resources, items) para diagnóstico.
+  manifest      Json     @default("{}")
+  /// Tamaño total descomprimido en bytes.
+  size          Int
+  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+  uploadedById  String?  @map("uploaded_by_id") @db.Uuid
+
+  @@index([tenantId])
+  @@map("mod_learning_scorm_package")
 }
 
 // ============================================================================

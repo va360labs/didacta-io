@@ -3,6 +3,8 @@ import { manifest } from './manifest.js';
 
 export { manifest };
 export { LearningService } from './learning.service.js';
+export { ScormService, type ScormPackageMetadata } from './scorm.service.js';
+export { parseScormManifest, ScormManifestError } from './scorm-parser.js';
 export {
   enrollByAdminSchema,
   enrollByCodeSchema,
@@ -25,6 +27,9 @@ export {
   EnrollmentNotFoundError,
   InvitationInvalidError,
   CourseNotPublishedError,
+  ScormLessonTypeMismatchError,
+  ScormPackageInvalidError,
+  ScormPackageNotFoundError,
 } from './errors.js';
 
 export const learningModule: DidactaModule = {

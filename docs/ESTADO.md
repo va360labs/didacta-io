@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (batch 5 — T-1A-018 cumple DoD con 20 specs)
+> **Última actualización**: 2026-04-27 (HU-FOR-002 SCORM 1.2/2004 — Fase 1.A 100% cerrada)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,49 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — HU-FOR-002 SCORM 1.2/2004 (cierra Fase 1.A)
+
+Última feature funcional pendiente de Fase 1.A. **Fase 1.A queda 100%
+cerrada** con esto.
+
+Scope del PR (atómico, sin tracking SCORM API runtime):
+
+- **Migración**: añade `SCORM` al enum `LessonType` + tabla
+  `mod_learning_scorm_package` (1:1 con lesson, sin FK cross-module).
+- **Parser** `parseScormManifest` puro: detecta version (1.2 vs 2004),
+  entryPath y organizations. Soporta resources con `adlcp:scormtype`
+  (1.2) y `scormType` (2004). 6 tests con fixtures de ambos.
+- **`ScormService.uploadPackage`**: descomprime ZIP en memoria con
+  `adm-zip`, valida límites (max 100 MiB descomprimido, max 5000
+  archivos contra zip-bomb), parsea manifest, sube cada asset al storage
+  bajo `scorm/{tenantId}/{packageId}/`, persiste fila con upsert
+  (reemplaza paquete previo). Audit log con metadata.
+- **`ScormService.getPackage`**: devuelve metadata + signed URL del
+  entryPath para el iframe del player.
+- **Endpoints HTTP**: `POST /modules/learning/lessons/:id/scorm`
+  (formador o admin) con body `{ data: base64, filename }`;
+  `GET /modules/learning/lessons/:id/scorm` autenticado.
+- **`LearningErrorFilter`** mapea `SCORM_PACKAGE_INVALID` → 400,
+  `SCORM_LESSON_TYPE_MISMATCH` → 422, `SCORM_PACKAGE_NOT_FOUND` → 404.
+- **UI formador**: cuando `lesson.type === 'SCORM'` aparece un input
+  file en `lesson-content-editor`. Sube como base64 (chunked encoding
+  para archivos grandes).
+- **UI alumno**: `lesson-player` con caso `SCORM` → iframe
+  `sandbox="allow-scripts allow-forms allow-same-origin"` que carga la
+  signed URL.
+
+**Tests**: 6 del parser + 8 del service (parser válido, lesson type
+mismatch, ZIP sin manifest, ZIP corrupto, upsert reemplaza paquete
+previo, getPackage cross-tenant rechaza).
+
+**Pendiente para PR posterior** (deliberadamente fuera de scope):
+
+- **Tracking SCORM API runtime** (`window.API` para 1.2, `window.API_1484_11` para 2004): bridge en el iframe que recibe `cmi.completion_status`, `cmi.score.scaled`, etc., y los traduce a `LearningService.trackProgress` + completion automático. Sin esto, el alumno tiene que marcar la lección como completada manualmente desde el botón existente.
+- **GC** de assets del paquete previo cuando se reemplaza (hoy quedan
+  huérfanos en storage).
+- **Streaming upload** en lugar de cargar el ZIP completo en memoria
+  (límite actual: 100 MiB descomprimido, 140 MiB de base64).
 
 ### Sesión 2026-04-27 — Batch 5 de E2E (T-1A-018 cierra DoD: 17 → 20)
 
