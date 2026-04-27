@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (vista previa PDF de plantillas — follow-up HU-FOR-004)
+> **Última actualización**: 2026-04-27 (batch 1 de E2E — T-1A-018 progreso 5→8 specs)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,30 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — Batch 1 de E2E nuevos (T-1A-018 progreso)
+
+Marca **T-1A-018** como `En curso`. La historia pide 20+ specs y hoy
+había 5 (golden path, quiz alumno, matrícula por código, corrección
+manual, MFA admin setup). Este PR sube a **8** ejercitando los PRs
+recientes.
+
+Specs nuevos (todos vía API por velocidad y robustez — la UI tiene smoke
+visual aparte):
+
+- **`module-toggle.spec.ts`** (HU-TA-002 + #118): desactivar
+  `mod.community` → `GET /modules/community/posts` responde 403 →
+  reactivar → vuelve a 200.
+- **`certificate-templates.spec.ts`** (HU-FOR-004): crear template
+  custom → listar → preview PDF (verifica header `%PDF-` y tamaño) →
+  eliminar. Segundo test: `TEMPLATE_NAME_TAKEN` con 409 al duplicar.
+- **`admin-stats.spec.ts`** (HU-TA-003): payload con range=all tiene
+  los 5 campos numéricos; range inválido → 400; range=7d devuelve
+  completionRate en [0..100].
+
+Faltan ~12 specs más para llegar al DoD: signup-flow + rol-formador,
+crear/editar curso desde UI, branding live preview, audit verify, etc.
+Quedan para batches incrementales en sesiones siguientes.
 
 ### Sesión 2026-04-27 — Vista previa de plantillas (follow-up de HU-FOR-004)
 
