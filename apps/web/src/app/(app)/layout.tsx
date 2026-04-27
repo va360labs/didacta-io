@@ -86,6 +86,7 @@ function buildGroups({
     items: [
       { href: '/cursos', label: 'Catálogo', icon: 'book' },
       { href: '/comunidad', label: 'Comunidad', icon: 'users' },
+      { href: '/comunidad/menciones', label: 'Mis menciones', icon: 'message' },
       { href: '/mis-certificados', label: 'Mis certificados', icon: 'award' },
       { href: '/notificaciones', label: 'Notificaciones', icon: 'bell' },
     ],
