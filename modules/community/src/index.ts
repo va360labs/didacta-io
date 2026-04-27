@@ -16,7 +16,9 @@ export {
 export {
   CommentNotFoundError,
   CommunityError,
+  NestedRepliesTooDeepError,
   NotAuthorError,
+  ParentCommentMismatchError,
   PostNotFoundError,
   ReactionTargetMissingError,
 } from './errors.js';

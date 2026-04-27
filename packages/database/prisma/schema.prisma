@@ -446,13 +446,20 @@ model ModCommunityComment {
   authorId  String    @map("author_id") @db.Uuid
   body      String
   authorDisplayName String? @map("author_display_name")
+  /// Comentario padre para nested replies (1 nivel de profundidad por
+  /// design — los hilos profundos confunden y se moderan peor). NULL para
+  /// comentarios root del post.
+  parentCommentId String? @map("parent_comment_id") @db.Uuid
   createdAt DateTime  @default(now()) @map("created_at")
   deletedAt DateTime? @map("deleted_at")
 
   post      ModCommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parent    ModCommunityComment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies   ModCommunityComment[] @relation("CommentReplies")
   reactions ModCommunityReaction[]
 
   @@index([tenantId, postId, createdAt])
+  @@index([parentCommentId])
   @@map("mod_community_comment")
 }
 

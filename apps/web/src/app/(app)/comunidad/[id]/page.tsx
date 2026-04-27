@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { cn } from '@/lib/utils';
-import { communityApi, type PostDetail, type Reaction } from '@/lib/community';
+import { communityApi, type Comment, type PostDetail, type Reaction } from '@/lib/community';
 
 const EMOJIS = ['👍', '❤️', '🎉', '🤔'];
 
@@ -22,6 +22,9 @@ export default function PostDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [commentBody, setCommentBody] = useState('');
+  /** Si está set, el form de respuesta inline está abierto bajo este comment. */
+  const [replyTarget, setReplyTarget] = useState<string | null>(null);
+  const [replyBody, setReplyBody] = useState('');
   const myUserId = authStorage.getSession()?.user.id;
 
   async function reload() {
@@ -48,6 +51,21 @@ export default function PostDetailPage() {
       await reload();
     } catch (err) {
       setError(err instanceof ApiHttpError ? err.message : 'No pudimos publicar el comentario.');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function handleReply(parentCommentId: string) {
+    if (!post || !replyBody.trim()) return;
+    setPending(true);
+    try {
+      await communityApi.addComment(post.id, replyBody, parentCommentId);
+      setReplyBody('');
+      setReplyTarget(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof ApiHttpError ? err.message : 'No pudimos publicar la respuesta.');
     } finally {
       setPending(false);
     }
@@ -258,92 +276,26 @@ export default function PostDetailPage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-3">
-          {post.comments.length === 0 ? (
-            <Card>
-              <CardContent className="p-8 text-center text-sm text-text-muted">
-                Aún no hay respuestas. Aportá vos la primera.
-              </CardContent>
-            </Card>
-          ) : (
-            post.comments.map((c) => {
-              const cReactions = groupReactions(post.reactions.filter((r) => r.commentId === c.id));
-              const myCommentReactions = new Set(
-                post.reactions
-                  .filter((r) => r.commentId === c.id && r.authorId === myUserId)
-                  .map((r) => r.emoji),
-              );
-              const isCommentAuthor = c.authorId === myUserId;
-              const cInitials = (c.authorDisplayName ?? 'A')
-                .split(/\s+/)
-                .filter(Boolean)
-                .slice(0, 2)
-                .map((s) => s[0]?.toUpperCase() ?? '')
-                .join('');
-              return (
-                <Card key={c.id}>
-                  <CardContent className="p-5">
-                    <div className="flex gap-3">
-                      <div
-                        aria-hidden="true"
-                        className="grid h-9 w-9 shrink-0 place-items-center rounded-full font-display text-xs font-bold text-white"
-                        style={{
-                          background: 'linear-gradient(135deg, #1E5AA8 0%, #18B5A8 100%)',
-                        }}
-                      >
-                        {cInitials || 'A'}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-semibold text-text">
-                            {c.authorDisplayName ?? 'Anónimo'}
-                          </span>
-                          <span className="text-xs text-text-subtle">{relTime(c.createdAt)}</span>
-                        </div>
-                        <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-text">
-                          {c.body}
-                        </p>
-                        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                          {EMOJIS.map((e) => {
-                            const mine = myCommentReactions.has(e);
-                            const count = cReactions[e] ?? 0;
-                            return (
-                              <button
-                                key={e}
-                                type="button"
-                                onClick={() => handleReactComment(c.id, e)}
-                                disabled={pending}
-                                className={cn(
-                                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors',
-                                  mine
-                                    ? 'border-[rgba(46,125,206,0.32)] bg-[var(--didacta-info-bg)] text-[var(--didacta-info-fg)]'
-                                    : 'border-border bg-surface text-text-muted hover:border-border-strong hover:text-text',
-                                )}
-                              >
-                                <span>{e}</span>
-                                {count > 0 ? <span className="tabular-nums">{count}</span> : null}
-                              </button>
-                            );
-                          })}
-                          {isCommentAuthor ? (
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteComment(c.id)}
-                              disabled={pending}
-                              className="ml-auto text-xs text-danger-700 hover:underline"
-                            >
-                              Eliminar
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })
-          )}
-        </div>
+        <CommentsSection
+          comments={post.comments}
+          reactions={post.reactions}
+          myUserId={myUserId}
+          pending={pending}
+          replyTarget={replyTarget}
+          replyBody={replyBody}
+          onReplyOpen={(id) => {
+            setReplyTarget(id);
+            setReplyBody('');
+          }}
+          onReplyClose={() => {
+            setReplyTarget(null);
+            setReplyBody('');
+          }}
+          onReplyChange={setReplyBody}
+          onReplySubmit={handleReply}
+          onReact={handleReactComment}
+          onDelete={handleDeleteComment}
+        />
       </div>
     </section>
   );
@@ -353,6 +305,273 @@ function groupReactions(reactions: Reaction[]): Record<string, number> {
   const out: Record<string, number> = {};
   for (const r of reactions) out[r.emoji] = (out[r.emoji] ?? 0) + 1;
   return out;
+}
+
+interface CommentsSectionProps {
+  comments: Comment[];
+  reactions: Reaction[];
+  myUserId: string | undefined;
+  pending: boolean;
+  replyTarget: string | null;
+  replyBody: string;
+  onReplyOpen: (parentId: string) => void;
+  onReplyClose: () => void;
+  onReplyChange: (value: string) => void;
+  onReplySubmit: (parentId: string) => Promise<void>;
+  onReact: (commentId: string, emoji: string) => void;
+  onDelete: (commentId: string) => void;
+}
+
+function CommentsSection(props: CommentsSectionProps) {
+  const { comments } = props;
+
+  if (comments.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center text-sm text-text-muted">
+          Aún no hay respuestas. Aportá vos la primera.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Agrupamos: root comments + replies indexadas por parentCommentId.
+  const rootComments = comments.filter((c) => c.parentCommentId === null);
+  const repliesByParent = new Map<string, Comment[]>();
+  for (const c of comments) {
+    if (c.parentCommentId) {
+      const arr = repliesByParent.get(c.parentCommentId) ?? [];
+      arr.push(c);
+      repliesByParent.set(c.parentCommentId, arr);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {rootComments.map((c) => {
+        const replies = repliesByParent.get(c.id) ?? [];
+        return (
+          <CommentThread
+            key={c.id}
+            comment={c}
+            replies={replies}
+            reactions={props.reactions}
+            myUserId={props.myUserId}
+            pending={props.pending}
+            isReplyOpen={props.replyTarget === c.id}
+            replyBody={props.replyBody}
+            onReplyOpen={() => props.onReplyOpen(c.id)}
+            onReplyClose={props.onReplyClose}
+            onReplyChange={props.onReplyChange}
+            onReplySubmit={() => props.onReplySubmit(c.id)}
+            onReact={props.onReact}
+            onDelete={props.onDelete}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function CommentThread({
+  comment,
+  replies,
+  isReplyOpen,
+  replyBody,
+  onReplyOpen,
+  onReplyClose,
+  onReplyChange,
+  onReplySubmit,
+  reactions,
+  myUserId,
+  pending,
+  onReact,
+  onDelete,
+}: {
+  comment: Comment;
+  replies: Comment[];
+  isReplyOpen: boolean;
+  replyBody: string;
+  onReplyOpen: () => void;
+  onReplyClose: () => void;
+  onReplyChange: (value: string) => void;
+  onReplySubmit: () => Promise<void>;
+  reactions: Reaction[];
+  myUserId: string | undefined;
+  pending: boolean;
+  onReact: (commentId: string, emoji: string) => void;
+  onDelete: (commentId: string) => void;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <CommentBody
+          comment={comment}
+          reactions={reactions}
+          myUserId={myUserId}
+          pending={pending}
+          onReact={onReact}
+          onDelete={onDelete}
+          onReply={onReplyOpen}
+          isReply={false}
+        />
+
+        {isReplyOpen ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void onReplySubmit();
+            }}
+            className="mt-3 ml-12 space-y-2 border-l-2 border-brand-200 pl-4"
+          >
+            <Textarea
+              value={replyBody}
+              onChange={(e) => onReplyChange(e.target.value)}
+              placeholder={`Responder a ${comment.authorDisplayName ?? 'este comentario'}…`}
+              rows={2}
+              autoFocus
+            />
+            <div className="flex items-center gap-2">
+              <Button type="submit" size="sm" disabled={pending || !replyBody.trim()}>
+                Publicar respuesta
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={onReplyClose}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        ) : null}
+
+        {replies.length > 0 ? (
+          <div className="mt-4 space-y-3 border-l-2 border-border-soft pl-4">
+            {replies.map((r) => (
+              <CommentBody
+                key={r.id}
+                comment={r}
+                reactions={reactions}
+                myUserId={myUserId}
+                pending={pending}
+                onReact={onReact}
+                onDelete={onDelete}
+                isReply={true}
+              />
+            ))}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CommentBody({
+  comment,
+  reactions,
+  myUserId,
+  pending,
+  onReact,
+  onDelete,
+  onReply,
+  isReply,
+}: {
+  comment: Comment;
+  reactions: Reaction[];
+  myUserId: string | undefined;
+  pending: boolean;
+  onReact: (commentId: string, emoji: string) => void;
+  onDelete: (commentId: string) => void;
+  onReply?: () => void;
+  isReply: boolean;
+}) {
+  const grouped = groupReactions(reactions.filter((r) => r.commentId === comment.id));
+  const mine = new Set(
+    reactions
+      .filter((r) => r.commentId === comment.id && r.authorId === myUserId)
+      .map((r) => r.emoji),
+  );
+  const isAuthor = comment.authorId === myUserId;
+  const initials = (comment.authorDisplayName ?? 'A')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() ?? '')
+    .join('');
+
+  return (
+    <div className="flex gap-3">
+      <div
+        aria-hidden="true"
+        className={cn(
+          'grid shrink-0 place-items-center rounded-full font-display font-bold text-white',
+          isReply ? 'h-7 w-7 text-[10px]' : 'h-9 w-9 text-xs',
+        )}
+        style={{
+          background: 'linear-gradient(135deg, #1E5AA8 0%, #18B5A8 100%)',
+        }}
+      >
+        {initials || 'A'}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-text">
+            {comment.authorDisplayName ?? 'Anónimo'}
+          </span>
+          <span className="text-xs text-text-subtle">{relTime(comment.createdAt)}</span>
+          {isReply ? (
+            <span className="text-[10px] uppercase tracking-wider text-text-subtle">
+              · respuesta
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-text">
+          {comment.body}
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {EMOJIS.map((e) => {
+            const m = mine.has(e);
+            const count = grouped[e] ?? 0;
+            return (
+              <button
+                key={e}
+                type="button"
+                onClick={() => onReact(comment.id, e)}
+                disabled={pending}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors',
+                  m
+                    ? 'border-[rgba(46,125,206,0.32)] bg-[var(--didacta-info-bg)] text-[var(--didacta-info-fg)]'
+                    : 'border-border bg-surface text-text-muted hover:border-border-strong hover:text-text',
+                )}
+              >
+                <span>{e}</span>
+                {count > 0 ? <span className="tabular-nums">{count}</span> : null}
+              </button>
+            );
+          })}
+          {/* "Responder" solo en root comments (1 nivel max). */}
+          {!isReply && onReply ? (
+            <button
+              type="button"
+              onClick={onReply}
+              disabled={pending}
+              className="text-xs font-semibold text-brand-600 hover:underline"
+            >
+              Responder
+            </button>
+          ) : null}
+          {isAuthor ? (
+            <button
+              type="button"
+              onClick={() => onDelete(comment.id)}
+              disabled={pending}
+              className="ml-auto text-xs text-danger-700 hover:underline"
+            >
+              Eliminar
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function relTime(iso: string): string {

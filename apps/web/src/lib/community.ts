@@ -22,6 +22,8 @@ export interface Comment {
   authorId: string;
   authorDisplayName: string | null;
   body: string;
+  /** UUID del comentario padre si esto es una respuesta. */
+  parentCommentId: string | null;
   createdAt: string;
   deletedAt: string | null;
 }
@@ -82,10 +84,16 @@ export const communityApi = {
       withAuth(),
     );
   },
-  async addComment(postId: string, body: string): Promise<Comment> {
+  async addComment(postId: string, body: string, parentCommentId?: string): Promise<Comment> {
     return apiFetch<Comment>(
       `/api/v1/modules/community/posts/${postId}/comments`,
-      { method: 'POST', body: JSON.stringify({ body }) },
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          body,
+          ...(parentCommentId ? { parentCommentId } : {}),
+        }),
+      },
       withAuth(),
     );
   },

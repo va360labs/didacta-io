@@ -4,7 +4,9 @@ import type { PrismaClient } from '@didacta/database';
 import type { AddReactionDto, CreateCommentDto, CreatePostDto, ListPostsQueryDto } from './dto.js';
 import {
   CommentNotFoundError,
+  NestedRepliesTooDeepError,
   NotAuthorError,
+  ParentCommentMismatchError,
   PostNotFoundError,
   ReactionTargetMissingError,
 } from './errors.js';
@@ -92,6 +94,18 @@ export class CommunityService {
     });
     if (!post) throw new PostNotFoundError();
 
+    // Si es una respuesta, validar el comentario padre.
+    if (dto.parentCommentId) {
+      const parent = await this.prisma.modCommunityComment.findFirst({
+        where: { id: dto.parentCommentId, tenantId, deletedAt: null },
+        select: { id: true, postId: true, parentCommentId: true },
+      });
+      if (!parent) throw new CommentNotFoundError();
+      if (parent.postId !== postId) throw new ParentCommentMismatchError();
+      // 1 nivel máx: el padre no puede ser él mismo una respuesta.
+      if (parent.parentCommentId !== null) throw new NestedRepliesTooDeepError();
+    }
+
     const comment = await this.prisma.modCommunityComment.create({
       data: {
         tenantId,
@@ -99,12 +113,14 @@ export class CommunityService {
         authorId: author.id,
         authorDisplayName: author.displayName,
         body: dto.body,
+        parentCommentId: dto.parentCommentId ?? null,
       },
     });
     await this.publish(tenantId, author.id, 'community.comment.created', {
       commentId: comment.id,
       postId,
       authorId: author.id,
+      parentCommentId: comment.parentCommentId,
     });
     return comment;
   }

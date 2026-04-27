@@ -34,3 +34,18 @@ export class NotAuthorError extends CommunityError {
     super('NOT_AUTHOR', 'Solo el autor puede modificar o eliminar este recurso');
   }
 }
+
+export class NestedRepliesTooDeepError extends CommunityError {
+  constructor() {
+    super(
+      'NESTED_REPLIES_TOO_DEEP',
+      'Los hilos solo permiten 1 nivel: respondé al comentario root, no a una respuesta.',
+    );
+  }
+}
+
+export class ParentCommentMismatchError extends CommunityError {
+  constructor() {
+    super('PARENT_COMMENT_MISMATCH', 'El comentario padre no pertenece al post indicado.');
+  }
+}
