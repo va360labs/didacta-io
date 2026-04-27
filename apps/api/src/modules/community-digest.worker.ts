@@ -8,6 +8,7 @@ import {
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { CommunityDigestMetrics } from './community-digest.metrics';
 import { ModuleContextFactory } from './module-context.factory';
 import { ModuleRegistryService } from './module-registry.service';
 
@@ -48,6 +49,7 @@ export class CommunityDigestWorker implements OnApplicationBootstrap, OnModuleDe
     @Inject(forwardRef(() => ModuleRegistryService))
     private readonly registry: ModuleRegistryService,
     private readonly logger: PinoLogger,
+    private readonly metrics: CommunityDigestMetrics,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -130,14 +132,18 @@ export class CommunityDigestWorker implements OnApplicationBootstrap, OnModuleDe
     const community = this.registry.getCommunityService();
     const ctx = this.factory.build();
 
+    const stopTimer = this.metrics.startRunTimer();
     const users = await community.listActiveUsersForDigest();
     let sent = 0;
     let skipped = 0;
+    let failed = 0;
 
     for (const u of users) {
+      this.metrics.recordUserProcessed();
       const digest = await community.buildDigest(u.tenantId, u.userId, since);
       if (digest.mentions.length === 0 && digest.replies.length === 0) {
         skipped++;
+        this.metrics.recordSkipped();
         continue;
       }
       try {
@@ -156,7 +162,10 @@ export class CommunityDigestWorker implements OnApplicationBootstrap, OnModuleDe
           },
         });
         sent++;
+        this.metrics.recordSent();
       } catch (err) {
+        failed++;
+        this.metrics.recordFailed();
         this.logger.warn(
           {
             tenantId: u.tenantId,
@@ -168,8 +177,9 @@ export class CommunityDigestWorker implements OnApplicationBootstrap, OnModuleDe
       }
     }
 
+    const elapsedSec = stopTimer();
     this.logger.log(
-      { sent, skipped, total: users.length, since: data.since },
+      { sent, skipped, failed, total: users.length, since: data.since, elapsedSec },
       'community digest job completado',
     );
   }

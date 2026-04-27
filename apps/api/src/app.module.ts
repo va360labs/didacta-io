@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
+import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
@@ -29,6 +30,12 @@ import { TenancyModule } from './tenancy/tenancy.module';
           service: 'api',
         }),
       },
+    }),
+    // Expone /metrics con default metrics + las custom registradas en
+    // los módulos. El path se excluye del prefijo global en main.ts.
+    PrometheusModule.register({
+      defaultMetrics: { enabled: true },
+      defaultLabels: { app: 'didacta-api' },
     }),
     PrismaModule,
     AuthModule,

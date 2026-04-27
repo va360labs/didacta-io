@@ -34,6 +34,10 @@ import { ZoomWebhookController } from './zoom-webhook.controller';
 import { FundaeController } from './fundae.controller';
 import { FundaeErrorFilter } from './fundae-error.filter';
 import { CommunityDigestWorker } from './community-digest.worker';
+import {
+  CommunityDigestMetrics,
+  communityDigestMetricsProviders,
+} from './community-digest.metrics';
 
 @Module({
   imports: [AuthModule],
@@ -54,6 +58,8 @@ import { CommunityDigestWorker } from './community-digest.worker';
     FundaeController,
   ],
   providers: [
+    ...communityDigestMetricsProviders,
+    CommunityDigestMetrics,
     OutboxQueueService,
     ModuleContextFactory,
     ModuleRegistryService,

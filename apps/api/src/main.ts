@@ -22,7 +22,7 @@ async function bootstrap(): Promise<void> {
   app.enableShutdownHooks();
 
   app.setGlobalPrefix('api/v1', {
-    exclude: ['healthz', 'readyz', 'livez', 'api/docs'],
+    exclude: ['healthz', 'readyz', 'livez', 'api/docs', 'metrics'],
   });
 
   const config = new DocumentBuilder()
