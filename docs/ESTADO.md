@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (batch 4 de E2E — T-1A-018 progreso 14→17 specs)
+> **Última actualización**: 2026-04-27 (batch 5 — T-1A-018 cumple DoD con 20 specs)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,24 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — Batch 5 de E2E (T-1A-018 cierra DoD: 17 → 20)
+
+Tres specs nuevos para llegar al DoD de **20+** specs Playwright:
+
+- **`me-profile.spec.ts`** (HU-USR-001): GET `/me/profile` con shape
+  esperado; PATCH actualiza name + locale + timezone; avatarUrl no-https
+  → 400; password con currentPassword incorrecta → 403.
+- **`quiz-multiple-choice.spec.ts`**: quiz standalone con 4 opciones
+  (2 correctas) → alumno marca todas las correctas → score completo +
+  passed=true.
+- **`quiz-fill-in-blank.spec.ts`** (mod.assessments v0.2): pregunta
+  con `acceptedAnswers: [Postgres, PostgreSQL, postgres]` → alumno A
+  responde "PostgreSQL" → score completo; alumno B responde "MongoDB"
+  → score 0 + passed=false.
+
+**Suite E2E final: 20 specs**. T-1A-018 cumple DoD y se marca Hecho en
+Notion.
 
 ### Sesión 2026-04-27 — Batch 4 de E2E nuevos (T-1A-018 progreso 14 → 17)
 
