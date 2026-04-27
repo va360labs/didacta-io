@@ -24,6 +24,7 @@ import {
   type ListPostsQueryDto,
   type ModerationActionDto,
 } from '@didacta/mod-community';
+import { z } from 'zod';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
@@ -133,6 +134,20 @@ export class CommunityController {
     if (!user) throw new UnauthorizedException();
     await this.registry.getCommunityService().removeReaction(user.tenantId, user.sub, id);
     return { deleted: true };
+  }
+
+  @Get('users/search')
+  @ApiOperation({
+    summary:
+      'Busca usuarios del tenant por prefijo (handle = email antes del @, o nombre). Usado por el autocomplete de menciones. Hasta 8 resultados.',
+  })
+  async searchUsers(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(z.object({ prefix: z.string().min(1).max(64) })))
+    q: { prefix: string },
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getCommunityService().searchTenantUsers(user.tenantId, q.prefix);
   }
 
   @Get('mentions/me')

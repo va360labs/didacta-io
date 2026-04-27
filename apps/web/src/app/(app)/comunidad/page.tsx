@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { MentionTextarea } from '@/components/mention-textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { communityApi, type Post } from '@/lib/community';
@@ -109,7 +109,7 @@ export default function ComunidadPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="body">Contenido</Label>
-                    <Textarea id="body" name="body" rows={4} required />
+                    <MentionTextarea id="body" name="body" rows={4} required />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="tags">Tags (separados por coma)</Label>

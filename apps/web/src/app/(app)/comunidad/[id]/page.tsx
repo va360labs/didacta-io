@@ -7,7 +7,7 @@ import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
+import { MentionTextarea } from '@/components/mention-textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { cn } from '@/lib/utils';
@@ -341,11 +341,11 @@ export default function PostDetailPage() {
         <Card className="mb-4">
           <CardContent className="p-5">
             <form onSubmit={handleAddComment} className="space-y-3">
-              <Textarea
+              <MentionTextarea
                 rows={3}
                 value={commentBody}
                 onChange={(e) => setCommentBody(e.target.value)}
-                placeholder="Aportá tu respuesta…"
+                placeholder="Aportá tu respuesta… podés mencionar con @usuario"
                 required
               />
               <div className="flex justify-end">
@@ -554,10 +554,10 @@ function CommentThread({
             }}
             className="mt-3 ml-12 space-y-2 border-l-2 border-brand-200 pl-4"
           >
-            <Textarea
+            <MentionTextarea
               value={replyBody}
               onChange={(e) => onReplyChange(e.target.value)}
-              placeholder={`Responder a ${comment.authorDisplayName ?? 'este comentario'}…`}
+              placeholder={`Responder a ${comment.authorDisplayName ?? 'este comentario'}… (@usuario para mencionar)`}
               rows={2}
               autoFocus
             />

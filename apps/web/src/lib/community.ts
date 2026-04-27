@@ -121,6 +121,17 @@ export const communityApi = {
       withAuth(),
     );
   },
+  async searchUsers(
+    prefix: string,
+  ): Promise<Array<{ userId: string; handle: string; displayName: string | null }>> {
+    const params = new URLSearchParams({ prefix });
+    return apiFetch(
+      `/api/v1/modules/community/users/search?${params.toString()}`,
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
   async listMyMentions(): Promise<
     Array<{
       id: string;

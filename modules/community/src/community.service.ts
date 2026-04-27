@@ -298,6 +298,41 @@ export class CommunityService {
   }
 
   /**
+   * Busca usuarios del tenant cuyo handle (email antes del `@`) o nombre
+   * contiene el prefijo. Limitado a 8 resultados. Usado por el autocomplete
+   * de menciones en el frontend.
+   *
+   * NO devuelve el email completo por privacidad — solo el handle (lo que
+   * el autor escribiría tras el `@`) y el displayName.
+   */
+  async searchTenantUsers(
+    tenantId: string,
+    prefix: string,
+  ): Promise<Array<{ userId: string; handle: string; displayName: string | null }>> {
+    if (!prefix || prefix.length < 1) return [];
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        tenantId,
+        status: 'ACTIVE',
+        OR: [
+          { email: { startsWith: `${prefix}`, mode: 'insensitive' } },
+          { name: { contains: prefix, mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true, email: true, name: true },
+      take: 8,
+      orderBy: { email: 'asc' },
+    });
+
+    return users.map((u) => ({
+      userId: u.id,
+      handle: u.email.split('@')[0] ?? u.email,
+      displayName: u.name ?? null,
+    }));
+  }
+
+  /**
    * Devuelve las menciones del usuario, más recientes primero, con el handle
    * y el postId / commentId para que el cliente pueda navegar.
    */
