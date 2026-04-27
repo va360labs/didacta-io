@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (module access guard runtime — follow-up HU-TA-002)
+> **Última actualización**: 2026-04-27 (logo en certificados — follow-up HU-FOR-004)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,22 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — Logo en certificados (follow-up de HU-FOR-004)
+
+- **Renderer** acepta `logoData?: Buffer` (no URL) y embebe el logo
+  centrado en cabecera del PDF (alto fijo 60px, ancho proporcional auto).
+  Si `pdfkit` rechaza el buffer (formato no soportado), se ignora sin
+  romper la emisión.
+- **Service** descarga el logo de `template.logoUrl` con `globalThis.fetch`
+  + `AbortController` (timeout 5s, max 2 MiB). Si falla por cualquier
+  motivo (404, timeout, archivo grande), loguea warn y emite el
+  certificado sin logo. La emisión NO debe fallar por un asset de
+  branding caído.
+- **Separación de concerns**: el renderer es puro (recibe buffer); el
+  service es el único que hace I/O HTTP.
+- 2 tests nuevos del renderer: PNG 1x1 válido se embebe + buffer corrupto
+  no rompe.
 
 ### Sesión 2026-04-27 — Module access guard (follow-up de HU-TA-002)
 

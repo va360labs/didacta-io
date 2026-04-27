@@ -67,6 +67,8 @@ export class CertificatesService {
     const number = await this.allocateNumber(input.tenantId);
     const issuedAt = new Date();
 
+    const logoData = template?.logoUrl ? await this.fetchLogo(template.logoUrl) : undefined;
+
     const pdf = await renderCertificatePdf({
       number,
       studentName: user.name ?? user.email,
@@ -77,6 +79,7 @@ export class CertificatesService {
       signerName: template?.signerName,
       signerTitle: template?.signerTitle,
       tenantName: tenant.name,
+      logoData,
     });
 
     const hash = createHash('sha256').update(pdf).digest('hex');
@@ -294,6 +297,38 @@ export class CertificatesService {
     return this.prisma.modCertificatesTemplate.findFirst({
       where: { tenantId, isDefault: true },
     });
+  }
+
+  /**
+   * Descarga el logo del tenant con timeout corto. Si falla por cualquier
+   * motivo (404, timeout, formato no aceptado), devuelve undefined y el
+   * certificado se emite sin logo. La emisión NO debe fallar por un asset
+   * de branding caído.
+   */
+  private async fetchLogo(url: string): Promise<Buffer | undefined> {
+    const TIMEOUT_MS = 5_000;
+    const MAX_BYTES = 2 * 1024 * 1024; // 2 MiB
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) return undefined;
+        const contentLength = Number(res.headers.get('content-length') ?? '0');
+        if (contentLength > MAX_BYTES) return undefined;
+        const arrayBuf = await res.arrayBuffer();
+        if (arrayBuf.byteLength > MAX_BYTES) return undefined;
+        return Buffer.from(arrayBuf);
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (err) {
+      this.ctx.logger.warn('mod.certificates: fallo al descargar logo del tenant', {
+        url,
+        error: (err as Error).message,
+      });
+      return undefined;
+    }
   }
 
   private async allocateNumber(tenantId: string): Promise<string> {

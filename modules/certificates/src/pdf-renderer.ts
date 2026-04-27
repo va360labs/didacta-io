@@ -10,6 +10,13 @@ export interface CertificateRenderInput {
   signerName?: string | null;
   signerTitle?: string | null;
   tenantName?: string;
+  /**
+   * Logo del tenant ya descargado como Buffer (PNG/JPEG). El renderer NO
+   * hace HTTP — el caller (service) decide descargarlo o no según la URL
+   * almacenada en la plantilla. Si está presente y pdfkit lo soporta, se
+   * embebe en la cabecera del certificado.
+   */
+  logoData?: Buffer;
 }
 
 const DEFAULT_BODY =
@@ -55,12 +62,27 @@ export async function renderCertificatePdf(input: CertificateRenderInput): Promi
         .rect(50, 50, pageWidth - 100, pageHeight - 100)
         .stroke();
 
+      // Logo (si el tenant lo provee).
+      if (input.logoData && input.logoData.length > 0) {
+        try {
+          // Centrado horizontal, alto fijo de 60px, ancho proporcional auto.
+          const logoHeight = 60;
+          const x = (pageWidth - 120) / 2;
+          doc.image(input.logoData, x, 70, { fit: [120, logoHeight], align: 'center' });
+        } catch {
+          // Buffer corrupto / formato no soportado por pdfkit: ignoramos sin
+          // romper la emisión. El caller debería loguear el incidente si
+          // quiere visibilidad.
+        }
+      }
+
       // Título
+      const titleY = input.logoData && input.logoData.length > 0 ? 145 : 90;
       doc
         .fillColor(color)
         .font('Helvetica-Bold')
         .fontSize(48)
-        .text('Certificado', 0, 90, { align: 'center' });
+        .text('Certificado', 0, titleY, { align: 'center' });
 
       doc.moveDown(0.3);
       doc
