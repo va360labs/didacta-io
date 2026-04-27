@@ -1,5 +1,5 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { StorageService } from '@didacta/core-kernel';
 
 /**
@@ -63,9 +63,13 @@ export class LocalDiskStorageService implements StorageService {
 
   private absolutePath(safeKey: string): string {
     const full = resolve(join(this.root, safeKey));
-    if (!full.startsWith(this.root + '/') && full !== this.root) {
-      throw new Error('Storage key escapa al root');
+    // Comprueba que `full` queda dentro del root usando `path.relative`,
+    // que es portable entre POSIX y Windows (el `startsWith(root + '/')`
+    // anterior fallaba en Windows porque el separador es `\`).
+    const rel = relative(this.root, full);
+    if (rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))) {
+      return full;
     }
-    return full;
+    throw new Error('Storage key escapa al root');
   }
 }
