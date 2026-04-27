@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
+import { StatCard } from '@/components/stat-card';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
 import { formadorStatsApi, type FormadorStats } from '@/lib/formador-stats';
@@ -63,17 +64,23 @@ export default function FormadorDashboardPage() {
           label="Cursos publicados"
           value={stats.coursesPublished}
           hint={`${stats.coursesDraft} en borrador`}
+          icon="book"
+          tone="info"
           href="/formador/cursos"
         />
         <StatCard
           label="Matriculaciones activas"
           value={stats.totalActiveEnrollments}
           hint={`${stats.totalCompletedEnrollments} completadas en total`}
+          icon="users"
+          tone="info"
         />
         <StatCard
           label="Progreso promedio"
           value={`${stats.averageProgressPercent}%`}
           hint="del alumnado activo y finalizado"
+          icon="trending"
+          tone="success"
         />
         <StatCard
           label="Correcciones pendientes"
@@ -83,6 +90,8 @@ export default function FormadorDashboardPage() {
               ? 'respuestas abiertas por revisar'
               : 'estás al día — sin pendientes'
           }
+          icon="check"
+          tone={stats.pendingGradings > 0 ? 'warn' : 'success'}
           href="/formador/correcciones"
           highlight={stats.pendingGradings > 0}
         />
@@ -117,45 +126,6 @@ export default function FormadorDashboardPage() {
         </CardContent>
       </Card>
     </section>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  hint,
-  href,
-  highlight,
-}: {
-  label: string;
-  value: number | string;
-  hint: string;
-  href?: string;
-  highlight?: boolean;
-}) {
-  const inner = (
-    <Card
-      interactive={Boolean(href)}
-      className={
-        highlight ? 'border-warning-200 bg-warning-50/40 transition-colors' : 'transition-colors'
-      }
-    >
-      <CardContent className="p-5">
-        <p className="label-uppercase text-text-muted">{label}</p>
-        <p className="font-display mt-1 text-4xl font-extrabold tabular-nums text-text">{value}</p>
-        <p className="mt-2 text-xs text-text-subtle leading-relaxed">{hint}</p>
-      </CardContent>
-    </Card>
-  );
-  return href ? (
-    <Link
-      href={href as never}
-      className="block rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-    >
-      {inner}
-    </Link>
-  ) : (
-    inner
   );
 }
 

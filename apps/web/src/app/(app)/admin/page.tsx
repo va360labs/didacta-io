@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
+import { StatCard } from '@/components/stat-card';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
 import { adminStatsApi, type AdminStats, type StatsRange } from '@/lib/admin-stats';
@@ -93,28 +94,38 @@ export default function AdminDashboardPage() {
             label="Usuarios activos"
             value={stats.activeUsers}
             hint="con status ACTIVE"
+            icon="users"
+            tone="info"
             href="/admin/usuarios"
           />
           <StatCard
             label="Cursos publicados"
             value={stats.coursesPublished}
             hint="snapshot actual del catálogo"
+            icon="book"
+            tone="info"
             href="/formador/cursos"
           />
           <StatCard
             label="Matriculaciones"
             value={stats.totalEnrollments}
             hint={range === 'all' ? 'histórico total' : `nuevas en ${rangeLabel(range)}`}
+            icon="trending"
+            tone="success"
           />
           <StatCard
             label="Certificados emitidos"
             value={stats.certificatesIssued}
             hint={range === 'all' ? 'histórico total' : `emitidos en ${rangeLabel(range)}`}
+            icon="award"
+            tone="success"
           />
           <StatCard
             label="Tasa de finalización"
             value={`${stats.completionRate}%`}
             hint="completed / total del rango"
+            icon="check"
+            tone="success"
           />
         </div>
       ) : null}
@@ -152,38 +163,6 @@ export default function AdminDashboardPage() {
 
 function rangeLabel(r: StatsRange): string {
   return r === '7d' ? 'los últimos 7 días' : 'los últimos 30 días';
-}
-
-function StatCard({
-  label,
-  value,
-  hint,
-  href,
-}: {
-  label: string;
-  value: number | string;
-  hint: string;
-  href?: string;
-}) {
-  const inner = (
-    <Card interactive={Boolean(href)} className="transition-colors">
-      <CardContent className="p-5">
-        <p className="label-uppercase text-text-muted">{label}</p>
-        <p className="font-display mt-1 text-4xl font-extrabold tabular-nums text-text">{value}</p>
-        <p className="mt-2 text-xs text-text-subtle leading-relaxed">{hint}</p>
-      </CardContent>
-    </Card>
-  );
-  return href ? (
-    <Link
-      href={href as never}
-      className="block rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-    >
-      {inner}
-    </Link>
-  ) : (
-    inner
-  );
 }
 
 function ShortcutLink({

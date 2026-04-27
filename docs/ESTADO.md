@@ -1,7 +1,7 @@
 # Estado del proyecto — handoff completo
 
 > **Nombre del producto**: **Didacta** (rebrand desde "LearnShip" en PR C0).
-> **Última actualización**: 2026-04-27 (UI kit Didacta · foundation — sidebar + shell + iconos)
+> **Última actualización**: 2026-04-27 (UI kit Didacta · primitives — StatCard + Badge premium)
 > **Por**: Valentín Ayesa (`valen@va360labs.com`)
 > **Objetivo**: que cualquier persona o IA pueda retomar exactamente donde quedó esta sesión, en otra máquina, sin contexto previo.
 
@@ -766,6 +766,38 @@ Tras el rebrand a Didacta (PR C0), el usuario pidió:
 | #81 | chore(rebrand): renombrar producto a Didacta (PR C0) | merged |
 | #82 | fix(database): tipar explícitamente tx en withTenantContext | merged |
 | #83 | fix(ci): actualizar filter @learnship/database → @didacta/database | merged |
+
+### Sesión 2026-04-27 — UI kit Didacta · primitives (StatCard + Badge premium + tokens)
+
+Fase 2 del UI kit. Alinea los primitives con los hex Didacta exactos
+sin tocar el sistema de theming HSL.
+
+Cambios:
+
+- **Tokens hex Didacta** en `globals.css` como variables adicionales
+  (`--didacta-night`, `--didacta-trust`, `--didacta-balance`,
+  `--didacta-growth`, `--didacta-coral`, `--didacta-success-bg/fg`,
+  `--didacta-info-bg/fg`, `--didacta-warn-bg/fg`, `--didacta-err-bg/fg`,
+  `--didacta-neutral-bg/fg`, `--didacta-border-spec`). Sirven a
+  componentes que necesitan 100% spec; NO afectan al theming por tenant
+  que sigue operando sobre `--brand-h` / `--brand-s`.
+- **`Badge`**: alineado a las tone bg/fg del UI kit
+  (`Primitives.jsx`). Variant nueva `info` (Azul confianza) y
+  `premium` (Azul noche fondo, blanco texto) para certificados,
+  cumplimiento, áreas institucionales. Soporte de `dot` opcional con
+  el punto de color current — replica `<Badge dot>` del UI kit.
+- **`StatCard` reutilizable** (`apps/web/src/components/stat-card.tsx`)
+  siguiendo `Primitives.jsx > StatCard` exacto: padding 20, label
+  Inter 13/500, número Sora 32/700 ls -0.02em, icon chip 32×32 Azul
+  confianza, hint con tone (success/info/warn/neutral).
+- Migra los 3 dashboards al component compartido: `/formador`,
+  `/admin`, `/formador/cursos/[id]/alumnos` ya no tienen `function StatCard` local
+  duplicado. Cada dashboard pasa el `icon` y `tone` apropiados —
+  ahora son visualmente más Didacta-compliant (chip + número grande
+  Sora + delta coloreado).
+
+**Plan de test**:
+- pnpm typecheck (23 paquetes verde).
 
 ### Sesión 2026-04-27 — UI kit Didacta · foundation (sidebar + shell + iconos)
 

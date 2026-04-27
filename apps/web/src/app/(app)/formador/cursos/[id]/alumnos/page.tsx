@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -289,17 +290,6 @@ export default function AlumnosPage() {
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: number | string }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="label-uppercase text-text-muted">{label}</p>
-        <p className="font-display mt-1 text-3xl font-extrabold tabular-nums">{value}</p>
-      </CardContent>
-    </Card>
   );
 }
 

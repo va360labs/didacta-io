@@ -167,6 +167,32 @@
   --z-modal: 40;
   --z-toast: 50;
   --z-tooltip: 60;
+
+  /* -------------------------------------------------------------------
+   * Didacta brand colors — hex exactos del UI kit oficial
+   * (`docs/ui-kit/colors_and_type.css`). Sirven de referencia precisa para
+   * componentes que necesitan 100% spec Didacta. NO afectan al sistema de
+   * theming por tenant (que opera sobre --brand-h / --brand-s).
+   * ------------------------------------------------------------------- */
+  --didacta-night: #0d1b2a;
+  --didacta-trust: #1e5aa8;
+  --didacta-balance: #2e7dce;
+  --didacta-growth: #18b5a8;
+  --didacta-coral: #ff6f61;
+  --didacta-surface: #f1f3f5;
+
+  --didacta-success-bg: #e6f7f5;
+  --didacta-success-fg: #0f8077;
+  --didacta-info-bg: #e8f1fb;
+  --didacta-info-fg: #1e5aa8;
+  --didacta-warn-bg: #ffedea;
+  --didacta-warn-fg: #c8473a;
+  --didacta-err-bg: #fee7e7;
+  --didacta-err-fg: #b91c1c;
+  --didacta-neutral-bg: #f1f3f5;
+  --didacta-neutral-fg: #475569;
+
+  --didacta-border-spec: #d7dee8;
 }
 
 /* =====================================================================
