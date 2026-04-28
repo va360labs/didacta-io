@@ -343,6 +343,20 @@ export class ZoomLiveService {
   }
 
   /**
+   * Smoke test de credenciales Zoom S2S del tenant. Hace el OAuth
+   * handshake real (sin tocar meetings) y devuelve el `accountId` echo
+   * + un flag `kind` indicando si las credenciales son reales o el stub.
+   * Lanza `ZoomApiError` (filtrado a 400 por error.filter) si Zoom
+   * rechaza las creds.
+   */
+  async testCredentials(tenantId: string): Promise<{ kind: 'real' | 'stub'; accountId: string }> {
+    const client = await this.clientFor(tenantId);
+    const result = await client.testCredentials();
+    const kind = client instanceof StubZoomApiClient ? 'stub' : 'real';
+    return { kind, accountId: result.accountId };
+  }
+
+  /**
    * Lista paginada de eventos webhook recibidos para QA/debugging admin.
    * Filtros: `eventType` (exact match) y `result` (OK | IGNORED | ERROR).
    * Solo devuelve eventos que tienen `tenantId` resuelto (eventos sin

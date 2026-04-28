@@ -101,6 +101,14 @@ export const zoomLiveApi = {
     );
   },
 
+  async testCredentials(): Promise<{ kind: 'real' | 'stub'; accountId: string }> {
+    return apiFetch<{ kind: 'real' | 'stub'; accountId: string }>(
+      '/api/v1/modules/zoom-live/test-credentials',
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
+
   async listWebhookEvents(
     opts: {
       eventType?: string;

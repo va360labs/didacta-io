@@ -31,6 +31,16 @@ export interface ZoomApiClient {
   createMeeting(input: ZoomMeetingCreateInput): Promise<ZoomMeetingCreateResult>;
   deleteMeeting(meetingId: string): Promise<void>;
   updateMeeting(meetingId: string, patch: Partial<ZoomMeetingCreateInput>): Promise<void>;
+  /**
+   * Smoke test: verifica que las credenciales son válidas haciendo el OAuth
+   * handshake sin crear ningún meeting. Devuelve `accountId` echo para que
+   * el admin confirme que matchea lo que configuró. Lanza `ZoomApiError` si
+   * Zoom rechaza las credenciales.
+   *
+   * El stub responde con un accountId fake. El cliente real hace el OAuth
+   * de verdad — útil para validar credenciales antes de operar.
+   */
+  testCredentials(): Promise<{ accountId: string }>;
 }
 
 /**
@@ -53,6 +63,10 @@ export class StubZoomApiClient implements ZoomApiClient {
 
   async updateMeeting(): Promise<void> {
     // Stub: no-op.
+  }
+
+  async testCredentials(): Promise<{ accountId: string }> {
+    return { accountId: 'stub-account' };
   }
 }
 
@@ -134,6 +148,15 @@ export class RealZoomApiClient implements ZoomApiClient {
       method: 'PATCH',
       body: JSON.stringify(body),
     });
+  }
+
+  async testCredentials(): Promise<{ accountId: string }> {
+    // Forzamos refresh del token para que sea un test real (no servir
+    // un cached) y devolvemos el accountId que vino en las creds para
+    // que el caller pueda mostrar feedback "vinculado a cuenta X".
+    this.cachedToken = undefined;
+    await this.getAccessToken();
+    return { accountId: this.creds.accountId };
   }
 
   // ---- internals ----

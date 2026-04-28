@@ -12,6 +12,7 @@ import { adminTenantsApi, type TenantListItem } from '@/lib/admin-tenants';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { tenantSettingsApi, type TenantSettingMetadata } from '@/lib/tenant-settings';
+import { zoomLiveApi } from '@/lib/zoom-live';
 
 interface SmtpDraft {
   host: string;
@@ -441,6 +442,9 @@ function ZoomCredentialsCard() {
   const [draft, setDraft] = useState({ accountId: '', clientId: '', clientSecret: '' });
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState<
+    'idle' | 'testing' | { kind: 'real' | 'stub'; accountId: string } | { error: string }
+  >('idle');
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
@@ -474,6 +478,18 @@ function ZoomCredentialsCard() {
     } catch (e) {
       setStatus('error');
       setErrMsg(e instanceof ApiHttpError ? e.message : 'No pudimos borrar las credenciales.');
+    }
+  }
+
+  async function handleTest() {
+    setTestStatus('testing');
+    try {
+      const res = await zoomLiveApi.testCredentials();
+      setTestStatus(res);
+    } catch (e) {
+      setTestStatus({
+        error: e instanceof ApiHttpError ? e.message : 'No pudimos validar las credenciales.',
+      });
     }
   }
 
@@ -526,6 +542,14 @@ function ZoomCredentialsCard() {
             <Button type="submit" disabled={status === 'saving'}>
               {status === 'saving' ? 'Guardando…' : 'Guardar credenciales'}
             </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleTest}
+              disabled={testStatus === 'testing'}
+            >
+              {testStatus === 'testing' ? 'Probando…' : 'Probar credenciales'}
+            </Button>
             <Button type="button" variant="ghost" onClick={handleClear}>
               Borrar credenciales
             </Button>
@@ -536,6 +560,18 @@ function ZoomCredentialsCard() {
               <span className="text-sm text-danger-700">{errMsg}</span>
             ) : null}
           </div>
+          {typeof testStatus === 'object' && 'kind' in testStatus ? (
+            <div className="sm:col-span-2 rounded-lg border border-success-100 bg-success-50 p-3 text-sm text-success-700">
+              {testStatus.kind === 'real'
+                ? `✓ Credenciales válidas. Vinculado a la cuenta Zoom ${testStatus.accountId}.`
+                : '⚠ El módulo está usando el stub local — no hay credenciales reales configuradas todavía.'}
+            </div>
+          ) : null}
+          {typeof testStatus === 'object' && 'error' in testStatus ? (
+            <div className="sm:col-span-2 rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700">
+              ✗ {testStatus.error}
+            </div>
+          ) : null}
         </form>
       </CardContent>
     </Card>

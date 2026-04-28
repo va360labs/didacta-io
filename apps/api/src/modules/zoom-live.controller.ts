@@ -108,6 +108,23 @@ export class ZoomLiveController {
     return { cancelled: true };
   }
 
+  @Post('test-credentials')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Smoke test de las credenciales Zoom S2S del tenant: hace el OAuth handshake (sin crear meetings). Devuelve `kind: "real" | "stub"` y el `accountId` echo. Errores de Zoom se traducen a 400.',
+  })
+  async testCredentials(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    const allowed = new Set(['super_admin', 'tenant_admin']);
+    if (!user.roles.some((r) => allowed.has(r))) {
+      throw new UnauthorizedException(
+        'Solo administradores pueden probar las credenciales de Zoom.',
+      );
+    }
+    return this.registry.getZoomLiveService().testCredentials(user.tenantId);
+  }
+
   @Get('webhook-events')
   @ApiOperation({
     summary:

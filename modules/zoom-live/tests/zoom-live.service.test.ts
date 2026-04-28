@@ -514,3 +514,14 @@ describe('ZoomLiveService.listWebhookEvents', () => {
     expect(otroTenant.items).toHaveLength(0);
   });
 });
+
+describe('ZoomLiveService.testCredentials', () => {
+  it('con stub devuelve kind=stub y accountId fake', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const result = await service.testCredentials(TENANT);
+    expect(result.kind).toBe('stub');
+    expect(result.accountId).toBe('stub-account');
+  });
+});
