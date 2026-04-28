@@ -61,6 +61,14 @@ function makeFakePrisma(users: UserRow[] = []) {
         return users.find((u) => u.id === args.where.id) ?? null;
       },
     },
+    notificationTemplate: {
+      // Stub: el render usa este lookup para overrides per-tenant. En
+      // estos tests no hay overrides — devolvemos null y dejamos que
+      // caiga al template hardcoded del producto.
+      async findUnique(): Promise<null> {
+        return null;
+      },
+    },
     _rows: rows,
   };
 }

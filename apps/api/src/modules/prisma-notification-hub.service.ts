@@ -40,7 +40,13 @@ export class PrismaNotificationHubService implements NotificationHubService {
     variables: Record<string, unknown>;
   }): Promise<void> {
     const channel = this.mapChannel(notification.channel);
-    const rendered = renderTemplate(notification.templateKey, notification.variables);
+    const rendered = await this.renderForTenant(
+      notification.tenantId,
+      notification.templateKey,
+      channel,
+      notification.locale,
+      notification.variables,
+    );
 
     const created = await this.prisma.notification.create({
       data: {
@@ -171,6 +177,47 @@ export class PrismaNotificationHubService implements NotificationHubService {
     if (channel === 'email') return 'EMAIL';
     if (channel === 'webhook') return 'WEBHOOK';
     return 'IN_APP';
+  }
+
+  /**
+   * Renderiza la notificación con prioridad:
+   * 1. Override per-tenant en `notification_template` para (tenantId, key,
+   *    channel, locale).
+   * 2. Si no existe, override en el locale fallback es-ES (compat con
+   *    tenants que solo configuran un idioma).
+   * 3. Si no existe, plantilla hardcoded por defecto del producto.
+   *
+   * Esto permite que cada tenant personalice el copy de cada notificación
+   * (subject + body con variables `{{var}}`) sin requerir redespliegue.
+   */
+  private async renderForTenant(
+    tenantId: string,
+    key: string,
+    channel: 'EMAIL' | 'IN_APP' | 'WEBHOOK',
+    locale: string,
+    variables: Record<string, unknown>,
+  ): Promise<RenderedTemplate> {
+    const override =
+      (await this.prisma.notificationTemplate.findUnique({
+        where: {
+          tenantId_key_channel_locale: { tenantId, key, channel, locale },
+        },
+      })) ??
+      (locale !== 'es-ES'
+        ? await this.prisma.notificationTemplate.findUnique({
+            where: {
+              tenantId_key_channel_locale: { tenantId, key, channel, locale: 'es-ES' },
+            },
+          })
+        : null);
+
+    if (override) {
+      return {
+        subject: override.subject ? interpolate(override.subject, variables) : null,
+        body: interpolate(override.body, variables),
+      };
+    }
+    return renderTemplate(key, variables);
   }
 }
 
