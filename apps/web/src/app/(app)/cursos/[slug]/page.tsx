@@ -15,6 +15,7 @@ import { certificatesApi, type Certificate } from '@/lib/certificates';
 import { coursesApi, type CourseDetail, type CourseLesson } from '@/lib/courses';
 import { formatDuration } from '@/lib/format';
 import { learningApi, type Enrollment } from '@/lib/learning';
+import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { zoomLiveApi, type ZoomSession } from '@/lib/zoom-live';
 
 const LESSON_TYPE_LABEL: Record<string, string> = {
@@ -204,9 +205,20 @@ export default function CourseAlumnoPage() {
             >
               {course.title}
             </h1>
-            <p className="max-w-2xl text-base leading-relaxed text-text-muted">
-              {course.description ?? 'Este curso aún no tiene descripción.'}
-            </p>
+            {course.description ? (
+              // El editor del builder produce HTML que el server sanitiza al
+              // guardar. Re-sanitizamos al renderizar via DOMPurify (defensa
+              // en profundidad: si una descripción legacy guardada en plano
+              // entró sin pasar por el sanitizer, igual no abre XSS).
+              <div
+                className="prose prose-slate max-w-2xl prose-p:text-text-muted prose-headings:font-display prose-a:text-brand-700"
+                dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(course.description) }}
+              />
+            ) : (
+              <p className="max-w-2xl text-base leading-relaxed text-text-muted">
+                Este curso aún no tiene descripción.
+              </p>
+            )}
             <div className="flex flex-wrap gap-x-7 gap-y-2 text-sm text-text-muted">
               <div>
                 <strong className="font-display text-text">{course.modules.length}</strong> módulo

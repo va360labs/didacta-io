@@ -21,14 +21,15 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { CourseStatusBadge } from '@/components/course-status-badge';
 import { Icon, type IconName } from '@/components/icon';
+import { RichTextEditor } from '@/components/rich-text-editor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { certificateTemplatesApi, type CertificateTemplate } from '@/lib/certificates';
+import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import {
   coursesApi,
   type CourseDetail,
@@ -148,9 +149,13 @@ export function CourseEditor({
               </h1>
               <p className="mt-1 font-mono text-sm text-white/60">/{initial.slug}</p>
               {initial.description ? (
-                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/85">
-                  {initial.description}
-                </p>
+                // Preview del HTML del editor (sanitizado). Los tags
+                // soportados (h2/h3, listas, b, i, links) se ven con la
+                // tipografía blanca del hero.
+                <div
+                  className="prose prose-invert mt-3 max-w-2xl text-sm leading-relaxed text-white/85"
+                  dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(initial.description) }}
+                />
               ) : null}
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -524,16 +529,15 @@ function MetadataEditor({
 
           <div className="space-y-1.5">
             <Label htmlFor="meta-description">Descripción</Label>
-            <Textarea
-              id="meta-description"
-              rows={4}
+            <RichTextEditor
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              maxLength={2000}
+              onChange={setDescription}
               placeholder="¿De qué trata este curso? ¿A quién está dirigido?"
+              ariaLabel="Descripción del curso"
             />
             <p className="text-xs text-text-subtle">
-              Aparece en el catálogo y bajo el cover del curso.
+              Aparece en el catálogo y bajo el cover del curso. Soporta negrita, listas, encabezados
+              y enlaces.
             </p>
           </div>
 

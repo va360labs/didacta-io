@@ -5,7 +5,7 @@ import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/rich-text-editor';
 import { ApiHttpError } from '@/lib/api-client';
 import { coursesApi, type Course } from '@/lib/courses';
 
@@ -115,16 +115,14 @@ export function NewCourseForm({ onCreated, onCancel }: Props) {
 
       <div className="space-y-1.5">
         <Label htmlFor="description">Descripción</Label>
-        <Textarea
-          id="description"
-          name="description"
-          rows={4}
+        <RichTextEditor
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={setDescription}
           placeholder="¿De qué trata este curso? ¿A quién está dirigido? ¿Qué van a aprender?"
+          ariaLabel="Descripción del curso"
         />
         <p className="text-xs text-text-subtle">
-          Recomendado para SEO y para el catálogo. Podés ampliarlo después.
+          Recomendado para SEO y para el catálogo. Soporta negrita, listas, encabezados y enlaces.
         </p>
       </div>
 

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { formatDuration } from '@/lib/format';
+import { richHtmlToPlainText } from '@/lib/sanitize-html';
 import { cn } from '@/lib/utils';
 
 export interface CourseCardData {
@@ -126,7 +127,7 @@ export function CourseCard({ course, href }: Props) {
 
           {course.description ? (
             <p className="line-clamp-2 text-sm leading-snug text-text-muted">
-              {course.description}
+              {richHtmlToPlainText(course.description)}
             </p>
           ) : null}
 
