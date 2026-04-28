@@ -4,6 +4,8 @@ import { manifest } from './manifest.js';
 export { manifest };
 export { FundaeService } from './fundae.service.js';
 export { buildActionXml } from './xml-export.js';
+export { renderEvidencePdf, type EvidenceRenderInput } from './evidence-pdf.js';
+export { buildPresentationZip, type ZipPackageInput } from './zip-package.js';
 export {
   actionStatusSchema,
   createActionSchema,
@@ -22,6 +24,7 @@ export {
 } from './dto.js';
 export {
   ActionNotFoundError,
+  ActionWithoutCourseError,
   BlockHoursExceedActionError,
   BlockNotFoundError,
   BlockOrdinalDuplicadoError,
@@ -29,6 +32,7 @@ export {
   CourseNotInTenantError,
   FechasInvalidasError,
   FundaeError,
+  ParticipantNotInActionError,
 } from './errors.js';
 
 export const fundaeModule: DidactaModule = {

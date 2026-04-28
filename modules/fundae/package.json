@@ -26,10 +26,14 @@
   "dependencies": {
     "@didacta/core-kernel": "workspace:*",
     "@didacta/database": "workspace:*",
+    "archiver": "^7.0.1",
+    "pdfkit": "^0.16.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/archiver": "^6.0.3",
     "@types/node": "^22.10.2",
+    "@types/pdfkit": "^0.13.9",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }

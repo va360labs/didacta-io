@@ -61,3 +61,21 @@ export class BlockOrdinalDuplicadoError extends FundaeError {
     );
   }
 }
+
+export class ParticipantNotInActionError extends FundaeError {
+  constructor(userId: string) {
+    super(
+      'FUNDAE_PARTICIPANT_NOT_IN_ACTION',
+      `El usuario ${userId} no está matriculado en el curso vinculado a esta acción.`,
+    );
+  }
+}
+
+export class ActionWithoutCourseError extends FundaeError {
+  constructor(actionId: string) {
+    super(
+      'FUNDAE_ACTION_WITHOUT_COURSE',
+      `La acción ${actionId} no tiene curso vinculado; no es posible generar evidencias por participante.`,
+    );
+  }
+}

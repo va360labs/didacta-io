@@ -112,6 +112,16 @@ export class FundaeController {
     return { total };
   }
 
+  @Get('actions/:id/participants')
+  @ApiOperation({
+    summary:
+      'Lista detallada de participantes con email, DNI, progreso y resultado. Usado por el admin para generar evidencias PDF.',
+  })
+  async listParticipants(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeService().listParticipants(u.tenantId, id);
+  }
+
   @Get('actions/:id/export.xml')
   @ApiOperation({
     summary:
@@ -176,5 +186,72 @@ export class FundaeController {
     const u = this.requireAdmin(user);
     await this.registry.getFundaeService().deleteBlock(u.tenantId, u.sub, id, blockId);
     return { deleted: true };
+  }
+
+  // ------------------- evidencias + ZIP de presentación -------------------
+
+  @Get('actions/:id/participants/:userId/evidence.pdf')
+  @ApiOperation({
+    summary:
+      'PDF de evidencia firmada para un participante. El firmante es el admin que solicita la descarga; el service resuelve nombre desde User.',
+  })
+  async exportEvidencePdf(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Res({ passthrough: false }) reply: FastifyReply,
+  ) {
+    const u = this.requireAdmin(user);
+    const signer = await this.resolveSigner(u);
+    const pdf = await this.registry
+      .getFundaeService()
+      .generateEvidencePdf(u.tenantId, id, userId, signer);
+    void reply
+      .header('Content-Type', 'application/pdf')
+      .header('Content-Disposition', `attachment; filename="evidencia-${id}-${userId}.pdf"`)
+      .send(pdf);
+  }
+
+  @Get('actions/:id/export.zip')
+  @ApiOperation({
+    summary:
+      'ZIP de presentación Fundae: contiene el XML de la acción y un PDF de evidencia firmada por participante (si la acción tiene curso vinculado).',
+  })
+  async exportPresentationZip(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Res({ passthrough: false }) reply: FastifyReply,
+  ) {
+    const u = this.requireAdmin(user);
+    const signer = await this.resolveSigner(u);
+    const zip = await this.registry
+      .getFundaeService()
+      .generatePresentationZip(u.tenantId, u.sub, id, signer);
+    void reply
+      .header('Content-Type', 'application/zip')
+      .header('Content-Disposition', `attachment; filename="fundae-${id}.zip"`)
+      .send(zip);
+  }
+
+  /**
+   * Resuelve el firmante (nombre + cargo) consultando el User del admin
+   * que dispara la descarga. Si el usuario no tiene `name`, cae a su email.
+   * El cargo se infiere del primer rol administrativo presente.
+   */
+  private async resolveSigner(
+    user: SessionClaims,
+  ): Promise<{ name: string; title: string | null }> {
+    const dbUser = await this.registry
+      .getFundaeService()
+      .resolveSignerProfile(user.tenantId, user.sub);
+    const title = user.roles.includes('super_admin')
+      ? 'Super administrador'
+      : user.roles.includes('tenant_admin')
+        ? 'Administrador'
+        : null;
+    return {
+      name: dbUser?.name ?? dbUser?.email ?? 'Responsable de formación',
+      title,
+    };
   }
 }

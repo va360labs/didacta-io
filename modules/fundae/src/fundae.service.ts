@@ -13,13 +13,17 @@ import type {
 } from './dto.js';
 import {
   ActionNotFoundError,
+  ActionWithoutCourseError,
   BlockHoursExceedActionError,
   BlockNotFoundError,
   BlockOrdinalDuplicadoError,
   CodigoDuplicadoError,
   CourseNotInTenantError,
   FechasInvalidasError,
+  ParticipantNotInActionError,
 } from './errors.js';
+import { renderEvidencePdf } from './evidence-pdf.js';
+import { buildPresentationZip } from './zip-package.js';
 import { buildActionXml, type ParticipantSnapshot, type BlockSnapshot } from './xml-export.js';
 
 export class FundaeService {
@@ -182,6 +186,152 @@ export class FundaeService {
   }
 
   /**
+   * Genera el PDF de evidencia para un participante concreto de una
+   * acción. Requiere que la acción tenga `courseId` set y que el usuario
+   * tenga una matriculación NO cancelada en ese curso.
+   *
+   * El PDF se construye en memoria; el caller (controller) decide si lo
+   * cachea en object storage o lo sirve directo.
+   */
+  async generateEvidencePdf(
+    tenantId: string,
+    actionId: string,
+    userId: string,
+    signer: { name: string; title?: string | null },
+  ): Promise<Buffer> {
+    const action = await this.get(tenantId, actionId);
+    if (!action.courseId) throw new ActionWithoutCourseError(actionId);
+
+    const enrollment = await this.prisma.modLearningEnrollment.findFirst({
+      where: { tenantId, courseId: action.courseId, userId, status: { not: 'CANCELLED' } },
+    });
+    if (!enrollment) throw new ParticipantNotInActionError(userId);
+
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, tenantId },
+      select: { id: true, name: true, email: true, documentId: true },
+    });
+    if (!user) throw new ParticipantNotInActionError(userId);
+
+    const tenant = await this.prisma.tenant.findFirst({
+      where: { id: tenantId },
+      select: { name: true },
+    });
+
+    const horasAsistidas = roundHours(
+      (action.horasFormacion * (enrollment.progressPercent ?? 0)) / 100,
+    );
+    const passed =
+      enrollment.completedAt !== null &&
+      (enrollment.progressPercent ?? 0) >= enrollment.completionThreshold;
+    const failed =
+      enrollment.status === 'CANCELLED' || (enrollment.completedAt !== null && !passed);
+    const resultado: 'APTO' | 'NO_APTO' | 'EN_CURSO' = passed
+      ? 'APTO'
+      : failed
+        ? 'NO_APTO'
+        : 'EN_CURSO';
+
+    return renderEvidencePdf({
+      action,
+      centerName: tenant?.name ?? 'Centro impartidor',
+      cifCentro: action.cifCentro,
+      participantName: user.name ?? user.email,
+      participantEmail: user.email,
+      participantDni: user.documentId,
+      horasAsistidas,
+      resultado,
+      enrolledAt: enrollment.enrolledAt,
+      completedAt: enrollment.completedAt,
+      signerName: signer.name,
+      signerTitle: signer.title,
+    });
+  }
+
+  /**
+   * Empaqueta el XML de la acción + un PDF de evidencia por participante
+   * en un único ZIP listo para subir a Fundae. Si la acción no tiene
+   * curso vinculado, el ZIP solo contiene el XML.
+   */
+  async generatePresentationZip(
+    tenantId: string,
+    actorId: string | null,
+    actionId: string,
+    signer: { name: string; title?: string | null },
+  ): Promise<Buffer> {
+    const action = await this.get(tenantId, actionId);
+    const xml = await this.generateXml(tenantId, actorId, actionId);
+
+    const evidences: Array<{ filename: string; pdfData: Buffer }> = [];
+    if (action.courseId) {
+      const enrollments = await this.prisma.modLearningEnrollment.findMany({
+        where: { tenantId, courseId: action.courseId, status: { not: 'CANCELLED' } },
+        orderBy: { enrolledAt: 'asc' },
+      });
+      const userIds = enrollments.map((e) => e.userId);
+      // Generamos los PDFs secuencialmente: pdfkit es CPU-bound y N suele
+      // ser bajo (≤ 50). Si necesitamos más, paralelizamos con `pMap`.
+      for (const userId of userIds) {
+        try {
+          const pdf = await this.generateEvidencePdf(tenantId, actionId, userId, signer);
+          const slug = await this.evidenceFilenameFor(tenantId, userId);
+          evidences.push({ filename: slug, pdfData: pdf });
+        } catch (e) {
+          this.ctx.logger.warn('mod.fundae: error generando evidencia, se omite del ZIP', {
+            actionId,
+            userId,
+            err: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+    }
+
+    const zip = await buildPresentationZip({
+      xmlFilename: `accion-${action.codigoAccion}.xml`,
+      xmlContent: xml,
+      evidences,
+    });
+
+    await this.publish(tenantId, actorId, 'fundae.zip.generated', {
+      actionId,
+      evidencesCount: evidences.length,
+      bytes: zip.byteLength,
+    });
+    return zip;
+  }
+
+  /**
+   * Resuelve un nombre de archivo predecible para el PDF de evidencia
+   * dentro del ZIP. Prefiere DNI (legible para el reviewer Fundae) y cae
+   * a un slug del email si no hay DNI.
+   */
+  private async evidenceFilenameFor(tenantId: string, userId: string): Promise<string> {
+    const u = await this.prisma.user.findFirst({
+      where: { id: userId, tenantId },
+      select: { documentId: true, email: true },
+    });
+    if (u?.documentId) return `evidencia-${u.documentId}.pdf`;
+    const slug = (u?.email ?? userId).split('@')[0]!.replace(/[^a-zA-Z0-9._-]/g, '_');
+    return `evidencia-${slug}.pdf`;
+  }
+
+  /**
+   * Resuelve el perfil del firmante (admin) para usar en evidencias y
+   * ZIP. Devuelve `null` si el usuario no existe o no pertenece al
+   * tenant — el caller decide el fallback.
+   */
+  async resolveSignerProfile(
+    tenantId: string,
+    userId: string,
+  ): Promise<{ name: string | null; email: string } | null> {
+    const u = await this.prisma.user.findFirst({
+      where: { id: userId, tenantId },
+      select: { name: true, email: true },
+    });
+    return u ?? null;
+  }
+
+  /**
    * Lista los bloques (módulos formativos) de una acción ordenados por
    * `ordinal` ascendente.
    */
@@ -331,6 +481,60 @@ export class FundaeService {
     if (!action.courseId) return 0;
     return this.prisma.modLearningEnrollment.count({
       where: { tenantId, courseId: action.courseId, status: { not: 'CANCELLED' } },
+    });
+  }
+
+  /**
+   * Lista los participantes (datos del User + enrollment) de una acción
+   * para uso del UI admin: permite generar evidencias PDF por persona.
+   * Devuelve `[]` si la acción no tiene curso vinculado.
+   */
+  async listParticipants(
+    tenantId: string,
+    actionId: string,
+  ): Promise<
+    Array<{
+      userId: string;
+      name: string | null;
+      email: string;
+      documentId: string | null;
+      progressPercent: number;
+      enrolledAt: string;
+      completedAt: string | null;
+      status: 'APTO' | 'NO_APTO' | 'EN_CURSO';
+    }>
+  > {
+    const action = await this.get(tenantId, actionId);
+    if (!action.courseId) return [];
+    const enrollments = await this.prisma.modLearningEnrollment.findMany({
+      where: { tenantId, courseId: action.courseId, status: { not: 'CANCELLED' } },
+      orderBy: { enrolledAt: 'asc' },
+    });
+    if (enrollments.length === 0) return [];
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: enrollments.map((e) => e.userId) } },
+      select: { id: true, name: true, email: true, documentId: true },
+    });
+    const byId = new Map(users.map((u) => [u.id, u]));
+    return enrollments.map((e) => {
+      const u = byId.get(e.userId);
+      const passed = e.completedAt !== null && (e.progressPercent ?? 0) >= e.completionThreshold;
+      const failed = e.status === 'CANCELLED' || (e.completedAt !== null && !passed);
+      const status: 'APTO' | 'NO_APTO' | 'EN_CURSO' = passed
+        ? 'APTO'
+        : failed
+          ? 'NO_APTO'
+          : 'EN_CURSO';
+      return {
+        userId: e.userId,
+        name: u?.name ?? null,
+        email: u?.email ?? '',
+        documentId: u?.documentId ?? null,
+        progressPercent: e.progressPercent ?? 0,
+        enrolledAt: e.enrolledAt.toISOString(),
+        completedAt: e.completedAt?.toISOString() ?? null,
+        status,
+      };
     });
   }
 

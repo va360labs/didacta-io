@@ -12,7 +12,14 @@ import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
-import { fundaeApi, type FundaeAction, type FundaeBlock, type Modalidad } from '@/lib/fundae';
+import { authStorage } from '@/lib/auth-storage';
+import {
+  fundaeApi,
+  type FundaeAction,
+  type FundaeBlock,
+  type FundaeParticipant,
+  type Modalidad,
+} from '@/lib/fundae';
 
 const MODALIDAD_OPTIONS: Modalidad[] = ['PRESENCIAL', 'TELEFORMACION', 'MIXTA'];
 
@@ -22,19 +29,69 @@ export default function FundaeActionDetailPage() {
 
   const [action, setAction] = useState<FundaeAction | null>(null);
   const [blocks, setBlocks] = useState<FundaeBlock[] | null>(null);
+  const [participants, setParticipants] = useState<FundaeParticipant[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [zipPending, setZipPending] = useState(false);
 
   async function reload() {
     try {
       setError(null);
-      const [a, list] = await Promise.all([
+      const [a, list, parts] = await Promise.all([
         fundaeApi.get(actionId),
         fundaeApi.listBlocks(actionId),
+        fundaeApi.listParticipants(actionId).catch(() => [] as FundaeParticipant[]),
       ]);
       setAction(a);
       setBlocks(list);
+      setParticipants(parts);
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar la acción.');
+    }
+  }
+
+  async function downloadAuthenticated(url: string, filename: string) {
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HTTP ${res.status}: ${text}`);
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
+  }
+
+  async function handleDownloadZip() {
+    if (!action) return;
+    setZipPending(true);
+    try {
+      await downloadAuthenticated(
+        fundaeApi.exportZipUrl(actionId),
+        `fundae-${action.codigoAccion}.zip`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No pudimos descargar el ZIP.');
+    } finally {
+      setZipPending(false);
+    }
+  }
+
+  async function handleDownloadEvidence(p: FundaeParticipant) {
+    try {
+      const idLabel = p.documentId ?? p.email.split('@')[0] ?? p.userId;
+      await downloadAuthenticated(
+        fundaeApi.evidencePdfUrl(actionId, p.userId),
+        `evidencia-${idLabel}.pdf`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No pudimos descargar la evidencia.');
     }
   }
 
@@ -83,11 +140,16 @@ export default function FundaeActionDetailPage() {
             </span>
           </div>
         </div>
-        <Button asChild variant="secondary">
-          <a href={fundaeApi.exportXmlUrl(action.id)} target="_blank" rel="noopener noreferrer">
-            Exportar XML
-          </a>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="ghost" size="sm">
+            <a href={fundaeApi.exportXmlUrl(action.id)} target="_blank" rel="noopener noreferrer">
+              XML
+            </a>
+          </Button>
+          <Button onClick={handleDownloadZip} disabled={zipPending}>
+            {zipPending ? 'Generando ZIP…' : 'Descargar ZIP de presentación'}
+          </Button>
+        </div>
       </header>
 
       <Card>
@@ -132,6 +194,60 @@ export default function FundaeActionDetailPage() {
           />
         </CardContent>
       </Card>
+
+      {action.courseId && participants ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Participantes ({participants.length})</CardTitle>
+            <CardDescription>
+              Cada participante puede tener una evidencia PDF firmada. El ZIP de presentación
+              empaqueta el XML + todas las evidencias.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {participants.length === 0 ? (
+              <p className="text-sm text-text-muted">
+                No hay matriculaciones activas en el curso vinculado.
+              </p>
+            ) : (
+              <ul className="divide-y divide-border rounded-lg border border-border">
+                {participants.map((p) => (
+                  <li key={p.userId} className="flex flex-wrap items-center gap-3 p-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-text">{p.name ?? p.email}</p>
+                      <p className="text-xs text-text-muted">
+                        {p.email}
+                        {p.documentId ? ` · ${p.documentId}` : ' · sin DNI declarado'}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={
+                        p.status === 'APTO'
+                          ? 'success'
+                          : p.status === 'NO_APTO'
+                            ? 'danger'
+                            : 'warning'
+                      }
+                    >
+                      {p.status === 'EN_CURSO' ? 'EN CURSO' : p.status}
+                    </Badge>
+                    <span className="text-xs text-text-muted tabular-nums">
+                      {p.progressPercent}%
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void handleDownloadEvidence(p)}
+                    >
+                      Evidencia PDF
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

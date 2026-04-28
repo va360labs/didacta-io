@@ -50,6 +50,17 @@ export interface UpdateBlockInput {
   contenidos?: string;
 }
 
+export interface FundaeParticipant {
+  userId: string;
+  name: string | null;
+  email: string;
+  documentId: string | null;
+  progressPercent: number;
+  enrolledAt: string;
+  completedAt: string | null;
+  status: 'APTO' | 'NO_APTO' | 'EN_CURSO';
+}
+
 function withAuth(): string {
   const token = authStorage.getAccessToken();
   if (!token) throw new ApiHttpError({ message: 'Sesión expirada', status: 401 });
@@ -111,6 +122,22 @@ export const fundaeApi = {
    */
   exportXmlUrl(id: string): string {
     return `/api/v1/modules/fundae/actions/${id}/export.xml`;
+  },
+
+  exportZipUrl(id: string): string {
+    return `/api/v1/modules/fundae/actions/${id}/export.zip`;
+  },
+
+  evidencePdfUrl(actionId: string, userId: string): string {
+    return `/api/v1/modules/fundae/actions/${actionId}/participants/${userId}/evidence.pdf`;
+  },
+
+  async listParticipants(actionId: string): Promise<FundaeParticipant[]> {
+    return apiFetch<FundaeParticipant[]>(
+      `/api/v1/modules/fundae/actions/${actionId}/participants`,
+      { method: 'GET' },
+      withAuth(),
+    );
   },
 
   async get(id: string): Promise<FundaeAction> {
