@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { adminModulesApi, type TenantModuleListItem } from '@/lib/admin-modules';
 import { adminTenantsApi, type TenantListItem } from '@/lib/admin-tenants';
@@ -296,24 +297,7 @@ export default function ConfiguracionPage() {
 
       {tab === 'aula-virtual' ? <ZoomCredentialsCard /> : null}
 
-      {tab === 'storage' ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Storage</CardTitle>
-            <CardDescription>
-              El backend de archivos se selecciona vía variables de entorno del servidor (no es
-              configurable per-tenant todavía).
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <p className="text-text-muted">
-              Estado actual: <strong className="text-text">controlado por env</strong> (
-              <code>STORAGE_DRIVER</code>). Si tu organización necesita un bucket S3 propio, hablá
-              con el equipo de plataforma.
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
+      {tab === 'storage' ? <StorageTab /> : null}
 
       {tab === 'plantillas' ? (
         <Card>
@@ -758,4 +742,227 @@ function extractDependents(err: ApiHttpError): string[] {
   const anyErr = err as unknown as { details?: { dependents?: unknown } };
   const list = anyErr.details?.dependents;
   return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : [];
+}
+
+type StorageDriver = 'local' | 's3';
+
+interface StorageDraft {
+  driver: StorageDriver;
+  localDir: string;
+  s3Bucket: string;
+  s3Region: string;
+  s3Endpoint: string;
+  s3AccessKeyId: string;
+  s3SecretAccessKey: string;
+}
+
+const EMPTY_STORAGE: StorageDraft = {
+  driver: 'local',
+  localDir: '/data/storage',
+  s3Bucket: '',
+  s3Region: 'eu-central-1',
+  s3Endpoint: '',
+  s3AccessKeyId: '',
+  s3SecretAccessKey: '',
+};
+
+function StorageTab() {
+  const [draft, setDraft] = useState<StorageDraft>(EMPTY_STORAGE);
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+
+  // Persistimos en 2 keys: `storage.config` (no-secret, hidratable al
+  // releer) con el driver y la metadata; `storage.secret` (cifrada) sólo
+  // con la access secret. Así el admin ve los valores guardados al volver
+  // a la tab y sólo re-tipea el secret si quiere rotarlo.
+  useEffect(() => {
+    let aborted = false;
+    void (async () => {
+      try {
+        const detail = await tenantSettingsApi
+          .get('storage', 'config')
+          .catch(() => null as { value: unknown } | null);
+        if (aborted || !detail || detail.value == null || typeof detail.value !== 'object') return;
+        const value = detail.value as Record<string, unknown>;
+        const driver = value['driver'] === 's3' ? 's3' : 'local';
+        setDraft({
+          driver,
+          localDir: typeof value['localDir'] === 'string' ? value['localDir'] : '/data/storage',
+          s3Bucket: typeof value['s3Bucket'] === 'string' ? value['s3Bucket'] : '',
+          s3Region: typeof value['s3Region'] === 'string' ? value['s3Region'] : 'eu-central-1',
+          s3Endpoint: typeof value['s3Endpoint'] === 'string' ? value['s3Endpoint'] : '',
+          s3AccessKeyId: typeof value['s3AccessKeyId'] === 'string' ? value['s3AccessKeyId'] : '',
+          s3SecretAccessKey: '',
+        });
+      } catch {
+        // Si la lectura falla dejamos los defaults.
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, []);
+
+  async function handleSave(e: FormEvent) {
+    e.preventDefault();
+    setStatus('saving');
+    setError(null);
+    try {
+      if (draft.driver === 's3' && (!draft.s3Bucket.trim() || !draft.s3AccessKeyId.trim())) {
+        throw new Error('Bucket y Access Key ID son requeridos para S3.');
+      }
+      const config =
+        draft.driver === 'local'
+          ? { driver: 'local' as const, localDir: draft.localDir.trim() || '/data/storage' }
+          : {
+              driver: 's3' as const,
+              s3Bucket: draft.s3Bucket.trim(),
+              s3Region: draft.s3Region.trim(),
+              s3Endpoint: draft.s3Endpoint.trim() || undefined,
+              s3AccessKeyId: draft.s3AccessKeyId.trim(),
+            };
+      await tenantSettingsApi.upsert('storage', 'config', { isSecret: false, value: config });
+      // Sólo escribimos el secret si el admin lo re-tipeó en este turno.
+      // Vacío significa "conservar el actual" para no requerir conocerlo.
+      if (draft.driver === 's3' && draft.s3SecretAccessKey) {
+        await tenantSettingsApi.upsert('storage', 'secret', {
+          isSecret: true,
+          value: { s3SecretAccessKey: draft.s3SecretAccessKey },
+        });
+      }
+      setStatus('saved');
+      setDraft((d) => ({ ...d, s3SecretAccessKey: '' }));
+    } catch (e) {
+      setStatus('error');
+      setError(e instanceof Error ? e.message : 'No pudimos guardar la configuración de storage.');
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Storage</CardTitle>
+        <CardDescription>
+          Backend de archivos para uploads (avatares, certificados, lecciones, evidencias). Disco
+          local del container o un bucket S3-compatible (AWS, Hetzner, MinIO, Backblaze).
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSave} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="storage-driver">Provider</Label>
+            <Select
+              id="storage-driver"
+              value={draft.driver}
+              onChange={(e) => setDraft({ ...draft, driver: e.target.value as StorageDriver })}
+            >
+              <option value="local">Disco local del container (volumen Docker)</option>
+              <option value="s3">S3-compatible (AWS, Hetzner, MinIO, Backblaze)</option>
+            </Select>
+          </div>
+
+          {draft.driver === 'local' ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="storage-localDir">Directorio del volumen</Label>
+              <Input
+                id="storage-localDir"
+                value={draft.localDir}
+                onChange={(e) => setDraft({ ...draft, localDir: e.target.value })}
+                placeholder="/data/storage"
+                className="font-mono"
+              />
+              <p className="text-xs text-text-subtle">
+                Asegurate de montar un volumen Docker apuntando a esta ruta para que los archivos
+                sobrevivan a redespliegues.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="s3-bucket">Bucket *</Label>
+                <Input
+                  id="s3-bucket"
+                  value={draft.s3Bucket}
+                  onChange={(e) => setDraft({ ...draft, s3Bucket: e.target.value })}
+                  placeholder="mi-tenant-uploads"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s3-region">Region *</Label>
+                <Input
+                  id="s3-region"
+                  value={draft.s3Region}
+                  onChange={(e) => setDraft({ ...draft, s3Region: e.target.value })}
+                  placeholder="eu-central-1"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="s3-endpoint">Endpoint (opcional)</Label>
+                <Input
+                  id="s3-endpoint"
+                  value={draft.s3Endpoint}
+                  onChange={(e) => setDraft({ ...draft, s3Endpoint: e.target.value })}
+                  placeholder="https://s3.eu-central-1.hetzner.com"
+                />
+                <p className="text-xs text-text-subtle">
+                  Sólo necesario para S3-compatible no-AWS (Hetzner, MinIO, Backblaze).
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s3-accessKey">Access Key ID *</Label>
+                <Input
+                  id="s3-accessKey"
+                  value={draft.s3AccessKeyId}
+                  onChange={(e) => setDraft({ ...draft, s3AccessKeyId: e.target.value })}
+                  required
+                  className="font-mono"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s3-secret">Secret Access Key</Label>
+                <Input
+                  id="s3-secret"
+                  type="password"
+                  value={draft.s3SecretAccessKey}
+                  onChange={(e) => setDraft({ ...draft, s3SecretAccessKey: e.target.value })}
+                  placeholder="(dejar vacío para conservar el actual)"
+                  className="font-mono"
+                />
+                <p className="text-xs text-text-subtle">
+                  Se cifra con AES-256-GCM antes de persistir. La API nunca lo devuelve en claro.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {error ? (
+            <div
+              role="alert"
+              className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+            >
+              {error}
+            </div>
+          ) : null}
+          {status === 'saved' ? (
+            <p className="text-sm text-success-700">Guardado correctamente.</p>
+          ) : null}
+
+          <div className="flex justify-end gap-2 border-t border-border-soft pt-4">
+            <Button type="submit" disabled={status === 'saving'}>
+              {status === 'saving' ? 'Guardando…' : 'Guardar configuración'}
+            </Button>
+          </div>
+        </form>
+
+        <div className="mt-6 rounded-lg border border-warning-200 bg-warning-50/50 p-3 text-xs text-warning-800">
+          <strong>Heads-up:</strong> el wiring de esta configuración al adapter del runtime
+          (selección dinámica per-tenant) llega en una iteración siguiente. Por ahora se persiste el
+          setting cifrado y el server sigue usando <code>STORAGE_DRIVER</code> del env hasta que se
+          complete la integración.
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
