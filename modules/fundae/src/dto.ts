@@ -57,3 +57,40 @@ export interface ActionView {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * Bloque/módulo formativo que compone una acción Fundae. Una acción
+ * puede tener N bloques cuyas horas suman como mucho `horasFormacion`
+ * de la acción (Fundae lo verifica al subir el XML). El `ordinal`
+ * define el orden de impartición y es único por acción.
+ */
+export const createBlockSchema = z.object({
+  /** Orden 1..N. Si no se provee, el service lo calcula como max(ordinal)+1. */
+  ordinal: z.number().int().min(1).max(99).optional(),
+  title: z.string().min(1).max(200),
+  hours: z.number().positive().max(9999),
+  modalidad: modalidadSchema,
+  contenidos: z.string().max(4000).optional(),
+});
+export type CreateBlockDto = z.infer<typeof createBlockSchema>;
+
+export const updateBlockSchema = z.object({
+  ordinal: z.number().int().min(1).max(99).optional(),
+  title: z.string().min(1).max(200).optional(),
+  hours: z.number().positive().max(9999).optional(),
+  modalidad: modalidadSchema.optional(),
+  contenidos: z.string().max(4000).optional(),
+});
+export type UpdateBlockDto = z.infer<typeof updateBlockSchema>;
+
+export interface BlockView {
+  id: string;
+  actionId: string;
+  ordinal: number;
+  title: string;
+  hours: number;
+  modalidad: Modalidad;
+  contenidos: string;
+  createdAt: string;
+  updatedAt: string;
+}

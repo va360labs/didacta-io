@@ -37,3 +37,27 @@ export class CourseNotInTenantError extends FundaeError {
     super('FUNDAE_COURSE_NOT_IN_TENANT', `El curso ${courseId} no pertenece a este tenant.`);
   }
 }
+
+export class BlockNotFoundError extends FundaeError {
+  constructor(blockId: string) {
+    super('FUNDAE_BLOCK_NOT_FOUND', `El módulo formativo ${blockId} no existe.`);
+  }
+}
+
+export class BlockHoursExceedActionError extends FundaeError {
+  constructor(totalRequested: number, actionHours: number) {
+    super(
+      'FUNDAE_BLOCK_HOURS_EXCEED',
+      `La suma de horas de los bloques (${totalRequested}h) supera las horas de la acción (${actionHours}h).`,
+    );
+  }
+}
+
+export class BlockOrdinalDuplicadoError extends FundaeError {
+  constructor(ordinal: number) {
+    super(
+      'FUNDAE_BLOCK_ORDINAL_DUPLICADO',
+      `Ya existe un bloque con ordinal ${ordinal} en esta acción.`,
+    );
+  }
+}

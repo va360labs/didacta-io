@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { FundaeService } from '../src/fundae.service.js';
 import { buildActionXml } from '../src/xml-export.js';
-import { ActionNotFoundError, CodigoDuplicadoError, FechasInvalidasError } from '../src/errors.js';
+import {
+  ActionNotFoundError,
+  BlockHoursExceedActionError,
+  BlockNotFoundError,
+  BlockOrdinalDuplicadoError,
+  CodigoDuplicadoError,
+  FechasInvalidasError,
+} from '../src/errors.js';
 
 interface ActionRow {
   id: string;
@@ -38,6 +45,19 @@ interface UserRow {
   email: string;
   name: string | null;
   documentId?: string | null;
+}
+
+interface BlockRow {
+  id: string;
+  tenantId: string;
+  actionId: string;
+  ordinal: number;
+  title: string;
+  hours: number;
+  modalidad: string;
+  contenidos: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 interface FakePrismaSeed {
@@ -121,6 +141,72 @@ function makeFakePrisma(seed: FakePrismaSeed = {}) {
       async findMany(args: { where: { id: { in: string[] } }; select?: unknown }) {
         return users.filter((u) => args.where.id.in.includes(u.id));
       },
+    },
+    modFundaeBlock: makeBlocksFakeRepo(),
+  };
+}
+
+function makeBlocksFakeRepo() {
+  const blocks: BlockRow[] = [];
+  return {
+    _blocks: blocks,
+    async findMany(args: {
+      where: {
+        tenantId?: string;
+        actionId?: string;
+        ordinal?: number;
+        NOT?: { id: string };
+      };
+      orderBy?: unknown;
+      select?: unknown;
+    }) {
+      return blocks
+        .filter((b) =>
+          args.where.tenantId !== undefined ? b.tenantId === args.where.tenantId : true,
+        )
+        .filter((b) =>
+          args.where.actionId !== undefined ? b.actionId === args.where.actionId : true,
+        )
+        .filter((b) => (args.where.ordinal !== undefined ? b.ordinal === args.where.ordinal : true))
+        .filter((b) => (args.where.NOT?.id ? b.id !== args.where.NOT.id : true))
+        .sort((a, b) => a.ordinal - b.ordinal);
+    },
+    async findFirst(args: {
+      where: {
+        tenantId?: string;
+        actionId?: string;
+        id?: string;
+        ordinal?: number;
+        NOT?: { id: string };
+      };
+    }) {
+      return (
+        blocks.find((b) => {
+          if (args.where.tenantId !== undefined && b.tenantId !== args.where.tenantId) return false;
+          if (args.where.actionId !== undefined && b.actionId !== args.where.actionId) return false;
+          if (args.where.id !== undefined && b.id !== args.where.id) return false;
+          if (args.where.ordinal !== undefined && b.ordinal !== args.where.ordinal) return false;
+          if (args.where.NOT?.id && b.id === args.where.NOT.id) return false;
+          return true;
+        }) ?? null
+      );
+    },
+    async create(args: { data: Omit<BlockRow, 'createdAt' | 'updatedAt'> }) {
+      const row: BlockRow = { ...args.data, createdAt: new Date(), updatedAt: new Date() };
+      blocks.push(row);
+      return row;
+    },
+    async update(args: { where: { id: string }; data: Partial<BlockRow> }) {
+      const idx = blocks.findIndex((b) => b.id === args.where.id);
+      if (idx === -1) throw new Error('block not found');
+      blocks[idx] = { ...blocks[idx]!, ...args.data, updatedAt: new Date() };
+      return blocks[idx]!;
+    },
+    async delete(args: { where: { id: string } }) {
+      const idx = blocks.findIndex((b) => b.id === args.where.id);
+      if (idx === -1) throw new Error('block not found');
+      blocks.splice(idx, 1);
+      return undefined;
     },
   };
 }
@@ -467,6 +553,180 @@ describe('FundaeService participantes', () => {
     });
     const xml = await svc.generateXml(TENANT, 'u', a.id);
     expect(xml).not.toContain('<participantes');
+  });
+
+  it('crea bloques y los serializa en el XML como <modulosFormativos>', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const svc = new FundaeService(prisma as never, ctx as never);
+    const a = await svc.create(TENANT, 'u', {
+      codigoAccion: 'BLK-1',
+      nombre: 'Acción con bloques',
+      modalidad: 'MIXTA',
+      horasFormacion: 10,
+      fechaInicio: '2026-01-01',
+      fechaFin: '2026-01-10',
+    });
+    const b1 = await svc.createBlock(TENANT, 'u', a.id, {
+      title: 'Introducción',
+      hours: 4,
+      modalidad: 'PRESENCIAL',
+      contenidos: 'Bloque 1\nÍtem A\nÍtem B',
+    });
+    const b2 = await svc.createBlock(TENANT, 'u', a.id, {
+      title: 'Práctica',
+      hours: 6,
+      modalidad: 'TELEFORMACION',
+    });
+    expect(b1.ordinal).toBe(1);
+    expect(b2.ordinal).toBe(2);
+
+    const list = await svc.listBlocks(TENANT, a.id);
+    expect(list).toHaveLength(2);
+    expect(list[0]!.ordinal).toBe(1);
+    expect(list[1]!.modalidad).toBe('TELEFORMACION');
+
+    const xml = await svc.generateXml(TENANT, 'u', a.id);
+    expect(xml).toContain('<modulosFormativos total="2">');
+    expect(xml).toContain('<title>Introducción</title>');
+    expect(xml).toContain('<title>Práctica</title>');
+    expect(xml).toContain('<modalidad>PRESENCIAL</modalidad>');
+    expect(xml).toContain('<modalidad>TELEFORMACION</modalidad>');
+    // Contenidos del b1 debe escaparse por XML pero preservarse.
+    expect(xml).toContain('<contenidos>Bloque 1\nÍtem A\nÍtem B</contenidos>');
+    // El bloque sin contenidos no genera <contenidos> vacío.
+    expect(xml).not.toContain('<contenidos></contenidos>');
+  });
+
+  it('rechaza bloques cuando la suma de horas supera la acción', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const svc = new FundaeService(prisma as never, ctx as never);
+    const a = await svc.create(TENANT, 'u', {
+      codigoAccion: 'BLK-CAP',
+      nombre: 'Acción con tope 10h',
+      modalidad: 'PRESENCIAL',
+      horasFormacion: 10,
+      fechaInicio: '2026-01-01',
+      fechaFin: '2026-01-10',
+    });
+    await svc.createBlock(TENANT, 'u', a.id, {
+      title: 'A',
+      hours: 8,
+      modalidad: 'PRESENCIAL',
+    });
+    await expect(
+      svc.createBlock(TENANT, 'u', a.id, {
+        title: 'B',
+        hours: 5, // 8 + 5 = 13 > 10
+        modalidad: 'PRESENCIAL',
+      }),
+    ).rejects.toBeInstanceOf(BlockHoursExceedActionError);
+  });
+
+  it('rechaza ordinal duplicado al crear', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const svc = new FundaeService(prisma as never, ctx as never);
+    const a = await svc.create(TENANT, 'u', {
+      codigoAccion: 'BLK-ORD',
+      nombre: 'X',
+      modalidad: 'PRESENCIAL',
+      horasFormacion: 10,
+      fechaInicio: '2026-01-01',
+      fechaFin: '2026-01-10',
+    });
+    await svc.createBlock(TENANT, 'u', a.id, {
+      ordinal: 1,
+      title: 'A',
+      hours: 1,
+      modalidad: 'PRESENCIAL',
+    });
+    await expect(
+      svc.createBlock(TENANT, 'u', a.id, {
+        ordinal: 1,
+        title: 'B',
+        hours: 1,
+        modalidad: 'PRESENCIAL',
+      }),
+    ).rejects.toBeInstanceOf(BlockOrdinalDuplicadoError);
+  });
+
+  it('updateBlock cambia título y hours respetando el cap', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const svc = new FundaeService(prisma as never, ctx as never);
+    const a = await svc.create(TENANT, 'u', {
+      codigoAccion: 'BLK-UPD',
+      nombre: 'X',
+      modalidad: 'PRESENCIAL',
+      horasFormacion: 10,
+      fechaInicio: '2026-01-01',
+      fechaFin: '2026-01-10',
+    });
+    const b = await svc.createBlock(TENANT, 'u', a.id, {
+      title: 'A',
+      hours: 4,
+      modalidad: 'PRESENCIAL',
+    });
+    const updated = await svc.updateBlock(TENANT, 'u', a.id, b.id, {
+      title: 'A renombrado',
+      hours: 6,
+    });
+    expect(updated.title).toBe('A renombrado');
+    expect(updated.hours).toBe(6);
+
+    // Excede el cap.
+    await expect(svc.updateBlock(TENANT, 'u', a.id, b.id, { hours: 11 })).rejects.toBeInstanceOf(
+      BlockHoursExceedActionError,
+    );
+  });
+
+  it('deleteBlock elimina y permite reciclar el ordinal', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const svc = new FundaeService(prisma as never, ctx as never);
+    const a = await svc.create(TENANT, 'u', {
+      codigoAccion: 'BLK-DEL',
+      nombre: 'X',
+      modalidad: 'PRESENCIAL',
+      horasFormacion: 10,
+      fechaInicio: '2026-01-01',
+      fechaFin: '2026-01-10',
+    });
+    const b1 = await svc.createBlock(TENANT, 'u', a.id, {
+      title: 'A',
+      hours: 4,
+      modalidad: 'PRESENCIAL',
+    });
+    await svc.deleteBlock(TENANT, 'u', a.id, b1.id);
+    const after = await svc.listBlocks(TENANT, a.id);
+    expect(after).toHaveLength(0);
+    // Reusar ordinal=1 sin choque.
+    await svc.createBlock(TENANT, 'u', a.id, {
+      ordinal: 1,
+      title: 'A2',
+      hours: 4,
+      modalidad: 'PRESENCIAL',
+    });
+    expect((await svc.listBlocks(TENANT, a.id))[0]!.ordinal).toBe(1);
+  });
+
+  it('deleteBlock rechaza id inexistente', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const svc = new FundaeService(prisma as never, ctx as never);
+    const a = await svc.create(TENANT, 'u', {
+      codigoAccion: 'BLK-NF',
+      nombre: 'X',
+      modalidad: 'PRESENCIAL',
+      horasFormacion: 10,
+      fechaInicio: '2026-01-01',
+      fechaFin: '2026-01-10',
+    });
+    await expect(svc.deleteBlock(TENANT, 'u', a.id, 'no-existe')).rejects.toBeInstanceOf(
+      BlockNotFoundError,
+    );
   });
 
   it('generateXml propaga el documentId del User como <dni> en el XML', async () => {

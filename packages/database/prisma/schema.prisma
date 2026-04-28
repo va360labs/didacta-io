@@ -1124,6 +1124,33 @@ model ModZoomWebhookEvent {
 }
 
 // ============================================================================
+// MOD.FUNDAE.BLOCK — módulos formativos (bloques) que componen una acción.
+// Cada acción puede desglosarse en N bloques con horas, contenidos y modalidad
+// propia. Útil para acciones mixtas (presencial + teleformación) donde Fundae
+// pide reportar cada bloque por separado en el XML.
+// ============================================================================
+model ModFundaeBlock {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  actionId    String   @map("action_id") @db.Uuid
+  /// Orden secuencial dentro de la acción (1..N). Unique por action_id.
+  ordinal     Int
+  title       String   @db.VarChar(200)
+  /// Horas del bloque (acepta decimales: 0.5, 1.5...).
+  hours       Float
+  /// Modalidad propia del bloque. Puede diferir de la acción.
+  modalidad   String   /// PRESENCIAL | TELEFORMACION | MIXTA
+  /// Contenidos del bloque (texto libre).
+  contenidos  String   @default("")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([actionId, ordinal], map: "mod_fundae_block_action_ordinal_key")
+  @@index([tenantId, actionId], map: "mod_fundae_block_tenant_action_idx")
+  @@map("mod_fundae_block")
+}
+
+// ============================================================================
 // MOD.FUNDAE — acciones formativas para subvenciones Fundae España.
 // `codigo_accion` único por tenant. Fechas como TEXT YYYY-MM-DD para
 // preservar el formato del input sin convertir a UTC. El XML de export

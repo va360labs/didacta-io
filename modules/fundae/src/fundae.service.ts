@@ -4,17 +4,23 @@ import type { PrismaClient } from '@didacta/database';
 import type {
   ActionStatus,
   ActionView,
+  BlockView,
   CreateActionDto,
+  CreateBlockDto,
   Modalidad,
   UpdateActionDto,
+  UpdateBlockDto,
 } from './dto.js';
 import {
   ActionNotFoundError,
+  BlockHoursExceedActionError,
+  BlockNotFoundError,
+  BlockOrdinalDuplicadoError,
   CodigoDuplicadoError,
   CourseNotInTenantError,
   FechasInvalidasError,
 } from './errors.js';
-import { buildActionXml, type ParticipantSnapshot } from './xml-export.js';
+import { buildActionXml, type ParticipantSnapshot, type BlockSnapshot } from './xml-export.js';
 
 export class FundaeService {
   constructor(
@@ -159,16 +165,160 @@ export class FundaeService {
    */
   async generateXml(tenantId: string, actorId: string | null, id: string): Promise<string> {
     const action = await this.get(tenantId, id);
-    const participants = action.courseId
-      ? await this.collectParticipants(tenantId, action.courseId, action.horasFormacion)
-      : [];
-    const xml = buildActionXml(action, participants);
+    const [participants, blocks] = await Promise.all([
+      action.courseId
+        ? this.collectParticipants(tenantId, action.courseId, action.horasFormacion)
+        : Promise.resolve([] as ParticipantSnapshot[]),
+      this.collectBlocks(tenantId, action.id),
+    ]);
+    const xml = buildActionXml(action, participants, blocks);
     await this.publish(tenantId, actorId, 'fundae.export.generated', {
       actionId: action.id,
       participantsCount: participants.length,
+      blocksCount: blocks.length,
       bytes: Buffer.byteLength(xml, 'utf8'),
     });
     return xml;
+  }
+
+  /**
+   * Lista los bloques (módulos formativos) de una acción ordenados por
+   * `ordinal` ascendente.
+   */
+  async listBlocks(tenantId: string, actionId: string): Promise<BlockView[]> {
+    // get() ya valida que la acción exista y pertenezca al tenant.
+    await this.get(tenantId, actionId);
+    const rows = await this.prisma.modFundaeBlock.findMany({
+      where: { tenantId, actionId },
+      orderBy: { ordinal: 'asc' },
+    });
+    return rows.map(toBlockView);
+  }
+
+  async createBlock(
+    tenantId: string,
+    actorId: string | null,
+    actionId: string,
+    dto: CreateBlockDto,
+  ): Promise<BlockView> {
+    const action = await this.get(tenantId, actionId);
+    const existing = await this.prisma.modFundaeBlock.findMany({
+      where: { tenantId, actionId },
+      orderBy: { ordinal: 'asc' },
+    });
+
+    // Validar que la suma de horas no supere las de la acción.
+    const newTotal = existing.reduce((acc, b) => acc + b.hours, 0) + dto.hours;
+    if (newTotal > action.horasFormacion + 1e-6) {
+      throw new BlockHoursExceedActionError(round(newTotal), action.horasFormacion);
+    }
+
+    // Si no se provee ordinal, usar el siguiente.
+    const ordinal =
+      dto.ordinal ?? (existing.length === 0 ? 1 : Math.max(...existing.map((b) => b.ordinal)) + 1);
+    if (existing.some((b) => b.ordinal === ordinal)) {
+      throw new BlockOrdinalDuplicadoError(ordinal);
+    }
+
+    const created = await this.prisma.modFundaeBlock.create({
+      data: {
+        id: randomUUID(),
+        tenantId,
+        actionId,
+        ordinal,
+        title: dto.title,
+        hours: dto.hours,
+        modalidad: dto.modalidad,
+        contenidos: dto.contenidos ?? '',
+      },
+    });
+
+    await this.publish(tenantId, actorId, 'fundae.block.created', {
+      actionId,
+      blockId: created.id,
+      ordinal,
+    });
+    return toBlockView(created);
+  }
+
+  async updateBlock(
+    tenantId: string,
+    actorId: string | null,
+    actionId: string,
+    blockId: string,
+    dto: UpdateBlockDto,
+  ): Promise<BlockView> {
+    const action = await this.get(tenantId, actionId);
+    const existing = await this.prisma.modFundaeBlock.findFirst({
+      where: { tenantId, actionId, id: blockId },
+    });
+    if (!existing) throw new BlockNotFoundError(blockId);
+
+    // Si cambia el ordinal, asegurarse de que no choca con otro bloque.
+    if (dto.ordinal !== undefined && dto.ordinal !== existing.ordinal) {
+      const collision = await this.prisma.modFundaeBlock.findFirst({
+        where: { tenantId, actionId, ordinal: dto.ordinal, NOT: { id: blockId } },
+      });
+      if (collision) throw new BlockOrdinalDuplicadoError(dto.ordinal);
+    }
+
+    // Si cambian las horas, recalcular el total y validar.
+    if (dto.hours !== undefined && dto.hours !== existing.hours) {
+      const others = await this.prisma.modFundaeBlock.findMany({
+        where: { tenantId, actionId, NOT: { id: blockId } },
+        select: { hours: true },
+      });
+      const newTotal = others.reduce((acc, b) => acc + b.hours, 0) + dto.hours;
+      if (newTotal > action.horasFormacion + 1e-6) {
+        throw new BlockHoursExceedActionError(round(newTotal), action.horasFormacion);
+      }
+    }
+
+    const updated = await this.prisma.modFundaeBlock.update({
+      where: { id: blockId },
+      data: {
+        ...(dto.ordinal !== undefined ? { ordinal: dto.ordinal } : {}),
+        ...(dto.title !== undefined ? { title: dto.title } : {}),
+        ...(dto.hours !== undefined ? { hours: dto.hours } : {}),
+        ...(dto.modalidad !== undefined ? { modalidad: dto.modalidad } : {}),
+        ...(dto.contenidos !== undefined ? { contenidos: dto.contenidos } : {}),
+      },
+    });
+
+    await this.publish(tenantId, actorId, 'fundae.block.updated', {
+      actionId,
+      blockId,
+    });
+    return toBlockView(updated);
+  }
+
+  async deleteBlock(
+    tenantId: string,
+    actorId: string | null,
+    actionId: string,
+    blockId: string,
+  ): Promise<void> {
+    await this.get(tenantId, actionId);
+    const existing = await this.prisma.modFundaeBlock.findFirst({
+      where: { tenantId, actionId, id: blockId },
+    });
+    if (!existing) throw new BlockNotFoundError(blockId);
+    await this.prisma.modFundaeBlock.delete({ where: { id: blockId } });
+    await this.publish(tenantId, actorId, 'fundae.block.deleted', { actionId, blockId });
+  }
+
+  private async collectBlocks(tenantId: string, actionId: string): Promise<BlockSnapshot[]> {
+    const rows = await this.prisma.modFundaeBlock.findMany({
+      where: { tenantId, actionId },
+      orderBy: { ordinal: 'asc' },
+    });
+    return rows.map((b) => ({
+      ordinal: b.ordinal,
+      title: b.title,
+      hours: b.hours,
+      modalidad: b.modalidad as Modalidad,
+      contenidos: b.contenidos,
+    }));
   }
 
   /**
@@ -266,6 +416,38 @@ export class FundaeService {
  */
 function roundHours(value: number): number {
   return Math.round(value * 2) / 2;
+}
+
+/**
+ * Redondeo defensivo a 2 decimales para mensajes de error (evita
+ * "13.000000000001 supera 13").
+ */
+function round(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function toBlockView(row: {
+  id: string;
+  actionId: string;
+  ordinal: number;
+  title: string;
+  hours: number;
+  modalidad: string;
+  contenidos: string;
+  createdAt: Date;
+  updatedAt: Date;
+}): BlockView {
+  return {
+    id: row.id,
+    actionId: row.actionId,
+    ordinal: row.ordinal,
+    title: row.title,
+    hours: row.hours,
+    modalidad: row.modalidad as Modalidad,
+    contenidos: row.contenidos,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 function toView(row: {

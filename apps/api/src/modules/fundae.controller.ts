@@ -16,9 +16,13 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   actionStatusSchema,
   createActionSchema,
+  createBlockSchema,
   updateActionSchema,
+  updateBlockSchema,
   type CreateActionDto,
+  type CreateBlockDto,
   type UpdateActionDto,
+  type UpdateBlockDto,
 } from '@didacta/mod-fundae';
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
@@ -124,5 +128,53 @@ export class FundaeController {
       .header('Content-Type', 'application/xml; charset=utf-8')
       .header('Content-Disposition', `attachment; filename="fundae-${id}.xml"`)
       .send(xml);
+  }
+
+  // ------------------- bloques / módulos formativos -------------------
+
+  @Get('actions/:id/blocks')
+  @ApiOperation({ summary: 'Listar módulos formativos (bloques) de una acción Fundae.' })
+  async listBlocks(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeService().listBlocks(u.tenantId, id);
+  }
+
+  @Post('actions/:id/blocks')
+  @ApiOperation({
+    summary:
+      'Crear un módulo formativo en una acción. Si no se provee `ordinal`, se asigna el siguiente.',
+  })
+  async createBlock(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(createBlockSchema)) dto: CreateBlockDto,
+  ) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeService().createBlock(u.tenantId, u.sub, id, dto);
+  }
+
+  @Put('actions/:id/blocks/:blockId')
+  @ApiOperation({ summary: 'Actualizar un módulo formativo.' })
+  async updateBlock(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Param('blockId') blockId: string,
+    @Body(new ZodValidationPipe(updateBlockSchema)) dto: UpdateBlockDto,
+  ) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeService().updateBlock(u.tenantId, u.sub, id, blockId, dto);
+  }
+
+  @Delete('actions/:id/blocks/:blockId')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Eliminar un módulo formativo de una acción.' })
+  async deleteBlock(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Param('blockId') blockId: string,
+  ) {
+    const u = this.requireAdmin(user);
+    await this.registry.getFundaeService().deleteBlock(u.tenantId, u.sub, id, blockId);
+    return { deleted: true };
   }
 }

@@ -22,6 +22,34 @@ export interface FundaeAction {
   updatedAt: string;
 }
 
+export interface FundaeBlock {
+  id: string;
+  actionId: string;
+  ordinal: number;
+  title: string;
+  hours: number;
+  modalidad: Modalidad;
+  contenidos: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateBlockInput {
+  ordinal?: number;
+  title: string;
+  hours: number;
+  modalidad: Modalidad;
+  contenidos?: string;
+}
+
+export interface UpdateBlockInput {
+  ordinal?: number;
+  title?: string;
+  hours?: number;
+  modalidad?: Modalidad;
+  contenidos?: string;
+}
+
 function withAuth(): string {
   const token = authStorage.getAccessToken();
   if (!token) throw new ApiHttpError({ message: 'Sesión expirada', status: 401 });
@@ -83,5 +111,49 @@ export const fundaeApi = {
    */
   exportXmlUrl(id: string): string {
     return `/api/v1/modules/fundae/actions/${id}/export.xml`;
+  },
+
+  async get(id: string): Promise<FundaeAction> {
+    return apiFetch<FundaeAction>(
+      `/api/v1/modules/fundae/actions/${id}`,
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
+  async listBlocks(actionId: string): Promise<FundaeBlock[]> {
+    return apiFetch<FundaeBlock[]>(
+      `/api/v1/modules/fundae/actions/${actionId}/blocks`,
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
+  async createBlock(actionId: string, input: CreateBlockInput): Promise<FundaeBlock> {
+    return apiFetch<FundaeBlock>(
+      `/api/v1/modules/fundae/actions/${actionId}/blocks`,
+      { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async updateBlock(
+    actionId: string,
+    blockId: string,
+    input: UpdateBlockInput,
+  ): Promise<FundaeBlock> {
+    return apiFetch<FundaeBlock>(
+      `/api/v1/modules/fundae/actions/${actionId}/blocks/${blockId}`,
+      { method: 'PUT', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async deleteBlock(actionId: string, blockId: string): Promise<void> {
+    await apiFetch<{ deleted: true }>(
+      `/api/v1/modules/fundae/actions/${actionId}/blocks/${blockId}`,
+      { method: 'DELETE' },
+      withAuth(),
+    );
   },
 };

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -212,6 +213,9 @@ export default function FundaePage() {
                   ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button asChild size="sm" variant="ghost">
+                    <Link href={`/admin/fundae/${a.id}` as never}>Ver bloques</Link>
+                  </Button>
                   <Button
                     type="button"
                     size="sm"
