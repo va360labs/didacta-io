@@ -20,7 +20,7 @@
 - [x] Al abrir un mensaje de comunidad para verlo completo debe abrirse en un modal y no en una sección nueva — [Notion](https://www.notion.so/350b609a124c81a38130f58cf5263188) · #205
 - [x] Del mensaje completo, se mostrarán 4 líneas y un "Leer más" que abrirá el modal — [Notion](https://www.notion.so/350b609a124c81d191a4d68acc2de0d2) · #198
 - [x] Debo poder añadir una reacción sin entrar en el post — [Notion](https://www.notion.so/350b609a124c811aa192f04ce0983a6e) · #208
-- [ ] Pintar los tags curados (color/icono) también en el feed, no solo en admin — [Notion](https://www.notion.so/350b609a124c8148a78ac14ae1b3dd0b)
+- [x] Pintar los tags curados (color/icono) también en el feed, no solo en admin — [Notion](https://www.notion.so/350b609a124c8148a78ac14ae1b3dd0b) · #209
 
 ## Curso como Alumno · `https://cloud.didacta.io/cursos/introduccion-n8n`
 
