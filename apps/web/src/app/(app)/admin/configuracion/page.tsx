@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { adminModulesApi, type TenantModuleListItem } from '@/lib/admin-modules';
 import { adminTenantsApi, type TenantListItem } from '@/lib/admin-tenants';
 import { ApiHttpError } from '@/lib/api-client';
@@ -605,6 +606,14 @@ function ModulesTab() {
   async function toggle(item: TenantModuleListItem, force = false) {
     setBusy(item.name);
     setError(null);
+    // Optimistic update: el switch refleja el estado destino al instante
+    // y, si la API falla, revertimos. La cascade-confirmation también
+    // revierte porque el módulo realmente no se desactivó hasta que el
+    // user confirme en el alertdialog.
+    const previous = items;
+    if (previous) {
+      setItems(previous.map((m) => (m.name === item.name ? { ...m, enabled: !m.enabled } : m)));
+    }
     try {
       if (item.enabled) {
         await adminModulesApi.disable(item.name, { force, tenantId: targetTenantId });
@@ -614,6 +623,7 @@ function ModulesTab() {
       setConfirmCascade(null);
       await reload(targetTenantId);
     } catch (e) {
+      if (previous) setItems(previous);
       if (e instanceof ApiHttpError && e.status === 409) {
         const dependents = extractDependents(e);
         setConfirmCascade({ name: item.name, dependents });
@@ -695,14 +705,17 @@ function ModulesTab() {
                 </p>
               ) : null}
             </div>
-            <Button
-              type="button"
-              variant={item.enabled ? 'secondary' : 'primary'}
-              onClick={() => toggle(item)}
-              disabled={busy !== null}
-            >
-              {busy === item.name ? '…' : item.enabled ? 'Desactivar' : 'Activar'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-text-subtle tabular-nums">
+                {busy === item.name ? 'Guardando…' : item.enabled ? 'Activo' : 'Desactivado'}
+              </span>
+              <Switch
+                checked={item.enabled}
+                onCheckedChange={() => toggle(item)}
+                disabled={busy !== null}
+                label={`${item.enabled ? 'Desactivar' : 'Activar'} ${item.displayName}`}
+              />
+            </div>
           </CardContent>
         </Card>
       ))}
