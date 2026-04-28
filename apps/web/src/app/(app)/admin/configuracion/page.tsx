@@ -15,7 +15,10 @@ import { authStorage } from '@/lib/auth-storage';
 import { tenantSettingsApi, type TenantSettingMetadata } from '@/lib/tenant-settings';
 import { zoomLiveApi } from '@/lib/zoom-live';
 
+type SmtpProvider = 'custom' | 'brevo' | 'ses' | 'gmail' | 'mailgun' | 'sendgrid' | 'postmark';
+
 interface SmtpDraft {
+  provider: SmtpProvider;
   host: string;
   port: string;
   user: string;
@@ -23,7 +26,55 @@ interface SmtpDraft {
   from: string;
 }
 
-const EMPTY_SMTP: SmtpDraft = { host: '', port: '587', user: '', password: '', from: '' };
+const EMPTY_SMTP: SmtpDraft = {
+  provider: 'custom',
+  host: '',
+  port: '587',
+  user: '',
+  password: '',
+  from: '',
+};
+
+/**
+ * Presets de hosts/puertos por provider para que el admin no tenga que
+ * memorizar. Al cambiar el selector, los campos host/port se autorrellenan
+ * sólo si el admin no los había tocado todavía. Cada preset usa SMTP
+ * estándar — todos los providers listados (Brevo, SES, Gmail, Mailgun,
+ * Sendgrid, Postmark) tienen interfaz SMTP relay.
+ */
+const SMTP_PRESETS: Record<SmtpProvider, { host: string; port: string; hint: string }> = {
+  custom: { host: '', port: '587', hint: 'SMTP genérico de tu hosting o servidor propio.' },
+  brevo: {
+    host: 'smtp-relay.brevo.com',
+    port: '587',
+    hint: 'Brevo (ex Sendinblue). Usuario = email; password = SMTP key (no la del login).',
+  },
+  ses: {
+    host: 'email-smtp.eu-central-1.amazonaws.com',
+    port: '587',
+    hint: 'AWS SES via SMTP. Cambiá el host por la región (eu-west-1, us-east-1, etc.). Usuario y password se generan en IAM > SMTP credentials.',
+  },
+  gmail: {
+    host: 'smtp.gmail.com',
+    port: '587',
+    hint: 'Gmail / Google Workspace. Usuario = email completo; password = App Password (requiere 2FA habilitado).',
+  },
+  mailgun: {
+    host: 'smtp.mailgun.org',
+    port: '587',
+    hint: 'Mailgun. Usuario = postmaster@dominio; password = SMTP password del dominio.',
+  },
+  sendgrid: {
+    host: 'smtp.sendgrid.net',
+    port: '587',
+    hint: 'Sendgrid. Usuario fijo = "apikey"; password = la API key con permiso Mail Send.',
+  },
+  postmark: {
+    host: 'smtp.postmarkapp.com',
+    port: '587',
+    hint: 'Postmark. Usuario y password = el Server API token.',
+  },
+};
 
 // Branding tiene su propia pantalla en /admin/branding con preview live.
 // Se removió la tab acá para no duplicar entry-point y confundir al admin.
@@ -99,6 +150,11 @@ export default function ConfiguracionPage() {
       if (!Number.isInteger(port) || port < 1 || port > 65535) {
         throw new Error('El puerto debe ser un número entre 1 y 65535.');
       }
+      if (!smtp.password) {
+        throw new Error(
+          'Contraseña requerida. Si ya hay una guardada, re-tipeala para confirmar el cambio.',
+        );
+      }
       await tenantSettingsApi.upsert('notifications', 'smtp', {
         isSecret: true,
         value: {
@@ -116,6 +172,20 @@ export default function ConfiguracionPage() {
       setSmtpStatus('error');
       setSmtpError(e instanceof Error ? e.message : 'No pudimos guardar la configuración SMTP.');
     }
+  }
+
+  function handleProviderChange(provider: SmtpProvider) {
+    const preset = SMTP_PRESETS[provider];
+    setSmtp((s) => ({
+      ...s,
+      provider,
+      // Sólo sobrescribimos host/port si el admin no los había tocado o
+      // si vienen de un preset previo. Heurística simple: si el host
+      // actual coincide con algún preset (incluido el vacío), lo
+      // reemplazamos.
+      host: Object.values(SMTP_PRESETS).some((p) => p.host === s.host) ? preset.host : s.host,
+      port: Object.values(SMTP_PRESETS).some((p) => p.port === s.port) ? preset.port : s.port,
+    }));
   }
 
   async function handleDelete(scope: string, key: string) {
@@ -204,11 +274,29 @@ export default function ConfiguracionPage() {
             <CardTitle>Notificaciones · SMTP</CardTitle>
             <CardDescription>
               Servidor saliente para enviar emails. Si no configurás esto, las notificaciones
-              quedarán registradas pero no se enviarán.
+              quedarán registradas pero no se enviarán. Soporta SMTP genérico, Brevo, AWS SES (via
+              SMTP), Gmail, Mailgun, Sendgrid y Postmark.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSaveSmtp} className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="smtp-provider">Proveedor</Label>
+                <Select
+                  id="smtp-provider"
+                  value={smtp.provider}
+                  onChange={(e) => handleProviderChange(e.target.value as SmtpProvider)}
+                >
+                  <option value="custom">SMTP genérico (hosting / servidor propio)</option>
+                  <option value="brevo">Brevo (ex Sendinblue)</option>
+                  <option value="ses">AWS SES (vía SMTP)</option>
+                  <option value="gmail">Gmail / Google Workspace</option>
+                  <option value="mailgun">Mailgun</option>
+                  <option value="sendgrid">Sendgrid</option>
+                  <option value="postmark">Postmark</option>
+                </Select>
+                <p className="text-xs text-text-subtle">{SMTP_PRESETS[smtp.provider].hint}</p>
+              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="smtp-host">Host</Label>
                 <Input
@@ -276,7 +364,10 @@ export default function ConfiguracionPage() {
                   {testStatus === 'sending' ? 'Enviando…' : 'Probar envío'}
                 </Button>
                 {smtpStatus === 'saved' ? (
-                  <span className="text-sm text-success-700">✓ Guardado cifrado.</span>
+                  <span className="text-sm text-success-700">
+                    ✓ Guardado cifrado · El servidor enviará emails con esta config a partir de la
+                    próxima notificación.
+                  </span>
                 ) : null}
                 {smtpStatus === 'error' && smtpError ? (
                   <span className="text-sm text-danger-700">{smtpError}</span>
