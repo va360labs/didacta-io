@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MentionTextarea } from '@/components/mention-textarea';
@@ -102,52 +103,55 @@ export default function ComunidadPage() {
             Conversaciones útiles entre formadores, alumnos y administradores.
           </p>
         </div>
-        <Button onClick={() => setShowCompose((s) => !s)}>
+        <Button onClick={() => setShowCompose(true)}>
           <Icon name="plus" size={16} />
-          {showCompose ? 'Cancelar' : 'Nueva conversación'}
+          Nueva conversación
         </Button>
       </header>
+
+      <Dialog
+        open={showCompose}
+        onOpenChange={setShowCompose}
+        title="Nueva conversación"
+        description="Compártelo con la comunidad. Puedes mencionar a alguien con @."
+      >
+        <form onSubmit={handleCreate} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="title">Título</Label>
+            <Input id="title" name="title" required minLength={3} maxLength={200} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="body">Contenido</Label>
+            <MentionTextarea id="body" name="body" rows={5} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="tags">Tags (separados por coma)</Label>
+            <Input id="tags" name="tags" placeholder="general, ayuda, anuncios" />
+          </div>
+          {error ? (
+            <p role="alert" className="text-sm text-danger-700">
+              {error}
+            </p>
+          ) : null}
+          <div className="flex justify-end gap-2 border-t border-border-soft pt-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setShowCompose(false)}
+              disabled={pending}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? 'Publicando…' : 'Publicar'}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
         {/* Feed */}
         <div className="flex flex-col gap-4">
-          {showCompose ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Nueva conversación</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleCreate} className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="title">Título</Label>
-                    <Input id="title" name="title" required minLength={3} maxLength={200} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="body">Contenido</Label>
-                    <MentionTextarea id="body" name="body" rows={4} required />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="tags">Tags (separados por coma)</Label>
-                    <Input id="tags" name="tags" placeholder="general, ayuda, anuncios" />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button type="submit" disabled={pending}>
-                      {pending ? 'Publicando…' : 'Publicar'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setShowCompose(false)}
-                      disabled={pending}
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          ) : null}
-
           {/* Filtros tipo chip */}
           <Card>
             <CardContent className="flex flex-wrap items-center gap-2 p-3">
