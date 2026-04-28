@@ -178,6 +178,10 @@ model User {
   timezone      String    @default("UTC") @map("timezone")
   /// URL pública (S3/CDN) del avatar del usuario. Null = usar iniciales.
   avatarUrl     String?   @map("avatar_url")
+  /// Documento de identidad (DNI o NIE español) en mayúsculas y sin
+  /// separadores. Requerido para Fundae cuando el usuario participa
+  /// en una acción formativa bonificada. Único por tenant si está set.
+  documentId    String?   @map("document_id") @db.VarChar(20)
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
@@ -189,6 +193,7 @@ model User {
   roles    UserRole[]
 
   @@unique([tenantId, email])
+  @@unique([tenantId, documentId], map: "user_tenant_document_id_key")
   @@index([tenantId, status])
   @@map("user")
 }

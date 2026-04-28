@@ -21,6 +21,7 @@ import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { extractClientContext } from './client-context';
 import { CurrentUser } from './decorators';
+import { isValidDocumentId, normalizeDocumentId } from './document-id';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { PasswordService } from './password.service';
 import type { SessionClaims } from './token.service';
@@ -37,6 +38,24 @@ const updateProfileSchema = z.object({
     .url()
     .refine((u) => u.startsWith('https://'), { message: 'Avatar URL debe usar https' })
     .nullable()
+    .optional(),
+  /**
+   * DNI o NIE español. Se normaliza (mayúsculas, sin guiones/puntos) antes
+   * de validar checksum. Pasar `null` lo borra. Omitir el campo lo deja
+   * como estaba.
+   */
+  documentId: z
+    .union([
+      z
+        .string()
+        .max(20)
+        .transform((v) => normalizeDocumentId(v))
+        .refine((v) => isValidDocumentId(v), {
+          message: 'Documento de identidad inválido (esperado DNI o NIE español).',
+        }),
+      z.literal(''),
+      z.null(),
+    ])
     .optional(),
 });
 type UpdateProfileDto = z.infer<typeof updateProfileSchema>;
@@ -74,6 +93,7 @@ export class MeController {
       avatarUrl: dbUser.avatarUrl,
       locale: dbUser.locale,
       timezone: dbUser.timezone,
+      documentId: dbUser.documentId,
       mfaEnabled: dbUser.mfaEnabled,
       emailVerified: dbUser.emailVerified,
       createdAt: dbUser.createdAt.toISOString(),
@@ -83,41 +103,60 @@ export class MeController {
   }
 
   @Patch('profile')
-  @ApiOperation({ summary: 'Editar nombre, idioma, zona horaria, avatar.' })
+  @ApiOperation({ summary: 'Editar nombre, idioma, zona horaria, avatar, DNI/NIE.' })
   async updateProfile(
     @Req() req: FastifyRequest,
     @CurrentUser() user: SessionClaims | undefined,
     @Body(new ZodValidationPipe(updateProfileSchema)) dto: UpdateProfileDto,
   ) {
     if (!user) throw new UnauthorizedException();
-    const updated = await this.prisma.user.update({
-      where: { id: user.sub },
-      data: {
-        ...(dto.name !== undefined ? { name: dto.name } : {}),
-        ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
-        ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
-        ...(dto.avatarUrl !== undefined ? { avatarUrl: dto.avatarUrl } : {}),
-      },
-    });
-    const ctx = extractClientContext(req);
-    await this.auditLog.record({
-      tenantId: user.tenantId,
-      actorId: user.sub,
-      action: 'user.profile.updated',
-      resourceType: 'user',
-      resourceId: user.sub,
-      metadata: { fields: Object.keys(dto) },
-      ip: ctx.ip ?? undefined,
-      userAgent: ctx.userAgent ?? undefined,
-    });
-    return {
-      id: updated.id,
-      email: updated.email,
-      name: updated.name,
-      avatarUrl: updated.avatarUrl,
-      locale: updated.locale,
-      timezone: updated.timezone,
-    };
+    // Convertimos `''` a null para borrar el documento; cualquier otro string
+    // ya viene normalizado por el schema (mayúsculas, sin separadores).
+    const documentIdValue =
+      dto.documentId === undefined
+        ? undefined
+        : dto.documentId === '' || dto.documentId === null
+          ? null
+          : dto.documentId;
+    try {
+      const updated = await this.prisma.user.update({
+        where: { id: user.sub },
+        data: {
+          ...(dto.name !== undefined ? { name: dto.name } : {}),
+          ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
+          ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
+          ...(dto.avatarUrl !== undefined ? { avatarUrl: dto.avatarUrl } : {}),
+          ...(documentIdValue !== undefined ? { documentId: documentIdValue } : {}),
+        },
+      });
+      const ctx = extractClientContext(req);
+      await this.auditLog.record({
+        tenantId: user.tenantId,
+        actorId: user.sub,
+        action: 'user.profile.updated',
+        resourceType: 'user',
+        resourceId: user.sub,
+        metadata: { fields: Object.keys(dto) },
+        ip: ctx.ip ?? undefined,
+        userAgent: ctx.userAgent ?? undefined,
+      });
+      return {
+        id: updated.id,
+        email: updated.email,
+        name: updated.name,
+        avatarUrl: updated.avatarUrl,
+        locale: updated.locale,
+        timezone: updated.timezone,
+        documentId: updated.documentId,
+      };
+    } catch (e) {
+      // Prisma P2002 = unique constraint violation. Para este modelo solo
+      // puede ser por (tenantId, documentId) ya que email no se edita acá.
+      if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002') {
+        throw new BadRequestException('Ese DNI/NIE ya está registrado en este tenant.');
+      }
+      throw e;
+    }
   }
 
   @Post('security/password')

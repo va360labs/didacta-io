@@ -37,6 +37,7 @@ interface UserRow {
   id: string;
   email: string;
   name: string | null;
+  documentId?: string | null;
 }
 
 interface FakePrismaSeed {
@@ -466,5 +467,55 @@ describe('FundaeService participantes', () => {
     });
     const xml = await svc.generateXml(TENANT, 'u', a.id);
     expect(xml).not.toContain('<participantes');
+  });
+
+  it('generateXml propaga el documentId del User como <dni> en el XML', async () => {
+    const courseId = 'course-dni';
+    const prisma = makeFakePrisma({
+      courses: [{ id: courseId, tenantId: TENANT }],
+      enrollments: [
+        {
+          id: 'e1',
+          tenantId: TENANT,
+          courseId,
+          userId: 'u-dni',
+          status: 'COMPLETED',
+          progressPercent: 100,
+          completionThreshold: 80,
+          completedAt: new Date('2026-01-09'),
+          enrolledAt: new Date('2026-01-01'),
+        },
+        {
+          id: 'e2',
+          tenantId: TENANT,
+          courseId,
+          userId: 'u-sin',
+          status: 'IN_PROGRESS',
+          progressPercent: 50,
+          completionThreshold: 80,
+          completedAt: null,
+          enrolledAt: new Date('2026-01-02'),
+        },
+      ],
+      users: [
+        { id: 'u-dni', email: 'dni@test.dev', name: 'Con DNI', documentId: '12345678Z' },
+        { id: 'u-sin', email: 'sin@test.dev', name: 'Sin DNI', documentId: null },
+      ],
+    });
+    const ctx = makeCtx();
+    const svc = new FundaeService(prisma as never, ctx as never);
+    const a = await svc.create(TENANT, 'u', {
+      codigoAccion: 'XML-DNI',
+      nombre: 'Curso con DNI',
+      modalidad: 'TELEFORMACION',
+      horasFormacion: 10,
+      fechaInicio: '2026-01-01',
+      fechaFin: '2026-01-10',
+      courseId,
+    });
+    const xml = await svc.generateXml(TENANT, 'u', a.id);
+    expect(xml).toContain('<dni>12345678Z</dni>');
+    // El usuario sin DNI no debe aparecer con tag dni vacío.
+    expect(xml).not.toContain('<dni></dni>');
   });
 });

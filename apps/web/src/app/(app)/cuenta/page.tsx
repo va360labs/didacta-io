@@ -51,6 +51,7 @@ export default function CuentaPage() {
   const [locale, setLocale] = useState('es-AR');
   const [timezone, setTimezone] = useState('UTC');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [documentId, setDocumentId] = useState('');
   const [digestOptOut, setDigestOptOut] = useState(false);
   const [digestPending, setDigestPending] = useState(false);
   const [digestSaved, setDigestSaved] = useState(false);
@@ -70,6 +71,7 @@ export default function CuentaPage() {
       setLocale(p.locale);
       setTimezone(p.timezone);
       setAvatarUrl(p.avatarUrl ?? '');
+      setDocumentId(p.documentId ?? '');
       // Cargar preferencias en paralelo. Si community está deshabilitado en
       // el tenant, el endpoint devuelve 403 y ocultamos la card.
       try {
@@ -119,6 +121,7 @@ export default function CuentaPage() {
         locale,
         timezone,
         avatarUrl: avatarUrl.trim() || null,
+        documentId: documentId.trim() === '' ? null : documentId.trim().toUpperCase(),
       });
       setSuccess(true);
       setTimeout(() => setSuccess(false), 2500);
@@ -258,6 +261,23 @@ export default function CuentaPage() {
                 onChange={(e) => setAvatarUrl(e.target.value)}
                 placeholder="https://… (deja vacío para usar tus iniciales)"
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="documentId">DNI / NIE</Label>
+              <Input
+                id="documentId"
+                value={documentId}
+                onChange={(e) => setDocumentId(e.target.value)}
+                placeholder="12345678Z o X1234567L (vacío si no aplica)"
+                autoComplete="off"
+                spellCheck={false}
+                maxLength={20}
+              />
+              <p className="text-xs text-text-subtle">
+                Solo necesario si vas a participar en acciones formativas Fundae. Aceptamos DNI o
+                NIE español. Lo guardamos normalizado en mayúsculas.
+              </p>
             </div>
 
             {error ? (

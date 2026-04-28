@@ -210,7 +210,7 @@ export class FundaeService {
     const userIds = enrollments.map((e) => e.userId);
     const users = await this.prisma.user.findMany({
       where: { id: { in: userIds } },
-      select: { id: true, email: true, name: true },
+      select: { id: true, email: true, name: true, documentId: true },
     });
     const userById = new Map(users.map((u) => [u.id, u]));
 
@@ -228,7 +228,7 @@ export class FundaeService {
         userId: e.userId,
         nombre: user?.name ?? null,
         email: user?.email ?? '',
-        dni: null, // futuro: campo del perfil del usuario
+        dni: user?.documentId ?? null,
         horasAsistidas,
         resultado,
         enrolledAt: e.enrolledAt.toISOString(),

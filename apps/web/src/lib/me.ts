@@ -9,6 +9,8 @@ export interface UserProfile {
   avatarUrl: string | null;
   locale: string;
   timezone: string;
+  /** DNI o NIE español normalizado. NULL si el usuario no lo declaró. */
+  documentId: string | null;
   mfaEnabled: boolean;
   emailVerified: boolean;
   createdAt: string;
@@ -21,6 +23,8 @@ export interface UpdateProfileInput {
   locale?: string;
   timezone?: string;
   avatarUrl?: string | null;
+  /** Pasar `null` o `''` para borrar el documento. */
+  documentId?: string | null;
 }
 
 export interface ActiveSession {
