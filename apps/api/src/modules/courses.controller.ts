@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  HttpException,
   Param,
   Post,
   Put,
@@ -288,6 +289,19 @@ export class CoursesController {
     }
   }
 
+  /**
+   * Convierte un `CoursesError` del módulo de dominio en un `HttpException`
+   * con el status code apropiado para que NestJS lo serialice como response
+   * HTTP. Antes se devolvía un `Error` genérico con propiedad `.status`,
+   * pero NestJS no inspecciona esa propiedad y lo trataba como 500.
+   *
+   * Nota: existe un `CoursesErrorFilter` global que también atrapa
+   * `CoursesError` por catch decorator, pero solo se dispara cuando el
+   * error sale crudo del handler — los try/catch en este controller lo
+   * absorbían antes y rompían la cadena. Mantenemos ambos por defensa en
+   * profundidad: si en el futuro alguien quita un try/catch, el filter
+   * global cubre.
+   */
   private translate(error: unknown): unknown {
     if (error instanceof CoursesError) {
       const map: Record<string, number> = {
@@ -298,10 +312,15 @@ export class CoursesController {
         COURSE_PUBLISH_VALIDATION_FAILED: 422,
       };
       const status = map[error.code] ?? 400;
-      const httpError = new Error(error.message) as Error & { status?: number; code?: string };
-      httpError.status = status;
-      httpError.code = error.code;
-      return httpError;
+      const body = {
+        statusCode: status,
+        code: error.code,
+        message: error.message,
+        ...('reasons' in error
+          ? { reasons: (error as unknown as { reasons: string[] }).reasons }
+          : {}),
+      };
+      return new HttpException(body, status);
     }
     return error;
   }

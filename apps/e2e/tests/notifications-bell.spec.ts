@@ -17,6 +17,16 @@ test.describe('Notificaciones in-app del alumno', () => {
       'Content-Type': 'application/json',
     };
 
+    // bootstrapScenario crea curso + alumno pero NO matricula. Lo
+    // hacemos explícito para que se dispare la notificación de
+    // enrollment.created y los flows posteriores tengan enrollment.
+    const enrollRes = await fetch(`${API_URL}/api/v1/modules/learning/enrollments/me`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ courseId: scenario.course.id }),
+    });
+    expect(enrollRes.ok, `self-enroll OK (got ${enrollRes.status})`).toBe(true);
+
     const enrollments = await listEnrollments(scenario.alumno.accessToken);
     const ours = enrollments.find((e) => e.courseId === scenario.course.id);
     expect(ours).toBeDefined();
@@ -49,7 +59,15 @@ test.describe('Notificaciones in-app del alumno', () => {
     };
 
     // Generar al menos una notificación enrollment.created (matriculación inicial).
-    await new Promise((r) => setTimeout(r, 200));
+    // bootstrapScenario no enrola: lo hacemos manualmente para que el
+    // outbox dispatcher emita la notificación.
+    const enrollRes = await fetch(`${API_URL}/api/v1/modules/learning/enrollments/me`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ courseId: scenario.course.id }),
+    });
+    expect(enrollRes.ok, `self-enroll OK (got ${enrollRes.status})`).toBe(true);
+    await new Promise((r) => setTimeout(r, 500));
 
     const markAll = await fetch(`${API_URL}/api/v1/me/notifications/mark-all-read`, {
       method: 'POST',

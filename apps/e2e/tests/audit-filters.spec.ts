@@ -69,9 +69,11 @@ test.describe('Audit log con filtros', () => {
       { headers },
     );
     expect(res.ok).toBe(true);
-    const list = (await res.json()) as Array<{ createdAt: string }>;
+    // El response del endpoint devuelve `timestamp` (no `createdAt`); el
+    // service lo expone explícitamente como tal en el select.
+    const list = (await res.json()) as Array<{ timestamp: string }>;
     expect(
-      list.every((e) => new Date(e.createdAt).getTime() >= new Date(since).getTime()),
+      list.every((e) => new Date(e.timestamp).getTime() >= new Date(since).getTime()),
       'todas posteriores a since',
     ).toBe(true);
   });

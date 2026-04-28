@@ -19,6 +19,18 @@ test.describe('Listado de alumnos por curso (HU-FORM-002)', () => {
   test('alumno completa curso → aparece en el listado del formador con progreso 100', async () => {
     const scenario = await bootstrapScenario();
 
+    // bootstrapScenario crea curso + alumno pero NO matricula. Lo
+    // hacemos explícito vía API antes de track de progreso.
+    const enrollRes = await fetch(`${API_URL}/api/v1/modules/learning/enrollments/me`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${scenario.alumno.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ courseId: scenario.course.id }),
+    });
+    expect(enrollRes.ok, `self-enroll OK (got ${enrollRes.status})`).toBe(true);
+
     // El alumno completa la lección.
     const enrollments = await listEnrollments(scenario.alumno.accessToken);
     const ours = enrollments.find((e) => e.courseId === scenario.course.id);

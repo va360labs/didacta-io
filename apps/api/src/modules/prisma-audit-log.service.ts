@@ -17,6 +17,26 @@ import { PrismaService } from '../prisma/prisma.service';
  * dos filas con el mismo prev_hash. Para Fase 1.A es aceptable; en Fase 2 se
  * añadirá un lock advisory por tenantId al insertar para garantizar linealidad.
  */
+/**
+ * Serializa un objeto con `JSON.stringify` ordenando claves de manera
+ * recursiva. Necesario para hashes deterministas: PostgreSQL JSONB
+ * normaliza el orden de keys de los `metadata` al guardar, así que
+ * hashear con el orden de inserción original rompe la verificación al
+ * releer (orden distinto → hash distinto).
+ */
+function canonicalStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, val) => {
+    if (val && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date)) {
+      const sorted: Record<string, unknown> = {};
+      for (const k of Object.keys(val).sort()) {
+        sorted[k] = (val as Record<string, unknown>)[k];
+      }
+      return sorted;
+    }
+    return val;
+  });
+}
+
 @Injectable()
 export class PrismaAuditLogService implements AuditLogService {
   constructor(private readonly prisma: PrismaService) {}
@@ -39,7 +59,7 @@ export class PrismaAuditLogService implements AuditLogService {
     const prevHash = last?.hash ?? null;
 
     const timestamp = new Date();
-    const hashInput = JSON.stringify({
+    const hashInput = canonicalStringify({
       prevHash,
       tenantId: entry.tenantId,
       actorId: entry.actorId,
@@ -97,22 +117,29 @@ export class PrismaAuditLogService implements AuditLogService {
         };
       }
 
+      // Canónico (orden alfabético de keys) — formato actual.
+      const payload = {
+        prevHash: row.prevHash,
+        tenantId: row.tenantId,
+        actorId: row.actorId,
+        action: row.action,
+        resourceType: row.resourceType,
+        resourceId: row.resourceId,
+        metadata: row.metadata ?? {},
+        timestamp: row.timestamp.toISOString(),
+      };
       const expected: string = createHash('sha256')
-        .update(
-          JSON.stringify({
-            prevHash: row.prevHash,
-            tenantId: row.tenantId,
-            actorId: row.actorId,
-            action: row.action,
-            resourceType: row.resourceType,
-            resourceId: row.resourceId,
-            metadata: row.metadata ?? {},
-            timestamp: row.timestamp.toISOString(),
-          }),
-        )
+        .update(canonicalStringify(payload))
+        .digest('hex');
+      // Legacy: orden de inserción del literal en código. Mantenemos
+      // compatibilidad para no invalidar audit logs creados antes del
+      // fix (PostgreSQL JSONB normaliza orden de keys de metadata, lo
+      // que rompía la verify para metadatas con > 1 key).
+      const expectedLegacy: string = createHash('sha256')
+        .update(JSON.stringify(payload))
         .digest('hex');
 
-      if (expected !== row.hash) {
+      if (expected !== row.hash && expectedLegacy !== row.hash) {
         return {
           valid: false,
           totalEntries: rows.length,
