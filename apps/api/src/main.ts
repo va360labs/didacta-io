@@ -6,39 +6,40 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
-  const adapter = new FastifyAdapter({ trustProxy: true });
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter({ trustProxy: true }),
+    // `rawBody: true` expone `req.rawBody` (Buffer) en cada request; lo
+    // necesita el webhook de Zoom para verificar HMAC sobre el body
+    // exacto recibido (no el JSON re-serializado).
+    { bufferLogs: true, rawBody: true },
+  );
 
   // Fastify por default rechaza con 400 cualquier request que llegue con
   // `Content-Type: application/json` y body vacío. Eso rompe llamadas
   // POST/DELETE válidas que mandan headers de JSON sin payload (común en
   // muchos clientes HTTP y librerías de tests). Reemplazamos el parser
-  // por uno que mapea body vacío → undefined (Nest lo trata como "sin
-  // body", el validador Zod del DTO recibe lo que corresponda).
-  adapter
-    .getInstance()
-    .addContentTypeParser(
-      'application/json',
-      { parseAs: 'string' },
-      (_req, body: string, done: (err: Error | null, result?: unknown) => void) => {
-        if (!body || body.length === 0) {
-          done(null, undefined);
-          return;
-        }
-        try {
-          done(null, JSON.parse(body));
-        } catch (err) {
-          done(err as Error, undefined);
-        }
-      },
-    );
-
-  const app = await NestFactory.create<NestFastifyApplication>(
-    AppModule,
-    adapter,
-    // `rawBody: true` expone `req.rawBody` (Buffer) en cada request; lo
-    // necesita el webhook de Zoom para verificar HMAC sobre el body
-    // exacto recibido (no el JSON re-serializado).
-    { bufferLogs: true, rawBody: true },
+  // que Nest registra en su init por uno que mapea body vacío → null
+  // (Nest lo trata como "sin body" y el validador Zod del DTO recibe
+  // lo que corresponda).
+  //
+  // El parser de NestFastifyApplication recibe el body como Buffer; lo
+  // convertimos a string para hacer el JSON.parse. El parseAs por
+  // default es 'buffer' (no exponible en NestFastifyBodyParserOptions).
+  app.useBodyParser(
+    'application/json',
+    {},
+    (_req, body: Buffer, done: (err: Error | null, result?: unknown) => void) => {
+      if (!body || body.length === 0) {
+        done(null, null);
+        return;
+      }
+      try {
+        done(null, JSON.parse(body.toString('utf8')));
+      } catch (err) {
+        done(err as Error, undefined);
+      }
+    },
   );
 
   app.useLogger(app.get(Logger));
