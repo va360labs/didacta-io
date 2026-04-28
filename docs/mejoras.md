@@ -24,7 +24,7 @@
 
 ## Curso como Alumno · `https://cloud.didacta.io/cursos/introduccion-n8n`
 
-- [ ] Si marco una lección como completada y cambio a otra lección también me aparece como completada y no aparece el botón de completar — [Notion](https://www.notion.so/350b609a124c81069582d90133dbb0b5)
+- [x] Si marco una lección como completada y cambio a otra lección también me aparece como completada y no aparece el botón de completar — [Notion](https://www.notion.so/350b609a124c81069582d90133dbb0b5) · #213
 - [ ] Echo de menos la opción de poder enviar comentarios/anotaciones en las lecciones. Estos comentarios llegarán como "pendiente de aprobación" al profesor del curso — [Notion](https://www.notion.so/350b609a124c81cfb677ef7bd2c25f60)
 - [ ] Aún habiendo seleccionado un Quiz y creado, cuando entro en una lección de Quiz aparece -> El quiz solicitado no existe o no pertenece al tenant — [Notion](https://www.notion.so/350b609a124c81ba9b7ce7349928f718)
 
