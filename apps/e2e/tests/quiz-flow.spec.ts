@@ -57,13 +57,20 @@ test.describe('mod.assessments — flujo del alumno', () => {
     await page.getByRole('button', { name: /Empezar quiz|Reintentar quiz/ }).click();
 
     // 4) Marcar la opción correcta y enviar.
-    // El QuizPlayer renderiza `<label><input type="radio"/><span>{label}</span></label>`
-    // y el input NO expone `value` con el option id (el state se mantiene
-    // en React via `checked` controlado). Identificamos la opción por
-    // el texto del label (en este quiz: "4" es la respuesta correcta a
-    // "¿2 + 2?", definido en el helper E2E createPublishedQuizForLesson).
-    void correctOptionId; // referenciado solo para semantica del test
-    await page.locator('label').filter({ hasText: '4' }).first().click();
+    // El QuizPlayer renderiza `<label><input type="radio" name="q-..." /><span>{label}</span></label>`
+    // y el input NO expone `value` con el option id (state controlado en
+    // React vía `checked`). Identificamos la opción por el texto del
+    // label (en este quiz: "4" es la respuesta correcta a "¿2 + 2?",
+    // definida en el helper createPublishedQuizForLesson). El click en
+    // el `<input>` directo dispara el onChange que React necesita para
+    // actualizar el state (un click en el `<label>` o `<span>` a veces
+    // se intercepta por estilos del wrapper).
+    void correctOptionId;
+    await page
+      .locator('label', { hasText: '4' })
+      .first()
+      .locator('input[type="radio"]')
+      .check();
 
     await page.getByRole('button', { name: 'Enviar respuestas' }).click();
 
