@@ -13,6 +13,7 @@ import { Progress } from '@/components/ui/progress';
 import { ApiHttpError } from '@/lib/api-client';
 import { certificatesApi, type Certificate } from '@/lib/certificates';
 import { coursesApi, type CourseDetail, type CourseLesson } from '@/lib/courses';
+import { formatDuration } from '@/lib/format';
 import { learningApi, type Enrollment } from '@/lib/learning';
 import { zoomLiveApi, type ZoomSession } from '@/lib/zoom-live';
 
@@ -198,9 +199,9 @@ export default function CourseAlumnoPage() {
               {course.estimatedMinutes ? (
                 <div>
                   <strong className="font-display text-text tabular-nums">
-                    {course.estimatedMinutes}
+                    {formatDuration(course.estimatedMinutes)}
                   </strong>{' '}
-                  min de contenido
+                  de contenido
                 </div>
               ) : null}
             </div>

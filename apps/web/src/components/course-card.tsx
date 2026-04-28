@@ -5,6 +5,7 @@ import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { formatDuration } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 export interface CourseCardData {
@@ -132,7 +133,7 @@ export function CourseCard({ course, href }: Props) {
           <div className="mt-auto space-y-3">
             {course.estimatedMinutes ? (
               <div className="text-xs font-medium text-text-subtle tabular-nums">
-                ≈ {course.estimatedMinutes} min
+                ≈ {formatDuration(course.estimatedMinutes)}
               </div>
             ) : null}
 
