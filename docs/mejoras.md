@@ -38,7 +38,7 @@
 
 ## Builder del curso como profesor · `https://cloud.didacta.io/formador/cursos/[id]`
 
-- [ ] En el curso como alumno hay un espacio para un video pero como profesor no tengo donde configurar ese video. Permitir URL de YouTube — [Notion](https://www.notion.so/350b609a124c812aabb2c7767edc450f)
+- [x] En el curso como alumno hay un espacio para un video pero como profesor no tengo donde configurar ese video. Permitir URL de YouTube — [Notion](https://www.notion.so/350b609a124c812aabb2c7767edc450f) · #217
 - [ ] Las categorías de los cursos deben ser como los tags. Un desplegable gestionable que me permita crear X categorías y el profesor las seleccione, una o varias por cada curso (con colores e icono) — [Notion](https://www.notion.so/350b609a124c81b998aec9ccbbcf0d98)
 - [ ] En la descripción del curso ponme algún editor de texto enriquecido que me permita subir imágenes y demás. No uses ninguno que tenga licencia ni TinyMCE — [Notion](https://www.notion.so/350b609a124c814688d3f527116576fe)
 
@@ -49,7 +49,7 @@
 ## Configuración del tenant · `https://cloud.didacta.io/admin/configuracion`
 
 - [ ] No guarda configuración SMTP. Soportar más providers (Amazon SES, SMTP genérico) con envío asíncrono — [Notion](https://www.notion.so/350b609a124c81138670d4b89e5f0208)
-- [ ] Módulos: usar toggle que guarda al cambio en lugar de form con submit — [Notion](https://www.notion.so/350b609a124c8130b73bcd821f07f55f)
+- [x] Módulos: usar toggle que guarda al cambio en lugar de form con submit — [Notion](https://www.notion.so/350b609a124c8130b73bcd821f07f55f) · #218
 - [ ] Storage configurable por tenant: local (Docker volume) / S3 / más — [Notion](https://www.notion.so/350b609a124c814f9934fe9833833181)
 - [x] Quitar Branding de Configuración (ya hay sección dedicada en /admin/branding) — [Notion](https://www.notion.so/350b609a124c81e4b20ce8746f8b95c3) · #210
 - [ ] Plantillas: editor por notificación con soporte multi-language — [Notion](https://www.notion.so/350b609a124c813cb9c2cf60a6693d09)
