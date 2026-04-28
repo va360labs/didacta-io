@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +9,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MentionTextarea } from '@/components/mention-textarea';
+import { PostDetailView } from '@/components/post-detail-view';
 import { PostReactions } from '@/components/post-reactions';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
@@ -29,6 +29,10 @@ export default function ComunidadPage() {
   const [showCompose, setShowCompose] = useState(false);
   const [activeTag, setActiveTag] = useState<string>('Todo');
   const [sort, setSort] = useState<PostSort>('recent');
+  // Si hay un post seleccionado, su detalle se renderiza en un modal
+  // sobre el listado en lugar de navegar a /comunidad/[id]. La ruta
+  // independiente sigue funcionando para enlaces compartibles.
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
 
   async function reload(opts: { sort?: PostSort; tag?: string } = {}) {
     try {
@@ -254,6 +258,7 @@ export default function ComunidadPage() {
                 key={p.id}
                 post={p}
                 viewerUserId={viewerUserId}
+                onOpen={() => setSelectedPostId(p.id)}
                 onTagClick={(t) => setActiveTag(t)}
                 onReactionToggle={(emoji) => void handleReactPost(p.id, emoji)}
               />
@@ -312,6 +317,23 @@ export default function ComunidadPage() {
           </Card>
         </aside>
       </div>
+
+      <Dialog
+        open={selectedPostId !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedPostId(null);
+        }}
+        ariaLabel="Detalle de la conversación"
+        maxWidthClass="max-w-3xl"
+      >
+        {selectedPostId ? (
+          <PostDetailView
+            postId={selectedPostId}
+            onClose={() => setSelectedPostId(null)}
+            onChanged={() => void reload({ sort, tag: activeTag })}
+          />
+        ) : null}
+      </Dialog>
     </section>
   );
 }
@@ -344,11 +366,13 @@ function ActivityRow({
 function ThreadCard({
   post,
   viewerUserId,
+  onOpen,
   onTagClick,
   onReactionToggle,
 }: {
   post: Post;
   viewerUserId: string | null;
+  onOpen: () => void;
   onTagClick: (tag: string) => void;
   onReactionToggle: (emoji: string) => void;
 }) {
@@ -359,10 +383,25 @@ function ThreadCard({
     .map((s) => s[0]?.toUpperCase() ?? '')
     .join('');
 
+  // Card clickable que abre el detalle en modal. Para mantener
+  // accesibilidad (Enter/Espacio + focus visible) usamos role="button"
+  // sobre el wrapper en lugar de un <button> para que los chips de
+  // tag y reacciones internos sigan siendo elementos interactivos
+  // anidados sin generar HTML inválido (button-in-button).
+  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onOpen();
+    }
+  }
+
   return (
-    <Link
-      href={`/comunidad/${post.id}` as never}
-      className="block rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={handleKeyDown}
+      className="block cursor-pointer rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
     >
       <Card interactive className="transition-shadow">
         <CardContent className="p-5">
@@ -382,14 +421,10 @@ function ThreadCard({
                   {post.authorDisplayName ?? 'Anónimo'}
                 </span>
                 {post.tags.slice(0, 2).map((t) => (
-                  // El Badge va dentro de un <Link> al detalle; al hacer
-                  // click sobre un tag queremos filtrar el feed, no navegar.
-                  // preventDefault + stopPropagation cortan la navegación.
                   <button
                     key={t}
                     type="button"
                     onClick={(e) => {
-                      e.preventDefault();
                       e.stopPropagation();
                       onTagClick(t);
                     }}
@@ -409,11 +444,9 @@ function ThreadCard({
                 {post.title}
               </h3>
               <p className="line-clamp-4 text-sm leading-relaxed text-text-muted">{post.body}</p>
-              {/* Heurística: si el body tiene > 240 caracteres es muy probable
-                  que line-clamp-4 esté truncando contenido visible. Mostramos
-                  "Leer más" para que el alumno sepa que hay más. El Link
-                  padre del card ya navega al detalle (en una iteración
-                  futura, el detalle abre como modal sobre el feed). */}
+              {/* Heurística: si el body tiene > 240 caracteres line-clamp-4
+                  está casi seguro recortando contenido. Mostramos "Leer
+                  más" para invitar a abrir el modal con el detalle. */}
               {post.body.length > 240 ? (
                 <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand-700">
                   Leer más →
@@ -437,7 +470,7 @@ function ThreadCard({
           </div>
         </CardContent>
       </Card>
-    </Link>
+    </div>
   );
 }
 

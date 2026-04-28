@@ -21,8 +21,16 @@ import { cn } from '@/lib/utils';
 export interface DialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  title: ReactNode;
+  /**
+   * Título visible del modal. Si se omite, el header con el título no se
+   * renderiza (solo el botón de cerrar) y se usa `ariaLabel` para la
+   * accesibilidad. Útil cuando el contenido ya trae su propia jerarquía
+   * de encabezados (p.ej. el detalle de un post).
+   */
+  title?: ReactNode;
   description?: ReactNode;
+  /** Etiqueta accesible cuando `title` es undefined. */
+  ariaLabel?: string;
   children: ReactNode;
   /** Ancho máximo del panel. Default: 32rem (512px). */
   maxWidthClass?: string;
@@ -33,6 +41,7 @@ export function Dialog({
   onOpenChange,
   title,
   description,
+  ariaLabel,
   children,
   maxWidthClass = 'max-w-lg',
 }: DialogProps): React.JSX.Element | null {
@@ -87,29 +96,42 @@ export function Dialog({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={titleId}
+        {...(title ? { 'aria-labelledby': titleId } : { 'aria-label': ariaLabel ?? 'Diálogo' })}
         className={cn(
           'relative w-full rounded-lg border border-border bg-surface shadow-2xl outline-none',
           maxWidthClass,
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-border-soft p-5">
-          <div className="min-w-0 flex-1 space-y-1">
-            <h2 id={titleId} className="font-display text-lg font-semibold text-text">
-              {title}
-            </h2>
-            {description ? <p className="text-sm text-text-muted">{description}</p> : null}
+        {title ? (
+          <div className="flex items-start justify-between gap-3 border-b border-border-soft p-5">
+            <div className="min-w-0 flex-1 space-y-1">
+              <h2 id={titleId} className="font-display text-lg font-semibold text-text">
+                {title}
+              </h2>
+              {description ? <p className="text-sm text-text-muted">{description}</p> : null}
+            </div>
+            <button
+              type="button"
+              onClick={close}
+              aria-label="Cerrar"
+              className="rounded-md p-1 text-text-muted hover:bg-surface-2 hover:text-text focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              ✕
+            </button>
           </div>
+        ) : (
+          // Sin título: el contenido trae su propia jerarquía. Mantenemos
+          // sólo un botón flotante para cerrar.
           <button
             type="button"
             onClick={close}
             aria-label="Cerrar"
-            className="rounded-md p-1 text-text-muted hover:bg-surface-2 hover:text-text focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="absolute right-3 top-3 z-10 rounded-md bg-surface/80 p-1 text-text-muted backdrop-blur hover:bg-surface-2 hover:text-text focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
             ✕
           </button>
-        </div>
+        )}
         <div className="p-5">{children}</div>
       </div>
     </div>,
