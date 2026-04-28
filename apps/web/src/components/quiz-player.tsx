@@ -61,7 +61,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
         message:
           e instanceof ApiHttpError
             ? e.message
-            : 'No pudimos cargar el quiz. Probá refrescar la página.',
+            : 'No pudimos cargar el quiz. Prueba refrescar la página.',
       });
     }
   }, [quizId]);
@@ -230,10 +230,10 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
         <CardHeader>
           <CardTitle>{state.quiz.title}</CardTitle>
           <CardDescription>
-            Respondé todas las preguntas y enviá. Umbral de aprobación:{' '}
+            Responde todas las preguntas y envía. Umbral de aprobación:{' '}
             <strong className="text-text">{state.quiz.passThreshold}%</strong>.
             {state.attempt.expiresAt
-              ? ` Tenés tiempo hasta las ${new Date(state.attempt.expiresAt).toLocaleTimeString('es-AR')}.`
+              ? ` Tienes tiempo hasta las ${new Date(state.attempt.expiresAt).toLocaleTimeString('es-AR')}.`
               : ''}
           </CardDescription>
         </CardHeader>

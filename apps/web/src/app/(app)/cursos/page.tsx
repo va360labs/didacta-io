@@ -42,7 +42,7 @@ export default function CatalogPage() {
         setError(
           e instanceof ApiHttpError
             ? e.message
-            : 'No pudimos cargar el catálogo. Probá refrescar la página.',
+            : 'No pudimos cargar el catálogo. Prueba refrescar la página.',
         );
       });
     return () => {
@@ -60,7 +60,7 @@ export default function CatalogPage() {
           Catálogo de cursos
         </h1>
         <p className="mt-2 max-w-2xl text-text-muted">
-          Explorá los cursos publicados de tu organización. Hacé clic en uno para ver el detalle y
+          Explora los cursos publicados de tu organización. Haz clic en uno para ver el detalle y
           matricularte.
         </p>
       </header>

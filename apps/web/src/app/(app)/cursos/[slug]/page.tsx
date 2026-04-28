@@ -81,7 +81,7 @@ export default function CourseAlumnoPage() {
       setError(
         e instanceof ApiHttpError
           ? e.message
-          : 'No pudimos cargar el curso. Probá refrescar la página.',
+          : 'No pudimos cargar el curso. Prueba refrescar la página.',
       );
     }
   }, [params?.slug]);
@@ -98,7 +98,7 @@ export default function CourseAlumnoPage() {
       const newEnrollment = await learningApi.enrollSelf(course.id);
       if (newEnrollment.status === 'ACTIVE') await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos matricularte. Probá de nuevo.');
+      setError(e instanceof ApiHttpError ? e.message : 'No pudimos matricularte. Prueba de nuevo.');
     } finally {
       setPending(false);
     }
@@ -256,7 +256,7 @@ export default function CourseAlumnoPage() {
               <div>
                 <div className="text-xs opacity-85">Vista previa</div>
                 <div className="font-display text-base font-semibold">
-                  {allLessons[0]?.title ?? 'Empezá por la primera lección'}
+                  {allLessons[0]?.title ?? 'Empieza por la primera lección'}
                 </div>
               </div>
             </div>
@@ -297,10 +297,10 @@ export default function CourseAlumnoPage() {
       {!enrollment ? (
         <Card>
           <CardHeader>
-            <CardTitle>Empezá este curso</CardTitle>
+            <CardTitle>Empieza este curso</CardTitle>
             <CardDescription>
-              Matriculate para acceder al contenido. Si tu organización te dio un código de
-              invitación, podés canjearlo abajo.
+              Matricúlate para acceder al contenido. Si tu organización te dio un código de
+              invitación, puedes canjearlo abajo.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -308,7 +308,7 @@ export default function CourseAlumnoPage() {
               {pending ? 'Procesando…' : 'Matricularme'}
             </Button>
             <form action={handleEnrollByCode} className="space-y-2 border-t border-border pt-5">
-              <Label htmlFor="code">¿Tenés un código de invitación?</Label>
+              <Label htmlFor="code">¿Tienes un código de invitación?</Label>
               <div className="flex gap-2">
                 <Input id="code" name="code" required placeholder="ABCD-1234" className="flex-1" />
                 <Button type="submit" variant="secondary" disabled={pending}>
@@ -379,7 +379,7 @@ export default function CourseAlumnoPage() {
               <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
                 <h3 className="font-display text-xl font-semibold">Contenido bloqueado</h3>
                 <p className="max-w-md text-sm text-text-muted">
-                  Matriculate al curso para empezar a ver las lecciones, marcar tu progreso y
+                  Matricúlate al curso para empezar a ver las lecciones, marcar tu progreso y
                   recibir tu certificado al completar.
                 </p>
               </CardContent>
