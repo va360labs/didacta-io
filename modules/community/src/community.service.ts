@@ -52,6 +52,14 @@ export class CommunityService {
     query: ListPostsQueryDto,
     viewer: { canModerate: boolean } = { canModerate: false },
   ) {
+    // Filtro de comentarios alineado con la visibilidad de moderación:
+    // los comentarios ocultos solo cuentan para admins. Sin esta cláusula,
+    // un alumno vería "5 comentarios" pero al abrir el post solo verá los
+    // visibles, generando un mismatch confuso.
+    const commentVisibilityWhere = viewer.canModerate
+      ? { deletedAt: null }
+      : { deletedAt: null, hiddenAt: null };
+
     return this.prisma.modCommunityPost.findMany({
       where: {
         tenantId,
@@ -63,6 +71,11 @@ export class CommunityService {
       },
       orderBy: { createdAt: 'desc' },
       take: query.limit,
+      include: {
+        _count: {
+          select: { comments: { where: commentVisibilityWhere } },
+        },
+      },
     });
   }
 

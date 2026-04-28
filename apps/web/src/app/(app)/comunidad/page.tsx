@@ -319,7 +319,9 @@ function ThreadCard({ post }: { post: Post }) {
               ) : null}
               <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-text-muted">
                 <Icon name="message" size={14} />
-                Ver conversación
+                {post._count && post._count.comments > 0
+                  ? `${post._count.comments} ${post._count.comments === 1 ? 'comentario' : 'comentarios'}`
+                  : 'Ver conversación'}
               </div>
             </div>
           </div>

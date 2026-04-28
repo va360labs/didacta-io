@@ -17,6 +17,15 @@ export interface Post {
   hiddenAt: string | null;
   hiddenById: string | null;
   hiddenReason: string | null;
+  /**
+   * Conteo de comentarios visibles del post (los ocultos solo cuentan
+   * para admins). Lo agrega el listado vía Prisma `_count`. En endpoints
+   * que no incluyen `_count` (como getPost, que ya trae los comentarios),
+   * puede venir undefined.
+   */
+  _count?: {
+    comments: number;
+  };
 }
 
 export interface Comment {

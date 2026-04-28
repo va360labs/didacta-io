@@ -75,7 +75,11 @@ function makeFakePrisma() {
           ) ?? null
         );
       },
-      async findMany(args: { where: Record<string, unknown>; take?: number }) {
+      async findMany(args: {
+        where: Record<string, unknown>;
+        take?: number;
+        include?: { _count?: { select?: { comments?: unknown } } };
+      }) {
         const w = args.where;
         const filtered = posts.filter(
           (p) =>
@@ -87,7 +91,18 @@ function makeFakePrisma() {
               !(w.tags as { has?: string }).has ||
               p.tags.includes((w.tags as { has?: string }).has!)),
         );
-        return filtered.slice(0, args.take ?? 50);
+        const sliced = filtered.slice(0, args.take ?? 50);
+        // Si el caller pidió `include: { _count: { select: { comments: ... } } }`
+        // calculamos el conteo simulando el comportamiento de Prisma.
+        if (args.include?._count?.select?.comments !== undefined) {
+          return sliced.map((p) => ({
+            ...p,
+            _count: {
+              comments: comments.filter((c) => c.postId === p.id && c.deletedAt === null).length,
+            },
+          }));
+        }
+        return sliced;
       },
       async update(args: { where: { id: string }; data: Partial<PostRow> }) {
         const found = posts.find((p) => p.id === args.where.id);
@@ -231,6 +246,30 @@ describe('CommunityService.createPost', () => {
     const list2 = await svc.listPosts('t1', { tag: 'general', limit: 50 });
     expect(list2).toHaveLength(1);
     expect(list2[0]?.title).toBe('B');
+  });
+
+  it('listPosts incluye _count.comments con el total visible', async () => {
+    const prisma = makeFakePrisma();
+    const svc = new CommunityService(prisma as never, trackingCtx([]));
+    const post = await svc.createPost(
+      't1',
+      { id: 'u1', displayName: null },
+      { title: 'P', body: 'body' },
+    );
+    await svc.addComment('t1', post.id, { id: 'u2', displayName: null }, { body: 'first' });
+    await svc.addComment('t1', post.id, { id: 'u3', displayName: null }, { body: 'second' });
+
+    const list = await svc.listPosts('t1', { limit: 50 });
+    expect(list).toHaveLength(1);
+    expect(list[0]?._count?.comments).toBe(2);
+  });
+
+  it('listPosts devuelve _count.comments=0 para post sin comentarios', async () => {
+    const prisma = makeFakePrisma();
+    const svc = new CommunityService(prisma as never, trackingCtx([]));
+    await svc.createPost('t1', { id: 'u1', displayName: null }, { title: 'P', body: 'body' });
+    const list = await svc.listPosts('t1', { limit: 50 });
+    expect(list[0]?._count?.comments).toBe(0);
   });
 });
 
