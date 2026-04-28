@@ -12,7 +12,7 @@
 
 - [x] El botón de nueva conversación debe abrir un modal con el formulario. No aparecer en línea — [Notion](https://www.notion.so/350b609a124c81fcbbced2fc1f112939) · #202
 - [x] Los tags son seleccionables (filtros) — [Notion](https://www.notion.so/350b609a124c81098829e50bbd88e9fb) · #201
-- [ ] Añadir en administrador de la comunidad "Gestión de tags" con colores e iconos — [Notion](https://www.notion.so/350b609a124c81fdacb1dbcad390131f)
+- [x] Añadir en administrador de la comunidad "Gestión de tags" con colores e iconos — [Notion](https://www.notion.so/350b609a124c81fdacb1dbcad390131f) · #206
 - [ ] Permitir a los administradores fijar mensajes en la comunidad — [Notion](https://www.notion.so/350b609a124c81d58073f83ac165b3c7)
 - [x] Si un mensaje tiene comentarios debe mostrar el contador de comentarios en lugar de "Ver conversación" — [Notion](https://www.notion.so/350b609a124c8197a359c6ecd8cbf346) · #199
 - [x] En ordenar, no se puede modificar nada. Debe permitir: Más recientes, Más Antiguas y Más comentarios — [Notion](https://www.notion.so/350b609a124c81e3bfa3d0a7331a18ab) · #200
