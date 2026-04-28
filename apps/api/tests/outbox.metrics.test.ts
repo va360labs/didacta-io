@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { Counter, Histogram, Registry } from 'prom-client';
+import { Counter, Gauge, Histogram, Registry } from 'prom-client';
 import { OutboxMetrics } from '../src/modules/outbox.metrics';
 
 function makeMetrics(): {
@@ -9,6 +9,8 @@ function makeMetrics(): {
   duration: Histogram<string>;
   sweeps: Counter<'result'>;
   events: Counter<'result'>;
+  oldestAge: Gauge<string>;
+  pending: Gauge<string>;
 } {
   const registry = new Registry();
   const dispatch = new Counter({
@@ -35,8 +37,18 @@ function makeMetrics(): {
     labelNames: ['result'],
     registers: [registry],
   });
-  const metrics = new OutboxMetrics(dispatch, duration, sweeps, events);
-  return { metrics, registry, dispatch, duration, sweeps, events };
+  const oldestAge = new Gauge({
+    name: 'outbox_pending_oldest_age_seconds',
+    help: 't',
+    registers: [registry],
+  });
+  const pending = new Gauge({
+    name: 'outbox_pending_events',
+    help: 't',
+    registers: [registry],
+  });
+  const metrics = new OutboxMetrics(dispatch, duration, sweeps, events, oldestAge, pending);
+  return { metrics, registry, dispatch, duration, sweeps, events, oldestAge, pending };
 }
 
 describe('OutboxMetrics', () => {
@@ -85,16 +97,35 @@ describe('OutboxMetrics', () => {
     expect(byLabel['failed']).toBe(1);
   });
 
+  it('setOldestPendingAgeSeconds expone el último valor', async () => {
+    setup.metrics.setOldestPendingAgeSeconds(42);
+    const v1 = await setup.oldestAge.get();
+    expect(v1.values[0]?.value).toBe(42);
+    setup.metrics.setOldestPendingAgeSeconds(0);
+    const v2 = await setup.oldestAge.get();
+    expect(v2.values[0]?.value).toBe(0);
+  });
+
+  it('setPendingEventsCount expone el último valor', async () => {
+    setup.metrics.setPendingEventsCount(7);
+    const v = await setup.pending.get();
+    expect(v.values[0]?.value).toBe(7);
+  });
+
   it('todas las métricas son scrape-ables', async () => {
     setup.metrics.recordDispatchCompleted();
     setup.metrics.recordSweep('success');
     setup.metrics.recordRecoveryEvents(1, 0);
     setup.metrics.recordDispatchDuration(0.02);
+    setup.metrics.setOldestPendingAgeSeconds(123);
+    setup.metrics.setPendingEventsCount(4);
     const text = await setup.registry.metrics();
     expect(text).toContain('outbox_dispatch_total');
     expect(text).toContain('outbox_dispatch_duration_seconds');
     expect(text).toContain('outbox_recovery_sweeps_total');
     expect(text).toContain('outbox_recovery_events_total');
+    expect(text).toContain('outbox_pending_oldest_age_seconds 123');
+    expect(text).toContain('outbox_pending_events 4');
     expect(text).toContain('result="completed"');
     expect(text).toContain('result="success"');
   });

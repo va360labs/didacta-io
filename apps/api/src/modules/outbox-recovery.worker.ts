@@ -1,5 +1,6 @@
 import { Injectable, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { PrismaService } from '../prisma/prisma.service';
 import { ModuleRegistryService } from './module-registry.service';
 import { OutboxMetrics } from './outbox.metrics';
 import { OutboxQueueService } from './outbox-queue.service';
@@ -13,6 +14,11 @@ import { OutboxQueueService } from './outbox-queue.service';
  *
  * Sin BullMQ (dev local sin Redis): mantiene el comportamiento original de
  * reprocesar in-process. Intervalo: 30 s para feedback rápido.
+ *
+ * Además del recovery, en cada sweep mide la **edad del evento pendiente más
+ * viejo** y la cantidad de pendientes, y los expone como gauges en `/metrics`.
+ * Esto permite alertar sobre lag (oldest > 5min) sin una alerta basada solo en
+ * counters.
  */
 @Injectable()
 export class OutboxRecoveryWorker implements OnApplicationBootstrap, OnModuleDestroy {
@@ -23,6 +29,7 @@ export class OutboxRecoveryWorker implements OnApplicationBootstrap, OnModuleDes
     private readonly queue: OutboxQueueService,
     private readonly logger: PinoLogger,
     private readonly metrics: OutboxMetrics,
+    private readonly prisma: PrismaService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -40,6 +47,28 @@ export class OutboxRecoveryWorker implements OnApplicationBootstrap, OnModuleDes
     if (this.interval) clearInterval(this.interval);
   }
 
+  /**
+   * Mide la edad del evento pendiente más viejo y el total de pendientes.
+   * Public para que el endpoint `/admin/system/health-detail` pueda
+   * pedir un valor fresco sin esperar al próximo sweep.
+   */
+  async sampleLag(): Promise<{ pending: number; oldestAgeSeconds: number }> {
+    const [pendingCount, oldest] = await Promise.all([
+      this.prisma.outboxEvent.count({ where: { processedAt: null } }),
+      this.prisma.outboxEvent.findFirst({
+        where: { processedAt: null },
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true },
+      }),
+    ]);
+    const oldestAgeSeconds = oldest
+      ? Math.max(0, Math.floor((Date.now() - oldest.createdAt.getTime()) / 1000))
+      : 0;
+    this.metrics.setPendingEventsCount(pendingCount);
+    this.metrics.setOldestPendingAgeSeconds(oldestAgeSeconds);
+    return { pending: pendingCount, oldestAgeSeconds };
+  }
+
   private async runOnce(): Promise<void> {
     try {
       const result = await this.registry.recoverOutbox();
@@ -51,6 +80,14 @@ export class OutboxRecoveryWorker implements OnApplicationBootstrap, OnModuleDes
     } catch (error) {
       this.metrics.recordSweep('error');
       this.logger.error({ err: error }, 'outbox recovery sweep falló');
+    }
+
+    // Siempre actualizamos los gauges, incluso si el sweep falló: nos interesa
+    // saber el lag aunque el dispatcher esté roto.
+    try {
+      await this.sampleLag();
+    } catch (error) {
+      this.logger.warn({ err: error }, 'outbox lag sample falló');
     }
   }
 }

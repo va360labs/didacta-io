@@ -1,0 +1,269 @@
+{
+  "annotations": { "list": [] },
+  "description": "Dashboard base de Didacta API: outbox, digest worker y salud del sistema. Importar en Grafana con datasource Prometheus.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "row",
+      "title": "Outbox dispatcher",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Lag del evento pendiente más viejo",
+      "id": 1,
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "red", "value": 300 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "outbox_pending_oldest_age_seconds{app=\"didacta-api\"}",
+          "legendFormat": "lag",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+    },
+    {
+      "type": "stat",
+      "title": "Pendientes",
+      "id": 2,
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 200 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "outbox_pending_events{app=\"didacta-api\"}",
+          "legendFormat": "pending",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Dispatch rate (per second)",
+      "id": 3,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "lineInterpolation": "linear" } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "rate(outbox_dispatch_total{app=\"didacta-api\", result=\"completed\"}[5m])",
+          "legendFormat": "completed",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(outbox_dispatch_total{app=\"didacta-api\", result=\"failed\"}[5m])",
+          "legendFormat": "failed",
+          "refId": "B"
+        }
+      ],
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Dispatch latency (p95 / p99)",
+      "id": 4,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "fieldConfig": {
+        "defaults": { "unit": "s", "custom": { "drawStyle": "line", "lineInterpolation": "linear" } }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(outbox_dispatch_duration_seconds_bucket{app=\"didacta-api\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(outbox_dispatch_duration_seconds_bucket{app=\"didacta-api\"}[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "B"
+        }
+      ],
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Recovery sweeps",
+      "id": 5,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        {
+          "expr": "increase(outbox_recovery_sweeps_total{app=\"didacta-api\", result=\"success\"}[5m])",
+          "legendFormat": "success",
+          "refId": "A"
+        },
+        {
+          "expr": "increase(outbox_recovery_sweeps_total{app=\"didacta-api\", result=\"error\"}[5m])",
+          "legendFormat": "error",
+          "refId": "B"
+        }
+      ],
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+    },
+    {
+      "type": "row",
+      "title": "Community digest",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "id": 200,
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Digest fail rate (5m)",
+      "id": 6,
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 18 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.05 },
+              { "color": "red", "value": 0.1 }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "(sum(rate(community_digest_emails_total{app=\"didacta-api\", result=\"failed\"}[5m])) or vector(0)) / clamp_min(sum(rate(community_digest_emails_total{app=\"didacta-api\"}[5m])), 1)",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Digest emails por resultado (5m rate)",
+      "id": 7,
+      "gridPos": { "h": 8, "w": 18, "x": 6, "y": 18 },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "targets": [
+        {
+          "expr": "sum by (result) (rate(community_digest_emails_total{app=\"didacta-api\"}[5m]))",
+          "legendFormat": "{{result}}",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+    },
+    {
+      "type": "row",
+      "title": "Proceso",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 },
+      "id": 300,
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "RSS memoria",
+      "id": 8,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 27 },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        {
+          "expr": "process_resident_memory_bytes{app=\"didacta-api\"}",
+          "legendFormat": "rss",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Event loop lag",
+      "id": 9,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 27 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "expr": "nodejs_eventloop_lag_seconds{app=\"didacta-api\"}",
+          "legendFormat": "lag",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["didacta", "api", "outbox"],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "current": {}
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Didacta · Plataforma",
+  "uid": "didacta-platform",
+  "version": 1,
+  "weekStart": ""
+}

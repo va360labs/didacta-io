@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthModule } from '../auth/auth.module';
+import { AdminSystemController } from './admin-system.controller';
 import { AssessmentsController } from './assessments.controller';
 import { AssessmentsAttemptsController } from './assessments-attempts.controller';
 import { AssessmentsErrorFilter } from './assessments-error.filter';
@@ -57,6 +58,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     ZoomLiveController,
     ZoomWebhookController,
     FundaeController,
+    AdminSystemController,
   ],
   providers: [
     ...communityDigestMetricsProviders,
