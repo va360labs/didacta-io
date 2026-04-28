@@ -8,9 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { coursesApi, type Course, type CourseDetail } from '@/lib/courses';
 import { zoomLiveApi, type SessionStatus, type ZoomSession } from '@/lib/zoom-live';
 
 const STATUS_VARIANT: Record<SessionStatus, 'success' | 'warning' | 'muted' | 'danger'> = {
@@ -208,10 +210,57 @@ function CreateSessionForm({
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [courseId, setCourseId] = useState<string>('');
+  const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
+  const [lessonId, setLessonId] = useState<string>('');
   const session = authStorage.getSession();
   const defaultEmail = session?.user.email ?? '';
   const tzGuess =
     typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC';
+
+  // Carga inicial de cursos publicados del tenant para el select.
+  useEffect(() => {
+    let aborted = false;
+    void coursesApi
+      .list({ status: 'PUBLISHED' })
+      .then((list) => {
+        if (!aborted) setCourses(list);
+      })
+      .catch(() => {
+        // Si falla la carga, dejamos los selects vacíos. El submit
+        // sigue siendo válido (curso/lección son opcionales).
+      });
+    return () => {
+      aborted = true;
+    };
+  }, []);
+
+  // Al cambiar de curso, cargamos su detalle para el select de lecciones.
+  // El reset de lessonId evita que quede un id huérfano de un curso anterior.
+  useEffect(() => {
+    setLessonId('');
+    setCourseDetail(null);
+    if (!courseId) return;
+    let aborted = false;
+    void coursesApi
+      .get(courseId)
+      .then((detail) => {
+        if (!aborted) setCourseDetail(detail);
+      })
+      .catch(() => {
+        if (!aborted) setCourseDetail(null);
+      });
+    return () => {
+      aborted = true;
+    };
+  }, [courseId]);
+
+  // Lista plana de lecciones del curso seleccionado (preserva el orden
+  // de módulos y dentro de cada módulo el orden de lecciones).
+  const lessonOptions = (courseDetail?.modules ?? []).flatMap((m) =>
+    m.lessons.map((l) => ({ id: l.id, label: `${m.title} · ${l.title}` })),
+  );
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -324,25 +373,40 @@ function CreateSessionForm({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="courseId">UUID del curso (opcional)</Label>
-              <Input
+              <Label htmlFor="courseId">Curso (opcional)</Label>
+              <Select
                 id="courseId"
                 name="courseId"
-                placeholder="Pegalo desde /formador/cursos/{id}"
-                className="font-mono"
-              />
+                value={courseId}
+                onChange={(e) => setCourseId(e.target.value)}
+              >
+                <option value="">Sesión libre (sin curso)</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="lessonId">UUID de la lección (opcional)</Label>
-              <Input
+              <Label htmlFor="lessonId">Lección (opcional)</Label>
+              <Select
                 id="lessonId"
                 name="lessonId"
-                placeholder="Para vincular a una lección concreta"
-                className="font-mono"
-              />
+                value={lessonId}
+                onChange={(e) => setLessonId(e.target.value)}
+                disabled={!courseId || lessonOptions.length === 0}
+              >
+                <option value="">— Sin vincular a una lección —</option>
+                {lessonOptions.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.label}
+                  </option>
+                ))}
+              </Select>
               <p className="text-xs text-text-subtle">
-                Requiere `courseId`. La sesión aparecerá en el detalle de esa lección para los
-                alumnos matriculados.
+                Si seleccionás una lección, la sesión aparece en su detalle para los alumnos
+                matriculados.
               </p>
             </div>
           </div>
