@@ -111,7 +111,14 @@ function makeFakePrisma(courses: { id: string; tenantId: string }[] = []) {
         return webhookEvents.find((e) => e.eventId === args.where.eventId) ?? null;
       },
       async create(args: { data: Omit<WebhookEventRow, 'receivedAt'> }) {
-        const row: WebhookEventRow = { ...args.data, receivedAt: new Date() };
+        // En CI los inserts caen dentro del mismo milisegundo y un sort
+        // por receivedAt no es determinístico. Garantizamos +1ms por
+        // cada insert para reproducir el orden estable que Prisma+
+        // PostgreSQL emiten via `orderBy: [receivedAt, id]`.
+        const lastTs = webhookEvents.length
+          ? webhookEvents[webhookEvents.length - 1]!.receivedAt.getTime()
+          : Date.now();
+        const row: WebhookEventRow = { ...args.data, receivedAt: new Date(lastTs + 1) };
         webhookEvents.push(row);
         return row;
       },
@@ -125,7 +132,12 @@ function makeFakePrisma(courses: { id: string; tenantId: string }[] = []) {
           .filter((e) => (args.where.tenantId ? e.tenantId === args.where.tenantId : true))
           .filter((e) => (args.where.eventType ? e.eventType === args.where.eventType : true))
           .filter((e) => (args.where.result ? e.result === args.where.result : true))
-          .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime());
+          .sort((a, b) => {
+            const dt = b.receivedAt.getTime() - a.receivedAt.getTime();
+            if (dt !== 0) return dt;
+            // Tiebreak por id DESC, igual que el service real.
+            return b.id.localeCompare(a.id);
+          });
         const skip = args.skip ?? 0;
         const take = args.take ?? filtered.length;
         return filtered.slice(skip, skip + take);

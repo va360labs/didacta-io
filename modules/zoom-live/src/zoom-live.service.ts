@@ -378,7 +378,12 @@ export class ZoomLiveService {
     const [items, total] = await Promise.all([
       this.prisma.modZoomWebhookEvent.findMany({
         where,
-        orderBy: { receivedAt: 'desc' },
+        // Tiebreak por id DESC: dos webhooks pueden persistirse con
+        // `received_at` idéntico al milisegundo (PostgreSQL TIMESTAMP(3)
+        // tiene resolución 1ms y los inserts pueden caer dentro del
+        // mismo tick). Sin tiebreak el orden no es determinístico y la
+        // paginación puede saltar filas o duplicarlas.
+        orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
         skip,
         take: limit,
       }),

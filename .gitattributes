@@ -1,0 +1,20 @@
+# Forzar LF en todos los archivos de texto del repo. Sin esto, en
+# Windows git con autocrlf=true convierte a CRLF al checkout, prettier
+# (configurado con endOfLine: 'lf') rechaza esos archivos como mal
+# formateados, y aparecen warnings tipo "LF will be replaced by CRLF"
+# en cada commit.
+*               text=auto eol=lf
+
+# Binarios: nunca normalizar.
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.svg           text
+*.pdf           binary
+*.zip           binary
+*.gz            binary
+*.tar           binary
+*.woff          binary
+*.woff2         binary
