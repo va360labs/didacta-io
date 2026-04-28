@@ -74,13 +74,13 @@ test.describe('mod.assessments — flujo del alumno', () => {
 
     await page.getByRole('button', { name: 'Enviar respuestas' }).click();
 
-    // 5) Pantalla de resultado: el header del último intento muestra
-    //    "Último intento: 100% · aprobado". Buscamos el texto completo
-    //    para no matchear el `100%` del progreso de la lección que
-    //    aparece en el sidebar tras completar el quiz.
-    await expect(page.getByText(/Último intento:\s*100%\s*·\s*aprobado/)).toBeVisible({
-      timeout: 15_000,
-    });
+    // 5) Pantalla de resultado: tras el submit el QuizPlayer entra en
+    //    state 'result' y muestra el hero "¡Lo lograste!" + scorePercent
+    //    en grande. (El texto "Último intento: X% · aprobado" solo aparece
+    //    al volver al quiz desde idle, no inmediatamente tras submit.)
+    await expect(
+      page.getByRole('heading', { name: '¡Lo lograste!', level: 3 }),
+    ).toBeVisible({ timeout: 15_000 });
 
     // 6) Refrescar y verificar que el curso quedó completado por el bridge
     await page.reload();
