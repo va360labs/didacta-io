@@ -40,7 +40,7 @@
 
 - [x] En el curso como alumno hay un espacio para un video pero como profesor no tengo donde configurar ese video. Permitir URL de YouTube — [Notion](https://www.notion.so/350b609a124c812aabb2c7767edc450f) · #217
 - [ ] Las categorías de los cursos deben ser como los tags. Un desplegable gestionable que me permita crear X categorías y el profesor las seleccione, una o varias por cada curso (con colores e icono) — [Notion](https://www.notion.so/350b609a124c81b998aec9ccbbcf0d98)
-- [ ] En la descripción del curso ponme algún editor de texto enriquecido que me permita subir imágenes y demás. No uses ninguno que tenga licencia ni TinyMCE — [Notion](https://www.notion.so/350b609a124c814688d3f527116576fe)
+- [x] En la descripción del curso ponme algún editor de texto enriquecido que me permita subir imágenes y demás. No uses ninguno que tenga licencia ni TinyMCE — [Notion](https://www.notion.so/350b609a124c814688d3f527116576fe) · #220
 
 ## Creador de aula virtual · `https://cloud.didacta.io/formador/aula-virtual`
 
