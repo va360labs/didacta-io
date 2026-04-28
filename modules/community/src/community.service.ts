@@ -87,6 +87,13 @@ export class CommunityService {
         _count: {
           select: { comments: { where: commentVisibilityWhere } },
         },
+        // Reacciones del POST (no de los comments). Las traemos completas
+        // porque la UI del listado las agrega por emoji y necesita saber
+        // si el viewer ya reaccionó (por authorId). Volumen esperado: < 20
+        // por post, así que el payload extra es trivial.
+        reactions: {
+          where: { commentId: null },
+        },
       },
     });
   }

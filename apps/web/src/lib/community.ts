@@ -26,6 +26,12 @@ export interface Post {
   _count?: {
     comments: number;
   };
+  /**
+   * Reacciones del post (no de los comentarios). El listado las incluye
+   * para que la UI agregue por emoji y sepa cuáles son del viewer.
+   * `getPost` también las devuelve por compatibilidad con el detalle.
+   */
+  reactions?: Reaction[];
 }
 
 export interface Comment {

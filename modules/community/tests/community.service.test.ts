@@ -79,7 +79,10 @@ function makeFakePrisma() {
         where: Record<string, unknown>;
         take?: number;
         orderBy?: Array<Record<string, unknown>> | Record<string, unknown>;
-        include?: { _count?: { select?: { comments?: unknown } } };
+        include?: {
+          _count?: { select?: { comments?: unknown } };
+          reactions?: { where?: { commentId?: null } };
+        };
       }) {
         const w = args.where;
         const filtered = posts.filter(
@@ -117,12 +120,23 @@ function makeFakePrisma() {
         });
 
         const sliced = sorted.slice(0, args.take ?? 50);
-        if (args.include?._count?.select?.comments !== undefined) {
+        if (
+          args.include?._count?.select?.comments !== undefined ||
+          args.include?.reactions !== undefined
+        ) {
           return sliced.map((p) => ({
             ...p,
-            _count: {
-              comments: comments.filter((c) => c.postId === p.id && c.deletedAt === null).length,
-            },
+            ...(args.include?._count?.select?.comments !== undefined
+              ? {
+                  _count: {
+                    comments: comments.filter((c) => c.postId === p.id && c.deletedAt === null)
+                      .length,
+                  },
+                }
+              : {}),
+            ...(args.include?.reactions !== undefined
+              ? { reactions: reactions.filter((r) => r.postId === p.id && r.commentId === null) }
+              : {}),
           }));
         }
         return sliced;
@@ -315,6 +329,24 @@ describe('CommunityService.createPost', () => {
 
     const oldest = await svc.listPosts('t1', { sort: 'oldest', limit: 50 });
     expect(oldest.map((p) => p.id)).toEqual([a.id, b.id]);
+  });
+
+  it('listPosts incluye reactions del post (no de comentarios)', async () => {
+    const prisma = makeFakePrisma();
+    const svc = new CommunityService(prisma as never, trackingCtx([]));
+    const post = await svc.createPost(
+      't1',
+      { id: 'u1', displayName: null },
+      { title: 'P', body: 'b' },
+    );
+    await svc.addReaction('t1', 'u2', { postId: post.id, emoji: '👍' });
+    await svc.addReaction('t1', 'u3', { postId: post.id, emoji: '❤️' });
+
+    const list = await svc.listPosts('t1', { limit: 50 });
+    expect(list[0]?.reactions).toBeDefined();
+    expect(list[0]?.reactions?.length).toBe(2);
+    const emojis = (list[0]?.reactions ?? []).map((r) => r.emoji).sort();
+    expect(emojis).toEqual(['❤️', '👍'].sort());
   });
 
   it('sort=most_commented prioriza el de más comentarios', async () => {

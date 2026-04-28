@@ -10,7 +10,9 @@ import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MentionTextarea } from '@/components/mention-textarea';
+import { PostReactions } from '@/components/post-reactions';
 import { ApiHttpError } from '@/lib/api-client';
+import { authStorage } from '@/lib/auth-storage';
 import { cn } from '@/lib/utils';
 import { communityApi, type Post, type PostSort } from '@/lib/community';
 
@@ -62,6 +64,28 @@ export default function ComunidadPage() {
   // El filtrado ahora ocurre en backend (`?tag=`); la UI muestra todos
   // los posts devueltos.
   const filtered = posts ?? [];
+
+  // userId del viewer para resaltar reacciones propias en el listado.
+  // Lo leemos de la sesión persistida; si no hay (no debería pasar en
+  // /comunidad porque hay JwtAuthGuard), la prop queda null y el feed
+  // muestra reacciones sin highlight.
+  const viewerUserId = useMemo(() => authStorage.getSession()?.user.id ?? null, []);
+
+  async function handleReactPost(postId: string, emoji: string) {
+    const post = posts?.find((p) => p.id === postId);
+    if (!post) return;
+    const mine = post.reactions?.find((r) => r.authorId === viewerUserId && r.emoji === emoji);
+    try {
+      if (mine) {
+        await communityApi.removeReaction(mine.id);
+      } else {
+        await communityApi.addReactionToPost(postId, emoji);
+      }
+      await reload({ sort, tag: activeTag });
+    } catch (err) {
+      setError(err instanceof ApiHttpError ? err.message : 'No pudimos actualizar la reacción.');
+    }
+  }
 
   async function handleCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -226,7 +250,13 @@ export default function ComunidadPage() {
             </Card>
           ) : (
             filtered.map((p) => (
-              <ThreadCard key={p.id} post={p} onTagClick={(t) => setActiveTag(t)} />
+              <ThreadCard
+                key={p.id}
+                post={p}
+                viewerUserId={viewerUserId}
+                onTagClick={(t) => setActiveTag(t)}
+                onReactionToggle={(emoji) => void handleReactPost(p.id, emoji)}
+              />
             ))
           )}
         </div>
@@ -311,7 +341,17 @@ function ActivityRow({
   );
 }
 
-function ThreadCard({ post, onTagClick }: { post: Post; onTagClick: (tag: string) => void }) {
+function ThreadCard({
+  post,
+  viewerUserId,
+  onTagClick,
+  onReactionToggle,
+}: {
+  post: Post;
+  viewerUserId: string | null;
+  onTagClick: (tag: string) => void;
+  onReactionToggle: (emoji: string) => void;
+}) {
   const initials = (post.authorDisplayName ?? 'A')
     .split(/\s+/)
     .filter(Boolean)
@@ -379,11 +419,19 @@ function ThreadCard({ post, onTagClick }: { post: Post; onTagClick: (tag: string
                   Leer más →
                 </span>
               ) : null}
-              <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-text-muted">
-                <Icon name="message" size={14} />
-                {post._count && post._count.comments > 0
-                  ? `${post._count.comments} ${post._count.comments === 1 ? 'comentario' : 'comentarios'}`
-                  : 'Ver conversación'}
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <span className="inline-flex items-center gap-1.5 text-xs text-text-muted">
+                  <Icon name="message" size={14} />
+                  {post._count && post._count.comments > 0
+                    ? `${post._count.comments} ${post._count.comments === 1 ? 'comentario' : 'comentarios'}`
+                    : 'Ver conversación'}
+                </span>
+                <PostReactions
+                  reactions={post.reactions}
+                  viewerUserId={viewerUserId}
+                  onToggle={onReactionToggle}
+                  variant="compact"
+                />
               </div>
             </div>
           </div>
