@@ -19,6 +19,14 @@ export interface Enrollment {
   cancelledAt: string | null;
 }
 
+export interface LessonProgress {
+  lessonId: string;
+  completed: boolean;
+  watchedSeconds: number;
+  resumePositionSec: number;
+  completedAt: string | null;
+}
+
 export interface ProgressResult {
   progress: {
     id: string;
@@ -95,6 +103,14 @@ export const learningApi = {
     return apiFetch<ProgressResult>(
       '/api/v1/modules/learning/progress',
       { method: 'POST', body: JSON.stringify(input) },
+      bearer(),
+    );
+  },
+
+  async listMyProgress(enrollmentId: string): Promise<LessonProgress[]> {
+    return apiFetch<LessonProgress[]>(
+      `/api/v1/modules/learning/me/enrollments/${enrollmentId}/progress`,
+      { method: 'GET' },
       bearer(),
     );
   },

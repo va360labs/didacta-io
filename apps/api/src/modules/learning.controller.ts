@@ -68,6 +68,19 @@ export class LearningController {
     return this.registry.getLearningService().listMyEnrollments(user.tenantId, user.sub);
   }
 
+  @Get('me/enrollments/:enrollmentId/progress')
+  @ApiOperation({
+    summary:
+      'Lista el progreso por lección de una matriculación del usuario. Usado para hidratar qué lecciones ya completó.',
+  })
+  async listMyProgress(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('enrollmentId') enrollmentId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getLearningService().listMyProgress(user.tenantId, user.sub, enrollmentId);
+  }
+
   @Get('courses/:courseId/enrollments')
   @ApiOperation({
     summary:

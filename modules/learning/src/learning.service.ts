@@ -141,6 +141,30 @@ export class LearningService {
   }
 
   /**
+   * Devuelve el progreso por lección de UNA matriculación del usuario.
+   * Lo usa el player del curso para hidratar qué lecciones ya completó
+   * el alumno al cargar la página (evita que vuelva a marcarlas como
+   * "no completadas" tras un refresh).
+   */
+  async listMyProgress(tenantId: string, userId: string, enrollmentId: string) {
+    const enrollment = await this.prisma.modLearningEnrollment.findFirst({
+      where: { tenantId, userId, id: enrollmentId },
+      select: { id: true },
+    });
+    if (!enrollment) throw new EnrollmentNotFoundError();
+    return this.prisma.modLearningProgress.findMany({
+      where: { tenantId, enrollmentId },
+      select: {
+        lessonId: true,
+        completed: true,
+        watchedSeconds: true,
+        resumePositionSec: true,
+        completedAt: true,
+      },
+    });
+  }
+
+  /**
    * HU-FORM-002: lista de matriculaciones de un curso (vista del formador
    * para ver alumnos).
    *

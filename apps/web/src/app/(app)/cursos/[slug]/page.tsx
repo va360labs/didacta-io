@@ -57,6 +57,26 @@ export default function CourseAlumnoPage() {
       const firstLesson = detail.modules.flatMap((m) => m.lessons)[0];
       setActiveLessonId((current) => current ?? firstLesson?.id ?? null);
 
+      // Hidratamos el map de lecciones completadas desde el backend para
+      // que al recargar la página o entrar de nuevo el alumno vea
+      // correctamente cuáles ya marcó. Sin esto, progressByLesson nace
+      // vacío y todas las lecciones se ven como "no completadas" hasta
+      // que las vuelva a marcar.
+      if (found) {
+        try {
+          const progressList = await learningApi.listMyProgress(found.id);
+          const map: Record<string, boolean> = {};
+          for (const p of progressList) {
+            if (p.completed) map[p.lessonId] = true;
+          }
+          setProgressByLesson(map);
+        } catch {
+          setProgressByLesson({});
+        }
+      } else {
+        setProgressByLesson({});
+      }
+
       if (found?.status === 'COMPLETED') {
         try {
           const certs = await certificatesApi.listMine();
@@ -385,7 +405,14 @@ export default function CourseAlumnoPage() {
               </CardContent>
             </Card>
           ) : activeLesson ? (
+            // key={activeLesson.id} fuerza re-mount del player al cambiar
+            // de lección. Sin esto, el useState interno de LessonPlayer
+            // (completed) persistía entre lecciones — el alumno marcaba
+            // lección A como completada y al ir a B la veía completada
+            // también porque la state no se reinicializaba con
+            // initialCompleted={false}.
             <LessonPlayer
+              key={activeLesson.id}
               lesson={{
                 ...activeLesson,
                 content:
