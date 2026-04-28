@@ -18,9 +18,10 @@ test.describe('Audit log y verificación de cadena', () => {
 
     const res = await fetch(`${API_URL}/api/v1/audit/verify`, { headers });
     expect(res.ok, 'verify → 200').toBe(true);
-    const body = (await res.json()) as { valid: boolean; checkedCount: number };
+    // El endpoint devuelve `totalEntries` (alineado con el cliente web).
+    const body = (await res.json()) as { valid: boolean; totalEntries: number };
     expect(body.valid, 'cadena válida').toBe(true);
-    expect(body.checkedCount).toBeGreaterThanOrEqual(0);
+    expect(body.totalEntries).toBeGreaterThanOrEqual(0);
   });
 
   test('GET /audit/entries lista entradas con paginación', async () => {

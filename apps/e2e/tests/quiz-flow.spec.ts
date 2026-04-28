@@ -48,8 +48,12 @@ test.describe('mod.assessments — flujo del alumno', () => {
     // 2) Click en la lección QUIZ desde el sidebar
     await page.getByRole('button', { name: /Quiz lesson/ }).click();
 
-    // 3) El QuizPlayer debe mostrar la portada del quiz
-    await expect(page.getByText('Quiz E2E')).toBeVisible({ timeout: 10_000 });
+    // 3) El QuizPlayer debe mostrar la portada del quiz. Usamos el
+    //    role heading para evitar matchear el h1 del header del curso
+    //    (que también incluye 'Quiz E2E' por venir del título del curso).
+    await expect(page.getByRole('heading', { name: 'Quiz E2E', exact: true })).toBeVisible({
+      timeout: 10_000,
+    });
     await page.getByRole('button', { name: /Empezar quiz|Reintentar quiz/ }).click();
 
     // 4) Marcar la opción correcta y enviar

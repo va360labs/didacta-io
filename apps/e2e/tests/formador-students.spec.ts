@@ -49,18 +49,26 @@ test.describe('Listado de alumnos por curso (HU-FORM-002)', () => {
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${bearer}` };
     const res = await fetch(
-      `${API_URL}/api/v1/modules/learning/courses/${scenario.course.id}/students`,
+      `${API_URL}/api/v1/modules/learning/courses/${scenario.course.id}/enrollments`,
       { headers },
     );
-    expect(res.ok, 'students endpoint → 200').toBe(true);
+    expect(res.ok, 'enrollments endpoint → 200').toBe(true);
     const list = (await res.json()) as Array<{
       userId: string;
-      email: string;
+      userEmail?: string;
+      email?: string;
       progressPercent: number;
       status: string;
     }>;
 
-    const ours2 = list.find((s) => s.email === scenario.alumno.email);
+    // El endpoint puede devolver `email` o `userEmail` según el shape;
+    // chequeamos ambos para no romper si el contracto evoluciona.
+    const ours2 = list.find(
+      (s) =>
+        s.userId === scenario.alumno.user.id ||
+        s.email === scenario.alumno.email ||
+        s.userEmail === scenario.alumno.email,
+    );
     expect(ours2, 'alumno en lista').toBeDefined();
     expect(ours2!.progressPercent).toBeGreaterThanOrEqual(75);
     expect(['ACTIVE', 'COMPLETED']).toContain(ours2!.status);

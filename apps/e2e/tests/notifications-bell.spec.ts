@@ -69,10 +69,9 @@ test.describe('Notificaciones in-app del alumno', () => {
     expect(enrollRes.ok, `self-enroll OK (got ${enrollRes.status})`).toBe(true);
     await new Promise((r) => setTimeout(r, 500));
 
-    const markAll = await fetch(`${API_URL}/api/v1/me/notifications/mark-all-read`, {
+    const markAll = await fetch(`${API_URL}/api/v1/me/notifications/read-all`, {
       method: 'POST',
       headers,
-      body: '{}',
     });
     expect(markAll.ok).toBe(true);
 

@@ -53,7 +53,7 @@ test.describe('mod.assessments — corrección manual end-to-end', () => {
     await page.getByRole('button', { name: /Quiz lesson SHORT/ }).click();
     await page.getByRole('button', { name: /Empezar quiz|Reintentar quiz/ }).click();
     await page
-      .getByPlaceholder(/corregirá manualmente el formador/)
+      .getByPlaceholder(/el formador la corregirá manualmente/)
       .fill('Postgres es una base de datos relacional open-source.');
     await page.getByRole('button', { name: 'Enviar respuestas' }).click();
 
