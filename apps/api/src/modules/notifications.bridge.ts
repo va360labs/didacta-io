@@ -1,5 +1,6 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { PrismaService } from '../prisma/prisma.service';
 import { ModuleContextFactory } from './module-context.factory';
 
 /**
@@ -20,8 +21,30 @@ import { ModuleContextFactory } from './module-context.factory';
 export class NotificationsBridge implements OnModuleInit {
   constructor(
     private readonly factory: ModuleContextFactory,
+    private readonly prisma: PrismaService,
     private readonly logger: PinoLogger,
   ) {}
+
+  /**
+   * Resuelve el nombre legible del curso a partir del courseId. Si la
+   * lectura falla (curso borrado, problemas de permisos), cae al UUID
+   * para que la notificación siga saliendo en lugar de tirar error.
+   */
+  private async resolveCourseLabel(tenantId: string, courseId: string): Promise<string> {
+    try {
+      const course = await this.prisma.modCoursesCourse.findFirst({
+        where: { id: courseId, tenantId, deletedAt: null },
+        select: { title: true },
+      });
+      return course?.title ?? courseId;
+    } catch (e) {
+      this.logger.warn(
+        { err: e instanceof Error ? e.message : String(e), tenantId, courseId },
+        'NotificationsBridge: no pudimos resolver el título del curso, caemos al UUID',
+      );
+      return courseId;
+    }
+  }
 
   onModuleInit(): void {
     const eventBus = this.factory.getEventBus();
@@ -30,39 +53,42 @@ export class NotificationsBridge implements OnModuleInit {
     eventBus.subscribe<EnrollmentCreated>('learning.enrollment.created', async (e) => {
       const tenantId = e.metadata.tenantId;
       const { userId, courseId } = e.data;
+      const courseLabel = await this.resolveCourseLabel(tenantId, courseId);
       await hub.send({
         tenantId,
         channel: 'in-app',
         templateKey: 'enrollment.created',
         locale: 'es-ES',
         to: userId,
-        variables: { course: courseId, courseId },
+        variables: { course: courseLabel, courseId },
       });
     });
 
     eventBus.subscribe<CourseCompleted>('learning.course.completed', async (e) => {
       const tenantId = e.metadata.tenantId;
       const { userId, courseId } = e.data;
+      const courseLabel = await this.resolveCourseLabel(tenantId, courseId);
       await hub.send({
         tenantId,
         channel: 'in-app',
         templateKey: 'course.completed',
         locale: 'es-ES',
         to: userId,
-        variables: { course: courseId, courseId },
+        variables: { course: courseLabel, courseId },
       });
     });
 
     eventBus.subscribe<CertificateIssued>('certificates.issued', async (e) => {
       const tenantId = e.metadata.tenantId;
       const { userId, courseId, number } = e.data;
+      const courseLabel = await this.resolveCourseLabel(tenantId, courseId);
       await hub.send({
         tenantId,
         channel: 'in-app',
         templateKey: 'certificate.issued',
         locale: 'es-ES',
         to: userId,
-        variables: { course: courseId, number },
+        variables: { course: courseLabel, number },
       });
     });
 

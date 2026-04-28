@@ -31,7 +31,17 @@ function setup() {
     getNotificationHub: () => hub,
   } as never;
 
-  const bridge = new NotificationsBridge(factory, noopLogger);
+  // Stub de PrismaService: devolvemos un título reconocible para que los
+  // tests verifiquen el lookup curso → título sin tocar la DB real.
+  const prismaStub = {
+    modCoursesCourse: {
+      findFirst: vi.fn(async ({ where }: { where: { id: string } }) => ({
+        title: `Curso de prueba (${where.id})`,
+      })),
+    },
+  } as never;
+
+  const bridge = new NotificationsBridge(factory, prismaStub, noopLogger);
   bridge.onModuleInit();
 
   return { bridge, eventBus, hub, sendCalls, subs };
