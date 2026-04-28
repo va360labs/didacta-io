@@ -27,9 +27,15 @@ export default function ComunidadPage() {
   const [activeTag, setActiveTag] = useState<string>('Todo');
   const [sort, setSort] = useState<PostSort>('recent');
 
-  async function reload(nextSort: PostSort = sort) {
+  async function reload(opts: { sort?: PostSort; tag?: string } = {}) {
     try {
-      setPosts(await communityApi.listPosts({ sort: nextSort }));
+      const tagFilter = opts.tag ?? activeTag;
+      setPosts(
+        await communityApi.listPosts({
+          sort: opts.sort ?? sort,
+          tag: tagFilter === 'Todo' ? undefined : tagFilter,
+        }),
+      );
       setError(null);
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar la comunidad.');
@@ -37,23 +43,24 @@ export default function ComunidadPage() {
   }
 
   useEffect(() => {
-    void reload(sort);
+    void reload({ sort, tag: activeTag });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort]);
+  }, [sort, activeTag]);
 
-  // Tags presentes en los posts → chips de filtro.
+  // Lista de tags disponibles para los chips. Tomamos los del tenant
+  // que vienen en el snapshot actual + el "Todo" inicial. Si hay un
+  // activeTag distinto de "Todo" lo aseguramos en la lista (ya que
+  // al filtrar puede ser que sólo aparezca ese tag).
   const allTags = useMemo(() => {
-    if (!posts) return ['Todo'];
     const set = new Set<string>(['Todo']);
-    for (const p of posts) for (const t of p.tags) set.add(t);
-    return Array.from(set).slice(0, 6);
-  }, [posts]);
-
-  const filtered = useMemo(() => {
-    if (!posts) return [];
-    if (activeTag === 'Todo') return posts;
-    return posts.filter((p) => p.tags.includes(activeTag));
+    if (posts) for (const p of posts) for (const t of p.tags) set.add(t);
+    if (activeTag !== 'Todo') set.add(activeTag);
+    return Array.from(set).slice(0, 8);
   }, [posts, activeTag]);
+
+  // El filtrado ahora ocurre en backend (`?tag=`); la UI muestra todos
+  // los posts devueltos.
+  const filtered = posts ?? [];
 
   async function handleCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -73,7 +80,7 @@ export default function ComunidadPage() {
           : undefined,
       });
       setShowCompose(false);
-      await reload();
+      await reload({ sort, tag: activeTag });
     } catch (err) {
       setError(err instanceof ApiHttpError ? err.message : 'No pudimos publicar.');
     } finally {
@@ -193,14 +200,30 @@ export default function ComunidadPage() {
             </>
           ) : filtered.length === 0 ? (
             <Card>
-              <CardContent className="p-12 text-center text-sm text-text-muted">
-                {activeTag === 'Todo'
-                  ? 'Aún no hay conversaciones. Empezá vos: hace click en "Nueva conversación".'
-                  : `Sin conversaciones con el tag "${activeTag}".`}
+              <CardContent className="flex flex-col items-center gap-3 p-12 text-center text-sm text-text-muted">
+                {activeTag === 'Todo' ? (
+                  'Aún no hay conversaciones. Empieza tú: haz click en "Nueva conversación".'
+                ) : (
+                  <>
+                    <span>
+                      Sin conversaciones con el tag <strong>{activeTag}</strong>.
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setActiveTag('Todo')}
+                    >
+                      Limpiar filtro
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           ) : (
-            filtered.map((p) => <ThreadCard key={p.id} post={p} />)
+            filtered.map((p) => (
+              <ThreadCard key={p.id} post={p} onTagClick={(t) => setActiveTag(t)} />
+            ))
           )}
         </div>
 
@@ -284,7 +307,7 @@ function ActivityRow({
   );
 }
 
-function ThreadCard({ post }: { post: Post }) {
+function ThreadCard({ post, onTagClick }: { post: Post; onTagClick: (tag: string) => void }) {
   const initials = (post.authorDisplayName ?? 'A')
     .split(/\s+/)
     .filter(Boolean)
@@ -315,9 +338,23 @@ function ThreadCard({ post }: { post: Post }) {
                   {post.authorDisplayName ?? 'Anónimo'}
                 </span>
                 {post.tags.slice(0, 2).map((t) => (
-                  <Badge key={t} variant="info">
-                    {t}
-                  </Badge>
+                  // El Badge va dentro de un <Link> al detalle; al hacer
+                  // click sobre un tag queremos filtrar el feed, no navegar.
+                  // preventDefault + stopPropagation cortan la navegación.
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onTagClick(t);
+                    }}
+                    className="rounded-full"
+                  >
+                    <Badge variant="info" className="cursor-pointer hover:opacity-80">
+                      {t}
+                    </Badge>
+                  </button>
                 ))}
                 <span className="text-xs text-text-subtle">{relTime(post.createdAt)}</span>
               </div>
