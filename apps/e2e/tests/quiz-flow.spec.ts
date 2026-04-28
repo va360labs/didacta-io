@@ -56,15 +56,14 @@ test.describe('mod.assessments — flujo del alumno', () => {
     });
     await page.getByRole('button', { name: /Empezar quiz|Reintentar quiz/ }).click();
 
-    // 4) Marcar la opción correcta y enviar
-    // El input es radio (SINGLE_CHOICE); lo identificamos por su value (option id)
-    await page
-      .locator(`input[type="radio"][value="${correctOptionId}"]`)
-      .check()
-      .catch(async () => {
-        // Fallback por label del partner Input.
-        await page.getByLabel('4').check();
-      });
+    // 4) Marcar la opción correcta y enviar.
+    // El QuizPlayer renderiza `<label><input type="radio"/><span>{label}</span></label>`
+    // y el input NO expone `value` con el option id (el state se mantiene
+    // en React via `checked` controlado). Identificamos la opción por
+    // el texto del label (en este quiz: "4" es la respuesta correcta a
+    // "¿2 + 2?", definido en el helper E2E createPublishedQuizForLesson).
+    void correctOptionId; // referenciado solo para semantica del test
+    await page.locator('label').filter({ hasText: '4' }).first().click();
 
     await page.getByRole('button', { name: 'Enviar respuestas' }).click();
 
