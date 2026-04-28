@@ -30,8 +30,32 @@ interface AuthResponse {
 }
 
 interface MfaSetupResponse {
-  secret: string;
-  otpAuthUrl: string;
+  /**
+   * URL `otpauth://totp/...?secret=XXX&issuer=YYY` que el endpoint
+   * `POST /auth/mfa/setup` devuelve para que el cliente arme el QR. El
+   * secret base32 viaja en el query string.
+   */
+  otpauthUrl: string;
+  qrCodeDataUrl: string;
+  recoveryCodes: string[];
+}
+
+interface MfaEnableResponse {
+  enabled: true;
+  tokens: Tokens;
+}
+
+/**
+ * Extrae el secret base32 del query `?secret=` de un `otpauth://...` URL.
+ * Hecho con regex porque Node URL parser puede tropezar con el path con
+ * `:` (ej. `/Didacta:user@example.com`) interpretándolo como puerto.
+ */
+function extractOtpSecret(otpauthUrl: string): string {
+  const m = otpauthUrl.match(/[?&]secret=([^&]+)/);
+  if (!m || !m[1]) {
+    throw new Error(`otpauthUrl no contiene secret en query string: ${otpauthUrl}`);
+  }
+  return decodeURIComponent(m[1]);
 }
 
 async function api<T>(
@@ -82,8 +106,16 @@ export async function signin(args: {
 
 /**
  * Para usuarios con rol administrativo (que requieren MFA), corre el flow:
- * setup -> verify con código TOTP generado de otplib.
- * Devuelve el access token verificado (mfaVerified=true).
+ *   POST /auth/mfa/setup     → genera nuevo secret + recoveryCodes (deja MFA disabled)
+ *   POST /auth/mfa/enable    → confirma con primer TOTP, activa MFA y devuelve tokens elevados
+ *
+ * `verify` no aplica acá: ese endpoint requiere `mfaEnabled: true` en DB
+ * (es para iniciar sesión cuando MFA ya está activado). El flow de
+ * primera vez (E2E ejecuta esto cada run con un admin distinto) usa
+ * setup → enable.
+ *
+ * Devuelve el access token con mfaVerified=true y el secret recién
+ * generado (por si el spec necesita más codes después).
  */
 export async function setupMfaAndVerify(
   bearer: string,
@@ -92,13 +124,14 @@ export async function setupMfaAndVerify(
     method: 'POST',
     bearer,
   });
-  const code = authenticator.generate(setup.secret);
-  const verified = await api<{ tokens: Tokens }>('/api/v1/auth/mfa/verify', {
+  const secret = extractOtpSecret(setup.otpauthUrl);
+  const code = authenticator.generate(secret);
+  const enabled = await api<MfaEnableResponse>('/api/v1/auth/mfa/enable', {
     method: 'POST',
     body: { code },
     bearer,
   });
-  return { accessToken: verified.tokens.accessToken, secret: setup.secret };
+  return { accessToken: enabled.tokens.accessToken, secret };
 }
 
 interface CourseDetail {
