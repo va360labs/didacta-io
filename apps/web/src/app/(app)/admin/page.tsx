@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import { StatCard } from '@/components/stat-card';
 import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ApiHttpError } from '@/lib/api-client';
 import { adminStatsApi, type AdminStats, type StatsRange } from '@/lib/admin-stats';
 
@@ -85,7 +86,7 @@ export default function AdminDashboardPage() {
       {stats === null && loading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} className="skeleton h-32 w-full" />
+            <Skeleton key={i} className="h-32 w-full" />
           ))}
         </div>
       ) : stats !== null ? (

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ApiHttpError } from '@/lib/api-client';
 import {
   adminUsersApi,
@@ -144,9 +145,9 @@ export default function UsuariosPage() {
         </div>
       ) : users === null ? (
         <div className="space-y-3">
-          <div className="skeleton h-16 w-full" />
-          <div className="skeleton h-16 w-full" />
-          <div className="skeleton h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
         </div>
       ) : users.length === 0 ? (
         <Card>

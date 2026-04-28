@@ -6,6 +6,7 @@ import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ApiHttpError } from '@/lib/api-client';
 import {
   adminTenantsApi,
@@ -64,8 +65,8 @@ export default function TenantsPage() {
         </div>
       ) : items === null ? (
         <div className="space-y-3">
-          <div className="skeleton h-24 w-full" />
-          <div className="skeleton h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
         </div>
       ) : items.length === 0 ? (
         <Card>

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ApiHttpError } from '@/lib/api-client';
 import {
   auditApi,
@@ -239,9 +240,9 @@ export default function AuditoriaPage() {
         </div>
       ) : entries === null ? (
         <div className="space-y-3">
-          <div className="skeleton h-16 w-full" />
-          <div className="skeleton h-16 w-full" />
-          <div className="skeleton h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
         </div>
       ) : entries.length === 0 ? (
         <Card>

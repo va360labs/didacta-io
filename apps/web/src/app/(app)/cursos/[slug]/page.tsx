@@ -501,9 +501,23 @@ function UpcomingZoomBanner({ sessions }: { sessions: ZoomSession[] }) {
               <Badge variant="info">Próxima sesión</Badge>
             )}
           </div>
-          <p className="text-sm tabular-nums text-text-muted">
-            {start.toLocaleString('es-AR', {
+          <p
+            className="text-sm tabular-nums text-text-muted"
+            title={`Hora del host: ${start.toLocaleString('es-AR', {
               timeZone: next.timezone,
+              day: '2-digit',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+              timeZoneName: 'short',
+            })}`}
+          >
+            {start.toLocaleString('es-AR', {
+              // Sin `timeZone` explícito: usa la del navegador. El tooltip
+              // arriba muestra la hora del host (next.timezone) para que el
+              // alumno entienda diferencias horarias sin tener que abrir el
+              // detalle. PR #170 mostraba la TZ del host en este texto, lo
+              // cual confundía a alumnos en otra zona ("yo no soy a las 10").
               day: '2-digit',
               month: 'short',
               hour: '2-digit',

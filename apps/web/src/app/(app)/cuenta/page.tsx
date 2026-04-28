@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { communityApi } from '@/lib/community';
@@ -136,8 +138,8 @@ export default function CuentaPage() {
   if (!profile && !error) {
     return (
       <div className="space-y-3">
-        <div className="skeleton h-12 w-64" />
-        <div className="skeleton h-48 w-full" />
+        <Skeleton className="h-12 w-64" />
+        <Skeleton className="h-48 w-full" />
       </div>
     );
   }
@@ -189,191 +191,242 @@ export default function CuentaPage() {
             ))}
           </div>
         </div>
-        <Button variant="secondary" asChild>
-          <Link href="/cuenta/seguridad">
-            <Icon name="lock" size={16} />
-            Seguridad
-          </Link>
-        </Button>
       </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Perfil</CardTitle>
-          <CardDescription>
-            Tu nombre, idioma y zona horaria. Estos datos se muestran a tus formadores y se usan
-            para formatear fechas y horas.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="name">Nombre completo</Label>
-                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" value={profile.email} disabled />
-                <p className="text-xs text-text-subtle">
-                  Para cambiar tu email, pedile a tu admin.
-                </p>
-              </div>
-            </div>
+      <Tabs defaultValue="datos" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="datos">Datos</TabsTrigger>
+          <TabsTrigger value="notificaciones">Notificaciones</TabsTrigger>
+          <TabsTrigger value="seguridad">Seguridad</TabsTrigger>
+        </TabsList>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="locale">Idioma</Label>
-                <Select id="locale" value={locale} onChange={(e) => setLocale(e.target.value)}>
-                  {LOCALE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="timezone">Zona horaria</Label>
-                <Select
-                  id="timezone"
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                >
-                  {TIMEZONE_OPTIONS.map((g) => (
-                    <optgroup key={g.group} label={g.group}>
-                      {g.values.map((tz) => (
-                        <option key={tz} value={tz}>
-                          {tz}
+        <TabsContent value="datos" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Perfil</CardTitle>
+              <CardDescription>
+                Tu nombre, idioma, zona horaria y DNI/NIE para Fundae.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={onSubmit} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="name">Nombre completo</Label>
+                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="email">Email</Label>
+                    <Input id="email" value={profile.email} disabled />
+                    <p className="text-xs text-text-subtle">
+                      Para cambiar tu email, pedile a tu admin.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="locale">Idioma</Label>
+                    <Select id="locale" value={locale} onChange={(e) => setLocale(e.target.value)}>
+                      {LOCALE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
                         </option>
                       ))}
-                    </optgroup>
-                  ))}
-                </Select>
-              </div>
-            </div>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="timezone">Zona horaria</Label>
+                    <Select
+                      id="timezone"
+                      value={timezone}
+                      onChange={(e) => setTimezone(e.target.value)}
+                    >
+                      {TIMEZONE_OPTIONS.map((g) => (
+                        <optgroup key={g.group} label={g.group}>
+                          {g.values.map((tz) => (
+                            <option key={tz} value={tz}>
+                              {tz}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </Select>
+                  </div>
+                </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="avatarUrl">URL del avatar</Label>
-              <Input
-                id="avatarUrl"
-                type="url"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                placeholder="https://… (deja vacío para usar tus iniciales)"
-              />
-            </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="avatarUrl">URL del avatar</Label>
+                  <Input
+                    id="avatarUrl"
+                    type="url"
+                    value={avatarUrl}
+                    onChange={(e) => setAvatarUrl(e.target.value)}
+                    placeholder="https://… (deja vacío para usar tus iniciales)"
+                  />
+                </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="documentId">DNI / NIE</Label>
-              <Input
-                id="documentId"
-                value={documentId}
-                onChange={(e) => setDocumentId(e.target.value)}
-                placeholder="12345678Z o X1234567L (vacío si no aplica)"
-                autoComplete="off"
-                spellCheck={false}
-                maxLength={20}
-              />
-              <p className="text-xs text-text-subtle">
-                Solo necesario si vas a participar en acciones formativas Fundae. Aceptamos DNI o
-                NIE español. Lo guardamos normalizado en mayúsculas.
-              </p>
-            </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="documentId">DNI / NIE</Label>
+                  <Input
+                    id="documentId"
+                    value={documentId}
+                    onChange={(e) => setDocumentId(e.target.value)}
+                    placeholder="12345678Z o X1234567L (vacío si no aplica)"
+                    autoComplete="off"
+                    spellCheck={false}
+                    maxLength={20}
+                  />
+                  <p className="text-xs text-text-subtle">
+                    Solo necesario si vas a participar en acciones formativas Fundae. Aceptamos DNI
+                    o NIE español. Lo guardamos normalizado en mayúsculas.
+                  </p>
+                </div>
 
-            {error ? (
-              <p role="alert" className="text-sm text-danger-700">
-                {error}
-              </p>
-            ) : null}
-
-            <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
-              {success ? (
-                <span className="text-sm font-semibold text-success-700">✓ Cambios guardados</span>
-              ) : (
-                <span className="text-sm text-text-subtle">
-                  Los cambios se aplican al recargar la página.
-                </span>
-              )}
-              <Button type="submit" disabled={pending}>
-                {pending ? 'Guardando…' : 'Guardar cambios'}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-
-      {digestAvailable ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Notificaciones</CardTitle>
-            <CardDescription>
-              Controlá qué emails y avisos recibís de la plataforma. Los avisos críticos (seguridad,
-              cuenta) se envían siempre.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <label className="flex items-start gap-3 rounded-lg border border-border-soft p-4 transition hover:border-border-strong">
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4 rounded border-border-strong"
-                checked={!digestOptOut}
-                disabled={digestPending}
-                onChange={(e) => void handleDigestToggle(!e.target.checked)}
-              />
-              <span className="flex-1 space-y-1">
-                <span className="block font-medium text-text">Resumen semanal de comunidad</span>
-                <span className="block text-sm text-text-muted">
-                  Email cada lunes con tus menciones y respuestas de la semana. Si lo desactivás, no
-                  recibirás este resumen pero seguís viendo todo en{' '}
-                  <Link href="/comunidad" className="underline">
-                    Comunidad
-                  </Link>
-                  .
-                </span>
-                {digestSaved ? (
-                  <span className="block text-xs font-semibold text-success-700">✓ Guardado</span>
+                {error ? (
+                  <p role="alert" className="text-sm text-danger-700">
+                    {error}
+                  </p>
                 ) : null}
-              </span>
-            </label>
-          </CardContent>
-        </Card>
-      ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Información de la cuenta</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 text-sm sm:grid-cols-3">
-          <div>
-            <p className="label-uppercase text-text-muted">MFA</p>
-            <div className="mt-1.5">
-              {profile.mfaEnabled ? (
-                <Badge variant="success" dot>
-                  Activo
-                </Badge>
-              ) : (
-                <Badge variant="muted">No configurado</Badge>
-              )}
-            </div>
-          </div>
-          <div>
-            <p className="label-uppercase text-text-muted">Cuenta creada</p>
-            <p className="mt-1.5 tabular-nums">
-              {new Date(profile.createdAt).toLocaleDateString('es-AR', {
-                day: '2-digit',
-                month: 'long',
-                year: 'numeric',
-              })}
-            </p>
-          </div>
-          <div>
-            <p className="label-uppercase text-text-muted">Último login</p>
-            <p className="mt-1.5 tabular-nums">
-              {profile.lastLoginAt ? new Date(profile.lastLoginAt).toLocaleString('es-AR') : '—'}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+                <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
+                  {success ? (
+                    <span className="text-sm font-semibold text-success-700">
+                      ✓ Cambios guardados
+                    </span>
+                  ) : (
+                    <span className="text-sm text-text-subtle">
+                      Los cambios se aplican al recargar la página.
+                    </span>
+                  )}
+                  <Button type="submit" disabled={pending}>
+                    {pending ? 'Guardando…' : 'Guardar cambios'}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Información de la cuenta</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 text-sm sm:grid-cols-3">
+              <div>
+                <p className="label-uppercase text-text-muted">MFA</p>
+                <div className="mt-1.5">
+                  {profile.mfaEnabled ? (
+                    <Badge variant="success" dot>
+                      Activo
+                    </Badge>
+                  ) : (
+                    <Badge variant="muted">No configurado</Badge>
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="label-uppercase text-text-muted">Cuenta creada</p>
+                <p className="mt-1.5 tabular-nums">
+                  {new Date(profile.createdAt).toLocaleDateString('es-AR', {
+                    day: '2-digit',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </p>
+              </div>
+              <div>
+                <p className="label-uppercase text-text-muted">Último login</p>
+                <p className="mt-1.5 tabular-nums">
+                  {profile.lastLoginAt
+                    ? new Date(profile.lastLoginAt).toLocaleString('es-AR')
+                    : '—'}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="notificaciones" className="space-y-6">
+          {digestAvailable ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Notificaciones</CardTitle>
+                <CardDescription>
+                  Controlá qué emails y avisos recibís de la plataforma. Los avisos críticos
+                  (seguridad, cuenta) se envían siempre.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <label className="flex items-start gap-3 rounded-lg border border-border-soft p-4 transition hover:border-border-strong">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 rounded border-border-strong"
+                    checked={!digestOptOut}
+                    disabled={digestPending}
+                    onChange={(e) => void handleDigestToggle(!e.target.checked)}
+                  />
+                  <span className="flex-1 space-y-1">
+                    <span className="block font-medium text-text">
+                      Resumen semanal de comunidad
+                    </span>
+                    <span className="block text-sm text-text-muted">
+                      Email cada lunes con tus menciones y respuestas de la semana. Si lo
+                      desactivás, no recibirás este resumen pero seguís viendo todo en{' '}
+                      <Link href="/comunidad" className="underline">
+                        Comunidad
+                      </Link>
+                      .
+                    </span>
+                    {digestSaved ? (
+                      <span className="block text-xs font-semibold text-success-700">
+                        ✓ Guardado
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-6 text-text-muted">
+                Tu organización no tiene la funcionalidad de comunidad habilitada todavía. Cuando se
+                active, vas a poder gestionar tus emails de resumen desde acá.
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="seguridad" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Seguridad</CardTitle>
+              <CardDescription>
+                Cambiá tu contraseña, configurá MFA y gestioná las sesiones activas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-sm text-text-muted">
+                  MFA actual:{' '}
+                  {profile.mfaEnabled ? (
+                    <Badge variant="success" dot>
+                      Activo
+                    </Badge>
+                  ) : (
+                    <Badge variant="muted">No configurado</Badge>
+                  )}
+                </p>
+              </div>
+              <Button asChild>
+                <Link href="/cuenta/seguridad">
+                  <Icon name="lock" size={16} />
+                  Ir a seguridad
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
