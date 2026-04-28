@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { CommunityTagChip } from '@/components/community-tag-chip';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { MentionTextarea } from '@/components/mention-textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { useCommunityTags } from '@/lib/community-tags';
 import { cn } from '@/lib/utils';
 import { communityApi, type Comment, type PostDetail, type Reaction } from '@/lib/community';
 
@@ -41,6 +43,7 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
   const myUserId = authStorage.getSession()?.user.id;
   const myRoles = authStorage.getSession()?.user.roles ?? [];
   const canModerate = myRoles.includes('super_admin') || myRoles.includes('tenant_admin');
+  const tagsByName = useCommunityTags();
 
   async function reload(opts: { silent?: boolean } = {}) {
     try {
@@ -273,9 +276,7 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
                   {post.authorDisplayName ?? 'Anónimo'}
                 </span>
                 {post.tags.slice(0, 3).map((t) => (
-                  <Badge key={t} variant="info">
-                    {t}
-                  </Badge>
+                  <CommunityTagChip key={t} name={t} tag={tagsByName.get(t)} />
                 ))}
                 <span className="text-xs text-text-subtle">{relTime(post.createdAt)}</span>
                 {post.pinnedAt ? (

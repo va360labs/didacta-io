@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { CommunityTagChip } from '@/components/community-tag-chip';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,8 +14,9 @@ import { PostDetailView } from '@/components/post-detail-view';
 import { PostReactions } from '@/components/post-reactions';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { useCommunityTags } from '@/lib/community-tags';
 import { cn } from '@/lib/utils';
-import { communityApi, type Post, type PostSort } from '@/lib/community';
+import { communityApi, type CommunityTag, type Post, type PostSort } from '@/lib/community';
 
 const SORT_LABELS: Record<PostSort, string> = {
   recent: 'Más recientes',
@@ -74,6 +76,11 @@ export default function ComunidadPage() {
   // /comunidad porque hay JwtAuthGuard), la prop queda null y el feed
   // muestra reacciones sin highlight.
   const viewerUserId = useMemo(() => authStorage.getSession()?.user.id ?? null, []);
+
+  // Tags curados del tenant (color/icono). Si el tag de un post no está en
+  // este map, el chip cae al estilo info por defecto. La carga es lazy y
+  // cacheada por sesión (ver useCommunityTags).
+  const tagsByName = useCommunityTags();
 
   async function handleReactPost(postId: string, emoji: string) {
     const post = posts?.find((p) => p.id === postId);
@@ -183,21 +190,50 @@ export default function ComunidadPage() {
           {/* Filtros tipo chip */}
           <Card>
             <CardContent className="flex flex-wrap items-center gap-2 p-3">
-              {allTags.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setActiveTag(t)}
-                  className={cn(
-                    'rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors',
-                    activeTag === t
-                      ? 'bg-[var(--didacta-night)] text-white'
-                      : 'bg-[var(--didacta-surface)] text-text-muted hover:text-text',
-                  )}
-                >
-                  {t}
-                </button>
-              ))}
+              {allTags.map((t) => {
+                const isActive = activeTag === t;
+                const curated = t === 'Todo' ? undefined : tagsByName.get(t);
+                // El "Todo" y tags sin curar mantienen el estilo plano del
+                // filtro (oscuro al activarse). Tags curados muestran el
+                // color del tenant; al activarse, lo intensificamos con
+                // ring para dejar claro cuál es el activo.
+                if (curated) {
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setActiveTag(t)}
+                      aria-pressed={isActive}
+                      className={cn(
+                        'rounded-full transition-shadow',
+                        isActive && 'ring-2 ring-offset-2 ring-offset-bg',
+                      )}
+                      style={
+                        isActive
+                          ? ({ '--tw-ring-color': curated.color } as React.CSSProperties)
+                          : undefined
+                      }
+                    >
+                      <CommunityTagChip name={t} tag={curated} />
+                    </button>
+                  );
+                }
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setActiveTag(t)}
+                    className={cn(
+                      'rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors',
+                      isActive
+                        ? 'bg-[var(--didacta-night)] text-white'
+                        : 'bg-[var(--didacta-surface)] text-text-muted hover:text-text',
+                    )}
+                  >
+                    {t}
+                  </button>
+                );
+              })}
               <label className="ml-auto flex items-center gap-2 text-xs text-text-subtle">
                 Ordenar:
                 <select
@@ -258,6 +294,7 @@ export default function ComunidadPage() {
                 key={p.id}
                 post={p}
                 viewerUserId={viewerUserId}
+                tagsByName={tagsByName}
                 onOpen={() => setSelectedPostId(p.id)}
                 onTagClick={(t) => setActiveTag(t)}
                 onReactionToggle={(emoji) => void handleReactPost(p.id, emoji)}
@@ -285,28 +322,32 @@ export default function ComunidadPage() {
               <div className="mt-3 space-y-2">
                 {allTags
                   .filter((t) => t !== 'Todo')
-                  .map((t, i) => (
-                    <div
-                      key={t}
-                      className={cn(
-                        'flex items-center gap-2.5 py-1.5',
-                        i > 0 ? 'border-t border-border-soft pt-3' : '',
-                      )}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="block h-7 w-7 rounded-lg"
-                        style={{
-                          background: TAG_COLORS[i % TAG_COLORS.length],
-                          opacity: 0.18,
-                        }}
-                      />
-                      <span className="flex-1 text-sm font-medium text-text">{t}</span>
-                      <span className="text-xs text-text-subtle tabular-nums">
-                        {posts?.filter((p) => p.tags.includes(t)).length ?? 0}
-                      </span>
-                    </div>
-                  ))}
+                  .map((t, i) => {
+                    const curated = tagsByName.get(t);
+                    const swatchColor = curated?.color ?? TAG_COLORS[i % TAG_COLORS.length]!;
+                    return (
+                      <div
+                        key={t}
+                        className={cn(
+                          'flex items-center gap-2.5 py-1.5',
+                          i > 0 ? 'border-t border-border-soft pt-3' : '',
+                        )}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="block h-7 w-7 rounded-lg"
+                          style={{
+                            background: swatchColor,
+                            opacity: 0.18,
+                          }}
+                        />
+                        <span className="flex-1 text-sm font-medium text-text">{t}</span>
+                        <span className="text-xs text-text-subtle tabular-nums">
+                          {posts?.filter((p) => p.tags.includes(t)).length ?? 0}
+                        </span>
+                      </div>
+                    );
+                  })}
                 {allTags.length <= 1 ? (
                   <p className="text-xs text-text-subtle">
                     Aún no hay tags. Etiquetá tu próxima publicación para organizar la comunidad.
@@ -366,12 +407,14 @@ function ActivityRow({
 function ThreadCard({
   post,
   viewerUserId,
+  tagsByName,
   onOpen,
   onTagClick,
   onReactionToggle,
 }: {
   post: Post;
   viewerUserId: string | null;
+  tagsByName: ReadonlyMap<string, CommunityTag>;
   onOpen: () => void;
   onTagClick: (tag: string) => void;
   onReactionToggle: (emoji: string) => void;
@@ -426,19 +469,15 @@ function ThreadCard({
                   {post.authorDisplayName ?? 'Anónimo'}
                 </span>
                 {post.tags.slice(0, 2).map((t) => (
-                  <button
+                  <CommunityTagChip
                     key={t}
-                    type="button"
+                    name={t}
+                    tag={tagsByName.get(t)}
                     onClick={(e) => {
                       e.stopPropagation();
                       onTagClick(t);
                     }}
-                    className="rounded-full"
-                  >
-                    <Badge variant="info" className="cursor-pointer hover:opacity-80">
-                      {t}
-                    </Badge>
-                  </button>
+                  />
                 ))}
                 <span className="text-xs text-text-subtle">{relTime(post.createdAt)}</span>
               </div>

@@ -15,6 +15,7 @@ import {
   type CommunityTag,
   type CommunityTagIcon,
 } from '@/lib/community';
+import { invalidateCommunityTagsCache } from '@/lib/community-tags';
 
 /**
  * Paleta sugerida para que el admin no tenga que tipear hex a mano.
@@ -94,6 +95,7 @@ export default function CommunityTagsAdminPage() {
       } else {
         await communityApi.createTag(payload);
       }
+      invalidateCommunityTagsCache();
       cancelEdit();
       await reload();
     } catch (err) {
@@ -109,6 +111,7 @@ export default function CommunityTagsAdminPage() {
     setError(null);
     try {
       await communityApi.deleteTag(tag.id);
+      invalidateCommunityTagsCache();
       if (editing?.id === tag.id) cancelEdit();
       await reload();
     } catch (err) {

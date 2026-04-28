@@ -19,7 +19,7 @@
 - [x] Los botones de reacción deben aparecer también en el listado de mensajes en la home de comunidad — [Notion](https://www.notion.so/350b609a124c81d6b2fbe7cb910e61b6) · #203
 - [x] Al abrir un mensaje de comunidad para verlo completo debe abrirse en un modal y no en una sección nueva — [Notion](https://www.notion.so/350b609a124c81a38130f58cf5263188) · #205
 - [x] Del mensaje completo, se mostrarán 4 líneas y un "Leer más" que abrirá el modal — [Notion](https://www.notion.so/350b609a124c81d191a4d68acc2de0d2) · #198
-- [ ] Debo poder añadir una reacción sin entrar en el post — [Notion](https://www.notion.so/350b609a124c811aa192f04ce0983a6e)
+- [x] Debo poder añadir una reacción sin entrar en el post — [Notion](https://www.notion.so/350b609a124c811aa192f04ce0983a6e) · #208
 - [ ] Pintar los tags curados (color/icono) también en el feed, no solo en admin — [Notion](https://www.notion.so/350b609a124c8148a78ac14ae1b3dd0b)
 
 ## Curso como Alumno · `https://cloud.didacta.io/cursos/introduccion-n8n`
@@ -45,3 +45,12 @@
 ## Creador de aula virtual · `https://cloud.didacta.io/formador/aula-virtual`
 
 - [ ] Pide aunque opcional UUID del curso y UUID de la lección. Hacer un seleccionable buscable — [Notion](https://www.notion.so/350b609a124c8197bafbd1595ef04bb7)
+
+## Configuración del tenant · `https://cloud.didacta.io/admin/configuracion`
+
+- [ ] No guarda configuración SMTP. Soportar más providers (Amazon SES, SMTP genérico) con envío asíncrono — [Notion](https://www.notion.so/350b609a124c81138670d4b89e5f0208)
+- [ ] Módulos: usar toggle que guarda al cambio en lugar de form con submit — [Notion](https://www.notion.so/350b609a124c8130b73bcd821f07f55f)
+- [ ] Storage configurable por tenant: local (Docker volume) / S3 / más — [Notion](https://www.notion.so/350b609a124c814f9934fe9833833181)
+- [ ] Quitar Branding de Configuración (ya hay sección dedicada en /admin/branding) — [Notion](https://www.notion.so/350b609a124c81e4b20ce8746f8b95c3)
+- [ ] Plantillas: editor por notificación con soporte multi-language — [Notion](https://www.notion.so/350b609a124c813cb9c2cf60a6693d09)
+- [ ] La tab "Todos los settings" muestra una vista raw confusa con secretos en ••• y un botón Eliminar. Ocultar o etiquetar como "Avanzado / debug" — [Notion](https://www.notion.so/350b609a124c81f586cbda23dfae8db1)
