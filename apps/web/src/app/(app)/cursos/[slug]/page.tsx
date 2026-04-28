@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { LessonComments } from '@/components/lesson-comments';
 import { LessonPlayer } from '@/components/lesson-player';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -423,22 +424,29 @@ export default function CourseAlumnoPage() {
             // lección A como completada y al ir a B la veía completada
             // también porque la state no se reinicializaba con
             // initialCompleted={false}.
-            <LessonPlayer
-              key={activeLesson.id}
-              lesson={{
-                ...activeLesson,
-                content:
-                  (activeLesson as CourseLesson & { content?: Record<string, unknown> }).content ??
-                  {},
-              }}
-              enrollmentId={enrollment.id}
-              initialResumePositionSec={0}
-              initialCompleted={Boolean(progressByLesson[activeLesson.id])}
-              onProgress={(percent) => {
-                setEnrollment((e) => (e ? { ...e, progressPercent: percent } : e));
-                setProgressByLesson((map) => ({ ...map, [activeLesson.id]: true }));
-              }}
-            />
+            <div className="space-y-6">
+              <LessonPlayer
+                key={activeLesson.id}
+                lesson={{
+                  ...activeLesson,
+                  content:
+                    (activeLesson as CourseLesson & { content?: Record<string, unknown> })
+                      .content ?? {},
+                }}
+                enrollmentId={enrollment.id}
+                initialResumePositionSec={0}
+                initialCompleted={Boolean(progressByLesson[activeLesson.id])}
+                onProgress={(percent) => {
+                  setEnrollment((e) => (e ? { ...e, progressPercent: percent } : e));
+                  setProgressByLesson((map) => ({ ...map, [activeLesson.id]: true }));
+                }}
+              />
+              <LessonComments
+                key={`comments-${activeLesson.id}`}
+                lessonId={activeLesson.id}
+                courseId={course.id}
+              />
+            </div>
           ) : (
             <Card>
               <CardContent className="py-12 text-center text-sm text-text-subtle">

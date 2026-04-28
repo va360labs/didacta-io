@@ -480,6 +480,44 @@ model ModCommunityMention {
   @@map("mod_community_mention")
 }
 
+/// Comentarios/anotaciones que dejan los alumnos en lecciones. Llegan
+/// en estado PENDING y el profesor del curso (o un admin) los aprueba
+/// o rechaza. Sólo los APPROVED son visibles al resto de alumnos. El
+/// autor siempre ve los suyos (incluyendo PENDING) para que sepa que
+/// están esperando moderación.
+model ModLearningLessonComment {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  /// ID lógico de la lección. Sin FK cross-module a courses.
+  lessonId     String   @map("lesson_id") @db.Uuid
+  /// Denormalizado: lo persiste el handler al crear el comentario para
+  /// que la cola de pendientes del profesor pueda filtrar por curso sin
+  /// lookup adicional a courses.
+  courseId     String   @map("course_id") @db.Uuid
+  authorId     String   @map("author_id") @db.Uuid
+  authorDisplayName String? @map("author_display_name")
+  body         String
+  status       LessonCommentStatus @default(PENDING)
+  reviewedById String?  @map("reviewed_by_id") @db.Uuid
+  reviewedAt   DateTime? @map("reviewed_at")
+  /// Si el profesor rechaza, opcionalmente un motivo visible al autor.
+  rejectionReason String? @map("rejection_reason")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  @@index([tenantId, lessonId, status])
+  @@index([tenantId, courseId, status])
+  @@index([tenantId, authorId, status])
+  @@map("mod_learning_lesson_comment")
+}
+
+enum LessonCommentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 /// Tags curados por el admin del tenant. Cada fila representa un tag
 /// "oficial" con metadatos visuales (color, icono) que la UI usa para
 /// pintar chips consistentes en el feed y la sidebar.

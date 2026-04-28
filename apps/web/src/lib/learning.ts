@@ -27,6 +27,25 @@ export interface LessonProgress {
   completedAt: string | null;
 }
 
+export type LessonCommentStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface LessonComment {
+  id: string;
+  tenantId: string;
+  lessonId: string;
+  courseId: string;
+  authorId: string;
+  authorDisplayName: string | null;
+  body: string;
+  status: LessonCommentStatus;
+  reviewedById: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
 export interface ProgressResult {
   progress: {
     id: string;
@@ -111,6 +130,57 @@ export const learningApi = {
     return apiFetch<LessonProgress[]>(
       `/api/v1/modules/learning/me/enrollments/${enrollmentId}/progress`,
       { method: 'GET' },
+      bearer(),
+    );
+  },
+
+  async listLessonComments(lessonId: string): Promise<LessonComment[]> {
+    return apiFetch<LessonComment[]>(
+      `/api/v1/modules/learning/lessons/${lessonId}/comments`,
+      { method: 'GET' },
+      bearer(),
+    );
+  },
+
+  async createLessonComment(
+    lessonId: string,
+    input: { courseId: string; body: string },
+  ): Promise<LessonComment> {
+    return apiFetch<LessonComment>(
+      `/api/v1/modules/learning/lessons/${lessonId}/comments`,
+      { method: 'POST', body: JSON.stringify(input) },
+      bearer(),
+    );
+  },
+
+  async listPendingComments(courseId: string): Promise<LessonComment[]> {
+    return apiFetch<LessonComment[]>(
+      `/api/v1/modules/learning/courses/${courseId}/comments/pending`,
+      { method: 'GET' },
+      bearer(),
+    );
+  },
+
+  async approveLessonComment(commentId: string): Promise<LessonComment> {
+    return apiFetch<LessonComment>(
+      `/api/v1/modules/learning/comments/${commentId}/approve`,
+      { method: 'POST', body: '{}' },
+      bearer(),
+    );
+  },
+
+  async rejectLessonComment(commentId: string, reason?: string): Promise<LessonComment> {
+    return apiFetch<LessonComment>(
+      `/api/v1/modules/learning/comments/${commentId}/reject`,
+      { method: 'POST', body: JSON.stringify({ ...(reason ? { reason } : {}) }) },
+      bearer(),
+    );
+  },
+
+  async deleteLessonComment(commentId: string): Promise<void> {
+    await apiFetch<{ deleted: true }>(
+      `/api/v1/modules/learning/comments/${commentId}`,
+      { method: 'DELETE' },
       bearer(),
     );
   },

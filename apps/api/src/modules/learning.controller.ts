@@ -81,6 +81,116 @@ export class LearningController {
     return this.registry.getLearningService().listMyProgress(user.tenantId, user.sub, enrollmentId);
   }
 
+  // -------------------- Comentarios en lecciones --------------------
+
+  @Get('lessons/:lessonId/comments')
+  @ApiOperation({
+    summary:
+      'Lista comentarios de una lección. APPROVED de cualquier autor + propios del viewer (incluyendo PENDING/REJECTED). Si el viewer es formador/admin, también ve los PENDING de otros.',
+  })
+  async listLessonComments(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('lessonId') lessonId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    const includePending = user.roles.some((r) =>
+      ['super_admin', 'tenant_admin', 'formador'].includes(r),
+    );
+    return this.registry
+      .getLearningService()
+      .listLessonComments(user.tenantId, user.sub, lessonId, { includePending });
+  }
+
+  @Post('lessons/:lessonId/comments')
+  @ApiOperation({
+    summary: 'Alumno crea un comentario en la lección. Queda en estado PENDING hasta aprobación.',
+  })
+  async createLessonComment(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('lessonId') lessonId: string,
+    @Body(
+      new ZodValidationPipe(
+        z.object({
+          courseId: z.string().uuid(),
+          body: z.string().trim().min(1).max(4000),
+        }),
+      ),
+    )
+    dto: { courseId: string; body: string },
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry
+      .getLearningService()
+      .createLessonComment(
+        user.tenantId,
+        { id: user.sub, displayName: null },
+        { lessonId, courseId: dto.courseId, body: dto.body },
+      );
+  }
+
+  @Get('courses/:courseId/comments/pending')
+  @ApiOperation({
+    summary: 'Cola de comentarios pendientes de moderación del curso. Solo formador / admin.',
+  })
+  async listPendingComments(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('courseId') courseId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r))) {
+      throw new ForbiddenException('Sólo formadores y admins pueden ver la cola de moderación.');
+    }
+    return this.registry.getLearningService().listPendingCommentsForCourse(user.tenantId, courseId);
+  }
+
+  @Post('comments/:commentId/approve')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Aprueba un comentario pendiente. Solo formador / admin.' })
+  async approveLessonComment(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('commentId') commentId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r))) {
+      throw new ForbiddenException('Sólo formadores y admins pueden moderar comentarios.');
+    }
+    return this.registry
+      .getLearningService()
+      .approveLessonComment(user.tenantId, user.sub, commentId);
+  }
+
+  @Post('comments/:commentId/reject')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Rechaza un comentario pendiente. Solo formador / admin.' })
+  async rejectLessonComment(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('commentId') commentId: string,
+    @Body(new ZodValidationPipe(z.object({ reason: z.string().max(500).optional() })))
+    dto: { reason?: string },
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r))) {
+      throw new ForbiddenException('Sólo formadores y admins pueden moderar comentarios.');
+    }
+    return this.registry
+      .getLearningService()
+      .rejectLessonComment(user.tenantId, user.sub, commentId, dto.reason);
+  }
+
+  @Delete('comments/:commentId')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Soft-delete del comentario (sólo el autor).' })
+  async deleteLessonComment(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('commentId') commentId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    await this.registry
+      .getLearningService()
+      .deleteLessonComment(user.tenantId, user.sub, commentId);
+    return { deleted: true };
+  }
+
   @Get('courses/:courseId/enrollments')
   @ApiOperation({
     summary:

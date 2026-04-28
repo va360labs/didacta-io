@@ -164,6 +164,116 @@ export class LearningService {
     });
   }
 
+  // -------------------- Comentarios en lecciones --------------------
+
+  /**
+   * Crea un comentario del alumno en una lección. Llega siempre en
+   * estado PENDING; el profesor del curso lo aprueba o rechaza antes
+   * de que sea visible al resto. El autor siempre ve los suyos
+   * (incluyendo PENDING) para que entienda que están en moderación.
+   */
+  async createLessonComment(
+    tenantId: string,
+    author: { id: string; displayName: string | null },
+    input: { lessonId: string; courseId: string; body: string },
+  ) {
+    return this.prisma.modLearningLessonComment.create({
+      data: {
+        tenantId,
+        lessonId: input.lessonId,
+        courseId: input.courseId,
+        authorId: author.id,
+        authorDisplayName: author.displayName,
+        body: input.body.trim(),
+      },
+    });
+  }
+
+  /**
+   * Lista los comentarios visibles para el viewer en una lección:
+   * los APPROVED de cualquier autor, más los PENDING/REJECTED del
+   * propio viewer (para que vea el estado de su moderación).
+   *
+   * Si el viewer es el formador del curso (o admin), también ve los
+   * PENDING de otros — eso lo decide el caller pasando `includePending`.
+   */
+  async listLessonComments(
+    tenantId: string,
+    viewerId: string,
+    lessonId: string,
+    opts: { includePending?: boolean } = {},
+  ) {
+    const where = opts.includePending
+      ? { tenantId, lessonId, deletedAt: null }
+      : {
+          tenantId,
+          lessonId,
+          deletedAt: null,
+          OR: [{ status: 'APPROVED' as const }, { authorId: viewerId }],
+        };
+    return this.prisma.modLearningLessonComment.findMany({
+      where,
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /**
+   * Cola de pendientes para el formador: comentarios en estado PENDING
+   * de cualquier lección de un curso. La autorización (que el viewer
+   * sea formador/admin del tenant) la verifica el controller.
+   */
+  async listPendingCommentsForCourse(tenantId: string, courseId: string) {
+    return this.prisma.modLearningLessonComment.findMany({
+      where: { tenantId, courseId, status: 'PENDING', deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async approveLessonComment(tenantId: string, reviewerId: string, commentId: string) {
+    return this.prisma.modLearningLessonComment.update({
+      where: { id: commentId },
+      data: {
+        status: 'APPROVED',
+        reviewedById: reviewerId,
+        reviewedAt: new Date(),
+        rejectionReason: null,
+      },
+    });
+  }
+
+  async rejectLessonComment(
+    tenantId: string,
+    reviewerId: string,
+    commentId: string,
+    reason?: string,
+  ) {
+    return this.prisma.modLearningLessonComment.update({
+      where: { id: commentId },
+      data: {
+        status: 'REJECTED',
+        reviewedById: reviewerId,
+        reviewedAt: new Date(),
+        rejectionReason: reason ?? null,
+      },
+    });
+  }
+
+  async deleteLessonComment(tenantId: string, actorId: string, commentId: string) {
+    const comment = await this.prisma.modLearningLessonComment.findFirst({
+      where: { id: commentId, tenantId, deletedAt: null },
+    });
+    if (!comment) return; // idempotent
+    if (comment.authorId !== actorId) {
+      // El controller verifica si es admin/formador antes de pasar acá;
+      // si no es ninguno y no es el autor, abortamos.
+      throw new EnrollmentNotFoundError();
+    }
+    await this.prisma.modLearningLessonComment.update({
+      where: { id: commentId },
+      data: { deletedAt: new Date() },
+    });
+  }
+
   /**
    * HU-FORM-002: lista de matriculaciones de un curso (vista del formador
    * para ver alumnos).
