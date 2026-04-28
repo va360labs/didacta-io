@@ -43,30 +43,30 @@ export interface UpdateThemeInput {
 
 export const themingApi = {
   async getMine(bearer: string): Promise<TenantTheme> {
-    return apiFetch<TenantTheme>('/modules/theming/me', { method: 'GET' }, bearer);
+    return apiFetch<TenantTheme>('/api/v1/modules/theming/me', { method: 'GET' }, bearer);
   },
   async update(bearer: string, dto: UpdateThemeInput): Promise<TenantTheme> {
     return apiFetch<TenantTheme>(
-      '/modules/theming/me',
+      '/api/v1/modules/theming/me',
       { method: 'PUT', body: JSON.stringify(dto) },
       bearer,
     );
   },
   async reset(bearer: string): Promise<TenantTheme> {
-    return apiFetch<TenantTheme>('/modules/theming/me/reset', { method: 'POST' }, bearer);
+    return apiFetch<TenantTheme>('/api/v1/modules/theming/me/reset', { method: 'POST' }, bearer);
   },
   async uploadLogo(
     bearer: string,
     input: { data: string; filename: string; contentType: string },
   ): Promise<TenantTheme> {
     return apiFetch<TenantTheme>(
-      '/modules/theming/me/logo',
+      '/api/v1/modules/theming/me/logo',
       { method: 'POST', body: JSON.stringify(input) },
       bearer,
     );
   },
   async removeLogo(bearer: string): Promise<TenantTheme> {
-    return apiFetch<TenantTheme>('/modules/theming/me/logo', { method: 'DELETE' }, bearer);
+    return apiFetch<TenantTheme>('/api/v1/modules/theming/me/logo', { method: 'DELETE' }, bearer);
   },
 };
 
