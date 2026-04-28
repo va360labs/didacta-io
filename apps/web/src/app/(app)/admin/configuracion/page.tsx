@@ -55,8 +55,9 @@ const TABS: Array<{ key: TabKey; label: string; description: string }> = [
   },
   {
     key: 'raw',
-    label: 'Todos los settings',
-    description: 'Vista cruda de los valores guardados con flag de cifrado.',
+    label: 'Avanzado',
+    description:
+      'Vista cruda (debug) de todos los valores guardados en este tenant, agrupados por módulo. Útil para troubleshooting; lo normal es usar las tabs específicas.',
   },
 ];
 
@@ -338,10 +339,18 @@ export default function ConfiguracionPage() {
       {tab === 'raw' ? (
         <Card>
           <CardHeader>
-            <CardTitle>Todos los settings</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle>Avanzado · vista debug</CardTitle>
+              <Badge variant="warning">Solo troubleshooting</Badge>
+            </div>
             <CardDescription>
-              Vista cruda de los valores guardados. Los secretos muestran <code>•••</code> sin
-              posibilidad de leerlos.
+              Lista todos los valores guardados en <code>tenant_setting</code> agrupados por módulo.
+              Lo normal es configurar cada cosa desde su tab específica (Notificaciones, Storage,
+              etc.). Esta vista es útil cuando hay que revisar/limpiar settings huérfanos. Los
+              valores marcados como <Badge variant="warning">secreto •••</Badge> están cifrados
+              at-rest y no se pueden leer desde la UI por diseño; sólo el servidor los descifra al
+              consumirlos. <strong>Eliminar</strong> remueve el setting completo y desactiva la
+              integración asociada.
             </CardDescription>
           </CardHeader>
           <CardContent>
