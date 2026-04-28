@@ -1,17 +1,22 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { CourseStatusBadge } from '@/components/course-status-badge';
 import { Icon } from '@/components/icon';
+import { NewCourseForm } from '@/components/new-course-form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Dialog } from '@/components/ui/dialog';
 import { ApiHttpError } from '@/lib/api-client';
 import { coursesApi, type Course } from '@/lib/courses';
 
 export default function FormadorCoursesPage() {
+  const router = useRouter();
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   async function load() {
     try {
@@ -30,6 +35,11 @@ export default function FormadorCoursesPage() {
     void load();
   }, []);
 
+  function handleCreated(course: Course) {
+    setShowCreate(false);
+    router.push(`/formador/cursos/${course.id}` as never);
+  }
+
   return (
     <section className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -39,10 +49,21 @@ export default function FormadorCoursesPage() {
             Cursos creados en tu organización: borradores, publicados y archivados.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/formador/cursos/nuevo">Crear curso nuevo</Link>
+        <Button type="button" onClick={() => setShowCreate(true)}>
+          <Icon name="plus" size={16} />
+          Crear curso nuevo
         </Button>
       </header>
+
+      <Dialog
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        title="Nuevo curso"
+        description="El curso queda en estado borrador hasta que lo publiques. Tras crearlo te llevamos al builder para añadir secciones y lecciones."
+        maxWidthClass="max-w-2xl"
+      >
+        <NewCourseForm onCreated={handleCreated} onCancel={() => setShowCreate(false)} />
+      </Dialog>
 
       {error ? (
         <div
@@ -77,11 +98,9 @@ export default function FormadorCoursesPage() {
               Empezá creando tu primer curso. Vas a poder añadir secciones, lecciones, quizzes y
               certificados después.
             </p>
-            <Button asChild className="mt-2">
-              <Link href="/formador/cursos/nuevo">
-                <Icon name="plus" size={16} />
-                Crear mi primer curso
-              </Link>
+            <Button type="button" onClick={() => setShowCreate(true)} className="mt-2">
+              <Icon name="plus" size={16} />
+              Crear mi primer curso
             </Button>
           </CardContent>
         </Card>
