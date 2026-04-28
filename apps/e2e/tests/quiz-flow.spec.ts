@@ -67,9 +67,13 @@ test.describe('mod.assessments — flujo del alumno', () => {
 
     await page.getByRole('button', { name: 'Enviar respuestas' }).click();
 
-    // 5) Pantalla de resultado: el header muestra `<score>%` + `· aprobado`.
-    await expect(page.getByText(/100%/)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText('· aprobado')).toBeVisible();
+    // 5) Pantalla de resultado: el header del último intento muestra
+    //    "Último intento: 100% · aprobado". Buscamos el texto completo
+    //    para no matchear el `100%` del progreso de la lección que
+    //    aparece en el sidebar tras completar el quiz.
+    await expect(page.getByText(/Último intento:\s*100%\s*·\s*aprobado/)).toBeVisible({
+      timeout: 15_000,
+    });
 
     // 6) Refrescar y verificar que el curso quedó completado por el bridge
     await page.reload();
