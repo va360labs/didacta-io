@@ -9,12 +9,14 @@ export {
   createPostSchema,
   listPostsQuerySchema,
   moderationActionSchema,
+  postSortSchema,
   userPreferencesSchema,
   type AddReactionDto,
   type CreateCommentDto,
   type CreatePostDto,
   type ListPostsQueryDto,
   type ModerationActionDto,
+  type PostSort,
   type UserPreferencesDto,
 } from './dto.js';
 export {

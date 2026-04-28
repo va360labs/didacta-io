@@ -8,10 +8,27 @@ export const createPostSchema = z.object({
 });
 export type CreatePostDto = z.infer<typeof createPostSchema>;
 
+/**
+ * Orden del listado.
+ * - `recent`: createdAt DESC (default; es lo que el listado mostraba antes
+ *   sin opción configurable).
+ * - `oldest`: createdAt ASC.
+ * - `most_commented`: comentarios DESC, createdAt DESC como tiebreaker
+ *   determinístico.
+ *
+ * Lo dejamos opcional en el schema (sin default) para que el tipo
+ * inferido sea `PostSort | undefined`. El service aplica el default
+ * `'recent'` si viene undefined, evitando que los callers TS estén
+ * obligados a pasarlo siempre.
+ */
+export const postSortSchema = z.enum(['recent', 'oldest', 'most_commented']);
+export type PostSort = z.infer<typeof postSortSchema>;
+
 export const listPostsQuerySchema = z.object({
   courseId: z.string().uuid().optional(),
   authorId: z.string().uuid().optional(),
   tag: z.string().min(1).max(40).optional(),
+  sort: postSortSchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
 });
 export type ListPostsQueryDto = z.infer<typeof listPostsQuerySchema>;

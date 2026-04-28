@@ -60,6 +60,18 @@ export class CommunityService {
       ? { deletedAt: null }
       : { deletedAt: null, hiddenAt: null };
 
+    // Mapeo del query.sort a Prisma orderBy. `most_commented` ordena por
+    // _count.comments DESC y rompe empates por createdAt DESC para que la
+    // paginación sea estable. Default 'recent' aplicado acá (el schema lo
+    // deja opcional para que callers TS no estén obligados a pasarlo).
+    const sort = query.sort ?? 'recent';
+    const orderBy =
+      sort === 'oldest'
+        ? [{ createdAt: 'asc' as const }]
+        : sort === 'most_commented'
+          ? [{ comments: { _count: 'desc' as const } }, { createdAt: 'desc' as const }]
+          : [{ createdAt: 'desc' as const }];
+
     return this.prisma.modCommunityPost.findMany({
       where: {
         tenantId,
@@ -69,7 +81,7 @@ export class CommunityService {
         ...(query.authorId !== undefined ? { authorId: query.authorId } : {}),
         ...(query.tag !== undefined ? { tags: { has: query.tag } } : {}),
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       take: query.limit,
       include: {
         _count: {

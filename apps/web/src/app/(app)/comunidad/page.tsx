@@ -11,7 +11,13 @@ import { Label } from '@/components/ui/label';
 import { MentionTextarea } from '@/components/mention-textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-import { communityApi, type Post } from '@/lib/community';
+import { communityApi, type Post, type PostSort } from '@/lib/community';
+
+const SORT_LABELS: Record<PostSort, string> = {
+  recent: 'Más recientes',
+  oldest: 'Más antiguas',
+  most_commented: 'Más comentadas',
+};
 
 export default function ComunidadPage() {
   const [posts, setPosts] = useState<Post[] | null>(null);
@@ -19,10 +25,11 @@ export default function ComunidadPage() {
   const [pending, setPending] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
   const [activeTag, setActiveTag] = useState<string>('Todo');
+  const [sort, setSort] = useState<PostSort>('recent');
 
-  async function reload() {
+  async function reload(nextSort: PostSort = sort) {
     try {
-      setPosts(await communityApi.listPosts());
+      setPosts(await communityApi.listPosts({ sort: nextSort }));
       setError(null);
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar la comunidad.');
@@ -30,8 +37,9 @@ export default function ComunidadPage() {
   }
 
   useEffect(() => {
-    void reload();
-  }, []);
+    void reload(sort);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sort]);
 
   // Tags presentes en los posts → chips de filtro.
   const allTags = useMemo(() => {
@@ -151,7 +159,20 @@ export default function ComunidadPage() {
                   {t}
                 </button>
               ))}
-              <span className="ml-auto text-xs text-text-subtle">Ordenar: Más recientes</span>
+              <label className="ml-auto flex items-center gap-2 text-xs text-text-subtle">
+                Ordenar:
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as PostSort)}
+                  className="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-text focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  {(Object.keys(SORT_LABELS) as PostSort[]).map((k) => (
+                    <option key={k} value={k}>
+                      {SORT_LABELS[k]}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </CardContent>
           </Card>
 

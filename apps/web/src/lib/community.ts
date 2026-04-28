@@ -65,11 +65,16 @@ function withAuth(): string {
   return token;
 }
 
+export type PostSort = 'recent' | 'oldest' | 'most_commented';
+
 export const communityApi = {
-  async listPosts(opts: { courseId?: string; tag?: string; limit?: number } = {}): Promise<Post[]> {
+  async listPosts(
+    opts: { courseId?: string; tag?: string; sort?: PostSort; limit?: number } = {},
+  ): Promise<Post[]> {
     const params = new URLSearchParams();
     if (opts.courseId) params.set('courseId', opts.courseId);
     if (opts.tag) params.set('tag', opts.tag);
+    if (opts.sort) params.set('sort', opts.sort);
     if (opts.limit) params.set('limit', String(opts.limit));
     const path = `/api/v1/modules/community/posts${params.toString() ? `?${params}` : ''}`;
     return apiFetch<Post[]>(path, { method: 'GET' }, withAuth());

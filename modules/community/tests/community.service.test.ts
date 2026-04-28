@@ -78,6 +78,7 @@ function makeFakePrisma() {
       async findMany(args: {
         where: Record<string, unknown>;
         take?: number;
+        orderBy?: Array<Record<string, unknown>> | Record<string, unknown>;
         include?: { _count?: { select?: { comments?: unknown } } };
       }) {
         const w = args.where;
@@ -91,9 +92,31 @@ function makeFakePrisma() {
               !(w.tags as { has?: string }).has ||
               p.tags.includes((w.tags as { has?: string }).has!)),
         );
-        const sliced = filtered.slice(0, args.take ?? 50);
-        // Si el caller pidió `include: { _count: { select: { comments: ... } } }`
-        // calculamos el conteo simulando el comportamiento de Prisma.
+
+        // Aplicar orderBy (puede ser un objeto o array). Implementamos los
+        // 3 modos que el service actual usa: createdAt asc/desc y
+        // comments._count desc (con createdAt desc como tiebreak).
+        const orderArr = Array.isArray(args.orderBy)
+          ? args.orderBy
+          : args.orderBy
+            ? [args.orderBy]
+            : [];
+        const sorted = [...filtered].sort((a, b) => {
+          for (const clause of orderArr) {
+            if ('createdAt' in clause) {
+              const dir = (clause as { createdAt: 'asc' | 'desc' }).createdAt;
+              const diff = a.createdAt.getTime() - b.createdAt.getTime();
+              if (diff !== 0) return dir === 'asc' ? diff : -diff;
+            } else if ('comments' in clause) {
+              const cntA = comments.filter((c) => c.postId === a.id && c.deletedAt === null).length;
+              const cntB = comments.filter((c) => c.postId === b.id && c.deletedAt === null).length;
+              if (cntA !== cntB) return cntB - cntA; // siempre desc según el use-case
+            }
+          }
+          return 0;
+        });
+
+        const sliced = sorted.slice(0, args.take ?? 50);
         if (args.include?._count?.select?.comments !== undefined) {
           return sliced.map((p) => ({
             ...p,
@@ -270,6 +293,51 @@ describe('CommunityService.createPost', () => {
     await svc.createPost('t1', { id: 'u1', displayName: null }, { title: 'P', body: 'body' });
     const list = await svc.listPosts('t1', { limit: 50 });
     expect(list[0]?._count?.comments).toBe(0);
+  });
+
+  it('sort=oldest invierte el orden (más antiguos primero)', async () => {
+    const prisma = makeFakePrisma();
+    const svc = new CommunityService(prisma as never, trackingCtx([]));
+    const a = await svc.createPost(
+      't1',
+      { id: 'u1', displayName: null },
+      { title: 'A', body: 'a' },
+    );
+    await new Promise((r) => setTimeout(r, 5));
+    const b = await svc.createPost(
+      't1',
+      { id: 'u1', displayName: null },
+      { title: 'B', body: 'b' },
+    );
+
+    const recent = await svc.listPosts('t1', { sort: 'recent', limit: 50 });
+    expect(recent.map((p) => p.id)).toEqual([b.id, a.id]);
+
+    const oldest = await svc.listPosts('t1', { sort: 'oldest', limit: 50 });
+    expect(oldest.map((p) => p.id)).toEqual([a.id, b.id]);
+  });
+
+  it('sort=most_commented prioriza el de más comentarios', async () => {
+    const prisma = makeFakePrisma();
+    const svc = new CommunityService(prisma as never, trackingCtx([]));
+    const a = await svc.createPost(
+      't1',
+      { id: 'u1', displayName: null },
+      { title: 'A', body: 'a' },
+    );
+    const b = await svc.createPost(
+      't1',
+      { id: 'u1', displayName: null },
+      { title: 'B', body: 'b' },
+    );
+    // B tiene 2 comentarios, A tiene 1 → B debe quedar primero.
+    await svc.addComment('t1', a.id, { id: 'u2', displayName: null }, { body: 'c1' });
+    await svc.addComment('t1', b.id, { id: 'u2', displayName: null }, { body: 'c1' });
+    await svc.addComment('t1', b.id, { id: 'u3', displayName: null }, { body: 'c2' });
+
+    const list = await svc.listPosts('t1', { sort: 'most_commented', limit: 50 });
+    expect(list[0]?.id).toBe(b.id);
+    expect(list[1]?.id).toBe(a.id);
   });
 });
 
