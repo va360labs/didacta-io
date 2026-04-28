@@ -38,13 +38,18 @@ async function api<T>(
   path: string,
   init: { method?: string; body?: unknown; bearer?: string } = {},
 ): Promise<T> {
+  // Solo setear Content-Type cuando enviamos body. Fastify rechaza con
+  // 400 "Body cannot be empty when content-type is set to 'application/json'"
+  // si llega Content-Type sin body — afecta a endpoints como
+  // POST /auth/mfa/setup que no esperan payload.
+  const headers: Record<string, string> = {};
+  if (init.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (init.bearer) headers['Authorization'] = `Bearer ${init.bearer}`;
+
   const res = await fetch(`${API_URL}${path}`, {
     method: init.method ?? 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init.bearer ? { Authorization: `Bearer ${init.bearer}` } : {}),
-    },
-    body: init.body ? JSON.stringify(init.body) : undefined,
+    headers,
+    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
   });
   const text = await res.text();
   const body = text ? (JSON.parse(text) as unknown) : null;

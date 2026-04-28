@@ -36,7 +36,13 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const url = path.startsWith('http') ? path : `${API_URL}${path}`;
   const headers = new Headers(init.headers);
-  headers.set('Content-Type', 'application/json');
+  // Solo setear Content-Type cuando hay body. Fastify (en la API) rechaza
+  // con 400 "Body cannot be empty when content-type is set to
+  // 'application/json'" si llega Content-Type sin body — afecta a llamadas
+  // POST/DELETE sin payload.
+  if (init.body !== undefined && init.body !== null) {
+    headers.set('Content-Type', 'application/json');
+  }
   if (bearer) headers.set('Authorization', `Bearer ${bearer}`);
 
   const response = await fetch(url, { ...init, headers });
