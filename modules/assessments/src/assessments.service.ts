@@ -149,6 +149,18 @@ export class AssessmentsService {
    * el intento (y solo si `quiz.showFeedback` es true).
    */
   async getQuizForAlumno(tenantId: string, quizId: string) {
+    // Lookup en 2 pasos para distinguir "no existe / no es del tenant"
+    // de "existe pero todavía está en DRAFT". El error genérico (mismo
+    // mensaje "no existe o no pertenece al tenant" en ambos casos)
+    // confundía al profesor cuando el quiz simplemente no había sido
+    // publicado tras crearlo.
+    const meta = await this.prisma.modAssessmentsQuiz.findFirst({
+      where: { id: quizId, tenantId, deletedAt: null },
+      select: { id: true, status: true },
+    });
+    if (!meta) throw new QuizNotFoundError();
+    if (meta.status !== 'PUBLISHED') throw new QuizNotPublishedError();
+
     const quiz = await this.prisma.modAssessmentsQuiz.findFirst({
       where: { id: quizId, tenantId, deletedAt: null, status: 'PUBLISHED' },
       select: {

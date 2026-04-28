@@ -22,7 +22,10 @@ export class QuestionNotFoundError extends AssessmentsError {
 
 export class QuizNotPublishedError extends AssessmentsError {
   constructor() {
-    super('QUIZ_NOT_PUBLISHED', 'No se puede iniciar un intento de un quiz no publicado');
+    super(
+      'QUIZ_NOT_PUBLISHED',
+      'Este quiz todavía no está publicado por el profesor. No podés realizarlo aún.',
+    );
   }
 }
 
