@@ -47,14 +47,17 @@ export class AdminStatsService {
           where: {
             tenantId,
             status: { in: ['ACTIVE', 'COMPLETED'] },
-            ...(dateFilter ? { createdAt: dateFilter } : {}),
+            // Bug previo: usaba `createdAt` que no existe en el modelo. La
+            // columna real es `enrolled_at` mapeada como `enrolledAt`. Esto
+            // hacía 500 en cualquier rango distinto de 'all'.
+            ...(dateFilter ? { enrolledAt: dateFilter } : {}),
           },
         }),
         this.prisma.modLearningEnrollment.count({
           where: {
             tenantId,
             status: 'COMPLETED',
-            ...(dateFilter ? { createdAt: dateFilter } : {}),
+            ...(dateFilter ? { enrolledAt: dateFilter } : {}),
           },
         }),
         this.prisma.modCertificatesIssued.count({

@@ -49,17 +49,17 @@ describe('AdminStatsService.getStats', () => {
     });
     await service.getStats('t1', 'all');
     const calls = enrollmentCount.mock.calls.map((c) => c[0].where);
-    expect(calls.every((w: any) => !w.createdAt)).toBe(true);
+    expect(calls.every((w: any) => !w.enrolledAt)).toBe(true);
     expect(certCount.mock.calls[0]?.[0].where.issuedAt).toBeUndefined();
   });
 
-  it('range=30d aplica createdAt gte ~30 días atrás', async () => {
+  it('range=30d aplica enrolledAt gte ~30 días atrás', async () => {
     const { service, enrollmentCount } = setup();
     const before = Date.now();
     await service.getStats('t1', '30d');
     const where = (enrollmentCount.mock.calls[0]?.[0] as any).where;
-    expect(where.createdAt.gte).toBeInstanceOf(Date);
-    const diff = before - (where.createdAt.gte as Date).getTime();
+    expect(where.enrolledAt.gte).toBeInstanceOf(Date);
+    const diff = before - (where.enrolledAt.gte as Date).getTime();
     // ~30 days ± 1s tolerance
     expect(diff).toBeGreaterThan(30 * 24 * 60 * 60 * 1000 - 2000);
     expect(diff).toBeLessThan(30 * 24 * 60 * 60 * 1000 + 2000);
