@@ -53,4 +53,4 @@
 - [ ] Storage configurable por tenant: local (Docker volume) / S3 / más — [Notion](https://www.notion.so/350b609a124c814f9934fe9833833181)
 - [x] Quitar Branding de Configuración (ya hay sección dedicada en /admin/branding) — [Notion](https://www.notion.so/350b609a124c81e4b20ce8746f8b95c3) · #210
 - [ ] Plantillas: editor por notificación con soporte multi-language — [Notion](https://www.notion.so/350b609a124c813cb9c2cf60a6693d09)
-- [ ] La tab "Todos los settings" muestra una vista raw confusa con secretos en ••• y un botón Eliminar. Ocultar o etiquetar como "Avanzado / debug" — [Notion](https://www.notion.so/350b609a124c81f586cbda23dfae8db1)
+- [x] La tab "Todos los settings" muestra una vista raw confusa con secretos en ••• y un botón Eliminar. Ocultar o etiquetar como "Avanzado / debug" — [Notion](https://www.notion.so/350b609a124c81f586cbda23dfae8db1) · #212
