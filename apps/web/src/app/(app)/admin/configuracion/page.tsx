@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,14 +23,9 @@ interface SmtpDraft {
 
 const EMPTY_SMTP: SmtpDraft = { host: '', port: '587', user: '', password: '', from: '' };
 
-type TabKey =
-  | 'notifications'
-  | 'modules'
-  | 'aula-virtual'
-  | 'storage'
-  | 'branding'
-  | 'plantillas'
-  | 'raw';
+// Branding tiene su propia pantalla en /admin/branding con preview live.
+// Se removió la tab acá para no duplicar entry-point y confundir al admin.
+type TabKey = 'notifications' | 'modules' | 'aula-virtual' | 'storage' | 'plantillas' | 'raw';
 
 const TABS: Array<{ key: TabKey; label: string; description: string }> = [
   {
@@ -53,11 +47,6 @@ const TABS: Array<{ key: TabKey; label: string; description: string }> = [
     key: 'storage',
     label: 'Storage',
     description: 'Backend de archivos (S3 o disco local) configurado vía variables de entorno.',
-  },
-  {
-    key: 'branding',
-    label: 'Branding',
-    description: 'Personalización visual de tu organización.',
   },
   {
     key: 'plantillas',
@@ -320,23 +309,6 @@ export default function ConfiguracionPage() {
               <code>STORAGE_DRIVER</code>). Si tu organización necesita un bucket S3 propio, hablá
               con el equipo de plataforma.
             </p>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {tab === 'branding' ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Branding</CardTitle>
-            <CardDescription>
-              La personalización visual (logo, color, fuentes, custom CSS) se gestiona en una
-              pantalla dedicada con preview live.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild>
-              <Link href="/admin/branding">Ir a Branding →</Link>
-            </Button>
           </CardContent>
         </Card>
       ) : null}
