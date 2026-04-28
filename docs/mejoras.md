@@ -30,7 +30,7 @@
 
 ## Notificaciones como Alumno · `https://cloud.didacta.io/notificaciones`
 
-- [ ] Notificación de matriculación muestra el UUID del curso en vez del título — [Notion](https://www.notion.so/350b609a124c81adb803e4891547251b)
+- [x] Notificación de matriculación muestra el UUID del curso en vez del título — [Notion](https://www.notion.so/350b609a124c81adb803e4891547251b) · #211
 
 ## Mis cursos como profesor · `https://cloud.didacta.io/formador/cursos`
 
@@ -51,6 +51,6 @@
 - [ ] No guarda configuración SMTP. Soportar más providers (Amazon SES, SMTP genérico) con envío asíncrono — [Notion](https://www.notion.so/350b609a124c81138670d4b89e5f0208)
 - [ ] Módulos: usar toggle que guarda al cambio en lugar de form con submit — [Notion](https://www.notion.so/350b609a124c8130b73bcd821f07f55f)
 - [ ] Storage configurable por tenant: local (Docker volume) / S3 / más — [Notion](https://www.notion.so/350b609a124c814f9934fe9833833181)
-- [ ] Quitar Branding de Configuración (ya hay sección dedicada en /admin/branding) — [Notion](https://www.notion.so/350b609a124c81e4b20ce8746f8b95c3)
+- [x] Quitar Branding de Configuración (ya hay sección dedicada en /admin/branding) — [Notion](https://www.notion.so/350b609a124c81e4b20ce8746f8b95c3) · #210
 - [ ] Plantillas: editor por notificación con soporte multi-language — [Notion](https://www.notion.so/350b609a124c813cb9c2cf60a6693d09)
 - [ ] La tab "Todos los settings" muestra una vista raw confusa con secretos en ••• y un botón Eliminar. Ocultar o etiquetar como "Avanzado / debug" — [Notion](https://www.notion.so/350b609a124c81f586cbda23dfae8db1)
