@@ -5,13 +5,17 @@ export { manifest };
 export { ZoomLiveService } from './zoom-live.service.js';
 export {
   createSessionSchema,
+  listWebhookEventsQuerySchema,
   sessionStatusSchema,
   updateSessionSchema,
   webhookEventSchema,
   type CreateSessionDto,
+  type ListWebhookEventsQuery,
+  type PaginatedWebhookEvents,
   type SessionStatus,
   type SessionView,
   type UpdateSessionDto,
+  type WebhookEventView,
   type ZoomWebhookEvent,
 } from './dto.js';
 export {

@@ -46,15 +46,16 @@ export type UpdateSessionDto = z.infer<typeof updateSessionSchema>;
 
 /**
  * Schema mínimo del payload de webhook que nos interesa procesar.
- * Zoom envía mucho más, pero solo extraemos lo que afecta al status.
+ * Zoom envía mucho más, pero solo extraemos lo que afecta al status
+ * o la grabación.
  *
- * Eventos soportados v0.1:
+ * Eventos con efecto:
  *  - `meeting.started` → `STARTED`
  *  - `meeting.ended` → `ENDED`
+ *  - `recording.completed` → guarda `recordingUrl` + `recordingDurationMinutes`
  *
- * Otros eventos (`meeting.participant_joined`, `recording.completed`,
- * etc.) se persisten como `IGNORED` y no provocan cambios; los
- * dejamos en la tabla por trazabilidad y para iteraciones futuras.
+ * Otros eventos (`meeting.participant_joined`, etc.) se persisten como
+ * `IGNORED` y no provocan cambios; los dejamos en la tabla por trazabilidad.
  */
 export const webhookEventSchema = z.object({
   /**
@@ -76,6 +77,17 @@ export const webhookEventSchema = z.object({
           host_email: z.string().optional(),
           start_time: z.string().optional(),
           end_time: z.string().optional(),
+          /**
+           * Solo presente en `recording.completed`. URL pública/compartida
+           * para acceder al video desde el portal de Zoom (requiere passcode
+           * si está configurado).
+           */
+          share_url: z.string().optional(),
+          /**
+           * Duración total del meeting según el reporte de grabación
+           * (en minutos). Zoom puede reportar 0 si fue cortado abruptamente.
+           */
+          duration: z.number().int().nonnegative().optional(),
         })
         .optional(),
     })
@@ -99,6 +111,40 @@ export interface SessionView {
   joinUrl: string | null;
   /** Solo se devuelve al host/admin. Para alumnos, undefined. */
   startUrl?: string | null;
+  /** URL de grabación (Zoom share_url). NULL hasta que llega el webhook. */
+  recordingUrl: string | null;
+  /** Duración del meeting reportada en `recording.completed` (minutos). */
+  recordingDurationMinutes: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Vista paginada de eventos webhook recibidos. Sirve al endpoint admin
+ * `/modules/zoom-live/webhook-events` para QA/debugging.
+ */
+export const listWebhookEventsQuerySchema = z.object({
+  eventType: z.string().min(1).max(80).optional(),
+  result: z.enum(['OK', 'IGNORED', 'ERROR']).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type ListWebhookEventsQuery = z.infer<typeof listWebhookEventsQuerySchema>;
+
+export interface WebhookEventView {
+  id: string;
+  eventId: string;
+  eventType: string;
+  meetingId: string | null;
+  sessionId: string | null;
+  receivedAt: string;
+  result: 'OK' | 'IGNORED' | 'ERROR';
+  errorMessage: string | null;
+}
+
+export interface PaginatedWebhookEvents {
+  items: WebhookEventView[];
+  total: number;
+  page: number;
+  limit: number;
 }

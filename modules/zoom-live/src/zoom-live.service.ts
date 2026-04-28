@@ -3,9 +3,12 @@ import type { ModuleContext } from '@didacta/core-kernel';
 import type { PrismaClient } from '@didacta/database';
 import {
   type CreateSessionDto,
+  type ListWebhookEventsQuery,
+  type PaginatedWebhookEvents,
   type SessionView,
   type UpdateSessionDto,
   type SessionStatus,
+  type WebhookEventView,
   type ZoomWebhookEvent,
 } from './dto.js';
 import {
@@ -260,12 +263,19 @@ export class ZoomLiveService {
     if (event.event === 'meeting.started') nextStatus = 'STARTED';
     else if (event.event === 'meeting.ended') nextStatus = 'ENDED';
 
+    const isRecordingCompleted = event.event === 'recording.completed';
+    const shareUrl = event.payload?.object?.share_url ?? null;
+    const recordingDurationMinutes =
+      typeof event.payload?.object?.duration === 'number' ? event.payload.object.duration : null;
+
     let result: 'OK' | 'IGNORED' | 'ERROR' = 'OK';
     let errorMessage: string | undefined;
 
-    if (!session || !nextStatus) {
+    if (!session) {
+      // Sin sesión local no hay nada que actualizar; persistimos el evento
+      // como IGNORED para trazabilidad.
       result = 'IGNORED';
-    } else {
+    } else if (nextStatus) {
       try {
         await this.prisma.modZoomSession.update({
           where: { id: session.id },
@@ -286,6 +296,34 @@ export class ZoomLiveService {
           error: errorMessage,
         });
       }
+    } else if (isRecordingCompleted && shareUrl) {
+      try {
+        await this.prisma.modZoomSession.update({
+          where: { id: session.id },
+          data: {
+            recordingUrl: shareUrl,
+            recordingDurationMinutes,
+          },
+        });
+        await this.publish(session.tenantId, null, 'zoom.session.recording_ready', {
+          sessionId: session.id,
+          meetingId,
+          recordingUrl: shareUrl,
+          recordingDurationMinutes,
+        });
+      } catch (e) {
+        result = 'ERROR';
+        errorMessage = e instanceof Error ? e.message : String(e);
+        this.ctx.logger.error('mod.zoom-live: error guardando grabación', {
+          eventId: event.event_id,
+          eventType: event.event,
+          error: errorMessage,
+        });
+      }
+    } else {
+      // Evento conocido pero sin efecto (ej. recording.completed sin
+      // share_url, o meeting.participant_joined): trazabilidad sin acción.
+      result = 'IGNORED';
     }
 
     await this.prisma.modZoomWebhookEvent.create({
@@ -302,6 +340,43 @@ export class ZoomLiveService {
     });
 
     return { result, ...(session ? { sessionId: session.id } : {}) };
+  }
+
+  /**
+   * Lista paginada de eventos webhook recibidos para QA/debugging admin.
+   * Filtros: `eventType` (exact match) y `result` (OK | IGNORED | ERROR).
+   * Solo devuelve eventos que tienen `tenantId` resuelto (eventos sin
+   * sesión asociada quedan con tenantId=null y se omiten para evitar
+   * leaks cross-tenant).
+   */
+  async listWebhookEvents(
+    tenantId: string,
+    query: ListWebhookEventsQuery,
+  ): Promise<PaginatedWebhookEvents> {
+    const { eventType, result, page, limit } = query;
+    const where = {
+      tenantId,
+      ...(eventType ? { eventType } : {}),
+      ...(result ? { result } : {}),
+    };
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.modZoomWebhookEvent.findMany({
+        where,
+        orderBy: { receivedAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.modZoomWebhookEvent.count({ where }),
+    ]);
+
+    return {
+      items: items.map(toWebhookEventView),
+      total,
+      page,
+      limit,
+    };
   }
 
   // ------------------- helpers -------------------
@@ -342,6 +417,8 @@ export class ZoomLiveService {
       zoomMeetingId: string | null;
       joinUrl: string | null;
       startUrl: string | null;
+      recordingUrl: string | null;
+      recordingDurationMinutes: number | null;
       createdAt: Date;
       updatedAt: Date;
     },
@@ -362,8 +439,32 @@ export class ZoomLiveService {
       zoomMeetingId: row.zoomMeetingId,
       joinUrl: row.joinUrl,
       ...(opts.includeStartUrl ? { startUrl: row.startUrl } : {}),
+      recordingUrl: row.recordingUrl,
+      recordingDurationMinutes: row.recordingDurationMinutes,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
   }
+}
+
+function toWebhookEventView(row: {
+  id: string;
+  eventId: string;
+  eventType: string;
+  meetingId: string | null;
+  sessionId: string | null;
+  receivedAt: Date;
+  result: string;
+  errorMessage: string | null;
+}): WebhookEventView {
+  return {
+    id: row.id,
+    eventId: row.eventId,
+    eventType: row.eventType,
+    meetingId: row.meetingId,
+    sessionId: row.sessionId,
+    receivedAt: row.receivedAt.toISOString(),
+    result: row.result as 'OK' | 'IGNORED' | 'ERROR',
+    errorMessage: row.errorMessage,
+  };
 }

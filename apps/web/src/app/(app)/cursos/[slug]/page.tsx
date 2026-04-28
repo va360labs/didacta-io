@@ -291,6 +291,7 @@ export default function CourseAlumnoPage() {
       ) : null}
 
       {enrollment ? <UpcomingZoomBanner sessions={zoomSessions} /> : null}
+      {enrollment ? <RecordedZoomSessions sessions={zoomSessions} /> : null}
 
       {!enrollment ? (
         <Card>
@@ -518,6 +519,59 @@ function UpcomingZoomBanner({ sessions }: { sessions: ZoomSession[] }) {
             </a>
           </Button>
         ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Lista plegable de sesiones Zoom finalizadas que tienen grabación
+ * disponible. Solo se renderiza si hay al menos una. La URL apunta al
+ * portal de Zoom (share_url); puede requerir passcode si el host lo
+ * configuró.
+ */
+function RecordedZoomSessions({ sessions }: { sessions: ZoomSession[] }) {
+  const recorded = sessions
+    .filter((s) => s.status === 'ENDED' && s.recordingUrl)
+    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+
+  if (recorded.length === 0) return null;
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <h3 className="font-display text-sm font-semibold text-text mb-3">
+          Grabaciones ({recorded.length})
+        </h3>
+        <ul className="space-y-2">
+          {recorded.map((s) => (
+            <li
+              key={s.id}
+              className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-surface px-3 py-2"
+            >
+              <Icon name="play" size={16} aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-text">{s.topic}</p>
+                <p className="text-xs tabular-nums text-text-muted">
+                  {new Date(s.startTime).toLocaleString('es-AR', {
+                    timeZone: s.timezone,
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  })}
+                  {typeof s.recordingDurationMinutes === 'number'
+                    ? ` · ${s.recordingDurationMinutes} min`
+                    : ''}
+                </p>
+              </div>
+              <Button asChild size="sm" variant="secondary">
+                <a href={s.recordingUrl!} target="_blank" rel="noopener noreferrer">
+                  Ver grabación
+                </a>
+              </Button>
+            </li>
+          ))}
+        </ul>
       </CardContent>
     </Card>
   );

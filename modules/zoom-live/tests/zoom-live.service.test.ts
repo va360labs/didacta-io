@@ -7,6 +7,7 @@ interface SessionRow {
   id: string;
   tenantId: string;
   courseId: string | null;
+  lessonId: string | null;
   topic: string;
   description: string | null;
   status: string;
@@ -17,6 +18,8 @@ interface SessionRow {
   zoomMeetingId: string | null;
   joinUrl: string | null;
   startUrl: string | null;
+  recordingUrl: string | null;
+  recordingDurationMinutes: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,8 +65,27 @@ function makeFakePrisma(courses: { id: string; tenantId: string }[] = []) {
           }) ?? null
         );
       },
-      async create(args: { data: SessionRow }) {
-        const row = { ...args.data, createdAt: new Date(), updatedAt: new Date() };
+      async create(args: {
+        data: Partial<SessionRow> & Pick<SessionRow, 'id' | 'tenantId' | 'topic'>;
+      }) {
+        const row: SessionRow = {
+          lessonId: null,
+          courseId: null,
+          description: null,
+          recordingUrl: null,
+          recordingDurationMinutes: null,
+          status: 'SCHEDULED',
+          startTime: new Date(),
+          durationMinutes: 60,
+          timezone: 'UTC',
+          hostEmail: '',
+          zoomMeetingId: null,
+          joinUrl: null,
+          startUrl: null,
+          ...args.data,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as SessionRow;
         sessions.push(row);
         return row;
       },
@@ -92,6 +114,27 @@ function makeFakePrisma(courses: { id: string; tenantId: string }[] = []) {
         const row: WebhookEventRow = { ...args.data, receivedAt: new Date() };
         webhookEvents.push(row);
         return row;
+      },
+      async findMany(args: {
+        where: { tenantId?: string; eventType?: string; result?: string };
+        orderBy?: unknown;
+        skip?: number;
+        take?: number;
+      }) {
+        const filtered = webhookEvents
+          .filter((e) => (args.where.tenantId ? e.tenantId === args.where.tenantId : true))
+          .filter((e) => (args.where.eventType ? e.eventType === args.where.eventType : true))
+          .filter((e) => (args.where.result ? e.result === args.where.result : true))
+          .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime());
+        const skip = args.skip ?? 0;
+        const take = args.take ?? filtered.length;
+        return filtered.slice(skip, skip + take);
+      },
+      async count(args: { where: { tenantId?: string; eventType?: string; result?: string } }) {
+        return webhookEvents
+          .filter((e) => (args.where.tenantId ? e.tenantId === args.where.tenantId : true))
+          .filter((e) => (args.where.eventType ? e.eventType === args.where.eventType : true))
+          .filter((e) => (args.where.result ? e.result === args.where.result : true)).length;
       },
     },
   };
@@ -328,5 +371,146 @@ describe('ZoomLiveService.handleWebhookEvent', () => {
     // Persiste el evento pero no toca status.
     const after = await service.get(TENANT, created.id);
     expect(after.status).toBe('SCHEDULED');
+  });
+
+  it('recording.completed → guarda recordingUrl + recordingDurationMinutes y emite zoom.session.recording_ready', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await service.create(TENANT, ACTOR, {
+      topic: 'Test',
+      startTime: '2026-05-15T10:00:00-03:00',
+      durationMinutes: 60,
+      hostEmail: 'h@x.com',
+      timezone: 'UTC',
+    });
+
+    const out = await service.handleWebhookEvent({
+      event_id: 'evt-rec-1',
+      event: 'recording.completed',
+      payload: {
+        object: {
+          id: created.zoomMeetingId!,
+          share_url: 'https://zoom.us/rec/share/abc-XYZ',
+          duration: 47,
+        },
+      },
+    });
+
+    expect(out.result).toBe('OK');
+    expect(out.sessionId).toBe(created.id);
+    const after = await service.get(TENANT, created.id);
+    expect(after.recordingUrl).toBe('https://zoom.us/rec/share/abc-XYZ');
+    expect(after.recordingDurationMinutes).toBe(47);
+    // No cambia el status: meeting.ended ya pudo haberlo dejado en ENDED.
+    expect(after.status).toBe('SCHEDULED');
+    expect(ctx.events.map((e) => e.name)).toContain('zoom.session.recording_ready');
+  });
+
+  it('recording.completed sin share_url → IGNORED y sesión sin grabación', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await service.create(TENANT, ACTOR, {
+      topic: 'Test',
+      startTime: '2026-05-15T10:00:00-03:00',
+      durationMinutes: 60,
+      hostEmail: 'h@x.com',
+      timezone: 'UTC',
+    });
+
+    const out = await service.handleWebhookEvent({
+      event_id: 'evt-rec-2',
+      event: 'recording.completed',
+      payload: { object: { id: created.zoomMeetingId! } },
+    });
+
+    expect(out.result).toBe('IGNORED');
+    const after = await service.get(TENANT, created.id);
+    expect(after.recordingUrl).toBeNull();
+    expect(after.recordingDurationMinutes).toBeNull();
+  });
+});
+
+describe('ZoomLiveService.listWebhookEvents', () => {
+  it('pagina y filtra por eventType y result', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await service.create(TENANT, ACTOR, {
+      topic: 'X',
+      startTime: '2026-05-15T10:00:00-03:00',
+      durationMinutes: 60,
+      hostEmail: 'h@x.com',
+      timezone: 'UTC',
+    });
+
+    // Genero 3 eventos: meeting.started (OK), meeting.ended (OK), participant_joined (IGNORED).
+    await service.handleWebhookEvent({
+      event_id: 'a',
+      event: 'meeting.started',
+      payload: { object: { id: created.zoomMeetingId! } },
+    });
+    await service.handleWebhookEvent({
+      event_id: 'b',
+      event: 'meeting.ended',
+      payload: { object: { id: created.zoomMeetingId! } },
+    });
+    await service.handleWebhookEvent({
+      event_id: 'c',
+      event: 'meeting.participant_joined',
+      payload: { object: { id: created.zoomMeetingId! } },
+    });
+
+    const all = await service.listWebhookEvents(TENANT, { page: 1, limit: 25 });
+    expect(all.total).toBe(3);
+    expect(all.items).toHaveLength(3);
+    // Orden DESC por receivedAt: el más reciente primero.
+    expect(all.items[0]!.eventId).toBe('c');
+
+    const onlyOk = await service.listWebhookEvents(TENANT, {
+      page: 1,
+      limit: 25,
+      result: 'OK',
+    });
+    expect(onlyOk.total).toBe(2);
+    expect(onlyOk.items.every((e) => e.result === 'OK')).toBe(true);
+
+    const onlyStarted = await service.listWebhookEvents(TENANT, {
+      page: 1,
+      limit: 25,
+      eventType: 'meeting.started',
+    });
+    expect(onlyStarted.total).toBe(1);
+    expect(onlyStarted.items[0]!.eventId).toBe('a');
+
+    // Pagina con limit=1.
+    const firstPage = await service.listWebhookEvents(TENANT, { page: 1, limit: 1 });
+    expect(firstPage.total).toBe(3);
+    expect(firstPage.items).toHaveLength(1);
+    const secondPage = await service.listWebhookEvents(TENANT, { page: 2, limit: 1 });
+    expect(secondPage.items[0]!.eventId).not.toBe(firstPage.items[0]!.eventId);
+  });
+
+  it('aísla por tenant: no devuelve eventos de otros tenants', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await service.create(TENANT, ACTOR, {
+      topic: 'X',
+      startTime: '2026-05-15T10:00:00-03:00',
+      durationMinutes: 60,
+      hostEmail: 'h@x.com',
+      timezone: 'UTC',
+    });
+    await service.handleWebhookEvent({
+      event_id: 'evt-tenant-iso',
+      event: 'meeting.started',
+      payload: { object: { id: created.zoomMeetingId! } },
+    });
+
+    const otroTenant = await service.listWebhookEvents('tenant-otro', { page: 1, limit: 25 });
+    expect(otroTenant.total).toBe(0);
+    expect(otroTenant.items).toHaveLength(0);
   });
 });

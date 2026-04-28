@@ -14,9 +14,11 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   createSessionSchema,
+  listWebhookEventsQuerySchema,
   sessionStatusSchema,
   updateSessionSchema,
   type CreateSessionDto,
+  type ListWebhookEventsQuery,
   type UpdateSessionDto,
 } from '@didacta/mod-zoom-live';
 import { z } from 'zod';
@@ -104,5 +106,24 @@ export class ZoomLiveController {
     }
     await this.registry.getZoomLiveService().cancel(user.tenantId, user.sub, id);
     return { cancelled: true };
+  }
+
+  @Get('webhook-events')
+  @ApiOperation({
+    summary:
+      'Lista paginada de eventos webhook recibidos de Zoom (solo super_admin / tenant_admin). Sirve para QA y debugging cuando un meeting no transiciona como se espera.',
+  })
+  async listWebhookEvents(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(listWebhookEventsQuerySchema)) q: ListWebhookEventsQuery,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    // Solo admins ven eventos crudos: incluyen meetingId y errorMessage
+    // que no queremos exponer a formadores genéricos.
+    const allowed = new Set(['super_admin', 'tenant_admin']);
+    if (!user.roles.some((r) => allowed.has(r))) {
+      throw new UnauthorizedException('Solo administradores pueden consultar eventos de webhook.');
+    }
+    return this.registry.getZoomLiveService().listWebhookEvents(user.tenantId, q);
   }
 }

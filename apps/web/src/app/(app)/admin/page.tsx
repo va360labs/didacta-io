@@ -154,6 +154,11 @@ export default function AdminDashboardPage() {
               label="Auditoría"
               hint="Cadena de hashes verificable."
             />
+            <ShortcutLink
+              href="/admin/zoom/webhook-events"
+              label="Webhooks Zoom"
+              hint="Trazabilidad de eventos recibidos para QA."
+            />
           </div>
         </CardContent>
       </Card>

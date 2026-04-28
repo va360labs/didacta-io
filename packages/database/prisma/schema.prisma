@@ -1082,6 +1082,12 @@ model ModZoomSession {
   zoomMeetingId   String?  @map("zoom_meeting_id")
   joinUrl         String?  @map("join_url")
   startUrl        String?  @map("start_url")
+  /// `share_url` de la grabación de Zoom (se rellena al recibir el
+  /// webhook `recording.completed`). NULL mientras no haya grabación.
+  recordingUrl    String?  @map("recording_url")
+  /// Duración total del meeting reportada por Zoom en `recording.completed`
+  /// (minutos enteros). NULL si todavía no hay grabación.
+  recordingDurationMinutes Int? @map("recording_duration_minutes")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
