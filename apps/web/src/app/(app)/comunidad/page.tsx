@@ -417,6 +417,11 @@ function ThreadCard({
             </div>
             <div className="min-w-0 flex-1 space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
+                {post.pinnedAt ? (
+                  <Badge variant="warning" dot>
+                    Fijado
+                  </Badge>
+                ) : null}
                 <span className="text-sm font-semibold text-text">
                   {post.authorDisplayName ?? 'Anónimo'}
                 </span>

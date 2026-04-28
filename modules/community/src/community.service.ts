@@ -66,13 +66,18 @@ export class CommunityService {
     // _count.comments DESC y rompe empates por createdAt DESC para que la
     // paginación sea estable. Default 'recent' aplicado acá (el schema lo
     // deja opcional para que callers TS no estén obligados a pasarlo).
+    //
+    // Pin: los posts fijados van siempre primero ordenados por pinnedAt
+    // DESC (el más reciente arriba). `nulls: 'last'` mantiene el resto
+    // del orden intacto cuando pinnedAt es null.
     const sort = query.sort ?? 'recent';
-    const orderBy =
+    const baseOrder =
       sort === 'oldest'
         ? [{ createdAt: 'asc' as const }]
         : sort === 'most_commented'
           ? [{ comments: { _count: 'desc' as const } }, { createdAt: 'desc' as const }]
           : [{ createdAt: 'desc' as const }];
+    const orderBy = [{ pinnedAt: { sort: 'desc' as const, nulls: 'last' as const } }, ...baseOrder];
 
     return this.prisma.modCommunityPost.findMany({
       where: {
@@ -551,12 +556,6 @@ export class CommunityService {
 
   // -------------------- tags admin --------------------
 
-  /**
-   * Devuelve todos los tags curados del tenant ordenados alfabéticamente.
-   * Es público dentro del tenant: cualquier usuario autenticado puede
-   * leerlo para que la UI pinte chips con color/icono. La gestión
-   * (create/update/delete) sí requiere rol moderador.
-   */
   async listTags(tenantId: string) {
     return this.prisma.modCommunityTag.findMany({
       where: { tenantId },
@@ -637,6 +636,54 @@ export class CommunityService {
       resourceId: tagId,
       metadata: { name: existing.name },
     });
+  }
+
+  // -------------------- pin admin --------------------
+
+  /**
+   * Fija un post al tope del feed. Solo super_admin / tenant_admin (el
+   * caller debe verificar el rol). Idempotente: si el post ya está
+   * fijado, refresca el `pinnedAt` para que vuelva al primer puesto entre
+   * los pinneados.
+   */
+  async pinPost(tenantId: string, moderatorId: string, postId: string) {
+    const post = await this.prisma.modCommunityPost.findFirst({
+      where: { id: postId, tenantId, deletedAt: null },
+    });
+    if (!post) throw new PostNotFoundError();
+    const updated = await this.prisma.modCommunityPost.update({
+      where: { id: postId },
+      data: { pinnedAt: new Date(), pinnedById: moderatorId },
+    });
+    await this.ctx.auditLog.record({
+      tenantId,
+      actorId: moderatorId,
+      action: 'community.post.pinned',
+      resourceType: 'post',
+      resourceId: postId,
+      metadata: { title: post.title },
+    });
+    return updated;
+  }
+
+  async unpinPost(tenantId: string, moderatorId: string, postId: string) {
+    const post = await this.prisma.modCommunityPost.findFirst({
+      where: { id: postId, tenantId, deletedAt: null },
+    });
+    if (!post) throw new PostNotFoundError();
+    const updated = await this.prisma.modCommunityPost.update({
+      where: { id: postId },
+      data: { pinnedAt: null, pinnedById: null },
+    });
+    await this.ctx.auditLog.record({
+      tenantId,
+      actorId: moderatorId,
+      action: 'community.post.unpinned',
+      resourceType: 'post',
+      resourceId: postId,
+      metadata: { title: post.title },
+    });
+    return updated;
   }
 
   // -------------------- helpers --------------------

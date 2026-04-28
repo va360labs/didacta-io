@@ -115,6 +115,24 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
     }
   }
 
+  async function handleTogglePin() {
+    if (!post) return;
+    const isPinned = post.pinnedAt !== null;
+    setPending(true);
+    try {
+      if (isPinned) {
+        await communityApi.unpinPost(post.id);
+      } else {
+        await communityApi.pinPost(post.id);
+      }
+      await reload();
+    } catch (err) {
+      setError(err instanceof ApiHttpError ? err.message : 'No pudimos cambiar el pin.');
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function handleModerateComment(commentId: string, isHidden: boolean) {
     if (isHidden) {
       if (!window.confirm('¿Restaurar este comentario?')) return;
@@ -260,6 +278,11 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
                   </Badge>
                 ))}
                 <span className="text-xs text-text-subtle">{relTime(post.createdAt)}</span>
+                {post.pinnedAt ? (
+                  <Badge variant="warning" dot>
+                    Fijado
+                  </Badge>
+                ) : null}
                 {post.hiddenAt ? (
                   <Badge variant="warning" dot>
                     Oculto
@@ -307,9 +330,20 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={handleModeratePost}
+                    onClick={handleTogglePin}
                     disabled={pending}
                     className="ml-auto"
+                  >
+                    {post.pinnedAt ? 'Desfijar' : 'Fijar'}
+                  </Button>
+                ) : null}
+                {canModerate ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleModeratePost}
+                    disabled={pending}
                   >
                     {post.hiddenAt ? 'Restaurar post' : 'Ocultar post'}
                   </Button>

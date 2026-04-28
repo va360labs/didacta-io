@@ -18,6 +18,12 @@ export interface Post {
   hiddenById: string | null;
   hiddenReason: string | null;
   /**
+   * Si está set, el post está fijado por un admin y va al tope del feed.
+   * `pinnedById` es el UUID del moderador que lo fijó (sin FK a IAM).
+   */
+  pinnedAt: string | null;
+  pinnedById: string | null;
+  /**
    * Conteo de comentarios visibles del post (los ocultos solo cuentan
    * para admins). Lo agrega el listado vía Prisma `_count`. En endpoints
    * que no incluyen `_count` (como getPost, que ya trae los comentarios),
@@ -138,6 +144,20 @@ export const communityApi = {
         method: 'POST',
         body: JSON.stringify({ hidden, ...(reason ? { reason } : {}) }),
       },
+      withAuth(),
+    );
+  },
+  async pinPost(postId: string): Promise<Post> {
+    return apiFetch<Post>(
+      `/api/v1/modules/community/posts/${postId}/pin`,
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
+  async unpinPost(postId: string): Promise<Post> {
+    return apiFetch<Post>(
+      `/api/v1/modules/community/posts/${postId}/unpin`,
+      { method: 'POST', body: '{}' },
       withAuth(),
     );
   },

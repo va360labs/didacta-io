@@ -275,6 +275,24 @@ export class CommunityController {
     await this.registry.getCommunityService().deleteTag(user.tenantId, user.sub, id);
     return { deleted: true };
   }
+
+  @Post('posts/:id/pin')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Fijar post al tope del feed. Solo super_admin / tenant_admin.' })
+  async pinPost(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException();
+    if (!canModerate(user)) throw new NotModeratorError();
+    return this.registry.getCommunityService().pinPost(user.tenantId, user.sub, id);
+  }
+
+  @Post('posts/:id/unpin')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Desfijar post. Solo super_admin / tenant_admin.' })
+  async unpinPost(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException();
+    if (!canModerate(user)) throw new NotModeratorError();
+    return this.registry.getCommunityService().unpinPost(user.tenantId, user.sub, id);
+  }
 }
 
 const MODERATOR_ROLES = new Set(['super_admin', 'tenant_admin']);

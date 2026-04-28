@@ -18,6 +18,8 @@ interface PostRow {
   tags: string[];
   deletedAt: Date | null;
   createdAt: Date;
+  pinnedAt: Date | null;
+  pinnedById: string | null;
 }
 interface CommentRow {
   id: string;
@@ -60,6 +62,8 @@ function makeFakePrisma() {
           tags: [],
           deletedAt: null,
           createdAt: new Date(),
+          pinnedAt: null,
+          pinnedById: null,
           ...(args.data as PostRow),
         };
         posts.push(row);
@@ -106,7 +110,19 @@ function makeFakePrisma() {
             : [];
         const sorted = [...filtered].sort((a, b) => {
           for (const clause of orderArr) {
-            if ('createdAt' in clause) {
+            if ('pinnedAt' in clause) {
+              // pinnedAt DESC nulls last: pinned first, ordered por
+              // pinnedAt desc; los no-pinned quedan al final preservando
+              // el resto del orden.
+              const aPinned = a.pinnedAt;
+              const bPinned = b.pinnedAt;
+              if (aPinned && !bPinned) return -1;
+              if (!aPinned && bPinned) return 1;
+              if (aPinned && bPinned) {
+                const diff = aPinned.getTime() - bPinned.getTime();
+                if (diff !== 0) return -diff; // desc
+              }
+            } else if ('createdAt' in clause) {
               const dir = (clause as { createdAt: 'asc' | 'desc' }).createdAt;
               const diff = a.createdAt.getTime() - b.createdAt.getTime();
               if (diff !== 0) return dir === 'asc' ? diff : -diff;
@@ -227,6 +243,12 @@ const trackingCtx = (events: { name: string; data: unknown }[]) =>
         events.push(e);
       },
     },
+    // Stub no-op para los métodos que registran audit (pin/unpin,
+    // moderate, etc.). Si en el futuro algún test quiere verificar
+    // qué se auditó, puede hacer override sobre este ctx.
+    auditLog: { record: async () => {} },
+    notificationHub: { send: async () => {} },
+    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
   }) as never;
 
 describe('CommunityService.createPost', () => {
@@ -842,5 +864,78 @@ describe('CommunityService tags', () => {
     await expect(svc.deleteTag('t1', 'u1', tag.id)).rejects.toMatchObject({
       code: 'TAG_NOT_FOUND',
     });
+  });
+});
+
+describe('CommunityService.pin', () => {
+  it('pinPost setea pinnedAt + pinnedById y retorna el post actualizado', async () => {
+    const prisma = makeFakePrisma();
+    const svc = new CommunityService(prisma as never, trackingCtx([]));
+    const post = await svc.createPost(
+      't1',
+      { id: 'u1', displayName: null },
+      { title: 'Anuncio', body: 'b' },
+    );
+    const pinned = await svc.pinPost('t1', 'admin1', post.id);
+    expect(pinned.pinnedAt).toBeInstanceOf(Date);
+    expect(pinned.pinnedById).toBe('admin1');
+  });
+
+  it('unpinPost limpia pinnedAt + pinnedById', async () => {
+    const prisma = makeFakePrisma();
+    const svc = new CommunityService(prisma as never, trackingCtx([]));
+    const post = await svc.createPost(
+      't1',
+      { id: 'u1', displayName: null },
+      { title: 'A', body: 'b' },
+    );
+    await svc.pinPost('t1', 'admin1', post.id);
+    const unpinned = await svc.unpinPost('t1', 'admin1', post.id);
+    expect(unpinned.pinnedAt).toBeNull();
+    expect(unpinned.pinnedById).toBeNull();
+  });
+
+  it('pinPost rechaza si el post no existe', async () => {
+    const prisma = makeFakePrisma();
+    const svc = new CommunityService(prisma as never, trackingCtx([]));
+    await expect(svc.pinPost('t1', 'admin1', 'no-existe')).rejects.toBeInstanceOf(
+      PostNotFoundError,
+    );
+  });
+
+  it('listPosts devuelve los pinneados primero independientemente del sort', async () => {
+    const prisma = makeFakePrisma();
+    const svc = new CommunityService(prisma as never, trackingCtx([]));
+    const a = await svc.createPost(
+      't1',
+      { id: 'u1', displayName: null },
+      { title: 'A más antiguo', body: 'b' },
+    );
+    // Espaciamos createdAt para que el orden sea determinístico.
+    await new Promise((r) => setTimeout(r, 5));
+    const b = await svc.createPost(
+      't1',
+      { id: 'u1', displayName: null },
+      { title: 'B medio', body: 'b' },
+    );
+    await new Promise((r) => setTimeout(r, 5));
+    const c = await svc.createPost(
+      't1',
+      { id: 'u1', displayName: null },
+      { title: 'C más nuevo', body: 'b' },
+    );
+
+    // Sin pin: orden recent → c, b, a
+    let list = await svc.listPosts('t1', { sort: 'recent', limit: 50 });
+    expect(list.map((p) => p.id)).toEqual([c.id, b.id, a.id]);
+
+    // Pinneamos el más antiguo (a). Debe ir primero aunque el sort sea
+    // 'recent' o 'oldest'.
+    await svc.pinPost('t1', 'admin1', a.id);
+    list = await svc.listPosts('t1', { sort: 'recent', limit: 50 });
+    expect(list[0]!.id).toBe(a.id);
+    list = await svc.listPosts('t1', { sort: 'oldest', limit: 50 });
+    expect(list[0]!.id).toBe(a.id);
+    void b;
   });
 });

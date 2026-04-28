@@ -444,11 +444,18 @@ model ModCommunityPost {
   hiddenById   String?   @map("hidden_by_id") @db.Uuid
   hiddenReason String?   @map("hidden_reason")
 
+  /// Pin/fijado por admin. Si `pinnedAt != null`, el post va al tope del
+  /// feed independientemente del orden elegido. `pinnedById` registra
+  /// quién lo fijó para auditoría sin FK cross-module a IAM.
+  pinnedAt   DateTime? @map("pinned_at")
+  pinnedById String?   @map("pinned_by_id") @db.Uuid
+
   comments  ModCommunityComment[]
   reactions ModCommunityReaction[]
 
   @@index([tenantId, courseId, createdAt])
   @@index([tenantId, authorId])
+  @@index([tenantId, pinnedAt])
   @@map("mod_community_post")
 }
 
