@@ -306,7 +306,17 @@ function ThreadCard({ post }: { post: Post }) {
               >
                 {post.title}
               </h3>
-              <p className="line-clamp-2 text-sm leading-relaxed text-text-muted">{post.body}</p>
+              <p className="line-clamp-4 text-sm leading-relaxed text-text-muted">{post.body}</p>
+              {/* Heurística: si el body tiene > 240 caracteres es muy probable
+                  que line-clamp-4 esté truncando contenido visible. Mostramos
+                  "Leer más" para que el alumno sepa que hay más. El Link
+                  padre del card ya navega al detalle (en una iteración
+                  futura, el detalle abre como modal sobre el feed). */}
+              {post.body.length > 240 ? (
+                <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand-700">
+                  Leer más →
+                </span>
+              ) : null}
               <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-text-muted">
                 <Icon name="message" size={14} />
                 Ver conversación
