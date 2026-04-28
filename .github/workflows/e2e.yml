@@ -2,22 +2,19 @@ name: E2E
 
 on:
   workflow_dispatch:
-  # NOTA (2026-04-26): el trigger automático en push está temporalmente
-  # deshabilitado. El workflow tiene una cadena de bugs pre-existentes
-  # (env faltantes, DI broken, paths incorrectos, specs que llaman a
-  # endpoints con body vacío) que nunca fue arreglada y que está
-  # generando notificaciones de email molestas en cada merge a main.
-  # Para volver a activarlo, dedicar un PR específico que (a) arregle
-  # los specs Playwright (b) actualice los selectors al rediseño del
-  # Bloque D y (c) pruebe el flujo completo verde antes de re-habilitar.
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - 'apps/e2e/**'
-  #     - 'apps/web/**'
-  #     - 'apps/api/**'
-  #     - 'modules/**'
-  #     - 'packages/**'
+  # Re-habilitado el 2026-04-28 tras la cadena de fixes #187–#194 (más
+  # commits directos a main en el flow final) que sanearon los specs
+  # Playwright, los body parsers de Fastify, el helper MFA y los
+  # selectors de UI rediseñados. Run de referencia verde (44/0/2):
+  # https://github.com/va360labs/didacta/actions/runs/25046054487
+  push:
+    branches: [main]
+    paths:
+      - 'apps/e2e/**'
+      - 'apps/web/**'
+      - 'apps/api/**'
+      - 'modules/**'
+      - 'packages/**'
 
 concurrency:
   group: e2e-${{ github.ref }}

@@ -66,11 +66,7 @@ test.describe('mod.assessments — flujo del alumno', () => {
     // actualizar el state (un click en el `<label>` o `<span>` a veces
     // se intercepta por estilos del wrapper).
     void correctOptionId;
-    await page
-      .locator('label', { hasText: '4' })
-      .first()
-      .locator('input[type="radio"]')
-      .check();
+    await page.locator('label', { hasText: '4' }).first().locator('input[type="radio"]').check();
 
     await page.getByRole('button', { name: 'Enviar respuestas' }).click();
 
@@ -78,9 +74,9 @@ test.describe('mod.assessments — flujo del alumno', () => {
     //    state 'result' y muestra el hero "¡Lo lograste!" + scorePercent
     //    en grande. (El texto "Último intento: X% · aprobado" solo aparece
     //    al volver al quiz desde idle, no inmediatamente tras submit.)
-    await expect(
-      page.getByRole('heading', { name: '¡Lo lograste!', level: 3 }),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: '¡Lo lograste!', level: 3 })).toBeVisible({
+      timeout: 15_000,
+    });
 
     // 6) Refrescar y verificar que el curso quedó completado por el bridge
     await page.reload();
