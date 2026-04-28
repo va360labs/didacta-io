@@ -34,7 +34,7 @@
 
 ## Mis cursos como profesor · `https://cloud.didacta.io/formador/cursos`
 
-- [ ] Al crear curso nuevo no debe cambiar de pantalla sino ser un modal y al darle a crear curso pues ya te lleva al builder del curso — [Notion](https://www.notion.so/350b609a124c81769b1cc8e0824ff911)
+- [x] Al crear curso nuevo no debe cambiar de pantalla sino ser un modal y al darle a crear curso pues ya te lleva al builder del curso — [Notion](https://www.notion.so/350b609a124c81769b1cc8e0824ff911) · #216
 
 ## Builder del curso como profesor · `https://cloud.didacta.io/formador/cursos/[id]`
 
@@ -44,7 +44,7 @@
 
 ## Creador de aula virtual · `https://cloud.didacta.io/formador/aula-virtual`
 
-- [ ] Pide aunque opcional UUID del curso y UUID de la lección. Hacer un seleccionable buscable — [Notion](https://www.notion.so/350b609a124c8197bafbd1595ef04bb7)
+- [x] Pide aunque opcional UUID del curso y UUID de la lección. Hacer un seleccionable buscable — [Notion](https://www.notion.so/350b609a124c8197bafbd1595ef04bb7) · #215
 
 ## Configuración del tenant · `https://cloud.didacta.io/admin/configuracion`
 
