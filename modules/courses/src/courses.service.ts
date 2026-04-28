@@ -166,11 +166,20 @@ export class CoursesService {
     dto: CreateModuleDto,
   ) {
     await this.requireCourse(tenantId, courseId);
-    const position =
-      dto.position ??
-      (await this.prisma.modCoursesModule.count({
-        where: { tenantId, courseId, deletedAt: null },
-      }));
+    // BUG fix: contar deletedAt:null y usar count daba colisión con la
+    // unique [courseId, position] cuando había módulos soft-deleted —
+    // sus posiciones siguen ocupadas en la tabla. Usamos el máximo +1
+    // sobre TODAS las filas (incluyendo soft-deleted) para que la
+    // posición del nuevo módulo no choque con un legacy soft-deleted.
+    const last =
+      dto.position === undefined
+        ? await this.prisma.modCoursesModule.findFirst({
+            where: { tenantId, courseId },
+            orderBy: { position: 'desc' },
+            select: { position: true },
+          })
+        : null;
+    const position = dto.position ?? (last ? last.position + 1 : 0);
     const created = await this.prisma.modCoursesModule.create({
       data: {
         tenantId,
@@ -197,11 +206,19 @@ export class CoursesService {
       where: { tenantId, id: moduleId, deletedAt: null },
     });
     if (!courseModule) throw new CourseNotFoundError(moduleId);
-    const position =
-      dto.position ??
-      (await this.prisma.modCoursesLesson.count({
-        where: { tenantId, moduleId, deletedAt: null },
-      }));
+    // Mismo bug que en createModule: count(deletedAt:null) chocaba con
+    // la unique [moduleId, position] al haber lecciones soft-deleted.
+    // Resolvemos con max(position)+1 sobre todas las filas, ignorando
+    // deletedAt para el cálculo (la unique no filtra por deletedAt).
+    const last =
+      dto.position === undefined
+        ? await this.prisma.modCoursesLesson.findFirst({
+            where: { tenantId, moduleId },
+            orderBy: { position: 'desc' },
+            select: { position: true },
+          })
+        : null;
+    const position = dto.position ?? (last ? last.position + 1 : 0);
     const created = await this.prisma.modCoursesLesson.create({
       data: {
         tenantId,
