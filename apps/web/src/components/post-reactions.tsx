@@ -48,14 +48,17 @@ export function PostReactions({
     return counts;
   }, [reactions, viewerUserId]);
 
-  // En variant compact, sólo mostramos los emojis que tienen al menos una
-  // reacción para no saturar el card del feed con chips vacíos.
+  // En variant compact:
+  //  - Si es interactivo (hay onToggle), mostramos los 4 emojis para que el
+  //    viewer pueda reaccionar al post sin tener que abrir el detalle.
+  //  - Si es solo display (sin onToggle), filtramos a los que ya tienen al
+  //    menos una reacción para no saturar la card con chips vacíos.
   const visibleEmojis =
-    variant === 'compact'
+    variant === 'compact' && !onToggle
       ? COMMUNITY_EMOJIS.filter((e) => (aggregated[e]?.count ?? 0) > 0)
       : COMMUNITY_EMOJIS;
 
-  if (variant === 'compact' && visibleEmojis.length === 0) return null;
+  if (visibleEmojis.length === 0) return null;
 
   return (
     <div className={cn('flex flex-wrap items-center gap-1.5', variant === 'full' && 'gap-2')}>
