@@ -21,6 +21,16 @@ export interface Course {
   updatedAt: string;
 }
 
+export interface CourseCategory {
+  id: string;
+  tenantId: string;
+  name: string;
+  color: string;
+  icon: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CourseLesson {
   id: string;
   moduleId: string;
@@ -64,6 +74,45 @@ export const coursesApi = {
 
   async listCategories(): Promise<string[]> {
     return apiFetch<string[]>('/api/v1/modules/courses/categories', { method: 'GET' }, withAuth());
+  },
+
+  async listManagedCategories(): Promise<CourseCategory[]> {
+    return apiFetch<CourseCategory[]>(
+      '/api/v1/modules/courses/managed-categories',
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
+  async createCategory(input: {
+    name: string;
+    color: string;
+    icon?: string | null;
+  }): Promise<CourseCategory> {
+    return apiFetch<CourseCategory>(
+      '/api/v1/modules/courses/managed-categories',
+      { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async updateCategory(
+    id: string,
+    patch: { name?: string; color?: string; icon?: string | null },
+  ): Promise<CourseCategory> {
+    return apiFetch<CourseCategory>(
+      `/api/v1/modules/courses/managed-categories/${id}`,
+      { method: 'PUT', body: JSON.stringify(patch) },
+      withAuth(),
+    );
+  },
+
+  async deleteCategory(id: string): Promise<void> {
+    await apiFetch<{ deleted: true }>(
+      `/api/v1/modules/courses/managed-categories/${id}`,
+      { method: 'DELETE' },
+      withAuth(),
+    );
   },
 
   async get(id: string): Promise<CourseDetail> {

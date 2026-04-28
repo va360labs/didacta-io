@@ -480,6 +480,33 @@ model ModCommunityMention {
   @@map("mod_community_mention")
 }
 
+/// Categorías curadas de cursos para el catálogo. Reemplazan al string
+/// libre `mod_courses_course.category` (que se mantiene como referencia
+/// por nombre para no romper datos existentes). El admin las gestiona
+/// desde /admin/cursos/categorias y el builder ofrece un select.
+///
+/// Multi-categoría con pivote queda como follow-up: el modelo actual
+/// soporta una sola categoría por curso (campo `category: string` que
+/// matches contra `name`), igual que el patrón de community tags donde
+/// `tags` es un array libre y la metadata curada es opcional.
+model ModCoursesCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  /// Nombre canónico (ej. "Tecnología", "Liderazgo"). Único por tenant
+  /// case-insensitive — la app normaliza al insertar.
+  name      String
+  /// Color hex 6 dígitos con `#`.
+  color     String
+  /// Icono opcional del set interno (mismos valores que community tags).
+  icon      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, name], map: "mod_courses_category_tenant_name_key")
+  @@index([tenantId])
+  @@map("mod_courses_category")
+}
+
 /// Comentarios/anotaciones que dejan los alumnos en lecciones. Llegan
 /// en estado PENDING y el profesor del curso (o un admin) los aprueba
 /// o rechaza. Sólo los APPROVED son visibles al resto de alumnos. El

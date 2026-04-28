@@ -32,6 +32,7 @@ import { certificateTemplatesApi, type CertificateTemplate } from '@/lib/certifi
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import {
   coursesApi,
+  type CourseCategory,
   type CourseDetail,
   type CourseLesson,
   type CourseModule,
@@ -467,8 +468,24 @@ function MetadataEditor({
   const [estimatedMinutes, setEstimatedMinutes] = useState(
     course.estimatedMinutes ? String(course.estimatedMinutes) : '',
   );
+  const [managedCategories, setManagedCategories] = useState<CourseCategory[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let aborted = false;
+    void coursesApi
+      .listManagedCategories()
+      .then((list) => {
+        if (!aborted) setManagedCategories(list);
+      })
+      .catch(() => {
+        // Si falla la carga, el form cae al input libre como fallback.
+      });
+    return () => {
+      aborted = true;
+    };
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -544,13 +561,34 @@ function MetadataEditor({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="meta-category">Categoría</Label>
-              <Input
-                id="meta-category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                maxLength={60}
-                placeholder="Ej: Tecnología"
-              />
+              {managedCategories.length > 0 ? (
+                <Select
+                  id="meta-category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  <option value="">— Sin categoría —</option>
+                  {managedCategories.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Input
+                  id="meta-category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  maxLength={60}
+                  placeholder="Ej: Tecnología"
+                />
+              )}
+              {managedCategories.length === 0 ? (
+                <p className="text-xs text-text-subtle">
+                  Tip: el admin puede curar categorías con color e icono en{' '}
+                  <code>/admin/cursos/categorias</code>.
+                </p>
+              ) : null}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="meta-estimated">Duración estimada (min)</Label>

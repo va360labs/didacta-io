@@ -85,6 +85,105 @@ export class CoursesController {
     }
   }
 
+  // ------------------- Categorías curadas (CRUD admin) -------------------
+
+  @Get('managed-categories')
+  @ApiOperation({
+    summary:
+      'Lista las categorías curadas del tenant con color/icono. Lectura pública dentro del tenant.',
+  })
+  async listManagedCategories(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    try {
+      return await this.registry.getCoursesService().listManagedCategories(user.tenantId);
+    } catch (error) {
+      throw this.translate(error);
+    }
+  }
+
+  @Post('managed-categories')
+  @ApiOperation({ summary: 'Crear categoría curada. Solo super_admin / tenant_admin.' })
+  async createCategory(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(
+      new ZodValidationPipe(
+        z.object({
+          name: z.string().trim().min(1).max(60),
+          color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Color debe ser hex 6 dígitos'),
+          icon: z.string().max(40).nullable().optional(),
+        }),
+      ),
+    )
+    dto: { name: string; color: string; icon?: string | null },
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.some((r) => ['super_admin', 'tenant_admin'].includes(r))) {
+      throw new HttpException(
+        { code: 'FORBIDDEN', message: 'Solo admins pueden gestionar categorías.' },
+        403,
+      );
+    }
+    try {
+      return await this.registry.getCoursesService().createCategory(user.tenantId, user.sub, dto);
+    } catch (error) {
+      throw this.translate(error);
+    }
+  }
+
+  @Put('managed-categories/:id')
+  @ApiOperation({ summary: 'Actualizar categoría curada. Solo super_admin / tenant_admin.' })
+  async updateCategory(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(
+      new ZodValidationPipe(
+        z.object({
+          name: z.string().trim().min(1).max(60).optional(),
+          color: z
+            .string()
+            .regex(/^#[0-9a-fA-F]{6}$/)
+            .optional(),
+          icon: z.string().max(40).nullable().optional(),
+        }),
+      ),
+    )
+    dto: { name?: string; color?: string; icon?: string | null },
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.some((r) => ['super_admin', 'tenant_admin'].includes(r))) {
+      throw new HttpException(
+        { code: 'FORBIDDEN', message: 'Solo admins pueden gestionar categorías.' },
+        403,
+      );
+    }
+    try {
+      return await this.registry
+        .getCoursesService()
+        .updateCategory(user.tenantId, user.sub, id, dto);
+    } catch (error) {
+      throw this.translate(error);
+    }
+  }
+
+  @Delete('managed-categories/:id')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Borrar categoría curada. Solo super_admin / tenant_admin.' })
+  async deleteCategory(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.some((r) => ['super_admin', 'tenant_admin'].includes(r))) {
+      throw new HttpException(
+        { code: 'FORBIDDEN', message: 'Solo admins pueden gestionar categorías.' },
+        403,
+      );
+    }
+    try {
+      await this.registry.getCoursesService().deleteCategory(user.tenantId, user.sub, id);
+      return { deleted: true };
+    } catch (error) {
+      throw this.translate(error);
+    }
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Detalle del curso con módulos y lecciones' })
   async get(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {

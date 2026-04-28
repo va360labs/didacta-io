@@ -117,10 +117,10 @@ export class CoursesService {
   }
 
   /**
-   * Devuelve la lista de categorías distintas en uso por los cursos
-   * publicados del tenant, ordenadas alfabéticamente. Sirve para alimentar
-   * el filtro del catálogo sin obligar al cliente a recorrerse el listado
-   * completo.
+   * Lista de categorías distintas en uso por cursos publicados, sólo
+   * nombres. Mantenida por compat con el filtro del catálogo, que sigue
+   * leyendo strings. Para metadata curada (color/icono) usar
+   * `listManagedCategories`.
    */
   async listCategories(tenantId: string): Promise<string[]> {
     const rows = await this.prisma.modCoursesCourse.findMany({
@@ -137,6 +137,99 @@ export class CoursesService {
     return rows
       .map((r) => r.category)
       .filter((c): c is string => typeof c === 'string' && c.length > 0);
+  }
+
+  // -------------------- Categorías curadas (admin) --------------------
+
+  /**
+   * Devuelve las categorías curadas del tenant, ordenadas alfabéticamente.
+   * Lectura pública dentro del tenant: cualquier usuario autenticado puede
+   * consumirla para que el catálogo pinte chips con color/icono.
+   */
+  async listManagedCategories(tenantId: string) {
+    return this.prisma.modCoursesCategory.findMany({
+      where: { tenantId },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async createCategory(
+    tenantId: string,
+    actorId: string | null,
+    dto: { name: string; color: string; icon?: string | null },
+  ) {
+    const name = dto.name.trim();
+    const collision = await this.prisma.modCoursesCategory.findUnique({
+      where: { tenantId_name: { tenantId, name } },
+    });
+    if (collision) {
+      // Reusamos CourseSlugAlreadyExistsError para señalar conflicto
+      // sin sumar un error nuevo todavía. El controller lo mapea a 409.
+      throw new CourseSlugAlreadyExistsError(name);
+    }
+    const cat = await this.prisma.modCoursesCategory.create({
+      data: {
+        id: randomUUID(),
+        tenantId,
+        name,
+        color: dto.color,
+        icon: dto.icon ?? null,
+      },
+    });
+    await this.ctx.auditLog.record({
+      tenantId,
+      actorId,
+      action: 'courses.category.created',
+      resourceType: 'course_category',
+      resourceId: cat.id,
+      metadata: { name, color: dto.color, icon: dto.icon ?? null },
+    });
+    return cat;
+  }
+
+  async updateCategory(
+    tenantId: string,
+    actorId: string | null,
+    categoryId: string,
+    dto: { name?: string; color?: string; icon?: string | null },
+  ) {
+    const existing = await this.prisma.modCoursesCategory.findFirst({
+      where: { id: categoryId, tenantId },
+    });
+    if (!existing) throw new CourseNotFoundError(categoryId);
+    const cat = await this.prisma.modCoursesCategory.update({
+      where: { id: categoryId },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+        ...(dto.color !== undefined ? { color: dto.color } : {}),
+        ...(dto.icon !== undefined ? { icon: dto.icon } : {}),
+      },
+    });
+    await this.ctx.auditLog.record({
+      tenantId,
+      actorId,
+      action: 'courses.category.updated',
+      resourceType: 'course_category',
+      resourceId: cat.id,
+      metadata: dto,
+    });
+    return cat;
+  }
+
+  async deleteCategory(tenantId: string, actorId: string | null, categoryId: string) {
+    const existing = await this.prisma.modCoursesCategory.findFirst({
+      where: { id: categoryId, tenantId },
+    });
+    if (!existing) throw new CourseNotFoundError(categoryId);
+    await this.prisma.modCoursesCategory.delete({ where: { id: categoryId } });
+    await this.ctx.auditLog.record({
+      tenantId,
+      actorId,
+      action: 'courses.category.deleted',
+      resourceType: 'course_category',
+      resourceId: categoryId,
+      metadata: { name: existing.name },
+    });
   }
 
   async getCourseDetail(tenantId: string, courseId: string) {
