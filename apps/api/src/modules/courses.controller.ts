@@ -35,6 +35,8 @@ import { ModuleRegistryService } from './module-registry.service';
 
 const listQuerySchema = z.object({
   status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).optional(),
+  q: z.string().trim().min(1).max(120).optional(),
+  category: z.string().trim().min(1).max(80).optional(),
 });
 
 @ApiTags('Modules · Courses')
@@ -67,6 +69,17 @@ export class CoursesController {
     if (!user) throw new UnauthorizedException();
     try {
       return await this.registry.getCoursesService().createCourse(user.tenantId, user.sub, dto);
+    } catch (error) {
+      throw this.translate(error);
+    }
+  }
+
+  @Get('categories')
+  @ApiOperation({ summary: 'Listar categorías distintas usadas por cursos publicados' })
+  async categories(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    try {
+      return await this.registry.getCoursesService().listCategories(user.tenantId);
     } catch (error) {
       throw this.translate(error);
     }

@@ -51,11 +51,19 @@ function withAuth(): string {
 }
 
 export const coursesApi = {
-  async list(opts: { status?: CourseStatus } = {}): Promise<Course[]> {
+  async list(
+    opts: { status?: CourseStatus; q?: string; category?: string } = {},
+  ): Promise<Course[]> {
     const params = new URLSearchParams();
     if (opts.status) params.set('status', opts.status);
+    if (opts.q) params.set('q', opts.q);
+    if (opts.category) params.set('category', opts.category);
     const path = `/api/v1/modules/courses${params.toString() ? `?${params}` : ''}`;
     return apiFetch<Course[]>(path, { method: 'GET' }, withAuth());
+  },
+
+  async listCategories(): Promise<string[]> {
+    return apiFetch<string[]>('/api/v1/modules/courses/categories', { method: 'GET' }, withAuth());
   },
 
   async get(id: string): Promise<CourseDetail> {

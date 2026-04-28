@@ -14,6 +14,8 @@ interface FakeCourse {
   tenantId: string;
   slug: string;
   title: string;
+  description: string | null;
+  category: string | null;
   status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   publishedAt: Date | null;
   deletedAt: Date | null;
@@ -53,7 +55,58 @@ function makeFakePrisma() {
           );
         },
       ),
-      findMany: vi.fn(async () => [...courses.values()].filter((c) => c.deletedAt === null)),
+      findMany: vi.fn(
+        async (
+          args: {
+            where?: {
+              tenantId?: string;
+              deletedAt?: null;
+              status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+              category?: string | { not: null };
+              OR?: Array<{
+                title?: { contains: string; mode?: string };
+                description?: { contains: string; mode?: string };
+              }>;
+            };
+            select?: { category?: boolean };
+            distinct?: string[];
+          } = {},
+        ) => {
+          const w = args.where ?? {};
+          let rows = [...courses.values()].filter((c) => c.deletedAt === null);
+          if (w.tenantId !== undefined) rows = rows.filter((c) => c.tenantId === w.tenantId);
+          if (w.status !== undefined) rows = rows.filter((c) => c.status === w.status);
+          if (typeof w.category === 'string') {
+            rows = rows.filter((c) => c.category === w.category);
+          } else if (w.category && 'not' in w.category && w.category.not === null) {
+            rows = rows.filter((c) => c.category !== null);
+          }
+          if (w.OR && w.OR.length > 0) {
+            rows = rows.filter((c) =>
+              w.OR!.some((clause) => {
+                if (clause.title?.contains) {
+                  const needle = clause.title.contains.toLowerCase();
+                  if (c.title.toLowerCase().includes(needle)) return true;
+                }
+                if (clause.description?.contains) {
+                  const needle = clause.description.contains.toLowerCase();
+                  if ((c.description ?? '').toLowerCase().includes(needle)) return true;
+                }
+                return false;
+              }),
+            );
+          }
+          if (args.distinct?.includes('category')) {
+            const seen = new Set<string | null>();
+            rows = rows.filter((c) => {
+              if (seen.has(c.category)) return false;
+              seen.add(c.category);
+              return true;
+            });
+          }
+          return rows;
+        },
+      ),
       create: vi.fn(
         async ({
           data,
@@ -65,6 +118,8 @@ function makeFakePrisma() {
             tenantId: data.tenantId,
             slug: data.slug,
             title: data.title,
+            description: data.description ?? null,
+            category: data.category ?? null,
             status: 'DRAFT',
             publishedAt: null,
             deletedAt: null,
@@ -104,7 +159,7 @@ function makeFakePrisma() {
     },
   };
 
-  return { prisma, lessons };
+  return { prisma, lessons, courses };
 }
 
 function makeContext(): ModuleContext {
@@ -234,5 +289,107 @@ describe('CoursesService', () => {
     await expect(
       service.updateCourse('t-1', null, 'no-existe', { title: 'x' }),
     ).rejects.toBeInstanceOf(CourseNotFoundError);
+  });
+
+  it('listCourses filtra por texto en título y descripción (case insensitive)', async () => {
+    const { prisma, courses } = makeFakePrisma();
+    const service = new CoursesService(prisma as never, makeContext());
+    const c1 = await service.createCourse('t-1', null, {
+      slug: 'a',
+      title: 'Introducción a n8n',
+      description: 'Workflow automation',
+      language: 'es-ES',
+    });
+    const c2 = await service.createCourse('t-1', null, {
+      slug: 'b',
+      title: 'Liderazgo de equipos',
+      description: 'Gestión de personas y N8N como ejemplo',
+      language: 'es-ES',
+    });
+    const c3 = await service.createCourse('t-1', null, {
+      slug: 'c',
+      title: 'Excel avanzado',
+      description: 'Tablas dinámicas',
+      language: 'es-ES',
+    });
+    // Forzamos PUBLISHED via mutación directa para evitar el flujo
+    // completo de publishCourse en tests de filtros.
+    for (const id of [c1.id, c2.id, c3.id]) {
+      const cur = courses.get(id)!;
+      courses.set(id, { ...cur, status: 'PUBLISHED' });
+    }
+
+    const matches = await service.listCourses('t-1', { q: 'n8n' });
+    const slugs = matches.map((c) => c.slug).sort();
+    expect(slugs).toEqual(['a', 'b']);
+  });
+
+  it('listCourses filtra por categoría exacta', async () => {
+    const { prisma, courses } = makeFakePrisma();
+    const service = new CoursesService(prisma as never, makeContext());
+    const c1 = await service.createCourse('t-1', null, {
+      slug: 'a',
+      title: 'Curso A',
+      category: 'Tecnología',
+      language: 'es-ES',
+    });
+    const c2 = await service.createCourse('t-1', null, {
+      slug: 'b',
+      title: 'Curso B',
+      category: 'Liderazgo',
+      language: 'es-ES',
+    });
+    for (const id of [c1.id, c2.id]) {
+      const cur = courses.get(id)!;
+      courses.set(id, { ...cur, status: 'PUBLISHED' });
+    }
+
+    const tec = await service.listCourses('t-1', { category: 'Tecnología' });
+    expect(tec.map((c) => c.slug)).toEqual(['a']);
+  });
+
+  it('listCategories devuelve categorías distintas de cursos publicados', async () => {
+    const { prisma, courses } = makeFakePrisma();
+    const service = new CoursesService(prisma as never, makeContext());
+    const c1 = await service.createCourse('t-1', null, {
+      slug: 'a',
+      title: 'A',
+      category: 'Tecnología',
+      language: 'es-ES',
+    });
+    const c2 = await service.createCourse('t-1', null, {
+      slug: 'b',
+      title: 'B',
+      category: 'Liderazgo',
+      language: 'es-ES',
+    });
+    const c3 = await service.createCourse('t-1', null, {
+      slug: 'c',
+      title: 'C',
+      category: 'Tecnología',
+      language: 'es-ES',
+    });
+    // c4 sin categoría — no debería aparecer.
+    const c4 = await service.createCourse('t-1', null, {
+      slug: 'd',
+      title: 'D',
+      language: 'es-ES',
+    });
+    // c5 borrador con categoría — no debería aparecer.
+    const c5 = await service.createCourse('t-1', null, {
+      slug: 'e',
+      title: 'E',
+      category: 'Marketing',
+      language: 'es-ES',
+    });
+    for (const id of [c1.id, c2.id, c3.id, c4.id]) {
+      const cur = courses.get(id)!;
+      courses.set(id, { ...cur, status: 'PUBLISHED' });
+    }
+    // c5 queda en DRAFT a propósito.
+    void c5;
+
+    const cats = await service.listCategories('t-1');
+    expect(cats.sort()).toEqual(['Liderazgo', 'Tecnología']);
   });
 });

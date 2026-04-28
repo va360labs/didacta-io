@@ -88,11 +88,55 @@ export class CoursesService {
     return updated;
   }
 
-  async listCourses(tenantId: string, opts: { status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED' } = {}) {
+  async listCourses(
+    tenantId: string,
+    opts: {
+      status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+      q?: string;
+      category?: string;
+    } = {},
+  ) {
+    const q = opts.q?.trim();
     return this.prisma.modCoursesCourse.findMany({
-      where: { tenantId, deletedAt: null, ...(opts.status ? { status: opts.status } : {}) },
+      where: {
+        tenantId,
+        deletedAt: null,
+        ...(opts.status ? { status: opts.status } : {}),
+        ...(opts.category ? { category: opts.category } : {}),
+        ...(q
+          ? {
+              OR: [
+                { title: { contains: q, mode: 'insensitive' as const } },
+                { description: { contains: q, mode: 'insensitive' as const } },
+              ],
+            }
+          : {}),
+      },
       orderBy: { updatedAt: 'desc' },
     });
+  }
+
+  /**
+   * Devuelve la lista de categorías distintas en uso por los cursos
+   * publicados del tenant, ordenadas alfabéticamente. Sirve para alimentar
+   * el filtro del catálogo sin obligar al cliente a recorrerse el listado
+   * completo.
+   */
+  async listCategories(tenantId: string): Promise<string[]> {
+    const rows = await this.prisma.modCoursesCourse.findMany({
+      where: {
+        tenantId,
+        deletedAt: null,
+        status: 'PUBLISHED',
+        category: { not: null },
+      },
+      select: { category: true },
+      distinct: ['category'],
+      orderBy: { category: 'asc' },
+    });
+    return rows
+      .map((r) => r.category)
+      .filter((c): c is string => typeof c === 'string' && c.length > 0);
   }
 
   async getCourseDetail(tenantId: string, courseId: string) {
