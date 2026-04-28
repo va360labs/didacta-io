@@ -150,14 +150,13 @@ export function LessonContentEditor({
             type="url"
             value={videoUrl}
             onChange={(e) => setVideoUrl(e.target.value)}
-            placeholder="https://video.ejemplo.com/leccion.mp4"
+            placeholder="https://www.youtube.com/watch?v=… o https://tu-cdn/leccion.mp4"
           />
-          {videoUrl ? (
-            <p className="text-xs text-text-subtle">
-              Se reproduce con el `&lt;video&gt;` nativo. Para HLS asegurate de servir el manifest
-              `.m3u8`.
-            </p>
-          ) : null}
+          <p className="text-xs text-text-subtle">
+            Acepta enlaces de YouTube (con o sin timestamp <code>t=</code>) y URLs directas a
+            archivos <code>.mp4</code> / <code>.webm</code> / <code>.m3u8</code>. YouTube se embebe
+            con dominio privacy-enhanced (<code>youtube-nocookie.com</code>).
+          </p>
         </div>
       )}
 

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
 import type { CourseLesson } from '@/lib/courses';
 import { learningApi } from '@/lib/learning';
+import { parseYouTubeId, parseYouTubeStartSeconds, youTubeEmbedUrl } from '@/lib/video';
 
 interface Props {
   lesson: CourseLesson & { content: Record<string, unknown> };
@@ -167,6 +168,26 @@ function LessonContent({
   if (lesson.type === 'VIDEO') {
     const url = typeof content['videoUrl'] === 'string' ? content['videoUrl'] : '';
     if (!url) return <Empty hint="Falta el video. Pedile al formador que lo cargue." />;
+
+    // Si la URL es de YouTube, embebemos via iframe (privacy-enhanced) en
+    // lugar de usar <video src>, que sólo entiende mp4/webm/HLS directos.
+    // El embed respeta el `t=`/`start=` si el formador lo pegó.
+    const ytId = parseYouTubeId(url);
+    if (ytId) {
+      const start = parseYouTubeStartSeconds(url);
+      return (
+        <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-black">
+          <iframe
+            src={youTubeEmbedUrl(ytId, start ? { startSeconds: start } : {})}
+            title={lesson.title}
+            className="h-full w-full"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      );
+    }
+
     return (
       <video
         controls
