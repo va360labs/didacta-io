@@ -9,6 +9,8 @@ import {
   ParentCommentMismatchError,
   PostNotFoundError,
   ReactionTargetMissingError,
+  TagNameAlreadyExistsError,
+  TagNotFoundError,
 } from './errors.js';
 
 export class CommunityService {
@@ -544,6 +546,96 @@ export class CommunityService {
       where: { tenantId, mentionedUserId: userId },
       orderBy: { createdAt: 'desc' },
       take: limit,
+    });
+  }
+
+  // -------------------- tags admin --------------------
+
+  /**
+   * Devuelve todos los tags curados del tenant ordenados alfabéticamente.
+   * Es público dentro del tenant: cualquier usuario autenticado puede
+   * leerlo para que la UI pinte chips con color/icono. La gestión
+   * (create/update/delete) sí requiere rol moderador.
+   */
+  async listTags(tenantId: string) {
+    return this.prisma.modCommunityTag.findMany({
+      where: { tenantId },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async createTag(
+    tenantId: string,
+    actorId: string,
+    dto: { name: string; color: string; icon?: string | null },
+  ) {
+    const name = dto.name.trim().toLowerCase();
+    const collision = await this.prisma.modCommunityTag.findUnique({
+      where: { tenantId_name: { tenantId, name } },
+    });
+    if (collision) throw new TagNameAlreadyExistsError(name);
+    const tag = await this.prisma.modCommunityTag.create({
+      data: {
+        id: randomUUID(),
+        tenantId,
+        name,
+        color: dto.color,
+        icon: dto.icon ?? null,
+      },
+    });
+    await this.ctx.auditLog.record({
+      tenantId,
+      actorId,
+      action: 'community.tag.created',
+      resourceType: 'community_tag',
+      resourceId: tag.id,
+      metadata: { name, color: dto.color, icon: dto.icon ?? null },
+    });
+    return tag;
+  }
+
+  async updateTag(
+    tenantId: string,
+    actorId: string,
+    tagId: string,
+    dto: { name?: string; color?: string; icon?: string | null },
+  ) {
+    const existing = await this.prisma.modCommunityTag.findFirst({
+      where: { id: tagId, tenantId },
+    });
+    if (!existing) throw new TagNotFoundError(tagId);
+    const tag = await this.prisma.modCommunityTag.update({
+      where: { id: tagId },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name.trim().toLowerCase() } : {}),
+        ...(dto.color !== undefined ? { color: dto.color } : {}),
+        ...(dto.icon !== undefined ? { icon: dto.icon } : {}),
+      },
+    });
+    await this.ctx.auditLog.record({
+      tenantId,
+      actorId,
+      action: 'community.tag.updated',
+      resourceType: 'community_tag',
+      resourceId: tag.id,
+      metadata: dto,
+    });
+    return tag;
+  }
+
+  async deleteTag(tenantId: string, actorId: string, tagId: string) {
+    const existing = await this.prisma.modCommunityTag.findFirst({
+      where: { id: tagId, tenantId },
+    });
+    if (!existing) throw new TagNotFoundError(tagId);
+    await this.prisma.modCommunityTag.delete({ where: { id: tagId } });
+    await this.ctx.auditLog.record({
+      tenantId,
+      actorId,
+      action: 'community.tag.deleted',
+      resourceType: 'community_tag',
+      resourceId: tagId,
+      metadata: { name: existing.name },
     });
   }
 

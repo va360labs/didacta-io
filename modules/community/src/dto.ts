@@ -69,3 +69,50 @@ export const userPreferencesSchema = z.object({
   digestOptOut: z.boolean().optional(),
 });
 export type UserPreferencesDto = z.infer<typeof userPreferencesSchema>;
+
+/**
+ * Color hexadecimal de 6 dígitos con `#` (ej. `#1E5AA8`). La UI lo
+ * inyecta directo como `style.background`/`style.color`, así que la
+ * validación tiene que ser estricta para evitar inyección de CSS.
+ */
+const hexColorRegex = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * Set de iconos del icon-set interno permitidos para los tags. Solo
+ * incluimos iconos que existen en `apps/web/src/components/icon.tsx`
+ * para que la admin no pueda elegir uno que la UI no sabe pintar.
+ */
+export const COMMUNITY_TAG_ICONS = [
+  'message',
+  'help',
+  'sparkles',
+  'book',
+  'users',
+  'award',
+  'bell',
+  'shield',
+  'alert',
+] as const;
+
+export const createTagSchema = z.object({
+  /**
+   * Nombre canónico. Hasta 40 chars, sin espacios al inicio/fin. La app
+   * lo normaliza a minúsculas antes de persistir para que el unique
+   * `(tenantId, name)` dispare en colisiones case-insensitive.
+   */
+  name: z.string().trim().min(1).max(40),
+  color: z.string().regex(hexColorRegex, 'Color debe ser hex 6 dígitos con #'),
+  icon: z
+    .enum(COMMUNITY_TAG_ICONS)
+    .nullable()
+    .optional()
+    .transform((v) => v ?? null),
+});
+export type CreateTagDto = z.infer<typeof createTagSchema>;
+
+export const updateTagSchema = z.object({
+  name: z.string().trim().min(1).max(40).optional(),
+  color: z.string().regex(hexColorRegex).optional(),
+  icon: z.enum(COMMUNITY_TAG_ICONS).nullable().optional(),
+});
+export type UpdateTagDto = z.infer<typeof updateTagSchema>;

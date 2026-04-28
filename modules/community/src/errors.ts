@@ -55,3 +55,15 @@ export class NotModeratorError extends CommunityError {
     super('NOT_MODERATOR', 'Solo super_admin y tenant_admin pueden ocultar o restaurar contenido.');
   }
 }
+
+export class TagNotFoundError extends CommunityError {
+  constructor(public readonly tagId: string) {
+    super('TAG_NOT_FOUND', `El tag ${tagId} no existe o no pertenece al tenant`);
+  }
+}
+
+export class TagNameAlreadyExistsError extends CommunityError {
+  constructor(tagName: string) {
+    super('TAG_NAME_EXISTS', `Ya existe un tag llamado "${tagName}" en este tenant`);
+  }
+}

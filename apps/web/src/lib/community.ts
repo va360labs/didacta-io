@@ -212,4 +212,71 @@ export const communityApi = {
       withAuth(),
     );
   },
+
+  async listTags(): Promise<CommunityTag[]> {
+    return apiFetch<CommunityTag[]>(
+      '/api/v1/modules/community/tags',
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
+  async createTag(input: {
+    name: string;
+    color: string;
+    icon?: string | null;
+  }): Promise<CommunityTag> {
+    return apiFetch<CommunityTag>(
+      '/api/v1/modules/community/tags',
+      { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async updateTag(
+    id: string,
+    patch: { name?: string; color?: string; icon?: string | null },
+  ): Promise<CommunityTag> {
+    return apiFetch<CommunityTag>(
+      `/api/v1/modules/community/tags/${id}`,
+      { method: 'PUT', body: JSON.stringify(patch) },
+      withAuth(),
+    );
+  },
+
+  async deleteTag(id: string): Promise<void> {
+    await apiFetch<{ deleted: true }>(
+      `/api/v1/modules/community/tags/${id}`,
+      { method: 'DELETE' },
+      withAuth(),
+    );
+  },
 };
+
+export interface CommunityTag {
+  id: string;
+  tenantId: string;
+  name: string;
+  color: string;
+  icon: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Set de iconos válidos para tags. Debe coincidir con `COMMUNITY_TAG_ICONS`
+ * del módulo. Lo duplicamos acá para que la UI pueda construir el selector
+ * sin importar nada del backend.
+ */
+export const COMMUNITY_TAG_ICONS = [
+  'message',
+  'help',
+  'sparkles',
+  'book',
+  'users',
+  'award',
+  'bell',
+  'shield',
+  'alert',
+] as const;
+export type CommunityTagIcon = (typeof COMMUNITY_TAG_ICONS)[number];

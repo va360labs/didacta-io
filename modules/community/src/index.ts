@@ -5,18 +5,23 @@ export { manifest };
 export { CommunityService } from './community.service.js';
 export {
   addReactionSchema,
+  COMMUNITY_TAG_ICONS,
   createCommentSchema,
   createPostSchema,
+  createTagSchema,
   listPostsQuerySchema,
   moderationActionSchema,
   postSortSchema,
+  updateTagSchema,
   userPreferencesSchema,
   type AddReactionDto,
   type CreateCommentDto,
   type CreatePostDto,
+  type CreateTagDto,
   type ListPostsQueryDto,
   type ModerationActionDto,
   type PostSort,
+  type UpdateTagDto,
   type UserPreferencesDto,
 } from './dto.js';
 export {
@@ -28,6 +33,8 @@ export {
   ParentCommentMismatchError,
   PostNotFoundError,
   ReactionTargetMissingError,
+  TagNameAlreadyExistsError,
+  TagNotFoundError,
 } from './errors.js';
 
 export const communityModule: DidactaModule = {

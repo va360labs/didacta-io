@@ -160,6 +160,11 @@ export default function AdminDashboardPage() {
               label="Webhooks Zoom"
               hint="Trazabilidad de eventos recibidos para QA."
             />
+            <ShortcutLink
+              href="/admin/comunidad/tags"
+              label="Tags de comunidad"
+              hint="Curá los tags oficiales con color e icono."
+            />
           </div>
         </CardContent>
       </Card>

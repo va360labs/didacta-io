@@ -689,3 +689,158 @@ describe('CommunityService preferences', () => {
     expect(await svc.listActiveUsersForDigest()).toEqual([]);
   });
 });
+
+interface FakeTag {
+  id: string;
+  tenantId: string;
+  name: string;
+  color: string;
+  icon: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function makeTagsPrisma() {
+  const tags: FakeTag[] = [];
+  let counter = 0;
+  return {
+    modCommunityTag: {
+      async findMany(args: { where?: { tenantId?: string }; orderBy?: { name?: 'asc' | 'desc' } }) {
+        let rows = tags.slice();
+        if (args.where?.tenantId !== undefined) {
+          rows = rows.filter((t) => t.tenantId === args.where!.tenantId);
+        }
+        if (args.orderBy?.name === 'asc') {
+          rows.sort((a, b) => a.name.localeCompare(b.name));
+        }
+        return rows;
+      },
+      async findFirst(args: { where: { id?: string; tenantId?: string } }) {
+        return (
+          tags.find(
+            (t) =>
+              (args.where.id === undefined || t.id === args.where.id) &&
+              (args.where.tenantId === undefined || t.tenantId === args.where.tenantId),
+          ) ?? null
+        );
+      },
+      async findUnique(args: { where: { tenantId_name?: { tenantId: string; name: string } } }) {
+        const k = args.where.tenantId_name;
+        if (!k) return null;
+        return tags.find((t) => t.tenantId === k.tenantId && t.name === k.name) ?? null;
+      },
+      async create(args: {
+        data: { id: string; tenantId: string; name: string; color: string; icon: string | null };
+      }) {
+        const row: FakeTag = {
+          ...args.data,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        tags.push(row);
+        return row;
+      },
+      async update(args: { where: { id: string }; data: Partial<FakeTag> }) {
+        const idx = tags.findIndex((t) => t.id === args.where.id);
+        if (idx === -1) throw new Error('not found');
+        tags[idx] = { ...tags[idx]!, ...args.data, updatedAt: new Date() };
+        return tags[idx]!;
+      },
+      async delete(args: { where: { id: string } }) {
+        const idx = tags.findIndex((t) => t.id === args.where.id);
+        if (idx === -1) throw new Error('not found');
+        const [removed] = tags.splice(idx, 1);
+        return removed!;
+      },
+    },
+    _tags: tags,
+    _nextId: () => `tag-${++counter}`,
+  };
+}
+
+function makeTagsContext() {
+  return {
+    eventBus: { publish: async () => {} },
+    auditLog: { record: async () => {} },
+    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+    notificationHub: { send: async () => {} },
+    hookRegistry: { run: async () => {} },
+  } as never;
+}
+
+describe('CommunityService tags', () => {
+  it('createTag normaliza el nombre a minúsculas y persiste', async () => {
+    const prisma = makeTagsPrisma();
+    const svc = new CommunityService(prisma as never, makeTagsContext());
+    const tag = await svc.createTag('t1', 'u1', {
+      name: '  Anuncios  ',
+      color: '#1E5AA8',
+      icon: 'message',
+    });
+    expect(tag.name).toBe('anuncios');
+    expect(tag.color).toBe('#1E5AA8');
+    expect(tag.icon).toBe('message');
+    expect(prisma._tags).toHaveLength(1);
+  });
+
+  it('createTag rechaza si el nombre ya existe en el tenant (case-insensitive)', async () => {
+    const prisma = makeTagsPrisma();
+    const svc = new CommunityService(prisma as never, makeTagsContext());
+    await svc.createTag('t1', 'u1', { name: 'ayuda', color: '#1E5AA8' });
+    await expect(
+      svc.createTag('t1', 'u1', { name: 'AYUDA', color: '#FF6F61' }),
+    ).rejects.toMatchObject({ code: 'TAG_NAME_EXISTS' });
+  });
+
+  it('createTag permite el mismo nombre en tenants distintos', async () => {
+    const prisma = makeTagsPrisma();
+    const svc = new CommunityService(prisma as never, makeTagsContext());
+    await svc.createTag('t1', 'u1', { name: 'ayuda', color: '#1E5AA8' });
+    const t2 = await svc.createTag('t2', 'u1', { name: 'ayuda', color: '#FF6F61' });
+    expect(t2.name).toBe('ayuda');
+    expect(t2.tenantId).toBe('t2');
+  });
+
+  it('listTags devuelve sólo los del tenant ordenados alfabéticamente', async () => {
+    const prisma = makeTagsPrisma();
+    const svc = new CommunityService(prisma as never, makeTagsContext());
+    await svc.createTag('t1', 'u1', { name: 'general', color: '#1E5AA8' });
+    await svc.createTag('t1', 'u1', { name: 'ayuda', color: '#16A34A' });
+    await svc.createTag('t2', 'u2', { name: 'otro-tenant', color: '#000000' });
+    const tags = await svc.listTags('t1');
+    expect(tags.map((t) => t.name)).toEqual(['ayuda', 'general']);
+  });
+
+  it('updateTag actualiza nombre, color e icono', async () => {
+    const prisma = makeTagsPrisma();
+    const svc = new CommunityService(prisma as never, makeTagsContext());
+    const tag = await svc.createTag('t1', 'u1', { name: 'ayuda', color: '#1E5AA8' });
+    const updated = await svc.updateTag('t1', 'u1', tag.id, {
+      name: 'Soporte',
+      color: '#FF6F61',
+      icon: 'help',
+    });
+    expect(updated.name).toBe('soporte');
+    expect(updated.color).toBe('#FF6F61');
+    expect(updated.icon).toBe('help');
+  });
+
+  it('updateTag rechaza si el tag no existe en el tenant', async () => {
+    const prisma = makeTagsPrisma();
+    const svc = new CommunityService(prisma as never, makeTagsContext());
+    await expect(svc.updateTag('t1', 'u1', 'no-existe', { name: 'x' })).rejects.toMatchObject({
+      code: 'TAG_NOT_FOUND',
+    });
+  });
+
+  it('deleteTag elimina el tag y rechaza si no existe', async () => {
+    const prisma = makeTagsPrisma();
+    const svc = new CommunityService(prisma as never, makeTagsContext());
+    const tag = await svc.createTag('t1', 'u1', { name: 'borrame', color: '#1E5AA8' });
+    await svc.deleteTag('t1', 'u1', tag.id);
+    expect(prisma._tags).toHaveLength(0);
+    await expect(svc.deleteTag('t1', 'u1', tag.id)).rejects.toMatchObject({
+      code: 'TAG_NOT_FOUND',
+    });
+  });
+});

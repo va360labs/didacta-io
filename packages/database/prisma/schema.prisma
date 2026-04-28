@@ -473,6 +473,38 @@ model ModCommunityMention {
   @@map("mod_community_mention")
 }
 
+/// Tags curados por el admin del tenant. Cada fila representa un tag
+/// "oficial" con metadatos visuales (color, icono) que la UI usa para
+/// pintar chips consistentes en el feed y la sidebar.
+///
+/// La columna `tags` de `ModCommunityPost` sigue siendo un `String[]`
+/// libre — los autores pueden seguir tipeando lo que quieran. Los tags
+/// curados son simplemente metadata opcional: si un post usa un tag que
+/// existe acá, la UI lo pinta con su color/icono; si no, cae al estilo
+/// genérico. Esta independencia evita FKs cross-record y permite a los
+/// admins añadir/quitar tags sin afectar el contenido histórico.
+model ModCommunityTag {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  /// Nombre canónico del tag (ej. "ayuda", "anuncios"). Único por tenant
+  /// case-insensitive — la app normaliza a minúsculas antes de persistir
+  /// para evitar duplicados tipo "Ayuda" / "ayuda".
+  name      String
+  /// Color hex 6 dígitos con `#` (ej. "#1E5AA8"). La UI lo aplica en el
+  /// chip del feed y en el cuadrito de la sidebar. Validado a nivel DTO.
+  color     String
+  /// Nombre del icono del set interno (ej. "message", "lightbulb"). NULL
+  /// = no muestra icono. La UI tolera nombres desconocidos cayendo a un
+  /// fallback genérico.
+  icon      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, name], map: "mod_community_tag_tenant_name_key")
+  @@index([tenantId])
+  @@map("mod_community_tag")
+}
+
 /// Preferencias de notificación por usuario de community.
 /// v0.1: solo `digestOptOut`. Estructura abierta para sumar prefs sin
 /// nuevas migraciones (la fila se upsert siempre).

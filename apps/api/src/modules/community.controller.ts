@@ -16,15 +16,19 @@ import {
   addReactionSchema,
   createCommentSchema,
   createPostSchema,
+  createTagSchema,
   listPostsQuerySchema,
   moderationActionSchema,
   NotModeratorError,
+  updateTagSchema,
   userPreferencesSchema,
   type AddReactionDto,
   type CreateCommentDto,
   type CreatePostDto,
+  type CreateTagDto,
   type ListPostsQueryDto,
   type ModerationActionDto,
+  type UpdateTagDto,
   type UserPreferencesDto,
 } from '@didacta/mod-community';
 import { z } from 'zod';
@@ -230,6 +234,46 @@ export class CommunityController {
     if (!user) throw new UnauthorizedException();
     if (!canModerate(user)) throw new NotModeratorError();
     return this.registry.getCommunityService().moderateComment(user.tenantId, user.sub, id, dto);
+  }
+
+  @Get('tags')
+  @ApiOperation({ summary: 'Listar tags curados del tenant (lectura pública dentro del tenant)' })
+  async listTags(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getCommunityService().listTags(user.tenantId);
+  }
+
+  @Post('tags')
+  @ApiOperation({ summary: 'Crear tag curado. Solo super_admin / tenant_admin.' })
+  async createTag(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(createTagSchema)) dto: CreateTagDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!canModerate(user)) throw new NotModeratorError();
+    return this.registry.getCommunityService().createTag(user.tenantId, user.sub, dto);
+  }
+
+  @Put('tags/:id')
+  @ApiOperation({ summary: 'Actualizar tag. Solo super_admin / tenant_admin.' })
+  async updateTag(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateTagSchema)) dto: UpdateTagDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!canModerate(user)) throw new NotModeratorError();
+    return this.registry.getCommunityService().updateTag(user.tenantId, user.sub, id, dto);
+  }
+
+  @Delete('tags/:id')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Borrar tag. Solo super_admin / tenant_admin.' })
+  async deleteTag(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException();
+    if (!canModerate(user)) throw new NotModeratorError();
+    await this.registry.getCommunityService().deleteTag(user.tenantId, user.sub, id);
+    return { deleted: true };
   }
 }
 
