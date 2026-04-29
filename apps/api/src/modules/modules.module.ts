@@ -2,7 +2,10 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { AiModule } from '../ai/ai.module';
 import { AuthModule } from '../auth/auth.module';
+import { AiProvidersController } from './ai-providers.controller';
 import { AiTutorBridge } from './ai-tutor.bridge';
+import { AiTutorController } from './ai-tutor.controller';
+import { AiTutorErrorFilter } from './ai-tutor-error.filter';
 import { AdminSystemController } from './admin-system.controller';
 import { AssessmentsController } from './assessments.controller';
 import { AssessmentsAttemptsController } from './assessments-attempts.controller';
@@ -73,6 +76,8 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     FundaeRlptController,
     AdminSystemController,
     StorageController,
+    AiTutorController,
+    AiProvidersController,
   ],
   providers: [
     ...communityDigestMetricsProviders,
@@ -100,6 +105,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     { provide: APP_FILTER, useClass: ZoomLiveErrorFilter },
     { provide: APP_FILTER, useClass: FundaeErrorFilter },
     { provide: APP_FILTER, useClass: TenantModulesErrorFilter },
+    { provide: APP_FILTER, useClass: AiTutorErrorFilter },
   ],
   exports: [
     ModuleRegistryService,

@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { AiTutorPanel } from '@/components/ai-tutor-panel';
 import { LessonComments } from '@/components/lesson-comments';
 import { LessonPlayer } from '@/components/lesson-player';
 import { Icon } from '@/components/icon';
@@ -446,6 +447,7 @@ export default function CourseAlumnoPage() {
                 lessonId={activeLesson.id}
                 courseId={course.id}
               />
+              <AiTutorPanel courseId={course.id} />
             </div>
           ) : (
             <Card>
