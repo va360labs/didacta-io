@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { Icon } from '@/components/icon';
+import { Icon, type IconName } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { useCourseCategories } from '@/lib/course-categories';
 import { formatDuration } from '@/lib/format';
 import { richHtmlToPlainText } from '@/lib/sanitize-html';
 import { cn } from '@/lib/utils';
@@ -58,6 +59,8 @@ export function CourseCard({ course, href }: Props) {
   const status = resolveStatus(course);
   const cover = course.thumbnailUrl ? null : pickGradient(course.slug || course.id || course.title);
   const progress = typeof course.progressPercent === 'number' ? course.progressPercent : null;
+  const categoriesByName = useCourseCategories();
+  const curatedCategory = course.category ? categoriesByName.get(course.category) : undefined;
   const ctaTone = status === 'completed' ? 'success' : 'info';
   const ctaLabel =
     status === 'completed'
@@ -113,8 +116,31 @@ export function CourseCard({ course, href }: Props) {
         {/* Body */}
         <CardContent className="flex flex-1 flex-col gap-2.5 p-5">
           {course.category || course.language ? (
-            <div className="text-xs font-medium text-text-muted">
-              {[course.category, course.language].filter(Boolean).join(' · ')}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-text-muted">
+              {course.category ? (
+                curatedCategory ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                    style={{
+                      backgroundColor: `${curatedCategory.color}2E`,
+                      color: curatedCategory.color,
+                    }}
+                  >
+                    {curatedCategory.icon ? (
+                      <Icon name={curatedCategory.icon as IconName} size={12} />
+                    ) : null}
+                    {curatedCategory.name}
+                  </span>
+                ) : (
+                  <span>{course.category}</span>
+                )
+              ) : null}
+              {course.language ? (
+                <>
+                  {course.category ? <span aria-hidden="true">·</span> : null}
+                  <span>{course.language}</span>
+                </>
+              ) : null}
             </div>
           ) : null}
 

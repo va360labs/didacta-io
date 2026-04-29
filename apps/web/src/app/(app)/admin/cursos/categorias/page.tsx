@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { invalidateCourseCategoriesCache } from '@/lib/course-categories';
 import { coursesApi, type CourseCategory } from '@/lib/courses';
 
 const SUGGESTED_COLORS = [
@@ -91,6 +92,7 @@ export default function CourseCategoriesAdminPage() {
       } else {
         await coursesApi.createCategory(payload);
       }
+      invalidateCourseCategoriesCache();
       cancelEdit();
       await reload();
     } catch (err) {
@@ -111,6 +113,7 @@ export default function CourseCategoriesAdminPage() {
     setError(null);
     try {
       await coursesApi.deleteCategory(c.id);
+      invalidateCourseCategoriesCache();
       if (editing?.id === c.id) cancelEdit();
       await reload();
     } catch (err) {
