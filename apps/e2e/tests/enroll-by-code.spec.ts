@@ -47,13 +47,15 @@ test.describe('Matriculación por código de invitación', () => {
     });
 
     // 1) Entrar al detalle del curso (sin estar matriculado): la card pre-enrolment
-    // tiene heading "Empezá este curso" + botón "Matricularme" + form de código.
+    // tiene heading "Empieza este curso" + botón "Matricularme" + form de código.
     await page.goto(`/cursos/${course.slug}`);
-    await expect(page.getByRole('heading', { name: 'Empezá este curso' })).toBeVisible({
+    await expect(page.getByRole('heading', { name: 'Empieza este curso' })).toBeVisible({
       timeout: 15_000,
     });
 
-    // 2) Pegar el código y canjearlo. El input tiene label "¿Tenés un código de invitación?".
+    // 2) Pegar el código y canjearlo. El input tiene label "¿Tienes un código de invitación?".
+    // El regex es case-insensitive y matchea "Tienes" / "Tenés" para sobrevivir
+    // futuros ajustes de copy en español.
     await page.getByLabel(/código de invitación/i).fill(invitation.code);
     await page.getByRole('button', { name: 'Canjear código' }).click();
 
