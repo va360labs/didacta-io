@@ -1,10 +1,13 @@
 'use client';
 
+import { Image } from '@tiptap/extension-image';
 import { Link } from '@tiptap/extension-link';
 import { Placeholder } from '@tiptap/extension-placeholder';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { ApiHttpError } from '@/lib/api-client';
+import { storageApi } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 
 interface RichTextEditorProps {
@@ -46,6 +49,9 @@ export function RichTextEditor({
       Link.configure({
         openOnClick: false,
         HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
+      }),
+      Image.configure({
+        HTMLAttributes: { class: 'rounded-md border border-border-soft' },
       }),
       Placeholder.configure({
         placeholder: placeholder ?? 'Escribí algo…',
@@ -99,7 +105,30 @@ interface ToolbarProps {
 }
 
 function Toolbar({ editor }: ToolbarProps) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+
   if (!editor) return null;
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permitir re-seleccionar el mismo archivo
+    if (!file || !editor) return;
+    setUploading(true);
+    try {
+      const result = await storageApi.uploadImage(file);
+      editor.chain().focus().setImage({ src: result.url, alt: file.name }).run();
+    } catch (err) {
+      window.alert(
+        err instanceof ApiHttpError
+          ? `No pudimos subir la imagen: ${err.message}`
+          : 'No pudimos subir la imagen. Probá de nuevo.',
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-0.5 border-b border-border-soft bg-surface-2 p-1">
       <ToolbarButton
@@ -160,6 +189,21 @@ function Toolbar({ editor }: ToolbarProps) {
       >
         <span className="font-mono text-xs">{`<>`}</span>
       </ToolbarButton>
+      <Separator />
+      <ToolbarButton
+        label={uploading ? 'Subiendo…' : 'Subir imagen'}
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+      >
+        🖼
+      </ToolbarButton>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+        className="hidden"
+        onChange={handleFileChange}
+      />
       <Separator />
       <ToolbarButton
         label="Insertar enlace"

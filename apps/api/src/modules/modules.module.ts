@@ -25,6 +25,7 @@ import { NotificationTemplatesController } from './notification-templates.contro
 import { OutboxQueueService } from './outbox-queue.service';
 import { OutboxRecoveryWorker } from './outbox-recovery.worker';
 import { ScormLearningBridge } from './scorm-learning.bridge';
+import { StorageController } from './storage.controller';
 import { TenantModulesService } from './tenant-modules.service';
 import { TenantModulesErrorFilter } from './tenant-modules-error.filter';
 import { TenantSettingsController } from './tenant-settings.controller';
@@ -61,6 +62,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     ZoomWebhookController,
     FundaeController,
     AdminSystemController,
+    StorageController,
   ],
   providers: [
     ...communityDigestMetricsProviders,

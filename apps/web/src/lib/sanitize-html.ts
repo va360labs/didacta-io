@@ -8,10 +8,9 @@ import DOMPurify from 'dompurify';
  * sanitiza al guardar, pero re-sanitizamos al render para que un cambio
  * en el server o un valor legacy no abra una puerta XSS.
  *
- * Lista blanca alineada con lo que produce Tiptap StarterKit + Link:
- * encabezados h2/h3, párrafos, listas, blockquote, code inline, strong,
- * em, links con rel/target. Sin imágenes hasta que tengamos el upload
- * con storage per-tenant.
+ * Lista blanca alineada con lo que produce Tiptap StarterKit + Link +
+ * Image: encabezados h2/h3, párrafos, listas, blockquote, code inline,
+ * strong, em, links con rel/target, imágenes con src/alt/title.
  */
 const ALLOWED_TAGS = [
   'p',
@@ -31,8 +30,9 @@ const ALLOWED_TAGS = [
   'code',
   'pre',
   'a',
+  'img',
 ];
-const ALLOWED_ATTR = ['href', 'target', 'rel', 'class'];
+const ALLOWED_ATTR = ['href', 'target', 'rel', 'class', 'src', 'alt', 'title'];
 
 export function sanitizeRichHtml(input: string): string {
   if (!input) return '';
