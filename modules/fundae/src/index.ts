@@ -5,6 +5,7 @@ export { manifest };
 export { FundaeService } from './fundae.service.js';
 export { FundaeCompanyService } from './company.service.js';
 export { FundaeRlptService } from './rlpt.service.js';
+export { FundaeGroupService } from './group.service.js';
 export { buildActionXml } from './xml-export.js';
 export { renderEvidencePdf, type EvidenceRenderInput } from './evidence-pdf.js';
 export { buildPresentationZip, type ZipPackageInput } from './zip-package.js';
@@ -42,6 +43,22 @@ export {
   type RlptNoticeView,
 } from './rlpt.dto.js';
 export {
+  createGroupSchema,
+  updateGroupSchema,
+  createCostSchema,
+  updateCostSchema,
+  groupStatusSchema,
+  costTipoSchema,
+  type CreateGroupDto,
+  type UpdateGroupDto,
+  type CreateCostDto,
+  type UpdateCostDto,
+  type GroupStatus,
+  type CostTipo,
+  type GroupView,
+  type CostView,
+} from './group.dto.js';
+export {
   isValidSpanishTaxId,
   normalizeSpanishTaxId,
   validateSpanishTaxId,
@@ -62,6 +79,12 @@ export {
   RlptNotFoundError,
   RlptNotificacionInicialMissingError,
   RlptPlazoNoCumplidoError,
+  GroupNotFoundError,
+  GroupNumeroDuplicadoError,
+  GroupTransicionInvalidaError,
+  GroupCerradoError,
+  CostNotFoundError,
+  CreditoInsuficienteError,
   FechasInvalidasError,
   FundaeError,
   ParticipantNotInActionError,

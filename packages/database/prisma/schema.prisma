@@ -1389,6 +1389,87 @@ model ModFundaeRlptNotice {
 }
 
 // ============================================================================
+// MOD.FUNDAE.GROUP — grupo formativo bonificable (LMS-81). Vincula una
+// acción formativa Fundae (mod_fundae_action) con la empresa que financia
+// la bonificación (mod_fundae_company), y materializa el ciclo de vida
+// del grupo: DRAFT → ACTIVE → CLOSED. La transición DRAFT → ACTIVE pasa
+// por `FundaeRlptService.assertGroupCanStart`, que rechaza si la empresa
+// no notificó a la RLPT con la antelación legal.
+//
+// `creditoEstimadoCents` se cobra del crédito Fundae de la empresa al
+// pasar a ACTIVE; al cerrar, el service ajusta `credito_usado_cents`
+// con `creditoConsumidoCents` definitivo (suma de todos los costes
+// directos/indirectos/organización).
+// ============================================================================
+model ModFundaeGroup {
+  id                     String    @id @default(uuid()) @db.Uuid
+  tenantId               String    @map("tenant_id") @db.Uuid
+  /// FK lógica a `mod_fundae_action.id` (sin FK física por la regla de
+  /// aislamiento de módulos — son submódulos del mismo `mod.fundae`,
+  /// pero conviene mantener el patrón homogéneo).
+  actionId               String    @map("action_id") @db.Uuid
+  /// FK lógica a `mod_fundae_company.id`.
+  companyId              String    @map("company_id") @db.Uuid
+  /// Identificador interno del grupo dentro de la acción. Único por
+  /// acción; suele coincidir con el `numeroGrupo` que pide Fundae al
+  /// presentar el grupo (1..N).
+  numeroGrupo            Int       @map("numero_grupo")
+  modalidad              String /// PRESENCIAL | TELEFORMACION | MIXTA
+  fechaInicioPrevista    DateTime  @map("fecha_inicio_prevista")
+  fechaFinPrevista       DateTime  @map("fecha_fin_prevista")
+  /// Fecha real en que se inició el grupo (null hasta el start).
+  fechaInicioReal        DateTime? @map("fecha_inicio_real")
+  /// Fecha real de cierre del grupo (null hasta el close).
+  fechaFinReal           DateTime? @map("fecha_fin_real")
+  /// Estado del ciclo de vida.
+  status                 String    @default("DRAFT") /// DRAFT | ACTIVE | CLOSED | CANCELLED
+  /// Crédito estimado a consumir cuando se planificó. En céntimos.
+  creditoEstimadoCents   Int?      @map("credito_estimado_cents")
+  notas                  String?
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  costs ModFundaeCost[]
+
+  @@unique([tenantId, actionId, numeroGrupo], map: "mod_fundae_group_action_numero_key")
+  @@index([tenantId, companyId, status], map: "mod_fundae_group_tenant_company_status_idx")
+  @@index([tenantId, actionId, status], map: "mod_fundae_group_tenant_action_status_idx")
+  @@index([tenantId, status, fechaInicioPrevista(sort: Desc)], map: "mod_fundae_group_tenant_status_fecha_idx")
+  @@map("mod_fundae_group")
+}
+
+// ============================================================================
+// MOD.FUNDAE.COST — desglose de costes del grupo (LMS-81). Fundae exige
+// el desglose por categoría para validar la bonificación: directos
+// (formación, materiales, alquiler de aulas, formadores), indirectos
+// (administración, gestión) y organización (limitados al 10%).
+//
+// Importes en céntimos (Int) para evitar drift de coma flotante al
+// sumar. Los costes son inmutables una vez cerrado el grupo: el service
+// rechaza creates/updates si el grupo está en CLOSED.
+// ============================================================================
+model ModFundaeCost {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  groupId     String   @map("group_id") @db.Uuid
+  tipo        String /// DIRECTO | INDIRECTO | ORGANIZACION
+  /// Concepto facturable (ej: "Formador externo Juan Pérez", "Alquiler
+  /// aula Madrid", "Material didáctico").
+  concepto    String   @db.VarChar(200)
+  amountCents Int      @map("amount_cents")
+  /// Notas opcionales (referencia a factura externa, proveedor).
+  notas       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  group ModFundaeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, groupId, tipo], map: "mod_fundae_cost_tenant_group_tipo_idx")
+  @@index([groupId], map: "mod_fundae_cost_group_idx")
+  @@map("mod_fundae_cost")
+}
+
+// ============================================================================
 // PASSWORD RESET TOKENS — flujo de "olvidé mi contraseña" para self-service.
 // El token raw viaja solo en email; la DB guarda SHA-256 (no se puede recuperar
 // el original aunque se filtre el dump). TTL 1h. Single-use (usedAt).

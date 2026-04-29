@@ -97,17 +97,13 @@ function makeFakePrisma(opts: { groupCount?: number } = {}) {
         return row;
       },
     },
-    // Si los tests del service comprueban grupos activos, este mock se
-    // usa. Por defecto el modelo NO existe (matches reality before LMS-81).
-    ...(opts.groupCount !== undefined
-      ? {
-          modFundaeGroup: {
-            async count() {
-              return opts.groupCount;
-            },
-          },
-        }
-      : {}),
+    // LMS-81: la tabla `mod_fundae_group` ya existe; `softDelete` la
+    // consulta directamente para validar que no quedan grupos activos.
+    modFundaeGroup: {
+      async count() {
+        return opts.groupCount ?? 0;
+      },
+    },
   };
 }
 

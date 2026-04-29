@@ -1,0 +1,182 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  createCostSchema,
+  createGroupSchema,
+  groupStatusSchema,
+  updateCostSchema,
+  updateGroupSchema,
+  type CreateCostDto,
+  type CreateGroupDto,
+  type GroupStatus,
+  type UpdateCostDto,
+  type UpdateGroupDto,
+} from '@didacta/mod-fundae';
+import { z } from 'zod';
+import { CurrentUser } from '../auth/decorators';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ZodValidationPipe } from '../auth/zod-validation.pipe';
+import type { SessionClaims } from '../auth/token.service';
+import { ModuleRegistryService } from './module-registry.service';
+
+const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
+
+const listGroupsQuerySchema = z.object({
+  companyId: z.string().uuid().optional(),
+  actionId: z.string().uuid().optional(),
+  status: groupStatusSchema.optional(),
+});
+
+/**
+ * Endpoints REST del grupo bonificable Fundae (LMS-81).
+ * Path base: `/api/v1/admin/fundae/groups`
+ * Costes anidados: `/api/v1/admin/fundae/groups/:id/costs`
+ */
+@ApiTags('Admin · Fundae · Grupos')
+@ApiBearerAuth()
+@Controller('admin/fundae/groups')
+@UseGuards(JwtAuthGuard)
+export class FundaeGroupsController {
+  constructor(private readonly registry: ModuleRegistryService) {}
+
+  private requireAdmin(user: SessionClaims | undefined): SessionClaims {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
+      throw new UnauthorizedException(
+        'Solo super_admin y tenant_admin pueden gestionar grupos bonificables.',
+      );
+    }
+    return user;
+  }
+
+  // ──────────────────── GRUPOS ────────────────────
+
+  @Get()
+  @ApiOperation({
+    summary: 'Listar grupos bonificables. Filtra por companyId, actionId o status.',
+  })
+  async list(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(listGroupsQuerySchema)) q: z.infer<typeof listGroupsQuerySchema>,
+  ) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeGroupService().list(u.tenantId, {
+      companyId: q.companyId,
+      actionId: q.actionId,
+      status: q.status as GroupStatus | undefined,
+    });
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Detalle de un grupo bonificable con sus costes.' })
+  async get(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeGroupService().get(u.tenantId, id);
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'Crear grupo bonificable en DRAFT.' })
+  async create(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(createGroupSchema)) dto: CreateGroupDto,
+  ) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeGroupService().create(u.tenantId, u.sub, dto);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Actualizar metadatos del grupo (solo DRAFT o ACTIVE).' })
+  async update(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateGroupSchema)) dto: UpdateGroupDto,
+  ) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeGroupService().update(u.tenantId, u.sub, id, dto);
+  }
+
+  @Post(':id/start')
+  @ApiOperation({
+    summary:
+      'DRAFT → ACTIVE. Valida antelación RLPT (15 días) y crédito Fundae disponible de la empresa.',
+  })
+  async start(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeGroupService().start(u.tenantId, u.sub, id);
+  }
+
+  @Post(':id/close')
+  @ApiOperation({
+    summary: 'ACTIVE → CLOSED. Debita el crédito consumido del grupo en el crédito de la empresa.',
+  })
+  async close(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeGroupService().close(u.tenantId, u.sub, id);
+  }
+
+  @Post(':id/cancel')
+  @ApiOperation({ summary: 'DRAFT/ACTIVE → CANCELLED.' })
+  async cancel(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeGroupService().cancel(u.tenantId, u.sub, id);
+  }
+
+  // ──────────────────── COSTES ────────────────────
+
+  @Get(':id/costs')
+  @ApiOperation({ summary: 'Listar costes de un grupo.' })
+  async listCosts(@CurrentUser() user: SessionClaims | undefined, @Param('id') groupId: string) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeGroupService().listCosts(u.tenantId, groupId);
+  }
+
+  @Post(':id/costs')
+  @ApiOperation({ summary: 'Añadir coste a un grupo (solo DRAFT o ACTIVE).' })
+  async addCost(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') groupId: string,
+    @Body(new ZodValidationPipe(createCostSchema)) dto: CreateCostDto,
+  ) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeGroupService().addCost(u.tenantId, u.sub, groupId, dto);
+  }
+
+  @Patch(':id/costs/:costId')
+  @ApiOperation({ summary: 'Actualizar un coste.' })
+  async updateCost(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') groupId: string,
+    @Param('costId') costId: string,
+    @Body(new ZodValidationPipe(updateCostSchema)) dto: UpdateCostDto,
+  ) {
+    const u = this.requireAdmin(user);
+    return this.registry
+      .getFundaeGroupService()
+      .updateCost(u.tenantId, u.sub, groupId, costId, dto);
+  }
+
+  @Delete(':id/costs/:costId')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Eliminar un coste (solo si el grupo no está cerrado).' })
+  async removeCost(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') groupId: string,
+    @Param('costId') costId: string,
+  ) {
+    const u = this.requireAdmin(user);
+    await this.registry.getFundaeGroupService().removeCost(u.tenantId, u.sub, groupId, costId);
+    return { deleted: true };
+  }
+}

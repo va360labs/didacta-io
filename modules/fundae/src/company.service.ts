@@ -144,20 +144,10 @@ export class FundaeCompanyService {
       return toView(existing);
     }
 
-    // Cuando exista `mod_fundae_group` (LMS-81) hay que validar aquí
-    // que no quedan grupos vivos. Por ahora se documenta el contrato
-    // con el error tipado y se reactiva en LMS-81.
-    const groupModelExists = (
-      this.prisma as unknown as {
-        modFundaeGroup?: { count: (...args: unknown[]) => Promise<number> };
-      }
-    ).modFundaeGroup;
-    if (groupModelExists) {
-      const activos = await groupModelExists.count({
-        where: { tenantId, companyId: id, status: { not: 'CLOSED' } },
-      });
-      if (activos > 0) throw new CompanyTieneGruposActivosError(id, activos);
-    }
+    const activos = await this.prisma.modFundaeGroup.count({
+      where: { tenantId, companyId: id, status: { in: ['DRAFT', 'ACTIVE'] } },
+    });
+    if (activos > 0) throw new CompanyTieneGruposActivosError(id, activos);
 
     const updated = await this.prisma.modFundaeCompany.update({
       where: { id },

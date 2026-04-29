@@ -129,3 +129,49 @@ export class RlptPlazoNoCumplidoError extends FundaeError {
     );
   }
 }
+
+export class GroupNotFoundError extends FundaeError {
+  constructor(groupId: string) {
+    super('FUNDAE_GROUP_NOT_FOUND', `El grupo bonificable ${groupId} no existe.`);
+  }
+}
+
+export class GroupNumeroDuplicadoError extends FundaeError {
+  constructor(numeroGrupo: number) {
+    super(
+      'FUNDAE_GROUP_NUMERO_DUPLICADO',
+      `Ya existe un grupo con número ${numeroGrupo} en esta acción.`,
+    );
+  }
+}
+
+export class GroupTransicionInvalidaError extends FundaeError {
+  constructor(from: string, to: string) {
+    super('FUNDAE_GROUP_TRANSICION_INVALIDA', `No se puede pasar el grupo de "${from}" a "${to}".`);
+  }
+}
+
+export class GroupCerradoError extends FundaeError {
+  constructor(groupId: string) {
+    super(
+      'FUNDAE_GROUP_CERRADO',
+      `El grupo ${groupId} está cerrado: no se pueden modificar costes ni metadatos.`,
+    );
+  }
+}
+
+export class CostNotFoundError extends FundaeError {
+  constructor(costId: string) {
+    super('FUNDAE_COST_NOT_FOUND', `El coste ${costId} no existe.`);
+  }
+}
+
+export class CreditoInsuficienteError extends FundaeError {
+  constructor(disponibleCents: number, requeridoCents: number) {
+    super(
+      'FUNDAE_CREDITO_INSUFICIENTE',
+      `Crédito Fundae insuficiente: disponible ${(disponibleCents / 100).toFixed(2)} €, ` +
+        `requerido ${(requeridoCents / 100).toFixed(2)} €.`,
+    );
+  }
+}
