@@ -58,3 +58,12 @@ export class GraderResponseParseError extends AiGraderError {
     );
   }
 }
+
+export class SuggestionNotFoundError extends AiGraderError {
+  constructor(suggestionId: string) {
+    super(
+      'AI_GRADER_SUGGESTION_NOT_FOUND',
+      `Sugerencia ${suggestionId} no encontrada en este tenant.`,
+    );
+  }
+}

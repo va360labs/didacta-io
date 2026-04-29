@@ -22,6 +22,7 @@ export {
   QuestionNotGradableError,
   RubricInvalidError,
   RubricNotFoundError,
+  SuggestionNotFoundError,
 } from './errors.js';
 export {
   buildGraderPrompt,
@@ -30,6 +31,8 @@ export {
   type BuiltGraderPrompt,
   type ParsedGraderResponse,
 } from './prompt-builder.js';
+export { AiGraderRubricService } from './rubric.service.js';
+export { AiGraderSuggestionService, type ChatFn } from './suggestion.service.js';
 
 export const aiGraderModule: DidactaModule = {
   manifest,

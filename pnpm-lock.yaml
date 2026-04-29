@@ -62,6 +62,9 @@ importers:
       '@didacta/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@didacta/mod-ai-grader':
+        specifier: workspace:*
+        version: link:../../modules/ai-grader
       '@didacta/mod-ai-tutor':
         specifier: workspace:*
         version: link:../../modules/ai-tutor

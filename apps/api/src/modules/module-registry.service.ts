@@ -17,6 +17,11 @@ import { learningModule, LearningService, ScormService } from '@didacta/mod-lear
 import { themingModule, ThemingService } from '@didacta/mod-theming';
 import { zoomLiveModule, ZoomLiveService } from '@didacta/mod-zoom-live';
 import { aiTutorModule, AiTutorChatService, AiTutorIndexerService } from '@didacta/mod-ai-tutor';
+import {
+  aiGraderModule,
+  AiGraderRubricService,
+  AiGraderSuggestionService,
+} from '@didacta/mod-ai-grader';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { AiGatewayService } from '../ai/ai-gateway.service';
 import { ModuleContextFactory } from './module-context.factory';
@@ -41,6 +46,8 @@ export class ModuleRegistryService implements OnModuleInit {
   private scorm?: ScormService;
   private aiTutorIndexer?: AiTutorIndexerService;
   private aiTutorChat?: AiTutorChatService;
+  private aiGraderRubric?: AiGraderRubricService;
+  private aiGraderSuggestion?: AiGraderSuggestionService;
 
   constructor(
     private readonly factory: ModuleContextFactory,
@@ -97,6 +104,27 @@ export class ModuleRegistryService implements OnModuleInit {
       };
     });
 
+    // mod.ai-grader: rúbrica + sugerencias IA con human-in-the-loop.
+    // chatFn delega al AI Gateway con resolución de provider per-tenant.
+    this.aiGraderRubric = new AiGraderRubricService(prisma, context);
+    this.aiGraderSuggestion = new AiGraderSuggestionService(prisma, context, async (args) => {
+      const result = await this.aiGateway.chat({
+        tenantId: args.tenantId,
+        input: {
+          system: args.system,
+          messages: args.messages,
+          maxTokens: args.maxTokens,
+        },
+      });
+      return {
+        content: result.content,
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+        provider: result.provider,
+        model: result.model,
+      };
+    });
+
     const certificatesModule = buildCertificatesModule(this.certificates);
 
     await this.registry.register([
@@ -110,6 +138,7 @@ export class ModuleRegistryService implements OnModuleInit {
       zoomLiveModule,
       fundaeModule,
       aiTutorModule,
+      aiGraderModule,
     ]);
 
     await this.persistManifests();
@@ -235,6 +264,16 @@ export class ModuleRegistryService implements OnModuleInit {
   getAiTutorChatService(): AiTutorChatService {
     if (!this.aiTutorChat) throw new Error('ModuleRegistry no está inicializado');
     return this.aiTutorChat;
+  }
+
+  getAiGraderRubricService(): AiGraderRubricService {
+    if (!this.aiGraderRubric) throw new Error('ModuleRegistry no está inicializado');
+    return this.aiGraderRubric;
+  }
+
+  getAiGraderSuggestionService(): AiGraderSuggestionService {
+    if (!this.aiGraderSuggestion) throw new Error('ModuleRegistry no está inicializado');
+    return this.aiGraderSuggestion;
   }
 
   isModuleEnabledForTenant(_tenantId: string, _moduleName: string): boolean {

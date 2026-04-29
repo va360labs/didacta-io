@@ -22,6 +22,7 @@
     "@didacta/core-kernel": "workspace:*",
     "@didacta/core-registry": "workspace:*",
     "@didacta/database": "workspace:*",
+    "@didacta/mod-ai-grader": "workspace:*",
     "@didacta/mod-ai-tutor": "workspace:*",
     "@didacta/mod-assessments": "workspace:*",
     "@didacta/mod-certificates": "workspace:*",
