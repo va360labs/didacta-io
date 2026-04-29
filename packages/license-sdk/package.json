@@ -5,7 +5,6 @@
   "description": "Didacta License SDK — verifies signed JWTs (ES256) for Enterprise capabilities and integrates with the opt-in registry",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -35,9 +34,9 @@
     "zod": "^3.24.1"
   },
   "peerDependencies": {
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0",
-    "react": "^19.0.0",
+    "@nestjs/common": "^10.0.0 || ^11.0.0",
+    "@nestjs/core": "^10.0.0 || ^11.0.0",
+    "react": "^18.0.0 || ^19.0.0",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependenciesMeta": {
@@ -47,8 +46,8 @@
     "reflect-metadata": { "optional": true }
   },
   "devDependencies": {
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0",
+    "@nestjs/common": "^10.4.15",
+    "@nestjs/core": "^10.4.15",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.0",
     "react": "^19.0.0",

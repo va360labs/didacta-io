@@ -28,12 +28,15 @@ const PUBLIC_KEYS_DIR = resolve(__dirname, 'public-keys');
 
 /**
  * Cache de claves públicas indexada por kid. Cargada perezosamente.
+ * Cada entry es la Promise<KeyLike> resultante de importSPKI — así el
+ * mismo Promise se reusa en consultas concurrentes sin re-importar.
+ *
  * Las claves NO son secretos — están publicadas en el repo.
  */
-let publicKeysCache: Map<string, KeyLike> | null = null;
+let publicKeysCache: Map<string, Promise<KeyLike>> | null = null;
 
-function loadPublicKeysFromDisk(): Map<string, KeyLike> {
-  const map = new Map<string, KeyLike>();
+function loadPublicKeysFromDisk(): Map<string, Promise<KeyLike>> {
+  const map = new Map<string, Promise<KeyLike>>();
   if (!existsSync(PUBLIC_KEYS_DIR)) {
     return map;
   }
@@ -44,10 +47,7 @@ function loadPublicKeysFromDisk(): Map<string, KeyLike> {
     // El kid es el filename sin extensión, p.ej. "didacta-issuer-2026".
     const kid = filename.replace(/\.pem$/, '');
     const pem = readFileSync(join(PUBLIC_KEYS_DIR, filename), 'utf8');
-    // importSPKI es async pero podemos awaitar al primer uso. Aquí guardamos pem y
-    // resolvemos en la primera consulta.
-    // Para simplicidad, hacemos importSPKI síncrono via top-level await del consumidor.
-    map.set(kid, pem as unknown as KeyLike);
+    map.set(kid, importSPKI(pem, ALG));
   }
 
   return map;
@@ -63,12 +63,6 @@ async function getPublicKey(kid: string): Promise<KeyLike> {
       `Unknown key id "${kid}". The license was signed with a key that is not embedded in this build of the SDK. ` +
         `Check that you are running an up-to-date version of Didacta.`,
     );
-  }
-  // Si ya es KeyLike (importado), devuélvelo. Si es PEM string, importa y cachea.
-  if (typeof cached === 'string') {
-    const imported = await importSPKI(cached as unknown as string, ALG);
-    publicKeysCache.set(kid, imported);
-    return imported;
   }
   return cached;
 }
@@ -87,7 +81,7 @@ export function registerPublicKeyForTest(kid: string, key: KeyLike): void {
   if (!publicKeysCache) {
     publicKeysCache = loadPublicKeysFromDisk();
   }
-  publicKeysCache.set(kid, key);
+  publicKeysCache.set(kid, Promise.resolve(key));
 }
 
 interface VerifyOptions {

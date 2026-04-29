@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
+import { LicenseModule } from '@didacta/license-sdk';
 import { AdminModule } from './admin/admin.module';
 import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
+import { ApiLicenseModule } from './license/license.module';
 import { MetricsAuthController } from './modules/metrics-auth.controller';
 import { ModulesModule } from './modules/modules.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -43,6 +45,14 @@ import { TenancyModule } from './tenancy/tenancy.module';
       controller: MetricsAuthController,
     }),
     PrismaModule,
+    // License SDK: cargamos la licencia al boot desde DIDACTA_LICENSE_KEY
+    // y exponemos LicenseService como provider global. Permite gateado de
+    // capabilities Enterprise transversales del core con @RequiresCapability.
+    LicenseModule.forRoot({
+      keyEnv: 'DIDACTA_LICENSE_KEY',
+      allowDevBypass: process.env['DIDACTA_DEV_BYPASS'] === 'true',
+    }),
+    ApiLicenseModule,
     AuthModule,
     AdminModule,
     TenancyModule,

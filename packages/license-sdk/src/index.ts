@@ -42,6 +42,13 @@ export {
 } from './guards.js';
 
 export {
+  LicenseModule,
+  LicenseExceptionFilter,
+  LICENSE_OPTIONS_TOKEN,
+  type LicenseModuleOptions,
+} from './nest.js';
+
+export {
   RegistryClient,
   registerInputSchema,
   telemetrySnapshotSchema,
@@ -50,3 +57,8 @@ export {
   type TelemetrySnapshot,
   type RegistryClientOptions,
 } from './registry/client.js';
+
+export {
+  toPublicLicenseState,
+  type PublicLicenseState,
+} from './public-state.js';

@@ -23,18 +23,8 @@ import {
   type LicenseCapability,
 } from './capabilities.js';
 import type { LicenseStatus } from './types.js';
-
-/**
- * Estado serializable que el backend manda al frontend (sin secretos).
- */
-export interface PublicLicenseState {
-  status: LicenseStatus;
-  edition?: 'community' | 'enterprise' | 'cloud';
-  organizationName?: string;
-  expiresAt?: string;
-  capabilities: string[];
-  warnings: string[];
-}
+import type { PublicLicenseState } from './public-state.js';
+export type { PublicLicenseState } from './public-state.js';
 
 const DEFAULT_STATE: PublicLicenseState = {
   status: 'community',

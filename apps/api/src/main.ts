@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
+import { LicenseExceptionFilter } from '@didacta/license-sdk';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
@@ -49,8 +50,21 @@ async function bootstrap(): Promise<void> {
   app.enableShutdownHooks();
 
   app.setGlobalPrefix('api/v1', {
-    exclude: ['healthz', 'readyz', 'livez', 'api/docs', 'metrics'],
+    exclude: [
+      'healthz',
+      'readyz',
+      'livez',
+      'api/docs',
+      'metrics',
+      // License public endpoint vive en /api/license (sin versión) para que
+      // el frontend lo consuma sin tener que conocer la versión actual del API.
+      'api/license',
+    ],
   });
+
+  // Captura CapabilityRequiredError y LicenseSignatureError, mapea a HTTP 402/401
+  // con body JSON estructurado.
+  app.useGlobalFilters(new LicenseExceptionFilter());
 
   const config = new DocumentBuilder()
     .setTitle('Didacta API')
