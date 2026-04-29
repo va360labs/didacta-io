@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { AdminModule } from './admin/admin.module';
+import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { MetricsAuthController } from './modules/metrics-auth.controller';
@@ -45,6 +46,7 @@ import { TenancyModule } from './tenancy/tenancy.module';
     AuthModule,
     AdminModule,
     TenancyModule,
+    AiModule,
     ModulesModule,
     HealthModule,
   ],

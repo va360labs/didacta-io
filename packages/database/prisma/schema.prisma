@@ -1559,6 +1559,52 @@ model PasswordResetToken {
 }
 
 // ============================================================================
+// AI GATEWAY — configuración multi-provider por tenant (LMS-90.B).
+//
+// Cada fila vincula un (tenant, purpose) con un provider concreto + sus
+// credenciales. La `apiKey` se cifra antes de persistir (AES-256-GCM con
+// clave maestra del cluster en `AI_CONFIG_ENCRYPTION_KEY`); en runtime se
+// descifra solo cuando el gateway necesita hacer una llamada.
+//
+// Si un tenant no tiene fila para un purpose, el gateway usa el default
+// global de env (`DEFAULT_AI_<PURPOSE>_PROVIDER` + `DEFAULT_AI_<PURPOSE>_API_KEY`).
+//
+// `purpose` separa chat y embed para que el tenant pueda mezclar (p.ej.
+// Anthropic para chat + Voyage para embeddings, que es una combinación común).
+// ============================================================================
+model TenantAiProviderConfig {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  /// 'chat' | 'embed'. Único por tenant+purpose.
+  purpose      String
+  /// Identificador del provider (openai, anthropic, gemini, openrouter,
+  /// mistral, groq, ollama, voyage).
+  provider     String
+  /// Modelo concreto. Vacío = usa default del adapter.
+  model        String   @default("")
+  /// Clave API cifrada con AES-256-GCM. NUNCA en plaintext.
+  apiKeyCipher String   @map("api_key_cipher")
+  /// IV usado para cifrar (96 bits hex). Único por fila.
+  apiKeyIv     String   @map("api_key_iv")
+  /// Auth tag GCM (128 bits hex).
+  apiKeyTag    String   @map("api_key_tag")
+  /// Override de URL base (autoalojado, proxy corporativo, etc.).
+  baseUrl      String?  @map("base_url")
+  /// Headers extra como JSON (algunos providers exigen referer, etc.).
+  extraHeaders Json     @default("{}") @map("extra_headers")
+  /// Si false, el gateway omite esta config y va al fallback default global.
+  enabled      Boolean  @default(true)
+  /// Notas internas del admin (motivo del provider elegido, fecha contrato).
+  notas        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, purpose], map: "tenant_ai_provider_config_tenant_purpose_key")
+  @@index([tenantId], map: "tenant_ai_provider_config_tenant_idx")
+  @@map("tenant_ai_provider_config")
+}
+
+// ============================================================================
 // MOD.AI-TUTOR — Tutor IA por curso con RAG (LMS-90, Fase 1.C).
 //
 // `mod_ai_tutor_chunk` almacena fragmentos de contenido de las lecciones
