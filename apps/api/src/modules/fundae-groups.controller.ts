@@ -186,6 +186,25 @@ export class FundaeGroupsController {
     void reply.header('Content-Type', 'application/xml; charset=utf-8').status(200).send(xml);
   }
 
+  @Get(':id/audit-zip')
+  @ApiOperation({
+    summary:
+      'Paquete de auditoría Fundae (LMS-86): ZIP con manifest.json + inicio.xml + finalizacion.xml + participantes.csv + costes.csv + adjuntos RLPT.',
+  })
+  async auditZip(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Res() reply: FastifyReply,
+  ) {
+    const u = this.requireAdmin(user);
+    const buf = await this.registry.getFundaeGroupService().generateAuditZip(u.tenantId, id);
+    void reply
+      .header('Content-Type', 'application/zip')
+      .header('Content-Disposition', `attachment; filename="fundae-grupo-${id}-auditoria.zip"`)
+      .status(200)
+      .send(buf);
+  }
+
   // ──────────────────── COSTES ────────────────────
 
   @Get(':id/costs')

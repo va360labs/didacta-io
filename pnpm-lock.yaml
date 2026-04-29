@@ -418,6 +418,9 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      '@types/adm-zip':
+        specifier: ^0.5.8
+        version: 0.5.8
       '@types/archiver':
         specifier: ^6.0.3
         version: 6.0.4
@@ -427,6 +430,9 @@ importers:
       '@types/pdfkit':
         specifier: ^0.13.9
         version: 0.13.9
+      adm-zip:
+        specifier: ^0.5.17
+        version: 0.5.17
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

@@ -18,6 +18,14 @@ export {
   type BuildGroupEndXmlInput,
   type GroupParticipantFinalSnapshot,
 } from './group-end-xml-export.js';
+export {
+  buildAuditZip,
+  buildCostsCsv,
+  buildParticipantsCsv,
+  type AuditZipInput,
+  type CostCsvRow,
+  type ParticipantCsvRow,
+} from './audit-zip.js';
 export { renderEvidencePdf, type EvidenceRenderInput } from './evidence-pdf.js';
 export { buildPresentationZip, type ZipPackageInput } from './zip-package.js';
 export {

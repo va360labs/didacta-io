@@ -508,6 +508,22 @@ function GroupDetail({
     }
   }
 
+  async function handleDownloadAuditZip() {
+    try {
+      const blob = await fundaeGroupsApi.auditZip(group.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fundae-grupo-${group.numeroGrupo}-auditoria.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(e instanceof ApiHttpError ? e.message : 'No pudimos descargar el ZIP de auditoría.');
+    }
+  }
+
   async function handleDownloadXml(kind: 'start' | 'end') {
     try {
       const xml =
@@ -605,6 +621,15 @@ function GroupDetail({
             >
               <Icon name="file" size={13} />
               XML finalización
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => void handleDownloadAuditZip()}
+            >
+              <Icon name="package" size={13} />
+              ZIP auditoría
             </Button>
             <Button
               type="button"

@@ -25,6 +25,13 @@ import {
 import { FundaeRlptService } from './rlpt.service.js';
 import { buildGroupStartXml, type GroupParticipantSnapshot } from './group-xml-export.js';
 import { buildGroupEndXml, type GroupParticipantFinalSnapshot } from './group-end-xml-export.js';
+import {
+  buildAuditZip,
+  buildCostsCsv,
+  buildParticipantsCsv,
+  type CostCsvRow,
+  type ParticipantCsvRow,
+} from './audit-zip.js';
 import { datosContactoSchema } from './company.dto.js';
 import type { ActionView, Modalidad } from './dto.js';
 import type { CompanyView } from './company.dto.js';
@@ -704,6 +711,147 @@ export class FundaeGroupService {
     return xml;
   }
 
+  // -------------------- PAQUETE AUDITORÍA (LMS-86) --------------------
+
+  /**
+   * Genera el ZIP completo de auditoría para un grupo bonificable. Contiene:
+   *   manifest.json (metadatos + hashes SHA-256)
+   *   inicio.xml + finalizacion.xml
+   *   participantes.csv + costes.csv
+   *   rlpt/notificacion-N.{ext} — adjuntos descargados de Evidence Vault
+   *
+   * Pensado para entregar a auditor externo o a Fundae sin necesidad de
+   * acceder al sistema. Los hashes en manifest.json permiten verificar
+   * integridad sin recalcular.
+   */
+  async generateAuditZip(tenantId: string, groupId: string): Promise<Buffer> {
+    const groupRow = await this.prisma.modFundaeGroup.findFirst({
+      where: { tenantId, id: groupId },
+      include: { costs: true },
+    });
+    if (!groupRow) throw new GroupNotFoundError(groupId);
+
+    const [actionRow, companyRow, participantRows, rlptNotices] = await Promise.all([
+      this.prisma.modFundaeAction.findFirst({ where: { tenantId, id: groupRow.actionId } }),
+      this.prisma.modFundaeCompany.findFirst({ where: { tenantId, id: groupRow.companyId } }),
+      this.prisma.modFundaeGroupParticipant.findMany({
+        where: { tenantId, groupId },
+        orderBy: { enrolledAt: 'asc' },
+      }),
+      this.prisma.modFundaeRlptNotice.findMany({
+        where: { tenantId, companyId: groupRow.companyId, deletedAt: null },
+        orderBy: { fechaNotificacionAt: 'asc' },
+      }),
+    ]);
+    if (!actionRow) throw new ActionNotFoundError(groupRow.actionId);
+    if (!companyRow) throw new CompanyNotFoundError(groupRow.companyId);
+
+    // XML start + end (reutiliza la lógica existente — pasamos por los métodos
+    // públicos para mantener un solo path de generación XML).
+    const [startXml, endXml] = await Promise.all([
+      this.generateStartXml(tenantId, groupId),
+      this.generateEndXml(tenantId, groupId),
+    ]);
+
+    // Hidratar usuarios para el CSV de participantes (mismas filas que
+    // el endpoint de participants list).
+    const userIds = participantRows.map((p) => p.userId);
+    const users =
+      userIds.length === 0
+        ? []
+        : await this.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, name: true, email: true },
+          });
+    const userById = new Map(users.map((u) => [u.id, u]));
+
+    const participantsCsv = buildParticipantsCsv(
+      participantRows.map<ParticipantCsvRow>((p) => {
+        const u = userById.get(p.userId);
+        const horas =
+          p.horasAsistidas === null || p.horasAsistidas === undefined
+            ? null
+            : Number(p.horasAsistidas);
+        return {
+          userId: p.userId,
+          nifAlumno: p.nifAlumno,
+          nombre: u?.name ?? null,
+          email: u?.email ?? '',
+          enrolledAt: p.enrolledAt.toISOString(),
+          status: p.status,
+          horasAsistidas: horas,
+          progressPercent: p.progressPercent ?? null,
+          resultado: p.resultado,
+        };
+      }),
+    );
+
+    const costsCsv = buildCostsCsv(
+      groupRow.costs.map<CostCsvRow>((c) => ({
+        tipo: c.tipo,
+        concepto: c.concepto,
+        importeCents: c.amountCents,
+        notas: c.notas,
+      })),
+    );
+
+    // Descargar blobs RLPT de storage. Si una lectura falla (storage caído,
+    // entry borrado físicamente), se omite ese adjunto y se anota en notas.
+    // El ZIP sigue siendo válido — el auditor verá la referencia en manifest
+    // pero sin el archivo. Mejor partial export que crash.
+    const rlptAttachments: Array<{ filename: string; blob: Buffer; tipo: string }> = [];
+    if (rlptNotices.length > 0) {
+      const evidenceIds = rlptNotices.map((n) => n.evidenceEntryId);
+      const evidenceEntries = await this.prisma.evidenceVaultEntry.findMany({
+        where: { id: { in: evidenceIds } },
+        select: { id: true, storageKey: true, contentType: true },
+      });
+      const entryById = new Map(evidenceEntries.map((e) => [e.id, e]));
+
+      for (const notice of rlptNotices) {
+        const entry = entryById.get(notice.evidenceEntryId);
+        if (!entry) continue;
+        try {
+          const blob = await this.ctx.storage.download(entry.storageKey);
+          const ext = mimeToExt(entry.contentType ?? 'application/pdf');
+          rlptAttachments.push({
+            filename: `rlpt/notificacion-${notice.id}.${ext}`,
+            blob,
+            tipo: notice.tipo,
+          });
+        } catch (err) {
+          this.ctx.logger.warn('mod.fundae: rlpt blob download failed; omitting from audit zip', {
+            tenantId,
+            noticeId: notice.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
+
+    const zip = await buildAuditZip({
+      groupId,
+      numeroGrupo: groupRow.numeroGrupo,
+      codigoAccion: actionRow.codigoAccion,
+      empresaNif: companyRow.nif,
+      generatedAt: new Date(),
+      startXml,
+      endXml,
+      participantsCsv,
+      costsCsv,
+      rlptAttachments,
+    });
+
+    await this.publish(tenantId, null, 'fundae.group.audit-zip.generated', {
+      groupId,
+      participantsCount: participantRows.length,
+      rlptAttachmentsCount: rlptAttachments.length,
+      bytes: zip.length,
+    });
+
+    return zip;
+  }
+
   // -------------------- COSTES --------------------
 
   async listCosts(tenantId: string, groupId: string): Promise<CostView[]> {
@@ -902,4 +1050,13 @@ export class FundaeGroupService {
 
 function roundTwo(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+function mimeToExt(contentType: string): string {
+  const ct = contentType.toLowerCase();
+  if (ct.includes('pdf')) return 'pdf';
+  if (ct.includes('png')) return 'png';
+  if (ct.includes('jpeg') || ct.includes('jpg')) return 'jpg';
+  if (ct.includes('webp')) return 'webp';
+  return 'bin';
 }

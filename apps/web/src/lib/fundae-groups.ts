@@ -212,6 +212,23 @@ export const fundaeGroupsApi = {
     return downloadXml(`/api/v1/admin/fundae/groups/${id}/end-xml`);
   },
 
+  /** Paquete ZIP de auditoría (LMS-86). Devuelve Blob para descarga directa. */
+  async auditZip(id: string): Promise<Blob> {
+    const token = withAuth();
+    const res = await fetch(`/api/v1/admin/fundae/groups/${id}/audit-zip`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new ApiHttpError({
+        message: text || 'No pudimos generar el ZIP de auditoría.',
+        status: res.status,
+      });
+    }
+    return res.blob();
+  },
+
   async listCosts(groupId: string): Promise<FundaeCost[]> {
     return apiFetch<FundaeCost[]>(
       `/api/v1/admin/fundae/groups/${groupId}/costs`,
