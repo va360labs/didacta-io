@@ -21,6 +21,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { CourseStatusBadge } from '@/components/course-status-badge';
 import { Icon, type IconName } from '@/components/icon';
+import { PendingCommentsQueue } from '@/components/pending-comments-queue';
 import { RichTextEditor } from '@/components/rich-text-editor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -229,6 +230,9 @@ export function CourseEditor({
           onCancel={() => setEditingMetadata(false)}
         />
       ) : null}
+
+      {/* === Cola de comentarios pendientes de moderación === */}
+      <PendingCommentsQueue courseId={initial.id} />
 
       {/* === Checklist de publicación (sólo si DRAFT) === */}
       {initial.status === 'DRAFT' ? (
