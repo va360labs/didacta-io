@@ -16,15 +16,26 @@ export interface ApiError {
   message: string;
   issues?: Array<{ path: string; message: string; code: string }>;
   status: number;
+  /**
+   * Código de error semántico que el backend opta por incluir en el body
+   * cuando el cliente debe reaccionar a algo más concreto que un status.
+   * Casos vivos:
+   *   - 'mfa_required' (LMS-109): admin con sesión sin verificar MFA →
+   *     el cliente redirige a /mfa/setup o /mfa/verify según mfaEnabled.
+   *   - 'AMBIGUOUS_TENANT': signin con email en >1 tenant → mostrar selector.
+   */
+  code?: string;
 }
 
 export class ApiHttpError extends Error implements ApiError {
   status: number;
   issues?: ApiError['issues'];
+  code?: string;
   constructor(payload: ApiError) {
     super(payload.message);
     this.status = payload.status;
     this.issues = payload.issues;
+    this.code = payload.code;
     this.name = 'ApiHttpError';
   }
 }
@@ -51,12 +62,41 @@ export async function apiFetch<T>(
 
   if (!response.ok) {
     const payload = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
-    throw new ApiHttpError({
+    const error = new ApiHttpError({
       message: typeof payload.message === 'string' ? payload.message : response.statusText,
       issues: Array.isArray(payload.issues) ? (payload.issues as ApiError['issues']) : undefined,
       status: response.status,
+      code: typeof payload.code === 'string' ? payload.code : undefined,
     });
+    // Auto-redirect del cliente cuando el API rechaza con mfa_required
+    // (LMS-109). Cualquier admin que abra una pantalla protegida con sesión
+    // sin verificar acaba derivado al flujo MFA en lugar de ver un toast
+    // críptico. Sólo aplica en el browser; los callers en SSR siguen
+    // recibiendo el throw para decidir ellos.
+    if (error.code === 'mfa_required' && typeof window !== 'undefined') {
+      const session = readStoredSessionSafe();
+      const target = session?.user?.mfaEnabled ? '/mfa/verify' : '/mfa/setup';
+      if (window.location.pathname !== target) {
+        window.location.assign(target);
+      }
+    }
+    throw error;
   }
 
   return body as T;
+}
+
+/**
+ * Acceso defensivo al sessionStorage para no acoplar el cliente HTTP a
+ * `auth-storage.ts` (lo que crearía un ciclo: api-client → auth-storage →
+ * api-client). Lee el shape mínimo que necesita la redirección.
+ */
+function readStoredSessionSafe(): { user?: { mfaEnabled?: boolean } } | null {
+  try {
+    const raw = sessionStorage.getItem('didacta.session');
+    if (!raw) return null;
+    return JSON.parse(raw) as { user?: { mfaEnabled?: boolean } };
+  } catch {
+    return null;
+  }
 }

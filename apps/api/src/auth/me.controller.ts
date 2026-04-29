@@ -20,7 +20,7 @@ import { z } from 'zod';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { extractClientContext } from './client-context';
-import { CurrentUser } from './decorators';
+import { CurrentUser, MfaExempt } from './decorators';
 import { isValidDocumentId, normalizeDocumentId } from './document-id';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { PasswordService } from './password.service';
@@ -78,6 +78,7 @@ export class MeController {
   ) {}
 
   @Get('profile')
+  @MfaExempt()
   @ApiOperation({ summary: 'Devuelve el perfil del usuario autenticado.' })
   async getProfile(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();

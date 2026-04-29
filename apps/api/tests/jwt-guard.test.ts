@@ -1,7 +1,13 @@
 import { Reflector } from '@nestjs/core';
+import { ForbiddenException } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ExecutionContext } from '@nestjs/common';
-import { JwtAuthGuard, PUBLIC_ROUTE_KEY, REQUIRES_MFA_KEY } from '../src/auth/jwt-auth.guard';
+import {
+  JwtAuthGuard,
+  MFA_EXEMPT_KEY,
+  PUBLIC_ROUTE_KEY,
+  REQUIRES_MFA_KEY,
+} from '../src/auth/jwt-auth.guard';
 import { TokenService } from '../src/auth/token.service';
 
 const ORIGINAL = process.env['AUTH_SECRET'];
@@ -78,5 +84,110 @@ describe('JwtAuthGuard', () => {
     const { ctx, reflector } = makeContext({}, { [PUBLIC_ROUTE_KEY]: true });
     const guard = new JwtAuthGuard(tokens, reflector);
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
+  });
+
+  describe('Enforcement automático para roles admin (LMS-109)', () => {
+    it('tenant_admin con mfaVerified=false en ruta NO exenta → ForbiddenException con code=mfa_required', async () => {
+      const tokens = new TokenService();
+      const signed = await tokens.sign({
+        sub: 'admin-1',
+        tenantId: 't-1',
+        roles: ['tenant_admin'],
+        mfaVerified: false,
+      });
+      const { ctx, reflector } = makeContext({ authorization: `Bearer ${signed.accessToken}` });
+      const guard = new JwtAuthGuard(tokens, reflector);
+      await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ForbiddenException);
+      // Comprobamos también el shape — el cliente web depende de este code
+      // para disparar el redirect a /mfa/setup o /mfa/verify.
+      try {
+        await guard.canActivate(ctx);
+      } catch (e) {
+        const fb = e as ForbiddenException;
+        const response = fb.getResponse() as { code?: string; message?: string };
+        expect(response.code).toBe('mfa_required');
+      }
+    });
+
+    it('super_admin con mfaVerified=false en ruta NO exenta → 403 con mfa_required', async () => {
+      const tokens = new TokenService();
+      const signed = await tokens.sign({
+        sub: 'super-1',
+        tenantId: 't-1',
+        roles: ['super_admin'],
+        mfaVerified: false,
+      });
+      const { ctx, reflector } = makeContext({ authorization: `Bearer ${signed.accessToken}` });
+      const guard = new JwtAuthGuard(tokens, reflector);
+      await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('admin con mfaVerified=true → pasa', async () => {
+      const tokens = new TokenService();
+      const signed = await tokens.sign({
+        sub: 'admin-2',
+        tenantId: 't-1',
+        roles: ['tenant_admin'],
+        mfaVerified: true,
+      });
+      const { ctx, reflector } = makeContext({ authorization: `Bearer ${signed.accessToken}` });
+      const guard = new JwtAuthGuard(tokens, reflector);
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    });
+
+    it('admin con mfaVerified=false en ruta @MfaExempt() → pasa (para poder completar el setup)', async () => {
+      const tokens = new TokenService();
+      const signed = await tokens.sign({
+        sub: 'admin-3',
+        tenantId: 't-1',
+        roles: ['tenant_admin'],
+        mfaVerified: false,
+      });
+      const { ctx, reflector } = makeContext(
+        { authorization: `Bearer ${signed.accessToken}` },
+        { [MFA_EXEMPT_KEY]: true },
+      );
+      const guard = new JwtAuthGuard(tokens, reflector);
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    });
+
+    it('alumno con mfaVerified=false → pasa (no aplica el enforcement automático)', async () => {
+      const tokens = new TokenService();
+      const signed = await tokens.sign({
+        sub: 'alumno-1',
+        tenantId: 't-1',
+        roles: ['alumno'],
+        mfaVerified: false,
+      });
+      const { ctx, reflector } = makeContext({ authorization: `Bearer ${signed.accessToken}` });
+      const guard = new JwtAuthGuard(tokens, reflector);
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    });
+
+    it('formador con mfaVerified=false → pasa (no aplica)', async () => {
+      const tokens = new TokenService();
+      const signed = await tokens.sign({
+        sub: 'formador-1',
+        tenantId: 't-1',
+        roles: ['formador'],
+        mfaVerified: false,
+      });
+      const { ctx, reflector } = makeContext({ authorization: `Bearer ${signed.accessToken}` });
+      const guard = new JwtAuthGuard(tokens, reflector);
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    });
+
+    it('admin con múltiples roles + mfaVerified=false → 403 (cualquier rol admin activa el enforcement)', async () => {
+      const tokens = new TokenService();
+      const signed = await tokens.sign({
+        sub: 'admin-multi',
+        tenantId: 't-1',
+        roles: ['formador', 'tenant_admin'],
+        mfaVerified: false,
+      });
+      const { ctx, reflector } = makeContext({ authorization: `Bearer ${signed.accessToken}` });
+      const guard = new JwtAuthGuard(tokens, reflector);
+      await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ForbiddenException);
+    });
   });
 });

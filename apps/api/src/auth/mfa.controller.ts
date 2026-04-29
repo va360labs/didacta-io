@@ -12,7 +12,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { extractClientContext } from './client-context';
-import { CurrentUser } from './decorators';
+import { CurrentUser, MfaExempt } from './decorators';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { MfaService } from './mfa.service';
 import { TokenService, type SessionClaims } from './token.service';
@@ -35,6 +35,7 @@ const verifySchema = z.object({
 @ApiBearerAuth()
 @Controller('auth/mfa')
 @UseGuards(JwtAuthGuard)
+@MfaExempt()
 export class MfaController {
   constructor(
     private readonly mfa: MfaService,

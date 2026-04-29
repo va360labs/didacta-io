@@ -1,6 +1,7 @@
 import {
   type CanActivate,
   type ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -9,7 +10,16 @@ import type { FastifyRequest } from 'fastify';
 import { TokenService, type SessionClaims } from './token.service';
 
 export const REQUIRES_MFA_KEY = 'requiresMfa';
+export const MFA_EXEMPT_KEY = 'mfaExempt';
 export const PUBLIC_ROUTE_KEY = 'isPublic';
+
+/**
+ * Roles a los que el guard exige MFA verificada por defecto. Coincide con
+ * `AuthService.shouldRequireMfa` — la política vive en un único lugar
+ * conceptual aunque se aplique en dos capas (auth.service marca el token,
+ * el guard impone runtime).
+ */
+const ADMIN_ROLES_REQUIRING_MFA = new Set(['super_admin', 'tenant_admin']);
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -53,6 +63,27 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Esta acción requiere MFA verificado');
     }
 
+    // Enforcement por rol: cualquier acción de un super_admin / tenant_admin
+    // exige token con mfaVerified=true salvo rutas explícitamente exentas
+    // (las del propio flujo de MFA + perfil mínimo, marcadas con @MfaExempt()).
+    // Esto cierra el bypass de LMS-109 sin tener que decorar uno por uno
+    // todos los controllers admin.
+    const mfaExempt = this.reflector.getAllAndOverride<boolean>(MFA_EXEMPT_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (!mfaExempt && this.requiresAdminMfa(request.user) && !request.user.mfaVerified) {
+      throw new ForbiddenException({
+        message:
+          'Tu rol exige MFA verificado para esta acción. Configurá o verificá tu segundo factor.',
+        code: 'mfa_required',
+      });
+    }
+
     return true;
+  }
+
+  private requiresAdminMfa(user: SessionClaims): boolean {
+    return user.roles.some((r) => ADMIN_ROLES_REQUIRING_MFA.has(r));
   }
 }
