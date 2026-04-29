@@ -171,6 +171,21 @@ export class FundaeGroupsController {
     void reply.header('Content-Type', 'application/xml; charset=utf-8').status(200).send(xml);
   }
 
+  @Get(':id/end-xml')
+  @ApiOperation({
+    summary:
+      'XML de "Comunicación de finalización de grupo" Fundae (LMS-85). Incluye listado nominal con APTO/NO_APTO y desglose de costes.',
+  })
+  async endXml(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Res() reply: FastifyReply,
+  ) {
+    const u = this.requireAdmin(user);
+    const xml = await this.registry.getFundaeGroupService().generateEndXml(u.tenantId, id);
+    void reply.header('Content-Type', 'application/xml; charset=utf-8').status(200).send(xml);
+  }
+
   // ──────────────────── COSTES ────────────────────
 
   @Get(':id/costs')

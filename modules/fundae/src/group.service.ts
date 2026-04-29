@@ -24,6 +24,7 @@ import {
 } from './errors.js';
 import { FundaeRlptService } from './rlpt.service.js';
 import { buildGroupStartXml, type GroupParticipantSnapshot } from './group-xml-export.js';
+import { buildGroupEndXml, type GroupParticipantFinalSnapshot } from './group-end-xml-export.js';
 import { datosContactoSchema } from './company.dto.js';
 import type { ActionView, Modalidad } from './dto.js';
 import type { CompanyView } from './company.dto.js';
@@ -569,6 +570,134 @@ export class FundaeGroupService {
     await this.publish(tenantId, null, 'fundae.group.start-xml.generated', {
       groupId,
       participantsCount: participants.length,
+      bytes: Buffer.byteLength(xml, 'utf8'),
+    });
+
+    return xml;
+  }
+
+  /**
+   * Genera el XML de "Comunicación de finalización de grupo" Fundae
+   * (LMS-85). Lee acción, empresa, participantes (ENROLLED + REMOVED
+   * para que el listado nominal sea completo, Fundae lo exige) y costes.
+   *
+   * Los participantes deben tener `resultado` snapshoteado (vía
+   * `computeCompletion` LMS-84) para que el XML tenga sentido. Si no
+   * lo tienen, se reportan como NO_APTO con horas=0.
+   */
+  async generateEndXml(tenantId: string, groupId: string): Promise<string> {
+    const groupRow = await this.prisma.modFundaeGroup.findFirst({
+      where: { tenantId, id: groupId },
+      include: { costs: true },
+    });
+    if (!groupRow) throw new GroupNotFoundError(groupId);
+    const groupView = this.toView(groupRow, groupRow.costs);
+
+    const [actionRow, companyRow, participantRows] = await Promise.all([
+      this.prisma.modFundaeAction.findFirst({ where: { tenantId, id: groupRow.actionId } }),
+      this.prisma.modFundaeCompany.findFirst({ where: { tenantId, id: groupRow.companyId } }),
+      // Para finalización incluimos también REMOVED — Fundae exige el
+      // listado completo de matriculaciones.
+      this.prisma.modFundaeGroupParticipant.findMany({
+        where: { tenantId, groupId },
+        orderBy: { enrolledAt: 'asc' },
+      }),
+    ]);
+    if (!actionRow) throw new ActionNotFoundError(groupRow.actionId);
+    if (!companyRow) throw new CompanyNotFoundError(groupRow.companyId);
+
+    const actionView: ActionView = {
+      id: actionRow.id,
+      tenantId: actionRow.tenantId,
+      courseId: actionRow.courseId,
+      codigoAccion: actionRow.codigoAccion,
+      nombre: actionRow.nombre,
+      modalidad: actionRow.modalidad as Modalidad,
+      horasFormacion: actionRow.horasFormacion,
+      fechaInicio: actionRow.fechaInicio,
+      fechaFin: actionRow.fechaFin,
+      lugar: actionRow.lugar,
+      cifCentro: actionRow.cifCentro,
+      notas: actionRow.notas,
+      status: actionRow.status as ActionView['status'],
+      createdAt: actionRow.createdAt.toISOString(),
+      updatedAt: actionRow.updatedAt.toISOString(),
+    };
+
+    const parsedContacto = datosContactoSchema.safeParse(companyRow.datosContacto ?? {});
+    const companyView: CompanyView = {
+      id: companyRow.id,
+      tenantId: companyRow.tenantId,
+      nif: companyRow.nif,
+      razonSocial: companyRow.razonSocial,
+      cccPrincipal: companyRow.cccPrincipal,
+      plantilla: companyRow.plantilla,
+      creditoTotalCents: companyRow.creditoTotalCents,
+      creditoUsadoCents: companyRow.creditoUsadoCents,
+      creditoDisponibleCents:
+        companyRow.creditoTotalCents === null
+          ? null
+          : companyRow.creditoTotalCents - companyRow.creditoUsadoCents,
+      datosContacto: parsedContacto.success ? parsedContacto.data : {},
+      notas: companyRow.notas,
+      createdAt: companyRow.createdAt.toISOString(),
+      updatedAt: companyRow.updatedAt.toISOString(),
+      deletedAt: companyRow.deletedAt?.toISOString() ?? null,
+    };
+
+    const userIds = participantRows.map((p) => p.userId);
+    const users =
+      userIds.length === 0
+        ? []
+        : await this.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, name: true, email: true },
+          });
+    const userById = new Map(users.map((u) => [u.id, u]));
+
+    const participants: GroupParticipantFinalSnapshot[] = participantRows.map((p) => {
+      const u = userById.get(p.userId);
+      const horas =
+        p.horasAsistidas === null || p.horasAsistidas === undefined ? 0 : Number(p.horasAsistidas);
+      const resultado = (p.resultado ?? 'NO_APTO') as 'APTO' | 'NO_APTO' | 'EN_CURSO';
+      return {
+        userId: p.userId,
+        nombre: u?.name ?? null,
+        email: u?.email ?? '',
+        nifAlumno: p.nifAlumno,
+        enrolledAt: p.enrolledAt.toISOString(),
+        horasAsistidas: horas,
+        progressPercent: p.progressPercent ?? 0,
+        resultado: p.status === 'REMOVED' ? 'NO_APTO' : resultado,
+        completedAt: p.completedAt?.toISOString() ?? null,
+      };
+    });
+
+    // Costes ya vienen en groupRow.costs; construimos CostView directamente.
+    const costViews: CostView[] = groupRow.costs.map((c) => ({
+      id: c.id,
+      tenantId: c.tenantId,
+      groupId: c.groupId,
+      tipo: c.tipo as CostTipo,
+      concepto: c.concepto,
+      amountCents: c.amountCents,
+      notas: c.notas,
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
+    }));
+
+    const xml = buildGroupEndXml({
+      group: groupView,
+      action: actionView,
+      company: companyView,
+      participants,
+      costs: costViews,
+    });
+
+    await this.publish(tenantId, null, 'fundae.group.end-xml.generated', {
+      groupId,
+      participantsCount: participants.length,
+      costsCount: costViews.length,
       bytes: Buffer.byteLength(xml, 'utf8'),
     });
 

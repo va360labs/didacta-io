@@ -13,6 +13,11 @@ export {
   type BuildGroupStartXmlInput,
   type GroupParticipantSnapshot,
 } from './group-xml-export.js';
+export {
+  buildGroupEndXml,
+  type BuildGroupEndXmlInput,
+  type GroupParticipantFinalSnapshot,
+} from './group-end-xml-export.js';
 export { renderEvidencePdf, type EvidenceRenderInput } from './evidence-pdf.js';
 export { buildPresentationZip, type ZipPackageInput } from './zip-package.js';
 export {

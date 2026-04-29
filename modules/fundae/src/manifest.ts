@@ -54,6 +54,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'fundae.group.participant.removed',
     'fundae.group.start-xml.generated',
     'fundae.group.completion-computed',
+    'fundae.group.end-xml.generated',
   ],
   eventsConsumed: [],
   apiNamespace: '/modules/fundae',

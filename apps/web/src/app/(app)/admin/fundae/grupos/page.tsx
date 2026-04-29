@@ -508,14 +508,17 @@ function GroupDetail({
     }
   }
 
-  async function handleDownloadStartXml() {
+  async function handleDownloadXml(kind: 'start' | 'end') {
     try {
-      const xml = await fundaeGroupsApi.startXml(group.id);
+      const xml =
+        kind === 'start'
+          ? await fundaeGroupsApi.startXml(group.id)
+          : await fundaeGroupsApi.endXml(group.id);
       const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `fundae-grupo-${group.numeroGrupo}-inicio.xml`;
+      a.download = `fundae-grupo-${group.numeroGrupo}-${kind === 'start' ? 'inicio' : 'fin'}.xml`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -589,10 +592,19 @@ function GroupDetail({
               type="button"
               size="sm"
               variant="ghost"
-              onClick={() => void handleDownloadStartXml()}
+              onClick={() => void handleDownloadXml('start')}
             >
               <Icon name="file" size={13} />
-              Descargar XML inicio
+              XML inicio
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => void handleDownloadXml('end')}
+            >
+              <Icon name="file" size={13} />
+              XML finalización
             </Button>
             <Button
               type="button"

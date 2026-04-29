@@ -107,6 +107,19 @@ function withAuth(): string {
   return token;
 }
 
+async function downloadXml(path: string): Promise<string> {
+  const token = withAuth();
+  const res = await fetch(path, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new ApiHttpError({ message: text || 'No pudimos generar el XML.', status: res.status });
+  }
+  return res.text();
+}
+
 export const fundaeGroupsApi = {
   async list(
     opts: {
@@ -191,19 +204,12 @@ export const fundaeGroupsApi = {
    * Usa fetch nativo porque `apiFetch` espera JSON.
    */
   async startXml(id: string): Promise<string> {
-    const token = withAuth();
-    const res = await fetch(`/api/v1/admin/fundae/groups/${id}/start-xml`, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new ApiHttpError({
-        message: text || 'No pudimos generar el XML.',
-        status: res.status,
-      });
-    }
-    return res.text();
+    return downloadXml(`/api/v1/admin/fundae/groups/${id}/start-xml`);
+  },
+
+  /** XML de comunicación de finalización (LMS-85). */
+  async endXml(id: string): Promise<string> {
+    return downloadXml(`/api/v1/admin/fundae/groups/${id}/end-xml`);
   },
 
   async listCosts(groupId: string): Promise<FundaeCost[]> {
