@@ -120,6 +120,11 @@ export class TenantSettingsController {
       isSecret: body.isSecret,
       actorId: claims.sub,
     });
+    // Invalida el cache de adapters cacheados por tenant cuya config
+    // depende del setting recién modificado. Por ahora sólo storage.
+    if (validScope === 'storage') {
+      this.modules.invalidateTenantStorage(claims.tenantId);
+    }
     return { ok: true };
   }
 
@@ -135,6 +140,9 @@ export class TenantSettingsController {
     const validKey = validateParam('key', key);
     const svc = this.modules.getTenantConfig();
     await svc.delete(claims.tenantId, validScope, validKey, { actorId: claims.sub });
+    if (validScope === 'storage') {
+      this.modules.invalidateTenantStorage(claims.tenantId);
+    }
     return { ok: true };
   }
 

@@ -1032,11 +1032,10 @@ function StorageTab() {
           </div>
         </form>
 
-        <div className="mt-6 rounded-lg border border-warning-200 bg-warning-50/50 p-3 text-xs text-warning-800">
-          <strong>Heads-up:</strong> el wiring de esta configuración al adapter del runtime
-          (selección dinámica per-tenant) llega en una iteración siguiente. Por ahora se persiste el
-          setting cifrado y el server sigue usando <code>STORAGE_DRIVER</code> del env hasta que se
-          complete la integración.
+        <div className="mt-6 rounded-lg border border-success-200 bg-success-50/50 p-3 text-xs text-success-800">
+          <strong>Activo:</strong> los uploads de imágenes y los archivos del tenant ya usan esta
+          configuración cuando el driver es <code>s3</code>. Si elegís disco local o no completás el
+          bucket, el server cae al adapter global del env.
         </div>
       </CardContent>
     </Card>

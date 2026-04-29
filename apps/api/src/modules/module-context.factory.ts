@@ -161,6 +161,78 @@ export class ModuleContextFactory {
     return this.storage;
   }
 
+  /**
+   * Cache de adapters S3 por tenant. La config se persiste cifrada en
+   * `tenant_setting` (scope=`storage`, keys `config` + `secret`); el primer
+   * acceso construye el adapter, los siguientes lo reutilizan. Si el admin
+   * cambia la config, llama a `invalidateTenantStorage(tenantId)` desde el
+   * upsert para limpiar el cache.
+   */
+  private readonly tenantStorageCache = new Map<
+    string,
+    StorageService & { ping?: () => Promise<boolean> }
+  >();
+
+  /**
+   * Devuelve el adapter de storage que aplica al tenant. Si el tenant
+   * tiene `storage.config` con driver=`s3` + bucket + accessKey en
+   * `tenant_setting`, construye un S3StorageService con esas credenciales.
+   * Si no, cae al adapter global (env STORAGE_DRIVER) — preserva el
+   * comportamiento previo para tenants que no migraron config aún.
+   */
+  async getStorageForTenant(
+    tenantId: string,
+  ): Promise<StorageService & { ping?: () => Promise<boolean> }> {
+    const cached = this.tenantStorageCache.get(tenantId);
+    if (cached) return cached;
+
+    const config = this.getTenantConfig();
+    type StorageConfig = {
+      driver?: string;
+      s3Bucket?: string;
+      s3Region?: string;
+      s3Endpoint?: string;
+      s3AccessKeyId?: string;
+    };
+    type StorageSecret = { s3SecretAccessKey?: string };
+
+    const cfg = await config
+      .get<StorageConfig>(tenantId, 'storage', 'config')
+      .catch(() => undefined);
+    if (!cfg || cfg.driver !== 's3' || !cfg.s3Bucket || !cfg.s3AccessKeyId) {
+      // Sin override válido → adapter global (env STORAGE_DRIVER).
+      this.tenantStorageCache.set(tenantId, this.storage);
+      return this.storage;
+    }
+    const sec = await config
+      .get<StorageSecret>(tenantId, 'storage', 'secret')
+      .catch(() => undefined);
+    if (!sec?.s3SecretAccessKey) {
+      // Falta el secret: tampoco podemos construir el adapter — fallback.
+      this.tenantStorageCache.set(tenantId, this.storage);
+      return this.storage;
+    }
+    const region = cfg.s3Region ?? 'eu-central-1';
+    // AWS S3 nativo no necesita endpoint (lo infiere de la región); para
+    // compat con S3-compatible (Hetzner/MinIO/Backblaze) sí. Si el admin
+    // no lo proveyó, generamos el URL canónico de AWS.
+    const endpoint = cfg.s3Endpoint?.trim() || `https://s3.${region}.amazonaws.com`;
+    const adapter = new S3StorageService({
+      bucket: cfg.s3Bucket,
+      region,
+      endpoint,
+      accessKeyId: cfg.s3AccessKeyId,
+      secretAccessKey: sec.s3SecretAccessKey,
+    });
+    this.tenantStorageCache.set(tenantId, adapter);
+    return adapter;
+  }
+
+  /** Invalidar el cache tras un cambio de config en /admin/configuracion. */
+  invalidateTenantStorage(tenantId: string): void {
+    this.tenantStorageCache.delete(tenantId);
+  }
+
   isS3Storage(): boolean {
     return this.storage instanceof S3StorageService;
   }
