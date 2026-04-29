@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { AiModule } from '../ai/ai.module';
 import { AuthModule } from '../auth/auth.module';
+import { AiTutorBridge } from './ai-tutor.bridge';
 import { AdminSystemController } from './admin-system.controller';
 import { AssessmentsController } from './assessments.controller';
 import { AssessmentsAttemptsController } from './assessments-attempts.controller';
@@ -48,7 +50,7 @@ import {
 import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, AiModule],
   controllers: [
     CoursesController,
     LearningController,
@@ -84,6 +86,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     CommunityDigestWorker,
     AssessmentsLearningBridge,
     NotificationsBridge,
+    AiTutorBridge,
     ScormLearningBridge,
     TenantModulesService,
     ModuleAccessInterceptor,

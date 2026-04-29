@@ -62,6 +62,9 @@ importers:
       '@didacta/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@didacta/mod-ai-tutor':
+        specifier: workspace:*
+        version: link:../../modules/ai-tutor
       '@didacta/mod-assessments':
         specifier: workspace:*
         version: link:../../modules/assessments
@@ -299,6 +302,28 @@ importers:
       tailwindcss:
         specifier: ^4.0.0
         version: 4.2.4
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
+
+  modules/ai-tutor:
+    dependencies:
+      '@didacta/core-kernel':
+        specifier: workspace:*
+        version: link:../../packages/core-kernel
+      '@didacta/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.17
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

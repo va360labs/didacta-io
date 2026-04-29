@@ -21,6 +21,13 @@ export {
   TokenQuotaExceededError,
 } from './errors.js';
 export { chunkText, type Chunk, type ChunkerOptions } from './chunker.js';
+export {
+  extractLessonText,
+  type ExtractInput,
+  type ExtractResult,
+  type LessonType,
+} from './lesson-extractor.js';
+export { AiTutorIndexerService, type EmbedFn, type IndexCourseOptions } from './indexer.service.js';
 
 export const aiTutorModule: DidactaModule = {
   manifest,

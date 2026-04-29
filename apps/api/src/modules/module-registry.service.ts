@@ -16,7 +16,9 @@ import {
 import { learningModule, LearningService, ScormService } from '@didacta/mod-learning';
 import { themingModule, ThemingService } from '@didacta/mod-theming';
 import { zoomLiveModule, ZoomLiveService } from '@didacta/mod-zoom-live';
+import { aiTutorModule, AiTutorIndexerService } from '@didacta/mod-ai-tutor';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { AiGatewayService } from '../ai/ai-gateway.service';
 import { ModuleContextFactory } from './module-context.factory';
 
 const CORE_VERSION = '1.0.0';
@@ -37,10 +39,12 @@ export class ModuleRegistryService implements OnModuleInit {
   private fundaeGroups?: FundaeGroupService;
   private fundaeGroupParticipants?: FundaeGroupParticipantService;
   private scorm?: ScormService;
+  private aiTutorIndexer?: AiTutorIndexerService;
 
   constructor(
     private readonly factory: ModuleContextFactory,
     private readonly pino: PinoLogger,
+    private readonly aiGateway: AiGatewayService,
   ) {}
 
   async onModuleInit() {
@@ -62,6 +66,23 @@ export class ModuleRegistryService implements OnModuleInit {
     this.fundaeGroupParticipants = new FundaeGroupParticipantService(prisma, context);
     this.scorm = new ScormService(prisma, context);
 
+    // mod.ai-tutor: indexer recibe embedFn que delega al AI Gateway por tenant.
+    this.aiTutorIndexer = new AiTutorIndexerService(
+      prisma,
+      context,
+      async (args: { tenantId: string; texts: string[] }) => {
+        const result = await this.aiGateway.embed({
+          tenantId: args.tenantId,
+          input: { texts: args.texts },
+        });
+        return {
+          embeddings: result.embeddings,
+          totalTokens: result.usage.totalTokens,
+          dimension: result.dimension,
+        };
+      },
+    );
+
     const certificatesModule = buildCertificatesModule(this.certificates);
 
     await this.registry.register([
@@ -74,6 +95,7 @@ export class ModuleRegistryService implements OnModuleInit {
       themingModule,
       zoomLiveModule,
       fundaeModule,
+      aiTutorModule,
     ]);
 
     await this.persistManifests();
@@ -185,6 +207,15 @@ export class ModuleRegistryService implements OnModuleInit {
   getScormService(): ScormService {
     if (!this.scorm) throw new Error('ModuleRegistry no está inicializado');
     return this.scorm;
+  }
+
+  /**
+   * Devuelve el indexer del tutor IA o null si el módulo no está activo.
+   * Útil para bridges (course.published) que no quieren acoplarse fuerte:
+   * si el módulo no está, no fuerzan el suscriptor.
+   */
+  getAiTutorIndexerServiceOrNull(): AiTutorIndexerService | null {
+    return this.aiTutorIndexer ?? null;
   }
 
   isModuleEnabledForTenant(_tenantId: string, _moduleName: string): boolean {
