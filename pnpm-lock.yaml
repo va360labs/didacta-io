@@ -62,6 +62,9 @@ importers:
       '@didacta/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@didacta/license-sdk':
+        specifier: workspace:*
+        version: link:../../packages/license-sdk
       '@didacta/mod-ai-grader':
         specifier: workspace:*
         version: link:../../modules/ai-grader
@@ -643,6 +646,40 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+
+  packages/license-sdk:
+    dependencies:
+      jose:
+        specifier: ^5.9.6
+        version: 5.10.0
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@nestjs/common':
+        specifier: ^10.4.15
+        version: 10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: ^10.4.15
+        version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.17
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.14
+      react:
+        specifier: ^19.0.0
+        version: 19.2.5
+      reflect-metadata:
+        specifier: ^0.2.2
+        version: 0.2.2
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
 
 packages:
 
