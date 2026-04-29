@@ -29,9 +29,46 @@ export const updateGroupSchema = z.object({
   fechaInicioPrevista: z.string().datetime({ offset: true }).optional(),
   fechaFinPrevista: z.string().datetime({ offset: true }).optional(),
   creditoEstimadoCents: z.number().int().min(0).max(999_999_999_99).nullable().optional(),
+  /** Umbral de horas/progreso para considerar APTO al participante. Default 75. */
+  umbralFinalizacionPct: z.number().int().min(1).max(100).optional(),
   notas: z.string().max(2000).nullable().optional(),
 });
 export type UpdateGroupDto = z.infer<typeof updateGroupSchema>;
+
+export const finalizeGroupSchema = z.object({
+  /** Si se omite, usa `group.umbralFinalizacionPct`. Permite override por
+   * cálculos puntuales (auditoría) sin tocar la config persistida. */
+  umbralOverride: z.number().int().min(1).max(100).optional(),
+  /** Modo `preview`: calcula pero no persiste; útil para mostrar resultados
+   * antes de confirmar. */
+  preview: z.boolean().optional(),
+});
+export type FinalizeGroupDto = z.infer<typeof finalizeGroupSchema>;
+
+export type ParticipantResultado = 'APTO' | 'NO_APTO' | 'EN_CURSO';
+
+export interface ParticipantCompletionView {
+  participantId: string;
+  userId: string;
+  userName: string | null;
+  userEmail: string | null;
+  nifAlumno: string | null;
+  horasAsistidas: number;
+  progressPercent: number;
+  resultado: ParticipantResultado;
+  completedAt: string | null;
+}
+
+export interface GroupCompletionResult {
+  groupId: string;
+  umbralAplicadoPct: number;
+  totalParticipantes: number;
+  aptos: number;
+  noAptos: number;
+  enCurso: number;
+  preview: boolean;
+  participants: ParticipantCompletionView[];
+}
 
 export const createCostSchema = z.object({
   tipo: costTipoSchema,
@@ -66,6 +103,8 @@ export interface GroupView {
   creditoConsumidoCents: number;
   /** Conteo por tipo, útil para el panel de detalle. */
   costsByTipo: Record<CostTipo, number>;
+  /** Umbral % usado para APTO/NO_APTO en el cálculo de finalización. */
+  umbralFinalizacionPct: number;
   notas: string | null;
   createdAt: string;
   updatedAt: string;

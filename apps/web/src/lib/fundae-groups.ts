@@ -25,9 +25,35 @@ export interface FundaeGroup {
   creditoEstimadoCents: number | null;
   creditoConsumidoCents: number;
   costsByTipo: Record<CostTipo, number>;
+  umbralFinalizacionPct: number;
   notas: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type ParticipantResultado = 'APTO' | 'NO_APTO' | 'EN_CURSO';
+
+export interface ParticipantCompletionView {
+  participantId: string;
+  userId: string;
+  userName: string | null;
+  userEmail: string | null;
+  nifAlumno: string | null;
+  horasAsistidas: number;
+  progressPercent: number;
+  resultado: ParticipantResultado;
+  completedAt: string | null;
+}
+
+export interface GroupCompletionResult {
+  groupId: string;
+  umbralAplicadoPct: number;
+  totalParticipantes: number;
+  aptos: number;
+  noAptos: number;
+  enCurso: number;
+  preview: boolean;
+  participants: ParticipantCompletionView[];
 }
 
 export interface FundaeCost {
@@ -149,6 +175,17 @@ export const fundaeGroupsApi = {
     );
   },
 
+  async finalize(
+    id: string,
+    opts: { umbralOverride?: number; preview?: boolean } = {},
+  ): Promise<GroupCompletionResult> {
+    return apiFetch<GroupCompletionResult>(
+      `/api/v1/admin/fundae/groups/${id}/finalize`,
+      { method: 'POST', body: JSON.stringify(opts) },
+      withAuth(),
+    );
+  },
+
   /**
    * Devuelve el XML como string. La UI lo descarga creando un Blob.
    * Usa fetch nativo porque `apiFetch` espera JSON.
@@ -236,6 +273,11 @@ export interface FundaeGroupParticipant {
   removedAt: string | null;
   status: ParticipantStatus;
   notas: string | null;
+  /** Snapshot del cálculo de finalización (LMS-84). */
+  horasAsistidas: number | null;
+  progressPercent: number | null;
+  resultado: ParticipantResultado | null;
+  completedAt: string | null;
   userName: string | null;
   userEmail: string | null;
   createdAt: string;

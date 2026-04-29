@@ -17,11 +17,13 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   createCostSchema,
   createGroupSchema,
+  finalizeGroupSchema,
   groupStatusSchema,
   updateCostSchema,
   updateGroupSchema,
   type CreateCostDto,
   type CreateGroupDto,
+  type FinalizeGroupDto,
   type GroupStatus,
   type UpdateCostDto,
   type UpdateGroupDto,
@@ -133,6 +135,23 @@ export class FundaeGroupsController {
   async cancel(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
     const u = this.requireAdmin(user);
     return this.registry.getFundaeGroupService().cancel(u.tenantId, u.sub, id);
+  }
+
+  @Post(':id/finalize')
+  @ApiOperation({
+    summary:
+      'Calcula APTO/NO_APTO/EN_CURSO por participante usando el umbral del grupo (default 75%). Modo `preview` no persiste.',
+  })
+  async finalize(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(finalizeGroupSchema)) dto: FinalizeGroupDto,
+  ) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeGroupService().computeCompletion(u.tenantId, u.sub, id, {
+      umbralOverride: dto.umbralOverride,
+      preview: dto.preview,
+    });
   }
 
   @Get(':id/start-xml')

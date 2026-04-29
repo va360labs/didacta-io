@@ -51,6 +51,12 @@ export interface GroupParticipantView {
   removedAt: string | null;
   status: ParticipantStatus;
   notas: string | null;
+  /** Snapshot del cálculo de finalización (LMS-84). Null hasta que se
+   * ejecute computeCompletion con preview=false. */
+  horasAsistidas: number | null;
+  progressPercent: number | null;
+  resultado: 'APTO' | 'NO_APTO' | 'EN_CURSO' | null;
+  completedAt: string | null;
   /** Datos del User resueltos para la UI (no se persisten aquí). */
   userName: string | null;
   userEmail: string | null;

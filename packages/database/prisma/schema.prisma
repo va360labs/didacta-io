@@ -1425,6 +1425,9 @@ model ModFundaeGroup {
   status                 String    @default("DRAFT") /// DRAFT | ACTIVE | CLOSED | CANCELLED
   /// Crédito estimado a consumir cuando se planificó. En céntimos.
   creditoEstimadoCents   Int?      @map("credito_estimado_cents")
+  /// Umbral de finalización Fundae (default 75%). Se aplica al cálculo
+  /// de resultado APTO/NO_APTO por participante (LMS-84).
+  umbralFinalizacionPct  Int       @default(75) @map("umbral_finalizacion_pct")
   notas                  String?
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")
@@ -1501,6 +1504,20 @@ model ModFundaeGroupParticipant {
   enrolledAt DateTime  @default(now()) @map("enrolled_at")
   removedAt  DateTime? @map("removed_at")
   status     String    @default("ENROLLED") /// ENROLLED | REMOVED
+  /// Horas reales de asistencia (LMS-84). Se calcula como
+  /// `action.horasFormacion * progressPercent / 100`. Decimal para
+  /// medias horas Fundae (0.5).
+  horasAsistidas   Decimal? @map("horas_asistidas") @db.Decimal(8, 2)
+  /// Progreso del enrollment del curso (0-100) capturado en el momento
+  /// del cálculo de finalización.
+  progressPercent  Int?     @map("progress_percent")
+  /// Resultado final Fundae: APTO si supera el umbral (default 75%),
+  /// NO_APTO si fue eliminado o no llegó al umbral, EN_CURSO antes
+  /// de la finalización.
+  resultado        String?  /// APTO | NO_APTO | EN_CURSO
+  /// Fecha del cálculo de finalización (cuando se snapshoteó el
+  /// resultado). Distinto de `removedAt` que indica baja administrativa.
+  completedAt      DateTime? @map("completed_at")
   notas      String?
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")

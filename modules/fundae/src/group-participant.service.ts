@@ -27,6 +27,11 @@ interface ParticipantRow {
   enrolledAt: Date;
   removedAt: Date | null;
   status: string;
+  /** Snapshot del cálculo de finalización (LMS-84). */
+  horasAsistidas: unknown; // Prisma Decimal | null — convertimos a number en hydrate
+  progressPercent: number | null;
+  resultado: string | null;
+  completedAt: Date | null;
   notas: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -351,6 +356,10 @@ export class FundaeGroupParticipantService {
     const byId = new Map(users.map((u) => [u.id, u]));
     return rows.map((r) => {
       const u = byId.get(r.userId);
+      const horas =
+        r.horasAsistidas === null || r.horasAsistidas === undefined
+          ? null
+          : Number(r.horasAsistidas);
       return {
         id: r.id,
         tenantId: r.tenantId,
@@ -362,6 +371,10 @@ export class FundaeGroupParticipantService {
         removedAt: r.removedAt?.toISOString() ?? null,
         status: r.status as ParticipantStatus,
         notas: r.notas,
+        horasAsistidas: horas,
+        progressPercent: r.progressPercent,
+        resultado: r.resultado as 'APTO' | 'NO_APTO' | 'EN_CURSO' | null,
+        completedAt: r.completedAt?.toISOString() ?? null,
         userName: u?.name ?? null,
         userEmail: u?.email ?? null,
         createdAt: r.createdAt.toISOString(),

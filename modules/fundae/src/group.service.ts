@@ -41,6 +41,7 @@ interface GroupRow {
   fechaFinReal: Date | null;
   status: string;
   creditoEstimadoCents: number | null;
+  umbralFinalizacionPct: number;
   notas: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -192,6 +193,9 @@ export class FundaeGroupService {
         ...(dto.creditoEstimadoCents !== undefined
           ? { creditoEstimadoCents: dto.creditoEstimadoCents }
           : {}),
+        ...(dto.umbralFinalizacionPct !== undefined
+          ? { umbralFinalizacionPct: dto.umbralFinalizacionPct }
+          : {}),
         ...(dto.notas !== undefined ? { notas: dto.notas } : {}),
       },
       include: { costs: true },
@@ -309,6 +313,160 @@ export class FundaeGroupService {
     });
     await this.publish(tenantId, actorId, 'fundae.group.cancelled', { groupId: id });
     return this.toView(updated, updated.costs);
+  }
+
+  // -------------------- FINALIZACIÓN (LMS-84) --------------------
+
+  /**
+   * Calcula el resultado APTO/NO_APTO/EN_CURSO de cada participante del
+   * grupo basado en el progreso de su enrollment del curso de la acción.
+   *
+   *   - Si la acción no tiene `courseId`: todos los participantes quedan
+   *     como EN_CURSO con 0 horas (no podemos inferir progreso).
+   *   - Si el participante tiene status REMOVED: queda como NO_APTO.
+   *   - Si el progress del enrollment >= umbral: APTO.
+   *   - Si no: NO_APTO si el enrollment está completado o el grupo cerrado;
+   *     EN_CURSO si todavía está en marcha.
+   *
+   * Modo `preview=true`: calcula sin persistir (útil para mostrar en UI
+   * antes de confirmar). Modo `preview=false`: persiste los snapshots
+   * en `mod_fundae_group_participant.{horasAsistidas,progressPercent,resultado,completedAt}`.
+   *
+   * Nota: NO transiciona el grupo a CLOSED — esa transición sigue siendo
+   * explícita vía `close()` (que debita crédito). Aquí sólo se snapshotea
+   * el resultado por participante.
+   */
+  async computeCompletion(
+    tenantId: string,
+    actorId: string | null,
+    groupId: string,
+    opts: { umbralOverride?: number; preview?: boolean } = {},
+  ): Promise<import('./group.dto.js').GroupCompletionResult> {
+    const groupRow = await this.prisma.modFundaeGroup.findFirst({
+      where: { tenantId, id: groupId },
+    });
+    if (!groupRow) throw new GroupNotFoundError(groupId);
+
+    const umbralAplicadoPct = opts.umbralOverride ?? groupRow.umbralFinalizacionPct;
+    const preview = opts.preview ?? false;
+
+    const action = await this.prisma.modFundaeAction.findFirst({
+      where: { tenantId, id: groupRow.actionId },
+      select: { courseId: true, horasFormacion: true },
+    });
+    if (!action) throw new ActionNotFoundError(groupRow.actionId);
+
+    const participants = await this.prisma.modFundaeGroupParticipant.findMany({
+      where: { tenantId, groupId },
+      orderBy: { enrolledAt: 'asc' },
+    });
+    if (participants.length === 0) {
+      return {
+        groupId,
+        umbralAplicadoPct,
+        totalParticipantes: 0,
+        aptos: 0,
+        noAptos: 0,
+        enCurso: 0,
+        preview,
+        participants: [],
+      };
+    }
+
+    // Resolver enrollments + users en lote.
+    const userIds = participants.map((p) => p.userId);
+    const [users, enrollments] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, name: true, email: true },
+      }),
+      action.courseId
+        ? this.prisma.modLearningEnrollment.findMany({
+            where: { tenantId, courseId: action.courseId, userId: { in: userIds } },
+            select: { userId: true, progressPercent: true, status: true, completedAt: true },
+          })
+        : Promise.resolve(
+            [] as Array<{
+              userId: string;
+              progressPercent: number | null;
+              status: string;
+              completedAt: Date | null;
+            }>,
+          ),
+    ]);
+    const userById = new Map(users.map((u) => [u.id, u]));
+    const enrollByUser = new Map(enrollments.map((e) => [e.userId, e]));
+
+    const groupClosed = groupRow.status === 'CLOSED' || groupRow.status === 'CANCELLED';
+
+    const computed = participants.map((p) => {
+      const u = userById.get(p.userId);
+      const enrollment = enrollByUser.get(p.userId);
+      const progress = enrollment?.progressPercent ?? 0;
+      const horas = (action.horasFormacion * progress) / 100;
+
+      let resultado: 'APTO' | 'NO_APTO' | 'EN_CURSO';
+      if (p.status === 'REMOVED') {
+        resultado = 'NO_APTO';
+      } else if (progress >= umbralAplicadoPct) {
+        resultado = 'APTO';
+      } else if (groupClosed || enrollment?.completedAt) {
+        resultado = 'NO_APTO';
+      } else {
+        resultado = 'EN_CURSO';
+      }
+
+      return {
+        participantId: p.id,
+        userId: p.userId,
+        userName: u?.name ?? null,
+        userEmail: u?.email ?? null,
+        nifAlumno: p.nifAlumno,
+        horasAsistidas: roundTwo(horas),
+        progressPercent: progress,
+        resultado,
+      };
+    });
+
+    if (!preview) {
+      const now = new Date();
+      await this.prisma.$transaction(
+        computed.map((c) =>
+          this.prisma.modFundaeGroupParticipant.update({
+            where: { id: c.participantId },
+            data: {
+              horasAsistidas: c.horasAsistidas,
+              progressPercent: c.progressPercent,
+              resultado: c.resultado,
+              completedAt: now,
+            },
+          }),
+        ),
+      );
+      await this.publish(tenantId, actorId, 'fundae.group.completion-computed', {
+        groupId,
+        umbralAplicadoPct,
+        totalParticipantes: computed.length,
+      });
+    }
+
+    const aptos = computed.filter((c) => c.resultado === 'APTO').length;
+    const noAptos = computed.filter((c) => c.resultado === 'NO_APTO').length;
+    const enCurso = computed.filter((c) => c.resultado === 'EN_CURSO').length;
+
+    return {
+      groupId,
+      umbralAplicadoPct,
+      totalParticipantes: computed.length,
+      aptos,
+      noAptos,
+      enCurso,
+      preview,
+      participants: computed.map((c) => ({
+        ...c,
+        completedAt: preview ? null : new Date().toISOString(),
+      })),
+    };
   }
 
   // -------------------- XML INICIO (LMS-83) --------------------
@@ -591,6 +749,7 @@ export class FundaeGroupService {
       creditoEstimadoCents: row.creditoEstimadoCents,
       creditoConsumidoCents: total,
       costsByTipo,
+      umbralFinalizacionPct: row.umbralFinalizacionPct,
       notas: row.notas,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -610,4 +769,8 @@ export class FundaeGroupService {
       updatedAt: row.updatedAt.toISOString(),
     };
   }
+}
+
+function roundTwo(n: number): number {
+  return Math.round(n * 100) / 100;
 }

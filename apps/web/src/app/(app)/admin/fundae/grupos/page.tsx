@@ -21,6 +21,7 @@ import {
   type FundaeCost,
   type FundaeGroup,
   type FundaeGroupParticipant,
+  type GroupCompletionResult,
   type GroupStatus,
   type Modalidad,
 } from '@/lib/fundae-groups';
@@ -454,6 +455,7 @@ function GroupDetail({
   const [enrollUserId, setEnrollUserId] = useState('');
   const [enrolling, setEnrolling] = useState(false);
   const [participantError, setParticipantError] = useState<string | null>(null);
+  const [completionResult, setCompletionResult] = useState<GroupCompletionResult | null>(null);
 
   async function handleBulkEnroll() {
     if (!confirm('Matricular todos los inscritos del curso del catálogo?')) return;
@@ -491,6 +493,18 @@ function GroupDetail({
       await onParticipantsChanged();
     } catch (e) {
       setParticipantError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar.');
+    }
+  }
+
+  async function handleComputeCompletion(preview: boolean) {
+    try {
+      const res = await fundaeGroupsApi.finalize(group.id, { preview });
+      setCompletionResult(res);
+      if (!preview) {
+        await onParticipantsChanged();
+      }
+    } catch (e) {
+      alert(e instanceof ApiHttpError ? e.message : 'No pudimos calcular la finalización.');
     }
   }
 
@@ -580,6 +594,79 @@ function GroupDetail({
               <Icon name="file" size={13} />
               Descargar XML inicio
             </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => void handleComputeCompletion(true)}
+            >
+              <Icon name="chart" size={13} />
+              Vista previa finalización
+            </Button>
+            {group.status === 'CLOSED' || group.status === 'ACTIVE' ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => void handleComputeCompletion(false)}
+              >
+                <Icon name="check" size={13} />
+                Persistir finalización
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {completionResult ? (
+          <div className="rounded-lg border border-border-soft bg-surface-soft p-3 text-xs">
+            <div className="mb-2 flex items-center gap-2">
+              <h5 className="text-sm font-semibold">
+                Finalización {completionResult.preview ? '(preview)' : '(persistida)'}
+              </h5>
+              <Badge variant="info">Umbral {completionResult.umbralAplicadoPct}%</Badge>
+              <Badge variant="success">APTO {completionResult.aptos}</Badge>
+              <Badge variant="warning">NO_APTO {completionResult.noAptos}</Badge>
+              <Badge variant="muted">EN_CURSO {completionResult.enCurso}</Badge>
+              <button
+                type="button"
+                onClick={() => setCompletionResult(null)}
+                className="ml-auto text-text-muted hover:text-text"
+              >
+                Cerrar
+              </button>
+            </div>
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-text-subtle">
+                  <th className="pb-1 font-medium">Alumno</th>
+                  <th className="pb-1 text-right font-medium">Progreso</th>
+                  <th className="pb-1 text-right font-medium">Horas</th>
+                  <th className="pb-1 text-right font-medium">Resultado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {completionResult.participants.map((p) => (
+                  <tr key={p.participantId} className="border-t border-border-soft">
+                    <td className="py-1 pr-2">{p.userName ?? p.userEmail ?? p.userId}</td>
+                    <td className="py-1 text-right tabular-nums">{p.progressPercent}%</td>
+                    <td className="py-1 text-right tabular-nums">{p.horasAsistidas}h</td>
+                    <td className="py-1 text-right">
+                      <Badge
+                        variant={
+                          p.resultado === 'APTO'
+                            ? 'success'
+                            : p.resultado === 'NO_APTO'
+                              ? 'warning'
+                              : 'muted'
+                        }
+                      >
+                        {p.resultado}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : null}
 
