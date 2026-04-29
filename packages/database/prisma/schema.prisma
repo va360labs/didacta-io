@@ -1750,3 +1750,38 @@ model ModAiGraderSuggestion {
   @@index([tenantId, attemptId], map: "mod_ai_grader_suggestion_tenant_attempt_idx")
   @@map("mod_ai_grader_suggestion")
 }
+
+// ============================================================================
+// CORE — INSTALLATION REGISTRY (opt-in, MIG-027)
+// ----------------------------------------------------------------------------
+// Registro opt-in de la instalación Community contra Cloud god (didacta.io).
+// Permite al admin activar comunicación directa con el equipo Didacta y enviar
+// telemetría agregada (sin PII). Singleton lógico: solo una fila NO-opted-out
+// a la vez.
+// ============================================================================
+
+model InstallationRegistry {
+  id                String    @id @default(uuid()) @db.Uuid
+  /// UUID generado en cliente al hacer opt-in. Identifica esta instancia
+  /// frente a Cloud god a perpetuidad.
+  installationId    String    @unique @map("installation_id")
+  email             String
+  organizationName  String    @map("organization_name")
+  /// URL pública del despliegue, opcional. Solo informativa.
+  deploymentUrl     String?   @map("deployment_url")
+  /// Token opaco devuelto por Cloud god tras /registry/install.
+  registryToken     String?   @map("registry_token")
+  /// Aceptación de términos por el admin.
+  termsAcceptedAt   DateTime  @map("terms_accepted_at")
+  optInAt           DateTime  @default(now()) @map("opt_in_at")
+  /// Fecha de opt-out (null mientras esté activo).
+  optedOutAt        DateTime? @map("opted_out_at")
+  /// Última vez que la instancia envió telemetría agregada.
+  lastTelemetryAt   DateTime? @map("last_telemetry_at")
+  /// Permite desactivar el envío de telemetría manteniendo registro.
+  telemetryEnabled  Boolean   @default(true) @map("telemetry_enabled")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@map("core_installation_registry")
+}

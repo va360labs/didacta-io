@@ -11,6 +11,7 @@ import { ApiLicenseModule } from './license/license.module';
 import { MetricsAuthController } from './modules/metrics-auth.controller';
 import { ModulesModule } from './modules/modules.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { RegistryModule } from './registry/registry.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 
 @Module({
@@ -55,6 +56,7 @@ import { TenancyModule } from './tenancy/tenancy.module';
     }),
     ApiLicenseModule,
     BrandingModule,
+    RegistryModule,
     AuthModule,
     AdminModule,
     TenancyModule,
