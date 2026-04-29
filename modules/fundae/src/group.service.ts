@@ -23,6 +23,10 @@ import {
   GroupTransicionInvalidaError,
 } from './errors.js';
 import { FundaeRlptService } from './rlpt.service.js';
+import { buildGroupStartXml, type GroupParticipantSnapshot } from './group-xml-export.js';
+import { datosContactoSchema } from './company.dto.js';
+import type { ActionView, Modalidad } from './dto.js';
+import type { CompanyView } from './company.dto.js';
 
 interface GroupRow {
   id: string;
@@ -305,6 +309,112 @@ export class FundaeGroupService {
     });
     await this.publish(tenantId, actorId, 'fundae.group.cancelled', { groupId: id });
     return this.toView(updated, updated.costs);
+  }
+
+  // -------------------- XML INICIO (LMS-83) --------------------
+
+  /**
+   * Genera el XML de "Comunicación de inicio de grupo" Fundae a partir
+   * de las filas actuales de DB. Lee acción, empresa y participantes
+   * activos del grupo, los hidrata y delega al builder puro.
+   *
+   * El service NO valida estado del grupo (DRAFT/ACTIVE/CLOSED) — el
+   * caller decide cuándo descargarlo. Conformidad Fundae: lo normal es
+   * descargarlo justo antes del start o tras él.
+   */
+  async generateStartXml(tenantId: string, groupId: string): Promise<string> {
+    const groupRow = await this.prisma.modFundaeGroup.findFirst({
+      where: { tenantId, id: groupId },
+      include: { costs: true },
+    });
+    if (!groupRow) throw new GroupNotFoundError(groupId);
+    const groupView = this.toView(groupRow, groupRow.costs);
+
+    const [actionRow, companyRow, participantRows] = await Promise.all([
+      this.prisma.modFundaeAction.findFirst({ where: { tenantId, id: groupRow.actionId } }),
+      this.prisma.modFundaeCompany.findFirst({ where: { tenantId, id: groupRow.companyId } }),
+      this.prisma.modFundaeGroupParticipant.findMany({
+        where: { tenantId, groupId, status: 'ENROLLED' },
+        orderBy: { enrolledAt: 'asc' },
+      }),
+    ]);
+    if (!actionRow) throw new ActionNotFoundError(groupRow.actionId);
+    if (!companyRow) throw new CompanyNotFoundError(groupRow.companyId);
+
+    const actionView: ActionView = {
+      id: actionRow.id,
+      tenantId: actionRow.tenantId,
+      courseId: actionRow.courseId,
+      codigoAccion: actionRow.codigoAccion,
+      nombre: actionRow.nombre,
+      modalidad: actionRow.modalidad as Modalidad,
+      horasFormacion: actionRow.horasFormacion,
+      fechaInicio: actionRow.fechaInicio,
+      fechaFin: actionRow.fechaFin,
+      lugar: actionRow.lugar,
+      cifCentro: actionRow.cifCentro,
+      notas: actionRow.notas,
+      status: actionRow.status as ActionView['status'],
+      createdAt: actionRow.createdAt.toISOString(),
+      updatedAt: actionRow.updatedAt.toISOString(),
+    };
+
+    const parsedContacto = datosContactoSchema.safeParse(companyRow.datosContacto ?? {});
+    const companyView: CompanyView = {
+      id: companyRow.id,
+      tenantId: companyRow.tenantId,
+      nif: companyRow.nif,
+      razonSocial: companyRow.razonSocial,
+      cccPrincipal: companyRow.cccPrincipal,
+      plantilla: companyRow.plantilla,
+      creditoTotalCents: companyRow.creditoTotalCents,
+      creditoUsadoCents: companyRow.creditoUsadoCents,
+      creditoDisponibleCents:
+        companyRow.creditoTotalCents === null
+          ? null
+          : companyRow.creditoTotalCents - companyRow.creditoUsadoCents,
+      datosContacto: parsedContacto.success ? parsedContacto.data : {},
+      notas: companyRow.notas,
+      createdAt: companyRow.createdAt.toISOString(),
+      updatedAt: companyRow.updatedAt.toISOString(),
+      deletedAt: companyRow.deletedAt?.toISOString() ?? null,
+    };
+
+    const userIds = participantRows.map((p) => p.userId);
+    const users =
+      userIds.length === 0
+        ? []
+        : await this.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, name: true, email: true },
+          });
+    const userById = new Map(users.map((u) => [u.id, u]));
+
+    const participants: GroupParticipantSnapshot[] = participantRows.map((p) => {
+      const u = userById.get(p.userId);
+      return {
+        userId: p.userId,
+        nombre: u?.name ?? null,
+        email: u?.email ?? '',
+        nifAlumno: p.nifAlumno,
+        enrolledAt: p.enrolledAt.toISOString(),
+      };
+    });
+
+    const xml = buildGroupStartXml({
+      group: groupView,
+      action: actionView,
+      company: companyView,
+      participants,
+    });
+
+    await this.publish(tenantId, null, 'fundae.group.start-xml.generated', {
+      groupId,
+      participantsCount: participants.length,
+      bytes: Buffer.byteLength(xml, 'utf8'),
+    });
+
+    return xml;
   }
 
   // -------------------- COSTES --------------------

@@ -8,9 +8,11 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import type { FastifyReply } from 'fastify';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   createCostSchema,
@@ -131,6 +133,23 @@ export class FundaeGroupsController {
   async cancel(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
     const u = this.requireAdmin(user);
     return this.registry.getFundaeGroupService().cancel(u.tenantId, u.sub, id);
+  }
+
+  @Get(':id/start-xml')
+  @ApiOperation({
+    summary:
+      'XML de "Comunicación de inicio de grupo" Fundae (LMS-83). Incluye acción, grupo, empresa y participantes ENROLLED.',
+  })
+  async startXml(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Res() reply: FastifyReply,
+  ) {
+    const u = this.requireAdmin(user);
+    // Header se aplica solo en la rama de éxito; si el service lanza,
+    // el FundaeErrorFilter responde JSON sin colisionar con este content-type.
+    const xml = await this.registry.getFundaeGroupService().generateStartXml(u.tenantId, id);
+    void reply.header('Content-Type', 'application/xml; charset=utf-8').status(200).send(xml);
   }
 
   // ──────────────────── COSTES ────────────────────

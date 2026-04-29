@@ -494,6 +494,23 @@ function GroupDetail({
     }
   }
 
+  async function handleDownloadStartXml() {
+    try {
+      const xml = await fundaeGroupsApi.startXml(group.id);
+      const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fundae-grupo-${group.numeroGrupo}-inicio.xml`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(e instanceof ApiHttpError ? e.message : 'No pudimos descargar el XML.');
+    }
+  }
+
   return (
     <Card className="border-l-4 border-l-primary">
       <CardHeader className="flex flex-row items-start justify-between pb-2">
@@ -553,6 +570,15 @@ function GroupDetail({
             >
               <Icon name="alert" size={13} />
               Cancelar grupo
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => void handleDownloadStartXml()}
+            >
+              <Icon name="file" size={13} />
+              Descargar XML inicio
             </Button>
           </div>
         ) : null}

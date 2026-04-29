@@ -149,6 +149,26 @@ export const fundaeGroupsApi = {
     );
   },
 
+  /**
+   * Devuelve el XML como string. La UI lo descarga creando un Blob.
+   * Usa fetch nativo porque `apiFetch` espera JSON.
+   */
+  async startXml(id: string): Promise<string> {
+    const token = withAuth();
+    const res = await fetch(`/api/v1/admin/fundae/groups/${id}/start-xml`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new ApiHttpError({
+        message: text || 'No pudimos generar el XML.',
+        status: res.status,
+      });
+    }
+    return res.text();
+  },
+
   async listCosts(groupId: string): Promise<FundaeCost[]> {
     return apiFetch<FundaeCost[]>(
       `/api/v1/admin/fundae/groups/${groupId}/costs`,

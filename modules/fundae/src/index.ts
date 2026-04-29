@@ -8,6 +8,11 @@ export { FundaeRlptService } from './rlpt.service.js';
 export { FundaeGroupService } from './group.service.js';
 export { FundaeGroupParticipantService } from './group-participant.service.js';
 export { buildActionXml } from './xml-export.js';
+export {
+  buildGroupStartXml,
+  type BuildGroupStartXmlInput,
+  type GroupParticipantSnapshot,
+} from './group-xml-export.js';
 export { renderEvidencePdf, type EvidenceRenderInput } from './evidence-pdf.js';
 export { buildPresentationZip, type ZipPackageInput } from './zip-package.js';
 export {
