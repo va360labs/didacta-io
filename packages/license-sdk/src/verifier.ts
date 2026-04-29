@@ -10,8 +10,7 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, resolve } from 'node:path';
 import { importSPKI, jwtVerify, type KeyLike } from 'jose';
 import {
   licensePayloadSchema,
@@ -23,7 +22,9 @@ const ALG = 'ES256';
 const EXPECTED_ISSUER = 'didacta.io';
 const EXPECTED_AUDIENCE = 'didacta-runtime';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+// `__dirname` está disponible directamente en CommonJS (que es lo que el SDK
+// compila — alineado con apps/api). Si en el futuro se compila a ESM, sustituir
+// por `dirname(fileURLToPath(import.meta.url))`.
 const PUBLIC_KEYS_DIR = resolve(__dirname, 'public-keys');
 
 /**

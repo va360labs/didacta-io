@@ -38,10 +38,12 @@ function makePrismaMock() {
       findFirst: vi.fn(async (args: { where: any; orderBy?: any }) => {
         const where = args?.where ?? {};
         const filtered = rows.filter((r) => {
-          if (where.optedOutAt === null) return r.optedOutAt === null;
-          if (where.telemetryEnabled === true) return r.telemetryEnabled === true;
+          // AND lógico — todos los predicados deben cumplirse.
+          if (where.optedOutAt === null && r.optedOutAt !== null) return false;
+          if (where.telemetryEnabled === true && r.telemetryEnabled !== true) return false;
           return true;
         });
+        // orderBy createdAt desc → último primero.
         return filtered[filtered.length - 1] ?? null;
       }),
       updateMany: vi.fn(async (args: any) => {
@@ -54,8 +56,16 @@ function makePrismaMock() {
         return { count: updated.length };
       }),
       create: vi.fn(async (args: any) => {
+        // Simula los defaults del schema Prisma:
+        //   optedOutAt → null, lastTelemetryAt → null,
+        //   telemetryEnabled → true, deploymentUrl → null, registryToken → null.
         const row: FakeRow = {
           id: `row_${rows.length + 1}`,
+          optedOutAt: null,
+          lastTelemetryAt: null,
+          telemetryEnabled: true,
+          deploymentUrl: null,
+          registryToken: null,
           ...args.data,
           createdAt: new Date(),
           updatedAt: new Date(),
