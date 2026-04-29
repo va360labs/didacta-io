@@ -1,0 +1,28 @@
+# Didacta — gitleaks config
+# Reglas adicionales sobre las default de gitleaks.
+# Ver https://github.com/gitleaks/gitleaks#configuration para sintaxis.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "didacta-license-jwt"
+description = "JWT que pueda ser una licencia Didacta firmada (no debería estar en repo)"
+regex = '''eyJhbGciOiJFZERTQSI[A-Za-z0-9_-]{30,}'''
+tags = ["didacta", "license", "jwt"]
+
+[[rules]]
+id = "didacta-private-key-pem"
+description = "Posible clave privada en PEM"
+regex = '''-----BEGIN (RSA |EC |OPENSSH |)PRIVATE KEY-----'''
+tags = ["didacta", "secret", "key"]
+
+[allowlist]
+description = "Falsos positivos conocidos"
+paths = [
+    # Las claves PÚBLICAS embebidas son intencionales y NO son secreto
+    '''packages/license-sdk/src/public-keys/.*\.pem''',
+    # Plantillas de docs que muestran ejemplos de JWT
+    '''docs/.*\.md''',
+    '''arquitectura-didacta/.*\.md''',
+]

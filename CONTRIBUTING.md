@@ -1,118 +1,122 @@
-# Contribuir a Didacta
+# Contributing to Didacta Community
 
-Guía rápida de flujo de trabajo.
+> Gracias por tu interés en contribuir a Didacta. Esta guía resume el proceso. Tómate 5 minutos para leerla antes de abrir tu primer PR.
 
-## Requisitos
+## Antes de empezar
 
-- Node.js 22 LTS (`.nvmrc` incluido — usa `nvm use` si tenés nvm).
-- pnpm 9 o superior (`corepack enable` si no lo tenés).
-- Docker Desktop o Docker Engine + Compose.
-- Git + GitHub CLI autenticado.
+### Estado actual: alpha cerrada
 
-## Setup inicial
+Este repositorio está en **alpha cerrada** mientras trabajamos hacia `v1.0.0`. Las contribuciones externas se aceptan **solo de alpha testers invitados** durante esta fase. Cuando hagamos público el repo (Fase 7 / `v1.0.0`), se abrirán las contribuciones a toda la comunidad.
+
+### Licencia
+
+Didacta es **fair-code source-available**, no open source bajo definición OSI. Lee:
+
+- [`LICENSE`](LICENSE) — Didacta Sustainable Use License v1.0 (cubre la mayor parte del repo).
+- [`LICENSE_EE`](LICENSE_EE) — Didacta Enterprise License (cubre archivos `*.ee.*` y carpetas `ee/` / `*.ee/` dentro del CORE).
+- [`LICENSE_NOTICE.md`](LICENSE_NOTICE.md) — resumen humano.
+
+## Tu primera contribución
+
+### 1. Bot CLA
+
+Cualquier PR es bloqueado hasta firmar el CLA (Contributor License Agreement) vía [cla-assistant.io](https://cla-assistant.io). El bot te lo pedirá automáticamente la primera vez. **Una sola firma vale para todas tus contribuciones futuras.**
+
+### 2. Issue antes de PR
+
+Para cambios no triviales, abre primero una **issue** describiendo el problema o la propuesta. Eso evita trabajo descartado si la dirección no encaja con el roadmap. Para fixes pequeños (typo, doc) puedes ir directo al PR.
+
+### 3. Branch
 
 ```bash
-pnpm install
-cp .env.example .env       # cuando exista
-docker compose up -d       # levanta Postgres, Redis, MinIO, MailPit (cuando exista)
-pnpm dev                   # arranca todos los servicios en watch mode
+git checkout -b <type>/<short-description>
 ```
 
-El primer `pnpm install` activa automáticamente los hooks de Husky.
+Tipos válidos: `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, `test/`, `perf/`.
 
-## Ramas
-
-- `main` — rama protegida, siempre deployable.
-- `feat/<descripción>` — nuevas features.
-- `fix/<descripción>` — correcciones de bugs.
-- `chore/<descripción>` — tareas de mantenimiento.
-- `docs/<descripción>` — cambios de documentación.
-
-Ejemplos:
-
-- `feat/T-F0-007-module-registry`
-- `fix/learning-progress-race-condition`
-- `docs/adr-003-auth-provider`
-
-## Convenciones de commit
-
-Usamos **Conventional Commits**. Commitlint valida en cada commit.
+### 4. Conventional Commits obligatorios
 
 ```
-<type>(<scope>): <descripción corta en español>
+feat(scope): título corto
 
-[body opcional explicando el porqué]
+Cuerpo opcional. Explica el POR QUÉ, no el QUÉ (eso ya lo dice el diff).
 
-[footer opcional]
+Refs: #123
 ```
 
-Tipos permitidos: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+Sin atribución a IA en commits (sin `Co-Authored-By: Claude` ni similar). Política del proyecto.
 
-Ejemplos:
+### 5. Tests
 
-```
-feat(api): añadir endpoint /healthz con métricas de uptime
-fix(learning): evitar doble emisión de learning.course.completed
-docs(adr): aprobar ADR-005 sobre Prisma 5 como ORM
-chore: actualizar dependencias del monorepo
-```
+Cualquier PR que toque lógica de negocio debe incluir tests. Coverage mínimo 70% en services.
 
-**Nunca** añadir "Co-Authored-By" ni referencias a asistentes IA en el cuerpo del commit.
-
-## Pull Requests
-
-Uno por feature. Formato del título: igual que un commit convencional.
-
-Descripción:
-
-```markdown
-## Resumen
-
-Qué se hace y por qué.
-
-## Cambios
-
-- Lista concreta de archivos o módulos afectados.
-
-## Plan de test
-
-- [ ] Pasos manuales o automáticos para verificar.
-
-## Referencias
-
-- Notion: LMS-<N>
-- ADR: <número si aplica>
-```
-
-## Estructura del repositorio
-
-```
-didacta/
-├── apps/              # Aplicaciones desplegables (api, web, super-admin, workers)
-├── packages/          # Paquetes del core y utilidades (core-kernel, database, sdk, ui)
-├── modules/           # Módulos de negocio (courses, learning, fundae, ai-tutor, ...)
-├── docs/              # Documentación viva (PRD, ADRs, arquitectura, runbooks)
-├── prompts/           # Prompts para generación asistida
-└── infra/             # Docker, Easypanel, GitHub Actions
-```
-
-## Tests y calidad
-
-Antes de abrir PR:
+### 6. Validaciones obligatorias antes de push
 
 ```bash
 pnpm lint
 pnpm typecheck
 pnpm test
-pnpm build
+pnpm tsx scripts/ee-fence.ts
+pnpm tsx scripts/module-doctor.ts
 ```
 
-Coverage mínimo 70% en lógica de negocio (services, handlers). E2E con Playwright para flujos críticos.
+CI las ejecuta otra vez. Si fallan, el PR no se mergea.
 
-## Contrato de módulo
+## Reglas duras del modelo
 
-Crítico. Cualquier cambio a `modules/*` debe respetar el contrato definido en [`docs/ARQUITECTURA-MODULAR.md`](docs/ARQUITECTURA-MODULAR.md). Un cambio al contrato exige **ADR aprobada** y major bump del core.
+Estas reglas son **innegociables**. Romperlas = PR rechazado.
 
-## Licencia
+### Convención `.ee` (open-core)
 
-Proprietary © 2026 VA360 LABS S.L. No contribuciones externas sin acuerdo previo.
+- Archivos `*.ee.ts` y carpetas `ee/` / `*.ee/` viven **solo dentro del CORE** (`apps/api/src/...`, `packages/core-kernel/`, `packages/license-sdk/src/`).
+- **Ningún módulo** (`modules/*`) puede tener archivos `.ee` ni sufijo `.ee` en su carpeta. Todos los módulos son Community.
+- Capabilities Enterprise se gatean con `@RequiresCapability(LICENSE_CAPABILITIES.X)` en endpoints y `license.requireCapability(...)` en services.
+
+### Contrato de módulo
+
+- Todas las tablas con prefijo `mod_<nombre>_*` y `tenant_id` con RLS.
+- Cero FKs cross-module.
+- Cero imports de código privado de otro módulo. Comunicación vía eventos / hooks / API pública.
+- `module.json` válido contra schema.
+- Lifecycle hooks (`onRegister`, `onEnable`, `onDisable`, `onUninstall`) implementados.
+
+### No introducir dependencias copyleft
+
+- ✅ MIT, Apache 2.0, BSD, ISC.
+- ⚠️ LGPL (caso a caso, solo si linkado dinámico).
+- ❌ GPL, AGPL, MPL, SSPL.
+
+CI corre `scripts/license-check.ts` y rechaza el PR si hay dependencia incompatible.
+
+## Estilo de código
+
+- TypeScript estricto. No `any` salvo casos justificados (con comentario).
+- Prettier + ESLint. CI lo verifica.
+- Identificadores en inglés. Comentarios y commits en español o inglés indistintamente.
+- Sin `console.log` en código de producción — usa el logger Pino.
+
+## Reportar bugs
+
+Si eres **alpha tester**, sigue [`docs/alpha/FEEDBACK.md`](docs/alpha/FEEDBACK.md).
+
+Si encuentras una vulnerabilidad de seguridad, **NO abras issue público**. Manda un email a `security@didacta.io`. Ver [`SECURITY.md`](SECURITY.md).
+
+## Decisiones arquitectónicas
+
+Cualquier cambio que afecte al contrato de módulo, al modelo de licencias, al SDK o a APIs públicas requiere **ADR** previa. Las ADRs viven en `docs/adrs/`. Plantilla: ADR-008.
+
+## Política de marca
+
+El nombre "Didacta", el logo y derivados son marcas registradas de VA360 LABS S.L. Lee [`TRADEMARKS.md`](TRADEMARKS.md) antes de mencionarlos en proyectos derivados o forks.
+
+## Reconocimiento
+
+Las contribuciones aceptadas aparecen en `CONTRIBUTORS.md` (con tu consentimiento) cuando publiquemos `v1.0.0`.
+
+## Contacto
+
+- 💬 Preguntas técnicas: GitHub Discussions o Discord `#didacta-alpha` (durante alpha).
+- 🔒 Seguridad: `security@didacta.io`.
+- 📜 Licensing / comercial: `licensing@didacta.io`.
+
+Gracias por contribuir. 🚀
