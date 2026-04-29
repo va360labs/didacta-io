@@ -17,6 +17,12 @@
  *   - Telemetry diaria pendiente: cron real se añadirá cuando Cloud god
  *     tenga endpoint de ingesta. Por ahora `buildTelemetrySnapshot()` está
  *     listo para ser invocado.
+ *
+ * 🚨 PENDIENTE Cloud god (no olvidar):
+ *   Decisión Sprint 0 = Opción A (registro solo local hasta Fase 4 / Sprint 2).
+ *   Cloud god vivirá en https://registry.didacta.io cuando MIG-049/050/051
+ *   se ejecuten. Hasta entonces: opt-in local sin envío.
+ *   Ver TODO-CLOUD-GOD.md en este mismo directorio.
  */
 
 import { Injectable, Logger } from '@nestjs/common';
