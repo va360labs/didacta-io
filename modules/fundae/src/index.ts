@@ -4,6 +4,7 @@ import { manifest } from './manifest.js';
 export { manifest };
 export { FundaeService } from './fundae.service.js';
 export { FundaeCompanyService } from './company.service.js';
+export { FundaeRlptService } from './rlpt.service.js';
 export { buildActionXml } from './xml-export.js';
 export { renderEvidencePdf, type EvidenceRenderInput } from './evidence-pdf.js';
 export { buildPresentationZip, type ZipPackageInput } from './zip-package.js';
@@ -33,6 +34,14 @@ export {
   type DatosContactoDto,
 } from './company.dto.js';
 export {
+  createRlptNoticeSchema,
+  rlptNoticeTypeSchema,
+  RLPT_ANTELACION_MINIMA_DIAS,
+  type CreateRlptNoticeDto,
+  type RlptNoticeType,
+  type RlptNoticeView,
+} from './rlpt.dto.js';
+export {
   isValidSpanishTaxId,
   normalizeSpanishTaxId,
   validateSpanishTaxId,
@@ -50,6 +59,9 @@ export {
   CompanyNotFoundError,
   CompanyTieneGruposActivosError,
   CourseNotInTenantError,
+  RlptNotFoundError,
+  RlptNotificacionInicialMissingError,
+  RlptPlazoNoCumplidoError,
   FechasInvalidasError,
   FundaeError,
   ParticipantNotInActionError,

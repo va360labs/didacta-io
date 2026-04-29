@@ -61,6 +61,41 @@ const TABLE_CHECKS: TableCheck[] = [
     columns: ['id', 'tenant_id', 'name', 'color', 'icon', 'created_at', 'updated_at'],
     feature: 'E2 / FU-1 — categorías curadas',
   },
+  {
+    table: 'mod_fundae_company',
+    columns: [
+      'id',
+      'tenant_id',
+      'nif',
+      'razon_social',
+      'ccc_principal',
+      'plantilla',
+      'credito_total_cents',
+      'credito_usado_cents',
+      'datos_contacto',
+      'created_at',
+      'updated_at',
+      'deleted_at',
+    ],
+    feature: 'LMS-79 — empresa bonificada Fundae',
+  },
+  {
+    table: 'mod_fundae_rlpt_notice',
+    columns: [
+      'id',
+      'tenant_id',
+      'company_id',
+      'tipo',
+      'fecha_notificacion_at',
+      'plazo_vencimiento_at',
+      'evidence_entry_id',
+      'observaciones',
+      'created_at',
+      'updated_at',
+      'deleted_at',
+    ],
+    feature: 'LMS-80 — notificación RLPT',
+  },
 ];
 
 const COLUMN_CHECKS: { table: string; column: string; feature: string }[] = [

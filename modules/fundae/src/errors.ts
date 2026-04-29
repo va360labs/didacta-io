@@ -103,3 +103,29 @@ export class CompanyTieneGruposActivosError extends FundaeError {
     );
   }
 }
+
+export class RlptNotFoundError extends FundaeError {
+  constructor(noticeId: string) {
+    super('FUNDAE_RLPT_NOT_FOUND', `La notificación RLPT ${noticeId} no existe.`);
+  }
+}
+
+export class RlptNotificacionInicialMissingError extends FundaeError {
+  constructor(companyId: string) {
+    super(
+      'FUNDAE_RLPT_NOTIFICACION_INICIAL_MISSING',
+      `La empresa ${companyId} no tiene una notificación inicial a la RLPT registrada; ` +
+        'no se puede iniciar un grupo bonificable hasta hacerla y subir la evidencia.',
+    );
+  }
+}
+
+export class RlptPlazoNoCumplidoError extends FundaeError {
+  constructor(companyId: string, plazoIso: string) {
+    super(
+      'FUNDAE_RLPT_PLAZO_NO_CUMPLIDO',
+      `Aún no se cumplen los 15 días naturales de antelación a la RLPT ` +
+        `(plazo: ${plazoIso}) para la empresa ${companyId}. Si hay discrepancia formalizada, registra el acta para autorizar el inicio.`,
+    );
+  }
+}

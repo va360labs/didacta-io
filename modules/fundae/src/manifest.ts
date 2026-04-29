@@ -17,6 +17,8 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'fundae.export.read',
     'fundae.company.read',
     'fundae.company.write',
+    'fundae.rlpt.read',
+    'fundae.rlpt.write',
   ],
   dependencies: {
     modules: [],
@@ -30,6 +32,8 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'fundae.company.created',
     'fundae.company.updated',
     'fundae.company.deleted',
+    'fundae.rlpt.notice.created',
+    'fundae.rlpt.notice.deleted',
   ],
   eventsConsumed: [],
   apiNamespace: '/modules/fundae',

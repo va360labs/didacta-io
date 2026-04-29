@@ -335,6 +335,7 @@ model EvidenceVaultEntry {
   createdAt    DateTime @default(now()) @map("created_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+  rlptNotices ModFundaeRlptNotice[]
 
   @@index([tenantId, resourceType, resourceId])
   @@index([hash])
@@ -1330,6 +1331,61 @@ model ModFundaeCompany {
   @@index([tenantId, deletedAt], map: "mod_fundae_company_tenant_deleted_idx")
   @@index([tenantId, razonSocial], map: "mod_fundae_company_tenant_razon_idx")
   @@map("mod_fundae_company")
+}
+
+// ============================================================================
+// MOD.FUNDAE.RLPT — notificaciones a la Representación Legal de Personas
+// Trabajadoras (LMS-80). Para que un grupo bonificable pueda iniciarse,
+// la empresa tiene que haber notificado a la RLPT con la antelación
+// mínima exigida por el RD 694/2017 (15 días naturales). El acuse de la
+// RLPT y eventuales actas de discrepancia se guardan como subtipos del
+// mismo modelo, todos vinculados a la empresa por `companyId` (FK
+// lógica — no FK física por la regla del proyecto de no-cross-module-FK).
+//
+// El blob (PDF firmado, escaneo del acuse) se persiste en
+// `evidence_vault_entry` con hash SHA-256; aquí guardamos sólo la
+// referencia + metadata. El hook `fundae.group.before-start` consulta
+// que exista al menos una NOTIFICACION_INICIAL con `plazoVencimientoAt`
+// pasada antes de permitir iniciar un grupo.
+// ============================================================================
+model ModFundaeRlptNotice {
+  id                  String    @id @default(uuid()) @db.Uuid
+  tenantId            String    @map("tenant_id") @db.Uuid
+  /// FK lógica a `mod_fundae_company.id`. Sin FK física por la regla
+  /// de aislamiento de módulos.
+  companyId           String    @map("company_id") @db.Uuid
+  /// Tipo de notificación.
+  ///   - NOTIFICACION_INICIAL: notificación previa al inicio del grupo.
+  ///   - ACUSE_RECIBO: respuesta de la RLPT confirmando recepción.
+  ///   - ACTA_DISCREPANCIA: cuando la RLPT formaliza desacuerdo; permite
+  ///     avanzar el grupo igualmente con la traza documentada.
+  tipo                String    /// NOTIFICACION_INICIAL | ACUSE_RECIBO | ACTA_DISCREPANCIA
+  /// Fecha en que se notificó / recibió. ISO 8601 string para preservar
+  /// la zona horaria del usuario (Madrid en la mayoría de casos).
+  fechaNotificacionAt DateTime  @map("fecha_notificacion_at")
+  /// Plazo en el que vence la antelación legal mínima. Para
+  /// NOTIFICACION_INICIAL se calcula como `fechaNotificacionAt + 15 días`.
+  /// El hook compara `now() >= plazoVencimientoAt` para autorizar el
+  /// inicio del grupo. Para los otros tipos suele coincidir con la
+  /// fecha de notificación.
+  plazoVencimientoAt  DateTime  @map("plazo_vencimiento_at")
+  /// Referencia al artefacto subido. Apunta a evidence_vault_entry.id —
+  /// FK física porque es el mismo módulo core (Evidence Vault) y la
+  /// integridad referencial protege contra eliminaciones accidentales
+  /// del blob.
+  evidenceEntryId     String    @map("evidence_entry_id") @db.Uuid
+  /// Notas internas (no van a Fundae).
+  observaciones       String?
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  deletedAt           DateTime? @map("deleted_at")
+
+  evidence EvidenceVaultEntry @relation(fields: [evidenceEntryId], references: [id])
+
+  @@index([tenantId, companyId, tipo], map: "mod_fundae_rlpt_tenant_company_tipo_idx")
+  @@index([tenantId, companyId, fechaNotificacionAt(sort: Desc)], map: "mod_fundae_rlpt_tenant_company_fecha_idx")
+  @@index([evidenceEntryId], map: "mod_fundae_rlpt_evidence_idx")
+  @@map("mod_fundae_rlpt_notice")
 }
 
 // ============================================================================

@@ -5,7 +5,12 @@ import { buildCertificatesModule, CertificatesService } from '@didacta/mod-certi
 import { communityModule, CommunityService } from '@didacta/mod-community';
 import { coursesModule, CoursesService } from '@didacta/mod-courses';
 import { helloWorldModule } from '@didacta/mod-hello-world';
-import { fundaeModule, FundaeCompanyService, FundaeService } from '@didacta/mod-fundae';
+import {
+  fundaeModule,
+  FundaeCompanyService,
+  FundaeRlptService,
+  FundaeService,
+} from '@didacta/mod-fundae';
 import { learningModule, LearningService, ScormService } from '@didacta/mod-learning';
 import { themingModule, ThemingService } from '@didacta/mod-theming';
 import { zoomLiveModule, ZoomLiveService } from '@didacta/mod-zoom-live';
@@ -26,6 +31,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private zoomLive?: ZoomLiveService;
   private fundae?: FundaeService;
   private fundaeCompanies?: FundaeCompanyService;
+  private fundaeRlpt?: FundaeRlptService;
   private scorm?: ScormService;
 
   constructor(
@@ -47,6 +53,7 @@ export class ModuleRegistryService implements OnModuleInit {
     this.zoomLive = new ZoomLiveService(prisma, context);
     this.fundae = new FundaeService(prisma, context);
     this.fundaeCompanies = new FundaeCompanyService(prisma, context);
+    this.fundaeRlpt = new FundaeRlptService(prisma, context);
     this.scorm = new ScormService(prisma, context);
 
     const certificatesModule = buildCertificatesModule(this.certificates);
@@ -152,6 +159,11 @@ export class ModuleRegistryService implements OnModuleInit {
   getFundaeCompanyService(): FundaeCompanyService {
     if (!this.fundaeCompanies) throw new Error('ModuleRegistry no está inicializado');
     return this.fundaeCompanies;
+  }
+
+  getFundaeRlptService(): FundaeRlptService {
+    if (!this.fundaeRlpt) throw new Error('ModuleRegistry no está inicializado');
+    return this.fundaeRlpt;
   }
 
   getScormService(): ScormService {

@@ -115,3 +115,78 @@ export function formatCents(cents: number | null): string {
     maximumFractionDigits: 2,
   }).format(cents / 100);
 }
+
+// -------------------- Notificaciones RLPT (LMS-80) --------------------
+
+export type RlptNoticeType = 'NOTIFICACION_INICIAL' | 'ACUSE_RECIBO' | 'ACTA_DISCREPANCIA';
+
+export interface RlptNotice {
+  id: string;
+  tenantId: string;
+  companyId: string;
+  tipo: RlptNoticeType;
+  fechaNotificacionAt: string;
+  plazoVencimientoAt: string;
+  evidenceEntryId: string;
+  evidenceHash: string;
+  evidenceSize: number;
+  observaciones: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface UploadRlptInput {
+  tipo: RlptNoticeType;
+  fechaNotificacionAt?: string;
+  plazoVencimientoAt?: string;
+  observaciones?: string;
+  /** Documento base64 (sin prefijo `data:...,`). */
+  data: string;
+  contentType: 'application/pdf' | 'image/png' | 'image/jpeg' | 'image/webp';
+  filename?: string;
+}
+
+export const fundaeRlptApi = {
+  async list(companyId: string): Promise<RlptNotice[]> {
+    return apiFetch<RlptNotice[]>(
+      `/api/v1/admin/fundae/companies/${companyId}/rlpt-notices`,
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
+  async upload(companyId: string, input: UploadRlptInput): Promise<RlptNotice> {
+    return apiFetch<RlptNotice>(
+      `/api/v1/admin/fundae/companies/${companyId}/rlpt-notices`,
+      { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async remove(companyId: string, id: string): Promise<void> {
+    await apiFetch<{ deleted: true }>(
+      `/api/v1/admin/fundae/companies/${companyId}/rlpt-notices/${id}`,
+      { method: 'DELETE' },
+      withAuth(),
+    );
+  },
+};
+
+/** Lee un File como base64 sin el prefijo `data:`. */
+export async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('No pudimos leer el archivo.'));
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error('Resultado inesperado del FileReader.'));
+        return;
+      }
+      const idx = result.indexOf(',');
+      resolve(idx >= 0 ? result.slice(idx + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
