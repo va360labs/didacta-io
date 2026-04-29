@@ -1,0 +1,36 @@
+import { parseModuleManifest, type ModuleManifest } from '@didacta/core-kernel';
+
+export const manifest: ModuleManifest = parseModuleManifest({
+  name: 'mod.ai-tutor',
+  displayName: 'AI Tutor · asistente IA por curso',
+  description:
+    'Tutor IA por curso con RAG sobre el contenido publicado. Indexa al publicar curso, ' +
+    'responde dudas del alumno citando las lecciones relevantes. Fase 1.C.',
+  version: '0.1.0',
+  author: 'VA360 LABS',
+  license: 'Proprietary',
+  category: 'ai',
+  coreVersionRequired: '^1.0.0',
+  tablePrefix: 'mod_ai_tutor_',
+  permissions: [
+    'ai-tutor.chat.read',
+    'ai-tutor.chat.write',
+    'ai-tutor.index.write',
+    'ai-tutor.config.write',
+  ],
+  dependencies: {
+    modules: [],
+    optionalModules: [
+      { name: 'mod.courses', version: '^1.0.0' },
+      { name: 'mod.learning', version: '^1.0.0' },
+    ],
+  },
+  eventsEmitted: [
+    'ai-tutor.course.indexed',
+    'ai-tutor.course.index-failed',
+    'ai-tutor.chat.message-sent',
+    'ai-tutor.chat.message-received',
+  ],
+  eventsConsumed: ['courses.course.published', 'courses.course.unpublished'],
+  apiNamespace: '/modules/ai-tutor',
+});

@@ -16,8 +16,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
   // pgvector se añade en Fase 1.C cuando se active mod.ai-tutor (embeddings + RAG).
   // Para activarlo en Postgres de Easypanel, cambiar la imagen del servicio
   // a pgvector/pgvector:pg16 y volver a añadir `vector` aquí.
@@ -29,26 +29,26 @@ datasource db {
 // ============================================================================
 
 model Tenant {
-  id        String    @id @default(uuid()) @db.Uuid
-  slug      String    @unique
+  id        String       @id @default(uuid()) @db.Uuid
+  slug      String       @unique
   name      String
   status    TenantStatus @default(ACTIVE)
-  config    Json      @default("{}")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  config    Json         @default("{}")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+  deletedAt DateTime?    @map("deleted_at")
 
-  users            User[]
-  sessions         Session[]
-  apiKeys          ApiKey[]
-  tenantModules    TenantModule[]
-  auditLogs        AuditLog[]
-  evidenceEntries  EvidenceVaultEntry[]
-  outboxEvents     OutboxEvent[]
-  webhooks         Webhook[]
-  notifTemplates   NotificationTemplate[]
-  tenantSettings   TenantSetting[]
-  domains          TenantDomain[]
+  users           User[]
+  sessions        Session[]
+  apiKeys         ApiKey[]
+  tenantModules   TenantModule[]
+  auditLogs       AuditLog[]
+  evidenceEntries EvidenceVaultEntry[]
+  outboxEvents    OutboxEvent[]
+  webhooks        Webhook[]
+  notifTemplates  NotificationTemplate[]
+  tenantSettings  TenantSetting[]
+  domains         TenantDomain[]
 
   @@index([slug])
   @@index([status])
@@ -93,24 +93,24 @@ model TenantDomain {
 // ============================================================================
 
 model TenantSetting {
-  id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @map("tenant_id") @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
   /// Namespace lógico: "notifications", "zoom", "ai-tutor", "storage", etc.
-  moduleName   String   @map("module_name") @db.VarChar(100)
+  moduleName  String   @map("module_name") @db.VarChar(100)
   /// Clave dentro del namespace (ej. "smtp", "default-locale").
-  key          String   @db.VarChar(200)
+  key         String   @db.VarChar(200)
   /// Si true, el valor es sensible y se cifra (passwords, API keys).
-  isSecret     Boolean  @default(false) @map("is_secret")
+  isSecret    Boolean  @default(false) @map("is_secret")
   /// Valor en claro cuando isSecret=false (cualquier JSON).
-  valueJson    Json?    @map("value_json")
+  valueJson   Json?    @map("value_json")
   /// AES-256-GCM ciphertext + IV (12B) + auth tag (16B) cuando isSecret=true.
-  valueCipher  Bytes?   @map("value_cipher")
-  valueIv      Bytes?   @map("value_iv")
-  valueTag     Bytes?   @map("value_tag")
+  valueCipher Bytes?   @map("value_cipher")
+  valueIv     Bytes?   @map("value_iv")
+  valueTag    Bytes?   @map("value_tag")
   /// Quién hizo el último cambio (sin FK cross-module a IAM).
-  updatedById  String?  @map("updated_by_id") @db.Uuid
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  updatedById String?  @map("updated_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -126,15 +126,15 @@ enum TenantStatus {
 }
 
 model Module {
-  id                String   @id @default(uuid()) @db.Uuid
-  name              String   @unique
-  version           String
-  displayName       String   @map("display_name")
-  description       String?
-  enabledByDefault  Boolean  @default(false) @map("enabled_by_default")
-  manifest          Json
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id               String   @id @default(uuid()) @db.Uuid
+  name             String   @unique
+  version          String
+  displayName      String   @map("display_name")
+  description      String?
+  enabledByDefault Boolean  @default(false) @map("enabled_by_default")
+  manifest         Json
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   tenantModules TenantModule[]
 
@@ -162,30 +162,30 @@ model TenantModule {
 // ============================================================================
 
 model User {
-  id            String    @id @default(uuid()) @db.Uuid
-  tenantId      String    @map("tenant_id") @db.Uuid
-  email         String
-  emailVerified Boolean   @default(false) @map("email_verified")
-  name          String?
-  passwordHash  String?   @map("password_hash")
-  mfaSecret     String?   @map("mfa_secret")
-  mfaEnabled    Boolean   @default(false) @map("mfa_enabled")
-  mfaRecoveryCodes String[] @default([]) @map("mfa_recovery_codes")
-  status        UserStatus @default(ACTIVE)
-  locale        String    @default("es-ES")
+  id               String     @id @default(uuid()) @db.Uuid
+  tenantId         String     @map("tenant_id") @db.Uuid
+  email            String
+  emailVerified    Boolean    @default(false) @map("email_verified")
+  name             String?
+  passwordHash     String?    @map("password_hash")
+  mfaSecret        String?    @map("mfa_secret")
+  mfaEnabled       Boolean    @default(false) @map("mfa_enabled")
+  mfaRecoveryCodes String[]   @default([]) @map("mfa_recovery_codes")
+  status           UserStatus @default(ACTIVE)
+  locale           String     @default("es-ES")
   /// IANA timezone, ej. "America/Argentina/Buenos_Aires" o "Europe/Madrid".
   /// Usado para mostrar timestamps localmente. Default UTC.
-  timezone      String    @default("UTC") @map("timezone")
+  timezone         String     @default("UTC") @map("timezone")
   /// URL pública (S3/CDN) del avatar del usuario. Null = usar iniciales.
-  avatarUrl     String?   @map("avatar_url")
+  avatarUrl        String?    @map("avatar_url")
   /// Documento de identidad (DNI o NIE español) en mayúsculas y sin
   /// separadores. Requerido para Fundae cuando el usuario participa
   /// en una acción formativa bonificada. Único por tenant si está set.
-  documentId    String?   @map("document_id") @db.VarChar(20)
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
-  lastLoginAt   DateTime? @map("last_login_at")
+  documentId       String?    @map("document_id") @db.VarChar(20)
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+  deletedAt        DateTime?  @map("deleted_at")
+  lastLoginAt      DateTime?  @map("last_login_at")
 
   tenant   Tenant     @relation(fields: [tenantId], references: [id])
   sessions Session[]
@@ -254,15 +254,15 @@ model UserRole {
 }
 
 model Session {
-  id         String    @id @default(uuid()) @db.Uuid
-  tenantId   String    @map("tenant_id") @db.Uuid
-  userId     String    @map("user_id") @db.Uuid
-  tokenHash  String    @unique @map("token_hash")
-  expiresAt  DateTime  @map("expires_at")
-  ip         String?
-  userAgent  String?   @map("user_agent")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  revokedAt  DateTime? @map("revoked_at")
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  ip        String?
+  userAgent String?   @map("user_agent")
+  createdAt DateTime  @default(now()) @map("created_at")
+  revokedAt DateTime? @map("revoked_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -273,16 +273,16 @@ model Session {
 }
 
 model ApiKey {
-  id           String    @id @default(uuid()) @db.Uuid
-  tenantId     String    @map("tenant_id") @db.Uuid
-  userId       String    @map("user_id") @db.Uuid
-  name         String
-  tokenHash    String    @unique @map("token_hash")
-  scopes       String[]
-  expiresAt    DateTime? @map("expires_at")
-  lastUsedAt   DateTime? @map("last_used_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  revokedAt    DateTime? @map("revoked_at")
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  name       String
+  tokenHash  String    @unique @map("token_hash")
+  scopes     String[]
+  expiresAt  DateTime? @map("expires_at")
+  lastUsedAt DateTime? @map("last_used_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  revokedAt  DateTime? @map("revoked_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -334,7 +334,7 @@ model EvidenceVaultEntry {
   metadata     Json     @default("{}")
   createdAt    DateTime @default(now()) @map("created_at")
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant      Tenant                @relation(fields: [tenantId], references: [id])
   rlptNotices ModFundaeRlptNotice[]
 
   @@index([tenantId, resourceType, resourceId])
@@ -347,17 +347,17 @@ model EvidenceVaultEntry {
 // ============================================================================
 
 model OutboxEvent {
-  id              BigInt   @id @default(autoincrement())
-  tenantId        String   @map("tenant_id") @db.Uuid
-  eventName       String   @map("event_name")
-  payloadVersion  Int      @default(1) @map("payload_version")
-  payload         Json
-  metadata        Json     @default("{}")
-  idempotencyKey  String   @map("idempotency_key")
-  createdAt       DateTime @default(now()) @map("created_at")
-  processedAt     DateTime? @map("processed_at")
-  processingAttempts Int   @default(0) @map("processing_attempts")
-  lastError       String?  @map("last_error")
+  id                 BigInt    @id @default(autoincrement())
+  tenantId           String    @map("tenant_id") @db.Uuid
+  eventName          String    @map("event_name")
+  payloadVersion     Int       @default(1) @map("payload_version")
+  payload            Json
+  metadata           Json      @default("{}")
+  idempotencyKey     String    @map("idempotency_key")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  processedAt        DateTime? @map("processed_at")
+  processingAttempts Int       @default(0) @map("processing_attempts")
+  lastError          String?   @map("last_error")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
@@ -368,14 +368,14 @@ model OutboxEvent {
 }
 
 model Webhook {
-  id          String    @id @default(uuid()) @db.Uuid
-  tenantId    String    @map("tenant_id") @db.Uuid
-  url         String
-  events      String[]
-  secretHash  String    @map("secret_hash")
-  enabled     Boolean   @default(true)
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  url            String
+  events         String[]
+  secretHash     String    @map("secret_hash")
+  enabled        Boolean   @default(true)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
   lastDeliveryAt DateTime? @map("last_delivery_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
@@ -389,15 +389,15 @@ model Webhook {
 // ============================================================================
 
 model NotificationTemplate {
-  id         String   @id @default(uuid()) @db.Uuid
-  tenantId   String   @map("tenant_id") @db.Uuid
-  key        String
-  channel    NotificationChannel
-  locale     String   @default("es-ES")
-  subject    String?
-  body       String
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id        String              @id @default(uuid()) @db.Uuid
+  tenantId  String              @map("tenant_id") @db.Uuid
+  key       String
+  channel   NotificationChannel
+  locale    String              @default("es-ES")
+  subject   String?
+  body      String
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
@@ -420,22 +420,22 @@ enum NotificationChannel {
 // ============================================================================
 
 model ModCommunityPost {
-  id        String    @id @default(uuid()) @db.Uuid
-  tenantId  String    @map("tenant_id") @db.Uuid
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
   /// ID lógico del autor (sin FK cross-module a IAM).
-  authorId  String    @map("author_id") @db.Uuid
+  authorId          String    @map("author_id") @db.Uuid
   /// ID lógico del curso al que está vinculado el post (null = post global).
-  courseId  String?   @map("course_id") @db.Uuid
-  title     String
-  body      String
+  courseId          String?   @map("course_id") @db.Uuid
+  title             String
+  body              String
   /// Tags libres (#general, #ayuda, #anuncios, etc.). Vacío = sin tags.
-  tags      String[]  @default([])
+  tags              String[]  @default([])
   /// Snapshot del nombre del autor al crear el post (denormalizado para
   /// listados rápidos sin necesidad de join cross-module a IAM).
-  authorDisplayName String? @map("author_display_name")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  authorDisplayName String?   @map("author_display_name")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
 
   /// Moderación: timestamp + actor + razón. Si `hiddenAt != null`, el post
   /// queda invisible para alumnos pero la fila se preserva (vs `deletedAt`,
@@ -464,16 +464,16 @@ model ModCommunityPost {
 /// recurso (post o comment). Se persisten al crear el contenido vía parser
 /// del body. Sirve para listar "mis menciones" rápido y para notificar.
 model ModCommunityMention {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
-  postId      String?  @map("post_id") @db.Uuid
-  commentId   String?  @map("comment_id") @db.Uuid
-  mentionedUserId String @map("mentioned_user_id") @db.Uuid
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  postId          String?  @map("post_id") @db.Uuid
+  commentId       String?  @map("comment_id") @db.Uuid
+  mentionedUserId String   @map("mentioned_user_id") @db.Uuid
   /// Handle textual usado al mencionar (ej. "juan" si email = juan@example.com).
   /// Snapshot para que cambios futuros del email no rompan la mención histórica.
-  mentionedHandle String @map("mentioned_handle")
-  authorId    String   @map("author_id") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at")
+  mentionedHandle String   @map("mentioned_handle")
+  authorId        String   @map("author_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
 
   @@index([tenantId, mentionedUserId, createdAt])
   @@index([postId])
@@ -514,25 +514,25 @@ model ModCoursesCategory {
 /// autor siempre ve los suyos (incluyendo PENDING) para que sepa que
 /// están esperando moderación.
 model ModLearningLessonComment {
-  id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @map("tenant_id") @db.Uuid
+  id                String              @id @default(uuid()) @db.Uuid
+  tenantId          String              @map("tenant_id") @db.Uuid
   /// ID lógico de la lección. Sin FK cross-module a courses.
-  lessonId     String   @map("lesson_id") @db.Uuid
+  lessonId          String              @map("lesson_id") @db.Uuid
   /// Denormalizado: lo persiste el handler al crear el comentario para
   /// que la cola de pendientes del profesor pueda filtrar por curso sin
   /// lookup adicional a courses.
-  courseId     String   @map("course_id") @db.Uuid
-  authorId     String   @map("author_id") @db.Uuid
-  authorDisplayName String? @map("author_display_name")
-  body         String
-  status       LessonCommentStatus @default(PENDING)
-  reviewedById String?  @map("reviewed_by_id") @db.Uuid
-  reviewedAt   DateTime? @map("reviewed_at")
+  courseId          String              @map("course_id") @db.Uuid
+  authorId          String              @map("author_id") @db.Uuid
+  authorDisplayName String?             @map("author_display_name")
+  body              String
+  status            LessonCommentStatus @default(PENDING)
+  reviewedById      String?             @map("reviewed_by_id") @db.Uuid
+  reviewedAt        DateTime?           @map("reviewed_at")
   /// Si el profesor rechaza, opcionalmente un motivo visible al autor.
-  rejectionReason String? @map("rejection_reason")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-  deletedAt    DateTime? @map("deleted_at")
+  rejectionReason   String?             @map("rejection_reason")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  deletedAt         DateTime?           @map("deleted_at")
 
   @@index([tenantId, lessonId, status])
   @@index([tenantId, courseId, status])
@@ -582,39 +582,39 @@ model ModCommunityTag {
 /// v0.1: solo `digestOptOut`. Estructura abierta para sumar prefs sin
 /// nuevas migraciones (la fila se upsert siempre).
 model ModCommunityUserPref {
-  id            String   @id @default(uuid()) @db.Uuid
-  tenantId      String   @map("tenant_id") @db.Uuid
-  userId        String   @map("user_id") @db.Uuid
-  digestOptOut  Boolean  @default(false) @map("digest_opt_out")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  digestOptOut Boolean  @default(false) @map("digest_opt_out")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@unique([tenantId, userId], map: "mod_community_user_pref_tenant_user_key")
   @@map("mod_community_user_pref")
 }
 
 model ModCommunityComment {
-  id        String    @id @default(uuid()) @db.Uuid
-  tenantId  String    @map("tenant_id") @db.Uuid
-  postId    String    @map("post_id") @db.Uuid
-  authorId  String    @map("author_id") @db.Uuid
-  body      String
-  authorDisplayName String? @map("author_display_name")
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  postId            String    @map("post_id") @db.Uuid
+  authorId          String    @map("author_id") @db.Uuid
+  body              String
+  authorDisplayName String?   @map("author_display_name")
   /// Comentario padre para nested replies (1 nivel de profundidad por
   /// design — los hilos profundos confunden y se moderan peor). NULL para
   /// comentarios root del post.
-  parentCommentId String? @map("parent_comment_id") @db.Uuid
-  createdAt DateTime  @default(now()) @map("created_at")
-  deletedAt DateTime? @map("deleted_at")
+  parentCommentId   String?   @map("parent_comment_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at")
+  deletedAt         DateTime? @map("deleted_at")
 
   /// Moderación, mismo patrón que `ModCommunityPost`.
   hiddenAt     DateTime? @map("hidden_at")
   hiddenById   String?   @map("hidden_by_id") @db.Uuid
   hiddenReason String?   @map("hidden_reason")
 
-  post      ModCommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  parent    ModCommunityComment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
-  replies   ModCommunityComment[] @relation("CommentReplies")
+  post      ModCommunityPost       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parent    ModCommunityComment?   @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies   ModCommunityComment[]  @relation("CommentReplies")
   reactions ModCommunityReaction[]
 
   @@index([tenantId, postId, createdAt])
@@ -644,23 +644,23 @@ model ModCommunityReaction {
 }
 
 model Notification {
-  id              String              @id @default(uuid()) @db.Uuid
-  tenantId        String              @map("tenant_id") @db.Uuid
-  userId          String              @map("user_id") @db.Uuid
-  channel         NotificationChannel
-  templateKey     String              @map("template_key")
-  subject         String?
-  body            String
-  metadata        Json                @default("{}")
+  id            String              @id @default(uuid()) @db.Uuid
+  tenantId      String              @map("tenant_id") @db.Uuid
+  userId        String              @map("user_id") @db.Uuid
+  channel       NotificationChannel
+  templateKey   String              @map("template_key")
+  subject       String?
+  body          String
+  metadata      Json                @default("{}")
   /// Timestamp de lectura por el destinatario (solo aplica a IN_APP).
-  readAt          DateTime?           @map("read_at")
+  readAt        DateTime?           @map("read_at")
   /// Timestamp de despacho del adapter (SMTP enviado, webhook OK, etc.).
   /// Para IN_APP se rellena al persistir, ya que entregar = persistir.
-  sentAt          DateTime?           @map("sent_at")
+  sentAt        DateTime?           @map("sent_at")
   /// Si el adapter falló (SMTP rebote, webhook 5xx), la razón queda aquí.
-  failedAt        DateTime?           @map("failed_at")
-  failureReason   String?             @map("failure_reason")
-  createdAt       DateTime            @default(now()) @map("created_at")
+  failedAt      DateTime?           @map("failed_at")
+  failureReason String?             @map("failure_reason")
+  createdAt     DateTime            @default(now()) @map("created_at")
 
   @@index([tenantId, userId, readAt])
   @@index([tenantId, channel, sentAt])
@@ -687,25 +687,25 @@ enum LessonType {
 }
 
 model ModCoursesCourse {
-  id               String       @id @default(uuid()) @db.Uuid
-  tenantId         String       @map("tenant_id") @db.Uuid
-  slug             String
-  title            String
-  description      String?
-  thumbnailUrl     String?      @map("thumbnail_url")
-  language         String       @default("es-ES")
-  estimatedMinutes Int?         @map("estimated_minutes")
-  status           CourseStatus @default(DRAFT)
-  category         String?
-  createdById      String?      @map("created_by_id") @db.Uuid
+  id                    String       @id @default(uuid()) @db.Uuid
+  tenantId              String       @map("tenant_id") @db.Uuid
+  slug                  String
+  title                 String
+  description           String?
+  thumbnailUrl          String?      @map("thumbnail_url")
+  language              String       @default("es-ES")
+  estimatedMinutes      Int?         @map("estimated_minutes")
+  status                CourseStatus @default(DRAFT)
+  category              String?
+  createdById           String?      @map("created_by_id") @db.Uuid
   /// Template de certificado preferido para este curso. Si null, se usa el
   /// default del tenant (mod_certificates_template.is_default = true).
   /// Sin @relation cross-module: es UUID lógico.
-  certificateTemplateId String? @map("certificate_template_id") @db.Uuid
-  createdAt        DateTime     @default(now()) @map("created_at")
-  updatedAt        DateTime     @updatedAt @map("updated_at")
-  publishedAt      DateTime?    @map("published_at")
-  deletedAt        DateTime?    @map("deleted_at")
+  certificateTemplateId String?      @map("certificate_template_id") @db.Uuid
+  createdAt             DateTime     @default(now()) @map("created_at")
+  updatedAt             DateTime     @updatedAt @map("updated_at")
+  publishedAt           DateTime?    @map("published_at")
+  deletedAt             DateTime?    @map("deleted_at")
 
   modules ModCoursesModule[]
 
@@ -775,20 +775,20 @@ enum EnrollmentSource {
 }
 
 model ModLearningEnrollment {
-  id                    String           @id @default(uuid()) @db.Uuid
-  tenantId              String           @map("tenant_id") @db.Uuid
-  userId                String           @map("user_id") @db.Uuid
+  id                  String           @id @default(uuid()) @db.Uuid
+  tenantId            String           @map("tenant_id") @db.Uuid
+  userId              String           @map("user_id") @db.Uuid
   /// ID lógico del curso (sin FK cross-module)
-  courseId              String           @map("course_id") @db.Uuid
-  status                EnrollmentStatus @default(ACTIVE)
-  source                EnrollmentSource @default(ADMIN)
-  completionThreshold   Int              @default(75) @map("completion_threshold")
+  courseId            String           @map("course_id") @db.Uuid
+  status              EnrollmentStatus @default(ACTIVE)
+  source              EnrollmentSource @default(ADMIN)
+  completionThreshold Int              @default(75) @map("completion_threshold")
   /// Porcentaje de finalización (0-100)
-  progressPercent       Int              @default(0) @map("progress_percent")
-  enrolledAt            DateTime         @default(now()) @map("enrolled_at")
-  startedAt             DateTime?        @map("started_at")
-  completedAt           DateTime?        @map("completed_at")
-  cancelledAt           DateTime?        @map("cancelled_at")
+  progressPercent     Int              @default(0) @map("progress_percent")
+  enrolledAt          DateTime         @default(now()) @map("enrolled_at")
+  startedAt           DateTime?        @map("started_at")
+  completedAt         DateTime?        @map("completed_at")
+  cancelledAt         DateTime?        @map("cancelled_at")
 
   progress ModLearningProgress[]
 
@@ -799,19 +799,19 @@ model ModLearningEnrollment {
 }
 
 model ModLearningProgress {
-  id                String                @id @default(uuid()) @db.Uuid
-  tenantId          String                @map("tenant_id") @db.Uuid
-  enrollmentId      String                @map("enrollment_id") @db.Uuid
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  enrollmentId      String    @map("enrollment_id") @db.Uuid
   /// ID lógico de la lección (sin FK cross-module)
-  lessonId          String                @map("lesson_id") @db.Uuid
+  lessonId          String    @map("lesson_id") @db.Uuid
   /// Tiempo total visto/leído en segundos
-  watchedSeconds    Int                   @default(0) @map("watched_seconds")
+  watchedSeconds    Int       @default(0) @map("watched_seconds")
   /// Posición exacta para reanudación (segundo dentro del vídeo, scroll en HTML, etc.)
-  resumePositionSec Int                   @default(0) @map("resume_position_sec")
-  completed         Boolean               @default(false)
-  firstAccessedAt   DateTime              @default(now()) @map("first_accessed_at")
-  lastAccessedAt    DateTime              @updatedAt @map("last_accessed_at")
-  completedAt       DateTime?             @map("completed_at")
+  resumePositionSec Int       @default(0) @map("resume_position_sec")
+  completed         Boolean   @default(false)
+  firstAccessedAt   DateTime  @default(now()) @map("first_accessed_at")
+  lastAccessedAt    DateTime  @updatedAt @map("last_accessed_at")
+  completedAt       DateTime? @map("completed_at")
 
   enrollment ModLearningEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
 
@@ -821,20 +821,20 @@ model ModLearningProgress {
 }
 
 model ModLearningInvitation {
-  id          String           @id @default(uuid()) @db.Uuid
-  tenantId    String           @map("tenant_id") @db.Uuid
-  courseId    String           @map("course_id") @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  courseId    String    @map("course_id") @db.Uuid
   /// Código corto para canje manual ("ABCD-1234")
   code        String
   /// Token de URL para enlace único compartible
-  token       String           @unique
+  token       String    @unique
   /// Cantidad máxima de matriculaciones que puede crear esta invitación (null = ilimitado)
-  maxUses     Int?             @map("max_uses")
-  usedCount   Int              @default(0) @map("used_count")
-  expiresAt   DateTime?        @map("expires_at")
-  createdById String?          @map("created_by_id") @db.Uuid
-  createdAt   DateTime         @default(now()) @map("created_at")
-  revokedAt   DateTime?        @map("revoked_at")
+  maxUses     Int?      @map("max_uses")
+  usedCount   Int       @default(0) @map("used_count")
+  expiresAt   DateTime? @map("expires_at")
+  createdById String?   @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  revokedAt   DateTime? @map("revoked_at")
 
   @@unique([tenantId, code])
   @@index([tenantId, courseId])
@@ -873,19 +873,19 @@ model ModLearningScormPackage {
 /// upsert para reanudar el state previo. Sin FK cross-module: userId y
 /// lessonId son UUID lógicos.
 model ModLearningScormAttempt {
-  id               String   @id @default(uuid()) @db.Uuid
-  tenantId         String   @map("tenant_id") @db.Uuid
-  userId           String   @map("user_id") @db.Uuid
-  lessonId         String   @map("lesson_id") @db.Uuid
-  packageId        String   @map("package_id") @db.Uuid
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  lessonId         String    @map("lesson_id") @db.Uuid
+  packageId        String    @map("package_id") @db.Uuid
   /// Diccionario completo cmi.* (location, suspend_data, score, completion_status, etc.).
-  cmiData          Json     @default("{}") @map("cmi_data")
+  cmiData          Json      @default("{}") @map("cmi_data")
   /// Atajo para indexar/filtrar sin parsear el blob: derivado de cmi.completion_status.
-  completionStatus String?  @map("completion_status")
+  completionStatus String?   @map("completion_status")
   /// Atajo: cmi.score.scaled (0..1) o cmi.core.score.raw escalado.
-  scoreScaled      Float?   @map("score_scaled")
-  startedAt        DateTime @default(now()) @map("started_at")
-  lastAccessedAt   DateTime @default(now()) @map("last_accessed_at")
+  scoreScaled      Float?    @map("score_scaled")
+  startedAt        DateTime  @default(now()) @map("started_at")
+  lastAccessedAt   DateTime  @default(now()) @map("last_accessed_at")
   completedAt      DateTime? @map("completed_at")
 
   @@unique([userId, lessonId])
@@ -899,23 +899,23 @@ model ModLearningScormAttempt {
 // ============================================================================
 
 model ModCertificatesTemplate {
-  id            String   @id @default(uuid()) @db.Uuid
-  tenantId      String   @map("tenant_id") @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
   /// Nombre legible: "Default", "VA360 oficial", etc.
-  name          String
+  name         String
   /// Si true, esta plantilla se usa cuando no hay otra explícita asociada
-  isDefault     Boolean  @default(false) @map("is_default")
+  isDefault    Boolean  @default(false) @map("is_default")
   /// Texto del cuerpo. Soporta {{alumno}}, {{curso}}, {{fecha}}, {{numero}}
-  body          String
+  body         String
   /// Color principal en hex (#RRGGBB) usado en bordes y títulos
-  primaryColor  String   @default("#0f172a") @map("primary_color")
+  primaryColor String   @default("#0f172a") @map("primary_color")
   /// URL absoluta del logo del tenant (opcional)
-  logoUrl       String?  @map("logo_url")
+  logoUrl      String?  @map("logo_url")
   /// Nombre del firmante (queda en el PDF)
-  signerName    String?  @map("signer_name")
-  signerTitle   String?  @map("signer_title")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  signerName   String?  @map("signer_name")
+  signerTitle  String?  @map("signer_title")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@unique([tenantId, name])
   @@index([tenantId, isDefault])
@@ -923,26 +923,26 @@ model ModCertificatesTemplate {
 }
 
 model ModCertificatesIssued {
-  id            String   @id @default(uuid()) @db.Uuid
-  tenantId      String   @map("tenant_id") @db.Uuid
-  userId        String   @map("user_id") @db.Uuid
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
   /// IDs lógicos sin FK cross-module
-  courseId      String   @map("course_id") @db.Uuid
-  enrollmentId  String   @map("enrollment_id") @db.Uuid
-  templateId    String?  @map("template_id") @db.Uuid
+  courseId     String    @map("course_id") @db.Uuid
+  enrollmentId String    @map("enrollment_id") @db.Uuid
+  templateId   String?   @map("template_id") @db.Uuid
   /// Número correlativo único por tenant
-  number        String
+  number       String
   /// Hash SHA-256 del PDF generado (para verificación)
-  hash          String
+  hash         String
   /// Datos congelados al momento de emisión (alumno, curso, fecha, etc.)
-  snapshot      Json     @default("{}")
+  snapshot     Json      @default("{}")
   /// Path en el storage del PDF generado
-  storageKey    String   @map("storage_key")
+  storageKey   String    @map("storage_key")
   /// Tamaño del PDF en bytes
-  size          Int
-  issuedAt      DateTime @default(now()) @map("issued_at")
-  revokedAt     DateTime? @map("revoked_at")
-  revokeReason  String?  @map("revoke_reason")
+  size         Int
+  issuedAt     DateTime  @default(now()) @map("issued_at")
+  revokedAt    DateTime? @map("revoked_at")
+  revokeReason String?   @map("revoke_reason")
 
   @@unique([tenantId, number])
   @@unique([tenantId, enrollmentId])
@@ -985,29 +985,29 @@ enum AttemptStatus {
 }
 
 model ModAssessmentsQuiz {
-  id                String     @id @default(uuid()) @db.Uuid
-  tenantId          String     @map("tenant_id") @db.Uuid
+  id               String     @id @default(uuid()) @db.Uuid
+  tenantId         String     @map("tenant_id") @db.Uuid
   /// ID lógico de la lección a la que pertenece el quiz (sin FK cross-module).
   /// Null mientras se redacta y aún no se ha asociado a ninguna lección.
-  lessonId          String?    @map("lesson_id") @db.Uuid
-  title             String
-  description       String?
-  status            QuizStatus @default(DRAFT)
+  lessonId         String?    @map("lesson_id") @db.Uuid
+  title            String
+  description      String?
+  status           QuizStatus @default(DRAFT)
   /// Umbral de aprobación en porcentaje (0-100). Default 60 %.
-  passThreshold     Int        @default(60) @map("pass_threshold")
+  passThreshold    Int        @default(60) @map("pass_threshold")
   /// Máximo de intentos por alumno (null = ilimitado).
-  maxAttempts       Int?       @map("max_attempts")
+  maxAttempts      Int?       @map("max_attempts")
   /// Límite de tiempo en minutos (null = sin límite).
-  timeLimitMinutes  Int?       @map("time_limit_minutes")
+  timeLimitMinutes Int?       @map("time_limit_minutes")
   /// Si true, el orden de preguntas y opciones se barajará al iniciar el intento.
-  shuffleQuestions  Boolean    @default(false) @map("shuffle_questions")
+  shuffleQuestions Boolean    @default(false) @map("shuffle_questions")
   /// Si true, al terminar el alumno ve la corrección por pregunta.
-  showFeedback      Boolean    @default(true) @map("show_feedback")
-  createdById       String?    @map("created_by_id") @db.Uuid
-  createdAt         DateTime   @default(now()) @map("created_at")
-  updatedAt         DateTime   @updatedAt @map("updated_at")
-  publishedAt       DateTime?  @map("published_at")
-  deletedAt         DateTime?  @map("deleted_at")
+  showFeedback     Boolean    @default(true) @map("show_feedback")
+  createdById      String?    @map("created_by_id") @db.Uuid
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+  publishedAt      DateTime?  @map("published_at")
+  deletedAt        DateTime?  @map("deleted_at")
 
   questions ModAssessmentsQuestion[]
   attempts  ModAssessmentsAttempt[]
@@ -1018,23 +1018,23 @@ model ModAssessmentsQuiz {
 }
 
 model ModAssessmentsQuestion {
-  id        String       @id @default(uuid()) @db.Uuid
-  tenantId  String       @map("tenant_id") @db.Uuid
-  quizId    String       @map("quiz_id") @db.Uuid
-  type      QuestionType
-  prompt    String
+  id              String       @id @default(uuid()) @db.Uuid
+  tenantId        String       @map("tenant_id") @db.Uuid
+  quizId          String       @map("quiz_id") @db.Uuid
+  type            QuestionType
+  prompt          String
   /// Texto de feedback opcional que se muestra tras corregir.
-  feedback  String?
-  position  Int
+  feedback        String?
+  position        Int
   /// Puntos que vale la pregunta (default 1).
-  points    Int          @default(1)
+  points          Int          @default(1)
   /// Lista de respuestas aceptadas para FILL_IN_BLANK. Se compara
   /// case-insensitive y trimmed contra la respuesta del alumno. Vacío
   /// para todos los demás tipos.
-  acceptedAnswers String[] @default([]) @map("accepted_answers")
-  createdAt DateTime     @default(now()) @map("created_at")
-  updatedAt DateTime     @updatedAt @map("updated_at")
-  deletedAt DateTime?    @map("deleted_at")
+  acceptedAnswers String[]     @default([]) @map("accepted_answers")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  deletedAt       DateTime?    @map("deleted_at")
 
   quiz    ModAssessmentsQuiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
   options ModAssessmentsOption[]
@@ -1063,30 +1063,30 @@ model ModAssessmentsOption {
 }
 
 model ModAssessmentsAttempt {
-  id            String        @id @default(uuid()) @db.Uuid
-  tenantId      String        @map("tenant_id") @db.Uuid
-  quizId        String        @map("quiz_id") @db.Uuid
-  userId        String        @map("user_id") @db.Uuid
+  id           String        @id @default(uuid()) @db.Uuid
+  tenantId     String        @map("tenant_id") @db.Uuid
+  quizId       String        @map("quiz_id") @db.Uuid
+  userId       String        @map("user_id") @db.Uuid
   /// IDs lógicos del contexto (sin FK cross-module): la matriculación y la lección
   /// desde las que el alumno está realizando el intento.
-  enrollmentId  String?       @map("enrollment_id") @db.Uuid
-  lessonId      String?       @map("lesson_id") @db.Uuid
-  status        AttemptStatus @default(IN_PROGRESS)
+  enrollmentId String?       @map("enrollment_id") @db.Uuid
+  lessonId     String?       @map("lesson_id") @db.Uuid
+  status       AttemptStatus @default(IN_PROGRESS)
   /// Snapshot inmutable del intento al enviarlo: puntos obtenidos, máximos, % y pasa/no pasa.
-  scoreEarned   Int?          @map("score_earned")
-  scoreMax      Int?          @map("score_max")
-  scorePercent  Int?          @map("score_percent")
-  passed        Boolean?
-  startedAt     DateTime      @default(now()) @map("started_at")
+  scoreEarned  Int?          @map("score_earned")
+  scoreMax     Int?          @map("score_max")
+  scorePercent Int?          @map("score_percent")
+  passed       Boolean?
+  startedAt    DateTime      @default(now()) @map("started_at")
   /// Vencimiento del intento si el quiz tenía time limit (start + timeLimit).
-  expiresAt     DateTime?     @map("expires_at")
-  submittedAt   DateTime?     @map("submitted_at")
+  expiresAt    DateTime?     @map("expires_at")
+  submittedAt  DateTime?     @map("submitted_at")
   /// Quién (formador / tenant_admin) corrigió las respuestas abiertas y cuándo.
   /// Null mientras el attempt está en PENDING_REVIEW.
-  gradedAt      DateTime?     @map("graded_at")
-  gradedById    String?       @map("graded_by_id") @db.Uuid
+  gradedAt     DateTime?     @map("graded_at")
+  gradedById   String?       @map("graded_by_id") @db.Uuid
 
-  quiz    ModAssessmentsQuiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  quiz    ModAssessmentsQuiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
   answers ModAssessmentsAnswer[]
 
   @@index([tenantId, quizId, userId])
@@ -1129,42 +1129,42 @@ model ModAssessmentsAnswer {
 // Ver docs/diseño/PANTALLAS-DOGFOODING.md §10 (mod.theming).
 // ============================================================================
 model ModThemingTenantTheme {
-  id                  String   @id @default(uuid()) @db.Uuid
-  tenantId            String   @unique @map("tenant_id") @db.Uuid
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @unique @map("tenant_id") @db.Uuid
 
   /// URL pública del logo principal del tenant. Usado en header y emails.
   /// Si `logoStorageKey` está set, esto apunta al endpoint público de
   /// branding del backend; si no, puede ser una URL externa pegada por el admin.
-  logoUrl             String?  @map("logo_url")
+  logoUrl        String? @map("logo_url")
   /// Key del blob en el StorageService (S3 o disco) cuando el logo se subió
   /// vía el uploader del panel de branding. NULL si el admin pegó una URL
   /// externa directamente.
-  logoStorageKey      String?  @map("logo_storage_key")
+  logoStorageKey String? @map("logo_storage_key")
   /// MIME type del logo subido (image/png, image/svg+xml, etc.). Necesario
   /// para servir el blob con el Content-Type correcto desde el endpoint público.
-  logoMimeType        String?  @map("logo_mime_type")
+  logoMimeType   String? @map("logo_mime_type")
   /// URL del favicon (suele ser cuadrado, 32x32 o 512x512 para PWA).
-  faviconUrl          String?  @map("favicon_url")
+  faviconUrl     String? @map("favicon_url")
 
   /// Hue HSL del color primario (0-360). Default 213 (azul confianza Didacta).
-  brandHue            Int      @default(213) @map("brand_hue")
+  brandHue        Int @default(213) @map("brand_hue")
   /// Saturation del color primario (0-100). Default 70.
-  brandSaturation     Int      @default(70) @map("brand_saturation")
+  brandSaturation Int @default(70) @map("brand_saturation")
 
   /// Familia tipográfica display (titulares). Whitelist ['Sora','Inter','Manrope','Space Grotesk','DM Sans','Plus Jakarta Sans'].
-  displayFontFamily   String   @default("Sora") @map("display_font_family")
+  displayFontFamily String @default("Sora") @map("display_font_family")
   /// Familia tipográfica body. Whitelist ['Inter','Manrope','DM Sans','IBM Plex Sans','Source Sans 3','Plus Jakarta Sans'].
-  bodyFontFamily      String   @default("Inter") @map("body_font_family")
+  bodyFontFamily    String @default("Inter") @map("body_font_family")
 
   /// CSS adicional sanitizado (solo CSS variables y selectores seguros).
   /// Limitado a 16 KB. Se inyecta tras los tokens base.
-  customCss           String?  @map("custom_css")
+  customCss String? @map("custom_css")
 
   /// HTML del footer custom (sanitizado). Solo etiquetas básicas: a, p, span, br.
-  footerHtml          String?  @map("footer_html")
+  footerHtml String? @map("footer_html")
 
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("mod_theming_tenant_theme")
 }
@@ -1175,31 +1175,31 @@ model ModThemingTenantTheme {
 // startUrl solo se devuelve al host/admin; alumnos ven solo joinUrl.
 // ============================================================================
 model ModZoomSession {
-  id              String   @id @default(uuid()) @db.Uuid
-  tenantId        String   @map("tenant_id") @db.Uuid
-  courseId        String?  @map("course_id") @db.Uuid
+  id                       String   @id @default(uuid()) @db.Uuid
+  tenantId                 String   @map("tenant_id") @db.Uuid
+  courseId                 String?  @map("course_id") @db.Uuid
   /// UUID de la lección concreta del curso a la que está vinculada esta
   /// sesión. NULL = sesión libre del curso. Permite mostrar el botón
   /// "Unirse" en el detalle de la lección.
-  lessonId        String?  @map("lesson_id") @db.Uuid
-  topic           String
-  description     String?
-  status          String   @default("SCHEDULED") /// SCHEDULED | STARTED | ENDED | CANCELLED
-  startTime       DateTime @map("start_time")
-  durationMinutes Int      @map("duration_minutes")
-  timezone        String
-  hostEmail       String   @map("host_email")
-  zoomMeetingId   String?  @map("zoom_meeting_id")
-  joinUrl         String?  @map("join_url")
-  startUrl        String?  @map("start_url")
+  lessonId                 String?  @map("lesson_id") @db.Uuid
+  topic                    String
+  description              String?
+  status                   String   @default("SCHEDULED") /// SCHEDULED | STARTED | ENDED | CANCELLED
+  startTime                DateTime @map("start_time")
+  durationMinutes          Int      @map("duration_minutes")
+  timezone                 String
+  hostEmail                String   @map("host_email")
+  zoomMeetingId            String?  @map("zoom_meeting_id")
+  joinUrl                  String?  @map("join_url")
+  startUrl                 String?  @map("start_url")
   /// `share_url` de la grabación de Zoom (se rellena al recibir el
   /// webhook `recording.completed`). NULL mientras no haya grabación.
-  recordingUrl    String?  @map("recording_url")
+  recordingUrl             String?  @map("recording_url")
   /// Duración total del meeting reportada por Zoom en `recording.completed`
   /// (minutos enteros). NULL si todavía no hay grabación.
-  recordingDurationMinutes Int? @map("recording_duration_minutes")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  recordingDurationMinutes Int?     @map("recording_duration_minutes")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
 
   @@index([tenantId, startTime(sort: Desc)], map: "mod_zoom_session_tenant_idx")
   @@index([courseId], map: "mod_zoom_session_course_idx")
@@ -1235,20 +1235,20 @@ model ModZoomWebhookEvent {
 // pide reportar cada bloque por separado en el XML.
 // ============================================================================
 model ModFundaeBlock {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
-  actionId    String   @map("action_id") @db.Uuid
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  actionId   String   @map("action_id") @db.Uuid
   /// Orden secuencial dentro de la acción (1..N). Unique por action_id.
-  ordinal     Int
-  title       String   @db.VarChar(200)
+  ordinal    Int
+  title      String   @db.VarChar(200)
   /// Horas del bloque (acepta decimales: 0.5, 1.5...).
-  hours       Float
+  hours      Float
   /// Modalidad propia del bloque. Puede diferir de la acción.
-  modalidad   String   /// PRESENCIAL | TELEFORMACION | MIXTA
+  modalidad  String /// PRESENCIAL | TELEFORMACION | MIXTA
   /// Contenidos del bloque (texto libre).
-  contenidos  String   @default("")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  contenidos String   @default("")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@unique([actionId, ordinal], map: "mod_fundae_block_action_ordinal_key")
   @@index([tenantId, actionId], map: "mod_fundae_block_tenant_action_idx")
@@ -1262,21 +1262,21 @@ model ModFundaeBlock {
 // se genera on-demand desde estas filas.
 // ============================================================================
 model ModFundaeAction {
-  id              String   @id @default(uuid()) @db.Uuid
-  tenantId        String   @map("tenant_id") @db.Uuid
-  courseId        String?  @map("course_id") @db.Uuid
-  codigoAccion    String   @map("codigo_accion")
-  nombre          String
-  modalidad       String /// PRESENCIAL | TELEFORMACION | MIXTA
-  horasFormacion  Float    @map("horas_formacion")
-  fechaInicio     String   @map("fecha_inicio") /// YYYY-MM-DD
-  fechaFin        String   @map("fecha_fin") /// YYYY-MM-DD
-  lugar           String?
-  cifCentro       String?  @map("cif_centro")
-  notas           String?
-  status          String   @default("DRAFT") /// DRAFT | ACTIVE | CLOSED | ARCHIVED
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  courseId       String?  @map("course_id") @db.Uuid
+  codigoAccion   String   @map("codigo_accion")
+  nombre         String
+  modalidad      String /// PRESENCIAL | TELEFORMACION | MIXTA
+  horasFormacion Float    @map("horas_formacion")
+  fechaInicio    String   @map("fecha_inicio") /// YYYY-MM-DD
+  fechaFin       String   @map("fecha_fin") /// YYYY-MM-DD
+  lugar          String?
+  cifCentro      String?  @map("cif_centro")
+  notas          String?
+  status         String   @default("DRAFT") /// DRAFT | ACTIVE | CLOSED | ARCHIVED
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@unique([tenantId, codigoAccion], map: "mod_fundae_action_codigo_per_tenant_idx")
   @@index([tenantId, fechaInicio(sort: Desc)], map: "mod_fundae_action_tenant_inicio_idx")
@@ -1359,7 +1359,7 @@ model ModFundaeRlptNotice {
   ///   - ACUSE_RECIBO: respuesta de la RLPT confirmando recepción.
   ///   - ACTA_DISCREPANCIA: cuando la RLPT formaliza desacuerdo; permite
   ///     avanzar el grupo igualmente con la traza documentada.
-  tipo                String    /// NOTIFICACION_INICIAL | ACUSE_RECIBO | ACTA_DISCREPANCIA
+  tipo                String /// NOTIFICACION_INICIAL | ACUSE_RECIBO | ACTA_DISCREPANCIA
   /// Fecha en que se notificó / recibió. ISO 8601 string para preservar
   /// la zona horaria del usuario (Madrid en la mayoría de casos).
   fechaNotificacionAt DateTime  @map("fecha_notificacion_at")
@@ -1402,35 +1402,35 @@ model ModFundaeRlptNotice {
 // directos/indirectos/organización).
 // ============================================================================
 model ModFundaeGroup {
-  id                     String    @id @default(uuid()) @db.Uuid
-  tenantId               String    @map("tenant_id") @db.Uuid
+  id                    String    @id @default(uuid()) @db.Uuid
+  tenantId              String    @map("tenant_id") @db.Uuid
   /// FK lógica a `mod_fundae_action.id` (sin FK física por la regla de
   /// aislamiento de módulos — son submódulos del mismo `mod.fundae`,
   /// pero conviene mantener el patrón homogéneo).
-  actionId               String    @map("action_id") @db.Uuid
+  actionId              String    @map("action_id") @db.Uuid
   /// FK lógica a `mod_fundae_company.id`.
-  companyId              String    @map("company_id") @db.Uuid
+  companyId             String    @map("company_id") @db.Uuid
   /// Identificador interno del grupo dentro de la acción. Único por
   /// acción; suele coincidir con el `numeroGrupo` que pide Fundae al
   /// presentar el grupo (1..N).
-  numeroGrupo            Int       @map("numero_grupo")
-  modalidad              String /// PRESENCIAL | TELEFORMACION | MIXTA
-  fechaInicioPrevista    DateTime  @map("fecha_inicio_prevista")
-  fechaFinPrevista       DateTime  @map("fecha_fin_prevista")
+  numeroGrupo           Int       @map("numero_grupo")
+  modalidad             String /// PRESENCIAL | TELEFORMACION | MIXTA
+  fechaInicioPrevista   DateTime  @map("fecha_inicio_prevista")
+  fechaFinPrevista      DateTime  @map("fecha_fin_prevista")
   /// Fecha real en que se inició el grupo (null hasta el start).
-  fechaInicioReal        DateTime? @map("fecha_inicio_real")
+  fechaInicioReal       DateTime? @map("fecha_inicio_real")
   /// Fecha real de cierre del grupo (null hasta el close).
-  fechaFinReal           DateTime? @map("fecha_fin_real")
+  fechaFinReal          DateTime? @map("fecha_fin_real")
   /// Estado del ciclo de vida.
-  status                 String    @default("DRAFT") /// DRAFT | ACTIVE | CLOSED | CANCELLED
+  status                String    @default("DRAFT") /// DRAFT | ACTIVE | CLOSED | CANCELLED
   /// Crédito estimado a consumir cuando se planificó. En céntimos.
-  creditoEstimadoCents   Int?      @map("credito_estimado_cents")
+  creditoEstimadoCents  Int?      @map("credito_estimado_cents")
   /// Umbral de finalización Fundae (default 75%). Se aplica al cálculo
   /// de resultado APTO/NO_APTO por participante (LMS-84).
-  umbralFinalizacionPct  Int       @default(75) @map("umbral_finalizacion_pct")
-  notas                  String?
-  createdAt              DateTime  @default(now()) @map("created_at")
-  updatedAt              DateTime  @updatedAt @map("updated_at")
+  umbralFinalizacionPct Int       @default(75) @map("umbral_finalizacion_pct")
+  notas                 String?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   costs        ModFundaeCost[]
   participants ModFundaeGroupParticipant[]
@@ -1489,38 +1489,38 @@ model ModFundaeCost {
 // matriculaciones canceladas (Fundae las exige en el expediente).
 // ============================================================================
 model ModFundaeGroupParticipant {
-  id         String    @id @default(uuid()) @db.Uuid
-  tenantId   String    @map("tenant_id") @db.Uuid
-  groupId    String    @map("group_id") @db.Uuid
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  groupId         String    @map("group_id") @db.Uuid
   /// FK lógica a `app_user.id`.
-  userId     String    @map("user_id") @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
   /// Empresa bonificada del grupo, denormalizada para acelerar reportes
   /// agregados por empresa sin tener que hacer join al grupo.
-  companyId  String    @map("company_id") @db.Uuid
+  companyId       String    @map("company_id") @db.Uuid
   /// Snapshot del NIF del alumno en el momento de matriculación (el campo
   /// `app_user.documentId` puede cambiar; Fundae exige fijar el NIF que
   /// se comunicó en su día).
-  nifAlumno  String?   @map("nif_alumno")
-  enrolledAt DateTime  @default(now()) @map("enrolled_at")
-  removedAt  DateTime? @map("removed_at")
-  status     String    @default("ENROLLED") /// ENROLLED | REMOVED
+  nifAlumno       String?   @map("nif_alumno")
+  enrolledAt      DateTime  @default(now()) @map("enrolled_at")
+  removedAt       DateTime? @map("removed_at")
+  status          String    @default("ENROLLED") /// ENROLLED | REMOVED
   /// Horas reales de asistencia (LMS-84). Se calcula como
   /// `action.horasFormacion * progressPercent / 100`. Decimal para
   /// medias horas Fundae (0.5).
-  horasAsistidas   Decimal? @map("horas_asistidas") @db.Decimal(8, 2)
+  horasAsistidas  Decimal?  @map("horas_asistidas") @db.Decimal(8, 2)
   /// Progreso del enrollment del curso (0-100) capturado en el momento
   /// del cálculo de finalización.
-  progressPercent  Int?     @map("progress_percent")
+  progressPercent Int?      @map("progress_percent")
   /// Resultado final Fundae: APTO si supera el umbral (default 75%),
   /// NO_APTO si fue eliminado o no llegó al umbral, EN_CURSO antes
   /// de la finalización.
-  resultado        String?  /// APTO | NO_APTO | EN_CURSO
+  resultado       String? /// APTO | NO_APTO | EN_CURSO
   /// Fecha del cálculo de finalización (cuando se snapshoteó el
   /// resultado). Distinto de `removedAt` que indica baja administrativa.
-  completedAt      DateTime? @map("completed_at")
-  notas      String?
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
+  completedAt     DateTime? @map("completed_at")
+  notas           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   group ModFundaeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
@@ -1556,4 +1556,101 @@ model PasswordResetToken {
   @@index([tenantId, userId])
   @@index([expiresAt])
   @@map("password_reset_token")
+}
+
+// ============================================================================
+// MOD.AI-TUTOR — Tutor IA por curso con RAG (LMS-90, Fase 1.C).
+//
+// `mod_ai_tutor_chunk` almacena fragmentos de contenido de las lecciones
+// indexados con embeddings (pgvector 1536 dim). El query de búsqueda es
+// cosine similarity vía SQL raw (Prisma todavía no soporta el operador `<=>`
+// nativamente; usamos $queryRaw en el service).
+//
+// `mod_ai_tutor_conversation` y `mod_ai_tutor_message` mantienen el histórico
+// de chat por (alumno, curso). El context window incluye las últimas N
+// mensajes para que el alumno pueda hacer follow-ups.
+//
+// `mod_ai_tutor_token_usage` agrega tokens consumidos por (tenant, user, día)
+// para enforce de cuota.
+// ============================================================================
+
+model ModAiTutorChunk {
+  id          String                      @id @default(uuid()) @db.Uuid
+  tenantId    String                      @map("tenant_id") @db.Uuid
+  /// FK lógica a mod_courses_course.id.
+  courseId    String                      @map("course_id") @db.Uuid
+  /// FK lógica a mod_courses_lesson.id. Null si es chunk de metadata del curso
+  /// (descripción general, objetivos) sin lección concreta.
+  lessonId    String?                     @map("lesson_id") @db.Uuid
+  /// Posición del chunk dentro de su origen (lesson o curso).
+  ordinal     Int
+  /// Texto del chunk (UTF-8). Lo usamos al construir el prompt.
+  content     String
+  /// Embedding vectorial. Dimensión depende del provider (1536 para
+  /// OpenAI text-embedding-3-small / ada-002; otros providers requieren
+  /// migración del schema).
+  embedding   Unsupported("vector(1536)")
+  /// Aproximación de tokens del content (para presupuesto del prompt).
+  tokensCount Int                         @map("tokens_count")
+  createdAt   DateTime                    @default(now()) @map("created_at")
+
+  @@index([tenantId, courseId, ordinal], map: "mod_ai_tutor_chunk_tenant_course_ordinal_idx")
+  @@index([tenantId, courseId, lessonId], map: "mod_ai_tutor_chunk_tenant_course_lesson_idx")
+  @@map("mod_ai_tutor_chunk")
+}
+
+model ModAiTutorConversation {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  courseId  String   @map("course_id") @db.Uuid
+  /// Resumen corto generado por el modelo cada N mensajes para no perder
+  /// contexto al desbordar el context window. Null en conversaciones nuevas.
+  summary   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  messages ModAiTutorMessage[]
+
+  @@index([tenantId, userId, courseId], map: "mod_ai_tutor_conversation_tenant_user_course_idx")
+  @@map("mod_ai_tutor_conversation")
+}
+
+model ModAiTutorMessage {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  /// 'user' | 'assistant'
+  role           String
+  content        String
+  /// Citas que el assistant generó: array de { lessonId, chunkOrdinal }.
+  citations      Json     @default("[]")
+  /// Tokens consumidos (solo para mensajes del assistant, calculados al recibir).
+  tokensInput    Int      @default(0) @map("tokens_input")
+  tokensOutput   Int      @default(0) @map("tokens_output")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation ModAiTutorConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt], map: "mod_ai_tutor_message_conv_created_idx")
+  @@map("mod_ai_tutor_message")
+}
+
+model ModAiTutorTokenUsage {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  /// Null para agregados a nivel tenant (sin desglose por user).
+  userId       String?  @map("user_id") @db.Uuid
+  /// Día calendario UTC (YYYY-MM-DD). Para queries por rango.
+  day          DateTime @db.Date
+  tokensInput  Int      @default(0) @map("tokens_input")
+  tokensOutput Int      @default(0) @map("tokens_output")
+  /// Coste estimado en céntimos de USD según pricing del provider al momento.
+  costCents    Int      @default(0) @map("cost_cents")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, userId, day], map: "mod_ai_tutor_token_usage_tenant_user_day_key")
+  @@index([tenantId, day], map: "mod_ai_tutor_token_usage_tenant_day_idx")
+  @@map("mod_ai_tutor_token_usage")
 }
