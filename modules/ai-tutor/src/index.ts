@@ -28,6 +28,17 @@ export {
   type LessonType,
 } from './lesson-extractor.js';
 export { AiTutorIndexerService, type EmbedFn, type IndexCourseOptions } from './indexer.service.js';
+export { AiTutorChatService, type ChatFn } from './chat.service.js';
+export {
+  buildPrompt,
+  extractCitations,
+  trimHistoryToBudget,
+  type BuildPromptInput,
+  type BuiltPrompt,
+  type ParsedCitation,
+  type PriorMessage,
+  type RetrievedChunk,
+} from './prompt-builder.js';
 
 export const aiTutorModule: DidactaModule = {
   manifest,

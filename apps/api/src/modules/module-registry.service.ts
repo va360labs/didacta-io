@@ -16,7 +16,7 @@ import {
 import { learningModule, LearningService, ScormService } from '@didacta/mod-learning';
 import { themingModule, ThemingService } from '@didacta/mod-theming';
 import { zoomLiveModule, ZoomLiveService } from '@didacta/mod-zoom-live';
-import { aiTutorModule, AiTutorIndexerService } from '@didacta/mod-ai-tutor';
+import { aiTutorModule, AiTutorChatService, AiTutorIndexerService } from '@didacta/mod-ai-tutor';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { AiGatewayService } from '../ai/ai-gateway.service';
 import { ModuleContextFactory } from './module-context.factory';
@@ -40,6 +40,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private fundaeGroupParticipants?: FundaeGroupParticipantService;
   private scorm?: ScormService;
   private aiTutorIndexer?: AiTutorIndexerService;
+  private aiTutorChat?: AiTutorChatService;
 
   constructor(
     private readonly factory: ModuleContextFactory,
@@ -66,22 +67,35 @@ export class ModuleRegistryService implements OnModuleInit {
     this.fundaeGroupParticipants = new FundaeGroupParticipantService(prisma, context);
     this.scorm = new ScormService(prisma, context);
 
-    // mod.ai-tutor: indexer recibe embedFn que delega al AI Gateway por tenant.
-    this.aiTutorIndexer = new AiTutorIndexerService(
-      prisma,
-      context,
-      async (args: { tenantId: string; texts: string[] }) => {
-        const result = await this.aiGateway.embed({
-          tenantId: args.tenantId,
-          input: { texts: args.texts },
-        });
-        return {
-          embeddings: result.embeddings,
-          totalTokens: result.usage.totalTokens,
-          dimension: result.dimension,
-        };
-      },
-    );
+    // mod.ai-tutor: indexer + chat reciben embedFn/chatFn que delegan al
+    // AI Gateway, resolviendo provider per-tenant.
+    const embedFn = async (args: { tenantId: string; texts: string[] }) => {
+      const result = await this.aiGateway.embed({
+        tenantId: args.tenantId,
+        input: { texts: args.texts },
+      });
+      return {
+        embeddings: result.embeddings,
+        totalTokens: result.usage.totalTokens,
+        dimension: result.dimension,
+      };
+    };
+    this.aiTutorIndexer = new AiTutorIndexerService(prisma, context, embedFn);
+    this.aiTutorChat = new AiTutorChatService(prisma, context, embedFn, async (args) => {
+      const result = await this.aiGateway.chat({
+        tenantId: args.tenantId,
+        input: {
+          system: args.system,
+          messages: args.messages,
+          maxTokens: args.maxTokens,
+        },
+      });
+      return {
+        content: result.content,
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+      };
+    });
 
     const certificatesModule = buildCertificatesModule(this.certificates);
 
@@ -216,6 +230,11 @@ export class ModuleRegistryService implements OnModuleInit {
    */
   getAiTutorIndexerServiceOrNull(): AiTutorIndexerService | null {
     return this.aiTutorIndexer ?? null;
+  }
+
+  getAiTutorChatService(): AiTutorChatService {
+    if (!this.aiTutorChat) throw new Error('ModuleRegistry no está inicializado');
+    return this.aiTutorChat;
   }
 
   isModuleEnabledForTenant(_tenantId: string, _moduleName: string): boolean {
