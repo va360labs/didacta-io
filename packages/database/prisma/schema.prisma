@@ -1700,3 +1700,53 @@ model ModAiTutorTokenUsage {
   @@index([tenantId, day], map: "mod_ai_tutor_token_usage_tenant_day_idx")
   @@map("mod_ai_tutor_token_usage")
 }
+
+// ─── mod.ai-grader · LMS-91 ──────────────────────────────────────────
+//
+// Rúbrica + sugerencias IA para corrección de respuestas abiertas.
+// La rúbrica vive a nivel de pregunta (1:1 con ModAssessmentsQuestion para
+// SHORT_ANSWER / LONG_ANSWER). Las suggestions se persisten para auditoría
+// y para que el formador pueda volver a verlas sin re-llamar al modelo.
+
+model ModAiGraderRubric {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  /// Pregunta evaluada. Aplica solo a SHORT_ANSWER / LONG_ANSWER.
+  questionId   String   @unique @map("question_id") @db.Uuid
+  instructions String
+  /// Array de criterios con nombre + descripción + peso. Validado a nivel
+  /// service contra Σweights = question.points.
+  criteria     Json
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId], map: "mod_ai_grader_rubric_tenant_idx")
+  @@map("mod_ai_grader_rubric")
+}
+
+model ModAiGraderSuggestion {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  attemptId       String   @map("attempt_id") @db.Uuid
+  answerId        String   @map("answer_id") @db.Uuid
+  questionId      String   @map("question_id") @db.Uuid
+  /// Score total propuesto (Σ scores de perCriterion). 0 ≤ x ≤ question.points.
+  proposedScore   Int      @map("proposed_score")
+  /// Desglose por criterio: [{ name, score, justification }]. Lectura UI.
+  perCriterion    Json     @map("per_criterion")
+  overallFeedback String   @map("overall_feedback")
+  provider        String
+  model           String
+  /// True cuando el formador aplicó la sugerencia vía gradeAttempt.
+  applied         Boolean  @default(false)
+  /// User id del formador que aplicó (null mientras esté en draft).
+  appliedById     String?  @map("applied_by_id") @db.Uuid
+  appliedAt       DateTime? @map("applied_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  /// Una sugerencia por (attempt, answer): regenerar reemplaza la anterior.
+  @@unique([attemptId, answerId], map: "mod_ai_grader_suggestion_attempt_answer_key")
+  @@index([tenantId, attemptId], map: "mod_ai_grader_suggestion_tenant_attempt_idx")
+  @@map("mod_ai_grader_suggestion")
+}
