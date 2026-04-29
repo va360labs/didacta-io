@@ -1284,6 +1284,55 @@ model ModFundaeAction {
 }
 
 // ============================================================================
+// MOD.FUNDAE.COMPANY — empresa bonificada que financia la formación con
+// crédito Fundae. Cada grupo formativo bonificable se ata a una de estas
+// (LMS-79). El NIF es la clave funcional dentro del tenant; soporte de
+// validación checksum vive en `validateSpanishTaxId` (modules/fundae).
+//
+// `creditoTotalCents` y `creditoUsadoCents` se almacenan en céntimos para
+// evitar errores de redondeo al cuadrar costes con Fundae. `cccPrincipal`
+// es el Código Cuenta Cotización (formato 11 dígitos sin guiones; aquí
+// guardamos como string para conservar ceros líderes).
+// ============================================================================
+model ModFundaeCompany {
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  /// NIF español (DNI / NIE / CIF). Normalizado en mayúsculas sin
+  /// separadores. Único por tenant para evitar duplicar empresa cuando
+  /// dos admins la dan de alta a la vez.
+  nif               String    @db.VarChar(20)
+  razonSocial       String    @map("razon_social") @db.VarChar(200)
+  /// Código Cuenta Cotización principal — 11 dígitos como string para
+  /// preservar ceros a la izquierda. Opcional: empresa puede tener varios
+  /// CCCs y registrarlos al inicio de un grupo concreto.
+  cccPrincipal      String?   @map("ccc_principal") @db.VarChar(15)
+  /// Nº de empleados de plantilla a fecha del alta. Necesario para
+  /// validar % de bonificación máxima permitido por Fundae.
+  plantilla         Int?
+  /// Crédito Fundae anual disponible en céntimos.
+  creditoTotalCents Int?      @map("credito_total_cents")
+  /// Crédito ya consumido en grupos cerrados (céntimos). El servicio lo
+  /// suma al cerrar grupos; nunca se decrementa.
+  creditoUsadoCents Int       @default(0) @map("credito_usado_cents")
+  /// Datos de contacto + dirección — JSON libre para permitir evolución
+  /// sin migración cada vez (calle, ciudad, CP, persona contacto, email,
+  /// teléfono). Validado por Zod en el service.
+  datosContacto     Json      @default("{}") @map("datos_contacto")
+  /// Notas internas del admin (no se exponen a empresa_manager).
+  notas             String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  /// Soft-delete. Conservamos la fila para integridad histórica de
+  /// grupos cerrados aunque el admin "borre" la empresa.
+  deletedAt         DateTime? @map("deleted_at")
+
+  @@unique([tenantId, nif], map: "mod_fundae_company_tenant_nif_key")
+  @@index([tenantId, deletedAt], map: "mod_fundae_company_tenant_deleted_idx")
+  @@index([tenantId, razonSocial], map: "mod_fundae_company_tenant_razon_idx")
+  @@map("mod_fundae_company")
+}
+
+// ============================================================================
 // PASSWORD RESET TOKENS — flujo de "olvidé mi contraseña" para self-service.
 // El token raw viaja solo en email; la DB guarda SHA-256 (no se puede recuperar
 // el original aunque se filtre el dump). TTL 1h. Single-use (usedAt).

@@ -79,3 +79,27 @@ export class ActionWithoutCourseError extends FundaeError {
     );
   }
 }
+
+export class CompanyNotFoundError extends FundaeError {
+  constructor(companyId: string) {
+    super('FUNDAE_COMPANY_NOT_FOUND', `La empresa bonificada ${companyId} no existe.`);
+  }
+}
+
+export class CompanyNifDuplicadoError extends FundaeError {
+  constructor(nif: string) {
+    super(
+      'FUNDAE_COMPANY_NIF_DUPLICADO',
+      `Ya existe una empresa bonificada con NIF "${nif}" en este tenant.`,
+    );
+  }
+}
+
+export class CompanyTieneGruposActivosError extends FundaeError {
+  constructor(companyId: string, count: number) {
+    super(
+      'FUNDAE_COMPANY_TIENE_GRUPOS_ACTIVOS',
+      `La empresa ${companyId} no puede borrarse: tiene ${count} grupo(s) bonificable(s) activo(s).`,
+    );
+  }
+}

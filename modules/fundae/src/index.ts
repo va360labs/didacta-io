@@ -3,6 +3,7 @@ import { manifest } from './manifest.js';
 
 export { manifest };
 export { FundaeService } from './fundae.service.js';
+export { FundaeCompanyService } from './company.service.js';
 export { buildActionXml } from './xml-export.js';
 export { renderEvidencePdf, type EvidenceRenderInput } from './evidence-pdf.js';
 export { buildPresentationZip, type ZipPackageInput } from './zip-package.js';
@@ -23,12 +24,31 @@ export {
   type UpdateBlockDto,
 } from './dto.js';
 export {
+  createCompanySchema,
+  updateCompanySchema,
+  datosContactoSchema,
+  type CreateCompanyDto,
+  type UpdateCompanyDto,
+  type CompanyView,
+  type DatosContactoDto,
+} from './company.dto.js';
+export {
+  isValidSpanishTaxId,
+  normalizeSpanishTaxId,
+  validateSpanishTaxId,
+  type TaxIdKind,
+  type TaxIdValidation,
+} from './spanish-tax-id.js';
+export {
   ActionNotFoundError,
   ActionWithoutCourseError,
   BlockHoursExceedActionError,
   BlockNotFoundError,
   BlockOrdinalDuplicadoError,
   CodigoDuplicadoError,
+  CompanyNifDuplicadoError,
+  CompanyNotFoundError,
+  CompanyTieneGruposActivosError,
   CourseNotInTenantError,
   FechasInvalidasError,
   FundaeError,

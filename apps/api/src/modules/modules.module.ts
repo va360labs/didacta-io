@@ -35,6 +35,7 @@ import { ZoomLiveController } from './zoom-live.controller';
 import { ZoomLiveErrorFilter } from './zoom-live-error.filter';
 import { ZoomWebhookController } from './zoom-webhook.controller';
 import { FundaeController } from './fundae.controller';
+import { FundaeCompaniesController } from './fundae-companies.controller';
 import { FundaeErrorFilter } from './fundae-error.filter';
 import { CommunityDigestWorker } from './community-digest.worker';
 import {
@@ -61,6 +62,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     ZoomLiveController,
     ZoomWebhookController,
     FundaeController,
+    FundaeCompaniesController,
     AdminSystemController,
     StorageController,
   ],

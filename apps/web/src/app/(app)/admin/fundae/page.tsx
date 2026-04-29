@@ -114,10 +114,18 @@ export default function FundaePage() {
             curso del catálogo y exportarse como XML para subida manual al sistema oficial.
           </p>
         </div>
-        <Button type="button" onClick={() => setShowForm((v) => !v)}>
-          <Icon name="plus" size={16} />
-          {showForm ? 'Cerrar' : 'Nueva acción'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild type="button" variant="secondary">
+            <Link href="/admin/fundae/empresas">
+              <Icon name="building" size={14} />
+              Empresas bonificadas
+            </Link>
+          </Button>
+          <Button type="button" onClick={() => setShowForm((v) => !v)}>
+            <Icon name="plus" size={16} />
+            {showForm ? 'Cerrar' : 'Nueva acción'}
+          </Button>
+        </div>
       </header>
 
       {error ? (
