@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discord/Slack alpha
+    url: https://didacta.io/alpha-channel
+    about: Para preguntas rápidas durante la alpha cerrada.
+  - name: 🔒 Reporte de seguridad
+    url: mailto:security@didacta.io
+    about: Para vulnerabilidades de seguridad. NO abras issue público.
+  - name: 📜 Licensing & comercial
+    url: mailto:licensing@didacta.io
+    about: Preguntas sobre uso comercial / Enterprise / Cloud.

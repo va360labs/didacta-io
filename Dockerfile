@@ -1,14 +1,16 @@
 # syntax=docker/dockerfile:1.7
 # ============================================================================
-# LearnShip — Dockerfile multi-stage único (api + web)
+# Didacta Community — Dockerfile multi-stage único (api + web)
 # ----------------------------------------------------------------------------
 # Construye apps/api (NestJS) y apps/web (Next.js) en un solo contenedor.
-# Easypanel hace deploy desde el repo en cada merge a main.
+# Imagen oficial: ghcr.io/va360labs/didacta-community:<version>.
 # El entrypoint corre `prisma migrate deploy` y `db:rls:apply` antes de levantar.
 #
 # Patrón usado: `pnpm fetch` + `pnpm install --offline`. Esto evita tener que
 # enumerar cada workspace package.json en COPYs separados — el lockfile basta.
 # Cuando se añaden módulos nuevos no hay que tocar el Dockerfile.
+#
+# Política de versionado: ver docs/versioning.md.
 # ============================================================================
 
 # ----------------------------------------------------------------------------

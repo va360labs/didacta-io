@@ -1,22 +1,57 @@
-# Didacta
+# Didacta Community
 
-> Plataforma LMS modular — VA360 LABS S.L.
+> 📚 **Plataforma LMS modular, fair-code y source-available** — VA360 LABS S.L.
 
-## Estado
+[![Docker](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/va360labs/didacta-community/pkgs/container/didacta-community)
+[![License](https://img.shields.io/badge/license-Sustainable%20Use%201.0-orange)](LICENSE)
+[![Versioning](https://img.shields.io/badge/versioning-SemVer-green)](docs/versioning.md)
+[![Stage](https://img.shields.io/badge/stage-alpha%20cerrada-red)](docs/alpha/INSTALL.md)
 
-🚧 **Fase 0 — Discovery técnico y fundaciones**
+## Estado actual
+
+🚧 **Alpha cerrada** — primer milestone público en `v0.0.1-alpha.0`.
+
+Si eres un alpha tester invitado, empieza por [`docs/alpha/INSTALL.md`](docs/alpha/INSTALL.md).
+
+## Quickstart (alpha testers)
+
+```bash
+# 1. Login en GHCR (privado durante alpha)
+echo $GITHUB_PAT | docker login ghcr.io -u <usuario> --password-stdin
+
+# 2. Clone + configurar .env
+git clone https://github.com/va360labs/didacta-community.git
+cd didacta-community
+cp .env.example .env
+# editar .env: AUTH_SECRET y DIDACTA_IMAGE_TAG
+
+# 3. Arrancar
+docker compose -f docker-compose.alpha.yml up -d
+
+# 4. Abrir
+# http://localhost:4000/api/docs   (Swagger)
+# http://localhost:3000             (Web)
+# http://localhost:8025             (Mailpit)
+```
+
+Detalle completo: [`docs/alpha/INSTALL.md`](docs/alpha/INSTALL.md). Para reportar bugs / feedback: [`docs/alpha/FEEDBACK.md`](docs/alpha/FEEDBACK.md).
 
 ## Sobre el proyecto
 
-Didacta es una plataforma LMS (Learning Management System) modular, moderna y
-extensible, propiedad de VA360 LABS S.L. Se construye con dos objetivos consecutivos:
+Didacta es una plataforma LMS (Learning Management System) **modular, moderna, fair-code**, propiedad de VA360 LABS S.L. Se construye con dos objetivos consecutivos:
 
-1. **Dogfooding**: reemplazar el stack actual de VA360 (LearnDash + FluentCommunity +
-   Zoom externo + n8n externo) para cursos propios de VA360.academy y PotenzIA.
-2. **Comercialización**: evolucionar a producto SaaS multi-tenant.
+1. **Dogfooding**: reemplazar el stack actual de VA360 (LearnDash + FluentCommunity + Zoom externo + n8n externo) para cursos propios de VA360.academy y PotenzIA.
+2. **Comercialización**: evolucionar a producto con tres ediciones (Community / Enterprise self-hosted / Cloud SaaS gestionado).
 
-El principio rector es **modularidad extrema**: un core mínimo y todo lo demás como
-módulos activables con contratos estables.
+El principio rector es **modularidad extrema**: un core mínimo, todo lo demás como módulos activables con contratos estables. Inspiración: n8n.io + WordPress matizado.
+
+## Modelo de licencias
+
+- **Repo + módulos**: [Didacta Sustainable Use License v1.0](LICENSE) (fair-code, adaptada de n8n SUL). Permite uso interno empresarial libre. Distribución comercial / SaaS / white-label requiere acuerdo.
+- **Capabilities Enterprise** (archivos `*.ee.*` dentro del CORE): [Didacta Enterprise License](LICENSE_EE). Requieren licencia firmada activa para usarse en producción.
+- **Cloud**: SaaS gestionado por VA360 (`cloud.didacta.io`).
+
+Resumen humano: [`LICENSE_NOTICE.md`](LICENSE_NOTICE.md). FAQ: [`docs/licensing/faq.md`](docs/licensing/faq.md).
 
 ## Documentación
 
