@@ -1,8 +1,5 @@
 # Didacta — License Notice
 
-> ⚠️ **DRAFT — NOT REVIEWED BY LEGAL COUNSEL**.
-> This file is provided for internal alignment. The legal source of truth is `LICENSE` and `LICENSE_EE`, both of which require legal review before this repo is made public.
-
 ## What you can do
 
 Didacta is **fair-code**: the source code is publicly available and you can:

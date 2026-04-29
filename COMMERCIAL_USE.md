@@ -1,7 +1,5 @@
 # Commercial use of Didacta
 
-> ⚠️ **DRAFT — under legal review.**
-
 ## When you need a commercial agreement
 
 You need a commercial agreement with VA360 LABS S.L. (or to use Didacta Cloud) if you intend to:
@@ -26,7 +24,6 @@ You need a commercial agreement with VA360 LABS S.L. (or to use Didacta Cloud) i
 - Cloud sales: **sales@didacta.io**
 - Partnership: **partners@didacta.io**
 
-> ✉️ These addresses are aliases. Activation pending — see the Notion issue list.
 
 ## What's free
 

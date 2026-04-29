@@ -1,7 +1,4 @@
 # Trademark policy — Didacta
-
-> ⚠️ **DRAFT — under legal review.**
-
 ## The marks
 
 The following are trademarks of VA360 LABS S.L.:
