@@ -2,6 +2,17 @@ The Didacta Enterprise License (the "Enterprise License")
 
 Copyright (c) VA360 LABS S.L.
 
+SCOPE NOTE (added 2026-04-29):
+This Enterprise License applies exclusively to source code files matching
+the `*.ee.*` filename suffix or located inside `ee/` directories WITHIN
+the project's core paths: `apps/api/src/`, `packages/core-kernel/`,
+`packages/core-registry/`, `packages/license-sdk/src/`. It does NOT apply
+to any module under `modules/` — all modules in this repository are
+distributed under the Didacta Sustainable Use License v1.0 (LICENSE),
+regardless of their filename. Third-party modules installed via the
+official marketplace or via ZIP upload are governed by their own
+respective licenses set by their authors.
+
 With regard to the Didacta Software:
 
 This software and associated documentation files (the "Software") may only be

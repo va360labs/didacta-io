@@ -2,14 +2,20 @@
 /**
  * ee-fence.ts — Open-core fence validator
  *
+ * MODELO WORDPRESS MATIZADO (revisión 2026-04-29):
+ * Los archivos `.ee.*` solo pueden vivir DENTRO DEL CORE
+ * (`apps/api/src/**`, `packages/core-kernel/**`). Nunca dentro de
+ * `modules/*` — todos los módulos son Community y no llevan sufijo.
+ *
  * Garantiza que la convención `.ee` no se rompa:
  *
- *   1. Archivos con sufijo `.ee.ts/tsx/js/jsx/json` o dentro de carpetas
- *      `ee/` o `*.ee/` están bajo Didacta Enterprise License.
- *   2. Archivos de Community NO pueden importar archivos `.ee` de forma
+ *   1. Archivos `.ee.*` o dentro de `ee/` solo en paths del CORE.
+ *      Si aparecen en `modules/*` → ERROR (módulos siempre CE).
+ *   2. Archivos `.ee` están bajo Didacta Enterprise License.
+ *   3. Archivos de Community NO pueden importar archivos `.ee` de forma
  *      estática. Solo dynamic imports detrás de LicenseService.
- *   3. Archivos `.ee` deben tener cabecera `LicenseRef-Didacta-Enterprise`.
- *   4. Archivos no-`.ee` no deben tener cabecera EE (typo / rename roto).
+ *   4. Archivos `.ee` deben tener cabecera `LicenseRef-Didacta-Enterprise`.
+ *   5. Archivos no-`.ee` no deben tener cabecera EE (typo / rename roto).
  *
  * Uso:
  *   pnpm tsx scripts/ee-fence.ts          # repo entero
@@ -27,6 +33,22 @@ const ROOT = resolve(process.cwd());
 const EE_HEADER_MARKER = 'LicenseRef-Didacta-Enterprise';
 const SUL_HEADER_MARKER = 'LicenseRef-Didacta-Sustainable-Use';
 const FIX = process.argv.includes('--fix');
+
+/**
+ * Paths donde un archivo `.ee.*` ES VÁLIDO (CORE).
+ * Cualquier `.ee.*` fuera de estos paths se considera violación de modelo.
+ */
+const EE_ALLOWED_ROOTS = [
+  'apps/api/src/',
+  'packages/core-kernel/',
+  'packages/core-registry/',
+  'packages/license-sdk/src/',
+];
+
+function isEEAllowedPath(filePath: string): boolean {
+  const p = filePath.replace(/\\/g, '/');
+  return EE_ALLOWED_ROOTS.some((root) => p.startsWith(root));
+}
 
 const EE_HEADER_TEMPLATE = `/**
  * Copyright (c) VA360 LABS S.L.
@@ -114,6 +136,16 @@ async function main() {
     const isEE = isEEPath(relPath);
 
     if (isEE) {
+      // Regla 1 (modelo WordPress matizado): los archivos .ee solo pueden
+      // vivir en paths del CORE. Cualquier .ee dentro de modules/* es violación.
+      if (!isEEAllowedPath(relPath)) {
+        violations.push({
+          file: relPath,
+          severity: 'error',
+          reason: `EE file outside of allowed core paths. Modules are always Community — move this capability into the core (apps/api/src/, packages/core-kernel/, etc.) or remove the .ee suffix.`,
+        });
+      }
+
       // Regla 3: cabecera EE obligatoria
       if (!checkEEHeader(content)) {
         if (FIX) {
