@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { assessmentsApi, type AttemptStatus } from '@/lib/assessments';
+import { aiGraderApi, type Suggestion } from '@/lib/ai-grader';
 
 const OPEN_TYPES = new Set(['SHORT_ANSWER', 'LONG_ANSWER']);
 
@@ -46,6 +47,9 @@ export default function CorreccionDetailPage() {
   const [grades, setGrades] = useState<Record<string, Grade>>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [suggestions, setSuggestions] = useState<Record<string, Suggestion>>({});
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestNotice, setSuggestNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!params?.id) return;
@@ -63,11 +67,59 @@ export default function CorreccionDetailPage() {
           };
         }
         setGrades(initial);
+
+        // Carga sugerencias IA persistidas si las hay (no llama al modelo).
+        try {
+          const persisted = await aiGraderApi.listSuggestions(result.id);
+          const byQuestion: Record<string, Suggestion> = {};
+          for (const s of persisted) byQuestion[s.questionId] = s;
+          setSuggestions(byQuestion);
+        } catch {
+          // mod.ai-grader puede no estar activo en el tenant: ignorar
+          // silenciosamente y simplemente no mostrar el panel IA.
+        }
       } catch (e) {
         setError(e instanceof ApiHttpError ? e.message : 'Error al cargar');
       }
     })();
   }, [params?.id]);
+
+  async function handleSuggestAll(force = false) {
+    if (!data) return;
+    setSuggesting(true);
+    setSuggestNotice(null);
+    try {
+      const r = await aiGraderApi.suggestForAttempt(data.id, force);
+      const byQuestion: Record<string, Suggestion> = {};
+      for (const s of r.generated) byQuestion[s.questionId] = s;
+      setSuggestions(byQuestion);
+      const skippedMsg =
+        r.skipped.length > 0
+          ? ` ${r.skipped.length} pregunta${r.skipped.length === 1 ? '' : 's'} sin rúbrica.`
+          : '';
+      setSuggestNotice(
+        `${r.generated.length} sugerencia${r.generated.length === 1 ? '' : 's'} generada${r.generated.length === 1 ? '' : 's'}.${skippedMsg} Tokens: ${r.tokensUsed.input + r.tokensUsed.output}.`,
+      );
+    } catch (e) {
+      setSuggestNotice(e instanceof ApiHttpError ? e.message : 'No pudimos generar sugerencias.');
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  function applySuggestionToForm(s: Suggestion) {
+    setGrades((prev) => ({
+      ...prev,
+      [s.questionId]: {
+        scoreEarned: String(s.proposedScore),
+        feedback: s.overallFeedback,
+      },
+    }));
+    // Marca como aplicada en background (audit-only, no bloquea la UI).
+    void aiGraderApi.markApplied(s.id).catch(() => {
+      /* tolerar fallo: la auditoría es best-effort */
+    });
+  }
 
   if (error)
     return (
@@ -204,6 +256,41 @@ export default function CorreccionDetailPage() {
         </div>
       ) : null}
 
+      {isPending && openAnswered > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-trust-100 bg-trust-50/40 p-3">
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="font-semibold text-text">Asistente IA de corrección</p>
+            <p className="text-xs text-text-subtle">
+              Genera sugerencias basadas en la rúbrica de cada pregunta. Vos seguís siendo quien
+              decide la nota final.
+            </p>
+            {suggestNotice ? <p className="mt-1 text-xs text-text">{suggestNotice}</p> : null}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => void handleSuggestAll(false)}
+              disabled={suggesting}
+            >
+              {suggesting ? 'Sugiriendo…' : 'Sugerir notas con IA'}
+            </Button>
+            {Object.keys(suggestions).length > 0 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void handleSuggestAll(true)}
+                disabled={suggesting}
+              >
+                Re-generar
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       <ol className="space-y-4">
         {data.quiz.questions.map((q, idx) => {
           const ans = data.answers.find((a) => a.questionId === q.id);
@@ -296,6 +383,46 @@ export default function CorreccionDetailPage() {
                           />
                         </div>
                       </div>
+                      {suggestions[q.id] ? (
+                        <div className="rounded-lg border border-trust-100 bg-trust-50/40 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="info" className="text-[10px]">
+                                Sugerencia IA
+                              </Badge>
+                              <span className="text-xs text-text-subtle">
+                                {suggestions[q.id]!.proposedScore}/{q.points} pts ·{' '}
+                                {suggestions[q.id]!.provider}
+                                {suggestions[q.id]!.model ? ` · ${suggestions[q.id]!.model}` : ''}
+                              </span>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => applySuggestionToForm(suggestions[q.id]!)}
+                              disabled={!isPending}
+                            >
+                              Aplicar al formulario
+                            </Button>
+                          </div>
+                          <p className="mt-2 whitespace-pre-wrap text-sm text-text">
+                            {suggestions[q.id]!.overallFeedback}
+                          </p>
+                          {suggestions[q.id]!.perCriterion.length > 0 ? (
+                            <ul className="mt-2 space-y-1 text-xs text-text-subtle">
+                              {suggestions[q.id]!.perCriterion.map((c, ci) => (
+                                <li key={ci}>
+                                  <span className="font-semibold text-text">
+                                    {c.name} ({c.score}):
+                                  </span>{' '}
+                                  {c.justification}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </>
                   ) : (
                     <div className="space-y-2.5">

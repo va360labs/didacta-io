@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { AiModule } from '../ai/ai.module';
 import { AuthModule } from '../auth/auth.module';
+import { AiGraderController } from './ai-grader.controller';
+import { AiGraderErrorFilter } from './ai-grader-error.filter';
 import { AiProvidersController } from './ai-providers.controller';
 import { AiTutorBridge } from './ai-tutor.bridge';
 import { AiTutorController } from './ai-tutor.controller';
@@ -78,6 +80,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     StorageController,
     AiTutorController,
     AiProvidersController,
+    AiGraderController,
   ],
   providers: [
     ...communityDigestMetricsProviders,
@@ -106,6 +109,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     { provide: APP_FILTER, useClass: FundaeErrorFilter },
     { provide: APP_FILTER, useClass: TenantModulesErrorFilter },
     { provide: APP_FILTER, useClass: AiTutorErrorFilter },
+    { provide: APP_FILTER, useClass: AiGraderErrorFilter },
   ],
   exports: [
     ModuleRegistryService,
