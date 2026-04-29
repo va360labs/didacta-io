@@ -8,6 +8,7 @@ import { helloWorldModule } from '@didacta/mod-hello-world';
 import {
   fundaeModule,
   FundaeCompanyService,
+  FundaeGroupParticipantService,
   FundaeGroupService,
   FundaeRlptService,
   FundaeService,
@@ -34,6 +35,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private fundaeCompanies?: FundaeCompanyService;
   private fundaeRlpt?: FundaeRlptService;
   private fundaeGroups?: FundaeGroupService;
+  private fundaeGroupParticipants?: FundaeGroupParticipantService;
   private scorm?: ScormService;
 
   constructor(
@@ -57,6 +59,7 @@ export class ModuleRegistryService implements OnModuleInit {
     this.fundaeCompanies = new FundaeCompanyService(prisma, context);
     this.fundaeRlpt = new FundaeRlptService(prisma, context);
     this.fundaeGroups = new FundaeGroupService(prisma, context, this.fundaeRlpt);
+    this.fundaeGroupParticipants = new FundaeGroupParticipantService(prisma, context);
     this.scorm = new ScormService(prisma, context);
 
     const certificatesModule = buildCertificatesModule(this.certificates);
@@ -172,6 +175,11 @@ export class ModuleRegistryService implements OnModuleInit {
   getFundaeGroupService(): FundaeGroupService {
     if (!this.fundaeGroups) throw new Error('ModuleRegistry no está inicializado');
     return this.fundaeGroups;
+  }
+
+  getFundaeGroupParticipantService(): FundaeGroupParticipantService {
+    if (!this.fundaeGroupParticipants) throw new Error('ModuleRegistry no está inicializado');
+    return this.fundaeGroupParticipants;
   }
 
   getScormService(): ScormService {

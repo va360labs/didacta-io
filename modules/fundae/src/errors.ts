@@ -175,3 +175,38 @@ export class CreditoInsuficienteError extends FundaeError {
     );
   }
 }
+
+export class GroupParticipantNotFoundError extends FundaeError {
+  constructor(participantId: string) {
+    super('FUNDAE_GROUP_PARTICIPANT_NOT_FOUND', `La matriculación ${participantId} no existe.`);
+  }
+}
+
+export class GroupParticipantDuplicadoError extends FundaeError {
+  constructor(userId: string, groupId: string) {
+    super(
+      'FUNDAE_GROUP_PARTICIPANT_DUPLICADO',
+      `El usuario ${userId} ya está matriculado en el grupo ${groupId}.`,
+    );
+  }
+}
+
+export class GroupParticipantNotEnrolledInCourseError extends FundaeError {
+  constructor(userId: string, courseId: string) {
+    super(
+      'FUNDAE_GROUP_PARTICIPANT_NOT_IN_COURSE',
+      `El usuario ${userId} no está matriculado en el curso ${courseId} de la acción. ` +
+        'Debe estar matriculado en el catálogo antes de añadirlo al grupo bonificable.',
+    );
+  }
+}
+
+export class GroupSinCursoError extends FundaeError {
+  constructor(groupId: string) {
+    super(
+      'FUNDAE_GROUP_SIN_CURSO',
+      `El grupo ${groupId} pertenece a una acción sin curso vinculado; ` +
+        'no se puede hacer bulk-enroll desde el catálogo. Añade los participantes uno a uno.',
+    );
+  }
+}

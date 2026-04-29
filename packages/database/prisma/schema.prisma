@@ -1429,7 +1429,8 @@ model ModFundaeGroup {
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")
 
-  costs ModFundaeCost[]
+  costs        ModFundaeCost[]
+  participants ModFundaeGroupParticipant[]
 
   @@unique([tenantId, actionId, numeroGrupo], map: "mod_fundae_group_action_numero_key")
   @@index([tenantId, companyId, status], map: "mod_fundae_group_tenant_company_status_idx")
@@ -1467,6 +1468,50 @@ model ModFundaeCost {
   @@index([tenantId, groupId, tipo], map: "mod_fundae_cost_tenant_group_tipo_idx")
   @@index([groupId], map: "mod_fundae_cost_group_idx")
   @@map("mod_fundae_cost")
+}
+
+// ============================================================================
+// MOD.FUNDAE.GROUP_PARTICIPANT — matriculación nominal de alumnos en un
+// grupo bonificable Fundae (LMS-82). Aunque el alumno también está
+// matriculado en el curso del catálogo (vía `course_enrollment`), el grupo
+// Fundae necesita un registro propio porque:
+//
+//   1. La comunicación de inicio Fundae exige listado nominal por grupo
+//      (no por curso).
+//   2. La empresa bonificada se vincula a través del grupo, no del curso.
+//   3. Un alumno puede pertenecer a varios grupos del mismo curso (ediciones
+//      sucesivas de la formación).
+//
+// Borrado lógico vía `status = REMOVED` para mantener trazabilidad de
+// matriculaciones canceladas (Fundae las exige en el expediente).
+// ============================================================================
+model ModFundaeGroupParticipant {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  groupId    String    @map("group_id") @db.Uuid
+  /// FK lógica a `app_user.id`.
+  userId     String    @map("user_id") @db.Uuid
+  /// Empresa bonificada del grupo, denormalizada para acelerar reportes
+  /// agregados por empresa sin tener que hacer join al grupo.
+  companyId  String    @map("company_id") @db.Uuid
+  /// Snapshot del NIF del alumno en el momento de matriculación (el campo
+  /// `app_user.documentId` puede cambiar; Fundae exige fijar el NIF que
+  /// se comunicó en su día).
+  nifAlumno  String?   @map("nif_alumno")
+  enrolledAt DateTime  @default(now()) @map("enrolled_at")
+  removedAt  DateTime? @map("removed_at")
+  status     String    @default("ENROLLED") /// ENROLLED | REMOVED
+  notas      String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  group ModFundaeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, groupId, userId], map: "mod_fundae_group_participant_group_user_key")
+  @@index([tenantId, groupId, status], map: "mod_fundae_group_participant_group_status_idx")
+  @@index([tenantId, companyId, status], map: "mod_fundae_group_participant_company_status_idx")
+  @@index([tenantId, userId], map: "mod_fundae_group_participant_tenant_user_idx")
+  @@map("mod_fundae_group_participant")
 }
 
 // ============================================================================

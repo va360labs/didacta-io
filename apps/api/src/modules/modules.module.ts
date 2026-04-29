@@ -37,6 +37,7 @@ import { ZoomWebhookController } from './zoom-webhook.controller';
 import { FundaeController } from './fundae.controller';
 import { FundaeCompaniesController } from './fundae-companies.controller';
 import { FundaeGroupsController } from './fundae-groups.controller';
+import { FundaeGroupParticipantsController } from './fundae-group-participants.controller';
 import { FundaeRlptController } from './fundae-rlpt.controller';
 import { FundaeErrorFilter } from './fundae-error.filter';
 import { CommunityDigestWorker } from './community-digest.worker';
@@ -66,6 +67,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     FundaeController,
     FundaeCompaniesController,
     FundaeGroupsController,
+    FundaeGroupParticipantsController,
     FundaeRlptController,
     AdminSystemController,
     StorageController,

@@ -6,6 +6,7 @@ export { FundaeService } from './fundae.service.js';
 export { FundaeCompanyService } from './company.service.js';
 export { FundaeRlptService } from './rlpt.service.js';
 export { FundaeGroupService } from './group.service.js';
+export { FundaeGroupParticipantService } from './group-participant.service.js';
 export { buildActionXml } from './xml-export.js';
 export { renderEvidencePdf, type EvidenceRenderInput } from './evidence-pdf.js';
 export { buildPresentationZip, type ZipPackageInput } from './zip-package.js';
@@ -59,6 +60,18 @@ export {
   type CostView,
 } from './group.dto.js';
 export {
+  bulkEnrollSchema,
+  enrollParticipantSchema,
+  participantStatusSchema,
+  updateParticipantSchema,
+  type BulkEnrollDto,
+  type BulkEnrollResult,
+  type EnrollParticipantDto,
+  type GroupParticipantView,
+  type ParticipantStatus,
+  type UpdateParticipantDto,
+} from './group-participant.dto.js';
+export {
   isValidSpanishTaxId,
   normalizeSpanishTaxId,
   validateSpanishTaxId,
@@ -87,6 +100,10 @@ export {
   CreditoInsuficienteError,
   FechasInvalidasError,
   FundaeError,
+  GroupParticipantDuplicadoError,
+  GroupParticipantNotEnrolledInCourseError,
+  GroupParticipantNotFoundError,
+  GroupSinCursoError,
   ParticipantNotInActionError,
 } from './errors.js';
 

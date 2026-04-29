@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { formatCents } from '@/lib/fundae-companies';
 import {
+  fundaeGroupParticipantsApi,
   fundaeGroupsApi,
   STATUS_LABELS,
   TIPO_LABELS,
@@ -19,6 +20,7 @@ import {
   type CreateGroupInput,
   type FundaeCost,
   type FundaeGroup,
+  type FundaeGroupParticipant,
   type GroupStatus,
   type Modalidad,
 } from '@/lib/fundae-groups';
@@ -39,7 +41,11 @@ export default function FundaeGruposPage() {
   const [statusFilter, setStatusFilter] = useState<GroupStatus | ''>('');
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [detail, setDetail] = useState<{ group: FundaeGroup; costs: FundaeCost[] } | null>(null);
+  const [detail, setDetail] = useState<{
+    group: FundaeGroup;
+    costs: FundaeCost[];
+    participants: FundaeGroupParticipant[];
+  } | null>(null);
 
   async function reload() {
     try {
@@ -60,11 +66,12 @@ export default function FundaeGruposPage() {
 
   async function openDetail(g: FundaeGroup) {
     try {
-      const [group, costs] = await Promise.all([
+      const [group, costs, participants] = await Promise.all([
         fundaeGroupsApi.get(g.id),
         fundaeGroupsApi.listCosts(g.id),
+        fundaeGroupParticipantsApi.list(g.id),
       ]);
-      setDetail({ group, costs });
+      setDetail({ group, costs, participants });
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar el detalle.');
     }
@@ -77,11 +84,12 @@ export default function FundaeGruposPage() {
       await fundaeGroupsApi[action](id);
       await reload();
       if (detail?.group.id === id) {
-        const [group, costs] = await Promise.all([
+        const [group, costs, participants] = await Promise.all([
           fundaeGroupsApi.get(id),
           fundaeGroupsApi.listCosts(id),
+          fundaeGroupParticipantsApi.list(id),
         ]);
-        setDetail({ group, costs });
+        setDetail({ group, costs, participants });
       }
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'La transición no fue posible.');
@@ -168,11 +176,16 @@ export default function FundaeGruposPage() {
         <GroupDetail
           group={detail.group}
           costs={detail.costs}
+          participants={detail.participants}
           onTransition={(action) => void handleTransition(detail.group.id, action)}
           onRemoveCost={(costId) => void handleRemoveCost(detail.group.id, costId)}
           onCostAdded={async () => {
             const costs = await fundaeGroupsApi.listCosts(detail.group.id);
             setDetail((prev) => (prev ? { ...prev, costs } : prev));
+          }}
+          onParticipantsChanged={async () => {
+            const participants = await fundaeGroupParticipantsApi.list(detail.group.id);
+            setDetail((prev) => (prev ? { ...prev, participants } : prev));
           }}
           onClose={() => setDetail(null)}
         />
@@ -420,20 +433,66 @@ function GroupForm({
 function GroupDetail({
   group,
   costs,
+  participants,
   onTransition,
   onRemoveCost,
   onCostAdded,
+  onParticipantsChanged,
   onClose,
 }: {
   group: FundaeGroup;
   costs: FundaeCost[];
+  participants: FundaeGroupParticipant[];
   onTransition: (action: 'start' | 'close' | 'cancel') => void;
   onRemoveCost: (costId: string) => void;
   onCostAdded: () => Promise<void>;
+  onParticipantsChanged: () => Promise<void>;
   onClose: () => void;
 }) {
   const isEditable = group.status === 'DRAFT' || group.status === 'ACTIVE';
   const [showCostForm, setShowCostForm] = useState(false);
+  const [enrollUserId, setEnrollUserId] = useState('');
+  const [enrolling, setEnrolling] = useState(false);
+  const [participantError, setParticipantError] = useState<string | null>(null);
+
+  async function handleBulkEnroll() {
+    if (!confirm('Matricular todos los inscritos del curso del catálogo?')) return;
+    setParticipantError(null);
+    try {
+      const res = await fundaeGroupParticipantsApi.bulkEnroll(group.id);
+      alert(`Matriculados ${res.enrolled} (saltados ${res.skipped} ya existentes).`);
+      await onParticipantsChanged();
+    } catch (e) {
+      setParticipantError(e instanceof ApiHttpError ? e.message : 'Bulk enroll falló.');
+    }
+  }
+
+  async function handleEnroll(e: FormEvent) {
+    e.preventDefault();
+    if (!enrollUserId) return;
+    setEnrolling(true);
+    setParticipantError(null);
+    try {
+      await fundaeGroupParticipantsApi.enroll(group.id, { userId: enrollUserId });
+      setEnrollUserId('');
+      await onParticipantsChanged();
+    } catch (e) {
+      setParticipantError(e instanceof ApiHttpError ? e.message : 'No pudimos matricular.');
+    } finally {
+      setEnrolling(false);
+    }
+  }
+
+  async function handleRemoveParticipant(participantId: string) {
+    if (!confirm('¿Eliminar matriculación? Quedará en histórico.')) return;
+    setParticipantError(null);
+    try {
+      await fundaeGroupParticipantsApi.remove(group.id, participantId);
+      await onParticipantsChanged();
+    } catch (e) {
+      setParticipantError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar.');
+    }
+  }
 
   return (
     <Card className="border-l-4 border-l-primary">
@@ -558,6 +617,93 @@ function GroupDetail({
                         </button>
                       </td>
                     ) : null}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="space-y-2 border-t border-border-soft pt-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold">
+              Participantes ({participants.filter((p) => p.status === 'ENROLLED').length})
+            </h4>
+            {isEditable ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => void handleBulkEnroll()}
+              >
+                <Icon name="users" size={13} />
+                Bulk enroll desde curso
+              </Button>
+            ) : null}
+          </div>
+
+          {isEditable ? (
+            <form onSubmit={handleEnroll} className="flex gap-2">
+              <Input
+                value={enrollUserId}
+                onChange={(e) => setEnrollUserId(e.target.value)}
+                placeholder="UUID del alumno"
+                className="h-8 font-mono text-xs"
+                required
+              />
+              <Button type="submit" size="sm" disabled={enrolling || !enrollUserId}>
+                {enrolling ? '…' : 'Matricular'}
+              </Button>
+            </form>
+          ) : null}
+
+          {participantError ? (
+            <div
+              role="alert"
+              className="rounded-lg border border-danger-100 bg-danger-50 p-2 text-xs text-danger-700"
+            >
+              {participantError}
+            </div>
+          ) : null}
+
+          {participants.length === 0 ? (
+            <p className="text-xs text-text-muted">Sin matriculaciones registradas.</p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-text-subtle">
+                  <th className="pb-1 font-medium">Alumno</th>
+                  <th className="pb-1 font-medium">NIF</th>
+                  <th className="pb-1 font-medium">Estado</th>
+                  {isEditable ? <th /> : null}
+                </tr>
+              </thead>
+              <tbody>
+                {participants.map((p) => (
+                  <tr key={p.id} className="border-t border-border-soft">
+                    <td className="py-1 pr-2">
+                      <div className="font-medium">{p.userName ?? '—'}</div>
+                      <div className="text-text-subtle">{p.userEmail ?? '—'}</div>
+                    </td>
+                    <td className="py-1 pr-2 font-mono">{p.nifAlumno ?? '—'}</td>
+                    <td className="py-1 pr-2">
+                      <Badge variant={p.status === 'ENROLLED' ? 'success' : 'muted'}>
+                        {p.status === 'ENROLLED' ? 'Matriculado' : 'Eliminado'}
+                      </Badge>
+                    </td>
+                    {isEditable && p.status === 'ENROLLED' ? (
+                      <td className="py-1 pl-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveParticipant(p.id)}
+                          className="text-danger-600 hover:text-danger-800"
+                        >
+                          <Icon name="trash" size={12} />
+                        </button>
+                      </td>
+                    ) : (
+                      <td />
+                    )}
                   </tr>
                 ))}
               </tbody>

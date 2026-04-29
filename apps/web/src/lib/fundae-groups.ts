@@ -200,3 +200,74 @@ export const MODALIDAD_LABELS: Record<Modalidad, string> = {
   TELEFORMACION: 'Teleformación',
   MIXTA: 'Mixta',
 };
+
+// ──────────────────── Participantes (LMS-82) ────────────────────
+
+export type ParticipantStatus = 'ENROLLED' | 'REMOVED';
+
+export interface FundaeGroupParticipant {
+  id: string;
+  tenantId: string;
+  groupId: string;
+  userId: string;
+  companyId: string;
+  nifAlumno: string | null;
+  enrolledAt: string;
+  removedAt: string | null;
+  status: ParticipantStatus;
+  notas: string | null;
+  userName: string | null;
+  userEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EnrollParticipantInput {
+  userId: string;
+  nifAlumno?: string;
+  notas?: string;
+}
+
+export interface BulkEnrollResult {
+  enrolled: number;
+  skipped: number;
+  total: number;
+}
+
+export const fundaeGroupParticipantsApi = {
+  async list(
+    groupId: string,
+    opts: { includeRemoved?: boolean } = {},
+  ): Promise<FundaeGroupParticipant[]> {
+    const qs = opts.includeRemoved ? '?includeRemoved=true' : '';
+    return apiFetch<FundaeGroupParticipant[]>(
+      `/api/v1/admin/fundae/groups/${groupId}/participants${qs}`,
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
+  async enroll(groupId: string, input: EnrollParticipantInput): Promise<FundaeGroupParticipant> {
+    return apiFetch<FundaeGroupParticipant>(
+      `/api/v1/admin/fundae/groups/${groupId}/participants`,
+      { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async bulkEnroll(groupId: string, sourceCourseId?: string): Promise<BulkEnrollResult> {
+    return apiFetch<BulkEnrollResult>(
+      `/api/v1/admin/fundae/groups/${groupId}/participants/bulk-enroll`,
+      { method: 'POST', body: JSON.stringify({ sourceCourseId }) },
+      withAuth(),
+    );
+  },
+
+  async remove(groupId: string, participantId: string): Promise<void> {
+    await apiFetch<{ removed: true }>(
+      `/api/v1/admin/fundae/groups/${groupId}/participants/${participantId}`,
+      { method: 'DELETE' },
+      withAuth(),
+    );
+  },
+};
