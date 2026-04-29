@@ -5,6 +5,7 @@ import { LicenseModule } from '@didacta/license-sdk';
 import { AdminModule } from './admin/admin.module';
 import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
+import { BrandingModule } from './branding/branding.module';
 import { HealthModule } from './health/health.module';
 import { ApiLicenseModule } from './license/license.module';
 import { MetricsAuthController } from './modules/metrics-auth.controller';
@@ -53,6 +54,7 @@ import { TenancyModule } from './tenancy/tenancy.module';
       allowDevBypass: process.env['DIDACTA_DEV_BYPASS'] === 'true',
     }),
     ApiLicenseModule,
+    BrandingModule,
     AuthModule,
     AdminModule,
     TenancyModule,

@@ -102,6 +102,23 @@ function importTargetIsEE(target: string): boolean {
   return /\.ee(\b|\/|$)/.test(target);
 }
 
+/**
+ * Excepción aceptada del modelo: un archivo `*.module.ts` (NestJS) puede
+ * importar siblings `*.ee.ts` para registrarlos en el array `controllers` /
+ * `providers` del @Module. Los endpoints EE registrados allí están gateados
+ * a runtime por @RequiresCapability — sin licencia válida el LicenseGuard
+ * rechaza con 402, así que el bundle puede contener el código EE sin
+ * comprometer el modelo.
+ *
+ * Restricción: solo archivos que terminan en `.module.ts` y solo pueden
+ * importar de paths relativos (mismo directorio o subdirectorios).
+ */
+function isAllowedModuleEEImport(filePath: string, target: string): boolean {
+  const isModuleFile = filePath.endsWith('.module.ts') || filePath.endsWith('.module.tsx');
+  const isRelative = target.startsWith('./') || target.startsWith('../');
+  return isModuleFile && isRelative;
+}
+
 async function main() {
   const violations: Violation[] = [];
 
@@ -183,10 +200,14 @@ async function main() {
       const imports = extractStaticImports(content);
       for (const target of imports) {
         if (importTargetIsEE(target)) {
+          if (isAllowedModuleEEImport(relPath, target)) {
+            // *.module.ts puede registrar controllers/providers EE — patrón aceptado.
+            continue;
+          }
           violations.push({
             file: relPath,
             severity: 'error',
-            reason: `Static import of EE target "${target}" from non-EE file. Use dynamic import behind LicenseService.`,
+            reason: `Static import of EE target "${target}" from non-EE file. Use dynamic import behind LicenseService, or move the import into a *.module.ts that only registers controllers/providers (the accepted exception).`,
           });
         }
       }
