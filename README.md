@@ -2,7 +2,7 @@
 
 > 📚 **Plataforma LMS modular, fair-code y source-available** — VA360 LABS S.L.
 
-[![Docker](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/va360labs/didacta-community/pkgs/container/didacta-community)
+[![Docker](https://img.shields.io/badge/docker-hub-blue)](https://hub.docker.com/r/didactaio/community)
 [![License](https://img.shields.io/badge/license-Sustainable%20Use%201.0-orange)](LICENSE)
 [![Versioning](https://img.shields.io/badge/versioning-SemVer-green)](docs/versioning.md)
 [![Stage](https://img.shields.io/badge/stage-alpha%20cerrada-red)](docs/alpha/INSTALL.md)
@@ -16,14 +16,14 @@ Si eres un alpha tester invitado, empieza por [`docs/alpha/INSTALL.md`](docs/alp
 ## Quickstart (alpha testers)
 
 ```bash
-# 1. Login en GHCR (privado durante alpha)
-echo $GITHUB_PAT | docker login ghcr.io -u <usuario> --password-stdin
+# 1. Login en Docker Hub con la credencial que te demos (read-only para didactaio/community)
+docker login -u didactaio
 
 # 2. Clone + configurar .env
 git clone https://github.com/va360labs/didacta-community.git
 cd didacta-community
 cp .env.example .env
-# editar .env: AUTH_SECRET y DIDACTA_IMAGE_TAG
+# editar .env: AUTH_SECRET y DIDACTA_IMAGE_TAG (ej. 0.0.1-alpha.0)
 
 # 3. Arrancar
 docker compose -f docker-compose.alpha.yml up -d
@@ -33,6 +33,8 @@ docker compose -f docker-compose.alpha.yml up -d
 # http://localhost:3000             (Web)
 # http://localhost:8025             (Mailpit)
 ```
+
+> Imagen publicada en `docker.io/didactaio/community` (Docker Hub). El mirror GHCR está deshabilitado durante alpha cerrada.
 
 Detalle completo: [`docs/alpha/INSTALL.md`](docs/alpha/INSTALL.md). Para reportar bugs / feedback: [`docs/alpha/FEEDBACK.md`](docs/alpha/FEEDBACK.md).
 

@@ -34,15 +34,19 @@ git push origin v0.0.1-alpha.0
 
 ## Imágenes Docker
 
+Registry primario durante alpha: **Docker Hub** (`docker.io/didactaio/community`).
+
 ```
-ghcr.io/va360labs/didacta-community:0.0.1-alpha.0   # exacto
-ghcr.io/va360labs/didacta-community:0.0.1-alpha     # último alpha de 0.0.1
-ghcr.io/va360labs/didacta-community:alpha           # último alpha global
-ghcr.io/va360labs/didacta-community:beta            # último beta global
-ghcr.io/va360labs/didacta-community:latest          # último estable (NO pre-release)
+docker.io/didactaio/community:0.0.1-alpha.0   # exacto
+docker.io/didactaio/community:0.0.1-alpha     # último alpha de 0.0.1
+docker.io/didactaio/community:alpha           # último alpha global
+docker.io/didactaio/community:beta            # último beta global
+docker.io/didactaio/community:latest          # último estable (NO pre-release)
 ```
 
 ⚠️ **`:latest` jamás apunta a un alpha o beta**. Antes de `1.0.0`, `:latest` simplemente no existe.
+
+> **Mirror GHCR**: `ghcr.io/va360labs/didacta-community` está configurado en el workflow `release.yml` pero deshabilitado por billing suspendido en GitHub Actions de la org `va360labs`. Cuando se reactive, el mismo digest se publicará en ambos registries.
 
 ## Cuando hacer bump
 
@@ -94,8 +98,9 @@ Para pre-releases añadir disclaimer "ALPHA / BETA — uso bajo NDA / con precau
 
 ## Versión actual
 
-- **Próximo tag a publicar**: `v0.0.1-alpha.0` (Sprint 1, MIG-038).
-- Tag previo: ninguno.
+- **Tag publicado**: `v0.0.1-alpha.0` (Sprint 1, MIG-038 cerrado).
+- **Imagen publicada**: `docker.io/didactaio/community:0.0.1-alpha.0` (`alpha` apunta al mismo digest).
+- **Próximo tag previsto**: `v0.0.1-alpha.1` (bugfix sprint tras feedback inicial de testers).
 
 ## Documentación maestra
 

@@ -6,18 +6,21 @@
 
 - **Docker Desktop** (Mac/Windows) o **Docker Engine + Compose** (Linux). Versión 24+.
 - **Acceso al repo privado** `va360labs/didacta-community` (te lo damos como collaborator).
-- **GitHub Personal Access Token** con scope `read:packages`. Ver [GitHub docs — Creating a personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) para crearlo.
+- **Credencial Docker Hub** del namespace `didactaio` (te la damos por canal privado durante el onboarding alpha).
 - 4 GB de RAM libres y 5 GB de disco libre.
 
 ## Pasos
 
-### 1. Login en GHCR (registro privado de imágenes)
+### 1. Login en Docker Hub (registro de imágenes alpha)
+
+La imagen vive en `docker.io/didactaio/community`. Durante alpha cerrada el repo del registry es privado, así que necesitas hacer login con la credencial que te pasamos.
 
 ```bash
-echo "<TU_GITHUB_PAT>" | docker login ghcr.io -u <TU_USUARIO_GITHUB> --password-stdin
+docker login -u didactaio
+# Password: la credencial read-only que te damos en el kickoff
 ```
 
-Sustituye `<TU_GITHUB_PAT>` por el token y `<TU_USUARIO_GITHUB>` por tu usuario.
+> **Si en futuras versiones publicamos la imagen como pública**, este paso podrá saltarse y `docker compose pull` funcionará sin login.
 
 ### 2. Clonar el repo
 
@@ -112,7 +115,7 @@ docker compose -f docker-compose.alpha.yml up -d
 ## Lo que NO funciona en alpha
 
 - ⚠️ **Sistema de registro opt-in con Cloud god**: no contacta servidor remoto (Cloud god aún no existe — Sprint 2). El registro queda local.
-- ⚠️ **Imagen Docker pública**: la imagen está en GHCR privado. Solo accesible con tu PAT.
+- ⚠️ **Imagen Docker pública**: la imagen está en Docker Hub privado (`didactaio/community`). Solo accesible con la credencial que te damos.
 - ⚠️ **Capabilities Enterprise**: solo white-label como piloto. Resto vendrá en próximos alphas.
 - ⚠️ **Marketplace de módulos**: no existe todavía. Los módulos oficiales vienen pre-instalados.
 
