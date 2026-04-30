@@ -12,6 +12,7 @@ import { AuditExportModule } from './modules/audit-export/audit-export.module';
 import { MetricsAuthController } from './modules/metrics-auth.controller';
 import { ModulesModule } from './modules/modules.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { RegistryModule } from './registry/registry.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 
@@ -56,6 +57,11 @@ import { TenancyModule } from './tenancy/tenancy.module';
       allowDevBypass: process.env['DIDACTA_DEV_BYPASS'] === 'true',
     }),
     ApiLicenseModule,
+    // Sexto piloto License SDK — gate feat:api.rate_limit.elevated end-to-end.
+    // Registra RateLimitInterceptor como APP_INTERCEPTOR global, así que
+    // todas las rutas (con las exenciones definidas en el interceptor)
+    // pasan por el limiter sin tocar controllers.
+    RateLimitModule,
     BrandingModule,
     RegistryModule,
     AuthModule,

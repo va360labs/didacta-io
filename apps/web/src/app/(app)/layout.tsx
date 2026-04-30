@@ -162,6 +162,12 @@ function buildGroups({
       { href: '/admin/seguridad', label: 'Seguridad', icon: 'lock' },
       { href: '/admin/fundae', label: 'Fundae', icon: 'file' },
       { href: '/admin/auditoria', label: 'Auditoría', icon: 'shield' },
+      // "Límites API" — sexto piloto License SDK (gate
+      // `feat:api.rate_limit.elevated`). El item es SIEMPRE visible: la
+      // página informa al admin community del rate "fair" actual y le
+      // ofrece upsell a Enterprise sin tener que llamar a ventas. El gate
+      // EE solo aplica al botón de upgrade dentro de la página.
+      { href: '/admin/rate-limit', label: 'Límites API', icon: 'trending' },
     ],
   };
 
