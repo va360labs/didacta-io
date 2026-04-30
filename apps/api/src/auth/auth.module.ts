@@ -89,6 +89,10 @@ function loadCipherKey(): string {
     JwtAuthGuard,
     JwtOrApiKeyGuard,
     PrismaAuditLogService,
+    // Exportado para que el AdminModule pueda inyectar el config service
+    // en CustomDomainsService (cuarto piloto License SDK) sin reproveerlo.
+    // La instancia queda compartida con AuthModule (donde la usa MfaPolicyService).
+    PrismaTenantConfigService,
   ],
 })
 export class AuthModule {}

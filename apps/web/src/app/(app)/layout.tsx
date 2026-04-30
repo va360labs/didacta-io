@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
+import { LICENSE_CAPABILITIES, useLicense } from '@didacta/license-sdk/react';
 import { AppSidebar, type SidebarGroup } from '@/components/app-sidebar';
 import { Icon } from '@/components/icon';
 import { LicenseProvider } from '@/components/license-provider';
@@ -18,7 +19,6 @@ import { authStorage, type StoredSession } from '@/lib/auth-storage';
  */
 export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [session, setSession] = useState<StoredSession | null>(null);
 
   useEffect(() => {
@@ -32,13 +32,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   if (!session) return null;
 
-  const isAdminOrFormador = session.user.roles.some((r) =>
-    ['super_admin', 'tenant_admin', 'formador'].includes(r),
-  );
-  const isSuperAdmin = session.user.roles.includes('super_admin');
-
-  const groups = buildGroups({ isAdminOrFormador, isSuperAdmin });
-
   function logout() {
     authStorage.clear();
     router.replace('/signin');
@@ -47,42 +40,83 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <LicenseProvider>
       <TenantThemeProvider>
-        <div className="flex min-h-dvh bg-bg-subtle">
-          <AppSidebar
-            groups={groups}
-            pathname={pathname ?? null}
-            session={session}
-            onLogout={logout}
-          />
-
-          <div className="flex min-w-0 flex-1 flex-col">
-            <div className="sticky top-0 z-sticky flex h-14 items-center justify-end gap-2 border-b border-border-soft bg-surface/95 px-6 backdrop-blur">
-              <button
-                type="button"
-                className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text"
-                aria-label="Mensajes"
-              >
-                <Icon name="message" size={18} />
-              </button>
-              <NotificationsBell />
-            </div>
-
-            <main className="flex-1 px-8 py-6">
-              <div className="mx-auto max-w-[1280px]">{children}</div>
-            </main>
-          </div>
-        </div>
+        <Shell session={session} onLogout={logout}>
+          {children}
+        </Shell>
       </TenantThemeProvider>
     </LicenseProvider>
+  );
+}
+
+/**
+ * Inner shell — vive dentro de `LicenseProvider` para poder consultar las
+ * capabilities EE activas y mostrar/ocultar items del sidebar acordemente
+ * (ej. "Dominios propios" → gateado por `feat:custom_domains`).
+ *
+ * Importante: estos toggles del sidebar son SOLO UX. El backend gatea cada
+ * endpoint con @RequiresCapability — un usuario que conozca la URL siempre
+ * va a recibir 402 si no tiene la licencia.
+ */
+function Shell({
+  session,
+  onLogout,
+  children,
+}: {
+  session: StoredSession;
+  onLogout: () => void;
+  children: ReactNode;
+}) {
+  const pathname = usePathname();
+  const { isCapabilityEnabled } = useLicense();
+
+  const isAdminOrFormador = session.user.roles.some((r) =>
+    ['super_admin', 'tenant_admin', 'formador'].includes(r),
+  );
+  const isSuperAdmin = session.user.roles.includes('super_admin');
+
+  const groups = buildGroups({
+    isAdminOrFormador,
+    isSuperAdmin,
+    customDomainsEnabled: isCapabilityEnabled(LICENSE_CAPABILITIES.CUSTOM_DOMAINS),
+  });
+
+  return (
+    <div className="flex min-h-dvh bg-bg-subtle">
+      <AppSidebar
+        groups={groups}
+        pathname={pathname ?? null}
+        session={session}
+        onLogout={onLogout}
+      />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="sticky top-0 z-sticky flex h-14 items-center justify-end gap-2 border-b border-border-soft bg-surface/95 px-6 backdrop-blur">
+          <button
+            type="button"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text"
+            aria-label="Mensajes"
+          >
+            <Icon name="message" size={18} />
+          </button>
+          <NotificationsBell />
+        </div>
+
+        <main className="flex-1 px-8 py-6">
+          <div className="mx-auto max-w-[1280px]">{children}</div>
+        </main>
+      </div>
+    </div>
   );
 }
 
 function buildGroups({
   isAdminOrFormador,
   isSuperAdmin,
+  customDomainsEnabled,
 }: {
   isAdminOrFormador: boolean;
   isSuperAdmin: boolean;
+  customDomainsEnabled: boolean;
 }): SidebarGroup[] {
   const learning: SidebarGroup = {
     label: 'Aprendizaje',
@@ -130,6 +164,14 @@ function buildGroups({
       { href: '/admin/auditoria', label: 'Auditoría', icon: 'shield' },
     ],
   };
+
+  // "Dominios propios" — gateado por capability `feat:custom_domains` (cuarto
+  // piloto License SDK). Sólo aparece en el sidebar cuando la licencia EE
+  // está activa. Si el admin escribe la URL a mano, la página se renderiza
+  // pero todos los endpoints devolverán 402 vía LicenseExceptionFilter.
+  if (customDomainsEnabled) {
+    admin.items.push({ href: '/admin/dominios', label: 'Dominios propios', icon: 'building' });
+  }
 
   if (isSuperAdmin) {
     admin.items.push({ href: '/admin/tenants', label: 'Tenants', icon: 'building' });

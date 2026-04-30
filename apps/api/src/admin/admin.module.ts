@@ -8,6 +8,8 @@ import { AdminTenantsController } from './admin-tenants.controller';
 import { AdminTenantsService } from './admin-tenants.service';
 import { AdminUsersController } from './admin-users.controller';
 import { AdminUsersService } from './admin-users.service';
+import { CustomDomainsController } from './custom-domains/custom-domains.controller';
+import { CustomDomainsService } from './custom-domains/custom-domains.service';
 
 /**
  * Módulo administrativo: agrupa controllers y services destinados al panel
@@ -26,8 +28,10 @@ import { AdminUsersService } from './admin-users.service';
     AdminTenantsController,
     AdminModulesController,
     AdminStatsController,
+    // Cuarto piloto License SDK — gate feat:custom_domains end-to-end.
+    CustomDomainsController,
   ],
-  providers: [AdminUsersService, AdminTenantsService, AdminStatsService],
+  providers: [AdminUsersService, AdminTenantsService, AdminStatsService, CustomDomainsService],
   exports: [AdminUsersService, AdminTenantsService, AdminStatsService],
 })
 export class AdminModule {}
