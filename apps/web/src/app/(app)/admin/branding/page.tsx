@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { EeGate, LICENSE_CAPABILITIES } from '@didacta/license-sdk/react';
 import { Icon } from '@/components/icon';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -359,48 +360,64 @@ export default function BrandingPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>CSS personalizado (avanzado)</CardTitle>
-              <CardDescription>
-                Solo para usuarios técnicos. Se sanitiza en el servidor: <code>@import</code>,{' '}
-                <code>expression()</code>, <code>javascript:</code> y cierre de{' '}
-                <code>&lt;/style&gt;</code> están bloqueados. Máximo 16&nbsp;KB.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                value={form.customCss}
-                onChange={(e) => setForm((f) => f && { ...f, customCss: e.target.value })}
-                rows={6}
-                placeholder=":root { --radius-card: 12px; }"
-                className="font-mono text-xs"
-              />
-              <p className="mt-2 text-xs text-text-subtle">
-                {Math.round(new TextEncoder().encode(form.customCss).length / 102.4) / 10} KB de 16
-                KB
-              </p>
-            </CardContent>
-          </Card>
+          {/*
+           * White-label avanzado (Enterprise): gateado por la capability
+           * `feat:white_label` del License SDK. En plan community se muestra
+           * un mensaje de upgrade; con licencia EE válida que incluya esta
+           * capability, los campos quedan editables.
+           *
+           * IMPORTANTE: este gate es solo UX. El backend ya gatea los
+           * endpoints relevantes con @RequiresCapability — sin licencia EE
+           * cualquier intento de PUT/POST con customCss / footerHtml acaba
+           * en 402 Payment Required vía LicenseExceptionFilter.
+           */}
+          <EeGate
+            capability={LICENSE_CAPABILITIES.WHITE_LABEL}
+            fallback={<WhiteLabelUpsellCard />}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle>CSS personalizado (avanzado)</CardTitle>
+                <CardDescription>
+                  Solo para usuarios técnicos. Se sanitiza en el servidor: <code>@import</code>,{' '}
+                  <code>expression()</code>, <code>javascript:</code> y cierre de{' '}
+                  <code>&lt;/style&gt;</code> están bloqueados. Máximo 16&nbsp;KB.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Textarea
+                  value={form.customCss}
+                  onChange={(e) => setForm((f) => f && { ...f, customCss: e.target.value })}
+                  rows={6}
+                  placeholder=":root { --radius-card: 12px; }"
+                  className="font-mono text-xs"
+                />
+                <p className="mt-2 text-xs text-text-subtle">
+                  {Math.round(new TextEncoder().encode(form.customCss).length / 102.4) / 10} KB de
+                  16 KB
+                </p>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Footer personalizado</CardTitle>
-              <CardDescription>
-                HTML del footer (sanitizado a etiquetas básicas). Aparece en el pie de las pantallas
-                autenticadas. Máximo 4&nbsp;KB.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                value={form.footerHtml}
-                onChange={(e) => setForm((f) => f && { ...f, footerHtml: e.target.value })}
-                rows={3}
-                placeholder="<p>&copy; 2026 Tu Organización · <a href='...'>Privacidad</a></p>"
-                className="font-mono text-xs"
-              />
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Footer personalizado</CardTitle>
+                <CardDescription>
+                  HTML del footer (sanitizado a etiquetas básicas). Aparece en el pie de las
+                  pantallas autenticadas. Máximo 4&nbsp;KB.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Textarea
+                  value={form.footerHtml}
+                  onChange={(e) => setForm((f) => f && { ...f, footerHtml: e.target.value })}
+                  rows={3}
+                  placeholder="<p>&copy; 2026 Tu Organización · <a href='...'>Privacidad</a></p>"
+                  className="font-mono text-xs"
+                />
+              </CardContent>
+            </Card>
+          </EeGate>
         </div>
 
         <aside className="lg:sticky lg:top-6 lg:self-start">
@@ -489,6 +506,55 @@ export default function BrandingPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+/**
+ * Tarjeta de upsell que se muestra en lugar del bloque white-label cuando el
+ * tenant está en plan community (sin licencia EE) o cuando la licencia activa
+ * no incluye la capability `feat:white_label`.
+ *
+ * Mensaje claro: explica qué se desbloquea y dirige al pricing público.
+ * No reemplaza el guard del backend — es solo UX. Cualquier intento de
+ * persistir customCss / footerHtml sin la capability sigue rebotando con 402.
+ */
+function WhiteLabelUpsellCard() {
+  return (
+    <Card
+      role="region"
+      aria-label="Funcionalidades Enterprise white-label"
+      className="border-dashed"
+    >
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Icon name="lock" size={18} />
+          Función Enterprise — actualiza tu plan
+        </CardTitle>
+        <CardDescription>
+          El CSS personalizado y el footer HTML del tenant son parte del paquete white-label de
+          Didacta Enterprise. Tu plan actual (community) no incluye esta funcionalidad.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-text-muted">
+          Con la licencia Enterprise activa podrás inyectar reglas CSS propias, sustituir el footer
+          por HTML personalizado y ocultar la marca Didacta. La capability requerida es{' '}
+          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">
+            feat:white_label
+          </code>
+          .
+        </p>
+        <a
+          href="https://didacta.io/pricing"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+        >
+          Ver planes Enterprise
+          <Icon name="arrow-right" size={14} />
+        </a>
+      </CardContent>
+    </Card>
   );
 }
 

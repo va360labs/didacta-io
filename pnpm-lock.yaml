@@ -223,6 +223,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@didacta/license-sdk':
+        specifier: workspace:*
+        version: link:../../packages/license-sdk
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)

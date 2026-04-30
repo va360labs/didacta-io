@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { AppSidebar, type SidebarGroup } from '@/components/app-sidebar';
 import { Icon } from '@/components/icon';
+import { LicenseProvider } from '@/components/license-provider';
 import { NotificationsBell } from '@/components/notifications-bell';
 import { TenantThemeProvider } from '@/components/tenant-theme-provider';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
@@ -44,33 +45,35 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <TenantThemeProvider>
-      <div className="flex min-h-dvh bg-bg-subtle">
-        <AppSidebar
-          groups={groups}
-          pathname={pathname ?? null}
-          session={session}
-          onLogout={logout}
-        />
+    <LicenseProvider>
+      <TenantThemeProvider>
+        <div className="flex min-h-dvh bg-bg-subtle">
+          <AppSidebar
+            groups={groups}
+            pathname={pathname ?? null}
+            session={session}
+            onLogout={logout}
+          />
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="sticky top-0 z-sticky flex h-14 items-center justify-end gap-2 border-b border-border-soft bg-surface/95 px-6 backdrop-blur">
-            <button
-              type="button"
-              className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text"
-              aria-label="Mensajes"
-            >
-              <Icon name="message" size={18} />
-            </button>
-            <NotificationsBell />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="sticky top-0 z-sticky flex h-14 items-center justify-end gap-2 border-b border-border-soft bg-surface/95 px-6 backdrop-blur">
+              <button
+                type="button"
+                className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text"
+                aria-label="Mensajes"
+              >
+                <Icon name="message" size={18} />
+              </button>
+              <NotificationsBell />
+            </div>
+
+            <main className="flex-1 px-8 py-6">
+              <div className="mx-auto max-w-[1280px]">{children}</div>
+            </main>
           </div>
-
-          <main className="flex-1 px-8 py-6">
-            <div className="mx-auto max-w-[1280px]">{children}</div>
-          </main>
         </div>
-      </div>
-    </TenantThemeProvider>
+      </TenantThemeProvider>
+    </LicenseProvider>
   );
 }
 
