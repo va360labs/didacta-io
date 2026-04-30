@@ -19,6 +19,7 @@ import {
   type UpdateThemeDto,
   type UploadLogoDto,
 } from '@didacta/mod-theming';
+import { LicenseService, LICENSE_CAPABILITIES } from '@didacta/license-sdk';
 import type { FastifyReply } from 'fastify';
 import { CurrentUser, Public } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -28,12 +29,22 @@ import { ModuleRegistryService } from './module-registry.service';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
+/**
+ * Campos del UpdateThemeDto que requieren capability `feat:white_label` activa
+ * para poder modificarse. Los colores, fuentes y copy del tenant son CE; el
+ * CSS arbitrario y el footer HTML son white-label puro.
+ */
+const WHITE_LABEL_FIELDS = ['customCss', 'footerHtml'] as const satisfies readonly (keyof UpdateThemeDto)[];
+
 @ApiTags('Modules · Theming')
 @ApiBearerAuth()
 @Controller('modules/theming')
 @UseGuards(JwtAuthGuard)
 export class ThemingController {
-  constructor(private readonly registry: ModuleRegistryService) {}
+  constructor(
+    private readonly registry: ModuleRegistryService,
+    private readonly license: LicenseService,
+  ) {}
 
   @Get('me')
   @ApiOperation({
@@ -48,7 +59,7 @@ export class ThemingController {
   @Put('me')
   @ApiOperation({
     summary:
-      'Actualiza el theme del tenant. Solo super_admin y tenant_admin (permission theming.write).',
+      'Actualiza el theme del tenant. Solo super_admin y tenant_admin. Los campos `customCss` y `footerHtml` exigen capability Enterprise `feat:white_label` activa — sin licencia el endpoint devuelve 402.',
   })
   async updateMine(
     @CurrentUser() user: SessionClaims | undefined,
@@ -57,6 +68,12 @@ export class ThemingController {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
       throw new UnauthorizedException('Solo administradores pueden modificar el theme.');
+    }
+    // Si el dto incluye CUALQUIER campo white-label (customCss / footerHtml),
+    // requerimos la capability EE. Lanza CapabilityRequiredError → 402.
+    const touchesWhiteLabel = WHITE_LABEL_FIELDS.some((f) => dto[f] !== undefined);
+    if (touchesWhiteLabel) {
+      this.license.requireCapability(LICENSE_CAPABILITIES.WHITE_LABEL);
     }
     return this.registry.getThemingService().update(user.tenantId, dto);
   }

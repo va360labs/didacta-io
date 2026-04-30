@@ -1,0 +1,93 @@
+name: Integration Tests
+
+# Suite de tests de integración que requieren contenedores reales
+# (Postgres, Redis). Hoy: License SDK end-to-end con Postgres real (MIG-034).
+# Mañana: cualquier otro test de integración que se vaya añadiendo.
+#
+# Este workflow está dormante hasta que se reactive billing GitHub Actions
+# en la org va360labs (ver MIG-037 — bloqueado por billing). En cuanto
+# vuelva, ya queda corriendo en cada PR sin más cambios.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      # Sólo dispara cuando cambia algo relacionado con licencias o tests
+      # de integración. Evita coste innecesario en PRs de docs / UI.
+      - 'apps/api/src/license/**'
+      - 'apps/api/src/branding/**'
+      - 'apps/api/tests/integration/**'
+      - 'apps/api/vitest.integration.config.ts'
+      - 'apps/api/scripts/run-integration-license.mjs'
+      - 'packages/license-sdk/**'
+      - 'packages/database/prisma/schema.prisma'
+      - 'docker-compose.test.yml'
+      - '.github/workflows/integration.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/src/license/**'
+      - 'apps/api/src/branding/**'
+      - 'apps/api/tests/integration/**'
+      - 'apps/api/vitest.integration.config.ts'
+      - 'apps/api/scripts/run-integration-license.mjs'
+      - 'packages/license-sdk/**'
+      - 'packages/database/prisma/schema.prisma'
+      - 'docker-compose.test.yml'
+      - '.github/workflows/integration.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+
+jobs:
+  license-guard-integration:
+    name: License Guard · Integración con Postgres real
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.21.0
+          run_install: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @didacta/database db:generate
+
+      - name: Run integration suite (LicenseGuard + Postgres real)
+        # El orquestador arranca docker-compose.test.yml, espera Postgres ready,
+        # corre vitest contra él y baja el compose. En GitHub-hosted Linux runners
+        # Docker está pre-instalado y disponible sin sudo.
+        run: pnpm --filter @didacta/api test:integration:license
+
+      - name: Upload logs si falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs-${{ github.run_id }}
+          path: |
+            apps/api/coverage
+            /tmp/docker-logs.txt
+          if-no-files-found: ignore
+          retention-days: 7
