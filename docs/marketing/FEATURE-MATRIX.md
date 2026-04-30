@@ -8,7 +8,7 @@
 
 ## TL;DR
 
-Didacta Community cubre **~95% del feature set core** de un LMS top, **~70% de las features de IA diferenciadoras** (RAG con citas, corrección IA con rúbrica) y aporta **3 diferenciadores únicos**: cumplimiento Fundae España al 100%, modelo arquitectónico modular tipo "WordPress" para tooling agnóstico de IA, y fair-code (Sustainable Use License). Los huecos están en monetización (billing, marketplace) y conectividad enterprise (SSO/SCIM), que se construirán Q2-Q3 2026.
+Didacta Community cubre **~95% del feature set core** de un LMS top, **~70% de las features de IA diferenciadoras** (RAG con citas, corrección IA con rúbrica), **provisioning SCIM 2.0 ya operativo** y aporta **3 diferenciadores únicos**: cumplimiento Fundae España al 100%, modelo arquitectónico modular tipo "WordPress" para tooling agnóstico de IA, y fair-code (Sustainable Use License). Los huecos restantes están en monetización (billing, marketplace) y SSO SAML/OIDC, que se construirán Q3 2026.
 
 **A quién le sirve hoy** (alpha cerrada):
 - Academias / consultoras de formación que necesitan **bonificaciones Fundae** sin pagar 200€/mes a TalentLMS.
@@ -89,7 +89,7 @@ Leyenda: ✅ Disponible · 🟡 Parcial · 🔵 EE (Enterprise gateado por licen
 | MFA enforcement tenant-wide (todos usuarios) | ✅ 🔵 EE | 🟡 | ❌ | 🟡 | ✅ |
 | SSO SAML 2.0 | 🚧 EE | ✅ | 🟡 | ✅ | ✅ |
 | SSO OIDC | 🚧 EE | ✅ | 🟡 | ✅ | ✅ |
-| Provisioning SCIM 2.0 | 🚧 EE | ❌ | ❌ | 🟡 | ✅ |
+| Provisioning SCIM 2.0 | ✅ 🔵 EE | ❌ | ❌ | 🟡 | ✅ |
 | Roles personalizados beyond fixed | 🚧 | ✅ | 🟡 | ✅ | ✅ |
 | Audit log con cadena de hashes verificable | ✅ | 🟡 | ❌ | 🟡 | ✅ |
 | Retención auditoría > 90 días | ✅ 🔵 EE | 🟡 | ❌ | 🟡 | ✅ |
@@ -190,7 +190,7 @@ A día de hoy, esto NO existe en Moodle ni LearnDash. Docebo y TalentLMS tienen 
 ## Roadmap de cierre de gap (orientativo)
 
 ### Q3 2026
-- 5to-7mo piloto EE: SSO SAML, SSO OIDC, SCIM (los 3 grandes operativos).
+- 8º-10º piloto EE: SSO SAML, SSO OIDC, multi-tenant strict isolation.
 - IFAPA Andalucía (después de Fundae cerrado).
 - Migrator from Moodle (cursos + usuarios + enrollments).
 
@@ -210,10 +210,10 @@ A día de hoy, esto NO existe en Moodle ni LearnDash. Docebo y TalentLMS tienen 
 
 ## Métricas técnicas alpha
 
-- **547 tests unit + 13 tests integración Postgres real** verde en `didacta-community`.
+- **608 tests unit + 13 tests integración Postgres real** verde en `didacta-community`.
 - **424 tests + 118 fundae module tests** verde en `learnship` (repo principal pre-rebrand).
 - **22 módulos** (11 en cada repo) en verde con linter `audit-module-contract`.
-- **6 capabilities EE pilotadas end-to-end** (>54% de las 11 oficiales).
+- **7 capabilities EE pilotadas end-to-end** (>63% de las 11 oficiales).
 - **Imagen Docker alpha**: 1.3 GB (alpine), publicada en Docker Hub `didactaio/community:0.0.1-alpha.0`.
 - **Stack**: NestJS 11 + Next 15 + Postgres 16 + Prisma 5 + Redis 7 + pgvector + S3 + Anthropic / OpenAI / Voyage.
 
