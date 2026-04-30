@@ -42,4 +42,5 @@ prompts/
 *.tar.gz
 *.log
 *.tsbuildinfo
+**/*.tsbuildinfo
 *.swp
