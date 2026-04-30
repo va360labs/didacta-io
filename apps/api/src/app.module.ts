@@ -14,6 +14,7 @@ import { ModulesModule } from './modules/modules.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { RegistryModule } from './registry/registry.module';
+import { ScimModule } from './scim/scim.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 
 @Module({
@@ -72,6 +73,10 @@ import { TenancyModule } from './tenancy/tenancy.module';
     // Quinto piloto License SDK — gate feat:reports.advanced_signed end-to-end.
     // Vivimos en módulo separado para acoplar `adm-zip` solo donde se usa.
     AuditExportModule,
+    // Séptimo piloto License SDK — gate feat:scim end-to-end (endpoints
+    // /scim/v2/...). El prefijo global /api/v1 NO aplica a estos paths
+    // (excluidos en main.ts) porque los IdPs esperan exactamente /scim/v2.
+    ScimModule,
     HealthModule,
   ],
 })

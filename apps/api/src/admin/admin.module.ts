@@ -10,6 +10,7 @@ import { AdminUsersController } from './admin-users.controller';
 import { AdminUsersService } from './admin-users.service';
 import { CustomDomainsController } from './custom-domains/custom-domains.controller';
 import { CustomDomainsService } from './custom-domains/custom-domains.service';
+import { ScimAdminTokenController } from './scim/scim-admin.controller';
 
 /**
  * Módulo administrativo: agrupa controllers y services destinados al panel
@@ -30,6 +31,10 @@ import { CustomDomainsService } from './custom-domains/custom-domains.service';
     AdminStatsController,
     // Cuarto piloto License SDK — gate feat:custom_domains end-to-end.
     CustomDomainsController,
+    // Séptimo piloto License SDK — gestión del token SCIM por tenant.
+    // Los endpoints /scim/v2/* viven en ScimModule (AppModule); este
+    // controller solo gestiona el bearer token estático (admin con JWT).
+    ScimAdminTokenController,
   ],
   providers: [AdminUsersService, AdminTenantsService, AdminStatsService, CustomDomainsService],
   exports: [AdminUsersService, AdminTenantsService, AdminStatsService],

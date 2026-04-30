@@ -59,6 +59,10 @@ async function bootstrap(): Promise<void> {
       // License public endpoint vive en /api/license (sin versión) para que
       // el frontend lo consuma sin tener que conocer la versión actual del API.
       'api/license',
+      // SCIM 2.0 vive en /scim/v2/* sin prefijo /api/v1 — los IdPs (Okta,
+      // Azure AD, Auth0, Google Workspace) esperan exactamente esa forma
+      // canónica del path RFC 7644. Séptimo piloto License SDK (feat:scim).
+      'scim/v2/(.*)',
     ],
   });
 

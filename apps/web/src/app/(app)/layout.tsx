@@ -78,6 +78,7 @@ function Shell({
     isAdminOrFormador,
     isSuperAdmin,
     customDomainsEnabled: isCapabilityEnabled(LICENSE_CAPABILITIES.CUSTOM_DOMAINS),
+    scimEnabled: isCapabilityEnabled(LICENSE_CAPABILITIES.SCIM),
   });
 
   return (
@@ -113,10 +114,12 @@ function buildGroups({
   isAdminOrFormador,
   isSuperAdmin,
   customDomainsEnabled,
+  scimEnabled,
 }: {
   isAdminOrFormador: boolean;
   isSuperAdmin: boolean;
   customDomainsEnabled: boolean;
+  scimEnabled: boolean;
 }): SidebarGroup[] {
   const learning: SidebarGroup = {
     label: 'Aprendizaje',
@@ -177,6 +180,15 @@ function buildGroups({
   // pero todos los endpoints devolverán 402 vía LicenseExceptionFilter.
   if (customDomainsEnabled) {
     admin.items.push({ href: '/admin/dominios', label: 'Dominios propios', icon: 'building' });
+  }
+
+  // "SCIM Provisioning" — gateado por capability `feat:scim` (séptimo piloto
+  // License SDK). Mismo patrón que custom-domains: sólo aparece con licencia
+  // EE activa. La página se renderiza igual si entran por URL directa, pero
+  // el panel queda con upsell card y los endpoints /api/v1/admin/scim/* +
+  // /scim/v2/Users devuelven 402.
+  if (scimEnabled) {
+    admin.items.push({ href: '/admin/scim', label: 'SCIM Provisioning', icon: 'users' });
   }
 
   if (isSuperAdmin) {
