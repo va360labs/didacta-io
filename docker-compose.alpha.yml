@@ -2,15 +2,15 @@
 # Didacta Community — docker-compose para Alpha testers
 # ----------------------------------------------------------------------------
 # Arranca el stack COMPLETO (API + web + dependencias) usando la imagen
-# oficial de GHCR. Diseñado para alpha testers que quieren probar Didacta
-# en su máquina sin desarrollarlo.
+# oficial de Docker Hub. Diseñado para alpha testers que quieren probar
+# Didacta en su máquina sin desarrollarlo.
 #
 # Uso:
-#   1. Asegúrate de tener login en GHCR (privado durante alpha):
-#        echo $GITHUB_TOKEN | docker login ghcr.io -u <usuario> --password-stdin
-#   2. Copia .env.example → .env y rellena valores.
-#   3. docker compose -f docker-compose.alpha.yml up -d
-#   4. Abre http://localhost:3000 (web) o http://localhost:4000/api/docs (API).
+#   1. Copia .env.example → .env y rellena los valores REQUIRED.
+#   2. docker compose -f docker-compose.alpha.yml up -d
+#   3. Abre http://localhost:3000 (web) o http://localhost:4000/api/docs (API).
+#
+# La imagen `didactaio/community` es pública en Docker Hub: no requiere login.
 #
 # Para desarrollo local (con `pnpm dev`), usa el `docker-compose.yml` clásico
 # que solo levanta dependencias.
@@ -101,7 +101,7 @@ services:
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
 
   didacta:
-    image: ghcr.io/va360labs/didacta-community:${DIDACTA_IMAGE_TAG:-alpha}
+    image: didactaio/community:${DIDACTA_IMAGE_TAG:-alpha}
     container_name: didacta-app
     restart: unless-stopped
     depends_on:
