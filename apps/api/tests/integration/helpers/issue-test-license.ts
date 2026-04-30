@@ -86,6 +86,16 @@ export interface IssueOptions {
    * header. El SDK lo trata como `invalid` (firma no verifica).
    */
   signWithRogueKey?: boolean;
+  /**
+   * Override del claim `exp` del JWT estándar (separado del `didacta.expiresAt`
+   * interno). Útil para probar el comportamiento de grace: el JWT estándar
+   * sigue válido (jose no lo rechaza) mientras que `didacta.expiresAt` está
+   * en pasado, lo que permite que el runtime calcule status `grace` o
+   * `expired` correctamente.
+   *
+   * Si se omite, `exp` JWT == `expiresAt` didacta (comportamiento original).
+   */
+  jwtExpiresAt?: Date;
 }
 
 /**
@@ -97,12 +107,18 @@ export async function issueTestLicense(opts: IssueOptions = {}): Promise<string>
 
   const now = opts.issuedAt ?? new Date();
   const exp = opts.expiresAt ?? new Date(now.getTime() + 365 * 86_400_000);
+  // El claim `exp` del JWT solo controla la validación de jose (clockTolerance
+  // 30s default). Para probar grace, conviene desacoplarlo de `didacta.expiresAt`:
+  // exp JWT en futuro lejano (jose acepta) + didacta.expiresAt en pasado
+  // (runtime calcula grace). Si el caller no override, mantener compatibilidad:
+  // exp JWT == didacta.expiresAt.
+  const jwtExp = opts.jwtExpiresAt ?? exp;
 
   const payload = {
     iss: opts.issuer ?? 'didacta.io',
     aud: opts.audience ?? 'didacta-runtime',
     iat: Math.floor(now.getTime() / 1000),
-    exp: Math.floor(exp.getTime() / 1000),
+    exp: Math.floor(jwtExp.getTime() / 1000),
     nbf: Math.floor(now.getTime() / 1000),
     sub: 'lic_integration_test',
     didacta: {

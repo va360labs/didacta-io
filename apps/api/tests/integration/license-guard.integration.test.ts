@@ -112,6 +112,77 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     });
   });
 
+  it('[grace + capability] licencia expirada DENTRO del grace period con feat:white_label → 200', async () => {
+    // 5 días post-expiración con grace de 30 → status `grace`.
+    // El SDK trata grace como "active funcionalmente" (capabilities siguen
+    // habilitadas) pero reporta el state distinto al cliente.
+    //
+    // Detalle: el JWT estándar usa `exp` para que jose lo valide; ponemos
+    // `jwtExpiresAt` lejano en futuro para que jose acepte la firma, mientras
+    // `expiresAt` (didacta) está en pasado para que el runtime calcule grace.
+    const now = new Date();
+    const farFuture = new Date(now.getTime() + 365 * 86_400_000);
+    const graceToken = await issueTestLicense({
+      capabilities: [LICENSE_CAPABILITIES.WHITE_LABEL],
+      organizationName: 'Acme In Grace',
+      issuedAt: new Date(now.getTime() - 100 * 86_400_000),
+      expiresAt: new Date(now.getTime() - 5 * 86_400_000),
+      jwtExpiresAt: farFuture,
+      gracePeriodDays: 30,
+    });
+    const testApp = await createTestApp({ licenseKey: graceToken });
+
+    await withApp(testApp, async (server) => {
+      const res = await supertest(server).get(PREVIEW_PATH);
+
+      expect(res.status).toBe(200);
+      expect(res.body.canHideBrand).toBe(true);
+    });
+  });
+
+  it('[grace sin capability] licencia en grace SIN feat:white_label → 402 (capability ausente, no expiración)', async () => {
+    const now = new Date();
+    const farFuture = new Date(now.getTime() + 365 * 86_400_000);
+    const graceTokenWithoutCap = await issueTestLicense({
+      capabilities: [LICENSE_CAPABILITIES.SCIM],
+      organizationName: 'Acme In Grace SCIM only',
+      issuedAt: new Date(now.getTime() - 100 * 86_400_000),
+      expiresAt: new Date(now.getTime() - 5 * 86_400_000),
+      jwtExpiresAt: farFuture,
+      gracePeriodDays: 30,
+    });
+    const testApp = await createTestApp({ licenseKey: graceTokenWithoutCap });
+
+    await withApp(testApp, async (server) => {
+      const res = await supertest(server).get(PREVIEW_PATH);
+
+      expect(res.status).toBe(402);
+      expect(res.body.capability).toBe(LICENSE_CAPABILITIES.WHITE_LABEL);
+    });
+  });
+
+  it('[grace boundary] licencia expirada exactamente al borde del grace (29 días post) → 200', async () => {
+    // Edge case: licencia 29 días post-expiración con grace 30 → aún en grace.
+    const now = new Date();
+    const farFuture = new Date(now.getTime() + 365 * 86_400_000);
+    const edgeToken = await issueTestLicense({
+      capabilities: [LICENSE_CAPABILITIES.WHITE_LABEL],
+      organizationName: 'Acme Grace Edge',
+      issuedAt: new Date(now.getTime() - 365 * 86_400_000),
+      expiresAt: new Date(now.getTime() - 29 * 86_400_000),
+      jwtExpiresAt: farFuture,
+      gracePeriodDays: 30,
+    });
+    const testApp = await createTestApp({ licenseKey: edgeToken });
+
+    await withApp(testApp, async (server) => {
+      const res = await supertest(server).get(PREVIEW_PATH);
+
+      // Justo dentro del grace → capability sigue habilitada.
+      expect(res.status).toBe(200);
+    });
+  });
+
   it('[expired] licencia expirada (post-grace) con feat:white_label → 402', async () => {
     const testApp = await createTestApp({ licenseKey: licenses.expired });
 
