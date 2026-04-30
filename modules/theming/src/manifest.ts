@@ -16,7 +16,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
     modules: [],
     optionalModules: [],
   },
-  eventsEmitted: [],
+  eventsEmitted: ['theming.logo.uploaded'],
   eventsConsumed: [],
   apiNamespace: '/modules/theming',
 });
