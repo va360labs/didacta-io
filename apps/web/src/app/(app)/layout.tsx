@@ -125,6 +125,7 @@ function buildGroups({
       { href: '/admin/usuarios', label: 'Usuarios', icon: 'users' },
       { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
       { href: '/admin/branding', label: 'Branding', icon: 'palette' },
+      { href: '/admin/seguridad', label: 'Seguridad', icon: 'lock' },
       { href: '/admin/fundae', label: 'Fundae', icon: 'file' },
       { href: '/admin/auditoria', label: 'Auditoría', icon: 'shield' },
     ],

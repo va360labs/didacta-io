@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AuthService } from '../src/auth/auth.service';
 
 const dummy = (..._args: unknown[]): AuthService =>
-  new AuthService(null as never, null as never, null as never, null as never);
+  new AuthService(null as never, null as never, null as never, null as never, null as never);
 
 describe('AuthService.shouldRequireMfa', () => {
   const service = dummy();

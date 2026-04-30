@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { LicenseService } from '@didacta/license-sdk';
 import { PrismaService } from '../prisma/prisma.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaTenantConfigService } from '../modules/prisma-tenant-config.service';
@@ -12,6 +13,8 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { MfaController } from './mfa.controller';
+import { MfaPolicyController } from './mfa-policy/mfa-policy.controller';
+import { MfaPolicyService } from './mfa-policy/mfa-policy.service';
 import { MfaService } from './mfa.service';
 import { PasswordResetService } from './password-reset.service';
 import { PasswordService } from './password.service';
@@ -36,7 +39,7 @@ function loadCipherKey(): string {
 }
 
 @Module({
-  controllers: [AuthController, MfaController, ApiKeyController, MeController],
+  controllers: [AuthController, MfaController, MfaPolicyController, ApiKeyController, MeController],
   providers: [
     AuthService,
     PasswordResetService,
@@ -64,6 +67,16 @@ function loadCipherKey(): string {
         auditLog: PrismaAuditLogService,
       ) => new PrismaTenantConfigService(prisma, cipher, auditLog),
     },
+    // MfaPolicyService — orquesta CRUD de la política tenant-wide y la
+    // evaluación del enforcement en el flujo de login. Inyectamos manual
+    // para mantener la fuente de verdad de PrismaTenantConfigService dentro
+    // del propio AuthModule (ver factory anterior).
+    {
+      provide: MfaPolicyService,
+      inject: [PrismaTenantConfigService, LicenseService],
+      useFactory: (tenantConfig: PrismaTenantConfigService, license: LicenseService) =>
+        new MfaPolicyService(tenantConfig, license),
+    },
   ],
   exports: [
     AuthService,
@@ -71,6 +84,7 @@ function loadCipherKey(): string {
     TokenService,
     PasswordService,
     MfaService,
+    MfaPolicyService,
     ApiKeyService,
     JwtAuthGuard,
     JwtOrApiKeyGuard,

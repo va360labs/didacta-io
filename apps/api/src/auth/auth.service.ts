@@ -2,6 +2,8 @@ import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/co
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { ClientContext } from './client-context';
+import { MfaPolicyService } from './mfa-policy/mfa-policy.service';
+import { MfaRequiredByTenantPolicyError } from './mfa-policy/mfa-required-by-tenant-policy.error';
 import { PasswordService } from './password.service';
 import { TokenService, type SignedTokens } from './token.service';
 import type { SigninDto, SignupDto } from './dto';
@@ -20,9 +22,29 @@ const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
 const NO_CLIENT_CONTEXT: ClientContext = { ip: null, userAgent: null };
 
+/**
+ * Aviso opcional emitido al cliente cuando la política MFA tenant-wide está
+ * activa y el usuario aún está dentro del grace period. Permite al frontend
+ * mostrar un banner "Configurá MFA antes de DD/MM/YYYY" sin bloquear.
+ */
+export interface MfaRequiredSoon {
+  /** Días totales de gracia que dio el admin. */
+  gracePeriodDays: number;
+  /** Timestamp ISO en el que vence el grace para este tenant. */
+  expiresAt: string;
+  /** URL relativa del flujo de setup MFA. */
+  setupUrl: string;
+}
+
 export interface AuthResult {
   tokens: SignedTokens;
   mfaRequired: boolean;
+  /**
+   * Presente solo cuando la política tenant-wide está activa, la capability
+   * EE `feat:mfa.enforcement` también, y el usuario aún tiene tiempo de
+   * configurar MFA. El cliente lo usa para mostrar el aviso UX.
+   */
+  mfaRequiredSoon?: MfaRequiredSoon;
   user: {
     id: string;
     email: string;
@@ -41,6 +63,7 @@ export class AuthService {
     private readonly passwords: PasswordService,
     private readonly tokens: TokenService,
     private readonly auditLog: PrismaAuditLogService,
+    private readonly mfaPolicy: MfaPolicyService,
   ) {}
 
   async signup(
@@ -84,6 +107,17 @@ export class AuthService {
     const roles = user.roles.map((r: { role: { name: string } }) => r.role.name);
     const mfaRequired = this.shouldRequireMfa(roles, user.mfaEnabled);
 
+    // En signup el usuario se acaba de crear sin MFA. Si la política
+    // tenant-wide está activa, NUNCA bloqueamos en signup (el grace acaba
+    // de empezar para él), pero pasamos el aviso al cliente para que pueda
+    // mostrar el banner de "configurá MFA en N días". `evaluateLoginPolicy`
+    // ya devuelve allow/warn (nunca block) si el usuario está dentro del
+    // grace, así que aprovechamos la misma lógica.
+    const policyOutcome = await this.mfaPolicy.evaluateLoginPolicy(tenant.id, {
+      mfaEnabled: user.mfaEnabled,
+      roles,
+    });
+
     const tokens = await this.tokens.sign({
       sub: user.id,
       tenantId: tenant.id,
@@ -105,6 +139,15 @@ export class AuthService {
     return {
       tokens,
       mfaRequired,
+      ...(policyOutcome.outcome === 'warn'
+        ? {
+            mfaRequiredSoon: {
+              gracePeriodDays: policyOutcome.gracePeriodDays,
+              expiresAt: policyOutcome.gracePeriodExpiresAt,
+              setupUrl: policyOutcome.setupUrl,
+            },
+          }
+        : {}),
       user: {
         id: user.id,
         email: user.email,
@@ -172,6 +215,35 @@ export class AuthService {
     const roles = user.roles.map((r: { role: { name: string } }) => r.role.name);
     const mfaRequired = this.shouldRequireMfa(roles, user.mfaEnabled);
 
+    // Política MFA tenant-wide (capability EE `feat:mfa.enforcement`).
+    // Los admins ya están cubiertos por LMS-109 (mfaRequired arriba). Esta
+    // evaluación afecta al resto del tenant y SOLO actúa si la licencia EE
+    // está activa — el service hace el failsafe internamente.
+    const policyOutcome = await this.mfaPolicy.evaluateLoginPolicy(tenant.id, {
+      mfaEnabled: user.mfaEnabled,
+      roles,
+    });
+    if (policyOutcome.outcome === 'block') {
+      await this.auditLog.record({
+        tenantId: tenant.id,
+        actorId: user.id,
+        action: 'user.signin.blocked_by_mfa_policy',
+        resourceType: 'user',
+        resourceId: user.id,
+        metadata: {
+          gracePeriodDays: policyOutcome.gracePeriodDays,
+          gracePeriodExpiredAt: policyOutcome.gracePeriodExpiredAt,
+        },
+        ip: ctx.ip ?? undefined,
+        userAgent: ctx.userAgent ?? undefined,
+      });
+      throw new MfaRequiredByTenantPolicyError({
+        gracePeriodDays: policyOutcome.gracePeriodDays,
+        gracePeriodExpiredAt: policyOutcome.gracePeriodExpiredAt,
+        setupUrl: policyOutcome.setupUrl,
+      });
+    }
+
     const tokens = await this.tokens.sign({
       sub: user.id,
       tenantId: tenant.id,
@@ -185,7 +257,11 @@ export class AuthService {
       action: 'user.signin.success',
       resourceType: 'user',
       resourceId: user.id,
-      metadata: { mfaRequired, roles },
+      metadata: {
+        mfaRequired,
+        roles,
+        ...(policyOutcome.outcome === 'warn' ? { mfaPolicyGraceWarning: true } : {}),
+      },
       ip: ctx.ip ?? undefined,
       userAgent: ctx.userAgent ?? undefined,
     });
@@ -193,6 +269,15 @@ export class AuthService {
     return {
       tokens,
       mfaRequired,
+      ...(policyOutcome.outcome === 'warn'
+        ? {
+            mfaRequiredSoon: {
+              gracePeriodDays: policyOutcome.gracePeriodDays,
+              expiresAt: policyOutcome.gracePeriodExpiresAt,
+              setupUrl: policyOutcome.setupUrl,
+            },
+          }
+        : {}),
       user: {
         id: user.id,
         email: user.email,
