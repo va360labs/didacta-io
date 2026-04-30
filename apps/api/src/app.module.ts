@@ -15,6 +15,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { RegistryModule } from './registry/registry.module';
 import { ScimModule } from './scim/scim.module';
+import { SsoOidcModule } from './sso/oidc/oidc.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 
 @Module({
@@ -77,6 +78,10 @@ import { TenancyModule } from './tenancy/tenancy.module';
     // /scim/v2/...). El prefijo global /api/v1 NO aplica a estos paths
     // (excluidos en main.ts) porque los IdPs esperan exactamente /scim/v2.
     ScimModule,
+    // 8º piloto License SDK — gate feat:sso.oidc end-to-end. Endpoints públicos
+    // bajo /api/v1/auth/oidc/* y admin bajo /api/v1/admin/sso/oidc/* (este
+    // último vive en AdminModule). El secret del IdP se cifra at-rest.
+    SsoOidcModule,
     HealthModule,
   ],
 })

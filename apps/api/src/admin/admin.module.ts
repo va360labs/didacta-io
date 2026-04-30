@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ModulesModule } from '../modules/modules.module';
+import { SsoOidcModule } from '../sso/oidc/oidc.module';
 import { AdminModulesController } from './admin-modules.controller';
 import { AdminStatsController } from './admin-stats.controller';
 import { AdminStatsService } from './admin-stats.service';
@@ -11,6 +12,7 @@ import { AdminUsersService } from './admin-users.service';
 import { CustomDomainsController } from './custom-domains/custom-domains.controller';
 import { CustomDomainsService } from './custom-domains/custom-domains.service';
 import { ScimAdminTokenController } from './scim/scim-admin.controller';
+import { OidcAdminController } from './sso/oidc-admin.controller';
 
 /**
  * Módulo administrativo: agrupa controllers y services destinados al panel
@@ -23,7 +25,7 @@ import { ScimAdminTokenController } from './scim/scim-admin.controller';
  * Importa ModulesModule para reusar TenantModulesService (HU-TA-002).
  */
 @Module({
-  imports: [AuthModule, ModulesModule],
+  imports: [AuthModule, ModulesModule, SsoOidcModule],
   controllers: [
     AdminUsersController,
     AdminTenantsController,
@@ -35,6 +37,9 @@ import { ScimAdminTokenController } from './scim/scim-admin.controller';
     // Los endpoints /scim/v2/* viven en ScimModule (AppModule); este
     // controller solo gestiona el bearer token estático (admin con JWT).
     ScimAdminTokenController,
+    // 8º piloto License SDK — gestión config OIDC del tenant. Reutiliza
+    // OidcService importado vía SsoOidcModule.
+    OidcAdminController,
   ],
   providers: [AdminUsersService, AdminTenantsService, AdminStatsService, CustomDomainsService],
   exports: [AdminUsersService, AdminTenantsService, AdminStatsService],

@@ -79,6 +79,7 @@ function Shell({
     isSuperAdmin,
     customDomainsEnabled: isCapabilityEnabled(LICENSE_CAPABILITIES.CUSTOM_DOMAINS),
     scimEnabled: isCapabilityEnabled(LICENSE_CAPABILITIES.SCIM),
+    ssoOidcEnabled: isCapabilityEnabled(LICENSE_CAPABILITIES.SSO_OIDC),
   });
 
   return (
@@ -115,11 +116,13 @@ function buildGroups({
   isSuperAdmin,
   customDomainsEnabled,
   scimEnabled,
+  ssoOidcEnabled,
 }: {
   isAdminOrFormador: boolean;
   isSuperAdmin: boolean;
   customDomainsEnabled: boolean;
   scimEnabled: boolean;
+  ssoOidcEnabled: boolean;
 }): SidebarGroup[] {
   const learning: SidebarGroup = {
     label: 'Aprendizaje',
@@ -189,6 +192,17 @@ function buildGroups({
   // /scim/v2/Users devuelven 402.
   if (scimEnabled) {
     admin.items.push({ href: '/admin/scim', label: 'SCIM Provisioning', icon: 'users' });
+  }
+
+  // "SSO con OIDC" — gateado por capability `feat:sso.oidc` (octavo piloto
+  // License SDK). Mismo patrón que SCIM: sólo aparece con licencia EE.
+  // La página `/admin/sso` se renderiza igual si entran por URL directa,
+  // pero el panel queda con upsell card y los endpoints
+  // /api/v1/admin/sso/oidc/* devuelven 402. El endpoint público
+  // /api/v1/auth/oidc/:slug/start tampoco funciona porque sin licencia
+  // el admin no pudo guardar la config (config.enabled=false ⇒ 404).
+  if (ssoOidcEnabled) {
+    admin.items.push({ href: '/admin/sso', label: 'SSO (OIDC)', icon: 'lock' });
   }
 
   if (isSuperAdmin) {

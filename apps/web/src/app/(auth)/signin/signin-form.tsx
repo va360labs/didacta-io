@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { buildOidcStartUrl, fetchOidcStatus } from '@/lib/sso';
 import { useTenantContext } from '@/lib/tenant-context';
 
 interface AuthResponse {
@@ -36,6 +37,25 @@ export function SignInForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [tenantCandidates, setTenantCandidates] = useState<string[] | null>(null);
+  // 8º piloto License SDK (`feat:sso.oidc`): si el tenant resuelto por host
+  // tiene SSO OIDC habilitado, mostramos un botón "Iniciar sesión con SSO"
+  // arriba del form clásico. Sin tenant resuelto NO mostramos el botón —
+  // requiere conocer el slug para construir el endpoint /auth/oidc/:slug/start.
+  const [ssoEnabled, setSsoEnabled] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!tenant?.slug) {
+      setSsoEnabled(false);
+      return;
+    }
+    let aborted = false;
+    void fetchOidcStatus(tenant.slug).then((res) => {
+      if (!aborted) setSsoEnabled(res.enabled);
+    });
+    return () => {
+      aborted = true;
+    };
+  }, [tenant?.slug]);
 
   async function onSubmit(form: FormData) {
     setError(null);
@@ -87,6 +107,27 @@ export function SignInForm() {
   }
 
   return (
+    <div className="space-y-5">
+      {/* Botón SSO — solo si el tenant resuelto tiene OIDC habilitado.
+          Se renderiza ARRIBA del form clásico para que sea la opción
+          preferida en tenants enterprise. */}
+      {ssoEnabled && tenant ? (
+        <div className="space-y-3">
+          <a
+            href={buildOidcStartUrl(tenant.slug)}
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-border-strong bg-surface text-sm font-semibold transition-colors hover:bg-surface-2"
+          >
+            <span aria-hidden="true">🔐</span>
+            Iniciar sesión con SSO
+          </a>
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-border-soft" />
+            <span className="text-xs uppercase tracking-wide text-text-subtle">o con tu contraseña</span>
+            <div className="h-px flex-1 bg-border-soft" />
+          </div>
+        </div>
+      ) : null}
+
     <form action={onSubmit} className="space-y-4">
       {/* Si el host está mapeado a un tenant, mostramos su nombre y omitimos
           el campo "Organización". Si no hay tenant, mostramos el campo
@@ -172,5 +213,6 @@ export function SignInForm() {
         {pending ? 'Entrando…' : 'Entrar'}
       </Button>
     </form>
+    </div>
   );
 }
