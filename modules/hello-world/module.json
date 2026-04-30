@@ -1,0 +1,13 @@
+{
+  "name": "hello-world",
+  "version": "0.1.0",
+  "edition": "community",
+  "displayName": "Hello World — módulo de referencia",
+  "description": "Módulo mínimo de demostración del contrato. Útil para el linter audit-module-contract y como skeleton de nuevos módulos.",
+  "category": "demo",
+  "tablePrefix": "mod_hello_world_",
+  "permissions": [],
+  "events": [],
+  "apiNamespace": "modules/hello-world",
+  "surfaces": []
+}

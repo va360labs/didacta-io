@@ -1,0 +1,22 @@
+{
+  "name": "fundae",
+  "version": "0.3.0",
+  "edition": "community",
+  "displayName": "Fundae — cumplimiento regulatorio España",
+  "category": "compliance",
+  "tablePrefix": "mod_fundae_",
+  "permissions": ["fundae:read", "fundae:write", "fundae:export"],
+  "events": [
+    { "name": "fundae.company.created" },
+    { "name": "fundae.company.updated" },
+    { "name": "fundae.rlpt.notification.created" },
+    { "name": "fundae.group.created" },
+    { "name": "fundae.group.before-start" },
+    { "name": "fundae.group.started" },
+    { "name": "fundae.group.finalized" },
+    { "name": "fundae.xml.exported" },
+    { "name": "fundae.audit.zip-exported" }
+  ],
+  "apiNamespace": "modules/fundae",
+  "surfaces": ["admin", "auditor", "empresa_manager"]
+}

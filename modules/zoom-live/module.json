@@ -1,0 +1,17 @@
+{
+  "name": "zoom-live",
+  "version": "0.1.0",
+  "edition": "community",
+  "displayName": "Aula virtual síncrona Zoom",
+  "category": "live",
+  "tablePrefix": "mod_zoom_",
+  "permissions": ["zoom-live:read", "zoom-live:write"],
+  "events": [
+    { "name": "zoom.session.created" },
+    { "name": "zoom.session.updated" },
+    { "name": "zoom.session.cancelled" },
+    { "name": "zoom.session.recording_ready" }
+  ],
+  "apiNamespace": "modules/zoom-live",
+  "surfaces": ["formador", "alumno", "admin"]
+}
