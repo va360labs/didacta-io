@@ -11,7 +11,9 @@
 
 generator client {
   provider        = "prisma-client-js"
-  binaryTargets   = ["native", "debian-openssl-3.0.x"]
+  // `linux-musl-openssl-3.0.x` cubre la imagen alpine de runtime;
+  // `debian-openssl-3.0.x` queda como fallback para entornos no-musl.
+  binaryTargets   = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
   previewFeatures = ["postgresqlExtensions"]
 }
 

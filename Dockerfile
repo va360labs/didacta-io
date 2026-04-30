@@ -1,32 +1,38 @@
 # syntax=docker/dockerfile:1.7
 # ============================================================================
-# Didacta Community — Dockerfile multi-stage único (api + web)
+# Didacta Community — Dockerfile multi-stage único (api + web) sobre Alpine
 # ----------------------------------------------------------------------------
 # Construye apps/api (NestJS) y apps/web (Next.js) en un solo contenedor.
-# Imagen oficial: ghcr.io/va360labs/didacta-community:<version>.
-# El entrypoint corre `prisma migrate deploy` y `db:rls:apply` antes de levantar.
+# El entrypoint corre `prisma db push` y aplica RLS antes de levantar.
 #
-# Patrón usado: `pnpm fetch` + `pnpm install --offline`. Esto evita tener que
-# enumerar cada workspace package.json en COPYs separados — el lockfile basta.
-# Cuando se añaden módulos nuevos no hay que tocar el Dockerfile.
+# Imagen base: `node:22-alpine` (musl). Recorta ~700MB frente a
+# `node:22-bookworm-slim`. Contrapartidas:
+#   - Deps del sistema con `apk` (no apt).
+#   - Native modules (argon2) compilan contra musl: el builder necesita
+#     `python3 make g++`.
+#   - Prisma necesita el binary target `linux-musl-openssl-3.0.x`
+#     (definido en packages/database/prisma/schema.prisma).
 #
-# Política de versionado: ver docs/versioning.md.
+# IMPORTANTE — patrón de stages:
+#
+#   base → fetcher → builder → pruner → runner
+#
+# El runner parte de un `node:22-alpine` LIMPIO (no `FROM builder`). Si
+# heredase del builder, todas las layers intermedias del build (instalación
+# completa con devDeps, caches de turbo, .tsbuildinfo, etc.) seguirían en
+# la imagen final aunque el filesystem las borrase: una imagen Docker es la
+# SUMA de sus layers, no un snapshot del filesystem final del último stage.
+#
+# Por eso el `pruner` deja el repo en estado runtime-only (solo prod deps,
+# solo dist/, sin src/, sin tests/, sin tsconfigs) y el runner hace un
+# único `COPY --from=pruner` en una sola layer. Esa es la diferencia entre
+# 3GB y <1GB.
 # ============================================================================
 
 # ----------------------------------------------------------------------------
-# Stage 1: base — Node 22 LTS + pnpm 10 + dependencias del sistema
+# Stage 1: base — Node 22 LTS sobre Alpine + pnpm 10
 # ----------------------------------------------------------------------------
-FROM node:22-bookworm-slim AS base
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssl \
-    ca-certificates \
-    curl \
-    postgresql-client \
-    tini \
-  && rm -rf /var/lib/apt/lists/*
-# Instalamos pnpm globalmente como binario (sin corepack) para evitar problemas
-# de caché por usuario en runtime (corepack quiere escribir a $HOME que no es
-# writable cuando corremos como un user no-root).
+FROM node:22-alpine AS base
 RUN npm install --global pnpm@10.21.0
 WORKDIR /repo
 ENV NODE_ENV=production \
@@ -44,7 +50,16 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 # Stage 3: builder — copia código y buildea TODO el monorepo (devDeps activas)
 # ----------------------------------------------------------------------------
 FROM fetcher AS builder
-ENV NEXT_TELEMETRY_DISABLED=1
+# CI=true: pnpm aborta el remove de node_modules sin TTY a menos que sepa que
+# corre en un entorno no interactivo (necesario si .npmrc/lockfile cambian).
+ENV CI=true \
+    NEXT_TELEMETRY_DISABLED=1
+# Build deps para compilar native modules (argon2). Alpine viene sin
+# toolchain por defecto.
+RUN apk add --no-cache --virtual .build-deps \
+    g++ \
+    make \
+    python3
 COPY . .
 # Defensa frente a `incremental: true` en tsconfig.base.json: si algún
 # .tsbuildinfo se cuela desde el host (a pesar del .dockerignore), tsc lo
@@ -73,23 +88,76 @@ RUN pnpm --filter "@didacta/mod-*" run build
 RUN pnpm --filter @didacta/api --filter @didacta/web run build
 
 # ----------------------------------------------------------------------------
-# Stage 4: runner — imagen final con prune de devDeps
+# Stage 4: pruner — deja el repo en estado runtime-only
 # ----------------------------------------------------------------------------
-FROM builder AS runner
-# CI=true: pnpm aborta el remove de node_modules sin TTY a menos que sepa que
-# corre en un entorno no interactivo. Sin esto, --prod aborta silenciosamente
-# y la imagen se queda con devDeps (más pesada y con superficie de ataque).
+# Importante: este stage NO se usa como `FROM` de runner. Solo sirve como
+# fuente de COPY. Sus layers no llegan a la imagen final.
+FROM builder AS pruner
+# 1) Quitar build-deps del sistema (ya no se necesitan).
+RUN apk del .build-deps || true
+# 2) Borrar fuentes y configs de build: el runner solo ejecuta dist/ y .next/.
+#    También .turbo (cache de turbo) y vitest configs.
+RUN find apps packages modules -type d \
+      \( -name src -o -name tests -o -name __tests__ -o -name .turbo \) \
+      -prune -exec rm -rf {} + 2>/dev/null || true
+RUN find apps packages modules -type f \
+      \( -name "tsconfig*.json" \
+      -o -name "vitest.config.*" \
+      -o -name ".eslintrc*" \
+      -o -name "eslint.config.*" \
+      -o -name "*.tsbuildinfo" \) \
+      -delete 2>/dev/null || true
+# Borrar cache de Next.js: solo se usa para builds incrementales, no para
+# runtime. Pesa ~200MB y aparece dentro de apps/web/.next/cache después
+# de `next build`. apps/e2e no se ejecuta en producción.
+RUN rm -rf apps/web/.next/cache apps/e2e || true
+# 3) Reinstalar SOLO prod deps. CI=true para que pnpm pueda eliminar
+#    node_modules sin TTY (sin esto aborta silenciosamente y la imagen se
+#    queda con devDeps).
 ENV CI=true
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --offline --frozen-lockfile --prod \
  && pnpm store prune || true
 
-RUN groupadd --system --gid 1001 didacta \
- && useradd  --system --uid 1001 --gid didacta --create-home --home-dir /home/didacta --shell /bin/bash didacta \
- && mkdir -p /home/didacta/.cache /home/didacta/.local /home/didacta/.npm \
- && chown -R didacta:didacta /repo /home/didacta
+# ----------------------------------------------------------------------------
+# Stage 5: runner — imagen final desde alpine LIMPIO (no hereda del builder)
+# ----------------------------------------------------------------------------
+FROM node:22-alpine AS runner
+# Deps de RUNTIME (no build):
+#   - bash: entrypoint.sh usa bashismos ([[, arrays, `wait -n`).
+#   - ca-certificates + openssl: TLS para S3, Anthropic, SMTP.
+#   - curl: healthcheck.
+#   - libc6-compat: algunos binarios prebuilt asumen glibc.
+#   - postgresql16-client: psql para aplicar rls.sql.
+#   - tini: init proper en PID 1 (manejo correcto de SIGTERM y zombies).
+RUN apk add --no-cache \
+    bash \
+    ca-certificates \
+    curl \
+    libc6-compat \
+    openssl \
+    postgresql16-client \
+    tini
+# pnpm como binario global (sin corepack: requiere $HOME escribible).
+RUN npm install --global pnpm@10.21.0
+WORKDIR /repo
+ENV NODE_ENV=production \
+    HUSKY=0 \
+    NEXT_TELEMETRY_DISABLED=1 \
+    API_PORT=4000 \
+    WEB_PORT=3000
 
-# Entrypoint: migraciones + rls + arranque
+# Usuario no-root.
+RUN addgroup -S -g 1001 didacta \
+ && adduser  -S -u 1001 -G didacta -h /home/didacta -s /bin/bash didacta \
+ && mkdir -p /home/didacta/.cache /home/didacta/.local /home/didacta/.npm \
+ && chown -R didacta:didacta /home/didacta
+
+# Repo limpio: una sola layer con el árbol final, sin acumular layers gordas
+# del builder. Aquí está el truco para bajar de 3GB a <1GB.
+COPY --from=pruner --chown=didacta:didacta /repo /repo
+
+# Entrypoint: migraciones + rls + arranque.
 COPY --chown=didacta:didacta infra/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
@@ -98,14 +166,13 @@ USER didacta
 ENV HOME=/home/didacta \
     XDG_CACHE_HOME=/home/didacta/.cache \
     XDG_DATA_HOME=/home/didacta/.local/share \
-    NPM_CONFIG_CACHE=/home/didacta/.npm \
-    API_PORT=4000 \
-    WEB_PORT=3000
+    NPM_CONFIG_CACHE=/home/didacta/.npm
 
 EXPOSE 4000 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD curl -fsS http://localhost:${API_PORT}/healthz || exit 1
 
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
+# tini en Alpine vive en /sbin/tini (en Debian es /usr/bin/tini).
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/entrypoint.sh"]
 CMD ["start"]

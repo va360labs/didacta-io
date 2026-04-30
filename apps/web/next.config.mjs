@@ -1,5 +1,3 @@
-import type { NextConfig } from 'next';
-
 /**
  * En el deploy de Easypanel, API y Web corren en el mismo contenedor pero
  * Easypanel solo proxea un puerto al dominio público. Apuntamos el dominio a :3000
@@ -8,10 +6,15 @@ import type { NextConfig } from 'next';
  * https://<dominio>; no hay CORS ni mismatch de cookies.
  *
  * En dev, si la API corre en otro puerto se puede sobreescribir con API_INTERNAL_URL.
+ *
+ * NOTA: este config está en `.mjs` (no `.ts`) a propósito. Si fuera `.ts`,
+ * Next.js intentaría cargar TypeScript en runtime de producción y fallaría
+ * con `Cannot find module 'typescript'` cuando devDeps están purgadas.
  */
-const API_INTERNAL_URL = process.env['API_INTERNAL_URL'] ?? 'http://localhost:4000';
+const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? 'http://localhost:4000';
 
-const config: NextConfig = {
+/** @type {import('next').NextConfig} */
+const config = {
   reactStrictMode: true,
   poweredByHeader: false,
   experimental: {
