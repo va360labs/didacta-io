@@ -1,0 +1,46 @@
+# ============================================================================
+# Didacta — Docker Compose para tests de integración (MIG-034).
+# ----------------------------------------------------------------------------
+# Levanta Postgres + Redis efímeros en puertos distintos al dev (5433/6380)
+# para no chocar con `docker-compose.yml`. SIN volúmenes persistentes — cada
+# `up -d` parte de un estado limpio.
+#
+# Uso:
+#   docker compose -f docker-compose.test.yml up -d
+#   docker compose -f docker-compose.test.yml down -v
+#
+# Lo orquesta también `pnpm --filter @didacta/api test:integration:license`,
+# que arranca el compose, espera healthcheck, ejecuta vitest y baja el compose.
+# ============================================================================
+
+services:
+  postgres-test:
+    image: pgvector/pgvector:pg16
+    container_name: didacta-postgres-test
+    environment:
+      POSTGRES_USER: didacta_test
+      POSTGRES_PASSWORD: didacta_test
+      POSTGRES_DB: didacta_test
+    ports:
+      - '5433:5432'
+    volumes:
+      - ./infra/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U didacta_test -d didacta_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  redis-test:
+    image: redis:7-alpine
+    container_name: didacta-redis-test
+    command: redis-server --save '' --appendonly no
+    ports:
+      - '6380:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 30

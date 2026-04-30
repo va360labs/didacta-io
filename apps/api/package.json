@@ -11,6 +11,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration:license": "node scripts/run-integration-license.mjs",
+    "test:integration:license:run": "node ../../node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts",
     "post-deploy:check": "ts-node --transpile-only scripts/post-deploy-check.ts",
     "clean": "rm -rf dist .turbo"
   },

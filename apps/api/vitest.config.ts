@@ -16,5 +16,15 @@ export default defineConfig({
     globals: false,
     environment: 'node',
     include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
+    // Los tests de integración (`*.integration.test.ts`) requieren Postgres
+    // levantado vía `docker-compose.test.yml` y se corren con
+    // `vitest.integration.config.ts`. Aquí los excluimos para que `pnpm test`
+    // siga pasando en local sin docker y en CI ligera.
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      'tests/integration/**',
+      '**/*.integration.test.ts',
+    ],
   },
 });
