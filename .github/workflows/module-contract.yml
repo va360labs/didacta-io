@@ -1,0 +1,59 @@
+name: Module Contract
+
+# Lint del contrato de módulo Didacta. Se ejecuta cuando cambian módulos
+# o el linter mismo (vía didacta-skills checkout). Bloquea PRs que rompan
+# las 10 reglas auto-detectables (ver didacta-skills/scripts/README.md).
+#
+# Workflow dormante hasta que vuelva billing GitHub Actions de va360labs
+# (MIG-037 bloqueado por billing).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'modules/**'
+      - 'scripts/audit-modules.mjs'
+      - '.github/workflows/module-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'modules/**'
+      - 'scripts/audit-modules.mjs'
+      - '.github/workflows/module-contract.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: module-contract-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  audit:
+    name: Lint contrato de módulo
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout didacta-community
+        uses: actions/checkout@v4
+        with:
+          path: didacta-community
+
+      # didacta-skills se checkoutea como sibling para que el wrapper script
+      # de didacta-community/scripts/audit-modules.mjs lo encuentre.
+      - name: Checkout didacta-skills
+        uses: actions/checkout@v4
+        with:
+          repository: va360labs/didacta-skills
+          path: didacta-skills
+          # Si el repo es privado, requiere PAT con scope `repo` configurado
+          # como secret. Si es público, basta GITHUB_TOKEN.
+          token: ${{ secrets.DIDACTA_SKILLS_PAT || github.token }}
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: didacta-community/.nvmrc
+
+      - name: Audit module contract
+        working-directory: didacta-community
+        run: node scripts/audit-modules.mjs --json
