@@ -8,7 +8,7 @@
 
 ## TL;DR
 
-Didacta Community cubre **~95% del feature set core** de un LMS top, **~70% de las features de IA diferenciadoras** (RAG con citas, corrección IA con rúbrica), **provisioning SCIM 2.0 ya operativo** y aporta **3 diferenciadores únicos**: cumplimiento Fundae España al 100%, modelo arquitectónico modular tipo "WordPress" para tooling agnóstico de IA, y fair-code (Sustainable Use License). Los huecos restantes están en monetización (billing, marketplace) y SSO SAML/OIDC, que se construirán Q3 2026.
+Didacta Community cubre **~95% del feature set core** de un LMS top, **~70% de las features de IA diferenciadoras** (RAG con citas, corrección IA con rúbrica), **SSO OIDC + provisioning SCIM 2.0 ya operativos** y aporta **3 diferenciadores únicos**: cumplimiento Fundae España al 100%, modelo arquitectónico modular tipo "WordPress" para tooling agnóstico de IA, y fair-code (Sustainable Use License). Los huecos restantes están en monetización (billing, marketplace) y SSO SAML, que se construirán Q3 2026.
 
 **A quién le sirve hoy** (alpha cerrada):
 - Academias / consultoras de formación que necesitan **bonificaciones Fundae** sin pagar 200€/mes a TalentLMS.
@@ -17,7 +17,7 @@ Didacta Community cubre **~95% del feature set core** de un LMS top, **~70% de l
 - Casos de uso donde **IA por curso (tutor + grader)** sea diferenciador comercial real.
 
 **A quién NO le sirve hoy**:
-- Organizaciones grandes que necesitan SSO SAML / SCIM provisioning desde day one (en roadmap).
+- Organizaciones grandes que necesitan SSO SAML desde day one (OIDC y SCIM ya operativos; SAML en roadmap Q3 2026).
 - Marketplaces de cursos pagados B2C masivos (sin Stripe integrado todavía).
 - Apps móviles nativas (no en alpha — solo web responsive).
 
@@ -88,7 +88,7 @@ Leyenda: ✅ Disponible · 🟡 Parcial · 🔵 EE (Enterprise gateado por licen
 | MFA TOTP obligatorio para admins | ✅ | 🟡 | ❌ | ✅ | ✅ |
 | MFA enforcement tenant-wide (todos usuarios) | ✅ 🔵 EE | 🟡 | ❌ | 🟡 | ✅ |
 | SSO SAML 2.0 | 🚧 EE | ✅ | 🟡 | ✅ | ✅ |
-| SSO OIDC | 🚧 EE | ✅ | 🟡 | ✅ | ✅ |
+| SSO OIDC | ✅ 🔵 EE | ✅ | 🟡 | ✅ | ✅ |
 | Provisioning SCIM 2.0 | ✅ 🔵 EE | ❌ | ❌ | 🟡 | ✅ |
 | Roles personalizados beyond fixed | 🚧 | ✅ | 🟡 | ✅ | ✅ |
 | Audit log con cadena de hashes verificable | ✅ | 🟡 | ❌ | 🟡 | ✅ |
@@ -133,7 +133,7 @@ Leyenda: ✅ Disponible · 🟡 Parcial · 🔵 EE (Enterprise gateado por licen
 | Health-detail con DB/Redis/S3/SMTP | ✅ | 🟡 | ❌ | 🟡 | ✅ |
 | Storage S3 (Hetzner / AWS / MinIO) | ✅ | ✅ | 🟡 | N/A | ✅ |
 | Backup Postgres + restore documentado | ✅ | ✅ | 🟡 | N/A | ✅ |
-| 561 tests automáticos verde (unit + integration) | ✅ | 🟡 | 🟡 | N/A | 🟡 |
+| 668 tests automáticos verde (unit + integration) | ✅ | 🟡 | 🟡 | N/A | 🟡 |
 
 ### Mobile
 
@@ -190,7 +190,7 @@ A día de hoy, esto NO existe en Moodle ni LearnDash. Docebo y TalentLMS tienen 
 ## Roadmap de cierre de gap (orientativo)
 
 ### Q3 2026
-- 8º-10º piloto EE: SSO SAML, SSO OIDC, multi-tenant strict isolation.
+- 9º-11º piloto EE: SSO SAML, webhooks high-throughput, multi-tenant strict isolation (cierra las 11 capabilities).
 - IFAPA Andalucía (después de Fundae cerrado).
 - Migrator from Moodle (cursos + usuarios + enrollments).
 
@@ -210,10 +210,10 @@ A día de hoy, esto NO existe en Moodle ni LearnDash. Docebo y TalentLMS tienen 
 
 ## Métricas técnicas alpha
 
-- **608 tests unit + 13 tests integración Postgres real** verde en `didacta-community`.
+- **668 tests unit + 13 tests integración Postgres real** verde en `didacta-community`.
 - **424 tests + 118 fundae module tests** verde en `learnship` (repo principal pre-rebrand).
 - **22 módulos** (11 en cada repo) en verde con linter `audit-module-contract`.
-- **7 capabilities EE pilotadas end-to-end** (>63% de las 11 oficiales).
+- **8 capabilities EE pilotadas end-to-end** (>72% de las 11 oficiales).
 - **Imagen Docker alpha**: 1.3 GB (alpine), publicada en Docker Hub `didactaio/community:0.0.1-alpha.0`.
 - **Stack**: NestJS 11 + Next 15 + Postgres 16 + Prisma 5 + Redis 7 + pgvector + S3 + Anthropic / OpenAI / Voyage.
 
