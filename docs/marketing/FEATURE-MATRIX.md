@@ -94,7 +94,8 @@ Leyenda: ✅ Disponible · 🟡 Parcial · 🔵 EE (Enterprise gateado por licen
 | Audit log con cadena de hashes verificable | ✅ | 🟡 | ❌ | 🟡 | ✅ |
 | Retención auditoría > 90 días | ✅ 🔵 EE | 🟡 | ❌ | 🟡 | ✅ |
 | Export audit firmado HMAC + manifest sha256 | ✅ 🔵 EE | ❌ | ❌ | 🟡 | 🟡 |
-| Rate limit elevado API (vs base community) | ✅ 🔵 EE | ❌ | ❌ | 🟡 | ✅ |
+| Rate limit base API (community 100/30 req/min) | ✅ | ❌ | ❌ | 🟡 | ✅ |
+| Rate limit elevado API (enterprise 1000/300 req/min) | ✅ 🔵 EE | ❌ | ❌ | 🟡 | ✅ |
 | Webhooks high-throughput | 🚧 EE | 🟡 | ❌ | 🟡 | ✅ |
 
 ### Compliance regional
@@ -209,10 +210,10 @@ A día de hoy, esto NO existe en Moodle ni LearnDash. Docebo y TalentLMS tienen 
 
 ## Métricas técnicas alpha
 
-- **528 tests unit + 13 tests integración Postgres real** verde en `didacta-community`.
+- **547 tests unit + 13 tests integración Postgres real** verde en `didacta-community`.
 - **424 tests + 118 fundae module tests** verde en `learnship` (repo principal pre-rebrand).
 - **22 módulos** (11 en cada repo) en verde con linter `audit-module-contract`.
-- **5 capabilities EE pilotadas end-to-end** (de 11 oficiales).
+- **6 capabilities EE pilotadas end-to-end** (>54% de las 11 oficiales).
 - **Imagen Docker alpha**: 1.3 GB (alpine), publicada en Docker Hub `didactaio/community:0.0.1-alpha.0`.
 - **Stack**: NestJS 11 + Next 15 + Postgres 16 + Prisma 5 + Redis 7 + pgvector + S3 + Anthropic / OpenAI / Voyage.
 
