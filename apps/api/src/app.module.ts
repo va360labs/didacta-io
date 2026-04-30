@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { BrandingModule } from './branding/branding.module';
 import { HealthModule } from './health/health.module';
 import { ApiLicenseModule } from './license/license.module';
+import { AuditExportModule } from './modules/audit-export/audit-export.module';
 import { MetricsAuthController } from './modules/metrics-auth.controller';
 import { ModulesModule } from './modules/modules.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -62,6 +63,9 @@ import { TenancyModule } from './tenancy/tenancy.module';
     TenancyModule,
     AiModule,
     ModulesModule,
+    // Quinto piloto License SDK — gate feat:reports.advanced_signed end-to-end.
+    // Vivimos en módulo separado para acoplar `adm-zip` solo donde se usa.
+    AuditExportModule,
     HealthModule,
   ],
 })
