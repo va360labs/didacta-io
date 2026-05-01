@@ -133,7 +133,7 @@ Leyenda: ✅ Disponible · 🟡 Parcial · 🔵 EE (Enterprise gateado por licen
 | Health-detail con DB/Redis/S3/SMTP | ✅ | 🟡 | ❌ | 🟡 | ✅ |
 | Storage S3 (Hetzner / AWS / MinIO) | ✅ | ✅ | 🟡 | N/A | ✅ |
 | Backup Postgres + restore documentado | ✅ | ✅ | 🟡 | N/A | ✅ |
-| 668 tests automáticos verde (unit + integration) | ✅ | 🟡 | 🟡 | N/A | 🟡 |
+| 668 tests unit + 39 tests integración Postgres real | ✅ | 🟡 | 🟡 | N/A | 🟡 |
 
 ### Mobile
 
@@ -210,7 +210,8 @@ A día de hoy, esto NO existe en Moodle ni LearnDash. Docebo y TalentLMS tienen 
 
 ## Métricas técnicas alpha
 
-- **668 tests unit + 13 tests integración Postgres real** verde en `didacta-community`.
+- **668 tests unit + 39 tests integración Postgres real** verde en `didacta-community`.
+- **8/8 capabilities EE pilotadas con cobertura integración**: white-label, audit long retention, MFA enforcement, custom domains, reports signed, rate limit elevated, SCIM, SSO OIDC. Suite `capabilities-ee.integration.test.ts` con 26 tests + `license-guard.integration.test.ts` con 13 tests.
 - **424 tests + 118 fundae module tests** verde en `learnship` (repo principal pre-rebrand).
 - **22 módulos** (11 en cada repo) en verde con linter `audit-module-contract`.
 - **8 capabilities EE pilotadas end-to-end** (>72% de las 11 oficiales).
