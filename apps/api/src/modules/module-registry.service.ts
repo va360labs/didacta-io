@@ -15,6 +15,15 @@ import {
   type CheckoutUrlBuilder,
   type StripeAdapter,
 } from '@didacta/mod-billing';
+import {
+  SubscriptionsService,
+  SubscriptionsStripeSdkAdapter,
+  buildSubscriptionsModule,
+  DEFAULT_GRACE_PERIOD_DAYS,
+  type CheckoutUrlBuilder as SubsCheckoutUrlBuilder,
+  type SubscriptionsEventPublisher,
+  type SubscriptionsStripeAdapter,
+} from '@didacta/mod-subscriptions';
 import { buildCertificatesModule, CertificatesService } from '@didacta/mod-certificates';
 import { communityModule, CommunityService } from '@didacta/mod-community';
 import { coursesModule, CoursesService } from '@didacta/mod-courses';
@@ -65,6 +74,8 @@ export class ModuleRegistryService implements OnModuleInit {
   private aiContent?: AiContentService;
   private billing?: BillingService;
   private stripeAdapter?: StripeAdapter;
+  private subscriptions?: SubscriptionsService;
+  private subscriptionsStripeAdapter?: SubscriptionsStripeAdapter;
 
   constructor(
     private readonly factory: ModuleContextFactory,
@@ -269,6 +280,73 @@ export class ModuleRegistryService implements OnModuleInit {
 
     const billingModuleOrNull = this.billing ? buildBillingModule(this.billing) : null;
 
+    // mod.subscriptions: comparte STRIPE_SECRET_KEY con mod.billing (un solo
+    // Stripe account por instancia). Webhook secret es independiente — Stripe
+    // permite múltiples endpoints firmados con secrets distintos.
+    const subscriptionsWebhookSecret =
+      process.env['SUBSCRIPTIONS_WEBHOOK_SECRET'] ?? stripeWebhookSecret;
+    if (stripeKey && subscriptionsWebhookSecret) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const StripeCtor = require('stripe').default ?? require('stripe');
+      this.subscriptionsStripeAdapter = new SubscriptionsStripeSdkAdapter(
+        stripeKey,
+        subscriptionsWebhookSecret,
+        StripeCtor,
+      );
+
+      const subsSuccessBase =
+        process.env['SUBSCRIPTIONS_SUCCESS_URL_BASE'] ??
+        `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cuenta/suscripciones`;
+      const subsCancelBase =
+        process.env['SUBSCRIPTIONS_CANCEL_URL_BASE'] ??
+        `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cuenta/suscripciones`;
+      const subsUrls: SubsCheckoutUrlBuilder = {
+        successUrl: (courseId) => `${subsSuccessBase}?course=${courseId}&status=success`,
+        cancelUrl: (courseId) => `${subsCancelBase}?course=${courseId}&status=cancel`,
+      };
+
+      const eventBus = this.factory.getEventBus();
+      const subsPublisher: SubscriptionsEventPublisher = {
+        publish: async (tenantId, actorId, name, payload) => {
+          const subId = (payload as { subscriptionId?: string }).subscriptionId;
+          await eventBus.publish({
+            name,
+            version: 1,
+            data: payload as never,
+            metadata: {
+              tenantId,
+              userId: actorId ?? undefined,
+              timestamp: new Date().toISOString(),
+              traceId: cryptoRandom(),
+              idempotencyKey: subId ? `${name}:${subId}` : `${name}:${cryptoRandom()}`,
+            },
+          });
+        },
+      };
+
+      const gracePeriodDays = Number(
+        process.env['SUBSCRIPTIONS_GRACE_PERIOD_DAYS'] ?? DEFAULT_GRACE_PERIOD_DAYS,
+      );
+      this.subscriptions = new SubscriptionsService(
+        prisma,
+        this.subscriptionsStripeAdapter,
+        subsPublisher,
+        subsUrls,
+        Number.isFinite(gracePeriodDays) && gracePeriodDays > 0
+          ? gracePeriodDays
+          : DEFAULT_GRACE_PERIOD_DAYS,
+      );
+    } else {
+      this.pino.warn(
+        {},
+        'STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET ausentes — mod.subscriptions sin service. Endpoints /modules/subscriptions devolverán 503.',
+      );
+    }
+
+    const subscriptionsModuleOrNull = this.subscriptions
+      ? buildSubscriptionsModule(this.subscriptions)
+      : null;
+
     await this.registry.register([
       helloWorldModule,
       coursesModule,
@@ -283,6 +361,7 @@ export class ModuleRegistryService implements OnModuleInit {
       aiGraderModule,
       aiContentModule,
       ...(billingModuleOrNull ? [billingModuleOrNull] : []),
+      ...(subscriptionsModuleOrNull ? [subscriptionsModuleOrNull] : []),
     ]);
 
     await this.persistManifests();
@@ -445,6 +524,24 @@ export class ModuleRegistryService implements OnModuleInit {
       );
     }
     return this.stripeAdapter;
+  }
+
+  getSubscriptionsService(): SubscriptionsService {
+    if (!this.subscriptions) {
+      throw new Error(
+        'mod.subscriptions no está inicializado. Configura STRIPE_SECRET_KEY y STRIPE_WEBHOOK_SECRET (o SUBSCRIPTIONS_WEBHOOK_SECRET).',
+      );
+    }
+    return this.subscriptions;
+  }
+
+  getSubscriptionsStripeAdapter(): SubscriptionsStripeAdapter {
+    if (!this.subscriptionsStripeAdapter) {
+      throw new Error(
+        'SubscriptionsStripeAdapter no está inicializado. Configura STRIPE_SECRET_KEY y STRIPE_WEBHOOK_SECRET.',
+      );
+    }
+    return this.subscriptionsStripeAdapter;
   }
 
   async recoverOutbox(): Promise<{ processed: number; failed: number }> {

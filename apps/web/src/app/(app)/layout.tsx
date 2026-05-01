@@ -129,6 +129,7 @@ function buildGroups({
     items: [
       { href: '/cuenta', label: 'Perfil', icon: 'user', exactMatch: true },
       { href: '/cuenta/seguridad', label: 'Seguridad', icon: 'lock' },
+      { href: '/cuenta/suscripciones', label: 'Suscripciones', icon: 'package' },
     ],
   };
 

@@ -37,6 +37,7 @@
     "@didacta/mod-fundae": "workspace:*",
     "@didacta/mod-hello-world": "workspace:*",
     "@didacta/mod-learning": "workspace:*",
+    "@didacta/mod-subscriptions": "workspace:*",
     "@didacta/mod-theming": "workspace:*",
     "@didacta/mod-zoom-live": "workspace:*",
     "@fastify/static": "^7.0.4",

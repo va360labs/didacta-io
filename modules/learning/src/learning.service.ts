@@ -80,6 +80,83 @@ export class LearningService {
     });
   }
 
+  /**
+   * Matriculación tras suscripción Stripe activa (mod.subscriptions). Source
+   * `SUBSCRIPTION` la diferencia de pago único en audit y reporting comercial.
+   *
+   * Idempotencia: si el alumno ya está enrolled (recovery desde PAST_DUE),
+   * `createEnrollment` lanza `AlreadyEnrolledError`. El bridge la captura y
+   * llama a `resumeEnrollment` por si estaba PAUSED.
+   */
+  async enrollFromSubscription(tenantId: string, userId: string, courseId: string) {
+    return this.createEnrollment({
+      tenantId,
+      actorId: null,
+      userId,
+      courseId,
+      source: 'SUBSCRIPTION',
+    });
+  }
+
+  /**
+   * Pausa el enrollment de un alumno en un curso. Lo invoca el bridge de
+   * mod.subscriptions cuando la suscripción entra en UNPAID (grace expirado).
+   *
+   * NO toca progreso ni lecciones completadas. Si vuelve a estar ACTIVE,
+   * `resumeEnrollment` reactiva sin perder nada.
+   *
+   * No lanza si no hay enrollment activo (puede haber sido cancelado por otra
+   * vía); en ese caso, no-op.
+   */
+  async pauseEnrollment(tenantId: string, userId: string, courseId: string): Promise<void> {
+    await this.prisma.modLearningEnrollment.updateMany({
+      where: { tenantId, userId, courseId, status: 'ACTIVE' },
+      data: { status: 'PAUSED' },
+    });
+    await this.publish(tenantId, userId, 'learning.enrollment.paused', { courseId, userId });
+  }
+
+  /**
+   * Reanuda enrollments PAUSED. Lo invoca el bridge tras recovery desde
+   * PAST_DUE/UNPAID a ACTIVE.
+   *
+   * No-op si no hay PAUSED (puede que ya esté ACTIVE o COMPLETED).
+   */
+  async resumeEnrollment(tenantId: string, userId: string, courseId: string): Promise<void> {
+    await this.prisma.modLearningEnrollment.updateMany({
+      where: { tenantId, userId, courseId, status: 'PAUSED' },
+      data: { status: 'ACTIVE' },
+    });
+    await this.publish(tenantId, userId, 'learning.enrollment.resumed', { courseId, userId });
+  }
+
+  /**
+   * Cancela el enrollment activo o pausado tras cancelación inmediata de
+   * suscripción (immediate=true en cancelSubscription, o subscription.deleted
+   * en Stripe). NO se conservan ni progreso ni datos personales más allá de
+   * lo que ya esté en audit.
+   *
+   * Si el alumno vuelve a suscribirse, se crea un enrollment nuevo (no se
+   * reactiva uno cancelado).
+   */
+  async unenrollFromSubscription(
+    tenantId: string,
+    userId: string,
+    courseId: string,
+  ): Promise<void> {
+    await this.prisma.modLearningEnrollment.updateMany({
+      where: {
+        tenantId,
+        userId,
+        courseId,
+        status: { in: ['ACTIVE', 'PAUSED'] },
+        source: 'SUBSCRIPTION',
+      },
+      data: { status: 'CANCELLED' },
+    });
+    await this.publish(tenantId, userId, 'learning.enrollment.cancelled', { courseId, userId });
+  }
+
   async listInvitationsForCourse(tenantId: string, courseId: string) {
     return this.prisma.modLearningInvitation.findMany({
       where: { tenantId, courseId, revokedAt: null },
@@ -385,7 +462,7 @@ export class LearningService {
     actorId: string | null;
     userId: string;
     courseId: string;
-    source: 'ADMIN' | 'CODE' | 'INVITATION_LINK' | 'PURCHASE' | 'IMPORT';
+    source: 'ADMIN' | 'CODE' | 'INVITATION_LINK' | 'PURCHASE' | 'IMPORT' | 'SUBSCRIPTION';
   }) {
     await this.requirePublishedCourse(params.tenantId, params.courseId);
 

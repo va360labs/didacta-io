@@ -1,0 +1,25 @@
+{
+  "name": "subscriptions",
+  "version": "1.0.0",
+  "edition": "community",
+  "displayName": "Suscripciones recurrentes (Stripe)",
+  "category": "core",
+  "tablePrefix": "mod_subscriptions_",
+  "permissions": [
+    "subscriptions:subscription:read",
+    "subscriptions:subscription:create",
+    "subscriptions:subscription:cancel"
+  ],
+  "events": [
+    { "name": "subscriptions.subscription.created" },
+    { "name": "subscriptions.subscription.activated" },
+    { "name": "subscriptions.subscription.past_due" },
+    { "name": "subscriptions.subscription.unpaid" },
+    { "name": "subscriptions.subscription.canceled" },
+    { "name": "subscriptions.invoice.paid" },
+    { "name": "subscriptions.invoice.payment_failed" }
+  ],
+  "hooks": [],
+  "apiNamespace": "/modules/subscriptions",
+  "surfaces": ["alumno"]
+}

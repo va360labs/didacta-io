@@ -766,6 +766,10 @@ enum EnrollmentStatus {
   ACTIVE
   COMPLETED
   CANCELLED
+  /// Suspendido temporalmente (típicamente por suscripción impaga). El alumno
+  /// no puede acceder a las lecciones hasta que vuelva a ACTIVE. NO se borra
+  /// el progreso — si reanuda la suscripción, vuelve donde se quedó.
+  PAUSED
 }
 
 enum EnrollmentSource {
@@ -774,6 +778,9 @@ enum EnrollmentSource {
   INVITATION_LINK
   PURCHASE
   IMPORT
+  /// Enrollment activo mientras la suscripción esté ACTIVE. Pausado durante
+  /// PAST_DUE→UNPAID y desenrolado al CANCELED inmediato.
+  SUBSCRIPTION
 }
 
 model ModLearningEnrollment {
@@ -1880,6 +1887,164 @@ model ModBillingWebhookEvent {
   @@index([tenantId, receivedAt])
   @@map("mod_billing_webhook_event")
 }
+
+// ============================================================================
+// mod.subscriptions — Suscripciones recurrentes con Stripe
+// ----------------------------------------------------------------------------
+// Extiende el modelo de mod.billing (pago único) con suscripciones recurrentes:
+// el alumno paga mensual/anual y mientras el subscription esté ACTIVE el
+// SubscriptionsLearningBridge mantiene el enrollment vivo. Si el invoice falla,
+// arranca un grace period configurable (default 3 días); si el grace expira sin
+// pago, el bridge pausa el enrollment. Si el subscription se cancela, el
+// bridge desenrolla.
+//
+// Sin FK cross-module: courseId es un ID lógico (igual que mod.billing). La
+// integración con mod.learning vive 100% por eventos.
+// ============================================================================
+
+enum SubscriptionStatus {
+  /// Sesión Checkout creada, esperando que Stripe nos confirme la suscripción.
+  PENDING
+  /// Suscripción activa — invoice del periodo actual pagado.
+  ACTIVE
+  /// Invoice del periodo actual falló. Estamos en grace period: el alumno
+  /// sigue con acceso hasta `gracePeriodEndsAt`. Si Stripe cobra antes,
+  /// volvemos a ACTIVE; si no, pasamos a UNPAID y el bridge pausa.
+  PAST_DUE
+  /// Grace period expirado sin pago. Sin acceso al curso hasta que el alumno
+  /// actualice método de pago y Stripe cobre.
+  UNPAID
+  /// Cancelada definitivamente (por alumno o admin). El bridge desenrolla.
+  CANCELED
+}
+
+enum SubscriptionInvoiceStatus {
+  /// Generada por Stripe, sin cobrar todavía (auto-collection en curso).
+  OPEN
+  /// Cobrada con éxito.
+  PAID
+  /// Stripe agotó los reintentos (típicamente 4 attempts en 1 semana).
+  UNCOLLECTIBLE
+  /// Cancelada (alumno canceló sub antes de que se cobrara).
+  VOID
+}
+
+/// Una suscripción recurrente de un alumno a un curso.
+///
+/// Cada (tenantId, userId, courseId) tiene como máximo UNA suscripción activa.
+/// Si el alumno cancela y se vuelve a suscribir, se crea un nuevo row en lugar
+/// de reactivar el anterior — así el historial queda completo para auditoría.
+model ModSubscriptionsSubscription {
+  id                   String             @id @default(uuid()) @db.Uuid
+  tenantId             String             @map("tenant_id") @db.Uuid
+  userId               String             @map("user_id") @db.Uuid
+  /// ID lógico del curso. Sin FK cross-module.
+  courseId             String             @map("course_id") @db.Uuid
+  /// Stripe Subscription ID (sub_...). Único globalmente — vacío durante el
+  /// breve hueco entre creación local en PENDING y respuesta de Stripe.
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  /// Stripe Customer ID (cus_...). Compartido con mod.billing — un alumno
+  /// puede tener varios subscriptions y orders bajo el mismo customer.
+  stripeCustomerId     String             @map("stripe_customer_id")
+  /// Stripe Price ID (price_...). Recurring (interval=month|year).
+  stripePriceId        String             @map("stripe_price_id")
+  status               SubscriptionStatus @default(PENDING)
+  /// Importe del periodo actual en céntimos. Se actualiza si cambia el price
+  /// (rotación de plan).
+  unitAmount           Int                @map("unit_amount")
+  currency             String             @default("eur")
+  /// Frecuencia: 'month' | 'year'. Igual que Stripe price.recurring.interval.
+  interval             String
+  /// Fecha de fin del periodo actual de facturación. Cuando llega, Stripe cobra
+  /// automáticamente y nos manda invoice.paid (o invoice.payment_failed).
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  /// Si el alumno o admin pulsa "Cancelar al final del periodo", marcamos esto
+  /// y Stripe NO renueva al llegar currentPeriodEnd. El bridge mantiene el
+  /// enrollment hasta esa fecha y luego desenrolla.
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  /// Fin del grace period tras invoice.payment_failed. NULL si la sub está
+  /// ACTIVE. Se setea a `now() + GRACE_PERIOD_DAYS` cuando el invoice falla.
+  /// El cron `dunning-cleanup` revisa esta columna y emite el evento de pausa
+  /// cuando expira sin que el alumno actualice el método de pago.
+  gracePeriodEndsAt    DateTime?          @map("grace_period_ends_at")
+  /// Fecha real de cancelación efectiva (post-currentPeriodEnd o inmediata).
+  canceledAt           DateTime?          @map("canceled_at")
+  /// Causa de cancelación para auditoría: 'user_request' | 'unpaid_grace_expired' | 'admin'.
+  canceledReason       String?            @map("canceled_reason")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  invoices             ModSubscriptionsInvoice[]
+
+  @@index([tenantId, userId])
+  @@index([tenantId, status])
+  @@index([tenantId, courseId])
+  @@index([gracePeriodEndsAt])
+  @@map("mod_subscriptions_subscription")
+}
+
+/// Una factura emitida por Stripe asociada a una suscripción.
+///
+/// Cada periodo de la suscripción genera UNA invoice. La primera invoice se
+/// crea junto con la subscription (al cierre del checkout); las siguientes
+/// las genera Stripe automáticamente al cierre de cada periodo.
+///
+/// Guardamos las invoices localmente para mostrarle al alumno su historial
+/// de pagos en /cuenta/suscripciones sin ir a Stripe en cada render.
+model ModSubscriptionsInvoice {
+  id                String                    @id @default(uuid()) @db.Uuid
+  tenantId          String                    @map("tenant_id") @db.Uuid
+  /// ID lógico de la suscripción local (FK conceptual, no real para mantener
+  /// la regla de no-FK pero al estar en el mismo módulo sí podemos usar FK).
+  subscriptionId    String                    @map("subscription_id") @db.Uuid
+  /// Stripe Invoice ID (in_...).
+  stripeInvoiceId   String                    @unique @map("stripe_invoice_id")
+  status            SubscriptionInvoiceStatus @default(OPEN)
+  /// Importe de la factura en céntimos.
+  amount            Int
+  currency          String                    @default("eur")
+  /// URL hosted de Stripe a la factura — el alumno la ve si quiere descargar PDF.
+  hostedInvoiceUrl  String?                   @map("hosted_invoice_url")
+  /// Cuándo Stripe la cobró exitosamente (NULL si OPEN/UNCOLLECTIBLE/VOID).
+  paidAt            DateTime?                 @map("paid_at")
+  /// Fecha del periodo de facturación que cubre esta invoice.
+  periodStart       DateTime                  @map("period_start")
+  periodEnd         DateTime                  @map("period_end")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+
+  subscription      ModSubscriptionsSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: NoAction, map: "fk_mod_subs_invoice_subscription")
+
+  @@index([tenantId, subscriptionId])
+  @@index([tenantId, status])
+  @@map("mod_subscriptions_invoice")
+}
+
+/// Persistencia de eventos webhook de Stripe específicos de suscripciones,
+/// para idempotencia. Stripe puede mandar el mismo evento múltiples veces;
+/// sin esta tabla, el bridge enrollaría / pausaría duplicado.
+///
+/// Tabla SEPARADA de mod_billing_webhook_event aunque conceptualmente parecida:
+/// los módulos NO comparten tablas (regla del contrato). Cada uno tiene su
+/// propio espacio de idempotencia.
+model ModSubscriptionsWebhookEvent {
+  /// Stripe event id (evt_...). PK natural.
+  stripeEventId  String    @id @map("stripe_event_id")
+  tenantId       String?   @map("tenant_id") @db.Uuid
+  type           String
+  subscriptionId String?   @map("subscription_id") @db.Uuid
+  payload        Json      @default("{}")
+  errorMessage   String?   @map("error_message")
+  receivedAt     DateTime  @default(now()) @map("received_at")
+  processedAt    DateTime? @map("processed_at")
+
+  @@index([type])
+  @@index([tenantId, receivedAt])
+  @@map("mod_subscriptions_webhook_event")
+}
+
+// Backref desde Subscription → Invoice para el query "lista invoices de mi sub".
+// Lo declaramos como atributo @relation aparte para no contaminar el primer model.
 
 // ============================================================================
 // mod.ai-content — Generador IA de borradores (resúmenes / flashcards / quizzes)
