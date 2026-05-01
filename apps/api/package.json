@@ -52,6 +52,7 @@
     "jose": "^5.9.6",
     "nestjs-pino": "^4.3.0",
     "nodemailer": "^8.0.6",
+    "@node-saml/node-saml": "^5.0.1",
     "openid-client": "^5.7.0",
     "otplib": "^12.0.1",
     "pino": "^9.5.0",

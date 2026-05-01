@@ -43,6 +43,30 @@ async function bootstrap(): Promise<void> {
     },
   );
 
+  // SAML ACS callback (9º piloto License SDK · feat:sso.saml) llega como POST
+  // con `application/x-www-form-urlencoded` y los campos `SAMLResponse` +
+  // `RelayState`. Sin este parser, el body llega como Buffer crudo y Nest no
+  // puede inyectarlo en @Body(). Registramos un parser que devuelve un objeto
+  // plano `{ SAMLResponse, RelayState }`.
+  app.useBodyParser(
+    'application/x-www-form-urlencoded',
+    {},
+    (_req, body: Buffer, done: (err: Error | null, result?: unknown) => void) => {
+      if (!body || body.length === 0) {
+        done(null, {});
+        return;
+      }
+      try {
+        const params = new URLSearchParams(body.toString('utf8'));
+        const obj: Record<string, string> = {};
+        for (const [k, v] of params.entries()) obj[k] = v;
+        done(null, obj);
+      } catch (err) {
+        done(err as Error, undefined);
+      }
+    },
+  );
+
   app.useLogger(app.get(Logger));
 
   // Habilita lifecycle hooks (onModuleDestroy) para cerrar limpio la conexión

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ModulesModule } from '../modules/modules.module';
 import { SsoOidcModule } from '../sso/oidc/oidc.module';
+import { SsoSamlModule } from '../sso/saml/saml.module';
 import { AdminModulesController } from './admin-modules.controller';
 import { AdminStatsController } from './admin-stats.controller';
 import { AdminStatsService } from './admin-stats.service';
@@ -13,6 +14,7 @@ import { CustomDomainsController } from './custom-domains/custom-domains.control
 import { CustomDomainsService } from './custom-domains/custom-domains.service';
 import { ScimAdminTokenController } from './scim/scim-admin.controller';
 import { OidcAdminController } from './sso/oidc-admin.controller';
+import { SamlAdminController } from './sso/saml-admin.controller';
 
 /**
  * Módulo administrativo: agrupa controllers y services destinados al panel
@@ -25,7 +27,7 @@ import { OidcAdminController } from './sso/oidc-admin.controller';
  * Importa ModulesModule para reusar TenantModulesService (HU-TA-002).
  */
 @Module({
-  imports: [AuthModule, ModulesModule, SsoOidcModule],
+  imports: [AuthModule, ModulesModule, SsoOidcModule, SsoSamlModule],
   controllers: [
     AdminUsersController,
     AdminTenantsController,
@@ -40,6 +42,9 @@ import { OidcAdminController } from './sso/oidc-admin.controller';
     // 8º piloto License SDK — gestión config OIDC del tenant. Reutiliza
     // OidcService importado vía SsoOidcModule.
     OidcAdminController,
+    // 9º piloto License SDK — gestión config SAML del tenant. Reutiliza
+    // SamlService importado vía SsoSamlModule.
+    SamlAdminController,
   ],
   providers: [AdminUsersService, AdminTenantsService, AdminStatsService, CustomDomainsService],
   exports: [AdminUsersService, AdminTenantsService, AdminStatsService],

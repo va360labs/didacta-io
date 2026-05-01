@@ -16,6 +16,7 @@ import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { RegistryModule } from './registry/registry.module';
 import { ScimModule } from './scim/scim.module';
 import { SsoOidcModule } from './sso/oidc/oidc.module';
+import { SsoSamlModule } from './sso/saml/saml.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 
 @Module({
@@ -82,6 +83,11 @@ import { TenancyModule } from './tenancy/tenancy.module';
     // bajo /api/v1/auth/oidc/* y admin bajo /api/v1/admin/sso/oidc/* (este
     // último vive en AdminModule). El secret del IdP se cifra at-rest.
     SsoOidcModule,
+    // 9º piloto License SDK — gate feat:sso.saml end-to-end. Endpoints públicos
+    // bajo /api/v1/auth/saml/* (incluye ACS POST x-www-form-urlencoded — el
+    // parser está registrado en main.ts) y admin bajo /api/v1/admin/sso/saml/*
+    // (en AdminModule). El cert IdP es público; no se cifra.
+    SsoSamlModule,
     HealthModule,
   ],
 })

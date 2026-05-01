@@ -2,7 +2,6 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { LICENSE_CAPABILITIES, useLicense } from '@didacta/license-sdk/react';
 import { AppSidebar, type SidebarGroup } from '@/components/app-sidebar';
 import { Icon } from '@/components/icon';
 import { LicenseProvider } from '@/components/license-provider';
@@ -67,7 +66,6 @@ function Shell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
-  const { isCapabilityEnabled } = useLicense();
 
   const isAdminOrFormador = session.user.roles.some((r) =>
     ['super_admin', 'tenant_admin', 'formador'].includes(r),
@@ -77,9 +75,6 @@ function Shell({
   const groups = buildGroups({
     isAdminOrFormador,
     isSuperAdmin,
-    customDomainsEnabled: isCapabilityEnabled(LICENSE_CAPABILITIES.CUSTOM_DOMAINS),
-    scimEnabled: isCapabilityEnabled(LICENSE_CAPABILITIES.SCIM),
-    ssoOidcEnabled: isCapabilityEnabled(LICENSE_CAPABILITIES.SSO_OIDC),
   });
 
   return (
@@ -114,15 +109,9 @@ function Shell({
 function buildGroups({
   isAdminOrFormador,
   isSuperAdmin,
-  customDomainsEnabled,
-  scimEnabled,
-  ssoOidcEnabled,
 }: {
   isAdminOrFormador: boolean;
   isSuperAdmin: boolean;
-  customDomainsEnabled: boolean;
-  scimEnabled: boolean;
-  ssoOidcEnabled: boolean;
 }): SidebarGroup[] {
   const learning: SidebarGroup = {
     label: 'Aprendizaje',
@@ -177,33 +166,16 @@ function buildGroups({
     ],
   };
 
-  // "Dominios propios" — gateado por capability `feat:custom_domains` (cuarto
-  // piloto License SDK). Sólo aparece en el sidebar cuando la licencia EE
-  // está activa. Si el admin escribe la URL a mano, la página se renderiza
-  // pero todos los endpoints devolverán 402 vía LicenseExceptionFilter.
-  if (customDomainsEnabled) {
-    admin.items.push({ href: '/admin/dominios', label: 'Dominios propios', icon: 'building' });
-  }
-
-  // "SCIM Provisioning" — gateado por capability `feat:scim` (séptimo piloto
-  // License SDK). Mismo patrón que custom-domains: sólo aparece con licencia
-  // EE activa. La página se renderiza igual si entran por URL directa, pero
-  // el panel queda con upsell card y los endpoints /api/v1/admin/scim/* +
-  // /scim/v2/Users devuelven 402.
-  if (scimEnabled) {
-    admin.items.push({ href: '/admin/scim', label: 'SCIM Provisioning', icon: 'users' });
-  }
-
-  // "SSO con OIDC" — gateado por capability `feat:sso.oidc` (octavo piloto
-  // License SDK). Mismo patrón que SCIM: sólo aparece con licencia EE.
-  // La página `/admin/sso` se renderiza igual si entran por URL directa,
-  // pero el panel queda con upsell card y los endpoints
-  // /api/v1/admin/sso/oidc/* devuelven 402. El endpoint público
-  // /api/v1/auth/oidc/:slug/start tampoco funciona porque sin licencia
-  // el admin no pudo guardar la config (config.enabled=false ⇒ 404).
-  if (ssoOidcEnabled) {
-    admin.items.push({ href: '/admin/sso', label: 'SSO (OIDC)', icon: 'lock' });
-  }
+  // Features Enterprise con UI: SIEMPRE visibles para community (patrón n8n,
+  // documentado en docs/UI-EE-GATING.md). Cada página aplica <EeGate> por
+  // dentro y muestra upsell card cuando la capability no está activa. El
+  // backend mantiene @RequiresCapability en cada endpoint admin → 402 sin
+  // licencia. La discoverability de la feature es parte del valor para
+  // community → enterprise (cada página es una superficie de pricing).
+  admin.items.push({ href: '/admin/dominios', label: 'Dominios propios', icon: 'building' });
+  admin.items.push({ href: '/admin/scim', label: 'SCIM Provisioning', icon: 'users' });
+  admin.items.push({ href: '/admin/sso', label: 'SSO (OIDC)', icon: 'lock' });
+  admin.items.push({ href: '/admin/sso-saml', label: 'SSO (SAML)', icon: 'lock' });
 
   if (isSuperAdmin) {
     admin.items.push({ href: '/admin/tenants', label: 'Tenants', icon: 'building' });
