@@ -85,7 +85,9 @@ describe('OidcController.start', () => {
       nonce: 'xyz',
       codeVerifier: 'cv',
     });
-    const ctrl = new OidcController(svc as unknown as ConstructorParameters<typeof OidcController>[0]);
+    const ctrl = new OidcController(
+      svc as unknown as ConstructorParameters<typeof OidcController>[0],
+    );
     const reply = makeFakeReply();
 
     await ctrl.start('acme', reply as unknown as Parameters<OidcController['start']>[1]);
@@ -98,7 +100,9 @@ describe('OidcController.start', () => {
   it('propaga NotFoundException del service (Nest la mapea a 404)', async () => {
     const svc = makeFakeService();
     svc.startFlow.mockRejectedValue(new NotFoundException('Tenant no encontrado.'));
-    const ctrl = new OidcController(svc as unknown as ConstructorParameters<typeof OidcController>[0]);
+    const ctrl = new OidcController(
+      svc as unknown as ConstructorParameters<typeof OidcController>[0],
+    );
     const reply = makeFakeReply();
     await expect(
       ctrl.start('does-not-exist', reply as unknown as Parameters<OidcController['start']>[1]),
@@ -114,7 +118,9 @@ describe('OidcController.status', () => {
   it('devuelve { enabled: true } cuando el service confirma habilitado', async () => {
     const svc = makeFakeService();
     svc.isEnabledForTenantSlug.mockResolvedValue(true);
-    const ctrl = new OidcController(svc as unknown as ConstructorParameters<typeof OidcController>[0]);
+    const ctrl = new OidcController(
+      svc as unknown as ConstructorParameters<typeof OidcController>[0],
+    );
     const out = await ctrl.status('acme');
     expect(svc.isEnabledForTenantSlug).toHaveBeenCalledWith('acme');
     expect(out).toEqual({ enabled: true });
@@ -123,7 +129,9 @@ describe('OidcController.status', () => {
   it('devuelve { enabled: false } cuando el tenant no tiene config', async () => {
     const svc = makeFakeService();
     svc.isEnabledForTenantSlug.mockResolvedValue(false);
-    const ctrl = new OidcController(svc as unknown as ConstructorParameters<typeof OidcController>[0]);
+    const ctrl = new OidcController(
+      svc as unknown as ConstructorParameters<typeof OidcController>[0],
+    );
     const out = await ctrl.status('unknown');
     expect(out).toEqual({ enabled: false });
   });
@@ -131,7 +139,9 @@ describe('OidcController.status', () => {
   it('NUNCA expone configuración (issuer/clientId/secret) en la respuesta', async () => {
     const svc = makeFakeService();
     svc.isEnabledForTenantSlug.mockResolvedValue(true);
-    const ctrl = new OidcController(svc as unknown as ConstructorParameters<typeof OidcController>[0]);
+    const ctrl = new OidcController(
+      svc as unknown as ConstructorParameters<typeof OidcController>[0],
+    );
     const out = await ctrl.status('acme');
     expect(Object.keys(out)).toEqual(['enabled']);
   });
@@ -159,7 +169,9 @@ describe('OidcController.callback', () => {
         roles: ['student'],
       },
     });
-    const ctrl = new OidcController(svc as unknown as ConstructorParameters<typeof OidcController>[0]);
+    const ctrl = new OidcController(
+      svc as unknown as ConstructorParameters<typeof OidcController>[0],
+    );
     const reply = makeFakeReply();
 
     await ctrl.callback(
@@ -195,7 +207,9 @@ describe('OidcController.callback', () => {
     svc.handleCallback.mockRejectedValue(
       new UnauthorizedException('nonce del id_token no coincide.'),
     );
-    const ctrl = new OidcController(svc as unknown as ConstructorParameters<typeof OidcController>[0]);
+    const ctrl = new OidcController(
+      svc as unknown as ConstructorParameters<typeof OidcController>[0],
+    );
     const reply = makeFakeReply();
 
     await ctrl.callback(
@@ -212,8 +226,12 @@ describe('OidcController.callback', () => {
 
   it('UnauthorizedException con "State desconocido" → reason=state_invalid', async () => {
     const svc = makeFakeService();
-    svc.handleCallback.mockRejectedValue(new UnauthorizedException('State desconocido o expirado.'));
-    const ctrl = new OidcController(svc as unknown as ConstructorParameters<typeof OidcController>[0]);
+    svc.handleCallback.mockRejectedValue(
+      new UnauthorizedException('State desconocido o expirado.'),
+    );
+    const ctrl = new OidcController(
+      svc as unknown as ConstructorParameters<typeof OidcController>[0],
+    );
     const reply = makeFakeReply();
 
     await ctrl.callback(
@@ -232,7 +250,9 @@ describe('OidcController.callback', () => {
     svc.handleCallback.mockRejectedValue(
       new UnauthorizedException('No tenés cuenta en este tenant.'),
     );
-    const ctrl = new OidcController(svc as unknown as ConstructorParameters<typeof OidcController>[0]);
+    const ctrl = new OidcController(
+      svc as unknown as ConstructorParameters<typeof OidcController>[0],
+    );
     const reply = makeFakeReply();
 
     await ctrl.callback(
@@ -251,7 +271,9 @@ describe('OidcController.callback', () => {
     svc.handleCallback.mockRejectedValue(
       new UnauthorizedException('El email no pertenece a los dominios permitidos.'),
     );
-    const ctrl = new OidcController(svc as unknown as ConstructorParameters<typeof OidcController>[0]);
+    const ctrl = new OidcController(
+      svc as unknown as ConstructorParameters<typeof OidcController>[0],
+    );
     const reply = makeFakeReply();
     await ctrl.callback(
       's',
@@ -267,7 +289,9 @@ describe('OidcController.callback', () => {
   it('NotFoundException → reason=tenant_not_configured', async () => {
     const svc = makeFakeService();
     svc.handleCallback.mockRejectedValue(new NotFoundException('Sin config.'));
-    const ctrl = new OidcController(svc as unknown as ConstructorParameters<typeof OidcController>[0]);
+    const ctrl = new OidcController(
+      svc as unknown as ConstructorParameters<typeof OidcController>[0],
+    );
     const reply = makeFakeReply();
     await ctrl.callback(
       's',
@@ -283,7 +307,9 @@ describe('OidcController.callback', () => {
   it('ServiceUnavailableException → reason=idp_unreachable', async () => {
     const svc = makeFakeService();
     svc.handleCallback.mockRejectedValue(new ServiceUnavailableException('IdP down'));
-    const ctrl = new OidcController(svc as unknown as ConstructorParameters<typeof OidcController>[0]);
+    const ctrl = new OidcController(
+      svc as unknown as ConstructorParameters<typeof OidcController>[0],
+    );
     const reply = makeFakeReply();
     await ctrl.callback(
       's',
@@ -299,7 +325,9 @@ describe('OidcController.callback', () => {
   it('BadRequestException → reason=bad_request', async () => {
     const svc = makeFakeService();
     svc.handleCallback.mockRejectedValue(new BadRequestException('Faltan params.'));
-    const ctrl = new OidcController(svc as unknown as ConstructorParameters<typeof OidcController>[0]);
+    const ctrl = new OidcController(
+      svc as unknown as ConstructorParameters<typeof OidcController>[0],
+    );
     const reply = makeFakeReply();
     await ctrl.callback(
       undefined,
@@ -315,7 +343,9 @@ describe('OidcController.callback', () => {
   it('error genérico → reason=internal', async () => {
     const svc = makeFakeService();
     svc.handleCallback.mockRejectedValue(new Error('boom'));
-    const ctrl = new OidcController(svc as unknown as ConstructorParameters<typeof OidcController>[0]);
+    const ctrl = new OidcController(
+      svc as unknown as ConstructorParameters<typeof OidcController>[0],
+    );
     const reply = makeFakeReply();
     await ctrl.callback(
       's',

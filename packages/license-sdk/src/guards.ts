@@ -38,10 +38,7 @@ export const LICENSE_SERVICE_TOKEN = 'DIDACTA_LICENSE_SERVICE';
 export function RequiresCapability(
   capability: LicenseCapability | string,
 ): MethodDecorator & ClassDecorator {
-  return applyDecorators(
-    SetMetadata(REQUIRES_CAPABILITY_KEY, capability),
-    UseGuards(LicenseGuard),
-  );
+  return applyDecorators(SetMetadata(REQUIRES_CAPABILITY_KEY, capability), UseGuards(LicenseGuard));
 }
 
 /**
@@ -58,9 +55,10 @@ export class LicenseGuard implements CanActivate {
   ) {}
 
   canActivate(ctx: ExecutionContext): boolean {
-    const required = this.reflector.getAllAndOverride<
-      LicenseCapability | string | undefined
-    >(REQUIRES_CAPABILITY_KEY, [ctx.getHandler(), ctx.getClass()]);
+    const required = this.reflector.getAllAndOverride<LicenseCapability | string | undefined>(
+      REQUIRES_CAPABILITY_KEY,
+      [ctx.getHandler(), ctx.getClass()],
+    );
 
     if (!required) return true;
 

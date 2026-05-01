@@ -18,13 +18,7 @@ import type { LicenseCapability } from './capabilities.js';
  * - `invalid`: firma incorrecta o payload malformado.
  * - `dev`: bypass de desarrollo (solo si `NODE_ENV !== 'production'`).
  */
-export type LicenseStatus =
-  | 'community'
-  | 'active'
-  | 'grace'
-  | 'expired'
-  | 'invalid'
-  | 'dev';
+export type LicenseStatus = 'community' | 'active' | 'grace' | 'expired' | 'invalid' | 'dev';
 
 /**
  * Schema Zod para el payload Didacta dentro del JWT.

@@ -100,9 +100,7 @@ function applySchema(): void {
     },
   );
   if (result.status !== 0) {
-    throw new Error(
-      `prisma db push failed (status=${result.status}). Revisa el output anterior.`,
-    );
+    throw new Error(`prisma db push failed (status=${result.status}). Revisa el output anterior.`);
   }
 }
 
@@ -122,6 +120,24 @@ export async function setup(): Promise<void> {
   // del shell que arrancó el runner.
   delete process.env.DIDACTA_DEV_BYPASS;
   delete process.env.DIDACTA_LICENSE_KEY;
+
+  // AUTH_SECRET: lo necesita `loadAuthConfig()` cuando algún módulo bajo test
+  // arrastra `TokenService` (admin endpoints con `JwtAuthGuard`). Mismo valor
+  // determinista que usan los tests unit (jwt-guard.test.ts, auth.unit.test.ts).
+  // 64 chars hex-like → cumple la validación `length >= 32` del config.
+  if (!process.env.AUTH_SECRET) {
+    process.env.AUTH_SECRET = 'a'.repeat(64);
+  }
+  if (!process.env.AUTH_URL) {
+    process.env.AUTH_URL = 'https://didacta.test';
+  }
+  // TENANT_SETTINGS_ENC_KEY: requerida en producción por `AuthModule.useFactory`
+  // para `SecretCipherService`. En test (NODE_ENV=test) hay fallback a 64 ceros,
+  // pero seteamos una determinista por claridad de los logs y para que la
+  // dev-experience match la del runner si alguien lo corre con NODE_ENV custom.
+  if (!process.env.TENANT_SETTINGS_ENC_KEY) {
+    process.env.TENANT_SETTINGS_ENC_KEY = '0'.repeat(64);
+  }
 
   // eslint-disable-next-line no-console
   console.log('[integration:setup] Esperando Postgres en', TEST_DATABASE_URL);

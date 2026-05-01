@@ -36,7 +36,7 @@ const REQUIRED_TOP_FIELDS = [
 ];
 
 const REQUIRED_README_SECTIONS = [
-  /^#\s+`?mod\./m,                       // título con `mod.`
+  /^#\s+`?mod\./m, // título con `mod.`
   /^##\s+(Edici[oó]n|Edition)/m,
   /^##\s+(Estado|Status)/m,
   /^##\s+(Resumen funcional|Summary)/m,
@@ -49,11 +49,10 @@ const REQUIRED_README_SECTIONS = [
 
 function listModules(): string[] {
   if (!existsSync(MODULES_DIR)) return [];
-  return readdirSync(MODULES_DIR)
-    .filter((name) => {
-      const p = join(MODULES_DIR, name);
-      return statSync(p).isDirectory() && existsSync(join(p, 'module.json'));
-    });
+  return readdirSync(MODULES_DIR).filter((name) => {
+    const p = join(MODULES_DIR, name);
+    return statSync(p).isDirectory() && existsSync(join(p, 'module.json'));
+  });
 }
 
 function validateModule(moduleDir: string): Issue[] {
@@ -69,23 +68,43 @@ function validateModule(moduleDir: string): Issue[] {
   try {
     manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   } catch (err: any) {
-    issues.push({ module: name, severity: 'error', field: 'module.json', message: `Invalid JSON: ${err.message}` });
+    issues.push({
+      module: name,
+      severity: 'error',
+      field: 'module.json',
+      message: `Invalid JSON: ${err.message}`,
+    });
     return issues;
   }
 
   // Campos requeridos
   for (const f of REQUIRED_TOP_FIELDS) {
     if (manifest[f] === undefined || manifest[f] === null) {
-      issues.push({ module: name, severity: 'error', field: f, message: `Missing required field "${f}"` });
+      issues.push({
+        module: name,
+        severity: 'error',
+        field: f,
+        message: `Missing required field "${f}"`,
+      });
     }
   }
 
   // edition
   if (manifest.edition && !['community', 'enterprise'].includes(manifest.edition)) {
-    issues.push({ module: name, severity: 'error', field: 'edition', message: `Invalid edition "${manifest.edition}". Must be "community" or "enterprise".` });
+    issues.push({
+      module: name,
+      severity: 'error',
+      field: 'edition',
+      message: `Invalid edition "${manifest.edition}". Must be "community" or "enterprise".`,
+    });
   }
   if (manifest.edition === 'enterprise' && !manifest.requiredLicenseFeature) {
-    issues.push({ module: name, severity: 'error', field: 'requiredLicenseFeature', message: `EE module must declare "requiredLicenseFeature".` });
+    issues.push({
+      module: name,
+      severity: 'error',
+      field: 'requiredLicenseFeature',
+      message: `EE module must declare "requiredLicenseFeature".`,
+    });
   }
 
   // tablePrefix
@@ -125,13 +144,23 @@ function validateModule(moduleDir: string): Issue[] {
   // eventsEmitted / eventsConsumed deben ser arrays
   for (const ek of ['eventsEmitted', 'eventsConsumed', 'permissions']) {
     if (manifest[ek] && !Array.isArray(manifest[ek])) {
-      issues.push({ module: name, severity: 'error', field: ek, message: `${ek} must be an array.` });
+      issues.push({
+        module: name,
+        severity: 'error',
+        field: ek,
+        message: `${ek} must be an array.`,
+      });
     }
   }
 
   // README
   if (!existsSync(readmePath)) {
-    issues.push({ module: name, severity: 'error', field: 'README.md', message: `Missing README.md` });
+    issues.push({
+      module: name,
+      severity: 'error',
+      field: 'README.md',
+      message: `Missing README.md`,
+    });
   } else {
     const readme = readFileSync(readmePath, 'utf8');
     for (const re of REQUIRED_README_SECTIONS) {
@@ -205,7 +234,9 @@ function main() {
     if (issues.length === 0) {
       console.log(`✅ ${m} — OK`);
     } else {
-      console.log(`${errors.length > 0 ? '❌' : '⚠️ '} ${m} — ${errors.length} error(s), ${warnings.length} warning(s)`);
+      console.log(
+        `${errors.length > 0 ? '❌' : '⚠️ '} ${m} — ${errors.length} error(s), ${warnings.length} warning(s)`,
+      );
       for (const i of issues) {
         const icon = i.severity === 'error' ? '   ❌' : '   ⚠️ ';
         console.log(`${icon} [${i.field ?? '?'}] ${i.message}`);
@@ -213,7 +244,9 @@ function main() {
     }
   }
 
-  console.log(`\nSummary: ${totalErrors} error(s), ${totalWarnings} warning(s) across ${modulesToCheck.length} module(s).`);
+  console.log(
+    `\nSummary: ${totalErrors} error(s), ${totalWarnings} warning(s) across ${modulesToCheck.length} module(s).`,
+  );
   process.exit(totalErrors > 0 ? 1 : 0);
 }
 

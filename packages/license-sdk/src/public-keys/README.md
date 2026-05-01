@@ -4,10 +4,10 @@ This directory contains the **public keys** used by the License SDK to verify JW
 
 ## Key files
 
-| File | KID | Algorithm | Storage of private key | In use |
-|------|-----|-----------|------------------------|:------:|
-| `didacta-issuer-2026.pem` | `didacta-issuer-2026` | ECDSA P-256 (`ES256`) | AWS KMS `alias/didacta-issuer-2026` (eu-west-1) | ✅ current |
-| `didacta-issuer-2026-ed25519-DEPRECATED.pem.txt` | `didacta-issuer-2026` (legacy) | Ed25519 (`EdDSA`) | Was in password manager, never used in production | ❌ deprecated |
+| File                                             | KID                            | Algorithm             | Storage of private key                            |    In use     |
+| ------------------------------------------------ | ------------------------------ | --------------------- | ------------------------------------------------- | :-----------: |
+| `didacta-issuer-2026.pem`                        | `didacta-issuer-2026`          | ECDSA P-256 (`ES256`) | AWS KMS `alias/didacta-issuer-2026` (eu-west-1)   |  ✅ current   |
+| `didacta-issuer-2026-ed25519-DEPRECATED.pem.txt` | `didacta-issuer-2026` (legacy) | Ed25519 (`EdDSA`)     | Was in password manager, never used in production | ❌ deprecated |
 
 > **Nota histórica**: el 2026-04-29 se generó inicialmente una pareja Ed25519 local como puente. Ese mismo día se decidió ir por **AWS KMS Camino A** (clave generada **dentro** del HSM, nunca tocó disco). La P-256 sustituyó a la Ed25519 antes de implementar el SDK, así que la Ed25519 nunca firmó ninguna licencia productiva.
 

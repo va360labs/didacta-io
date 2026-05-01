@@ -10,9 +10,7 @@ import { generateKeyPair, exportSPKI, exportJWK, SignJWT, type KeyLike } from 'j
 import { registerPublicKeyForTest, resetPublicKeysCache } from '../src/verifier.js';
 import type { LicensePayload } from '../src/types.js';
 
-let cached:
-  | { privateKey: KeyLike; publicKey: KeyLike; kid: string }
-  | undefined;
+let cached: { privateKey: KeyLike; publicKey: KeyLike; kid: string } | undefined;
 
 export async function getEphemeralKeyPair(kid = 'didacta-test-2026') {
   if (cached) return cached;

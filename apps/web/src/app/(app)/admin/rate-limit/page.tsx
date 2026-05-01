@@ -57,7 +57,8 @@ export default function AdminRateLimitPage() {
         <p className="text-text-muted">
           Cuotas por minuto que la API aplica a tu organización. Si superás el límite recibís
           respuesta <code>429 Too Many Requests</code> con cabeceras{' '}
-          <code className="font-mono">Retry-After</code> y <code className="font-mono">X-RateLimit-*</code>.
+          <code className="font-mono">Retry-After</code> y{' '}
+          <code className="font-mono">X-RateLimit-*</code>.
         </p>
       </header>
 
@@ -96,8 +97,7 @@ function RateLimitPanel({ info }: { info: RateLimitInfo }) {
             <TierBadge tier={info.tier} />
           </CardTitle>
           <CardDescription>
-            Capability asociada:{' '}
-            <code className="font-mono text-xs">{info.capability}</code>
+            Capability asociada: <code className="font-mono text-xs">{info.capability}</code>
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -132,8 +132,8 @@ function RateLimitPanel({ info }: { info: RateLimitInfo }) {
         <CardHeader>
           <CardTitle>Comparativa de planes</CardTitle>
           <CardDescription>
-            Cifras por minuto y por tenant. Los buckets son independientes — un
-            pico de tráfico público no consume tu cuota autenticada.
+            Cifras por minuto y por tenant. Los buckets son independientes — un pico de tráfico
+            público no consume tu cuota autenticada.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -202,9 +202,9 @@ function UpgradeCta() {
           ¿Necesitás más capacidad?
         </CardTitle>
         <CardDescription>
-          El plan Enterprise multiplica los límites por ~10x. Recomendado si tu
-          integración hace polling agresivo, sincroniza Fundae XML al cierre de
-          mes o sirve un portal público con tráfico estacional.
+          El plan Enterprise multiplica los límites por ~10x. Recomendado si tu integración hace
+          polling agresivo, sincroniza Fundae XML al cierre de mes o sirve un portal público con
+          tráfico estacional.
         </CardDescription>
       </CardHeader>
       <CardContent>

@@ -4,11 +4,11 @@ Estos scripts forman parte de la garantía de calidad del repo. Se ejecutan en C
 
 ## Scripts disponibles
 
-| Script | Propósito | Uso típico |
-|--------|-----------|------------|
-| `ee-fence.ts` | Valida convención `.ee` open-core | `pnpm tsx scripts/ee-fence.ts` |
-| `module-doctor.ts` | Valida contrato de módulo | `pnpm tsx scripts/module-doctor.ts` |
-| `license-check.ts` | Audita licencias de dependencias | `pnpm tsx scripts/license-check.ts` |
+| Script             | Propósito                         | Uso típico                          |
+| ------------------ | --------------------------------- | ----------------------------------- |
+| `ee-fence.ts`      | Valida convención `.ee` open-core | `pnpm tsx scripts/ee-fence.ts`      |
+| `module-doctor.ts` | Valida contrato de módulo         | `pnpm tsx scripts/module-doctor.ts` |
+| `license-check.ts` | Audita licencias de dependencias  | `pnpm tsx scripts/license-check.ts` |
 
 ## Ejecutar los tres antes de un PR
 

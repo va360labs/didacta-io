@@ -3,8 +3,8 @@ name: release
 on:
   push:
     tags:
-      - 'v*.*.*'         # v1.0.0, v0.0.1, etc.
-      - 'v*.*.*-*'       # v0.0.1-alpha.0, v1.0.0-rc.0, etc.
+      - 'v*.*.*' # v1.0.0, v0.0.1, etc.
+      - 'v*.*.*-*' # v0.0.1-alpha.0, v1.0.0-rc.0, etc.
   workflow_dispatch:
     inputs:
       tag:

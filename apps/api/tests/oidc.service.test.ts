@@ -124,7 +124,13 @@ function makeFakePrisma(): FakePrisma {
         return u;
       }),
       update: vi.fn(
-        async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        async ({
+          where,
+          data,
+        }: {
+          where: Record<string, unknown>;
+          data: Record<string, unknown>;
+        }) => {
           const u = users.find((x) => x.id === where['id']);
           if (!u) throw new Error('user not found');
           if (data['lastLoginAt']) u.lastLoginAt = data['lastLoginAt'] as Date;
@@ -149,9 +155,17 @@ function makeFakeTenantConfig(): FakeTenantConfigStore {
 
   return {
     _records: records,
-    set: vi.fn(async (tenantId: string, m: string, k: string, value: unknown, opts?: { isSecret?: boolean }) => {
-      records.set(key(tenantId, m, k), { value, isSecret: opts?.isSecret ?? false });
-    }),
+    set: vi.fn(
+      async (
+        tenantId: string,
+        m: string,
+        k: string,
+        value: unknown,
+        opts?: { isSecret?: boolean },
+      ) => {
+        records.set(key(tenantId, m, k), { value, isSecret: opts?.isSecret ?? false });
+      },
+    ),
     get: vi.fn(async (tenantId: string, m: string, k: string) => {
       return records.get(key(tenantId, m, k))?.value;
     }),
@@ -207,28 +221,28 @@ class TestOidcService extends OidcService {
   public buildSpy = vi.fn<
     [unknown, { scope: string; state: string; nonce: string; codeChallenge: string }],
     string
-  >((_c, p) => `https://idp.example.com/authorize?state=${p.state}&nonce=${p.nonce}&scope=${encodeURIComponent(p.scope)}`);
-  public exchangeStub: ((p: {
-    code: string;
-    state: string;
-    nonce: string;
-    codeVerifier: string;
-  }) => Promise<{
-    idTokenClaims: {
-      sub: string;
-      iss: string;
-      aud: string | string[];
-      exp: number;
-      nonce?: string;
-      email?: string;
-      name?: string;
-      given_name?: string;
-      family_name?: string;
-      preferred_username?: string;
-      email_verified?: boolean;
-    };
-    accessToken?: string;
-  }>) | null = null;
+  >(
+    (_c, p) =>
+      `https://idp.example.com/authorize?state=${p.state}&nonce=${p.nonce}&scope=${encodeURIComponent(p.scope)}`,
+  );
+  public exchangeStub:
+    | ((p: { code: string; state: string; nonce: string; codeVerifier: string }) => Promise<{
+        idTokenClaims: {
+          sub: string;
+          iss: string;
+          aud: string | string[];
+          exp: number;
+          nonce?: string;
+          email?: string;
+          name?: string;
+          given_name?: string;
+          family_name?: string;
+          preferred_username?: string;
+          email_verified?: boolean;
+        };
+        accessToken?: string;
+      }>)
+    | null = null;
 
   protected async discoverIssuer(): Promise<{ issuer: unknown; client: unknown }> {
     if (this.discoveryFails) throw this.discoveryFails;
@@ -245,7 +259,8 @@ class TestOidcService extends OidcService {
   protected async exchangeCode(
     _client: unknown,
     params: { code: string; state: string; nonce: string; codeVerifier: string },
-  ): Promise<{ idTokenClaims: {
+  ): Promise<{
+    idTokenClaims: {
       sub: string;
       iss: string;
       aud: string | string[];
@@ -257,7 +272,9 @@ class TestOidcService extends OidcService {
       family_name?: string;
       preferred_username?: string;
       email_verified?: boolean;
-    }; accessToken?: string }> {
+    };
+    accessToken?: string;
+  }> {
     if (!this.exchangeStub) throw new Error('exchangeStub no configurado en este test.');
     return this.exchangeStub(params);
   }
@@ -643,9 +660,7 @@ describe('OidcService.handleCallback', () => {
         email: 'user@acme.com',
       },
     });
-    await expect(svc.handleCallback({ state: flow.state, code: 'abc' })).rejects.toThrow(
-      /nonce/i,
-    );
+    await expect(svc.handleCallback({ state: flow.state, code: 'abc' })).rejects.toThrow(/nonce/i);
   });
 
   it('rechaza aud mismatch', async () => {
@@ -661,9 +676,7 @@ describe('OidcService.handleCallback', () => {
         email: 'user@acme.com',
       },
     });
-    await expect(svc.handleCallback({ state: flow.state, code: 'abc' })).rejects.toThrow(
-      /aud/i,
-    );
+    await expect(svc.handleCallback({ state: flow.state, code: 'abc' })).rejects.toThrow(/aud/i);
   });
 
   it('rechaza iss mismatch', async () => {
@@ -679,9 +692,7 @@ describe('OidcService.handleCallback', () => {
         email: 'user@acme.com',
       },
     });
-    await expect(svc.handleCallback({ state: flow.state, code: 'abc' })).rejects.toThrow(
-      /iss/i,
-    );
+    await expect(svc.handleCallback({ state: flow.state, code: 'abc' })).rejects.toThrow(/iss/i);
   });
 
   it('rechaza si email no está en allowedEmailDomains', async () => {
@@ -760,7 +771,11 @@ describe('OidcService.handleCallback', () => {
 
   it('user existente ACTIVE: no crea, refresca lastLogin y emite tokens', async () => {
     const { svc, prisma, tokens, tenantSlug } = setupService({
-      existingUser: { email: 'existing@acme.com', status: 'ACTIVE', roles: ['student', 'tenant_admin'] },
+      existingUser: {
+        email: 'existing@acme.com',
+        status: 'ACTIVE',
+        roles: ['student', 'tenant_admin'],
+      },
     });
     const flow = await svc.startFlow(tenantSlug);
     svc.exchangeStub = async () => ({
@@ -777,9 +792,7 @@ describe('OidcService.handleCallback', () => {
     expect(prisma._users).toHaveLength(1); // sin crear nuevo
     expect(prisma.user.update).toHaveBeenCalled();
     expect(result.user.roles).toEqual(['student', 'tenant_admin']);
-    expect(tokens.sign).toHaveBeenCalledWith(
-      expect.objectContaining({ mfaVerified: true }),
-    );
+    expect(tokens.sign).toHaveBeenCalledWith(expect.objectContaining({ mfaVerified: true }));
   });
 
   it('user existente DEACTIVATED → 401 (no permitimos rehab via SSO)', async () => {
@@ -869,10 +882,20 @@ describe('OidcService.handleCallback', () => {
     });
     const flow = await svc.startFlow(tenantSlug);
     // Admin desactiva config:
-    const cfg = (await tc.get(tenantId, OIDC_CONFIG_MODULE_NAME, OIDC_CONFIG_KEY)) as TenantOidcConfig;
-    await tc.set(tenantId, OIDC_CONFIG_MODULE_NAME, OIDC_CONFIG_KEY, { ...cfg, enabled: false }, {
-      isSecret: true,
-    });
+    const cfg = (await tc.get(
+      tenantId,
+      OIDC_CONFIG_MODULE_NAME,
+      OIDC_CONFIG_KEY,
+    )) as TenantOidcConfig;
+    await tc.set(
+      tenantId,
+      OIDC_CONFIG_MODULE_NAME,
+      OIDC_CONFIG_KEY,
+      { ...cfg, enabled: false },
+      {
+        isSecret: true,
+      },
+    );
     svc.exchangeStub = async () => ({
       idTokenClaims: {
         sub: 's1',

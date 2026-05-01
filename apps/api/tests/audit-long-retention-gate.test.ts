@@ -13,10 +13,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { LicenseService } from '@didacta/license-sdk';
-import {
-  AuditController,
-  COMMUNITY_AUDIT_RETENTION_DAYS,
-} from '../src/modules/audit.controller';
+import { AuditController, COMMUNITY_AUDIT_RETENTION_DAYS } from '../src/modules/audit.controller';
 
 const adminUser = {
   sub: 'user-1',
@@ -66,13 +63,7 @@ describe('AuditController · gate feat:audit.long_retention (B5)', () => {
 
     it('GET /entries con dateFrom RECIENTE (30d) → respeta la fecha pedida', async () => {
       const recent = new Date(Date.now() - 30 * 86_400_000);
-      await controller.list(
-        adminUser,
-        undefined,
-        undefined,
-        undefined,
-        recent.toISOString(),
-      );
+      await controller.list(adminUser, undefined, undefined, undefined, recent.toISOString());
       const args = listSpy.mock.calls[0][1];
       // Tolerancia ms por el round-trip ISO string.
       expect(Math.abs(args.dateFrom.getTime() - recent.getTime())).toBeLessThan(1000);
@@ -93,13 +84,7 @@ describe('AuditController · gate feat:audit.long_retention (B5)', () => {
 
     it('GET /entries con dateFrom MUY antiguo → no trunca', async () => {
       const veryOld = new Date(Date.now() - 365 * 86_400_000);
-      await controller.list(
-        adminUser,
-        undefined,
-        undefined,
-        undefined,
-        veryOld.toISOString(),
-      );
+      await controller.list(adminUser, undefined, undefined, undefined, veryOld.toISOString());
       const args = listSpy.mock.calls[0][1];
       expect(Math.abs(args.dateFrom.getTime() - veryOld.getTime())).toBeLessThan(1000);
     });

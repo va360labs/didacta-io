@@ -40,10 +40,18 @@
     "reflect-metadata": "^0.2.2"
   },
   "peerDependenciesMeta": {
-    "@nestjs/common": { "optional": true },
-    "@nestjs/core": { "optional": true },
-    "react": { "optional": true },
-    "reflect-metadata": { "optional": true }
+    "@nestjs/common": {
+      "optional": true
+    },
+    "@nestjs/core": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "reflect-metadata": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@nestjs/common": "^10.4.15",

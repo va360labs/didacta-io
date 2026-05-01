@@ -122,97 +122,99 @@ export function SignInForm() {
           </a>
           <div className="flex items-center gap-3">
             <div className="h-px flex-1 bg-border-soft" />
-            <span className="text-xs uppercase tracking-wide text-text-subtle">o con tu contraseña</span>
+            <span className="text-xs uppercase tracking-wide text-text-subtle">
+              o con tu contraseña
+            </span>
             <div className="h-px flex-1 bg-border-soft" />
           </div>
         </div>
       ) : null}
 
-    <form action={onSubmit} className="space-y-4">
-      {/* Si el host está mapeado a un tenant, mostramos su nombre y omitimos
+      <form action={onSubmit} className="space-y-4">
+        {/* Si el host está mapeado a un tenant, mostramos su nombre y omitimos
           el campo "Organización". Si no hay tenant, mostramos el campo
           (dev local sin domain configurado, o multi-tenant). */}
-      {tenant ? (
-        <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
-          <span className="text-text-muted">Iniciás sesión en</span>{' '}
-          <strong className="text-brand-700">{tenant.name}</strong>
-        </div>
-      ) : (
+        {tenant ? (
+          <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
+            <span className="text-text-muted">Iniciás sesión en</span>{' '}
+            <strong className="text-brand-700">{tenant.name}</strong>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <Label htmlFor="tenantSlug">
+              Organización <span className="text-text-subtle text-xs">(opcional)</span>
+            </Label>
+            <Input
+              id="tenantSlug"
+              name="tenantSlug"
+              autoComplete="organization"
+              placeholder="Si tu admin te dio un nombre corto, escribilo aquí"
+            />
+            <p className="text-xs text-text-subtle">
+              Si no lo sabés, dejá vacío — intentamos identificar tu organización por tu email.
+            </p>
+          </div>
+        )}
+
+        {tenantCandidates && tenantCandidates.length > 0 ? (
+          <div className="space-y-1.5">
+            <Label htmlFor="tenantSlugSelect">Elegí tu organización</Label>
+            <select
+              id="tenantSlugSelect"
+              name="tenantSlug"
+              required
+              className="flex h-10 w-full rounded-lg bg-surface px-3.5 py-2 pr-9 text-[0.9375rem] text-text border border-border-strong"
+            >
+              {tenantCandidates.map((slug) => (
+                <option key={slug} value={slug}>
+                  {slug}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
         <div className="space-y-1.5">
-          <Label htmlFor="tenantSlug">
-            Organización <span className="text-text-subtle text-xs">(opcional)</span>
+          <Label htmlFor="email">
+            Email <span className="text-danger-700">*</span>
           </Label>
+          <Input id="email" name="email" type="email" autoComplete="email" required />
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">
+              Contraseña <span className="text-danger-700">*</span>
+            </Label>
+            <Link
+              href="/forgot-password"
+              className="text-xs font-semibold text-brand-700 hover:underline"
+            >
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </div>
           <Input
-            id="tenantSlug"
-            name="tenantSlug"
-            autoComplete="organization"
-            placeholder="Si tu admin te dio un nombre corto, escribilo aquí"
-          />
-          <p className="text-xs text-text-subtle">
-            Si no lo sabés, dejá vacío — intentamos identificar tu organización por tu email.
-          </p>
-        </div>
-      )}
-
-      {tenantCandidates && tenantCandidates.length > 0 ? (
-        <div className="space-y-1.5">
-          <Label htmlFor="tenantSlugSelect">Elegí tu organización</Label>
-          <select
-            id="tenantSlugSelect"
-            name="tenantSlug"
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
             required
-            className="flex h-10 w-full rounded-lg bg-surface px-3.5 py-2 pr-9 text-[0.9375rem] text-text border border-border-strong"
+          />
+        </div>
+
+        {error ? (
+          <div
+            role="alert"
+            className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
           >
-            {tenantCandidates.map((slug) => (
-              <option key={slug} value={slug}>
-                {slug}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
+            {error}
+          </div>
+        ) : null}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="email">
-          Email <span className="text-danger-700">*</span>
-        </Label>
-        <Input id="email" name="email" type="email" autoComplete="email" required />
-      </div>
-
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <Label htmlFor="password">
-            Contraseña <span className="text-danger-700">*</span>
-          </Label>
-          <Link
-            href="/forgot-password"
-            className="text-xs font-semibold text-brand-700 hover:underline"
-          >
-            ¿Olvidaste tu contraseña?
-          </Link>
-        </div>
-        <Input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-        />
-      </div>
-
-      {error ? (
-        <div
-          role="alert"
-          className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
-        >
-          {error}
-        </div>
-      ) : null}
-
-      <Button type="submit" disabled={pending} className="w-full" size="lg">
-        {pending ? 'Entrando…' : 'Entrar'}
-      </Button>
-    </form>
+        <Button type="submit" disabled={pending} className="w-full" size="lg">
+          {pending ? 'Entrando…' : 'Entrar'}
+        </Button>
+      </form>
     </div>
   );
 }

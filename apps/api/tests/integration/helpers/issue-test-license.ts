@@ -14,13 +14,7 @@
  * camino "invalid".
  */
 
-import {
-  exportJWK,
-  generateKeyPair,
-  SignJWT,
-  type JWK,
-  type KeyLike,
-} from 'jose';
+import { exportJWK, generateKeyPair, SignJWT, type JWK, type KeyLike } from 'jose';
 import { registerPublicKeyForTest, resetPublicKeysCache } from '@didacta/license-sdk';
 import { LICENSE_CAPABILITIES } from '@didacta/license-sdk';
 

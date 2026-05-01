@@ -16,23 +16,30 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { LicenseService } from '@didacta/license-sdk';
-import {
-  CapabilityRequiredError,
-  LICENSE_CAPABILITIES,
-} from '@didacta/license-sdk';
+import { CapabilityRequiredError, LICENSE_CAPABILITIES } from '@didacta/license-sdk';
 import { BrandingService } from '../src/branding/branding.service';
 import { BrandingController } from '../src/branding/branding.controller';
-import { WhiteLabelService } from '../src/branding/white-label.service.ee';
-import { WhiteLabelController } from '../src/branding/white-label.controller.ee';
+
+// El fence open-core (`scripts/ee-fence.ts`) prohíbe imports estáticos de
+// archivos `.ee.*` desde código no-EE. Cargamos los símbolos EE vía dynamic
+// import en el setup, igual que haría el runtime real detrás de
+// LicenseService.requireCapability(). Esto nos da los tipos sin romper la
+// convención.
+type WhiteLabelServiceCtor =
+  typeof import('../src/branding/white-label.service.ee').WhiteLabelService;
+type WhiteLabelControllerCtor =
+  typeof import('../src/branding/white-label.controller.ee').WhiteLabelController;
 
 describe('Capability piloto: white-label (MIG-026)', () => {
   let license: LicenseService;
   let branding: BrandingService;
-  let whiteLabel: WhiteLabelService;
+  let whiteLabel: InstanceType<WhiteLabelServiceCtor>;
   let brandingCtrl: BrandingController;
-  let whiteLabelCtrl: WhiteLabelController;
+  let whiteLabelCtrl: InstanceType<WhiteLabelControllerCtor>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    const { WhiteLabelService } = await import('../src/branding/white-label.service.ee');
+    const { WhiteLabelController } = await import('../src/branding/white-label.controller.ee');
     license = new LicenseService();
     branding = new BrandingService();
     whiteLabel = new WhiteLabelService(branding);
@@ -82,9 +89,9 @@ describe('Capability piloto: white-label (MIG-026)', () => {
   describe('Gating: requireCapability + LicenseService', () => {
     it('en community, requireCapability(white_label) lanza error', async () => {
       await license.load({ key: null });
-      expect(() =>
-        license.requireCapability(LICENSE_CAPABILITIES.WHITE_LABEL),
-      ).toThrow(CapabilityRequiredError);
+      expect(() => license.requireCapability(LICENSE_CAPABILITIES.WHITE_LABEL)).toThrow(
+        CapabilityRequiredError,
+      );
     });
 
     it('en dev bypass, requireCapability(white_label) pasa', async () => {
@@ -92,9 +99,7 @@ describe('Capability piloto: white-label (MIG-026)', () => {
         allowDevBypass: true,
         key: 'dev-key',
       });
-      expect(() =>
-        license.requireCapability(LICENSE_CAPABILITIES.WHITE_LABEL),
-      ).not.toThrow();
+      expect(() => license.requireCapability(LICENSE_CAPABILITIES.WHITE_LABEL)).not.toThrow();
     });
   });
 });

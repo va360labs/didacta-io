@@ -12,18 +12,17 @@ You need a commercial agreement with VA360 LABS S.L. (or to use Didacta Cloud) i
 
 ## What we offer
 
-| Path | Best for |
-|------|----------|
-| **Didacta Enterprise License** | Self-hosted production with all features unlocked |
-| **Didacta Cloud** | SaaS-grade hosting, billing, support, no infrastructure to manage |
-| **Partner Program** (planned) | Consultancies and integrators who deliver Didacta to clients |
+| Path                           | Best for                                                          |
+| ------------------------------ | ----------------------------------------------------------------- |
+| **Didacta Enterprise License** | Self-hosted production with all features unlocked                 |
+| **Didacta Cloud**              | SaaS-grade hosting, billing, support, no infrastructure to manage |
+| **Partner Program** (planned)  | Consultancies and integrators who deliver Didacta to clients      |
 
 ## How to contact us
 
 - General licensing inquiries: **licensing@didacta.io**
 - Cloud sales: **sales@didacta.io**
 - Partnership: **partners@didacta.io**
-
 
 ## What's free
 

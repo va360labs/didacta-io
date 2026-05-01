@@ -32,11 +32,7 @@ export default defineConfig({
     globals: false,
     environment: 'node',
     include: ['tests/integration/**/*.integration.test.ts'],
-    exclude: [
-      '**/node_modules/**',
-      '**/dist/**',
-      'src/**',
-    ],
+    exclude: ['**/node_modules/**', '**/dist/**', 'src/**'],
     globalSetup: ['tests/integration/helpers/global-setup.ts'],
     testTimeout: 30_000,
     hookTimeout: 60_000,

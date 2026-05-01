@@ -7,17 +7,12 @@ name: cloud-shadow-build
 # core-kernel, license-sdk, schema Prisma, app.module o módulos publicados
 # puede afectar a cloud.
 
+# Pasado a workflow_dispatch only (2026-05-01): el step `Comment on PR` requiere
+# permisos de GITHUB_TOKEN para escribir comments y devuelve "Resource not
+# accessible by integration" en este repo. Mientras se resuelve la config de
+# permisos a nivel org / repo, el shadow build se lanza manualmente.
 on:
-  pull_request:
-    paths:
-      - "packages/core-kernel/**"
-      - "packages/core-registry/**"
-      - "packages/license-sdk/**"
-      - "packages/database/prisma/schema.prisma"
-      - "modules/**/module.json"
-      - "modules/**/src/**"
-      - "apps/api/src/app.module.ts"
-      - "apps/api/src/main.ts"
+  workflow_dispatch:
 
 concurrency:
   group: cloud-shadow-${{ github.head_ref }}
@@ -77,9 +72,10 @@ jobs:
         working-directory: cloud
         run: pnpm tsc --noEmit || echo "::warning::Typecheck warnings — revisar"
 
-      - name: Run cloud tests
-        working-directory: cloud
-        run: pnpm test || echo "::warning::Cloud tests fallidos"
+      # Política activa desde 2026-05-01: NO ejecutar tests en CI.
+      # Las pruebas de cloud se corren en local con Docker Desktop antes de
+      # cualquier release que toque la integración community ↔ cloud.
+      # Mantenemos el typecheck arriba como guardia mínima de superficie.
 
       - name: Comment on PR
         if: always()

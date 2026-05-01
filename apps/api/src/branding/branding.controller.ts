@@ -41,9 +41,7 @@ export class BrandingController {
     },
   })
   getOptions(): PublicBrandingOptions {
-    const whiteLabelEnabled = this.license.isCapabilityEnabled(
-      LICENSE_CAPABILITIES.WHITE_LABEL,
-    );
+    const whiteLabelEnabled = this.license.isCapabilityEnabled(LICENSE_CAPABILITIES.WHITE_LABEL);
     return this.branding.getPublicOptions(whiteLabelEnabled);
   }
 }

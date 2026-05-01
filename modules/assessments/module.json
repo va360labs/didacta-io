@@ -6,10 +6,7 @@
   "category": "core",
   "tablePrefix": "mod_assessments_",
   "permissions": ["assessments:read", "assessments:write", "assessments:grade"],
-  "events": [
-    { "name": "assessments.attempt.submitted" },
-    { "name": "assessments.attempt.graded" }
-  ],
+  "events": [{ "name": "assessments.attempt.submitted" }, { "name": "assessments.attempt.graded" }],
   "apiNamespace": "modules/assessments",
   "surfaces": ["alumno", "formador"]
 }

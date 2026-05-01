@@ -17,22 +17,22 @@ Si la vulnerabilidad es crítica y prefieres cifrar, pide la PGP key en el mismo
 
 ### Qué pasa después
 
-| Plazo | Acción |
-|-------|--------|
-| **48 h hábiles** | Acuse de recibo + asignación de severidad. |
-| **7 días** | Plan de mitigación + ETA del parche. |
-| **Variable según severidad** | Parche desarrollado y testeado. |
-| **Tras parche en main** | Aviso público (sin detalle de exploit) y crédito al reporter si lo aceptó. |
-| **+30 días** | Detalle técnico publicado en advisory. |
+| Plazo                        | Acción                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------- |
+| **48 h hábiles**             | Acuse de recibo + asignación de severidad.                                 |
+| **7 días**                   | Plan de mitigación + ETA del parche.                                       |
+| **Variable según severidad** | Parche desarrollado y testeado.                                            |
+| **Tras parche en main**      | Aviso público (sin detalle de exploit) y crédito al reporter si lo aceptó. |
+| **+30 días**                 | Detalle técnico publicado en advisory.                                     |
 
 ## Severidad
 
-| Nivel | Ejemplos | SLA parche |
-|-------|----------|-----------|
-| **Crítica** | RCE, SQL injection en endpoint público, leak de credenciales / claves privadas, bypass de autenticación / RLS | 72 h |
-| **Alta** | XSS persistente, escalación de privilegios entre tenants, leak de PII | 7 días |
-| **Media** | XSS reflejado, IDOR no crítico, denegación de servicio limitada | 30 días |
-| **Baja** | Information disclosure menor, problema de rate limit, mensaje de error con info técnica | Próxima minor |
+| Nivel       | Ejemplos                                                                                                      | SLA parche    |
+| ----------- | ------------------------------------------------------------------------------------------------------------- | ------------- |
+| **Crítica** | RCE, SQL injection en endpoint público, leak de credenciales / claves privadas, bypass de autenticación / RLS | 72 h          |
+| **Alta**    | XSS persistente, escalación de privilegios entre tenants, leak de PII                                         | 7 días        |
+| **Media**   | XSS reflejado, IDOR no crítico, denegación de servicio limitada                                               | 30 días       |
+| **Baja**    | Information disclosure menor, problema de rate limit, mensaje de error con info técnica                       | Próxima minor |
 
 ## Versiones soportadas
 

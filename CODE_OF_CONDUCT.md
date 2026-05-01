@@ -44,12 +44,12 @@ Incluye en el reporte:
 
 ### Acciones posibles
 
-| Severidad | Acción |
-|-----------|--------|
-| Comentario fuera de tono aislado | Aviso privado + petición de retracto público si aplica. |
+| Severidad                             | Acción                                                                       |
+| ------------------------------------- | ---------------------------------------------------------------------------- |
+| Comentario fuera de tono aislado      | Aviso privado + petición de retracto público si aplica.                      |
 | Patrón de comportamiento problemático | Aviso formal + lectura obligada de este código. Reincidencia = ban temporal. |
-| Acoso, ataques personales, doxing | Ban permanente del repo, Discord y canales del proyecto. |
-| Conducta ilegal | Ban permanente + reporte a autoridades si aplica. |
+| Acoso, ataques personales, doxing     | Ban permanente del repo, Discord y canales del proyecto.                     |
+| Conducta ilegal                       | Ban permanente + reporte a autoridades si aplica.                            |
 
 Las decisiones del equipo de mantenedores son finales.
 

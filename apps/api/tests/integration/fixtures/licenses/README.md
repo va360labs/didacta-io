@@ -24,12 +24,12 @@ Ver [`apps/api/tests/integration/helpers/issue-test-license.ts`](../../helpers/i
 
 `issueCanonicalLicenses()` produce 4 tokens canónicos para los tests:
 
-| Nombre                  | Capability        | exp         | Firma            | Estado SDK esperado |
-| ----------------------- | ----------------- | ----------- | ---------------- | ------------------- |
-| `validWithWhiteLabel`   | `feat:white_label`| now+90d     | primary key      | `active`            |
-| `validWithoutWhiteLabel`| `feat:scim`       | now+90d     | primary key      | `active` (sin WL)   |
-| `expired`               | `feat:white_label`| now-100d    | primary key      | `expired`           |
-| `invalidSignature`      | `feat:white_label`| now+90d     | rogue key + kid primary | `invalid`    |
+| Nombre                   | Capability         | exp      | Firma                   | Estado SDK esperado |
+| ------------------------ | ------------------ | -------- | ----------------------- | ------------------- |
+| `validWithWhiteLabel`    | `feat:white_label` | now+90d  | primary key             | `active`            |
+| `validWithoutWhiteLabel` | `feat:scim`        | now+90d  | primary key             | `active` (sin WL)   |
+| `expired`                | `feat:white_label` | now-100d | primary key             | `expired`           |
+| `invalidSignature`       | `feat:white_label` | now+90d  | rogue key + kid primary | `invalid`           |
 
 `primary key` = pareja generada en el primer call y registrada como kid
 `didacta-test-2026` en el verifier.

@@ -51,7 +51,9 @@ export class WhiteLabelController {
   })
   @ApiResponse({ status: 200, description: 'White-label applied.' })
   @ApiResponse({ status: 402, description: 'Capability `feat:white_label` not licensed.' })
-  configure(@Body(new ZodValidationPipe(configureWhiteLabelDtoSchema)) body: ConfigureWhiteLabelDto) {
+  configure(
+    @Body(new ZodValidationPipe(configureWhiteLabelDtoSchema)) body: ConfigureWhiteLabelDto,
+  ) {
     return this.whiteLabel.configure(body);
   }
 }

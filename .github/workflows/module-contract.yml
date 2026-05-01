@@ -1,25 +1,16 @@
 name: Module Contract
 
-# Lint del contrato de módulo Didacta. Se ejecuta cuando cambian módulos
-# o el linter mismo (vía didacta-skills checkout). Bloquea PRs que rompan
-# las 10 reglas auto-detectables (ver didacta-skills/scripts/README.md).
+# Lint del contrato de módulo Didacta. Bloquea PRs que rompan las 10 reglas
+# auto-detectables (ver didacta-skills/scripts/README.md).
 #
-# Workflow dormante hasta que vuelva billing GitHub Actions de va360labs
-# (MIG-037 bloqueado por billing).
+# Pasado a workflow_dispatch only (2026-05-01): el job depende del checkout de
+# va360labs/didacta-skills, que requiere `DIDACTA_SKILLS_PAT` con scope `repo`
+# (privado). Sin PAT vigente, el checkout falla con "Not Found" y bloquea el
+# merge. Se ejecuta manualmente cuando el PAT esté configurado, o en local con
+# `node scripts/audit-modules.mjs --json` (mismo comando, pero sin checkout
+# remoto del linter).
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'modules/**'
-      - 'scripts/audit-modules.mjs'
-      - '.github/workflows/module-contract.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'modules/**'
-      - 'scripts/audit-modules.mjs'
-      - '.github/workflows/module-contract.yml'
   workflow_dispatch:
 
 concurrency:

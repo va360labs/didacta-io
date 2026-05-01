@@ -34,7 +34,10 @@ const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
  * para poder modificarse. Los colores, fuentes y copy del tenant son CE; el
  * CSS arbitrario y el footer HTML son white-label puro.
  */
-const WHITE_LABEL_FIELDS = ['customCss', 'footerHtml'] as const satisfies readonly (keyof UpdateThemeDto)[];
+const WHITE_LABEL_FIELDS = [
+  'customCss',
+  'footerHtml',
+] as const satisfies readonly (keyof UpdateThemeDto)[];
 
 @ApiTags('Modules · Theming')
 @ApiBearerAuth()

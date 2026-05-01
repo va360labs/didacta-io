@@ -21,12 +21,10 @@
  *   "el guard funciona dentro de un Nest real con DI completo".
  */
 
-import { Module } from '@nestjs/common';
+import { Module, type ModuleMetadata } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from '@nestjs/platform-fastify';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
+import { LoggerModule } from 'nestjs-pino';
 import { LicenseExceptionFilter, LicenseModule } from '@didacta/license-sdk';
 import { PrismaModule } from '../../../src/prisma/prisma.module';
 import { PrismaService } from '../../../src/prisma/prisma.service';
@@ -37,6 +35,19 @@ export interface TestAppOptions {
   licenseKey: string | null;
   /** Activa dev bypass. Solo efectivo si NODE_ENV !== 'production'. */
   allowDevBypass?: boolean;
+  /**
+   * Módulos extra a montar junto al stack base (LicenseModule + PrismaModule).
+   *
+   * Si se proveen, REEMPLAZAN a `BrandingModule` (default histórico).
+   * Cada módulo extra carga sus propios providers — el caller es responsable
+   * de incluir todas las deps transitivas (e.g. AuthModule) cuando un controller
+   * use `JwtAuthGuard` o servicios del kernel.
+   *
+   * Use-case típico: tests de integración por capability EE que sólo montan
+   * el sub-grafo necesario, sin inflar la app con AppModule completo (BullMQ,
+   * smtp, S3, etc.).
+   */
+  extraModules?: ModuleMetadata['imports'];
 }
 
 @Module({})
@@ -57,14 +68,27 @@ export async function createTestApp(opts: TestAppOptions): Promise<TestApp> {
   // Construimos el módulo dinámicamente para poder pasar la licencia distinta
   // en cada test. forRoot recibe `key` directo (no env) — más explícito y
   // libre de race conditions con process.env entre tests paralelos.
+  // Si el caller no provee `extraModules`, mantenemos el default histórico
+  // (BrandingModule) para no romper `license-guard.integration.test.ts`.
+  const featureImports =
+    opts.extraModules && opts.extraModules.length > 0 ? opts.extraModules : [BrandingModule];
   const moduleRef: TestingModule = await Test.createTestingModule({
     imports: [
+      // LoggerModule (nestjs-pino) es global y lo necesitan algunos services
+      // del AuthModule (PasswordResetService, etc.). Lo configuramos en modo
+      // silencioso para no inundar el output del test runner.
+      LoggerModule.forRoot({
+        pinoHttp: {
+          level: 'silent',
+          autoLogging: false,
+        },
+      }),
       LicenseModule.forRoot({
         key: opts.licenseKey,
         allowDevBypass: opts.allowDevBypass ?? false,
       }),
       PrismaModule,
-      BrandingModule,
+      ...featureImports,
     ],
   }).compile();
 

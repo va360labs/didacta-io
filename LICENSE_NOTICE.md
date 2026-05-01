@@ -23,11 +23,11 @@ For any of the above, contact: **licensing@didacta.io** or use **Didacta Cloud**
 
 ## Two licenses, one repository
 
-| Code | License |
-|------|---------|
+| Code                                                                | License                                          |
+| ------------------------------------------------------------------- | ------------------------------------------------ |
 | Files **NOT** matching `*.ee.*` and not in `ee/` or `*.ee/` folders | Didacta Sustainable Use License v1.0 (`LICENSE`) |
-| Files matching `*.ee.*` or in `ee/` or `*.ee/` folders | Didacta Enterprise License (`LICENSE_EE`) |
-| Third-party components | Original upstream license |
+| Files matching `*.ee.*` or in `ee/` or `*.ee/` folders              | Didacta Enterprise License (`LICENSE_EE`)        |
+| Third-party components                                              | Original upstream license                        |
 
 The Enterprise License files (`*.ee.*`) require a **valid Didacta Enterprise License key** to be used in production. Without that key, those features are gated at runtime by the License SDK.
 

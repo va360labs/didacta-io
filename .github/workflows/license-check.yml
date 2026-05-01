@@ -3,13 +3,13 @@ name: license-check
 on:
   pull_request:
     paths:
-      - "**/package.json"
-      - "pnpm-lock.yaml"
-      - "scripts/license-check.ts"
+      - '**/package.json'
+      - 'pnpm-lock.yaml'
+      - 'scripts/license-check.ts'
   push:
     branches: [main]
   schedule:
-    - cron: "0 6 * * 1"  # weekly Monday 06:00 UTC
+    - cron: '0 6 * * 1' # weekly Monday 06:00 UTC
 
 jobs:
   license-check:
@@ -23,7 +23,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10.21.0
 
       - name: Setup Node
         uses: actions/setup-node@v4

@@ -49,9 +49,9 @@ export default function AdminSsoPage() {
       <header className="flex flex-col gap-1">
         <h1 className="font-display text-3xl font-bold tracking-tight">SSO con OpenID Connect</h1>
         <p className="text-text-muted">
-          Permite a tus usuarios iniciar sesión con su identidad corporativa (Okta, Azure AD,
-          Auth0, Google Workspace, Keycloak…). Una vez configurado, aparece un botón &ldquo;Iniciar
-          sesión con SSO&rdquo; en la pantalla de login del tenant.
+          Permite a tus usuarios iniciar sesión con su identidad corporativa (Okta, Azure AD, Auth0,
+          Google Workspace, Keycloak…). Una vez configurado, aparece un botón &ldquo;Iniciar sesión
+          con SSO&rdquo; en la pantalla de login del tenant.
         </p>
       </header>
 
@@ -289,8 +289,9 @@ function SsoPanel() {
         <CardHeader>
           <CardTitle>Configuración del IdP</CardTitle>
           <CardDescription>
-            Necesitás haber dado de alta una aplicación &ldquo;OpenID Connect / Web&rdquo; en tu IdP.
-            Pegá la URL de callback de abajo en su configuración como URI de redirección autorizada.
+            Necesitás haber dado de alta una aplicación &ldquo;OpenID Connect / Web&rdquo; en tu
+            IdP. Pegá la URL de callback de abajo en su configuración como URI de redirección
+            autorizada.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -321,9 +322,7 @@ function SsoPanel() {
                 inputMode="url"
                 placeholder="https://tu-idp.example.com"
                 value={form.issuer}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, issuer: e.target.value, }))
-                }
+                onChange={(e) => setForm((prev) => ({ ...prev, issuer: e.target.value }))}
               />
               <Button type="button" variant="ghost" onClick={handleProbe} disabled={probing}>
                 {probing ? 'Probando…' : 'Probar discovery'}
@@ -355,7 +354,9 @@ function SsoPanel() {
             <Label htmlFor="oidc-client-secret">
               Client Secret{' '}
               {serverConfig?.hasSecret ? (
-                <span className="text-text-subtle text-xs">(dejá vacío para mantener el actual)</span>
+                <span className="text-text-subtle text-xs">
+                  (dejá vacío para mantener el actual)
+                </span>
               ) : (
                 <span className="text-danger-700">*</span>
               )}
@@ -422,15 +423,13 @@ function SsoPanel() {
               <p className="text-sm font-semibold">Auto-provisionar usuarios</p>
               <p className="text-xs text-text-muted">
                 Si está activo, el primer login crea automáticamente la cuenta con role{' '}
-                <code className="font-mono">student</code>. Si está apagado, sólo dejan entrar usuarios
-                que ya existen en el tenant (provisionados por SCIM o manualmente).
+                <code className="font-mono">student</code>. Si está apagado, sólo dejan entrar
+                usuarios que ya existen en el tenant (provisionados por SCIM o manualmente).
               </p>
             </div>
             <Switch
               checked={form.autoProvisionUsers}
-              onCheckedChange={(next) =>
-                setForm((prev) => ({ ...prev, autoProvisionUsers: next }))
-              }
+              onCheckedChange={(next) => setForm((prev) => ({ ...prev, autoProvisionUsers: next }))}
               label="Auto-provisionar usuarios"
             />
           </div>
@@ -449,12 +448,18 @@ function SsoPanel() {
           </div>
 
           {actionError ? (
-            <div role="alert" className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700">
+            <div
+              role="alert"
+              className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+            >
               {actionError}
             </div>
           ) : null}
           {actionSuccess ? (
-            <div role="status" className="rounded-lg border border-success-200 bg-success-50 p-3 text-sm text-success-800">
+            <div
+              role="status"
+              className="rounded-lg border border-success-200 bg-success-50 p-3 text-sm text-success-800"
+            >
               {actionSuccess}
             </div>
           ) : null}
@@ -513,32 +518,35 @@ function SsoPanel() {
           <div>
             <p className="font-semibold">3. Copiar issuer + clientId + clientSecret</p>
             <p className="text-text-muted">
-              Pegá el issuer URL del IdP arriba (sin <code className="font-mono">/.well-known</code>),
-              y el clientId / clientSecret que el IdP genere. Para Okta el issuer es{' '}
+              Pegá el issuer URL del IdP arriba (sin <code className="font-mono">/.well-known</code>
+              ), y el clientId / clientSecret que el IdP genere. Para Okta el issuer es{' '}
               <code className="font-mono">https://&#123;tu-org&#125;.okta.com/oauth2/default</code>.
               Para Azure AD:{' '}
-              <code className="font-mono">https://login.microsoftonline.com/&#123;tenant&#125;/v2.0</code>.
+              <code className="font-mono">
+                https://login.microsoftonline.com/&#123;tenant&#125;/v2.0
+              </code>
+              .
             </p>
           </div>
           <div>
             <p className="font-semibold">4. Probar discovery</p>
             <p className="text-text-muted">
-              Click &ldquo;Probar discovery&rdquo; — debería responder con los endpoints. Si falla, revisá
-              que el issuer sea HTTPS y accesible desde el server.
+              Click &ldquo;Probar discovery&rdquo; — debería responder con los endpoints. Si falla,
+              revisá que el issuer sea HTTPS y accesible desde el server.
             </p>
           </div>
           <div>
             <p className="font-semibold">5. Habilitar y probar el flow</p>
             <p className="text-text-muted">
-              Toggle &ldquo;Habilitar SSO&rdquo; → guardar → click &ldquo;Probar flow&rdquo;.
-              Te redirige al IdP y vuelve loguead@.
+              Toggle &ldquo;Habilitar SSO&rdquo; → guardar → click &ldquo;Probar flow&rdquo;. Te
+              redirige al IdP y vuelve loguead@.
             </p>
           </div>
           <div className="rounded-lg border border-warning-200 bg-warning-50 p-4 text-warning-800">
             <p className="font-semibold">Nota: scope acotado en este piloto</p>
             <p className="text-xs">
-              1 IdP por tenant, sólo Authorization Code + PKCE, sin role mapping desde el IdP.
-              Los usuarios provisionados automáticamente reciben role{' '}
+              1 IdP por tenant, sólo Authorization Code + PKCE, sin role mapping desde el IdP. Los
+              usuarios provisionados automáticamente reciben role{' '}
               <code className="font-mono">student</code>; los admins lo cambian luego en{' '}
               <a href="/admin/usuarios">Usuarios</a>.
             </p>
@@ -597,10 +605,12 @@ export function SsoUpsellCard() {
       <CardContent className="space-y-3">
         <p className="text-sm text-text-muted">
           La capability requerida es{' '}
-          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">feat:sso.oidc</code>.
-          Sin Enterprise, los endpoints <code className="font-mono">/admin/sso/oidc/*</code> devuelven{' '}
-          <code className="font-mono">402 Payment Required</code> y los flows de login federado no se
-          inician.
+          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">
+            feat:sso.oidc
+          </code>
+          . Sin Enterprise, los endpoints <code className="font-mono">/admin/sso/oidc/*</code>{' '}
+          devuelven <code className="font-mono">402 Payment Required</code> y los flows de login
+          federado no se inician.
         </p>
         <a
           href="https://didacta.io/pricing"

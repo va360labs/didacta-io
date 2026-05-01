@@ -117,7 +117,10 @@ export class OidcController {
       'user si auto-provision habilitado, emite tokens internos y redirige al ' +
       'frontend con accessToken/refreshToken en el query string.',
   })
-  @ApiResponse({ status: 302, description: 'Redirect a /auth/callback (success) o /auth/error (failure).' })
+  @ApiResponse({
+    status: 302,
+    description: 'Redirect a /auth/callback (success) o /auth/error (failure).',
+  })
   async callback(
     @Query('state') state: string | undefined,
     @Query('code') code: string | undefined,

@@ -11,12 +11,20 @@
  * al `/`. Si faltan params, redirige a /auth/error.
  */
 
+import { Suspense } from 'react';
 import { OidcCallbackHandler } from './oidc-callback-handler';
 
 export const metadata = {
   title: 'Iniciando sesión…',
 };
 
+// Next 15 exige envolver páginas que usan `useSearchParams()` en <Suspense>
+// cuando hay static generation. Sin esto, el build de producción falla con
+// "missing-suspense-with-csr-bailout" en /auth/callback.
 export default function OidcCallbackPage() {
-  return <OidcCallbackHandler />;
+  return (
+    <Suspense fallback={null}>
+      <OidcCallbackHandler />
+    </Suspense>
+  );
 }

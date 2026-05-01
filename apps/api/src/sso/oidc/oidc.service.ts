@@ -158,11 +158,12 @@ export class OidcService {
     private readonly auditLog: PrismaAuditLogService,
     private readonly tokens: TokenService,
   ) {
-    this.redirectUri = stripTrailingSlash(
-      process.env['OIDC_REDIRECT_URI'] ??
-        process.env['PUBLIC_API_URL'] ??
-        'http://localhost:4000',
-    ) + '/api/v1/auth/oidc/callback';
+    this.redirectUri =
+      stripTrailingSlash(
+        process.env['OIDC_REDIRECT_URI'] ??
+          process.env['PUBLIC_API_URL'] ??
+          'http://localhost:4000',
+      ) + '/api/v1/auth/oidc/callback';
   }
 
   // ---------------------------------------------------------------------------
@@ -227,7 +228,9 @@ export class OidcService {
 
     const incomingSecret = dto.clientSecret ?? null;
     const finalSecret =
-      incomingSecret !== null && incomingSecret.length > 0 ? incomingSecret : previous?.clientSecret;
+      incomingSecret !== null && incomingSecret.length > 0
+        ? incomingSecret
+        : previous?.clientSecret;
 
     if (!finalSecret) {
       throw new BadRequestException(
@@ -275,7 +278,8 @@ export class OidcService {
     });
 
     const safe = await this.getSafeConfig(tenantId);
-    if (!safe) throw new Error('Inconsistencia: getSafeConfig() después de setConfig() devolvió null.');
+    if (!safe)
+      throw new Error('Inconsistencia: getSafeConfig() después de setConfig() devolvió null.');
     return safe;
   }
 
@@ -453,7 +457,9 @@ export class OidcService {
 
     const config = await this.getConfig(flow.tenantId);
     if (!config || !config.enabled) {
-      throw new UnauthorizedException('La config OIDC del tenant fue deshabilitada durante el flow.');
+      throw new UnauthorizedException(
+        'La config OIDC del tenant fue deshabilitada durante el flow.',
+      );
     }
     if (config.issuer !== flow.issuer || config.clientId !== flow.clientId) {
       throw new UnauthorizedException('La config OIDC cambió durante el flow. Reintenta el login.');

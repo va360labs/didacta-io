@@ -99,9 +99,9 @@ describe('OidcAdminController.getConfig', () => {
       svc as unknown as ConstructorParameters<typeof OidcAdminController>[0],
       al as unknown as ConstructorParameters<typeof OidcAdminController>[1],
     );
-    await expect(
-      ctrl.getConfig(adminUser({ roles: ['student'] })),
-    ).rejects.toThrow(ForbiddenException);
+    await expect(ctrl.getConfig(adminUser({ roles: ['student'] }))).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   it('exists:false con redirectUri si no hay config', async () => {

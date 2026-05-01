@@ -1,20 +1,12 @@
 name: E2E
 
+# Política activa desde 2026-05-01: NO ejecutar tests en GitHub Actions.
+# E2E con Playwright se corre en local sobre Docker Desktop antes de mergear
+# (ver docs/TESTING-LOCAL.md). Este workflow queda como `workflow_dispatch`
+# para poder lanzarlo manualmente si se quiere validar en runner Linux real.
+
 on:
   workflow_dispatch:
-  # Re-habilitado el 2026-04-28 tras la cadena de fixes #187–#194 (más
-  # commits directos a main en el flow final) que sanearon los specs
-  # Playwright, los body parsers de Fastify, el helper MFA y los
-  # selectors de UI rediseñados. Run de referencia verde (44/0/2):
-  # https://github.com/va360labs/didacta/actions/runs/25046054487
-  push:
-    branches: [main]
-    paths:
-      - 'apps/e2e/**'
-      - 'apps/web/**'
-      - 'apps/api/**'
-      - 'modules/**'
-      - 'packages/**'
 
 concurrency:
   group: e2e-${{ github.ref }}

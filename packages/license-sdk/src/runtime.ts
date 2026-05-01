@@ -17,11 +17,7 @@ import {
   type LicenseStatus,
   type LicenseSubject,
 } from './types.js';
-import {
-  ALL_CAPABILITIES,
-  LICENSE_CAPABILITIES,
-  type LicenseCapability,
-} from './capabilities.js';
+import { ALL_CAPABILITIES, LICENSE_CAPABILITIES, type LicenseCapability } from './capabilities.js';
 import { verifyLicense } from './verifier.js';
 
 const COMMUNITY_STATE: LicenseState = {

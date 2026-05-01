@@ -26,11 +26,7 @@ export {
   type LicenseStatus,
 } from './types.js';
 
-export {
-  verifyLicense,
-  resetPublicKeysCache,
-  registerPublicKeyForTest,
-} from './verifier.js';
+export { verifyLicense, resetPublicKeysCache, registerPublicKeyForTest } from './verifier.js';
 
 export { LicenseService, type LoadOptions } from './runtime.js';
 
@@ -58,7 +54,4 @@ export {
   type RegistryClientOptions,
 } from './registry/client.js';
 
-export {
-  toPublicLicenseState,
-  type PublicLicenseState,
-} from './public-state.js';
+export { toPublicLicenseState, type PublicLicenseState } from './public-state.js';

@@ -15,11 +15,7 @@ In the Didacta WordPress-matizado model:
 ### NestJS
 
 ```ts
-import {
-  LicenseService,
-  RequiresCapability,
-  LICENSE_CAPABILITIES,
-} from '@didacta/license-sdk';
+import { LicenseService, RequiresCapability, LICENSE_CAPABILITIES } from '@didacta/license-sdk';
 
 @Controller('admin/multi-tenant')
 export class MultiTenantController {
@@ -62,14 +58,14 @@ export function SamlSettings() {
 
 The SDK distinguishes 6 states:
 
-| State | Meaning |
-|-------|---------|
-| `community` | No license set. Default. |
-| `active` | License signature valid, not expired. |
-| `grace` | License expired but inside `gracePeriodDays` (default 30). Capabilities still work, warnings prominent. |
-| `expired` | Past grace period. Capabilities disabled. |
-| `invalid` | Signature invalid or malformed. Capabilities disabled. |
-| `dev` | Development bypass. Only when `NODE_ENV !== 'production'` and `DIDACTA_DEV_BYPASS=true`. |
+| State       | Meaning                                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------------- |
+| `community` | No license set. Default.                                                                                |
+| `active`    | License signature valid, not expired.                                                                   |
+| `grace`     | License expired but inside `gracePeriodDays` (default 30). Capabilities still work, warnings prominent. |
+| `expired`   | Past grace period. Capabilities disabled.                                                               |
+| `invalid`   | Signature invalid or malformed. Capabilities disabled.                                                  |
+| `dev`       | Development bypass. Only when `NODE_ENV !== 'production'` and `DIDACTA_DEV_BYPASS=true`.                |
 
 ## Boot
 

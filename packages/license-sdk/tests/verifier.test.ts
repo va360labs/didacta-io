@@ -24,9 +24,7 @@ describe('verifier', () => {
   });
 
   it('throws on malformed JWT', async () => {
-    await expect(verifyLicense('not-a-jwt')).rejects.toBeInstanceOf(
-      LicenseSignatureError,
-    );
+    await expect(verifyLicense('not-a-jwt')).rejects.toBeInstanceOf(LicenseSignatureError);
   });
 
   it('throws on token signed with wrong issuer', async () => {

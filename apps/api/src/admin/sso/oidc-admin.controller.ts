@@ -147,10 +147,7 @@ export class OidcAdminController {
   })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 402 })
-  async deleteConfig(
-    @Req() req: FastifyRequest,
-    @CurrentUser() user: SessionClaims | undefined,
-  ) {
+  async deleteConfig(@Req() req: FastifyRequest, @CurrentUser() user: SessionClaims | undefined) {
     const u = requireTenantAdmin(user);
     const result = await this.oidc.deleteConfig(u.tenantId, u.sub);
 

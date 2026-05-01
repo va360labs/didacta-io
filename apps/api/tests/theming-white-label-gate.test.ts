@@ -56,9 +56,7 @@ describe('ThemingController · gate feat:white_label en PUT /me (MIG-026 follow-
       const dto = { customCss: 'body { color: red }' } as Parameters<
         ThemingController['updateMine']
       >[1];
-      await expect(controller.updateMine(adminUser, dto)).rejects.toThrow(
-        CapabilityRequiredError,
-      );
+      await expect(controller.updateMine(adminUser, dto)).rejects.toThrow(CapabilityRequiredError);
       expect(updateSpy).not.toHaveBeenCalled();
     });
 
@@ -66,17 +64,13 @@ describe('ThemingController · gate feat:white_label en PUT /me (MIG-026 follow-
       const dto = { footerHtml: '<p>powered by acme</p>' } as Parameters<
         ThemingController['updateMine']
       >[1];
-      await expect(controller.updateMine(adminUser, dto)).rejects.toThrow(
-        CapabilityRequiredError,
-      );
+      await expect(controller.updateMine(adminUser, dto)).rejects.toThrow(CapabilityRequiredError);
       expect(updateSpy).not.toHaveBeenCalled();
     });
 
     it('rechaza incluso si customCss es null (intento de borrar) sin licencia', async () => {
       const dto = { customCss: null } as Parameters<ThemingController['updateMine']>[1];
-      await expect(controller.updateMine(adminUser, dto)).rejects.toThrow(
-        CapabilityRequiredError,
-      );
+      await expect(controller.updateMine(adminUser, dto)).rejects.toThrow(CapabilityRequiredError);
     });
   });
 

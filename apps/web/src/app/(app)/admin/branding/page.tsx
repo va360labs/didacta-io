@@ -371,10 +371,7 @@ export default function BrandingPage() {
            * cualquier intento de PUT/POST con customCss / footerHtml acaba
            * en 402 Payment Required vía LicenseExceptionFilter.
            */}
-          <EeGate
-            capability={LICENSE_CAPABILITIES.WHITE_LABEL}
-            fallback={<WhiteLabelUpsellCard />}
-          >
+          <EeGate capability={LICENSE_CAPABILITIES.WHITE_LABEL} fallback={<WhiteLabelUpsellCard />}>
             <Card>
               <CardHeader>
                 <CardTitle>CSS personalizado (avanzado)</CardTitle>

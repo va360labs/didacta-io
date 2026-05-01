@@ -19,6 +19,7 @@ Toggle desde `/admin/configuracion` → módulo `fundae`.
 ## Eventos
 
 Ver `module.json` para la lista completa. Los más importantes:
+
 - `fundae.group.before-start` — síncrono, valida RLPT vencida.
 - `fundae.audit.zip-exported` — emite tras export con hash del manifest.
 

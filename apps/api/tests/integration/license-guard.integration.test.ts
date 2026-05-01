@@ -31,10 +31,7 @@ import supertest from 'supertest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { LICENSE_CAPABILITIES } from '@didacta/license-sdk';
 import { createTestApp, type TestApp } from './helpers/test-app';
-import {
-  issueCanonicalLicenses,
-  issueTestLicense,
-} from './helpers/issue-test-license';
+import { issueCanonicalLicenses, issueTestLicense } from './helpers/issue-test-license';
 
 const PREVIEW_PATH = '/api/v1/branding/white-label/preview';
 const CONFIGURE_PATH = '/api/v1/branding/white-label/configure';
@@ -267,13 +264,11 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     });
 
     await withApp(testApp, async (server) => {
-      const res = await supertest(server)
-        .post(CONFIGURE_PATH)
-        .send({
-          logoUrl: 'https://acme.example.com/logo.png',
-          primaryColor: '#ff5500',
-          poweredByDidacta: false,
-        });
+      const res = await supertest(server).post(CONFIGURE_PATH).send({
+        logoUrl: 'https://acme.example.com/logo.png',
+        primaryColor: '#ff5500',
+        poweredByDidacta: false,
+      });
 
       expect(res.status).toBe(201); // Nest @Post() default 201
       expect(res.body).toMatchObject({

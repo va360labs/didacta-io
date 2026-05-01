@@ -101,11 +101,7 @@ export const oidcAdminApi = {
   },
 
   async deleteConfig(bearer: string): Promise<{ deleted: boolean }> {
-    return apiFetch<{ deleted: boolean }>(
-      `${ADMIN_BASE}/config`,
-      { method: 'DELETE' },
-      bearer,
-    );
+    return apiFetch<{ deleted: boolean }>(`${ADMIN_BASE}/config`, { method: 'DELETE' }, bearer);
   },
 
   async testDiscovery(bearer: string, issuer: string): Promise<OidcDiscoveryProbe> {

@@ -77,11 +77,9 @@ async function runVitest() {
   const req = createRequire(import.meta.url);
   const vitestPkg = req.resolve('vitest/package.json');
   const vitestEntry = resolve(vitestPkg, '..', 'vitest.mjs');
-  await run(
-    process.execPath,
-    [vitestEntry, 'run', '--config', 'vitest.integration.config.ts'],
-    { cwd: resolve(__dirname, '..') },
-  );
+  await run(process.execPath, [vitestEntry, 'run', '--config', 'vitest.integration.config.ts'], {
+    cwd: resolve(__dirname, '..'),
+  });
 }
 
 let exitCode = 0;

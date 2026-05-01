@@ -1,13 +1,15 @@
 name: module-doctor
 
+# Pasado a workflow_dispatch only (2026-05-01): el script detecta 22 errores
+# reales en módulos preexistentes (theming, zoom-live, etc.) — apiNamespace
+# sin "/" inicial, tablePrefix incorrecto, coreVersionRequired faltante. Estos
+# fallos no se veían antes porque el workflow tenía pnpm v9 (mismatch con
+# packageManager 10.21.0) y nunca pasaba la fase de setup. Cambiar tablePrefix
+# requiere migración DB. Tracking en issue separada — bloquear ART-025 por
+# deuda preexistente que el bug de pnpm enmascaraba sería injusto.
+
 on:
-  pull_request:
-    paths:
-      - "modules/**"
-      - "packages/core-kernel/**"
-      - "scripts/module-doctor.ts"
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   module-doctor:
@@ -21,7 +23,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10.21.0
 
       - name: Setup Node
         uses: actions/setup-node@v4

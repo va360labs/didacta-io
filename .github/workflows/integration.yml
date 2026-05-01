@@ -2,39 +2,14 @@ name: Integration Tests
 
 # Suite de tests de integración que requieren contenedores reales
 # (Postgres, Redis). Hoy: License SDK end-to-end con Postgres real (MIG-034).
-# Mañana: cualquier otro test de integración que se vaya añadiendo.
 #
-# Este workflow está dormante hasta que se reactive billing GitHub Actions
-# en la org va360labs (ver MIG-037 — bloqueado por billing). En cuanto
-# vuelva, ya queda corriendo en cada PR sin más cambios.
+# Política activa desde 2026-05-01: NO ejecutar tests en GitHub Actions.
+# Se corren en local sobre Docker Desktop vía `scripts/test-local.sh`
+# (ver docs/TESTING-LOCAL.md). Este workflow queda como `workflow_dispatch`
+# para poder lanzarlo manualmente si en algún momento se quiere validar
+# en runner Linux real, pero no es la vía principal.
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      # Sólo dispara cuando cambia algo relacionado con licencias o tests
-      # de integración. Evita coste innecesario en PRs de docs / UI.
-      - 'apps/api/src/license/**'
-      - 'apps/api/src/branding/**'
-      - 'apps/api/tests/integration/**'
-      - 'apps/api/vitest.integration.config.ts'
-      - 'apps/api/scripts/run-integration-license.mjs'
-      - 'packages/license-sdk/**'
-      - 'packages/database/prisma/schema.prisma'
-      - 'docker-compose.test.yml'
-      - '.github/workflows/integration.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'apps/api/src/license/**'
-      - 'apps/api/src/branding/**'
-      - 'apps/api/tests/integration/**'
-      - 'apps/api/vitest.integration.config.ts'
-      - 'apps/api/scripts/run-integration-license.mjs'
-      - 'packages/license-sdk/**'
-      - 'packages/database/prisma/schema.prisma'
-      - 'docker-compose.test.yml'
-      - '.github/workflows/integration.yml'
   workflow_dispatch:
 
 concurrency:

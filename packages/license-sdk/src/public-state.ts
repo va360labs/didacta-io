@@ -30,9 +30,7 @@ export function toPublicLicenseState(state: LicenseState): PublicLicenseState {
     status: state.status,
     edition: state.subject?.edition,
     organizationName: state.subject?.organizationName,
-    expiresAt: state.subject?.expiresAt
-      ? state.subject.expiresAt.toISOString()
-      : undefined,
+    expiresAt: state.subject?.expiresAt ? state.subject.expiresAt.toISOString() : undefined,
     capabilities: state.subject?.capabilities ?? [],
     warnings: state.warnings,
   };

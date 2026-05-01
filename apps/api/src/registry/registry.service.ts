@@ -28,10 +28,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  RegistryClient,
-  type TelemetrySnapshot,
-} from '@didacta/license-sdk';
+import { RegistryClient, type TelemetrySnapshot } from '@didacta/license-sdk';
 import { LicenseService } from '@didacta/license-sdk';
 
 export interface OptInInput {
@@ -101,9 +98,7 @@ export class RegistryService {
       deploymentUrl: row.deploymentUrl,
       optInAt: row.optInAt.toISOString(),
       optedOutAt: row.optedOutAt ? row.optedOutAt.toISOString() : null,
-      lastTelemetryAt: row.lastTelemetryAt
-        ? row.lastTelemetryAt.toISOString()
-        : null,
+      lastTelemetryAt: row.lastTelemetryAt ? row.lastTelemetryAt.toISOString() : null,
       telemetryEnabled: row.telemetryEnabled,
       registryUrl,
       registryConnected: !!row.registryToken,
@@ -241,7 +236,7 @@ export class RegistryService {
       courses: typeof courses === 'number' ? courses : 0,
       activeUsers30d: 0, // TODO: query con login en 30d
       modulesInstalled: [], // TODO: leer de @didacta/core-registry
-      capabilitiesActive: [...license.subject?.capabilities ?? []],
+      capabilitiesActive: [...(license.subject?.capabilities ?? [])],
       licensePlan: license.subject?.plan ?? 'community',
       errorCount24h: 0, // TODO: query logs
       takenAt: new Date().toISOString(),

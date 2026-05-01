@@ -18,10 +18,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import {
-  LICENSE_CAPABILITIES,
-  type LicenseCapability,
-} from './capabilities.js';
+import { LICENSE_CAPABILITIES, type LicenseCapability } from './capabilities.js';
 import type { LicenseStatus } from './types.js';
 import type { PublicLicenseState } from './public-state.js';
 export type { PublicLicenseState } from './public-state.js';
@@ -131,12 +128,7 @@ export interface EeGateProps {
  * IMPORTANTE: el frontend NO es la fuente de verdad. Cualquier endpoint del API
  * sigue protegido por LicenseGuard en backend. EeGate es solo UX.
  */
-export function EeGate({
-  capability,
-  mode = 'locked',
-  children,
-  fallback,
-}: EeGateProps) {
+export function EeGate({ capability, mode = 'locked', children, fallback }: EeGateProps) {
   const { isCapabilityEnabled, state } = useLicense();
 
   if (isCapabilityEnabled(capability)) {

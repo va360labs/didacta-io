@@ -223,7 +223,9 @@ async function main() {
     process.exit(0);
   }
 
-  console.log(`ee-fence: ${files.length} files scanned, ${errors.length} error(s), ${warnings.length} warning(s).\n`);
+  console.log(
+    `ee-fence: ${files.length} files scanned, ${errors.length} error(s), ${warnings.length} warning(s).\n`,
+  );
   for (const v of violations) {
     const icon = v.severity === 'error' ? '❌' : '⚠️ ';
     console.log(`${icon} ${v.file}\n   → ${v.reason}\n`);

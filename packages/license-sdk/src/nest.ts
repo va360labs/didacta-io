@@ -72,7 +72,9 @@ class LicenseBootstrap implements OnApplicationBootstrap {
     if (state.status === 'community') {
       this.logger.log('License: community (no key set). Enterprise capabilities disabled.');
     } else if (state.status === 'dev') {
-      this.logger.warn('License: DEV BYPASS active. ALL Enterprise capabilities enabled. NEVER use in production.');
+      this.logger.warn(
+        'License: DEV BYPASS active. ALL Enterprise capabilities enabled. NEVER use in production.',
+      );
     } else if (state.status === 'invalid') {
       this.logger.error(`License: INVALID. ${state.warnings.join(' | ')}`);
     } else {
@@ -136,12 +138,7 @@ export class LicenseModule {
 
     return {
       module: LicenseModule,
-      providers: [
-        optionsProvider,
-        LicenseService,
-        LicenseGuard,
-        LicenseBootstrap,
-      ],
+      providers: [optionsProvider, LicenseService, LicenseGuard, LicenseBootstrap],
       exports: [LicenseService, LicenseGuard],
     };
   }

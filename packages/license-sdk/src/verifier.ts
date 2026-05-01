@@ -12,11 +12,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { importSPKI, jwtVerify, type KeyLike } from 'jose';
-import {
-  licensePayloadSchema,
-  LicenseSignatureError,
-  type LicensePayload,
-} from './types.js';
+import { licensePayloadSchema, LicenseSignatureError, type LicensePayload } from './types.js';
 
 const ALG = 'ES256';
 const EXPECTED_ISSUER = 'didacta.io';
@@ -119,15 +115,11 @@ export async function verifyLicense(
   }
 
   if (header.alg !== ALG) {
-    throw new LicenseSignatureError(
-      `Unsupported algorithm "${header.alg}". Expected "${ALG}".`,
-    );
+    throw new LicenseSignatureError(`Unsupported algorithm "${header.alg}". Expected "${ALG}".`);
   }
 
   if (!header.kid) {
-    throw new LicenseSignatureError(
-      'JWT header missing "kid". Cannot identify signing key.',
-    );
+    throw new LicenseSignatureError('JWT header missing "kid". Cannot identify signing key.');
   }
 
   const publicKey = await getPublicKey(header.kid);
@@ -142,16 +134,12 @@ export async function verifyLicense(
     });
     payload = result.payload;
   } catch (err) {
-    throw new LicenseSignatureError(
-      `JWT verification failed: ${(err as Error).message}`,
-    );
+    throw new LicenseSignatureError(`JWT verification failed: ${(err as Error).message}`);
   }
 
   const parsed = licensePayloadSchema.safeParse(payload);
   if (!parsed.success) {
-    throw new LicenseSignatureError(
-      `License payload schema invalid: ${parsed.error.message}`,
-    );
+    throw new LicenseSignatureError(`License payload schema invalid: ${parsed.error.message}`);
   }
 
   return parsed.data;

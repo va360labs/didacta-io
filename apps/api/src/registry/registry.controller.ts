@@ -27,7 +27,8 @@ export class RegistryController {
   @Get('status')
   @ApiOperation({
     summary: 'Estado del registro opt-in',
-    description: 'Devuelve si esta instalación está registrada en Cloud god, fecha de opt-in, último envío de telemetría y si la conexión está establecida.',
+    description:
+      'Devuelve si esta instalación está registrada en Cloud god, fecha de opt-in, último envío de telemetría y si la conexión está establecida.',
   })
   @ApiResponse({ status: 200, description: 'Estado del registro.' })
   status(): Promise<RegistryStatus> {
@@ -37,19 +38,19 @@ export class RegistryController {
   @Post('opt-in')
   @ApiOperation({
     summary: 'Opt-in: registrar esta instalación con Cloud god',
-    description: 'Activa el envío de telemetría agregada (sin PII) a cambio de comunicación directa con el equipo Didacta. Requiere aceptación explícita de términos.',
+    description:
+      'Activa el envío de telemetría agregada (sin PII) a cambio de comunicación directa con el equipo Didacta. Requiere aceptación explícita de términos.',
   })
   @ApiResponse({ status: 201, description: 'Opt-in confirmado.' })
-  optIn(
-    @Body(new ZodValidationPipe(optInDtoSchema)) body: OptInDto,
-  ): Promise<RegistryStatus> {
+  optIn(@Body(new ZodValidationPipe(optInDtoSchema)) body: OptInDto): Promise<RegistryStatus> {
     return this.registry.optIn(body);
   }
 
   @Delete('opt-in')
   @ApiOperation({
     summary: 'Opt-out: borrar registro y telemetría (RGPD)',
-    description: 'Marca el registro como opted-out localmente y solicita borrado remoto a Cloud god. Best-effort en caso de Cloud god inalcanzable.',
+    description:
+      'Marca el registro como opted-out localmente y solicita borrado remoto a Cloud god. Best-effort en caso de Cloud god inalcanzable.',
   })
   @ApiResponse({ status: 200, description: 'Opt-out aplicado.' })
   optOut(): Promise<RegistryStatus> {

@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "0 4 * * 1"  # weekly Monday 04:00 UTC
+    - cron: '0 4 * * 1' # weekly Monday 04:00 UTC
 
 permissions:
   contents: read

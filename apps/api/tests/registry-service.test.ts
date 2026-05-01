@@ -47,9 +47,7 @@ function makePrismaMock() {
         return filtered[filtered.length - 1] ?? null;
       }),
       updateMany: vi.fn(async (args: any) => {
-        const updated = rows.filter(
-          (r) => args.where.optedOutAt === null && r.optedOutAt === null,
-        );
+        const updated = rows.filter((r) => args.where.optedOutAt === null && r.optedOutAt === null);
         for (const r of updated) {
           Object.assign(r, args.data);
         }

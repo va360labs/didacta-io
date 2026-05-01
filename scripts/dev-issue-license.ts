@@ -52,7 +52,10 @@ function parseArgs(argv: string[]): Args {
   return {
     org: get('org'),
     plan: get('plan', 'enterprise-standard'),
-    capabilities: get('capabilities').split(',').map((c) => c.trim()).filter(Boolean),
+    capabilities: get('capabilities')
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean),
     expires: get('expires'),
     customerId: get('customer', `cus_dev_${Date.now()}`),
     organizationId: get('organizationId', `org_dev_${Date.now()}`),
@@ -61,7 +64,7 @@ function parseArgs(argv: string[]): Args {
     keyAlias: get('key', 'alias/didacta-issuer-2026'),
     issuer: get('issuer', 'didacta.io'),
     audience: get('audience', 'didacta-runtime'),
-    edition: (get('edition', 'enterprise') as Args['edition']),
+    edition: get('edition', 'enterprise') as Args['edition'],
     gracePeriodDays: Number(get('grace', '30')),
   };
 }
@@ -81,13 +84,20 @@ function awsKmsSign(message: Buffer, region: string, keyAlias: string): Buffer {
     'aws',
     'kms',
     'sign',
-    '--region', region,
-    '--key-id', keyAlias,
-    '--message', `fileb://${writeTempFile(messageB64, '.b64')}`,
-    '--message-type', 'RAW',
-    '--signing-algorithm', 'ECDSA_SHA_256',
-    '--query', 'Signature',
-    '--output', 'text',
+    '--region',
+    region,
+    '--key-id',
+    keyAlias,
+    '--message',
+    `fileb://${writeTempFile(messageB64, '.b64')}`,
+    '--message-type',
+    'RAW',
+    '--signing-algorithm',
+    'ECDSA_SHA_256',
+    '--query',
+    'Signature',
+    '--output',
+    'text',
   ];
 
   // En Windows AWS CLI vive en una ruta concreta. Detectamos.

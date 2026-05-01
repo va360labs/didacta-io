@@ -13,19 +13,9 @@
 import { execSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 
-const FORBIDDEN_LICENSES = [
-  /^GPL-/i,
-  /^AGPL-/i,
-  /^GPL$/i,
-  /^AGPL$/i,
-];
+const FORBIDDEN_LICENSES = [/^GPL-/i, /^AGPL-/i, /^GPL$/i, /^AGPL$/i];
 
-const REVIEW_REQUIRED = [
-  /MPL/i,
-  /Custom/i,
-  /Proprietary/i,
-  /SSPL/i,
-];
+const REVIEW_REQUIRED = [/MPL/i, /Custom/i, /Proprietary/i, /SSPL/i];
 
 type Dep = {
   name: string;

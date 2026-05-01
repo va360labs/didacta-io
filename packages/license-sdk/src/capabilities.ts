@@ -48,8 +48,7 @@ export const LICENSE_CAPABILITIES = {
   API_RATE_LIMIT_ELEVATED: 'feat:api.rate_limit.elevated',
 } as const;
 
-export type LicenseCapability =
-  (typeof LICENSE_CAPABILITIES)[keyof typeof LICENSE_CAPABILITIES];
+export type LicenseCapability = (typeof LICENSE_CAPABILITIES)[keyof typeof LICENSE_CAPABILITIES];
 
 /**
  * Lista de todas las capabilities conocidas por el SDK. Útil para validaciones,

@@ -24,12 +24,20 @@
  *   - internal               → fallo no clasificado
  */
 
+import { Suspense } from 'react';
 import { OidcErrorContent } from './oidc-error-content';
 
 export const metadata = {
   title: 'Error de inicio de sesión',
 };
 
+// Next 15 exige envolver páginas que usan `useSearchParams()` en <Suspense>
+// cuando hay static generation (router App + export). Sin esto, el build de
+// producción falla con "missing-suspense-with-csr-bailout" en /auth/error.
 export default function OidcErrorPage() {
-  return <OidcErrorContent />;
+  return (
+    <Suspense fallback={null}>
+      <OidcErrorContent />
+    </Suspense>
+  );
 }
