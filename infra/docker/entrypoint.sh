@@ -22,11 +22,27 @@ strip_url_query() {
   printf '%s' "${1%%\?*}"
 }
 
+ensure_pgvector_extension() {
+  if ! command -v psql >/dev/null 2>&1; then
+    log "psql no disponible, salto activación pgvector (verificá imagen base)."
+    return 0
+  fi
+  local psql_url
+  psql_url="$(strip_url_query "$DATABASE_URL")"
+  log "Activando extensión pgvector si no existe…"
+  if ! psql "$psql_url" -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS vector;" >/dev/null 2>&1; then
+    log "WARN: no se pudo activar pgvector. Si tu Postgres no es pgvector/pgvector la app fallará al crear tablas con tipo 'vector'."
+    log "WARN: solucionalo con 'CREATE EXTENSION vector;' en la BD destino, o usá la imagen pgvector/pgvector:pg17."
+  fi
+}
+
 run_migrations() {
   if [[ -z "${DATABASE_URL:-}" ]]; then
     log "DATABASE_URL no definido, salto sincronización de schema."
     return 0
   fi
+
+  ensure_pgvector_extension
 
   log "Sincronizando schema con prisma db push…"
   pnpm --filter @didacta/database exec prisma db push --skip-generate --accept-data-loss
