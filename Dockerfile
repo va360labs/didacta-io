@@ -97,10 +97,20 @@ FROM builder AS pruner
 RUN apk del .build-deps || true
 # 2) Borrar fuentes y configs de build: el runner solo ejecuta dist/ y .next/.
 #    También .turbo (cache de turbo) y vitest configs.
+#
+#    OJO: Next 15 compila el middleware en `apps/web/.next/server/src/middleware.js`
+#    cuando el source vive en `src/middleware.ts`. Si hacemos find sobre el árbol
+#    sin descartar `.next`, el `-name src` matchea ese directorio y rompe el runtime
+#    (Next emite 404 a todas las rutas con matcher porque no encuentra el bundle).
+#    Por eso prunamos `.next` y `node_modules` antes de descender.
 RUN find apps packages modules -type d \
+      \( -name node_modules -o -name .next \) -prune \
+      -o -type d \
       \( -name src -o -name tests -o -name __tests__ -o -name .turbo \) \
-      -prune -exec rm -rf {} + 2>/dev/null || true
-RUN find apps packages modules -type f \
+      -print -exec rm -rf {} + 2>/dev/null || true
+RUN find apps packages modules \
+      \( -name node_modules -o -name .next \) -prune \
+      -o -type f \
       \( -name "tsconfig*.json" \
       -o -name "vitest.config.*" \
       -o -name ".eslintrc*" \

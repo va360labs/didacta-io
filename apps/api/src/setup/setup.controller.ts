@@ -32,6 +32,9 @@ export class SetupController {
   ) {
     const host = req.headers.host ?? req.headers['x-forwarded-host'];
     const hostStr = Array.isArray(host) ? (host[0] ?? null) : (host ?? null);
-    return this.service.init(dto, hostStr, extractClientContext(req));
+    // Quitamos el puerto: el TenantDomain.hostname no incluye `:port`. El
+    // request a `localhost:4000` debe persistir como `localhost`.
+    const hostNoPort = hostStr ? hostStr.split(':')[0] ?? null : null;
+    return this.service.init(dto, hostNoPort, extractClientContext(req));
   }
 }
