@@ -26,6 +26,7 @@ import {
 } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import IORedis, { type Redis } from 'ioredis';
+import { AuthModule } from '../auth/auth.module';
 import { RateLimitInfoController } from './rate-limit-info.controller';
 import { RateLimitInterceptor } from './rate-limit.interceptor';
 import {
@@ -77,6 +78,15 @@ const redisProvider: FactoryProvider<RateLimitRedisClient | null> = {
 };
 
 @Module({
+  // RateLimitInfoController usa @UseGuards(JwtAuthGuard). El guard inyecta
+  // TokenService, que solo es resoluble si AuthModule está en imports del
+  // módulo que registra el controller. Sin esto NestJS lanza al boot:
+  //   "Nest can't resolve dependencies of the JwtAuthGuard (?, Reflector).
+  //    TokenService is available in the RateLimitModule context"
+  // Bug latente desde el 6º piloto — solo se manifestó al cambiar el orden
+  // de instanciación tras añadir WebhooksModule (PR #35). Patrón estándar:
+  // todo módulo cuyos controllers usan JwtAuthGuard DEBE importar AuthModule.
+  imports: [AuthModule],
   controllers: [RateLimitInfoController],
   providers: [
     redisProvider,
