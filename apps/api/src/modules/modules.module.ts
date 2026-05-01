@@ -14,6 +14,11 @@ import { AssessmentsAttemptsController } from './assessments-attempts.controller
 import { AssessmentsErrorFilter } from './assessments-error.filter';
 import { AssessmentsLearningBridge } from './assessments-learning.bridge';
 import { AuditController } from './audit.controller';
+import { BillingAdminController } from './billing-admin.controller';
+import { BillingController } from './billing.controller';
+import { BillingErrorFilter } from './billing-error.filter';
+import { BillingLearningBridge } from './billing-learning.bridge';
+import { BillingWebhookController } from './billing-webhook.controller';
 import { CertificatesController } from './certificates.controller';
 import { CertificatesErrorFilter } from './certificates-error.filter';
 import { CommunityController } from './community.controller';
@@ -81,6 +86,9 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     AiTutorController,
     AiProvidersController,
     AiGraderController,
+    BillingController,
+    BillingWebhookController,
+    BillingAdminController,
   ],
   providers: [
     ...communityDigestMetricsProviders,
@@ -96,6 +104,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     NotificationsBridge,
     AiTutorBridge,
     ScormLearningBridge,
+    BillingLearningBridge,
     TenantModulesService,
     ModuleAccessInterceptor,
     { provide: APP_INTERCEPTOR, useExisting: ModuleAccessInterceptor },
@@ -110,6 +119,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     { provide: APP_FILTER, useClass: TenantModulesErrorFilter },
     { provide: APP_FILTER, useClass: AiTutorErrorFilter },
     { provide: APP_FILTER, useClass: AiGraderErrorFilter },
+    { provide: APP_FILTER, useClass: BillingErrorFilter },
   ],
   exports: [
     ModuleRegistryService,

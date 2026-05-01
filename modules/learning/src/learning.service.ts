@@ -63,6 +63,23 @@ export class LearningService {
     });
   }
 
+  /**
+   * Matriculación tras pago confirmado por mod.billing. Source `PURCHASE`
+   * la diferencia de admin/código en audit y reporting comercial.
+   * Idempotente desde la perspectiva del bridge: si el alumno ya tenía
+   * enrollment ACTIVE (webhook duplicado), `createEnrollment` lanza
+   * `AlreadyEnrolledError`, que el bridge captura como no-op.
+   */
+  async enrollFromPurchase(tenantId: string, userId: string, courseId: string) {
+    return this.createEnrollment({
+      tenantId,
+      actorId: null,
+      userId,
+      courseId,
+      source: 'PURCHASE',
+    });
+  }
+
   async listInvitationsForCourse(tenantId: string, courseId: string) {
     return this.prisma.modLearningInvitation.findMany({
       where: { tenantId, courseId, revokedAt: null },

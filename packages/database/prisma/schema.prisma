@@ -1787,3 +1787,96 @@ model InstallationRegistry {
 
   @@map("core_installation_registry")
 }
+
+// ============================================================================
+// mod.billing — Stripe checkout MVP (pago único)
+// ============================================================================
+
+enum BillingOrderStatus {
+  /// Sesión de Checkout creada en Stripe, esperando que el alumno pague.
+  PENDING
+  /// Pago confirmado vía webhook checkout.session.completed.
+  COMPLETED
+  /// Sesión expirada o cancelada por el alumno antes de pagar.
+  CANCELLED
+  /// Pago rechazado o falló (ej. tarjeta declinada).
+  FAILED
+  /// Reembolsado tras COMPLETED. Mantenemos el order pero con este estado.
+  REFUNDED
+}
+
+/// Vincula un curso a un Stripe Price. Un tenant puede tener varios productos
+/// (uno por curso). MVP: un único stripePriceId por curso.
+model ModBillingProduct {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  /// ID lógico del curso. Sin FK cross-module (regla del contrato modular).
+  courseId        String   @map("course_id") @db.Uuid
+  /// Stripe Product ID (prod_...). Se crea desde el admin panel o se importa.
+  stripeProductId String   @map("stripe_product_id")
+  /// Stripe Price ID (price_...). MVP: único por producto.
+  stripePriceId   String   @map("stripe_price_id")
+  /// Importe declarado en la moneda más pequeña (céntimos en EUR/USD).
+  /// Coincide con price.unit_amount de Stripe; cacheado aquí para listados.
+  unitAmount      Int      @map("unit_amount")
+  /// ISO 4217 lowercase (eur, usd, gbp...).
+  currency        String   @default("eur")
+  /// Si false, el botón Comprar no aparece en el curso.
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, courseId])
+  @@unique([tenantId, stripePriceId])
+  @@index([tenantId, active])
+  @@map("mod_billing_product")
+}
+
+/// Una orden de compra de un alumno por un producto. Se crea al iniciar la
+/// Checkout Session y se actualiza vía webhook.
+model ModBillingOrder {
+  id              String             @id @default(uuid()) @db.Uuid
+  tenantId        String             @map("tenant_id") @db.Uuid
+  userId          String             @map("user_id") @db.Uuid
+  productId       String             @map("product_id") @db.Uuid
+  courseId        String             @map("course_id") @db.Uuid
+  /// Stripe Checkout Session ID (cs_...). Único globalmente.
+  stripeSessionId String             @unique @map("stripe_session_id")
+  status          BillingOrderStatus @default(PENDING)
+  /// Importe pagado (en céntimos). Se rellena al recibir webhook completed.
+  amountPaid      Int?               @map("amount_paid")
+  currency        String             @default("eur")
+  /// Email del comprador según Stripe (puede diferir del email del user).
+  customerEmail   String?            @map("customer_email")
+  completedAt     DateTime?          @map("completed_at")
+  refundedAt      DateTime?          @map("refunded_at")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  @@index([tenantId, userId])
+  @@index([tenantId, status])
+  @@index([courseId])
+  @@map("mod_billing_order")
+}
+
+/// Persistencia de eventos webhook de Stripe para idempotencia. Antes de
+/// procesar cualquier evento, verificamos que su id no esté ya en la tabla.
+/// Stripe reintenta hasta 3 días; sin esta tabla, un alumno se enrollaría
+/// múltiples veces si Stripe duplica.
+model ModBillingWebhookEvent {
+  /// Stripe event id (evt_...). PK natural — Stripe garantiza unicidad global.
+  stripeEventId String    @id @map("stripe_event_id")
+  tenantId      String?   @map("tenant_id") @db.Uuid
+  type          String
+  /// Si el procesamiento creó/actualizó alguna orden, la referenciamos.
+  orderId       String?   @map("order_id") @db.Uuid
+  /// Payload original (sin PII fuera de email).
+  payload       Json      @default("{}")
+  errorMessage  String?   @map("error_message")
+  receivedAt    DateTime  @default(now()) @map("received_at")
+  processedAt   DateTime? @map("processed_at")
+
+  @@index([type])
+  @@index([tenantId, receivedAt])
+  @@map("mod_billing_webhook_event")
+}

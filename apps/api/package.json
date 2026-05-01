@@ -29,6 +29,7 @@
     "@didacta/mod-ai-grader": "workspace:*",
     "@didacta/mod-ai-tutor": "workspace:*",
     "@didacta/mod-assessments": "workspace:*",
+    "@didacta/mod-billing": "workspace:*",
     "@didacta/mod-certificates": "workspace:*",
     "@didacta/mod-community": "workspace:*",
     "@didacta/mod-courses": "workspace:*",

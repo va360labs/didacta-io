@@ -1,6 +1,14 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { ModuleRegistry } from '@didacta/core-registry';
 import { assessmentsModule, AssessmentsService } from '@didacta/mod-assessments';
+import {
+  BillingService,
+  buildBillingModule,
+  StripeSdkAdapter,
+  type BillingEventPublisher,
+  type CheckoutUrlBuilder,
+  type StripeAdapter,
+} from '@didacta/mod-billing';
 import { buildCertificatesModule, CertificatesService } from '@didacta/mod-certificates';
 import { communityModule, CommunityService } from '@didacta/mod-community';
 import { coursesModule, CoursesService } from '@didacta/mod-courses';
@@ -48,6 +56,8 @@ export class ModuleRegistryService implements OnModuleInit {
   private aiTutorChat?: AiTutorChatService;
   private aiGraderRubric?: AiGraderRubricService;
   private aiGraderSuggestion?: AiGraderSuggestionService;
+  private billing?: BillingService;
+  private stripeAdapter?: StripeAdapter;
 
   constructor(
     private readonly factory: ModuleContextFactory,
@@ -127,6 +137,60 @@ export class ModuleRegistryService implements OnModuleInit {
 
     const certificatesModule = buildCertificatesModule(this.certificates);
 
+    // mod.billing: el adapter Stripe se construye solo si las ENVs están
+    // presentes. Sin Stripe configurado, el módulo no expone su service —
+    // los endpoints `/modules/billing/*` devuelven 503 vía ConfigMissing.
+    const stripeKey = process.env['STRIPE_SECRET_KEY'];
+    const stripeWebhookSecret = process.env['STRIPE_WEBHOOK_SECRET'];
+    if (stripeKey && stripeWebhookSecret) {
+      // Carga perezosa de Stripe SDK — evita romper en NODE_ENV=test si no
+      // está instalado (vitest unit no lo necesita).
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const StripeCtor = require('stripe').default ?? require('stripe');
+      this.stripeAdapter = new StripeSdkAdapter(stripeKey, stripeWebhookSecret, StripeCtor);
+
+      const successUrlBase =
+        process.env['BILLING_SUCCESS_URL_BASE'] ??
+        `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cursos`;
+      const cancelUrlBase =
+        process.env['BILLING_CANCEL_URL_BASE'] ??
+        `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cursos`;
+      const urls: CheckoutUrlBuilder = {
+        successUrl: (courseId) => `${successUrlBase}/${courseId}?paid=1`,
+        cancelUrl: (courseId) => `${cancelUrlBase}/${courseId}?cancelled=1`,
+      };
+
+      const eventBus = this.factory.getEventBus();
+      const publisher: BillingEventPublisher = {
+        publish: async (tenantId, actorId, name, payload) => {
+          // idempotencyKey derivado del orderId cuando aplique: si el outbox
+          // dispatcher reintrega, downstream subscribers no duplican efecto.
+          const orderId = (payload as { orderId?: string }).orderId;
+          await eventBus.publish({
+            name,
+            version: 1,
+            data: payload as never,
+            metadata: {
+              tenantId,
+              userId: actorId ?? undefined,
+              timestamp: new Date().toISOString(),
+              traceId: cryptoRandom(),
+              idempotencyKey: orderId ? `${name}:${orderId}` : `${name}:${cryptoRandom()}`,
+            },
+          });
+        },
+      };
+
+      this.billing = new BillingService(prisma, this.stripeAdapter, publisher, urls);
+    } else {
+      this.pino.warn(
+        {},
+        'STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET ausentes — mod.billing sin service. Endpoints /modules/billing devolverán 503.',
+      );
+    }
+
+    const billingModuleOrNull = this.billing ? buildBillingModule(this.billing) : null;
+
     await this.registry.register([
       helloWorldModule,
       coursesModule,
@@ -139,6 +203,7 @@ export class ModuleRegistryService implements OnModuleInit {
       fundaeModule,
       aiTutorModule,
       aiGraderModule,
+      ...(billingModuleOrNull ? [billingModuleOrNull] : []),
     ]);
 
     await this.persistManifests();
@@ -280,7 +345,31 @@ export class ModuleRegistryService implements OnModuleInit {
     return true;
   }
 
+  getBillingService(): BillingService {
+    if (!this.billing) {
+      throw new Error(
+        'mod.billing no está inicializado. Configura STRIPE_SECRET_KEY y STRIPE_WEBHOOK_SECRET.',
+      );
+    }
+    return this.billing;
+  }
+
+  getStripeAdapter(): StripeAdapter {
+    if (!this.stripeAdapter) {
+      throw new Error(
+        'StripeAdapter no está inicializado. Configura STRIPE_SECRET_KEY y STRIPE_WEBHOOK_SECRET.',
+      );
+    }
+    return this.stripeAdapter;
+  }
+
   async recoverOutbox(): Promise<{ processed: number; failed: number }> {
     return this.factory.getEventBus().recoverPending();
   }
+}
+
+function cryptoRandom(): string {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { randomUUID } = require('node:crypto') as typeof import('node:crypto');
+  return randomUUID();
 }

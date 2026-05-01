@@ -1,0 +1,23 @@
+{
+  "name": "billing",
+  "version": "1.0.0",
+  "edition": "community",
+  "displayName": "Stripe Checkout (pago único de cursos)",
+  "category": "core",
+  "tablePrefix": "mod_billing_",
+  "permissions": [
+    "billing:product:read",
+    "billing:product:write",
+    "billing:order:read",
+    "billing:checkout:create"
+  ],
+  "events": [
+    { "name": "billing.order.created" },
+    { "name": "billing.order.completed" },
+    { "name": "billing.order.failed" },
+    { "name": "billing.order.refunded" }
+  ],
+  "hooks": [],
+  "apiNamespace": "/modules/billing",
+  "surfaces": ["admin", "alumno"]
+}
