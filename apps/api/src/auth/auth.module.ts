@@ -19,23 +19,23 @@ import { MfaService } from './mfa.service';
 import { PasswordResetService } from './password-reset.service';
 import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
+import { loadCipherKey, describeCipherKeySource } from './cipher-key';
 
 /**
  * Factory para SecretCipherService — replica la lógica de
  * `module-context.factory.ts` para que el AuthModule no dependa de
- * ModulesModule (evita ciclo) pero use la misma key del .env.
+ * ModulesModule (evita ciclo) pero use la misma key resuelta por
+ * `loadCipherKey()` (env → file persistente → fallback efímero).
  */
-function loadCipherKey(): string {
-  const key = process.env.TENANT_SETTINGS_ENC_KEY;
-  if (!key || key.trim().length === 0) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error(
-        'TENANT_SETTINGS_ENC_KEY es obligatoria en producción. Generala con: openssl rand -hex 32',
-      );
-    }
-    return '0'.repeat(64);
+function loadCipherKeyForAuth(): string {
+  const resolved = loadCipherKey();
+  // Solo mostramos el WARN al boot UNA vez — desde aquí, porque AuthModule
+  // se construye antes que ModuleContextFactory (que comparte la key).
+  if (resolved.source !== 'env') {
+    // eslint-disable-next-line no-console
+    console.warn(describeCipherKeySource(resolved));
   }
-  return key;
+  return resolved.key;
 }
 
 @Module({
@@ -53,7 +53,7 @@ function loadCipherKey(): string {
     SmtpAdapterService,
     {
       provide: SecretCipherService,
-      useFactory: () => new SecretCipherService(loadCipherKey()),
+      useFactory: () => new SecretCipherService(loadCipherKeyForAuth()),
     },
     // PrismaTenantConfigService recibe AuditLogService (interface del kernel)
     // como tercer arg. NestJS DI no puede resolver una interface, así que

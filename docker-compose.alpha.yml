@@ -55,9 +55,13 @@ services:
       timeout: 3s
       retries: 5
 
+  # MinIO opcional — solo se levanta con `--profile s3`. Por defecto la app
+  # usa storage local en disco (volumen didacta_data, ver servicio `didacta`).
+  # Activar con: `docker compose -f docker-compose.alpha.yml --profile s3 up -d`.
   minio:
     image: minio/minio:latest
     container_name: didacta-minio
+    profiles: ['s3']
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -77,6 +81,7 @@ services:
   minio-init:
     image: minio/mc:latest
     container_name: didacta-minio-init
+    profiles: ['s3']
     depends_on:
       minio:
         condition: service_healthy
@@ -109,27 +114,40 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgresql://${POSTGRES_USER:-didacta}:${POSTGRES_PASSWORD:-didacta_dev}@postgres:5432/${POSTGRES_DB:-didacta}?schema=public
       REDIS_URL: redis://redis:6379
       AUTH_SECRET: ${AUTH_SECRET}
-      TENANT_SETTINGS_ENC_KEY: ${TENANT_SETTINGS_ENC_KEY}
+      # TENANT_SETTINGS_ENC_KEY es opcional: si se omite, Didacta genera y
+      # persiste una clave en /app/data/.didacta-secret-key (volumen didacta_data
+      # abajo). Setealo explícitamente solo si querés controlarlo desde tu
+      # secrets manager.
+      TENANT_SETTINGS_ENC_KEY: ${TENANT_SETTINGS_ENC_KEY:-}
       API_PORT: ${API_PORT:-4000}
       WEB_PORT: ${WEB_PORT:-3000}
-      S3_ENDPOINT: http://minio:9000
-      S3_BUCKET: ${S3_BUCKET:-didacta-dev}
-      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-didacta}
-      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-didacta_dev}
-      S3_REGION: us-east-1
-      S3_FORCE_PATH_STYLE: 'true'
+      # Storage por defecto: local en disco (volumen `didacta_data` montado
+      # en /app/data). Si querés S3-compatible (MinIO local con --profile s3,
+      # AWS, Hetzner Object Storage, etc.) seteá las S3_* en .env y descomentá
+      # las líneas correspondientes en este bloque environment.
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      STORAGE_ROOT: /app/data/storage
+      # S3_ENDPOINT: ${S3_ENDPOINT:-}
+      # S3_BUCKET: ${S3_BUCKET:-}
+      # S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      # S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+      # S3_REGION: ${S3_REGION:-us-east-1}
+      # S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
       SMTP_HOST: mailpit
       SMTP_PORT: '1025'
       SMTP_FROM: ${SMTP_FROM:-Didacta <noreply@didacta.local>}
       DIDACTA_LICENSE_KEY: ${DIDACTA_LICENSE_KEY:-}
       DIDACTA_DEV_BYPASS: ${DIDACTA_DEV_BYPASS:-false}
+    volumes:
+      # Persiste el storage local (uploads de cursos/certificados/evidencias)
+      # + la clave de cifrado autogenerada (.didacta-secret-key). Sobrevive
+      # a `docker compose up/down/restart` sin perder datos.
+      - didacta_data:/app/data
     ports:
       - '${API_PORT:-4000}:4000'
       - '${WEB_PORT:-3000}:3000'
@@ -144,3 +162,4 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  didacta_data:

@@ -28,18 +28,17 @@ Si baja sin pedir credenciales, estás listo para cualquiera de los dos caminos 
 
 ## Variables de entorno obligatorias
 
-Solo 4 ENVs son **estrictamente obligatorias** para que la app arranque. El resto tienen defaults razonables o se inyectan desde el compose. Set completo y documentado en [`.env.example`](.env.example).
+Solo **3 ENVs** son estrictamente obligatorias para arrancar. El resto tienen defaults razonables o se inyectan desde el compose. Set completo y documentado en [`.env.example`](.env.example).
 
-| Variable                  | Qué es                                                                                                                                                                                                                                                                                          | Cómo generarla                                                                                              |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`            | Connection string Postgres 16 con extensión `pgvector` instalada.                                                                                                                                                                                                                               | Apunta a tu Postgres. Para compose: `postgresql://didacta:didacta_dev@postgres:5432/didacta?schema=public`. |
-| `REDIS_URL`               | Connection string Redis 7.                                                                                                                                                                                                                                                                      | Apunta a tu Redis. Para compose: `redis://redis:6379`.                                                      |
-| `AUTH_SECRET`             | Secret para firmar sesiones / cookies. Mínimo 32 chars.                                                                                                                                                                                                                                         | `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`                               |
-| `TENANT_SETTINGS_ENC_KEY` | Clave AES-256 (hex 32 bytes) que cifra los secretos de la instalación en DB (claves API de proveedores IA, credenciales SMTP propias, etc). **Obligatoria en `NODE_ENV=production`** (en dev/test hay fallback). Backup antes de rotar — si la pierdes, los secretos cifrados quedan ilegibles. | `openssl rand -hex 32`                                                                                      |
+| Variable       | Qué es                                                            | Cómo generarla                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL` | Connection string Postgres 16 con extensión `pgvector` instalada. | Apunta a tu Postgres. Para compose: `postgresql://didacta:didacta_dev@postgres:5432/didacta?schema=public`.                                                                                                                                                                                                                                                                                                                             |
+| `REDIS_URL`    | Connection string Redis 7.                                        | Apunta a tu Redis. Para compose: `redis://redis:6379`.                                                                                                                                                                                                                                                                                                                                                                                  |
+| `AUTH_SECRET`  | Secret para firmar sesiones / cookies. Mínimo 32 caracteres.      | Cualquier string aleatoria de **32+ caracteres** vale. Opciones: 1) un generador online de contraseñas (longitud 40+, marcar todo); 2) un gestor de contraseñas (1Password, Bitwarden) → "Generar contraseña" 40 chars; 3) `openssl rand -base64 32`; 4) `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Lo importante: que sea aleatoria y la guardes — si la cambias, todas las sesiones se invalidan. |
 
 ## Camino A — Docker Compose (recomendado)
 
-Stack completo en local: API + web + Postgres + Redis + MinIO (S3) + Mailpit (SMTP).
+Stack: API + web + Postgres + Redis + Mailpit (SMTP). Storage local por defecto en un volumen Docker (sin S3 externo).
 
 ```bash
 # 1. Clonar
@@ -49,9 +48,13 @@ cd didacta-community
 # 2. Configurar .env
 cp .env.example .env
 
-# 3. Generar los 2 secrets obligatorios
-echo "AUTH_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")" >> .env
-echo "TENANT_SETTINGS_ENC_KEY=$(openssl rand -hex 32)" >> .env
+# 3. Pegar tu AUTH_SECRET en .env (cualquier string aleatoria 32+ chars).
+#    Opciones rápidas — cualquiera vale:
+#    - Un generador online de contraseñas (longitud 40+).
+#    - Tu gestor de contraseñas → "Generar contraseña" 40 chars.
+#    - openssl rand -base64 32     (si tenés openssl)
+#    - node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+#    Editá .env y completá AUTH_SECRET=...
 
 # 4. Fijar la versión de la imagen (default: alpha)
 echo "DIDACTA_IMAGE_TAG=0.0.1-alpha.0" >> .env
@@ -67,8 +70,31 @@ docker compose -f docker-compose.alpha.yml ps
 # http://localhost:4000/api/docs    — Swagger
 # http://localhost:4000/healthz     — health probe
 # http://localhost:8025             — Mailpit (emails de prueba)
-# http://localhost:9001             — MinIO console
 ```
+
+### Persistencia: volúmenes Docker
+
+El compose declara cuatro volúmenes nombrados que sobreviven `down`/`up` y reinicios:
+
+| Volumen         | Qué guarda                                                                                                                 |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `postgres_data` | Toda la base de datos.                                                                                                     |
+| `redis_data`    | Cola persistente (`appendonly yes`) — outbox + jobs.                                                                       |
+| `didacta_data`  | Storage local de la app: uploads de cursos / certificados / evidencias + clave de cifrado autogenerada para datos at-rest. |
+| `minio_data`    | Solo si activás el profile `s3` (ver abajo). Guarda los buckets de MinIO.                                                  |
+
+**Ojo**: `docker compose down -v` borra los volúmenes — perdés los datos. Para detener sin borrar usá `docker compose down` (sin `-v`). Backup recomendado para producción: `pg_dump` + `tar` del volumen `didacta_data`.
+
+### Storage opcional con MinIO (S3-compatible)
+
+Si querés probar el flujo S3 sin pagar AWS / Hetzner, levantá MinIO con el profile `s3`:
+
+```bash
+docker compose -f docker-compose.alpha.yml --profile s3 up -d
+# MinIO console disponible en http://localhost:9001
+```
+
+Y descomentá las líneas `S3_*` en `docker-compose.alpha.yml` (servicio `didacta`) para que la app use MinIO en lugar del disco local. Para producción real apuntá a tu Hetzner Object Storage / AWS S3 / etc. seteando las S3\_\* en `.env`.
 
 Manual completo con troubleshooting, primer admin, actualización de versión y operaciones del día a día: [`docs/alpha/INSTALL.md`](docs/alpha/INSTALL.md) y [`docs/alpha/RUNBOOK.md`](docs/alpha/RUNBOOK.md). Reportar bugs / feedback: [`docs/alpha/FEEDBACK.md`](docs/alpha/FEEDBACK.md).
 
@@ -80,23 +106,32 @@ Para operadores que ya tienen Postgres 16 + Redis 7 administrados y solo quieren
 
 - Postgres 16 con extensión `pgvector` instalada y schema vacío (la app aplica las migraciones Prisma al arrancar).
 - Redis 7 accesible desde el contenedor.
-- Las 4 ENVs obligatorias listadas arriba.
+- Las 3 ENVs obligatorias listadas arriba.
 
 ```bash
 docker pull didactaio/community:0.0.1-alpha.0
+
+# Crear volumen para uploads + clave de cifrado autogenerada (sobrevive reinicios).
+docker volume create didacta_data
 
 docker run -d \
   --name didacta-app \
   -p 3000:3000 \
   -p 4000:4000 \
+  -v didacta_data:/app/data \
   -e DATABASE_URL='postgresql://USER:PASS@HOST:5432/didacta?schema=public' \
   -e REDIS_URL='redis://HOST:6379' \
-  -e AUTH_SECRET='...' \
-  -e TENANT_SETTINGS_ENC_KEY='...' \
+  -e AUTH_SECRET='cualquier-string-aleatoria-de-32+-caracteres' \
+  -e STORAGE_DRIVER=local \
+  -e STORAGE_ROOT=/app/data/storage \
   -e NODE_ENV=production \
   --restart unless-stopped \
   didactaio/community:0.0.1-alpha.0
 ```
+
+> El volumen `didacta_data` guarda los archivos subidos (cursos / certificados / evidencias) **y** una clave de cifrado autogenerada al primer arranque para los secretos at-rest. Sin ese volumen montado, todo se borra al recrear el contenedor.
+
+> Si preferís S3-compatible en lugar de disco local: quitá `STORAGE_DRIVER` y `STORAGE_ROOT`, y añadí `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`. Igualmente conviene mantener el volumen montado para la clave de cifrado.
 
 **Verificar:**
 

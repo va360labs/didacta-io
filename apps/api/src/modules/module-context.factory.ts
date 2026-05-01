@@ -20,20 +20,7 @@ import { PrismaNotificationHubService } from './prisma-notification-hub.service'
 import { PrismaTenantConfigService } from './prisma-tenant-config.service';
 import { SecretCipherService } from './secret-cipher.service';
 import { SmtpAdapterService } from './smtp-adapter.service';
-
-function loadCipherKey(): string {
-  const key = process.env.TENANT_SETTINGS_ENC_KEY;
-  if (!key || key.trim().length === 0) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error(
-        'TENANT_SETTINGS_ENC_KEY es obligatoria en producción. Generala con: openssl rand -hex 32',
-      );
-    }
-    // Dev fallback: clave determinística para tests/local sin .env (ÚNICAMENTE dev).
-    return '0'.repeat(64);
-  }
-  return key;
-}
+import { loadCipherKey } from '../auth/cipher-key';
 
 /**
  * Selecciona el storage backend según `STORAGE_DRIVER`. `s3` requiere las
@@ -104,7 +91,7 @@ const stubI18n: I18nService = {
 export class ModuleContextFactory {
   private readonly hookRegistry = new InMemoryHookRegistry();
   private readonly storage = buildStorage();
-  private readonly cipher = new SecretCipherService(loadCipherKey());
+  private readonly cipher = new SecretCipherService(loadCipherKey().key);
   private readonly smtp = new SmtpAdapterService();
   private tenantConfig?: PrismaTenantConfigService;
   private eventBus?: PersistentEventBus;
