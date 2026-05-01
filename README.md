@@ -1,15 +1,15 @@
 # Didacta Community
 
-> 📚 **Plataforma LMS modular, fair-code y source-available** — VA360 LABS S.L.
+> 📚 **El LMS de nueva generación. Open-source, modular y listo para Fundae.**
 
 [![Docker](https://img.shields.io/badge/docker-hub-blue)](https://hub.docker.com/r/didactaio/community)
-[![License](https://img.shields.io/badge/license-Sustainable%20Use%201.0-orange)](LICENSE)
 [![Versioning](https://img.shields.io/badge/versioning-SemVer-green)](docs/versioning.md)
 [![Stage](https://img.shields.io/badge/stage-alpha-red)](docs/alpha/INSTALL.md)
+[![Web](https://img.shields.io/badge/web-didacta.io-black)](https://didacta.io)
 
 ## Estado actual
 
-🚧 **Alpha pública** — primer milestone público en `v0.0.1-alpha.0`.
+🚧 **Alpha pública** — primer milestone público en `v0.0.1-alpha.0`. Lanzamiento previsto: mayo de 2026.
 
 Imagen oficial publicada en Docker Hub: [`didactaio/community`](https://hub.docker.com/r/didactaio/community). **Pública** — no requiere `docker login`.
 
@@ -117,62 +117,58 @@ curl -fsS http://localhost:4000/healthz     # debe responder 200
 
 ## Sobre el proyecto
 
-Didacta es una plataforma LMS (Learning Management System) **modular, moderna, fair-code**, propiedad de VA360 LABS S.L. Se construye con dos objetivos consecutivos:
+Didacta es un LMS (Learning Management System) **open-source de nueva generación**: arquitectura modular, sin licencias por usuario y con cumplimiento legal integrado en el núcleo. Diseñado para academias, formadores y organizaciones que quieren operar su propia plataforma de formación con control total.
 
-1. **Dogfooding**: reemplazar el stack actual de VA360 (LearnDash + FluentCommunity + Zoom externo + n8n externo) para cursos propios de VA360.academy y PotenzIA.
-2. **Comercialización**: evolucionar a producto con tres ediciones (Community / Enterprise self-hosted / Cloud SaaS gestionado).
+Más información y demo en vivo: [didacta.io](https://didacta.io).
 
-El principio rector es **modularidad extrema**: un core mínimo, todo lo demás como módulos activables con contratos estables. Inspiración: n8n.io + WordPress matizado.
+### Por qué Didacta
+
+- **Modular de verdad.** Instala solo lo que necesitas. Cada función es un módulo limpio: sin parches, sin temas que rompen en cada actualización, sin deuda técnica acumulada.
+- **Software libre.** Tu plataforma, tu código. Audítalo, modifícalo, despliégalo, redistribúyelo. Sin licencias por usuario.
+- **Cumplimiento serio.** Fundae, RGPD y WCAG 2.2 AA integrados en el núcleo, no añadidos con plugins de terceros. Trazabilidad, auditoría y exportación de datos listos desde el día uno.
+- **IA discreta.** Inteligencia artificial que ayuda sin interrumpir: crea contenido, sugiere itinerarios y resume actividad.
+
+### Tres ediciones, mismo producto
+
+| Edición                   | Para quién                                                            | Incluye                                                                                                          |
+| ------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Community** (este repo) | Equipos que despliegan y operan ellos mismos.                         | Todo el código fuente. Comunidad activa de contribuidores.                                                       |
+| **Cloud**                 | Quien quiere arrancar en minutos, sin infraestructura.                | Hosting gestionado, backups automáticos diarios, actualizaciones sin intervención. Desde 20 €/mes.               |
+| **Enterprise**            | Organizaciones con SLA, integraciones a medida y partner certificado. | Account manager dedicado, onboarding guiado, integraciones con sistemas existentes, infraestructura monitoreada. |
+
+Detalles y precios: [didacta.io](https://didacta.io).
 
 ## Modelo de licencias
 
-- **Repo + módulos**: [Didacta Sustainable Use License v1.0](LICENSE) (fair-code, adaptada de n8n SUL). Permite uso interno empresarial libre. Distribución comercial / SaaS / white-label requiere acuerdo.
-- **Capabilities Enterprise** (archivos `*.ee.*` dentro del CORE): [Didacta Enterprise License](LICENSE_EE). Requieren licencia firmada activa para usarse en producción.
-- **Cloud**: SaaS gestionado por VA360 (`cloud.didacta.io`).
+> ⚠️ **Aviso importante (pendiente de armonización)**: la landing pública en [didacta.io](https://didacta.io) anuncia GPL v3, mientras que los archivos `LICENSE` / `LICENSE_EE` de este repo aplican Sustainable Use License + Enterprise License. Hasta que se publique la versión final del modelo legal, **rige lo que dicen los archivos `LICENSE` y `LICENSE_EE` de este repo, no la landing**. Si necesitas una respuesta firme antes de desplegar, escribe a [legal@va360labs.com](mailto:legal@va360labs.com).
 
-Resumen humano: [`LICENSE_NOTICE.md`](LICENSE_NOTICE.md). FAQ: [`docs/licensing/faq.md`](docs/licensing/faq.md).
+- Repo + módulos: ver [`LICENSE`](LICENSE) y resumen humano en [`LICENSE_NOTICE.md`](LICENSE_NOTICE.md).
+- Capabilities Enterprise (archivos `*.ee.*` dentro del CORE): ver [`LICENSE_EE`](LICENSE_EE).
+- FAQ de licencias: [`docs/licensing/faq.md`](docs/licensing/faq.md).
+- Política de uso comercial: [`COMMERCIAL_USE.md`](COMMERCIAL_USE.md).
+- Marca registrada: [`TRADEMARKS.md`](TRADEMARKS.md).
 
 ## Documentación
 
-- 📄 [PRD (Product Requirements Document)](docs/PRD.md)
-- 🗺 [Plan de fases](docs/PLAN-FASES.md)
-- 🏗 [Arquitectura modular](docs/ARQUITECTURA-MODULAR.md)
-- ✅ [Checklist de arranque](docs/CHECKLIST-ARRANQUE.md)
-
-## Prompts para Claude Code
-
-El backlog del proyecto se genera asistido con Claude Code en 3 sesiones:
-
-- [Prompt 01 — Casos de uso e historias de usuario](prompts/prompt-01-casos-uso.md)
-- [Prompt 02 — Tareas técnicas atómicas](prompts/prompt-02-tareas-tecnicas.md)
-- [Prompt 03 — Volcado a Notion como kanban](prompts/prompt-03-notion-kanban.md)
+- 🚀 [`docs/alpha/INSTALL.md`](docs/alpha/INSTALL.md) — Manual completo de instalación.
+- 📘 [`docs/alpha/RUNBOOK.md`](docs/alpha/RUNBOOK.md) — Operación día a día.
+- 🐛 [`docs/alpha/FEEDBACK.md`](docs/alpha/FEEDBACK.md) — Cómo reportar bugs.
+- 🔒 [`SECURITY.md`](SECURITY.md) — Política de seguridad y reporte responsable.
+- 📋 [`CHANGELOG.md`](CHANGELOG.md) — Historial de cambios.
+- 🤝 [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — Código de conducta.
 
 ## Stack tecnológico
 
-- **Backend**: Node.js 22 + NestJS 11 + TypeScript
-- **Frontend**: Next.js 15 (App Router) + React 19 + Tailwind + shadcn/ui
-- **DB**: PostgreSQL 16 con Row-Level Security + Prisma 5
-- **Cache/Colas**: Redis 7 + BullMQ
-- **Storage**: S3-compatible (MinIO dev, Hetzner prod)
-- **Aula virtual**: Zoom API + SDK Web
-- **IA**: Anthropic API (Claude Sonnet 4.5) + pgvector
-- **Automatización**: n8n via webhooks
-- **Hosting**: Hetzner + Easypanel
-- **CI/CD**: GitHub Actions
-- **Monorepo**: Turborepo + pnpm workspaces
-
-Detalle completo en [docs/PRD.md](docs/PRD.md#6-stack-tecnológico-cerrado).
-
-## Roadmap de alto nivel
-
-| Fase     | Duración  | Objetivo                                      |
-| -------- | --------- | --------------------------------------------- |
-| Fase 0   | 2 semanas | Discovery técnico, repo, infraestructura base |
-| Fase 1.A | 8 semanas | CORE + cursos asíncronos + certificados       |
-| Fase 1.B | 8 semanas | Zoom directo + comunidad + Fundae básico      |
-| Fase 1.C | 8 semanas | IA integrada + piloto + auditoría externa     |
-| Fase 2+  | Iterativo | Migradores, SSO, comercial, IFAPA             |
+- **Backend**: Node.js 22 + NestJS 11 + TypeScript.
+- **Frontend**: Next.js 15 (App Router) + React 19 + Tailwind + shadcn/ui.
+- **Base de datos**: PostgreSQL 16 con Row-Level Security + Prisma.
+- **Cache / colas**: Redis 7 + BullMQ.
+- **Object storage**: S3-compatible (MinIO en compose, cualquier proveedor S3 en producción).
+- **IA**: capa pluggable — alpha actual usa proveedor LLM externo, futuras versiones permitirán swap.
+- **Monorepo**: Turborepo + pnpm workspaces.
 
 ## Licencia
 
-Proprietary © 2026 VA360 LABS S.L. All rights reserved.
+Ver [`LICENSE`](LICENSE) y la nota de aviso bajo "Modelo de licencias" arriba.
+
+Didacta™ es marca registrada de VA360 LABS S.L. Ver [`TRADEMARKS.md`](TRADEMARKS.md).
