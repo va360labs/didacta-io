@@ -1880,3 +1880,60 @@ model ModBillingWebhookEvent {
   @@index([tenantId, receivedAt])
   @@map("mod_billing_webhook_event")
 }
+
+// ============================================================================
+// mod.ai-content — Generador IA de borradores (resúmenes / flashcards / quizzes)
+// ============================================================================
+
+enum AiContentDraftType {
+  SUMMARY
+  FLASHCARDS
+  QUIZ
+}
+
+enum AiContentDraftStatus {
+  /// Recién generado por IA. El formador aún no lo ha revisado.
+  DRAFT
+  /// El formador aprobó el draft. Listeners pueden ingerirlo en otros
+  /// módulos (ej. mod.assessments crea ModAssessmentsQuiz desde un QUIZ).
+  PUBLISHED
+  /// El formador descartó el draft. Mantenemos el row para auditoría +
+  /// telemetría de calidad IA (si muchos drafts se rechazan, hay que
+  /// ajustar prompt o provider).
+  REJECTED
+}
+
+/// Borrador de contenido formativo generado por IA. Pertenece a una lección
+/// y, opcionalmente, a un curso (cacheado para listings rápidos sin JOIN).
+/// El contenido va en JSON con shape distinto por type:
+///   - SUMMARY:    { text }
+///   - FLASHCARDS: { cards: [{ front, back }] }
+///   - QUIZ:       { questions: [{ prompt, options?, answer, explanation? }] }
+model ModAiContentDraft {
+  id           String               @id @default(uuid()) @db.Uuid
+  tenantId     String               @map("tenant_id") @db.Uuid
+  /// IDs lógicos sin FK cross-module.
+  lessonId     String               @map("lesson_id") @db.Uuid
+  courseId     String               @map("course_id") @db.Uuid
+  /// Quién pidió generarlo (formador). Auditoría.
+  requestedBy  String               @map("requested_by") @db.Uuid
+  type         AiContentDraftType
+  status       AiContentDraftStatus @default(DRAFT)
+  content      Json                 @default("{}")
+  /// Provider/model usado al generar — útil para reportes de calidad y
+  /// reproducibilidad si en el futuro se permite "regenerar".
+  provider     String?
+  model        String?
+  inputTokens  Int?                 @map("input_tokens")
+  outputTokens Int?                 @map("output_tokens")
+  reviewedBy   String?              @map("reviewed_by") @db.Uuid
+  reviewedAt   DateTime?            @map("reviewed_at")
+  rejectReason String?              @map("reject_reason")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
+
+  @@index([tenantId, lessonId])
+  @@index([tenantId, status])
+  @@index([courseId])
+  @@map("mod_ai_content_draft")
+}

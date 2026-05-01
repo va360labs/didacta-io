@@ -1,5 +1,11 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { ModuleRegistry } from '@didacta/core-registry';
+import {
+  AiContentService,
+  buildAiContentModule,
+  type LessonTextResolver as AiContentLessonResolver,
+} from '@didacta/mod-ai-content';
+import { extractLessonText, type LessonType } from '@didacta/mod-ai-tutor';
 import { assessmentsModule, AssessmentsService } from '@didacta/mod-assessments';
 import {
   BillingService,
@@ -56,6 +62,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private aiTutorChat?: AiTutorChatService;
   private aiGraderRubric?: AiGraderRubricService;
   private aiGraderSuggestion?: AiGraderSuggestionService;
+  private aiContent?: AiContentService;
   private billing?: BillingService;
   private stripeAdapter?: StripeAdapter;
 
@@ -135,7 +142,78 @@ export class ModuleRegistryService implements OnModuleInit {
       };
     });
 
+    // mod.ai-content: chatFn delega al AI Gateway (mismo patrón ai-tutor /
+    // ai-grader). El resolver lee la lección desde Prisma y aplana el
+    // content JSON via extractLessonText reutilizado de mod.ai-tutor.
+    const aiContentChatFn = async (args: {
+      tenantId: string;
+      system: string;
+      messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+      maxTokens?: number;
+    }) => {
+      const result = await this.aiGateway.chat({
+        tenantId: args.tenantId,
+        input: {
+          system: args.system,
+          messages: args.messages,
+          maxTokens: args.maxTokens,
+        },
+      });
+      return {
+        content: result.content,
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+        provider: result.provider,
+        model: result.model,
+      };
+    };
+    const lessonPrisma = this.factory.getPrisma();
+    const lessonResolver: AiContentLessonResolver = {
+      resolve: async (args: { tenantId: string; lessonId: string }) => {
+        const lesson = await lessonPrisma.modCoursesLesson.findFirst({
+          where: { tenantId: args.tenantId, id: args.lessonId },
+          select: { type: true, title: true, content: true },
+        });
+        if (!lesson) return null;
+        const extracted = extractLessonText({
+          type: lesson.type as LessonType,
+          title: lesson.title,
+          content: (lesson.content as Record<string, unknown>) ?? {},
+        });
+        return { text: extracted.text, title: lesson.title };
+      },
+    };
+    const aiContentPublisher = {
+      publish: async (
+        tenantId: string,
+        actorId: string | null,
+        eventName: string,
+        payload: Record<string, unknown>,
+      ) => {
+        const draftId = (payload as { draftId?: string }).draftId;
+        await this.factory.getEventBus().publish({
+          name: eventName,
+          version: 1,
+          data: payload as never,
+          metadata: {
+            tenantId,
+            userId: actorId ?? undefined,
+            timestamp: new Date().toISOString(),
+            traceId: cryptoRandom(),
+            idempotencyKey: draftId ? `${eventName}:${draftId}` : `${eventName}:${cryptoRandom()}`,
+          },
+        });
+      },
+    };
+    this.aiContent = new AiContentService(
+      prisma,
+      aiContentChatFn,
+      lessonResolver,
+      aiContentPublisher,
+    );
+
     const certificatesModule = buildCertificatesModule(this.certificates);
+    const aiContentModule = buildAiContentModule(this.aiContent);
 
     // mod.billing: el adapter Stripe se construye solo si las ENVs están
     // presentes. Sin Stripe configurado, el módulo no expone su service —
@@ -203,6 +281,7 @@ export class ModuleRegistryService implements OnModuleInit {
       fundaeModule,
       aiTutorModule,
       aiGraderModule,
+      aiContentModule,
       ...(billingModuleOrNull ? [billingModuleOrNull] : []),
     ]);
 
@@ -343,6 +422,11 @@ export class ModuleRegistryService implements OnModuleInit {
 
   isModuleEnabledForTenant(_tenantId: string, _moduleName: string): boolean {
     return true;
+  }
+
+  getAiContentService(): AiContentService {
+    if (!this.aiContent) throw new Error('mod.ai-content no está inicializado');
+    return this.aiContent;
   }
 
   getBillingService(): BillingService {

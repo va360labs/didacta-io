@@ -65,6 +65,9 @@ importers:
       '@didacta/license-sdk':
         specifier: workspace:*
         version: link:../../packages/license-sdk
+      '@didacta/mod-ai-content':
+        specifier: workspace:*
+        version: link:../../modules/ai-content
       '@didacta/mod-ai-grader':
         specifier: workspace:*
         version: link:../../modules/ai-grader
@@ -328,6 +331,25 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
+
+  modules/ai-content:
+    dependencies:
+      '@didacta/core-kernel':
+        specifier: workspace:*
+        version: link:../../packages/core-kernel
+      '@didacta/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.17
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
         version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
 
   modules/ai-grader:
