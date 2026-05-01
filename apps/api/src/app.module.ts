@@ -18,6 +18,7 @@ import { ScimModule } from './scim/scim.module';
 import { SsoOidcModule } from './sso/oidc/oidc.module';
 import { SsoSamlModule } from './sso/saml/saml.module';
 import { TenancyModule } from './tenancy/tenancy.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
   imports: [
@@ -88,6 +89,10 @@ import { TenancyModule } from './tenancy/tenancy.module';
     // parser está registrado en main.ts) y admin bajo /api/v1/admin/sso/saml/*
     // (en AdminModule). El cert IdP es público; no se cifra.
     SsoSamlModule,
+    // 10º piloto License SDK — gate feat:api.webhooks.high_throughput.
+    // CRUD endpoints CE + envío naive síncrono. Path EE (BullMQ + HMAC +
+    // dead-letter) gateado por capability en runtime.
+    WebhooksModule,
     HealthModule,
   ],
 })

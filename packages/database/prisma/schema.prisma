@@ -47,7 +47,8 @@ model Tenant {
   auditLogs       AuditLog[]
   evidenceEntries EvidenceVaultEntry[]
   outboxEvents    OutboxEvent[]
-  webhooks        Webhook[]
+  webhookEndpoints WebhookEndpoint[]
+  webhookDeadLetters WebhookDeadLetter[]
   notifTemplates  NotificationTemplate[]
   tenantSettings  TenantSetting[]
   domains         TenantDomain[]
@@ -369,21 +370,59 @@ model OutboxEvent {
   @@map("outbox_event")
 }
 
-model Webhook {
-  id             String    @id @default(uuid()) @db.Uuid
-  tenantId       String    @map("tenant_id") @db.Uuid
-  url            String
-  events         String[]
-  secretHash     String    @map("secret_hash")
-  enabled        Boolean   @default(true)
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-  lastDeliveryAt DateTime? @map("last_delivery_at")
+// ============================================================================
+// WEBHOOKS SALIENTES — 10º piloto License SDK (`feat:api.webhooks.high_throughput`)
+// ----------------------------------------------------------------------------
+// Endpoints de webhook que el tenant configura para recibir notificaciones
+// outbound de eventos de la plataforma (enrollment.created, course.completed,
+// etc.). Tier community = envío naive síncrono con 1 reintento. Tier
+// enterprise = cola BullMQ + reintentos exponenciales + HMAC + dead-letter.
+// El bus de eventos publica al outbox (tabla `outbox_event`); un bridge
+// suscribe handlers que reenvían a estos endpoints según los eventos a los
+// que cada uno está suscrito (campo `eventTypes`).
+// ============================================================================
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+model WebhookEndpoint {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  url        String
+  /// Secret en plano para HMAC-SHA256 (path EE) y para reentregarlo al
+  /// admin en la respuesta de POST/PUT (one-shot, ver controller). NO se
+  /// usa en hash — es el secret real. RLS aísla por tenant_id.
+  secret     String
+  /// Lista de eventos a los que este endpoint está suscrito. Si está vacío
+  /// o contiene `'*'`, recibe todos. La validación de límites de cantidad
+  /// la hace el service (community = 3 max, EE = ilimitado).
+  eventTypes String[] @map("event_types")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
-  @@index([tenantId, enabled])
-  @@map("webhook")
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, url])
+  @@index([tenantId, active])
+  @@map("webhook_endpoint")
+}
+
+model WebhookDeadLetter {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  /// FK lógica a `webhook_endpoint.id`. NO declaramos FK física para evitar
+  /// CASCADE on delete — preferimos preservar el dead-letter histórico aunque
+  /// el endpoint se borre (auditoría / análisis postmortem).
+  endpointId String   @map("endpoint_id") @db.Uuid
+  eventType  String   @map("event_type")
+  payload    Json
+  lastError  String   @map("last_error")
+  attempts   Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([endpointId])
+  @@map("webhook_dead_letter")
 }
 
 // ============================================================================

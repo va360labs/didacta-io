@@ -164,6 +164,11 @@ function buildGroups({
       // ofrece upsell a Enterprise sin tener que llamar a ventas. El gate
       // EE solo aplica al botón de upgrade dentro de la página.
       { href: '/admin/rate-limit', label: 'Límites API', icon: 'trending' },
+      // "Webhooks API" — 10º piloto License SDK (gate
+      // `feat:api.webhooks.high_throughput`). El item es SIEMPRE visible:
+      // CRUD endpoints es funcional en community con límites estrictos
+      // (1 endpoint, 3 eventos), y EE desbloquea cola BullMQ + HMAC + DLQ.
+      { href: '/admin/webhooks', label: 'Webhooks API', icon: 'package' },
     ],
   };
 
