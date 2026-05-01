@@ -3,6 +3,7 @@
 > 📚 **El LMS de nueva generación. Open-source, modular y listo para Fundae.**
 
 [![Docker](https://img.shields.io/badge/docker-hub-blue)](https://hub.docker.com/r/didactaio/community)
+[![License](https://img.shields.io/badge/license-Sustainable%20Use%201.0-orange)](LICENSE)
 [![Versioning](https://img.shields.io/badge/versioning-SemVer-green)](docs/versioning.md)
 [![Stage](https://img.shields.io/badge/stage-alpha-red)](docs/alpha/INSTALL.md)
 [![Web](https://img.shields.io/badge/web-didacta.io-black)](https://didacta.io)
@@ -140,13 +141,13 @@ Detalles y precios: [didacta.io](https://didacta.io).
 
 ## Modelo de licencias
 
-> ⚠️ **Aviso importante (pendiente de armonización)**: la landing pública en [didacta.io](https://didacta.io) anuncia GPL v3, mientras que los archivos `LICENSE` / `LICENSE_EE` de este repo aplican Sustainable Use License + Enterprise License. Hasta que se publique la versión final del modelo legal, **rige lo que dicen los archivos `LICENSE` y `LICENSE_EE` de este repo, no la landing**. Si necesitas una respuesta firme antes de desplegar, escribe a [legal@va360labs.com](mailto:legal@va360labs.com).
+Didacta es **fair-code**: source-available, uso interno empresarial libre, distribución comercial / SaaS de terceros bajo acuerdo. Modelo Open-Core con capabilities Enterprise blindadas:
 
-- Repo + módulos: ver [`LICENSE`](LICENSE) y resumen humano en [`LICENSE_NOTICE.md`](LICENSE_NOTICE.md).
-- Capabilities Enterprise (archivos `*.ee.*` dentro del CORE): ver [`LICENSE_EE`](LICENSE_EE).
-- FAQ de licencias: [`docs/licensing/faq.md`](docs/licensing/faq.md).
-- Política de uso comercial: [`COMMERCIAL_USE.md`](COMMERCIAL_USE.md).
-- Marca registrada: [`TRADEMARKS.md`](TRADEMARKS.md).
+- **Repo + módulos**: [Didacta Sustainable Use License v1.0](LICENSE) (fair-code, adaptada de n8n SUL). Permite uso interno empresarial libre. Distribución comercial / SaaS / white-label requiere acuerdo con VA360 LABS S.L.
+- **Capabilities Enterprise** (archivos `*.ee.*` dentro del CORE): [Didacta Enterprise License](LICENSE_EE). Requieren licencia firmada activa para usarse en producción.
+- **Cloud**: SaaS gestionado por VA360 (`cloud.didacta.io`).
+
+Resumen humano: [`LICENSE_NOTICE.md`](LICENSE_NOTICE.md). FAQ: [`docs/licensing/faq.md`](docs/licensing/faq.md). Política de uso comercial: [`COMMERCIAL_USE.md`](COMMERCIAL_USE.md). Marca registrada: [`TRADEMARKS.md`](TRADEMARKS.md).
 
 ## Documentación
 
@@ -169,6 +170,8 @@ Detalles y precios: [didacta.io](https://didacta.io).
 
 ## Licencia
 
-Ver [`LICENSE`](LICENSE) y la nota de aviso bajo "Modelo de licencias" arriba.
+Didacta Community © 2026 VA360 LABS S.L. — distribuido bajo [Didacta Sustainable Use License v1.0](LICENSE) (fair-code).
+
+Capabilities Enterprise: [Didacta Enterprise License](LICENSE_EE).
 
 Didacta™ es marca registrada de VA360 LABS S.L. Ver [`TRADEMARKS.md`](TRADEMARKS.md).
