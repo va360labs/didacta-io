@@ -23,9 +23,28 @@ export interface CreateTenantInput {
   primaryHostname: string;
 }
 
+/**
+ * Capacidad multi-tenant (11º piloto License SDK · `feat:multi_tenant.real`).
+ * Lo consume `/admin/tenants` para decidir botón Crear vs upsell card.
+ */
+export interface TenantCapacityInfo {
+  tenantCount: number;
+  limit: number | null;
+  capabilityActive: boolean;
+  capability: 'feat:multi_tenant.real';
+  canCreate: boolean;
+}
+
 export const adminTenantsApi = {
   async list(bearer: string): Promise<TenantListItem[]> {
     return apiFetch<TenantListItem[]>('/api/v1/admin/tenants', { method: 'GET' }, bearer);
+  },
+  async capacity(bearer: string): Promise<TenantCapacityInfo> {
+    return apiFetch<TenantCapacityInfo>(
+      '/api/v1/admin/tenants/capacity',
+      { method: 'GET' },
+      bearer,
+    );
   },
   async getOne(bearer: string, id: string): Promise<TenantListItem> {
     return apiFetch<TenantListItem>(`/api/v1/admin/tenants/${id}`, { method: 'GET' }, bearer);

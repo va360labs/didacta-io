@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { LICENSE_CAPABILITIES, LicenseService } from '@didacta/license-sdk';
 import type { ClientContext } from '../auth/client-context';
 import { PasswordResetService } from '../auth/password-reset.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
@@ -27,6 +28,28 @@ export interface TenantListItem {
 }
 
 /**
+ * Información de capacidad multi-tenant para el panel super_admin.
+ *
+ * Semántica del 11º piloto License SDK (`feat:multi_tenant.real`):
+ *  - Sin licencia EE: 1 tenant ACTIVE/SUSPENDED por instancia (el que creó
+ *    el setup wizard al primer arranque). Crear un 2º devuelve 402.
+ *  - Con licencia EE: ilimitado (limit = null).
+ *  - `tenantCount` cuenta los tenants no soft-deleted (archivados sí cuentan
+ *    porque siguen siendo recursos del tenant pool).
+ */
+export interface TenantCapacityInfo {
+  tenantCount: number;
+  /** null = ilimitado (EE activo). number = cap aplicado en CE. */
+  limit: number | null;
+  capabilityActive: boolean;
+  capability: 'feat:multi_tenant.real';
+  canCreate: boolean;
+}
+
+/** Capacidad CE: 1 tenant por instancia (el del setup wizard). */
+const COMMUNITY_TENANT_LIMIT = 1;
+
+/**
  * Servicio CRUD para super_admin sobre la tabla `tenant`.
  *
  * HU-SA-001: alta de tenant + suspensión + asignación de dominios.
@@ -44,8 +67,32 @@ export class AdminTenantsService {
     private readonly prisma: PrismaService,
     private readonly auditLog: PrismaAuditLogService,
     private readonly passwordReset: PasswordResetService,
+    private readonly license: LicenseService,
     private readonly logger: PinoLogger,
   ) {}
+
+  /**
+   * Calcula si el operador puede crear un tenant adicional. Lo consume el
+   * panel `/admin/tenants` para decidir entre mostrar el botón "Crear" o
+   * el upsell card de Enterprise.
+   *
+   * El backend SIEMPRE re-comprueba dentro de `create()` — esto solo es UX.
+   */
+  async getCapacityInfo(): Promise<TenantCapacityInfo> {
+    const tenantCount = await this.prisma.tenant.count({ where: { deletedAt: null } });
+    const capabilityActive = this.license.isCapabilityEnabled(
+      LICENSE_CAPABILITIES.MULTI_TENANT_REAL,
+    );
+    const limit = capabilityActive ? null : COMMUNITY_TENANT_LIMIT;
+    const canCreate = capabilityActive ? true : tenantCount < COMMUNITY_TENANT_LIMIT;
+    return {
+      tenantCount,
+      limit,
+      capabilityActive,
+      capability: LICENSE_CAPABILITIES.MULTI_TENANT_REAL,
+      canCreate,
+    };
+  }
 
   async list(): Promise<TenantListItem[]> {
     const tenants = await this.prisma.tenant.findMany({
@@ -130,6 +177,16 @@ export class AdminTenantsService {
     const hostname = dto.primaryHostname.trim().toLowerCase();
     if (!HOSTNAME_RE.test(hostname)) {
       throw new BadRequestException('Hostname inválido.');
+    }
+
+    // 11º piloto License SDK · `feat:multi_tenant.real`. La instancia community
+    // permite UN tenant (el que crea el setup wizard al primer arranque).
+    // Crear un 2º requiere licencia EE — sin ella, lanzamos
+    // CapabilityRequiredError → el LicenseExceptionFilter lo serializa a
+    // 402 Payment Required con `{ capability: "feat:multi_tenant.real" }`.
+    const currentCount = await this.prisma.tenant.count({ where: { deletedAt: null } });
+    if (currentCount >= COMMUNITY_TENANT_LIMIT) {
+      this.license.requireCapability(LICENSE_CAPABILITIES.MULTI_TENANT_REAL);
     }
 
     const existingSlug = await this.prisma.tenant.findUnique({ where: { slug: dto.slug } });

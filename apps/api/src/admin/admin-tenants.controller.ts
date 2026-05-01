@@ -62,6 +62,16 @@ export class AdminTenantsController {
     return this.service.list();
   }
 
+  @Get('capacity')
+  @ApiOperation({
+    summary:
+      '11º piloto License SDK — informa cuántos tenants hay y si la licencia EE permite crear más (feat:multi_tenant.real). Solo super_admin.',
+  })
+  async capacity(@CurrentUser() user: SessionClaims | undefined) {
+    requireSuperAdmin(user);
+    return this.service.getCapacityInfo();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Detalle de un tenant. Solo super_admin.' })
   async getOne(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {

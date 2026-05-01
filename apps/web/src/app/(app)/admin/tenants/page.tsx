@@ -11,6 +11,7 @@ import { ApiHttpError } from '@/lib/api-client';
 import {
   adminTenantsApi,
   STATUS_LABELS,
+  type TenantCapacityInfo,
   type TenantListItem,
   type TenantStatus,
 } from '@/lib/admin-tenants';
@@ -24,6 +25,7 @@ const VARIANT: Record<TenantStatus, 'success' | 'danger' | 'muted'> = {
 
 export default function TenantsPage() {
   const [items, setItems] = useState<TenantListItem[] | null>(null);
+  const [capacity, setCapacity] = useState<TenantCapacityInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function reload() {
@@ -31,7 +33,12 @@ export default function TenantsPage() {
     if (!token) return;
     try {
       setError(null);
-      setItems(await adminTenantsApi.list(token));
+      const [list, cap] = await Promise.all([
+        adminTenantsApi.list(token),
+        adminTenantsApi.capacity(token),
+      ]);
+      setItems(list);
+      setCapacity(cap);
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los tenants.');
     }
@@ -51,10 +58,19 @@ export default function TenantsPage() {
             dominios custom.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/admin/tenants/nuevo">Crear tenant</Link>
-        </Button>
+        {capacity?.canCreate ? (
+          <Button asChild>
+            <Link href="/admin/tenants/nuevo">Crear tenant</Link>
+          </Button>
+        ) : capacity ? (
+          <Button disabled title="Tu plan community ya tiene un tenant. Activa Enterprise para añadir más.">
+            <Icon name="lock" size={16} />
+            Crear tenant
+          </Button>
+        ) : null}
       </header>
+
+      {capacity ? <CapacityBanner capacity={capacity} /> : null}
 
       {error ? (
         <div
@@ -137,5 +153,85 @@ export default function TenantsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Banner de capacidad multi-tenant. En CE muestra el cap (1 tenant) y un
+ * upsell inline; en EE muestra el contador y "ilimitado".
+ */
+function CapacityBanner({ capacity }: { capacity: TenantCapacityInfo }) {
+  if (capacity.capabilityActive) {
+    return (
+      <Card className="border-success-200 bg-success-50">
+        <CardContent className="flex items-center gap-3 p-4 text-sm">
+          <Icon name="shield" size={18} aria-hidden="true" />
+          <div className="flex-1">
+            <strong>Enterprise · multi-tenant activo.</strong> Tenants actuales:{' '}
+            <span className="tabular-nums">{capacity.tenantCount}</span> · sin límite.
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (capacity.canCreate) {
+    return (
+      <Card>
+        <CardContent className="p-4 text-sm text-text-muted">
+          Plan community · usás <strong className="tabular-nums">{capacity.tenantCount}</strong> de{' '}
+          <strong>{capacity.limit}</strong> tenants. Activá Enterprise para crear varias
+          organizaciones aisladas en esta misma instancia.
+        </CardContent>
+      </Card>
+    );
+  }
+  return <MultiTenantUpsellCard capacity={capacity} />;
+}
+
+/**
+ * Tarjeta de upsell para community que ya tiene 1 tenant y quiere crear más.
+ * Sigue el patrón de `CustomDomainsUpsellCard` y `WhiteLabelUpsellCard`.
+ *
+ * Recordatorio: el backend rechaza `POST /admin/tenants` con 402 cuando se
+ * supera el cap sin licencia EE — esto es solo UX.
+ */
+export function MultiTenantUpsellCard({ capacity }: { capacity: TenantCapacityInfo }) {
+  return (
+    <Card
+      role="region"
+      aria-label="Multi-tenant real (Enterprise)"
+      className="border-dashed"
+    >
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Icon name="lock" size={18} />
+          Multi-tenant real — función Enterprise
+        </CardTitle>
+        <CardDescription>
+          Tu plan community tiene <strong>{capacity.tenantCount}</strong> de{' '}
+          <strong>{capacity.limit}</strong> tenants. Para alojar varias organizaciones aisladas en
+          la misma instancia (datos, usuarios, cursos y dominios separados), activá Enterprise.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-text-muted">
+          La capability requerida es{' '}
+          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">
+            feat:multi_tenant.real
+          </code>
+          . Si tu licencia Enterprise expira o se revoca, los tenants existentes se conservan, pero
+          NO se pueden crear nuevos hasta renovar.
+        </p>
+        <a
+          href="https://didacta.io/pricing"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+        >
+          Ver planes Enterprise
+          <Icon name="arrow-right" size={14} />
+        </a>
+      </CardContent>
+    </Card>
   );
 }
