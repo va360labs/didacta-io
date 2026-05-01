@@ -59,6 +59,7 @@ import { FundaeGroupParticipantsController } from './fundae-group-participants.c
 import { FundaeRlptController } from './fundae-rlpt.controller';
 import { FundaeErrorFilter } from './fundae-error.filter';
 import { CommunityDigestWorker } from './community-digest.worker';
+import { SubscriptionsGraceExpirationWorker } from './subscriptions-grace-expiration.worker';
 import {
   CommunityDigestMetrics,
   communityDigestMetricsProviders,
@@ -109,6 +110,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     ModuleRegistryService,
     OutboxRecoveryWorker,
     CommunityDigestWorker,
+    SubscriptionsGraceExpirationWorker,
     AssessmentsLearningBridge,
     NotificationsBridge,
     AiTutorBridge,

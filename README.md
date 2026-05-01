@@ -30,11 +30,11 @@ Si se descarga sin pedir credenciales, ya puedes seguir cualquiera de los dos ca
 
 Solo **3 variables de entorno** son estrictamente obligatorias para arrancar. El resto tienen valores por defecto razonables o se inyectan desde el compose. El conjunto completo está documentado en [`.env.example`](.env.example).
 
-| Variable       | Qué es                                                            | Cómo generarla                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| -------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL` | Connection string de Postgres 16 con la extensión `pgvector` instalada. | Apunta a tu Postgres. Para compose: `postgresql://didacta:didacta_dev@postgres:5432/didacta?schema=public`.                                                                                                                                                                                                                                                                                                                             |
-| `REDIS_URL`    | Connection string de Redis 7.                                     | Apunta a tu Redis. Para compose: `redis://redis:6379`.                                                                                                                                                                                                                                                                                                                                                                                  |
-| `AUTH_SECRET`  | Secreto para firmar sesiones y cookies. Mínimo 32 caracteres.     | Cualquier cadena aleatoria de **32+ caracteres** sirve. Opciones: 1) un generador online de contraseñas con longitud 40+; 2) un gestor de contraseñas como 1Password o Bitwarden → "Generar contraseña" de 40 caracteres; 3) `openssl rand -base64 32`; 4) `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Lo importante: que sea aleatoria y que la guardes. Si la cambias, todas las sesiones se invalidan. |
+| Variable       | Qué es                                                                  | Cómo generarla                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| -------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL` | Connection string de Postgres 16 con la extensión `pgvector` instalada. | Apunta a tu Postgres. Para compose: `postgresql://didacta:didacta_dev@postgres:5432/didacta?schema=public`.                                                                                                                                                                                                                                                                                                                                  |
+| `REDIS_URL`    | Connection string de Redis 7.                                           | Apunta a tu Redis. Para compose: `redis://redis:6379`.                                                                                                                                                                                                                                                                                                                                                                                       |
+| `AUTH_SECRET`  | Secreto para firmar sesiones y cookies. Mínimo 32 caracteres.           | Cualquier cadena aleatoria de **32+ caracteres** sirve. Opciones: 1) un generador online de contraseñas con longitud 40+; 2) un gestor de contraseñas como 1Password o Bitwarden → "Generar contraseña" de 40 caracteres; 3) `openssl rand -base64 32`; 4) `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Lo importante: que sea aleatoria y que la guardes. Si la cambias, todas las sesiones se invalidan. |
 
 ## Camino A — Docker Compose
 
@@ -79,12 +79,12 @@ docker compose -f docker-compose.alpha.yml ps
 
 El compose declara cuatro volúmenes nombrados que sobreviven a `down`/`up` y reinicios:
 
-| Volumen         | Qué guarda                                                                                                                 |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `postgres_data` | Toda la base de datos.                                                                                                     |
-| `redis_data`    | Cola persistente (`appendonly yes`) — outbox + jobs.                                                                       |
+| Volumen         | Qué guarda                                                                                                                       |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `postgres_data` | Toda la base de datos.                                                                                                           |
+| `redis_data`    | Cola persistente (`appendonly yes`) — outbox + jobs.                                                                             |
 | `didacta_data`  | Storage local de la aplicación: uploads de cursos, certificados y evidencias + clave de cifrado autogenerada para datos at-rest. |
-| `minio_data`    | Solo si activas el profile `s3`. Guarda los buckets de MinIO.                                                              |
+| `minio_data`    | Solo si activas el profile `s3`. Guarda los buckets de MinIO.                                                                    |
 
 **Importante**: `docker compose down -v` borra los volúmenes y, por tanto, los datos. Para detener sin borrar, usa `docker compose down` sin `-v`.
 
@@ -157,11 +157,11 @@ curl -fsS http://localhost:4000/healthz     # debe responder 200
 
 **Variables opcionales útiles** — conjunto completo en [`.env.example`](.env.example):
 
-| Variable                                                        | Para qué                                                                                     |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`    | Storage S3-compatible: MinIO, AWS, Hetzner, etc. Obligatorio para subida de contenido.       |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Envío de emails transaccionales. Sin esto, los emails se registran en logs pero no se envían. |
-| `DIDACTA_LICENSE_KEY`                                           | JWT firmado por Didacta para activar capabilities Enterprise. Sin esto, modo Community puro. |
+| Variable                                                        | Para qué                                                                                       |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`    | Storage S3-compatible: MinIO, AWS, Hetzner, etc. Obligatorio para subida de contenido.         |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Envío de emails transaccionales. Sin esto, los emails se registran en logs pero no se envían.  |
+| `DIDACTA_LICENSE_KEY`                                           | JWT firmado por Didacta para activar capabilities Enterprise. Sin esto, modo Community puro.   |
 | `METRICS_TOKEN`                                                 | Bearer token para proteger `/metrics` en Prometheus. Si está vacío, el endpoint queda público. |
 
 ## Sobre el proyecto
@@ -179,10 +179,10 @@ Más información y demo en vivo: [didacta.io](https://didacta.io).
 
 ### Tres ediciones, mismo producto
 
-| Edición                   | Para quién                                                            | Incluye                                                                                                          |
-| ------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **Community** (este repo) | Equipos que despliegan y operan ellos mismos.                         | Todo el código fuente. Comunidad activa de contribuidores.                                                       |
-| **Cloud**                 | Quien quiere arrancar en minutos, sin infraestructura.                | Hosting gestionado, backups automáticos diarios, actualizaciones sin intervención. Desde 20 €/mes.               |
+| Edición                   | Para quién                                                            | Incluye                                                                                                           |
+| ------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Community** (este repo) | Equipos que despliegan y operan ellos mismos.                         | Todo el código fuente. Comunidad activa de contribuidores.                                                        |
+| **Cloud**                 | Quien quiere arrancar en minutos, sin infraestructura.                | Hosting gestionado, backups automáticos diarios, actualizaciones sin intervención. Desde 20 €/mes.                |
 | **Enterprise**            | Organizaciones con SLA, integraciones a medida y partner certificado. | Account manager dedicado, onboarding guiado, integraciones con sistemas existentes, infraestructura monitorizada. |
 
 Detalles y precios: [didacta.io](https://didacta.io).

@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   Post,
   UnauthorizedException,
@@ -16,6 +17,7 @@ import type { SessionClaims } from '../auth/token.service';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModuleRegistryService } from './module-registry.service';
+import { SubscriptionsGraceExpirationWorker } from './subscriptions-grace-expiration.worker';
 
 /**
  * Endpoints alumno de mod.subscriptions:
@@ -55,6 +57,7 @@ export class SubscriptionsController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly prisma: PrismaService,
+    private readonly graceExpiration: SubscriptionsGraceExpirationWorker,
   ) {}
 
   @Post('checkout/:courseId')
@@ -126,5 +129,22 @@ export class SubscriptionsController {
         actorIsAdmin: false,
       });
     return { subscription: updated };
+  }
+
+  @Post('admin/grace-expiration/run-now')
+  @HttpCode(202)
+  @ApiOperation({
+    summary:
+      'Encola un job manual de expireGracePeriods (PAST_DUE → UNPAID). Solo super_admin (test/QA).',
+  })
+  async runGraceExpirationNow(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.includes('super_admin')) {
+      throw new UnauthorizedException(
+        'Solo super_admin puede disparar grace-expiration manualmente.',
+      );
+    }
+    await this.graceExpiration.triggerNow();
+    return { enqueued: true };
   }
 }
