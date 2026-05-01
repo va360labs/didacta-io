@@ -169,6 +169,9 @@ function buildGroups({
       // CRUD endpoints es funcional en community con límites estrictos
       // (1 endpoint, 3 eventos), y EE desbloquea cola BullMQ + HMAC + DLQ.
       { href: '/admin/webhooks', label: 'Webhooks API', icon: 'package' },
+      // "Pagos" — mod.billing (CE). Vincula cursos a Stripe Price IDs para
+      // que el catálogo abra Checkout. NO es feature EE — sin gate.
+      { href: '/admin/billing/products', label: 'Pagos (Stripe)', icon: 'package' },
     ],
   };
 

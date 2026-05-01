@@ -1,10 +1,14 @@
 'use client';
 
 /**
- * Cliente HTTP de mod.billing para el alumno.
+ * Cliente HTTP de mod.billing.
  *
- * Endpoint vivo:
- *  - POST /api/v1/modules/billing/checkout/:courseId  → arranca Stripe Checkout
+ * Endpoints vivos:
+ *  - POST   /api/v1/modules/billing/checkout/:courseId  → arranca Stripe Checkout (alumno)
+ *  - GET    /api/v1/modules/billing/products            → lista productos del tenant (admin)
+ *  - POST   /api/v1/modules/billing/products            → vincula curso ↔ stripePriceId (admin)
+ *  - PATCH  /api/v1/modules/billing/products/:id        → activar/desactivar / cambiar price (admin)
+ *  - DELETE /api/v1/modules/billing/products/:id        → desvincular producto (admin)
  *
  * El backend construye `success_url` y `cancel_url` por sí mismo a partir de
  * `BILLING_SUCCESS_URL_BASE` / `BILLING_CANCEL_URL_BASE` (ver
@@ -32,7 +36,35 @@ export interface StartCheckoutResult {
   url: string;
 }
 
+/**
+ * Producto admin: vínculo persistido entre un curso del tenant y un
+ * `Stripe Price` concreto. Ver `BillingProductRow` en el service. El
+ * `unitAmount` está en céntimos y `currency` en ISO-4217 minúsculas
+ * (convención Stripe). Usar `formatPrice` para formato humano.
+ */
+export interface BillingProduct {
+  id: string;
+  tenantId: string;
+  courseId: string;
+  stripeProductId: string;
+  stripePriceId: string;
+  unitAmount: number;
+  currency: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BillingProductsListResponse {
+  products: BillingProduct[];
+}
+
+export interface BillingProductResponse {
+  product: BillingProduct;
+}
+
 const BASE = '/api/v1/modules/billing';
+const PRODUCTS = `${BASE}/products`;
 
 export const billingApi = {
   /**
@@ -55,4 +87,53 @@ export const billingApi = {
       accessToken,
     );
   },
+
+  // ---------------- Admin ----------------
+
+  async listProducts(bearer: string): Promise<BillingProductsListResponse> {
+    return apiFetch<BillingProductsListResponse>(PRODUCTS, { method: 'GET' }, bearer);
+  },
+
+  async createProduct(
+    bearer: string,
+    courseId: string,
+    stripePriceId: string,
+  ): Promise<BillingProductResponse> {
+    return apiFetch<BillingProductResponse>(
+      PRODUCTS,
+      { method: 'POST', body: JSON.stringify({ courseId, stripePriceId }) },
+      bearer,
+    );
+  },
+
+  async updateProduct(
+    bearer: string,
+    id: string,
+    patch: { active?: boolean; stripePriceId?: string },
+  ): Promise<BillingProductResponse> {
+    return apiFetch<BillingProductResponse>(
+      `${PRODUCTS}/${id}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+      bearer,
+    );
+  },
+
+  async deleteProduct(bearer: string, id: string): Promise<{ deleted: boolean }> {
+    return apiFetch<{ deleted: boolean }>(`${PRODUCTS}/${id}`, { method: 'DELETE' }, bearer);
+  },
 };
+
+/**
+ * Formatea un unitAmount (céntimos) + currency (ISO-4217 minúsculas) a una
+ * cadena humana. Ej. (9900, 'eur') → "99,00 €".
+ */
+export function formatPrice(unitAmount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat('es-ES', {
+      style: 'currency',
+      currency: currency.toUpperCase(),
+    }).format(unitAmount / 100);
+  } catch {
+    return `${(unitAmount / 100).toFixed(2)} ${currency.toUpperCase()}`;
+  }
+}
