@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AiTutorPanel } from '@/components/ai-tutor-panel';
+import { BuyCourseButton } from '@/components/buy-course-button';
 import { LessonComments } from '@/components/lesson-comments';
 import { LessonPlayer } from '@/components/lesson-player';
 import { Icon } from '@/components/icon';
@@ -338,9 +339,18 @@ export default function CourseAlumnoPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <Button onClick={handleEnroll} disabled={pending} size="lg">
-              {pending ? 'Procesando…' : 'Matricularme'}
-            </Button>
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={handleEnroll} disabled={pending} size="lg">
+                {pending ? 'Procesando…' : 'Matricularme'}
+              </Button>
+              {/*
+                Si tu organización vinculó este curso a un producto Stripe en
+                mod.billing, "Comprar curso" arranca el checkout. Si NO existe
+                producto, el endpoint devuelve 404 BILLING_PRODUCT_NOT_FOUND y
+                BuyCourseButton muestra un mensaje claro al alumno (sin crash).
+              */}
+              <BuyCourseButton courseId={course.id} variant="secondary" size="lg" />
+            </div>
             <form action={handleEnrollByCode} className="space-y-2 border-t border-border pt-5">
               <Label htmlFor="code">¿Tienes un código de invitación?</Label>
               <div className="flex gap-2">
