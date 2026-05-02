@@ -8,6 +8,8 @@ import { LicenseProvider } from '@/components/license-provider';
 import { NotificationsBell } from '@/components/notifications-bell';
 import { TenantThemeProvider } from '@/components/tenant-theme-provider';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
+import { meApi } from '@/lib/me';
+import { filterByActiveModules } from '@/lib/sidebar-modules-filter';
 
 /**
  * Shell de la app autenticada — sidebar persistente Didacta + main canvas.
@@ -72,10 +74,36 @@ function Shell({
   );
   const isSuperAdmin = session.user.roles.includes('super_admin');
 
-  const groups = buildGroups({
+  // Módulos activos para el tenant del usuario. Mientras está null (primer
+  // render) no filtramos — el sidebar se pinta completo y se reordena al
+  // resolver la promesa. El backend sigue gateando con ModuleAccessInterceptor
+  // aunque el usuario haga clic antes de que llegue la respuesta.
+  const [activeModules, setActiveModules] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    let cancelled = false;
+    meApi
+      .getMyModules(token)
+      .then((res) => {
+        if (!cancelled) setActiveModules(new Set(res.activeModules));
+      })
+      .catch(() => {
+        // Si falla (red, 401 expirado, módulo registry indisponible), dejamos
+        // null para no romper el sidebar — el usuario verá items que tal vez
+        // no tengan módulo activo y el backend devolverá 403 al click.
+        if (!cancelled) setActiveModules(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const allGroups = buildGroups({
     isAdminOrFormador,
     isSuperAdmin,
   });
+  const groups = filterByActiveModules(allGroups, activeModules);
 
   return (
     <div className="flex min-h-dvh bg-bg-subtle">
@@ -117,9 +145,19 @@ function buildGroups({
     label: 'Aprendizaje',
     items: [
       { href: '/cursos', label: 'Catálogo', icon: 'book' },
-      { href: '/comunidad', label: 'Comunidad', icon: 'users' },
-      { href: '/comunidad/menciones', label: 'Mis menciones', icon: 'message' },
-      { href: '/mis-certificados', label: 'Mis certificados', icon: 'award' },
+      { href: '/comunidad', label: 'Comunidad', icon: 'users', requiresModule: 'mod.community' },
+      {
+        href: '/comunidad/menciones',
+        label: 'Mis menciones',
+        icon: 'message',
+        requiresModule: 'mod.community',
+      },
+      {
+        href: '/mis-certificados',
+        label: 'Mis certificados',
+        icon: 'award',
+        requiresModule: 'mod.certificates',
+      },
       { href: '/notificaciones', label: 'Notificaciones', icon: 'bell' },
     ],
   };
@@ -142,9 +180,24 @@ function buildGroups({
     items: [
       { href: '/formador', label: 'Panel', icon: 'home', exactMatch: true },
       { href: '/formador/cursos', label: 'Mis cursos', icon: 'book' },
-      { href: '/formador/aula-virtual', label: 'Aula virtual', icon: 'calendar' },
-      { href: '/formador/correcciones', label: 'Correcciones', icon: 'check' },
-      { href: '/formador/certificados/templates', label: 'Plantillas certificado', icon: 'award' },
+      {
+        href: '/formador/aula-virtual',
+        label: 'Aula virtual',
+        icon: 'calendar',
+        requiresModule: 'mod.zoom-live',
+      },
+      {
+        href: '/formador/correcciones',
+        label: 'Correcciones',
+        icon: 'check',
+        requiresModule: 'mod.ai-grader',
+      },
+      {
+        href: '/formador/certificados/templates',
+        label: 'Plantillas certificado',
+        icon: 'award',
+        requiresModule: 'mod.certificates',
+      },
     ],
   };
 
@@ -156,7 +209,7 @@ function buildGroups({
       { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
       { href: '/admin/branding', label: 'Branding', icon: 'palette' },
       { href: '/admin/seguridad', label: 'Seguridad', icon: 'lock' },
-      { href: '/admin/fundae', label: 'Fundae', icon: 'file' },
+      { href: '/admin/fundae', label: 'Fundae', icon: 'file', requiresModule: 'mod.fundae' },
       { href: '/admin/auditoria', label: 'Auditoría', icon: 'shield' },
       // "Límites API" — sexto piloto License SDK (gate
       // `feat:api.rate_limit.elevated`). El item es SIEMPRE visible: la
@@ -170,8 +223,14 @@ function buildGroups({
       // (1 endpoint, 3 eventos), y EE desbloquea cola BullMQ + HMAC + DLQ.
       { href: '/admin/webhooks', label: 'Webhooks API', icon: 'package' },
       // "Pagos" — mod.billing (CE). Vincula cursos a Stripe Price IDs para
-      // que el catálogo abra Checkout. NO es feature EE — sin gate.
-      { href: '/admin/billing/products', label: 'Pagos (Stripe)', icon: 'package' },
+      // que el catálogo abra Checkout. NO es feature EE — sin gate de
+      // capability. SÍ se filtra por módulo activo (mod.billing).
+      {
+        href: '/admin/billing/products',
+        label: 'Pagos (Stripe)',
+        icon: 'package',
+        requiresModule: 'mod.billing',
+      },
     ],
   };
 

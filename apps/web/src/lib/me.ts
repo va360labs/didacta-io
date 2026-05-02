@@ -73,6 +73,21 @@ export const meApi = {
       bearer,
     );
   },
+  /**
+   * Sidebar gating: módulos activos del tenant + capabilities EE de la
+   * instancia. Lo consume el layout para filtrar items condicionados a
+   * `requiresModule`. Las capabilities EE NO se usan para ocultar — siguen
+   * el patrón EeGate (visible-pero-bloqueado).
+   */
+  async getMyModules(
+    bearer: string,
+  ): Promise<{ activeModules: string[]; enabledCapabilities: string[] }> {
+    return apiFetch<{ activeModules: string[]; enabledCapabilities: string[] }>(
+      '/api/v1/me/modules',
+      { method: 'GET' },
+      bearer,
+    );
+  },
 };
 
 const TIMEZONE_GROUPS: Record<string, string[]> = {

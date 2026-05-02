@@ -11,6 +11,13 @@ export interface SidebarItem {
   icon: IconName;
   badge?: number;
   exactMatch?: boolean;
+  /**
+   * Si está presente y el módulo NO está activo en el tenant, el item se
+   * oculta del sidebar. NO confundir con capabilities EE: estas siguen el
+   * patrón EeGate (visible-pero-bloqueado, ver docs/UI-EE-GATING.md).
+   * El filtrado lo aplica el layout antes de pasar `groups` al sidebar.
+   */
+  requiresModule?: string;
 }
 
 export interface SidebarGroup {

@@ -46,6 +46,7 @@ import { ScormLearningBridge } from './scorm-learning.bridge';
 import { StorageController } from './storage.controller';
 import { TenantModulesService } from './tenant-modules.service';
 import { TenantModulesErrorFilter } from './tenant-modules-error.filter';
+import { MeModulesController } from './me-modules.controller';
 import { TenantSettingsController } from './tenant-settings.controller';
 import { ThemingController } from './theming.controller';
 import { ThemingErrorFilter } from './theming-error.filter';
@@ -99,6 +100,8 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     BillingAdminController,
     SubscriptionsController,
     SubscriptionsWebhookController,
+    // GET /me/modules — sidebar gating UI (módulos activos + capabilities EE).
+    MeModulesController,
   ],
   providers: [
     ...communityDigestMetricsProviders,
