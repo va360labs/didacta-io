@@ -272,6 +272,13 @@ function buildGroups({
       { href: '/admin/fundae', label: 'Fundae', icon: 'file', requiresModule: 'mod.fundae' },
     ],
   };
+  if (isSuperAdmin) {
+    integraciones.items.push({
+      href: '/admin/marketplace',
+      label: 'Marketplace módulos',
+      icon: 'package',
+    });
+  }
 
   const facturacion: SidebarGroup = {
     label: 'Facturación',
