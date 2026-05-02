@@ -2141,3 +2141,94 @@ model ModAiContentDraft {
   @@index([courseId])
   @@map("mod_ai_content_draft")
 }
+
+// ============================================================================
+// MARKETPLACE — registro de módulos instalados a nivel instancia (ADR-009)
+// ============================================================================
+//
+// Esta tabla NO lleva tenantId: la instalación de un módulo es global a la
+// instancia. La activación per-tenant sigue viviendo en `tenant_module`.
+//
+// Un row se crea cuando un super_admin sube un *.didactamod. Los pasos del
+// flujo (verify firma → extract → migrate → boot VM) van actualizando
+// `status`. El paquete original se persiste en object storage (clave en
+// `package_storage_key`) para permitir reinstalación en otra réplica del
+// mismo deploy o rollback.
+//
+// Vendor 'VA360' = paquete firmado por VA360 (clave pública confiada por la
+// instancia). 'COMMUNITY' queda reservado para el marketplace de terceros
+// (Fase 2+, ADR pendiente).
+
+enum InstalledModuleVendor {
+  VA360
+  COMMUNITY
+}
+
+enum InstalledModuleStatus {
+  /// El paquete fue subido y validado pero la instalación aún no terminó.
+  /// Estados intermedios del pipeline (extract → migrate → boot).
+  INSTALLING
+  /// Instalado y activo en la instancia. Aparece en `module` para que cada
+  /// tenant decida si lo activa via `/admin/modules`.
+  INSTALLED
+  /// Instalación falló en alguna fase. `error_message` lleva el detalle.
+  /// Row se mantiene para postmortem; un retry crea un row nuevo.
+  FAILED
+  /// Versión anterior tras un upgrade exitoso. Permite revert ≤ 24h.
+  /// Después se purga del disco; el row queda como histórico.
+  DEPRECATED
+}
+
+model InstalledModule {
+  id           String                @id @default(uuid()) @db.Uuid
+  /// Slug del módulo (ej. "mod.gamification"). Único por instancia, una sola
+  /// versión activa a la vez. Para upgrade in-place se actualiza el row.
+  name         String                @unique
+  version      String
+  /// Versión anterior si este row es resultado de un upgrade. Permite revert.
+  prevVersion  String?               @map("prev_version")
+  vendor       InstalledModuleVendor
+  displayName  String                @map("display_name")
+  description  String?
+  /// Manifest del módulo serializado (ADR-008 + extensiones ADR-009).
+  /// Se persiste tal cual viene en el ZIP para auditoría y para diff entre
+  /// versiones tras un upgrade.
+  manifestJson Json                  @map("manifest_json")
+  /// Firma RSA-PSS-SHA256 base64 del manifest. La instancia la verifica
+  /// contra la clave pública del vendor confiado antes de aceptar el ZIP.
+  signatureB64 String                @map("signature_b64")
+  /// `signedAt` declarado por el publisher. Solo informativo, no se compara
+  /// con el reloj del receiver — los relojes de los clientes self-host no
+  /// son confiables.
+  signedAt     DateTime              @map("signed_at")
+  /// Clave del *.didactamod en object storage de la instancia (S3/MinIO).
+  /// Ejemplo: "modules/mod.gamification-1.2.0.didactamod".
+  packageStorageKey String            @map("package_storage_key")
+  /// Hash SHA-256 hex del paquete. Verificado al re-leerlo del storage.
+  packageSha256     String            @map("package_sha256")
+  /// Tamaño en bytes; útil para listados sin abrir el ZIP.
+  packageSizeBytes  Int               @map("package_size_bytes")
+  /// Restricciones runtime del manifest (cacheadas como columnas para query
+  /// rápido). El contenido autoritativo sigue en `manifestJson`.
+  coreVersionRequired String          @map("core_version_required")
+  tablePrefix         String          @map("table_prefix")
+  apiNamespace        String          @map("api_namespace")
+  requiredCapabilities String[]       @default([]) @map("required_capabilities")
+  requiredEnvVars      String[]       @default([]) @map("required_env_vars")
+  /// Modelo de aislamiento solicitado: 'vm' (node:vm) o 'worker_thread'.
+  /// MVP solo soporta 'vm'.
+  isolation     String                @default("vm")
+  status        InstalledModuleStatus @default(INSTALLING)
+  errorMessage  String?               @map("error_message")
+  /// Super_admin que inició la instalación. FK lógica (sin REFERENCES) para
+  /// no acoplar marketplace al ciclo de vida del usuario; si el user se
+  /// borra, el row queda con la traza histórica.
+  installedById String                @map("installed_by_id") @db.Uuid
+  installedAt   DateTime?             @map("installed_at")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([vendor])
+  @@map("installed_module")
+}

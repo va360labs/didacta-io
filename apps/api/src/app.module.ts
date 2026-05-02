@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { BrandingModule } from './branding/branding.module';
 import { HealthModule } from './health/health.module';
 import { ApiLicenseModule } from './license/license.module';
+import { MarketplaceModule } from './marketplace/marketplace.module';
 import { AuditExportModule } from './modules/audit-export/audit-export.module';
 import { MetricsAuthController } from './modules/metrics-auth.controller';
 import { ModulesModule } from './modules/modules.module';
@@ -97,6 +98,11 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     // CRUD endpoints CE + envío naive síncrono. Path EE (BullMQ + HMAC +
     // dead-letter) gateado por capability en runtime.
     WebhooksModule,
+    // Marketplace de módulos — fundaciones (PR A de ADR-009). Solo expone
+    // ModuleSignatureService + ModulePackageService para que los tests y
+    // futuros endpoints (PR B) los consuman. Sin endpoints todavía: el
+    // upload del *.didactamod llega en PRs siguientes.
+    MarketplaceModule,
     HealthModule,
   ],
 })
