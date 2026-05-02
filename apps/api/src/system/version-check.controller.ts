@@ -14,7 +14,11 @@ import { Public } from '../auth/decorators';
 
 const DOCKERHUB_API =
   'https://hub.docker.com/v2/repositories/didactaio/community/tags?ordering=last_updated&page_size=25';
-const CACHE_TTL_MS = 4 * 60 * 60 * 1000;
+/// 15 minutos. Alpha sale a cadencia alta — TTL largo (4h del prototipo
+/// inicial) tapaba publicaciones recientes y el banner no aparecía.
+/// 15min × 24h = 96 reqs/día por instancia, dentro del rate limit de
+/// Docker Hub anónimo (100 req/6h por IP).
+const CACHE_TTL_MS = 15 * 60 * 1000;
 
 interface DockerHubTagsResponse {
   results: Array<{ name: string; last_updated: string }>;

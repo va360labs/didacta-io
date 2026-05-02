@@ -15,7 +15,11 @@
 import { APP_VERSION } from './version';
 
 const VERSION_CHECK_ENDPOINT = '/api/v1/system/version-check';
-const POLL_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 horas
+/// 30 min. La cadencia útil la pone el cache server-side (15 min);
+/// pollear más seguido desde cada browser solo carga al server sin
+/// ganar nada. 30 min asegura que dentro de ~1h tras un release todos
+/// los browsers abiertos lo verán.
+const POLL_INTERVAL_MS = 30 * 60 * 1000;
 const STORAGE_KEY_LAST_CHECK = 'didacta:version-check:last-check';
 const STORAGE_KEY_DISMISSED = 'didacta:version-check:dismissed';
 
