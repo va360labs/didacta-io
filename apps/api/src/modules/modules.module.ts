@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { AiModule } from '../ai/ai.module';
 import { AuthModule } from '../auth/auth.module';
@@ -66,7 +66,7 @@ import {
 import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
 
 @Module({
-  imports: [AuthModule, AiModule, ZoomLiveModule],
+  imports: [AuthModule, AiModule, forwardRef(() => ZoomLiveModule)],
   controllers: [
     CoursesController,
     LearningController,
