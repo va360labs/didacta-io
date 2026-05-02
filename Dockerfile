@@ -95,7 +95,15 @@ RUN pnpm --filter @didacta/api --filter @didacta/web run build
 FROM builder AS pruner
 # 1) Quitar build-deps del sistema (ya no se necesitan).
 RUN apk del .build-deps || true
-# 2) Borrar fuentes y configs de build: el runner solo ejecuta dist/ y .next/.
+# 2a) Rescatar artefactos que viven dentro de `src/` y necesitamos en
+#     runtime. Los pasamos a un sibling fuera del path que el pruner
+#     borra. Hoy cubre las claves públicas del license-sdk (que también
+#     usa el marketplace para verificar firmas de módulos firmados con
+#     la KMS de Didacta).
+RUN if [ -d packages/license-sdk/src/public-keys ]; then \
+      cp -r packages/license-sdk/src/public-keys packages/license-sdk/public-keys; \
+    fi
+# 2b) Borrar fuentes y configs de build: el runner solo ejecuta dist/ y .next/.
 #    También .turbo (cache de turbo) y vitest configs.
 #
 #    OJO: Next 15 compila el middleware en `apps/web/.next/server/src/middleware.js`

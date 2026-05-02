@@ -30,8 +30,30 @@ const ALG = 'ES256';
 /// license-sdk porque la KMS key es la misma en MVP. Si en el futuro se
 /// crea un alias separado (`didacta-marketplace-2026`), este path puede
 /// apuntar a un directorio dedicado vía `MARKETPLACE_PUBLIC_KEYS_DIR`.
+///
+/// El cwd del proceso depende de cómo se arranca: en `pnpm dev` desde
+/// la raíz del monorepo es `/repo`; en producción `node dist/main.js`
+/// desde `apps/api/` es `/repo/apps/api`. Buscamos el dir de claves
+/// subiendo niveles desde el cwd hasta encontrarlo. Sin esto, el
+/// contenedor de producción reportaba `Unknown kid` aunque el .pem
+/// existiera dos directorios arriba.
 function defaultPublicKeysDir(): string {
-  return resolve(process.cwd(), 'packages/license-sdk/src/public-keys');
+  // Probamos pares (cwd-relative) × (path en repo). Producción tiene los
+  // .pem en `packages/license-sdk/public-keys/` (rescatados antes del
+  // pruner, ver Dockerfile). Dev mantiene la carpeta original
+  // `packages/license-sdk/src/public-keys/`.
+  const subPaths = [
+    'packages/license-sdk/public-keys',
+    'packages/license-sdk/src/public-keys',
+  ];
+  const cwdPrefixes = ['', '../', '../../', '../../../'];
+  for (const prefix of cwdPrefixes) {
+    for (const sub of subPaths) {
+      const candidate = resolve(process.cwd(), prefix + sub);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return resolve(process.cwd(), subPaths[0]!);
 }
 
 @Injectable()
