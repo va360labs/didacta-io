@@ -10,6 +10,13 @@ export interface TenantModuleListItem {
   description: string | null;
   enabled: boolean;
   enabledByDefault: boolean;
+  /**
+   * Si true, el módulo es categoría 'core' en su manifest y no se puede
+   * desactivar. La UI debe ocultarlo del panel de toggles (es estructural,
+   * no opcional). El backend rechaza disable() con
+   * CORE_MODULE_NOT_DISABLEABLE (HTTP 422).
+   */
+  isCore: boolean;
   dependencies: string[];
   dependents: string[];
   optionalDependencies: string[];

@@ -741,7 +741,9 @@ function ModulesTab() {
         </div>
       ) : null}
 
-      {items.map((item) => (
+      {items
+        .filter((item) => !item.isCore)
+        .map((item) => (
         <Card key={item.name}>
           <CardContent className="flex flex-wrap items-start justify-between gap-4 p-4">
             <div className="min-w-0 flex-1 space-y-1">

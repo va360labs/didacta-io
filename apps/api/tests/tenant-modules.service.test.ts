@@ -19,13 +19,19 @@ interface TenantModuleRow {
   updatedAt: Date;
 }
 
-function manifest(name: string, deps: string[] = [], optionalDeps: string[] = []): ModuleManifest {
+function manifest(
+  name: string,
+  deps: string[] = [],
+  optionalDeps: string[] = [],
+  category?: string,
+): ModuleManifest {
   return {
     name: name as ModuleManifest['name'],
     displayName: name,
     description: `${name} description`,
     version: '1.0.0',
     coreVersionRequired: '^1.0.0',
+    ...(category ? { category } : {}),
     dependencies: {
       modules: deps.map((d) => ({ name: d, version: '^1.0.0' })),
       optionalModules: optionalDeps.map((d) => ({ name: d, version: '^1.0.0' })),
@@ -44,9 +50,14 @@ function manifest(name: string, deps: string[] = [], optionalDeps: string[] = []
   } as ModuleManifest;
 }
 
-function fakeModule(name: string, deps: string[] = [], optionalDeps: string[] = []): DidactaModule {
+function fakeModule(
+  name: string,
+  deps: string[] = [],
+  optionalDeps: string[] = [],
+  category?: string,
+): DidactaModule {
   return {
-    manifest: manifest(name, deps, optionalDeps),
+    manifest: manifest(name, deps, optionalDeps, category),
     onRegister: vi.fn(),
     onEnable: vi.fn(),
     onDisable: vi.fn(),
@@ -284,5 +295,48 @@ describe('TenantModulesService.disable', () => {
         metadata: expect.objectContaining({ moduleName: 'mod.a', cascade: ['mod.b'] }),
       }),
     );
+  });
+});
+
+describe('TenantModulesService · módulos categoría core', () => {
+  it('disable rechaza con CORE_MODULE_NOT_DISABLEABLE si manifest.category=="core"', async () => {
+    const modules = [fakeModule('mod.theming', [], [], 'core')];
+    const ctx = setup(modules);
+    await expect(ctx.service.disable('t1', 'mod.theming', 'u1')).rejects.toMatchObject({
+      code: 'CORE_MODULE_NOT_DISABLEABLE',
+      metadata: { moduleName: 'mod.theming', category: 'core' },
+    });
+    // No tocó nada — el guard corta antes de cualquier write.
+    expect(ctx.disableForTenant).not.toHaveBeenCalled();
+    expect(ctx.publish).not.toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'tenant.module.disabled' }),
+    );
+  });
+
+  it('disable permite módulos no-core (sin category o con otra categoría)', async () => {
+    const modules = [fakeModule('mod.zoom-live', [], [], 'live')];
+    const ctx = setup(modules);
+    await expect(ctx.service.disable('t1', 'mod.zoom-live', 'u1')).resolves.toBeDefined();
+    expect(ctx.disableForTenant).toHaveBeenCalled();
+  });
+
+  it('list incluye isCore=true para módulos category core', async () => {
+    const modules = [
+      fakeModule('mod.theming', [], [], 'core'),
+      fakeModule('mod.zoom-live', [], [], 'live'),
+      fakeModule('mod.fundae', [], [], 'compliance'),
+    ];
+    const { service } = setup(modules);
+    const list = await service.list('t1');
+    expect(list.find((m) => m.name === 'mod.theming')?.isCore).toBe(true);
+    expect(list.find((m) => m.name === 'mod.zoom-live')?.isCore).toBe(false);
+    expect(list.find((m) => m.name === 'mod.fundae')?.isCore).toBe(false);
+  });
+
+  it('isCore=false para módulos sin category en el manifest', async () => {
+    const modules = [fakeModule('mod.a')];
+    const { service } = setup(modules);
+    const list = await service.list('t1');
+    expect(list[0].isCore).toBe(false);
   });
 });

@@ -12,6 +12,7 @@ const STATUS_BY_CODE: Record<TenantModulesErrorCode, number> = {
   MODULE_NOT_FOUND: HttpStatus.NOT_FOUND,
   TENANT_NOT_FOUND: HttpStatus.NOT_FOUND,
   MODULE_HAS_ACTIVE_DEPENDENTS: HttpStatus.CONFLICT,
+  CORE_MODULE_NOT_DISABLEABLE: HttpStatus.UNPROCESSABLE_ENTITY,
 };
 
 @Catch(TenantModulesError)

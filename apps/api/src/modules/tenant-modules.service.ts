@@ -13,7 +13,8 @@ const NO_CTX: ClientContext = { ip: null, userAgent: null };
 export type TenantModulesErrorCode =
   | 'MODULE_NOT_FOUND'
   | 'TENANT_NOT_FOUND'
-  | 'MODULE_HAS_ACTIVE_DEPENDENTS';
+  | 'MODULE_HAS_ACTIVE_DEPENDENTS'
+  | 'CORE_MODULE_NOT_DISABLEABLE';
 
 export class TenantModulesError extends Error {
   constructor(
@@ -33,6 +34,14 @@ export interface TenantModuleListItem {
   description: string | null;
   enabled: boolean;
   enabledByDefault: boolean;
+  /**
+   * Si true, el módulo es categoría 'core' en su manifest y NO se puede
+   * desactivar. La UI debe ocultar el toggle de activación; el backend
+   * rechaza `disable()` con CORE_MODULE_NOT_DISABLEABLE. Esto cubre
+   * theming/courses/learning/etc. — son arquitectónicamente core aunque
+   * vivan en `modules/*` por estructura del repo.
+   */
+  isCore: boolean;
   dependencies: string[];
   dependents: string[];
   optionalDependencies: string[];
@@ -138,6 +147,19 @@ export class TenantModulesService {
   ): Promise<TenantModuleListItem> {
     await this.ensureTenant(tenantId);
     const mod = this.requireModule(moduleName);
+
+    // Módulos categoría 'core' (theming, courses, learning, certificates,
+    // assessments, community, billing, subscriptions) son arquitectónicamente
+    // parte del producto base — no se desactivan aunque vivan en `modules/*`
+    // por estructura del repo. Si alguien intenta desactivar uno (UI legacy,
+    // script, llamada directa al API) lo bloqueamos acá.
+    if (mod.manifest.category === 'core') {
+      throw new TenantModulesError(
+        'CORE_MODULE_NOT_DISABLEABLE',
+        `El módulo "${moduleName}" es del core y no se puede desactivar.`,
+        { moduleName, category: 'core' },
+      );
+    }
 
     const all = this.registry.getRegistry().listModules();
     const dependents = this.findActiveDependents(mod.manifest.name, all);
@@ -272,6 +294,7 @@ export class TenantModulesService {
       description: mod.manifest.description ?? row?.description ?? null,
       enabled,
       enabledByDefault: row?.enabledByDefault ?? true,
+      isCore: mod.manifest.category === 'core',
       dependencies: mod.manifest.dependencies.modules.map((d) => d.name),
       dependents: this.findActiveDependents(mod.manifest.name, all),
       optionalDependencies: mod.manifest.dependencies.optionalModules.map((d) => d.name),

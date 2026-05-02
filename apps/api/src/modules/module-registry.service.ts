@@ -365,11 +365,44 @@ export class ModuleRegistryService implements OnModuleInit {
     ]);
 
     await this.persistManifests();
+    await this.healCoreModulesEnabled();
 
     this.pino.log(
       { modules: this.registry.listModules().map((m) => m.manifest.name) },
       'Module registry inicializado',
     );
+  }
+
+  /**
+   * Self-heal post-boot: módulos categoría 'core' (theming, courses, learning,
+   * etc.) que estén `enabled=false` en algún tenant se re-habilitan.
+   * `TenantModulesService.disable` los rechaza desde alpha.10 con
+   * CORE_MODULE_NOT_DISABLEABLE, pero deploys antiguos pueden haber dejado
+   * filas con enabled=false. Este healer corrige el estado existente sin
+   * necesidad de migración manual.
+   */
+  private async healCoreModulesEnabled(): Promise<void> {
+    if (!this.registry) return;
+    const prisma = this.factory.getPrisma();
+    const coreNames = this.registry
+      .listModules()
+      .filter((m) => m.manifest.category === 'core')
+      .map((m) => m.manifest.name);
+    if (coreNames.length === 0) return;
+
+    const result = await prisma.tenantModule.updateMany({
+      where: {
+        enabled: false,
+        module: { name: { in: coreNames } },
+      },
+      data: { enabled: true },
+    });
+    if (result.count > 0) {
+      this.pino.log(
+        { healed: result.count, coreModules: coreNames },
+        'Re-habilitados módulos core que estaban disabled (self-heal post-boot)',
+      );
+    }
   }
 
   /**
