@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Icon, type IconName } from '@/components/icon';
 import type { StoredSession } from '@/lib/auth-storage';
+import { APP_CHANNEL, APP_VERSION } from '@/lib/version';
 
 export interface SidebarItem {
   href: string;
@@ -252,9 +253,15 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
           })}
         </nav>
 
-        <div className="border-t border-white/[0.06] px-4 py-2.5 text-[11px] text-white/40">
-          {area.items.length} {area.items.length === 1 ? 'elemento' : 'elementos'} en{' '}
-          {area.label}
+        <div className="flex items-center justify-between border-t border-white/[0.06] px-4 py-2.5 text-[11px] text-white/40">
+          <span>
+            Didacta <span className="font-mono">{APP_VERSION}</span>
+          </span>
+          {APP_CHANNEL !== 'stable' ? (
+            <span className="rounded bg-white/[0.08] px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+              {APP_CHANNEL}
+            </span>
+          ) : null}
         </div>
       </div>
     </aside>
