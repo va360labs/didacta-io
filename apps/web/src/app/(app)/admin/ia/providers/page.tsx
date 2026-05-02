@@ -13,7 +13,7 @@ import {
   aiProvidersApi,
   type ProviderCatalogEntry,
   type TenantProviderConfig,
-} from '@/lib/ai-tutor';
+} from '@/modules/ai-tutor';
 import { ApiHttpError } from '@/lib/api-client';
 
 type Purpose = 'chat' | 'embed';

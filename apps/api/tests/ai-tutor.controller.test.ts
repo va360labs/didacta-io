@@ -1,6 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
-import { AiTutorController } from '../src/modules/ai-tutor.controller';
+import { AiTutorController } from '../src/modules/ai-tutor/ai-tutor.controller';
 import type { ModuleRegistryService } from '../src/modules/module-registry.service';
 import type { SessionClaims } from '../src/auth/token.service';
 

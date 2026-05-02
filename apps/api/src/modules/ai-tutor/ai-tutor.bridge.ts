@@ -1,7 +1,7 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
-import { ModuleContextFactory } from './module-context.factory';
-import { ModuleRegistryService } from './module-registry.service';
+import { ModuleContextFactory } from '../module-context.factory';
+import { ModuleRegistryService } from '../module-registry.service';
 
 interface CoursePublishedEvent {
   courseId: string;

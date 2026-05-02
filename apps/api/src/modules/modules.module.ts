@@ -7,9 +7,7 @@ import { AiContentErrorFilter } from './ai-content-error.filter';
 import { AiGraderController } from './ai-grader.controller';
 import { AiGraderErrorFilter } from './ai-grader-error.filter';
 import { AiProvidersController } from './ai-providers.controller';
-import { AiTutorBridge } from './ai-tutor.bridge';
-import { AiTutorController } from './ai-tutor.controller';
-import { AiTutorErrorFilter } from './ai-tutor-error.filter';
+import { AiTutorModule } from './ai-tutor/ai-tutor.module';
 import { AdminSystemController } from './admin-system.controller';
 import { AssessmentsModule } from './assessments/assessments.module';
 import { AuditController } from './audit.controller';
@@ -52,6 +50,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     forwardRef(() => SubscriptionsModule),
     forwardRef(() => CommunityModule),
     forwardRef(() => CertificatesModule),
+    forwardRef(() => AiTutorModule),
   ],
   controllers: [
     CoursesController,
@@ -62,7 +61,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     ThemingController,
     AdminSystemController,
     StorageController,
-    AiTutorController,
     AiProvidersController,
     AiGraderController,
     AiContentController,
@@ -76,7 +74,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     ModuleContextFactory,
     ModuleRegistryService,
     OutboxRecoveryWorker,
-    AiTutorBridge,
     ScormLearningBridge,
     TenantModulesService,
     ModuleAccessInterceptor,
@@ -85,7 +82,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     { provide: APP_FILTER, useClass: LearningErrorFilter },
     { provide: APP_FILTER, useClass: ThemingErrorFilter },
     { provide: APP_FILTER, useClass: TenantModulesErrorFilter },
-    { provide: APP_FILTER, useClass: AiTutorErrorFilter },
     { provide: APP_FILTER, useClass: AiGraderErrorFilter },
     { provide: APP_FILTER, useClass: AiContentErrorFilter },
   ],

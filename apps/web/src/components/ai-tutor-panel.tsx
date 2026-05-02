@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
-import { aiTutorApi, type AskResponseView, type CitationView } from '@/lib/ai-tutor';
+import { aiTutorApi, type AskResponseView, type CitationView } from '@/modules/ai-tutor';
 
 interface Props {
   courseId: string;

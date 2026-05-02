@@ -6,7 +6,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { AiTutorError } from '@didacta/mod-ai-tutor';
-import { AiGatewayError } from '../ai/types/contracts';
+import { AiGatewayError } from '../../ai/types/contracts';
 import type { FastifyReply } from 'fastify';
 
 const STATUS_BY_CODE: Record<string, number> = {

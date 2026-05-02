@@ -1,5 +1,5 @@
-import { ApiHttpError, apiFetch } from './api-client';
-import { authStorage } from './auth-storage';
+import { ApiHttpError, apiFetch } from '@/lib/api-client';
+import { authStorage } from '@/lib/auth-storage';
 
 export interface CitationView {
   lessonId: string;

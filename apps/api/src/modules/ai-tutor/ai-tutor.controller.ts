@@ -6,11 +6,11 @@ import {
   type AskDto,
   type IndexCourseDto,
 } from '@didacta/mod-ai-tutor';
-import { CurrentUser } from '../auth/decorators';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { ZodValidationPipe } from '../auth/zod-validation.pipe';
-import type { SessionClaims } from '../auth/token.service';
-import { ModuleRegistryService } from './module-registry.service';
+import { CurrentUser } from '../../auth/decorators';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
+import type { SessionClaims } from '../../auth/token.service';
+import { ModuleRegistryService } from '../module-registry.service';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
