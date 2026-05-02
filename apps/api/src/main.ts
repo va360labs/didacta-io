@@ -48,6 +48,19 @@ async function bootstrap(): Promise<void> {
   // `RelayState`. Sin este parser, el body llega como Buffer crudo y Nest no
   // puede inyectarlo en @Body(). Registramos un parser que devuelve un objeto
   // plano `{ SAMLResponse, RelayState }`.
+  // Marketplace de módulos (ADR-009): el endpoint `POST /admin/modules/install`
+  // recibe el `*.didactamod` como body crudo `application/zip`. El parser
+  // por defecto no maneja este content-type — sin esto Fastify devolvería
+  // 415. `bodyLimit` se aliña con `MAX_PACKAGE_BYTES` del validador (50MB);
+  // si el ZIP excede el límite, Fastify rechaza antes de llegar al handler.
+  app.useBodyParser(
+    'application/zip',
+    { bodyLimit: 50 * 1024 * 1024 },
+    (_req, body: Buffer, done: (err: Error | null, result?: unknown) => void) => {
+      done(null, body);
+    },
+  );
+
   app.useBodyParser(
     'application/x-www-form-urlencoded',
     {},

@@ -15,7 +15,17 @@ export type MarketplaceErrorCode =
   | 'SIGNATURE_VERIFY_FAILED'
   | 'VENDOR_NOT_TRUSTED'
   | 'CORE_VERSION_INCOMPATIBLE'
-  | 'NAME_RESERVED';
+  | 'NAME_RESERVED'
+  /// La misma versión del módulo ya está instalada y `INSTALLED`. No es un
+  /// error técnico, pero el endpoint lo expone como 409 para que el cliente
+  /// distinga "no-op idempotente" de "instalación nueva".
+  | 'ALREADY_INSTALLED'
+  /// Recurso no encontrado (ej. `GET /admin/modules/installed/:name` con
+  /// nombre que no existe). Mapea a 404.
+  | 'NOT_FOUND'
+  /// Fallo persistiendo el paquete en object storage. La validación pasó,
+  /// pero el blob no llegó al bucket. El row queda `FAILED`. 502 al cliente.
+  | 'STORAGE_FAILED';
 
 export class MarketplacePackageError extends Error {
   readonly code: MarketplaceErrorCode;
