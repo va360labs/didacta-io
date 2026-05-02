@@ -58,3 +58,4 @@ Thumbs.db
 *.private.pem
 didacta-keys-*/
 .env.local.license
+kms-sign-input-*.b64
