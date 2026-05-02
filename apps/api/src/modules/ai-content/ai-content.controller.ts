@@ -12,11 +12,11 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
-import { CurrentUser } from '../auth/decorators';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import type { SessionClaims } from '../auth/token.service';
-import { ZodValidationPipe } from '../auth/zod-validation.pipe';
-import { ModuleRegistryService } from './module-registry.service';
+import { CurrentUser } from '../../auth/decorators';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import type { SessionClaims } from '../../auth/token.service';
+import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
+import { ModuleRegistryService } from '../module-registry.service';
 
 const FORMADOR_ROLES = ['super_admin', 'tenant_admin', 'formador'] as const;
 

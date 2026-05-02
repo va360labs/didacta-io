@@ -2,8 +2,7 @@ import { forwardRef, Module } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { AiModule } from '../ai/ai.module';
 import { AuthModule } from '../auth/auth.module';
-import { AiContentController } from './ai-content.controller';
-import { AiContentErrorFilter } from './ai-content-error.filter';
+import { AiContentModule } from './ai-content/ai-content.module';
 import { AiGraderModule } from './ai-grader/ai-grader.module';
 import { AiProvidersController } from './ai-providers.controller';
 import { AiTutorModule } from './ai-tutor/ai-tutor.module';
@@ -51,6 +50,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     forwardRef(() => CertificatesModule),
     forwardRef(() => AiTutorModule),
     forwardRef(() => AiGraderModule),
+    forwardRef(() => AiContentModule),
   ],
   controllers: [
     CoursesController,
@@ -62,7 +62,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     AdminSystemController,
     StorageController,
     AiProvidersController,
-    AiContentController,
     // GET /me/modules — sidebar gating UI (módulos activos + capabilities EE).
     MeModulesController,
   ],
@@ -81,7 +80,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     { provide: APP_FILTER, useClass: LearningErrorFilter },
     { provide: APP_FILTER, useClass: ThemingErrorFilter },
     { provide: APP_FILTER, useClass: TenantModulesErrorFilter },
-    { provide: APP_FILTER, useClass: AiContentErrorFilter },
   ],
   exports: [
     ModuleRegistryService,
