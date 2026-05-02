@@ -20,7 +20,7 @@ import { ModuleRegistryService } from '../module-registry.service';
  * Zoom espera 2xx en menos de 3s o reintenta hasta 3 veces. La idempotencia
  * la garantiza `mod_zoom_webhook_event.event_id` UNIQUE en DB.
  *
- * `validation` event (Zoom envía esto cuando configurás el endpoint en su
+ * `validation` event (Zoom envía esto cuando configuras el endpoint en su
  * panel) responde con `{ plainToken, encryptedToken }` para handshake.
  */
 @ApiTags('Webhooks · Zoom')

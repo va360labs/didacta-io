@@ -234,7 +234,7 @@ export default function UsuariosPage() {
                       )}
                     </td>
                     <td className="px-6 py-3 text-right text-xs text-text-muted tabular-nums">
-                      {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString('es-AR') : '—'}
+                      {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString('es-ES') : '—'}
                     </td>
                   </tr>
                 ))}

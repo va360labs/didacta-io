@@ -22,7 +22,7 @@ function relTime(iso: string): string {
   if (h < 24) return `hace ${h} h`;
   const d = Math.floor(h / 24);
   if (d < 7) return `hace ${d} d`;
-  return new Date(iso).toLocaleDateString('es-AR');
+  return new Date(iso).toLocaleDateString('es-ES');
 }
 
 export default function SeguridadPage() {

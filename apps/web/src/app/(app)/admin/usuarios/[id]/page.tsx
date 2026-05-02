@@ -67,7 +67,7 @@ export default function UserDetailPage() {
     if (status === 'SUSPENDED' || status === 'DEACTIVATED') {
       if (
         !confirm(
-          `¿Confirmás cambiar a "${STATUS_LABELS[status]}"? Las sesiones activas se cierran.`,
+          `¿Confirmas cambiar a "${STATUS_LABELS[status]}"? Las sesiones activas se cierran.`,
         )
       ) {
         return;
@@ -377,7 +377,7 @@ export default function UserDetailPage() {
                 >
                   <span className="tabular-nums text-text">
                     Iniciada{' '}
-                    {new Date(s.createdAt).toLocaleString('es-AR', {
+                    {new Date(s.createdAt).toLocaleString('es-ES', {
                       day: '2-digit',
                       month: 'short',
                       hour: '2-digit',
@@ -386,7 +386,7 @@ export default function UserDetailPage() {
                   </span>
                   <span className="tabular-nums text-xs text-text-subtle">
                     Vence{' '}
-                    {new Date(s.expiresAt).toLocaleString('es-AR', {
+                    {new Date(s.expiresAt).toLocaleString('es-ES', {
                       day: '2-digit',
                       month: 'short',
                       hour: '2-digit',
@@ -401,8 +401,8 @@ export default function UserDetailPage() {
       </Card>
 
       <p className="text-xs text-text-subtle">
-        Creado: {new Date(user.createdAt).toLocaleString('es-AR')} · Última actualización:{' '}
-        {new Date(user.updatedAt).toLocaleString('es-AR')}
+        Creado: {new Date(user.createdAt).toLocaleString('es-ES')} · Última actualización:{' '}
+        {new Date(user.updatedAt).toLocaleString('es-ES')}
       </p>
     </div>
   );

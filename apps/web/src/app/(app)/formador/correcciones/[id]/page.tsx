@@ -200,7 +200,7 @@ export default function CorreccionDetailPage() {
                 {openAnswered} {openAnswered === 1 ? 'pregunta abierta' : 'preguntas abiertas'} para
                 corregir
                 {data.submittedAt
-                  ? ` · enviado el ${new Date(data.submittedAt).toLocaleString('es-AR')}`
+                  ? ` · enviado el ${new Date(data.submittedAt).toLocaleString('es-ES')}`
                   : ''}
               </p>
             </div>

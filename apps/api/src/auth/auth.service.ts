@@ -12,7 +12,7 @@ import type { SigninDto, SignupDto } from './dto';
 export class AmbiguousTenantError extends UnauthorizedException {
   constructor(public readonly candidateSlugs: string[]) {
     super({
-      message: 'Tu email pertenece a más de una organización. Indicá cuál querés usar.',
+      message: 'Tu email pertenece a más de una organización. Indicá cuál quieres usar.',
       candidateSlugs,
       code: 'AMBIGUOUS_TENANT',
     });

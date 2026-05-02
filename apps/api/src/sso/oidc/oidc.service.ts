@@ -525,7 +525,7 @@ export class OidcService {
           metadata: { reason: 'user_not_provisioned', email },
         });
         throw new UnauthorizedException(
-          `No tenés cuenta en este tenant. Pedile al admin que active el auto-provisioning o que te dé de alta primero.`,
+          `No tienes cuenta en este tenant. Pídele al admin que active el auto-provisioning o que te dé de alta primero.`,
         );
       }
 

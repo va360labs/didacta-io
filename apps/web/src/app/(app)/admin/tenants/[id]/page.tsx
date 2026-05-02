@@ -154,7 +154,7 @@ export default function TenantDetailPage() {
               </Badge>
               <span className="text-xs tabular-nums text-text-subtle">
                 Creado{' '}
-                {new Date(tenant.createdAt).toLocaleDateString('es-AR', {
+                {new Date(tenant.createdAt).toLocaleDateString('es-ES', {
                   day: '2-digit',
                   month: 'short',
                   year: 'numeric',

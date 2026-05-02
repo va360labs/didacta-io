@@ -392,7 +392,7 @@ function ScormUploader({ lessonId }: { lessonId: string }) {
             </p>
             <p className="text-xs text-text-subtle tabular-nums">
               {(metadata.size / (1024 * 1024)).toFixed(1)} MiB · subido el{' '}
-              {new Date(metadata.uploadedAt).toLocaleDateString('es-AR', {
+              {new Date(metadata.uploadedAt).toLocaleDateString('es-ES', {
                 day: '2-digit',
                 month: 'short',
                 year: 'numeric',

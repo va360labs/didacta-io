@@ -31,7 +31,7 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
 
 function formatStart(iso: string, tz: string): string {
   try {
-    return new Date(iso).toLocaleString('es-AR', {
+    return new Date(iso).toLocaleString('es-ES', {
       timeZone: tz,
       day: '2-digit',
       month: 'short',

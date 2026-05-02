@@ -170,7 +170,7 @@ function mapErrorToReason(err: unknown): string {
     if (body.includes('Issuer del SAMLResponse')) return 'issuer_mismatch';
     if (body.includes('SAMLResponse inválido')) return 'idp_error';
     if (body.includes('email no pertenece') || body.includes('email')) return 'email_not_allowed';
-    if (body.includes('No tenés cuenta')) return 'user_not_provisioned';
+    if (body.includes('No tienes cuenta')) return 'user_not_provisioned';
     if (body.includes('config SAML')) return 'config_changed';
     if (body.includes('cuenta no está activa')) return 'user_inactive';
     return 'unauthorized';

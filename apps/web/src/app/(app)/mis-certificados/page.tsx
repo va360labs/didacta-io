@@ -11,7 +11,7 @@ import { certificatesApi, type Certificate } from '@/lib/certificates';
 
 function formatDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString('es-AR', {
+    return new Date(iso).toLocaleDateString('es-ES', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -68,7 +68,7 @@ export default function MisCertificadosPage() {
           Mis certificados
         </h1>
         <p className="mt-2 max-w-2xl text-text-muted">
-          Cada vez que completás un curso, generamos un certificado nominal con número correlativo y
+          Cada vez que completas un curso, generamos un certificado nominal con número correlativo y
           hash de verificación.
         </p>
       </header>

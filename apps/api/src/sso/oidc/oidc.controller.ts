@@ -178,7 +178,7 @@ function mapErrorToReason(err: unknown): string {
     if (body.includes('aud del id_token')) return 'aud_mismatch';
     if (body.includes('nonce del id_token')) return 'nonce_mismatch';
     if (body.includes('email')) return 'email_not_allowed';
-    if (body.includes('No tenés cuenta')) return 'user_not_provisioned';
+    if (body.includes('No tienes cuenta')) return 'user_not_provisioned';
     if (body.includes('config OIDC')) return 'config_changed';
     if (body.includes('cuenta no está activa')) return 'user_inactive';
     return 'unauthorized';

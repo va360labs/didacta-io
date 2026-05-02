@@ -349,7 +349,7 @@ export class AdminTenantsService {
     }
     if (domain.isPrimary) {
       throw new BadRequestException(
-        'No podés eliminar el dominio primario. Asigná otro como primario antes.',
+        'No puedes eliminar el dominio primario. Asigná otro como primario antes.',
       );
     }
     await this.prisma.tenantDomain.delete({ where: { id: domain.id } });

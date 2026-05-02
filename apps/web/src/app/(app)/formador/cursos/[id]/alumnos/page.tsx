@@ -33,7 +33,7 @@ const STATUS_VARIANT: Record<EnrollmentStatus, 'success' | 'warning' | 'muted'> 
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-AR', {
+  return new Date(iso).toLocaleDateString('es-ES', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -279,7 +279,7 @@ export default function AlumnosPage() {
                         {formatDate(r.enrolledAt)}
                       </td>
                       <td className="px-6 py-3 text-right text-xs text-text-muted tabular-nums">
-                        {r.lastLoginAt ? new Date(r.lastLoginAt).toLocaleDateString('es-AR') : '—'}
+                        {r.lastLoginAt ? new Date(r.lastLoginAt).toLocaleDateString('es-ES') : '—'}
                       </td>
                     </tr>
                   ))}

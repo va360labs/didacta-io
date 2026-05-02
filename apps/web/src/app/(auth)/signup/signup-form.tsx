@@ -69,7 +69,7 @@ export function SignUpForm() {
     <form action={onSubmit} className="space-y-4">
       {tenant ? (
         <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
-          <span className="text-text-muted">Te registrás en</span>{' '}
+          <span className="text-text-muted">Te registras en</span>{' '}
           <strong className="text-brand-700">{tenant.name}</strong>
         </div>
       ) : (
@@ -85,7 +85,7 @@ export function SignUpForm() {
             required
           />
           <p className="text-xs text-text-subtle">
-            Pedíle a tu admin el nombre corto de tu organización.
+            Pidele a tu admin el nombre corto de tu organización.
           </p>
         </div>
       )}

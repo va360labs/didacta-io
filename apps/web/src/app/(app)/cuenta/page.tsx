@@ -219,7 +219,7 @@ export default function CuentaPage() {
                     <Label htmlFor="email">Email</Label>
                     <Input id="email" value={profile.email} disabled />
                     <p className="text-xs text-text-subtle">
-                      Para cambiar tu email, pedile a tu admin.
+                      Para cambiar tu email, pídele a tu admin.
                     </p>
                   </div>
                 </div>
@@ -327,7 +327,7 @@ export default function CuentaPage() {
               <div>
                 <p className="label-uppercase text-text-muted">Cuenta creada</p>
                 <p className="mt-1.5 tabular-nums">
-                  {new Date(profile.createdAt).toLocaleDateString('es-AR', {
+                  {new Date(profile.createdAt).toLocaleDateString('es-ES', {
                     day: '2-digit',
                     month: 'long',
                     year: 'numeric',
@@ -338,7 +338,7 @@ export default function CuentaPage() {
                 <p className="label-uppercase text-text-muted">Último login</p>
                 <p className="mt-1.5 tabular-nums">
                   {profile.lastLoginAt
-                    ? new Date(profile.lastLoginAt).toLocaleString('es-AR')
+                    ? new Date(profile.lastLoginAt).toLocaleString('es-ES')
                     : '—'}
                 </p>
               </div>
@@ -371,7 +371,7 @@ export default function CuentaPage() {
                     </span>
                     <span className="block text-sm text-text-muted">
                       Email cada lunes con tus menciones y respuestas de la semana. Si lo
-                      desactivás, no recibirás este resumen pero sigues viendo todo en{' '}
+                      desactivas, no recibirás este resumen pero sigues viendo todo en{' '}
                       <Link href="/comunidad" className="underline">
                         Comunidad
                       </Link>

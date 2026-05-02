@@ -179,7 +179,7 @@ export default function BrandingPage() {
           <p className="mt-1 text-text-muted">
             Personalizá la identidad visual de tu organización. Los cambios se guardan al hacer clic
             en <span className="font-semibold">Guardar</span>; puedes ver una vista previa mientras
-            editás.
+            editas.
           </p>
         </div>
         <Button variant="ghost" onClick={handleReset} disabled={resetStatus === 'resetting'}>

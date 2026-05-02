@@ -109,7 +109,7 @@ export class AuthController {
     @Body(new ZodValidationPipe(resetPasswordSchema)) dto: ResetPasswordDto,
   ) {
     await this.passwordReset.reset(dto.token, dto.newPassword, extractClientContext(req));
-    return { ok: true, message: 'Tu contraseña fue actualizada. Ya podés iniciar sesión.' };
+    return { ok: true, message: 'Tu contraseña fue actualizada. Ya puedes iniciar sesión.' };
   }
 
   // -------------------- helpers --------------------

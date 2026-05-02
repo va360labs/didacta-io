@@ -191,7 +191,7 @@ export class AdminUsersService {
     ctx: ClientContext = NO_CTX,
   ): Promise<UserListItem> {
     if (userId === actorId && status !== 'ACTIVE') {
-      throw new BadRequestException('No podés suspender ni desactivar tu propio usuario.');
+      throw new BadRequestException('No puedes suspender ni desactivar tu propio usuario.');
     }
 
     const user = await this.prisma.user.findFirst({
@@ -276,7 +276,7 @@ export class AdminUsersService {
 
     if (userId === actorId && roleName === 'tenant_admin') {
       throw new BadRequestException(
-        'No podés quitarte el rol tenant_admin a vos mismo (te quedarías sin acceso al panel).',
+        'No puedes quitarte el rol tenant_admin a ti mismo (te quedarías sin acceso al panel).',
       );
     }
 

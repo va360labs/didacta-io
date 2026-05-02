@@ -106,7 +106,7 @@ export function describeCipherKeySource(resolved: ResolvedCipherKey): string {
     case 'file-new':
       return (
         `[Didacta] TENANT_SETTINGS_ENC_KEY: nueva clave generada y persistida en ${resolved.filePath}.\n` +
-        `          Sobrevive reinicios mientras el volumen persista. Hacé backup si configurás\n` +
+        `          Sobrevive reinicios mientras el volumen persista. Hacé backup si configuras\n` +
         `          features que cifran (Stripe, OIDC, SCIM, SMTP custom, Zoom S2S).`
       );
     case 'ephemeral':

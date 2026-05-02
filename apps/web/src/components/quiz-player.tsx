@@ -233,7 +233,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
             Responde todas las preguntas y envía. Umbral de aprobación:{' '}
             <strong className="text-text">{state.quiz.passThreshold}%</strong>.
             {state.attempt.expiresAt
-              ? ` Tienes tiempo hasta las ${new Date(state.attempt.expiresAt).toLocaleTimeString('es-AR')}.`
+              ? ` Tienes tiempo hasta las ${new Date(state.attempt.expiresAt).toLocaleTimeString('es-ES')}.`
               : ''}
           </CardDescription>
         </CardHeader>

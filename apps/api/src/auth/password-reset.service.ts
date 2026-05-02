@@ -269,7 +269,7 @@ Para definir una contraseña nueva, abrí este enlace (válido por ${TOKEN_TTL_M
 
 ${link}
 
-Si no fuiste vos, podés ignorar este mensaje — tu contraseña actual sigue intacta.
+Si no fuiste tú, puedes ignorar este mensaje — tu contraseña actual sigue intacta.
 
 — Equipo Didacta`;
     const html = `<!DOCTYPE html>
@@ -287,7 +287,7 @@ Si no fuiste vos, podés ignorar este mensaje — tu contraseña actual sigue in
     <span style="word-break: break-all;">${link}</span>
   </p>
   <p style="font-size: 14px; color: #5b6b7c;">
-    Si no fuiste vos, podés ignorar este mensaje — tu contraseña actual sigue intacta.
+    Si no fuiste tú, puedes ignorar este mensaje — tu contraseña actual sigue intacta.
   </p>
   <p style="margin-top: 32px; font-size: 12px; color: #94a3b8;">— Equipo Didacta</p>
 </body></html>`;

@@ -192,7 +192,7 @@ function EventRow({ event }: { event: ZoomWebhookEventItem }) {
   return (
     <tr className="border-b border-border last:border-0 hover:bg-surface-2">
       <td className="px-6 py-3 tabular-nums text-text-muted">
-        {new Date(event.receivedAt).toLocaleString('es-AR')}
+        {new Date(event.receivedAt).toLocaleString('es-ES')}
       </td>
       <td className="px-3 py-3 font-mono text-xs text-text">{event.eventType}</td>
       <td className="px-3 py-3 font-mono text-xs text-text-muted">{event.meetingId ?? '—'}</td>

@@ -31,12 +31,12 @@ const REASON_MESSAGES: Record<string, { title: string; description: string }> = 
   iss_mismatch: {
     title: 'Configuración SSO incorrecta',
     description:
-      'El id_token vino con un issuer distinto al configurado. Pedile al admin que revise la configuración SSO.',
+      'El id_token vino con un issuer distinto al configurado. Pídele al admin que revise la configuración SSO.',
   },
   aud_mismatch: {
     title: 'Configuración SSO incorrecta',
     description:
-      'El id_token tiene una audience distinta a nuestro client_id. Pedile al admin que revise la configuración SSO.',
+      'El id_token tiene una audience distinta a nuestro client_id. Pídele al admin que revise la configuración SSO.',
   },
   nonce_mismatch: {
     title: 'Sesión SSO comprometida',
@@ -51,7 +51,7 @@ const REASON_MESSAGES: Record<string, { title: string; description: string }> = 
   user_not_provisioned: {
     title: 'No tienes cuenta en este tenant',
     description:
-      'El SSO te autenticó pero el admin no activó la creación automática de cuentas. Pedile al admin que te dé de alta.',
+      'El SSO te autenticó pero el admin no activó la creación automática de cuentas. Pídele al admin que te dé de alta.',
   },
   user_inactive: {
     title: 'Tu cuenta no está activa',
@@ -59,7 +59,7 @@ const REASON_MESSAGES: Record<string, { title: string; description: string }> = 
   },
   tenant_not_configured: {
     title: 'SSO no disponible para esta organización',
-    description: 'Pedile al admin que configure SSO o iniciá sesión con email + contraseña.',
+    description: 'Pídele al admin que configure SSO o iniciá sesión con email + contraseña.',
   },
   idp_unreachable: {
     title: 'Tu IdP no responde',

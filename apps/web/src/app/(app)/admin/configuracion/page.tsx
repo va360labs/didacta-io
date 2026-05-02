@@ -539,7 +539,7 @@ export default function ConfiguracionPage() {
                           )}
                         </td>
                         <td className="py-2 pr-4 text-xs text-text-subtle tabular-nums">
-                          {new Date(it.updatedAt).toLocaleDateString('es-AR', {
+                          {new Date(it.updatedAt).toLocaleDateString('es-ES', {
                             day: '2-digit',
                             month: 'short',
                             year: 'numeric',
@@ -746,7 +746,7 @@ function ModulesTab() {
           </p>
           <p className="mt-1 font-mono text-warning-800">{confirmCascade.dependents.join(', ')}</p>
           <p className="mt-2 text-warning-800">
-            Si confirmás, se desactivarán también esos módulos en cascada.
+            Si confirmas, se desactivarán también esos módulos en cascada.
           </p>
           <div className="mt-3 flex gap-2">
             <Button
@@ -989,7 +989,7 @@ function StorageTab() {
 
         <div className="mt-6 rounded-lg border border-success-200 bg-success-50/50 p-3 text-xs text-success-800">
           <strong>Activo:</strong> los uploads de imágenes y los archivos del tenant ya usan esta
-          configuración cuando el driver es <code>s3</code>. Si eliges disco local o no completás el
+          configuración cuando el driver es <code>s3</code>. Si eliges disco local o no completas el
           bucket, el server cae al adapter global del env.
         </div>
       </CardContent>

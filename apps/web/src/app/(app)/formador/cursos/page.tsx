@@ -138,7 +138,7 @@ export default function FormadorCoursesPage() {
                   <div className="flex items-center justify-between border-t border-border-soft pt-3 text-xs text-text-subtle">
                     <span className="tabular-nums">
                       Actualizado{' '}
-                      {new Date(c.updatedAt).toLocaleDateString('es-AR', {
+                      {new Date(c.updatedAt).toLocaleDateString('es-ES', {
                         day: '2-digit',
                         month: 'short',
                         year: 'numeric',

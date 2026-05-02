@@ -22,7 +22,7 @@ function formatRelative(iso: string): string {
     if (days < 1) return 'hoy';
     if (days === 1) return 'ayer';
     if (days < 7) return `hace ${days} días`;
-    return d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
+    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
   } catch {
     return iso;
   }

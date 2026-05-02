@@ -563,7 +563,7 @@ function UpcomingZoomBanner({ sessions }: { sessions: ZoomSession[] }) {
           </div>
           <p
             className="text-sm tabular-nums text-text-muted"
-            title={`Hora del host: ${start.toLocaleString('es-AR', {
+            title={`Hora del host: ${start.toLocaleString('es-ES', {
               timeZone: next.timezone,
               day: '2-digit',
               month: 'short',
@@ -572,7 +572,7 @@ function UpcomingZoomBanner({ sessions }: { sessions: ZoomSession[] }) {
               timeZoneName: 'short',
             })}`}
           >
-            {start.toLocaleString('es-AR', {
+            {start.toLocaleString('es-ES', {
               // Sin `timeZone` explícito: usa la del navegador. El tooltip
               // arriba muestra la hora del host (next.timezone) para que el
               // alumno entienda diferencias horarias sin tener que abrir el
@@ -627,7 +627,7 @@ function RecordedZoomSessions({ sessions }: { sessions: ZoomSession[] }) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-text">{s.topic}</p>
                 <p className="text-xs tabular-nums text-text-muted">
-                  {new Date(s.startTime).toLocaleString('es-AR', {
+                  {new Date(s.startTime).toLocaleString('es-ES', {
                     timeZone: s.timezone,
                     day: '2-digit',
                     month: 'short',

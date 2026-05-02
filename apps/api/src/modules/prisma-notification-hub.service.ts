@@ -234,7 +234,7 @@ interface TemplateDef {
 const TEMPLATES: Record<string, TemplateDef> = {
   'enrollment.created': {
     subject: 'Te matriculaste en {{course}}',
-    body: 'Acabás de matricularte en el curso "{{course}}". ¡A aprender! Podés continuar desde tu panel.',
+    body: 'Acabas de matricularte en el curso "{{course}}". ¡A aprender! Puedes continuar desde tu panel.',
   },
   'course.completed': {
     subject: '¡Curso completado!',
@@ -242,7 +242,7 @@ const TEMPLATES: Record<string, TemplateDef> = {
   },
   'certificate.issued': {
     subject: 'Tu certificado de "{{course}}" está listo',
-    body: 'Ya podés descargar el certificado número {{number}} desde Mis certificados.',
+    body: 'Ya puedes descargar el certificado número {{number}} desde Mis certificados.',
   },
   'attempt.passed': {
     subject: 'Aprobaste el quiz de "{{course}}"',
@@ -250,7 +250,7 @@ const TEMPLATES: Record<string, TemplateDef> = {
   },
   'attempt.failed': {
     subject: 'Resultado de quiz: no aprobado',
-    body: 'Tu intento del quiz "{{quiz}}" obtuvo {{scorePercent}}%, por debajo del umbral del {{passThreshold}}%. Podés reintentarlo si el quiz lo permite.',
+    body: 'Tu intento del quiz "{{quiz}}" obtuvo {{scorePercent}}%, por debajo del umbral del {{passThreshold}}%. Puedes reintentarlo si el quiz lo permite.',
   },
   'attempt.graded': {
     subject: 'El formador corrigió tu quiz',

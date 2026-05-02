@@ -182,7 +182,7 @@ export class ScimAdminTokenController {
   @ApiOperation({
     summary:
       'Revoca el token SCIM del tenant. El IdP empezará a recibir 401 ' +
-      'inmediatamente. Si querés volver a habilitarlo, llamá POST.',
+      'inmediatamente. Si quieres volver a habilitarlo, llamá POST.',
   })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 402 })

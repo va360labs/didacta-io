@@ -167,7 +167,7 @@ function LessonContent({
 
   if (lesson.type === 'VIDEO') {
     const url = typeof content['videoUrl'] === 'string' ? content['videoUrl'] : '';
-    if (!url) return <Empty hint="Falta el video. Pedile al formador que lo cargue." />;
+    if (!url) return <Empty hint="Falta el video. Pídele al formador que lo cargue." />;
 
     // Si la URL es de YouTube, embebemos via iframe (privacy-enhanced) en
     // lugar de usar <video src>, que sólo entiende mp4/webm/HLS directos.
@@ -216,7 +216,7 @@ function LessonContent({
 
   if (lesson.type === 'PDF') {
     const url = typeof content['pdfUrl'] === 'string' ? content['pdfUrl'] : '';
-    if (!url) return <Empty hint="Falta el PDF. Pedile al formador que lo suba." />;
+    if (!url) return <Empty hint="Falta el PDF. Pídele al formador que lo suba." />;
     return (
       <iframe
         src={url}
@@ -312,7 +312,7 @@ function ScormFrame({ lessonId, title }: { lessonId: string; title: string }) {
         setError(
           e instanceof ApiHttpError
             ? e.message
-            : 'No pudimos cargar el paquete SCORM. Pedile al formador que lo suba.',
+            : 'No pudimos cargar el paquete SCORM. Pídele al formador que lo suba.',
         );
       }
     })();

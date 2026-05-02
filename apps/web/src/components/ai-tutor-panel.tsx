@@ -180,7 +180,7 @@ function humanizeError(e: unknown): string {
     case 'AI_TUTOR_TOKEN_QUOTA_EXCEEDED':
       return 'Se alcanzó el límite de tokens para el tutor. Probá más tarde.';
     case 'AI_PROVIDER_NOT_CONFIGURED':
-      return 'No hay proveedor de IA configurado en el tenant. Pedile al admin que configure uno.';
+      return 'No hay proveedor de IA configurado en el tenant. Pídele al admin que configure uno.';
     case 'AI_PROVIDER_RATE_LIMIT':
       return 'El proveedor de IA está saturado ahora mismo. Probá en unos segundos.';
     case 'AI_PROVIDER_AUTH':

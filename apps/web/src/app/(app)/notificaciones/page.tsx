@@ -50,7 +50,7 @@ function formatRelative(iso: string): string {
     if (hours < 24) return `hace ${hours} h`;
     const days = Math.floor(hours / 24);
     if (days < 7) return `hace ${days} d`;
-    return d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
+    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
   } catch {
     return iso;
   }

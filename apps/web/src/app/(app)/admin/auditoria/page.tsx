@@ -71,7 +71,7 @@ export default function AuditoriaPage() {
     if (!entries) return null;
     const map = new Map<string, AuditEntry[]>();
     for (const e of entries) {
-      const date = new Date(e.timestamp).toLocaleDateString('es-AR', {
+      const date = new Date(e.timestamp).toLocaleDateString('es-ES', {
         day: '2-digit',
         month: 'long',
         year: 'numeric',
@@ -127,7 +127,7 @@ export default function AuditoriaPage() {
                     Cadena íntegra
                   </h3>
                   <p className="mt-1 text-sm text-text-muted">
-                    Verificamos {verifyResult.totalEntries.toLocaleString('es-AR')} entradas
+                    Verificamos {verifyResult.totalEntries.toLocaleString('es-ES')} entradas
                     consecutivas. Ninguna fue modificada después de su registro original.
                   </p>
                 </div>
@@ -151,7 +151,7 @@ export default function AuditoriaPage() {
                   <p className="mt-1 text-sm text-text">
                     Detectamos un quiebre en la entrada {verifyResult.firstBrokenId} (
                     {verifyResult.brokenAt
-                      ? new Date(verifyResult.brokenAt).toLocaleString('es-AR')
+                      ? new Date(verifyResult.brokenAt).toLocaleString('es-ES')
                       : 'fecha desconocida'}
                     ). Las entradas previas a ese punto siguen siendo confiables.
                   </p>
@@ -258,7 +258,7 @@ export default function AuditoriaPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {entries.length.toLocaleString('es-AR')} entradas
+              {entries.length.toLocaleString('es-ES')} entradas
             </CardTitle>
             <CardDescription>
               Ordenadas por fecha descendente. Cada fila muestra el actor, la acción y el recurso
@@ -276,7 +276,7 @@ export default function AuditoriaPage() {
                       className="flex flex-wrap items-start gap-3 border-b border-border bg-surface p-3 text-sm last:border-0 hover:bg-surface-2"
                     >
                       <span className="tabular-nums text-text-subtle min-w-[5rem]">
-                        {new Date(e.timestamp).toLocaleTimeString('es-AR', {
+                        {new Date(e.timestamp).toLocaleTimeString('es-ES', {
                           hour: '2-digit',
                           minute: '2-digit',
                           second: '2-digit',
