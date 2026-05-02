@@ -5,7 +5,7 @@ import { importSPKI, jwtVerify, type JWTPayload, type KeyLike } from 'jose';
 import { moduleManifestSchema, type ModuleManifest } from './module-manifest.schema';
 import { MarketplacePackageError } from './module-package.errors';
 
-/// Verifica firmas JWS (ES256) de los manifests de paquetes `*.didactamod`.
+/// Verifica firmas JWS (ES256) de los manifests de paquetes `*.zip`.
 ///
 /// **Mismo esquema que el License SDK**: ECDSA P-256 + SHA-256, JWT compact,
 /// firmado por AWS KMS `alias/didacta-issuer-2026` (eu-west-1). La

@@ -19,7 +19,7 @@ import { ZoomWebhookController } from './zoom-webhook.controller';
 ///
 /// Convención sub-módulo (ADR-011): todo el código del módulo (back +
 /// front) vive bajo `apps/<api|web>/src/modules/<name>/`. El día que
-/// `mod.zoom-live` se publique como `*.didactamod` distribuible vía
+/// `mod.zoom-live` se publique como `*.zip` distribuible vía
 /// marketplace, este sub-module deja de existir y `ModuleRegistryService`
 /// lo carga dinámicamente — la dependencia circular desaparece sola.
 @Module({

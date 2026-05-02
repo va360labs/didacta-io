@@ -8,7 +8,7 @@ import {
 } from '../../../src/marketplace/module-signature.service';
 
 /// Fixture builder: genera un par ES256 efímero, construye un manifest
-/// válido, lo firma como JWT y arma un buffer `*.didactamod` listo para
+/// válido, lo firma como JWT y arma un buffer `*.zip` listo para
 /// alimentar a `ModulePackageService.validatePackage`.
 ///
 /// Mismo patrón que `packages/license-sdk/tests/setup-test-keys.ts` —

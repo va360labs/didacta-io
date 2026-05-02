@@ -6,7 +6,7 @@
 ///
 /// Convención (ADR pendiente de redactar): NUNCA añadir UI de un módulo
 /// fuera de su carpeta. Si el día de mañana `mod.zoom-live` se publica
-/// como `*.didactamod` distribuible, esta carpeta entera se empaqueta
+/// como `*.zip` distribuible, esta carpeta entera se empaqueta
 /// y el catálogo runtime (loader del marketplace) reemplaza este import
 /// estático.
 

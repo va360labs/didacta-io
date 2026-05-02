@@ -67,7 +67,7 @@ describe('InstalledModuleService', () => {
     const row = await svc.createInstalling({
       manifest: baseManifest,
       manifestJwt: 'fake.jwt.token',
-      packageStorageKey: 'modules/mod.example/1.0.0-x.didactamod',
+      packageStorageKey: 'modules/mod.example/1.0.0-x.zip',
       packageSha256: 'a'.repeat(64),
       packageSizeBytes: 1024,
       installedById: 'user-1',
@@ -92,7 +92,7 @@ describe('InstalledModuleService', () => {
     await svc.createInstalling({
       manifest: baseManifest,
       manifestJwt: 'fake.jwt.token',
-      packageStorageKey: 'modules/mod.example/1.0.0-x.didactamod',
+      packageStorageKey: 'modules/mod.example/1.0.0-x.zip',
       packageSha256: 'b'.repeat(64),
       packageSizeBytes: 2048,
       installedById: 'user-2',

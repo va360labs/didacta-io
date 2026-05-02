@@ -84,7 +84,7 @@ async function rawFetch<T>(
 }
 
 export const marketplaceApi = {
-  /// Sube un `*.didactamod`. El `file` puede ser un Blob/File del input
+  /// Sube un `*.zip`. El `file` puede ser un Blob/File del input
   /// del usuario. Devuelve el InstallResult del orquestador.
   async install(file: File | Blob): Promise<InstallSuccessResponse> {
     return rawFetch<InstallSuccessResponse>('/api/v1/admin/modules/install', {

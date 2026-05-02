@@ -168,7 +168,7 @@ function sampleRow(): InstalledModule {
     manifestJson: {},
     manifestJwt: 'fake.jwt.token',
     signedAt: new Date('2026-05-01T00:00:00Z'),
-    packageStorageKey: 'modules/mod.example/1.0.0-1.didactamod',
+    packageStorageKey: 'modules/mod.example/1.0.0-1.zip',
     packageSha256: 'a'.repeat(64),
     packageSizeBytes: 1024,
     coreVersionRequired: '^1.0.0',

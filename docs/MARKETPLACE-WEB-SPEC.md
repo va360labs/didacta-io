@@ -3,7 +3,7 @@
 > Documento dirigido al **equipo de la web pública de Didacta** (didacta.io).
 > Define el contrato que debe respetar la web para que un usuario pueda navegar el marketplace, hacer click en "Instalar" sobre un módulo y disparar la instalación contra una de sus instancias self-host registradas.
 >
-> **Contrato runtime de los módulos** (formato `*.didactamod`, firma RSA, lifecycle, aislamiento VM): ver [`docs/adrs/ADR-009-module-marketplace.md`](adrs/ADR-009-module-marketplace.md). Este doc se centra en el **canal web ↔ instancia**, no en la ejecución del módulo dentro de la instancia.
+> **Contrato runtime de los módulos** (formato `*.zip`, firma RSA, lifecycle, aislamiento VM): ver [`docs/adrs/ADR-009-module-marketplace.md`](adrs/ADR-009-module-marketplace.md). Este doc se centra en el **canal web ↔ instancia**, no en la ejecución del módulo dentro de la instancia.
 >
 > Estado: **propuesta v1**. Pendiente de validación con el equipo web. Última revisión: 2026-05-02.
 
@@ -11,7 +11,7 @@
 
 ## 1. Resumen ejecutivo
 
-Hoy el flujo previsto en ADR-009 es: el operador descarga manualmente un `*.didactamod` desde un canal privado (Drive/Notion) y lo sube en `/admin/modules/install`. Esto es el **fallback offline** y queda intocado.
+Hoy el flujo previsto en ADR-009 es: el operador descarga manualmente un `*.zip` desde un canal privado (Drive/Notion) y lo sube en `/admin/modules/install`. Esto es el **fallback offline** y queda intocado.
 
 A esto añadimos un segundo flujo, inspirado en n8n Cloud → instancia self-hosted:
 
@@ -33,7 +33,7 @@ Beneficio: misma promesa de self-host (la instancia decide si acepta y valida to
 - **Cuenta web**: usuario en didacta.io. Puede tener N instancias enlazadas.
 - **Pairing**: proceso one-time de enlazar una instancia con una cuenta web.
 - **Push install**: la web inicia la instalación de un módulo en una instancia ya pareada.
-- **Paquete `*.didactamod`**: ZIP firmado por Didacta con el módulo. Definido en ADR-009 §1.
+- **Paquete `*.zip`**: ZIP firmado por Didacta con el módulo. Definido en ADR-009 §1.
 
 ---
 
@@ -82,7 +82,7 @@ created_at, updated_at
 id                  uuid PK
 module_id           uuid FK
 version             text                     -- "1.2.0"
-zip_url             text                     -- "https://cdn.didacta.io/modules/mod.gamification-1.2.0.didactamod"
+zip_url             text                     -- "https://cdn.didacta.io/modules/mod.gamification-1.2.0.zip"
 zip_sha256          text                     -- hex
 manifest_json       jsonb                    -- copia legible del manifest (para preview)
 manifest_jwt       text                     -- firma JWT compact ES256 (mismo flujo que license-sdk) (la misma que va dentro del ZIP)
@@ -264,7 +264,7 @@ Se usa un flujo similar a OAuth Device Code, pero iniciado desde la instancia (m
 {
   "module_slug": "mod.gamification",
   "version": "1.2.0",
-  "zip_url": "https://cdn.didacta.io/modules/mod.gamification-1.2.0.didactamod",
+  "zip_url": "https://cdn.didacta.io/modules/mod.gamification-1.2.0.zip",
   "zip_sha256": "abc123...",
   "manifest_preview": { ...ADR-008 manifest... },
   "manifest_jwt": "...",
@@ -328,7 +328,7 @@ Endpoints públicos (sin auth) y autenticados:
 | GET | `/api/v1/installs/:id` | user | estado de una instalación |
 | POST | `/api/v1/installs/:id/webhook` | HMAC instancia | recibe resultado |
 
-### 6.1 Hosting de los `*.didactamod`
+### 6.1 Hosting de los `*.zip`
 
 Los ZIP firmados deben servirse desde un **CDN público** (`cdn.didacta.io`) con:
 - HTTPS obligatorio
@@ -364,7 +364,7 @@ Antes de que la web pueda lanzar el marketplace, faltan piezas que dependen de l
 |---|---|---|---|
 | S1 | Esquema definitivo de firma de módulos: clave Didacta, rotación, revocación. Reusa flujo del license-sdk (KMS alias/didacta-issuer-2026, ES256) | propuesto en ADR-009, sin implementación | firma push install |
 | S2 | KMS o HSM para custodiar la private key Didacta (no puede vivir en un repo) | no existe | firma producción |
-| S3 | Pipeline CI Didacta que firma los `.didactamod` al publicar | no existe | publicar versión |
+| S3 | Pipeline CI Didacta que firma los `.zip` al publicar | no existe | publicar versión |
 | S4 | CDN público `cdn.didacta.io` con bucket detrás | no existe | distribuir ZIP |
 | S5 | RLS strict en producción (`docs/RLS-STRICT-PLAN.md`) — pre-requisito de ADR-009 §"Pre-requisitos" | parcial, plan escrito, no aplicado | ACEPTAR primer módulo de terceros |
 
@@ -409,7 +409,7 @@ Fases incrementales para ir desbloqueando piezas sin esperar todo el sistema:
 ## 10. Referencias
 
 - [`docs/adrs/ADR-008-contrato-de-modulo.md`](adrs/ADR-008-contrato-de-modulo.md) — contrato runtime del módulo
-- [`docs/adrs/ADR-009-module-marketplace.md`](adrs/ADR-009-module-marketplace.md) — formato `*.didactamod`, firma, VM, lifecycle
+- [`docs/adrs/ADR-009-module-marketplace.md`](adrs/ADR-009-module-marketplace.md) — formato `*.zip`, firma, VM, lifecycle
 - [`docs/RLS-STRICT-PLAN.md`](RLS-STRICT-PLAN.md) — pre-requisito de seguridad
 - [`docs/ARQUITECTURA-MODULAR.md`](ARQUITECTURA-MODULAR.md) — anti-patrones y reglas de módulo
 - n8n self-hosted ↔ cloud pairing (referencia de UX): https://docs.n8n.io/hosting/server-setup/

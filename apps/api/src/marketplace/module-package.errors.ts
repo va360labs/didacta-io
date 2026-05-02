@@ -1,4 +1,4 @@
-/// Errores tipados del pipeline de validación de un `*.didactamod`.
+/// Errores tipados del pipeline de validación de un `*.zip`.
 ///
 /// Cada error lleva un `code` estable que el endpoint de install traduce a un
 /// status HTTP y mensaje legible. La separación de errores tipados permite

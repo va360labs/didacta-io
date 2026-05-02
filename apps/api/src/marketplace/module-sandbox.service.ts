@@ -53,7 +53,7 @@ export class ModuleSandboxService {
 
     try {
       runInContext(distSource, context, {
-        filename: `${moduleName}.didactamod/dist/index.js`,
+        filename: `${moduleName}.zip/dist/index.js`,
         timeout: DEFAULT_TIMEOUT_MS,
         displayErrors: true,
       });

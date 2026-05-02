@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/// Schema Zod del manifest de un módulo `*.didactamod`.
+/// Schema Zod del manifest de un módulo `*.zip`.
 ///
 /// Une el contrato base (ADR-008 — campos que todo módulo declara: nombre,
 /// versión, tablePrefix, apiNamespace, eventos, hooks, permisos) con las

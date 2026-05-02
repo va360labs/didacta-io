@@ -1,4 +1,4 @@
-/// Linter SQL para migraciones de un módulo `*.didactamod`.
+/// Linter SQL para migraciones de un módulo `*.zip`.
 ///
 /// Garantiza dos invariantes críticas del contrato (ADR-008/009):
 ///   1. **Aislamiento de schema por prefix**: cualquier objeto SQL creado

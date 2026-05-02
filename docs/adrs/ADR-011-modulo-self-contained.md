@@ -17,7 +17,7 @@ Síntoma observable (alpha.16): el operador desactivaba `mod.zoom-live` y el tab
 
 Esto rompe tres promesas del producto:
 1. **Modularidad operativa**: si el módulo tiene UI en el core, desactivarlo no quita visualmente sus superficies (sin maquillaje extra).
-2. **Distribución vía marketplace** (ADR-009): un `*.didactamod` debe poder traer su UI también, no solo backend. Sin esto, los módulos de terceros nunca pueden añadir paneles.
+2. **Distribución vía marketplace** (ADR-009): un `*.zip` debe poder traer su UI también, no solo backend. Sin esto, los módulos de terceros nunca pueden añadir paneles.
 3. **Aislamiento**: cualquier acoplamiento del core con un módulo (un import, una constante con su nombre) impide eliminar el módulo del producto sin tocar el core.
 
 ## Decisión
@@ -71,7 +71,7 @@ El core consume esto en su shell (`/admin/configuracion`, sidebar) filtrando por
 
 ### Carga dinámica (marketplace, fase 2+)
 
-Cuando el marketplace dinámico esté operativo (ADR-009 implementado), este patrón se extiende con un **loader runtime** que lee `installed_module` de la BD y mounta extensions desde paquetes `*.didactamod` instalados sin restart. La interfaz `ModuleWebExtension` no cambia — solo se reemplaza el import estático del catálogo por una resolución dinámica.
+Cuando el marketplace dinámico esté operativo (ADR-009 implementado), este patrón se extiende con un **loader runtime** que lee `installed_module` de la BD y mounta extensions desde paquetes `*.zip` instalados sin restart. La interfaz `ModuleWebExtension` no cambia — solo se reemplaza el import estático del catálogo por una resolución dinámica.
 
 ### Anti-patrones prohibidos
 

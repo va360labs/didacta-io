@@ -18,7 +18,7 @@ n8n, WordPress, Strapi y Drupal resuelven esto con un marketplace + upload de pa
 
 ## Decisión
 
-Permitir que un `super_admin` suba un paquete `*.didactamod` (ZIP firmado) desde `/admin/modules/install`, validarlo end-to-end contra el contrato de módulo (ADR-008), persistirlo en object storage y cargarlo en el process del API sin reinicio.
+Permitir que un `super_admin` suba un paquete `*.zip` (ZIP firmado) desde `/admin/modules/install`, validarlo end-to-end contra el contrato de módulo (ADR-008), persistirlo en object storage y cargarlo en el process del API sin reinicio.
 
 ### Alcance MVP (Sprint 4-5, esfuerzo XL)
 
@@ -29,12 +29,12 @@ Permitir que un `super_admin` suba un paquete `*.didactamod` (ZIP firmado) desde
 
 ## Arquitectura
 
-### 1. Formato del paquete `*.didactamod`
+### 1. Formato del paquete `*.zip`
 
 ZIP con estructura fija:
 
 ```
-mod.example-1.0.0.didactamod
+mod.example-1.0.0.zip
 ├── manifest.json           # ADR-008 manifest serializado
 ├── manifest.jwt            # JWT compact ES256 (manifest como payload) (clave Didacta)
 ├── dist/                   # Código JS compilado (output tsc, no TS source)
@@ -77,7 +77,7 @@ Sobre el manifest de ADR-008 añadimos:
 ### 3. Flujo de instalación
 
 ```
-super_admin → POST /api/v1/admin/modules/install (multipart, file=mod.example-1.0.0.didactamod)
+super_admin → POST /api/v1/admin/modules/install (multipart, file=mod.example-1.0.0.zip)
   │
   ├─ 1. Validate mime + size (max 50MB por módulo)
   ├─ 2. Extract ZIP a /tmp/<uuid>/ (adm-zip, ya usado por mod.learning para SCORM)
@@ -88,7 +88,7 @@ super_admin → POST /api/v1/admin/modules/install (multipart, file=mod.example-
   ├─ 7. Check name único (no colisiona con módulos ya instalados ni built-in)
   ├─ 8. Lint estático del dist/ (no requires fuera de allowlist, no fs writes fuera de su namespace)
   ├─ 9. Persist:
-  │     - ZIP completo a S3 didacta-modules/<tenantInstance>/<name>-<version>.didactamod
+  │     - ZIP completo a S3 didacta-modules/<tenantInstance>/<name>-<version>.zip
   │     - Row en table installed_modules (id, name, version, status='installing', ...)
   ├─10. Run prisma/migrations/ del módulo en transacción
   ├─11. Boot del módulo en VM aislada (vm2 o worker_thread):
@@ -112,7 +112,7 @@ Para MVP usamos `node:vm` nativo (vm2 es deprecated). El módulo NO tiene acceso
 
 ### 5. Distribución (NO marketplace público en MVP)
 
-Didacta publica `*.didactamod` en un canal privado (Notion → "Módulos disponibles" + Drive con assets). El operador descarga manualmente. Marketplace público (catálogo browseable, ratings, payments) = work item separado en Fase 2+.
+Didacta publica `*.zip` en un canal privado (Notion → "Módulos disponibles" + Drive con assets). El operador descarga manualmente. Marketplace público (catálogo browseable, ratings, payments) = work item separado en Fase 2+.
 
 ### 6. Lifecycle por tenant tras instalación global
 
@@ -175,7 +175,7 @@ Marketplace público de terceros queda explícitamente **out of scope** y se tra
 | Sprint 4 | Hot-reload via DynamicModule + VM aislamiento + install allowlist requires. |
 | Sprint 5 | Migración Prisma del módulo + lint SQL `tablePrefix` enforcement. |
 | Sprint 5 | UI `/admin/modules/install` con drag & drop + preview manifest + confirm. |
-| Sprint 5 | Tests E2E con `mod.hello-world.didactamod` real (módulo sample firmado). |
+| Sprint 5 | Tests E2E con `mod.hello-world.zip` real (módulo sample firmado). |
 | Sprint 6 | RLS strict (depende de `docs/RLS-STRICT-PLAN.md`) — sin esto el módulo accede a tablas ajenas. |
 | Sprint 6 | Métricas + circuit breaker por módulo (kill si p99 > 5s). |
 

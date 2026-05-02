@@ -131,7 +131,7 @@ describe('InstallPackageService.install', () => {
     expect(result.name).toBe('mod.example');
     expect(installed.createInstalling).toHaveBeenCalledOnce();
     expect(storage.upload).toHaveBeenCalledWith(
-      expect.stringMatching(/^modules\/mod\.example\/1\.0\.0-\d+\.didactamod$/),
+      expect.stringMatching(/^modules\/mod\.example\/1\.0\.0-\d+\.zip$/),
       fixture.buffer,
       'application/zip',
     );
@@ -371,9 +371,9 @@ describe('InstallPackageService.install', () => {
 });
 
 describe('buildStorageKey', () => {
-  it('formato modules/<name>/<version>-<timestamp>.didactamod', () => {
+  it('formato modules/<name>/<version>-<timestamp>.zip', () => {
     const key = buildStorageKey('mod.example', '1.2.3');
-    expect(key).toMatch(/^modules\/mod\.example\/1\.2\.3-\d+\.didactamod$/);
+    expect(key).toMatch(/^modules\/mod\.example\/1\.2\.3-\d+\.zip$/);
   });
 
   it('sanitiza caracteres no permitidos', () => {

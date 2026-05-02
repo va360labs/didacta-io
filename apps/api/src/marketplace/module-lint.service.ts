@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MarketplacePackageError } from './module-package.errors';
 
-/// Allowlist de módulos que un paquete `*.didactamod` puede requerir desde
+/// Allowlist de módulos que un paquete `*.zip` puede requerir desde
 /// su `dist/index.js`. La VM aislada intercepta cada `require` en runtime
 /// (defensa principal); este lint estático es belt-and-suspenders, sirve
 /// para fallar temprano antes de booteo y dejar mejor mensaje en el

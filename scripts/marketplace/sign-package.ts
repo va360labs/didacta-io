@@ -1,7 +1,7 @@
 #!/usr/bin/env -S node --import tsx
 /* eslint-disable no-console */
 
-/// Empaqueta y firma un módulo `*.didactamod` para distribución oficial
+/// Empaqueta y firma un módulo `*.zip` para distribución oficial
 /// (vendor=didacta). Reusa el mismo flujo de firma que el license-issuer:
 /// AWS KMS `kms:Sign` sobre `alias/didacta-issuer-2026` (eu-west-1, ECDSA
 /// P-256 + SHA-256), produciendo un JWT compact ES256.
@@ -16,7 +16,7 @@
 ///     --manifest ./build/mod.example/manifest.json \
 ///     --dist ./build/mod.example/dist \
 ///     --migrations ./build/mod.example/prisma/migrations \
-///     --out ./dist/mod.example-1.0.0.didactamod \
+///     --out ./dist/mod.example-1.0.0.zip \
 ///     --kid didacta-issuer-2026
 ///
 /// Pre-requisitos:

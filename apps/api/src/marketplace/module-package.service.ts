@@ -59,7 +59,7 @@ export class ModulePackageService {
 
   constructor(private readonly signatures: ModuleSignatureService) {}
 
-  /// Pipeline de validación de un `*.didactamod`. NO escribe a disco ni a BD;
+  /// Pipeline de validación de un `*.zip`. NO escribe a disco ni a BD;
   /// solo valida y devuelve los datos extraídos para que el caller decida
   /// qué hacer con ellos (persistir en S3, abrir transacción Prisma, etc.).
   ///

@@ -4,13 +4,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MarketplacePackageError } from './module-package.errors';
 import { lintMigrationSql, splitStatements } from './sql-lint';
 
-/// Convención: el subdir `prisma/migrations/` del paquete `*.didactamod`
+/// Convención: el subdir `prisma/migrations/` del paquete `*.zip`
 /// contiene 0+ archivos `.sql` que se aplican en orden alfabético. Cada
 /// archivo es un set atómico (todo o nada) — si una migration tiene 5
 /// statements y el 4º falla, los 4 anteriores se rollback con savepoint.
 ///
 /// MOTIVACIÓN del orden alfabético (no del orden de Prisma migrate): los
-/// paquetes `*.didactamod` son inmutables tras firmar; no podemos meter
+/// paquetes `*.zip` son inmutables tras firmar; no podemos meter
 /// un `migration.toml` con `lock` mutable. La convención de timestamp
 /// prefix (`20260502000001_xxx.sql`) emerge naturalmente de `prisma
 /// migrate dev` del módulo y nos da orden estable.

@@ -4,7 +4,7 @@
  * Panel super_admin · Marketplace de módulos (ADR-009 PR F).
  *
  * Permite al operador self-host:
- *   1. Subir un paquete `*.didactamod` firmado por Didacta vía drag&drop o
+ *   1. Subir un paquete `*.zip` firmado por Didacta vía drag&drop o
  *      file picker. El paquete viaja como body `application/zip` directo
  *      al endpoint `POST /admin/modules/install` (sin multipart, sin
  *      base64 — coherente con el body parser registrado en `main.ts`).
@@ -37,7 +37,7 @@ export default function AdminMarketplacePage() {
       <header className="flex flex-col gap-1">
         <h1 className="font-display text-3xl font-bold tracking-tight">Marketplace de módulos</h1>
         <p className="text-text-muted">
-          Subí un paquete <code>*.didactamod</code> firmado por Didacta para añadir un módulo a esta
+          Sube un paquete <code>.zip</code> firmado por Didacta para añadir un módulo a esta
           instancia sin reiniciar el API. Los módulos quedan disponibles para ser activados por
           tenant en <a href="/admin/configuracion" className="underline">Configuración</a>.
         </p>
@@ -87,7 +87,7 @@ function UploadCard() {
       <CardHeader>
         <CardTitle>Subir paquete</CardTitle>
         <CardDescription>
-          Arrastrá el <code>.didactamod</code> aquí o seleccionalo del disco. La instancia valida
+          Arrastra el <code>.zip</code> aquí o selecciónalo del disco. La instancia valida
           firma + lint del bundle + migrations SQL antes de aceptar.
         </CardDescription>
       </CardHeader>
@@ -112,7 +112,7 @@ function UploadCard() {
         >
           <Icon name="package" className="mx-auto mb-3 h-10 w-10 text-text-muted" />
           <p className="mb-2 font-medium">
-            {busy ? 'Procesando paquete…' : 'Arrastrá el .didactamod aquí'}
+            {busy ? 'Procesando paquete…' : 'Arrastra el .zip aquí'}
           </p>
           <p className="mb-4 text-sm text-text-muted">o</p>
           <Button
@@ -125,7 +125,7 @@ function UploadCard() {
           <input
             ref={fileRef}
             type="file"
-            accept=".didactamod,application/zip"
+            accept=".zip,application/zip"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];

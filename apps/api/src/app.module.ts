@@ -104,7 +104,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     // Marketplace de módulos — fundaciones (PR A de ADR-009). Solo expone
     // ModuleSignatureService + ModulePackageService para que los tests y
     // futuros endpoints (PR B) los consuman. Sin endpoints todavía: el
-    // upload del *.didactamod llega en PRs siguientes.
+    // upload del *.zip llega en PRs siguientes.
     MarketplaceModule,
     HealthModule,
   ],

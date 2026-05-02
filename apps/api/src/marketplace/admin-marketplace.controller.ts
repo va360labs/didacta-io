@@ -72,7 +72,7 @@ function requireSuperAdmin(user: SessionClaims | undefined): SessionClaims {
 }
 
 /// Endpoints super_admin del marketplace. Solo se llega aquí con un Bearer
-/// JWT válido + rol `super_admin`. El upload del `*.didactamod` viaja como
+/// JWT válido + rol `super_admin`. El upload del `*.zip` viaja como
 /// body `application/zip` (parser registrado en `main.ts`); el frontend
 /// puede usar `fetch(..., { body: file })` con `Content-Type: application/zip`.
 ///
@@ -95,7 +95,7 @@ export class AdminMarketplaceController {
   @Post('install')
   @ApiOperation({
     summary:
-      'Instala un paquete *.didactamod firmado por Didacta (KMS alias/didacta-issuer-2026, ES256). Requiere rol super_admin.',
+      'Instala un paquete *.zip firmado por Didacta (KMS alias/didacta-issuer-2026, ES256). Requiere rol super_admin.',
   })
   async installPackage(
     @CurrentUser() user: SessionClaims | undefined,
@@ -105,7 +105,7 @@ export class AdminMarketplaceController {
     if (!Buffer.isBuffer(body) || body.length === 0) {
       throw new MarketplacePackageError(
         'PACKAGE_INVALID_ZIP',
-        'Body vacío o no es application/zip. Manda los bytes del .didactamod en el body.',
+        'Body vacío o no es application/zip. Manda los bytes del .zip en el body.',
       );
     }
     return this.install.install(body, session.sub);

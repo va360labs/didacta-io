@@ -31,7 +31,7 @@ export interface InstallResult {
   installedAt: Date | null;
 }
 
-/// Orquestador del pipeline de instalación de un `*.didactamod` (ADR-009 §3).
+/// Orquestador del pipeline de instalación de un `*.zip` (ADR-009 §3).
 ///
 /// Pasos:
 ///   1-8. Validación del paquete (firma, schema, etc.) — PR A.
@@ -196,7 +196,7 @@ function extractDistSource(packageBuffer: Buffer): string {
 }
 
 /// Clave estable en object storage para el paquete. Pattern:
-///   modules/<name>/<version>-<timestamp>.didactamod
+///   modules/<name>/<version>-<timestamp>.zip
 /// El timestamp evita colisiones cuando se reinstala la misma versión
 /// (caso: el operador subió un build corrupto, lo arregló, vuelve a
 /// subir). El cleanup de versiones huérfanas no está en MVP.
@@ -204,7 +204,7 @@ export function buildStorageKey(name: string, version: string): string {
   const safeName = name.replace(/[^A-Za-z0-9.-]/g, '_');
   const safeVersion = version.replace(/[^A-Za-z0-9.+-]/g, '_');
   const ts = Date.now();
-  return `modules/${safeName}/${safeVersion}-${ts}.didactamod`;
+  return `modules/${safeName}/${safeVersion}-${ts}.zip`;
 }
 
 function toInstallResult(row: InstalledModule, manifest: ModuleManifest): InstallResult {

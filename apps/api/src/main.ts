@@ -49,7 +49,7 @@ async function bootstrap(): Promise<void> {
   // puede inyectarlo en @Body(). Registramos un parser que devuelve un objeto
   // plano `{ SAMLResponse, RelayState }`.
   // Marketplace de módulos (ADR-009): el endpoint `POST /admin/modules/install`
-  // recibe el `*.didactamod` como body crudo `application/zip`. El parser
+  // recibe el `*.zip` como body crudo `application/zip`. El parser
   // por defecto no maneja este content-type — sin esto Fastify devolvería
   // 415. `bodyLimit` se aliña con `MAX_PACKAGE_BYTES` del validador (50MB);
   // si el ZIP excede el límite, Fastify rechaza antes de llegar al handler.
