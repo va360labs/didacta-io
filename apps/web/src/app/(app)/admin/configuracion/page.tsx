@@ -160,33 +160,46 @@ export default function ConfiguracionPage() {
 
   // Carga la lista de módulos activos del tenant para filtrar tabs cuyo
   // módulo está desactivado (ej. mod.zoom-live → oculta "Aula virtual").
+  // Re-ejecuta también cuando otro componente dispara el evento
+  // `didacta:modules-changed` (típicamente el ModulesTab de esta misma
+  // página tras un toggle), así el filtro se actualiza sin recargar.
   useEffect(() => {
-    const token = authStorage.getAccessToken();
-    if (!token) return;
     let cancelled = false;
-    meApi
-      .getMyModules(token)
-      .then((res) => {
-        if (!cancelled) setActiveModules(new Set(res.activeModules));
-      })
-      .catch(() => {
-        // Si falla (red, módulo registry indisponible), dejamos null —
-        // mostramos todas las tabs para no bloquear al admin.
-        if (!cancelled) setActiveModules(null);
-      });
+    function refresh() {
+      const token = authStorage.getAccessToken();
+      if (!token) return;
+      meApi
+        .getMyModules(token)
+        .then((res) => {
+          if (!cancelled) setActiveModules(new Set(res.activeModules));
+        })
+        .catch(() => {
+          // Si falla (red, módulo registry indisponible), pasamos a un
+          // set VACÍO en lugar de null para ser ESTRICTOS: ocultamos
+          // tabs de módulos hasta que la lista llegue. Antes era
+          // permisivo y dejaba el tab visible aunque el módulo
+          // estuviera desactivado — ese era el síntoma reportado
+          // en alpha.17.
+          if (!cancelled) setActiveModules(new Set<string>());
+        });
+    }
+    refresh();
+    window.addEventListener('didacta:modules-changed', refresh);
     return () => {
       cancelled = true;
+      window.removeEventListener('didacta:modules-changed', refresh);
     };
   }, []);
 
-  /// Filtra tabs cuyo `requiresModule` no está activo. Mientras
-  /// `activeModules` es null (loading o error) mostramos todas — fallback
-  /// permisivo para no esconder accidentalmente acciones legítimas. El
-  /// backend sigue devolviendo 403 si se intenta acceder a un endpoint
-  /// del módulo desactivado.
+  /// Filtra tabs cuyo `requiresModule` no está activo. Si `activeModules`
+  /// aún no llegó del API (estado inicial pre-fetch), ocultamos los tabs
+  /// de extensión por seguridad — la versión anterior era permisiva (los
+  /// mostraba durante el flash) y el operador veía el tab incluso con el
+  /// módulo desactivado. Tabs del core (sin `requiresModule`) siempre
+  /// visibles.
   const visibleTabs = ALL_TABS.filter((t) => {
     if (!t.requiresModule) return true;
-    if (!activeModules) return true;
+    if (!activeModules) return false;
     return activeModules.has(t.requiresModule);
   });
 
