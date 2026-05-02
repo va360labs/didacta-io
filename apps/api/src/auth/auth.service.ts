@@ -2,6 +2,7 @@ import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/co
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { ClientContext } from './client-context';
+import { isAdminMfaEnforced } from './mfa-config';
 import { MfaPolicyService } from './mfa-policy/mfa-policy.service';
 import { MfaRequiredByTenantPolicyError } from './mfa-policy/mfa-required-by-tenant-policy.error';
 import { PasswordService } from './password.service';
@@ -19,15 +20,6 @@ export class AmbiguousTenantError extends UnauthorizedException {
 }
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
-
-/// Default policy: cualquier admin debe configurar MFA. El operador
-/// puede opt-out con `DIDACTA_REQUIRE_MFA_ADMIN=false`. Strings tratados
-/// como falsy: `'false'`, `'0'`, `'no'`, `'off'`. Cualquier otro valor —
-/// incluido vacío — mantiene la enforcement activa.
-function isAdminMfaEnforced(): boolean {
-  const raw = (process.env['DIDACTA_REQUIRE_MFA_ADMIN'] ?? '').trim().toLowerCase();
-  return raw !== 'false' && raw !== '0' && raw !== 'no' && raw !== 'off';
-}
 
 const NO_CLIENT_CONTEXT: ClientContext = { ip: null, userAgent: null };
 
@@ -321,19 +313,18 @@ export class AuthService {
   }
 
   /**
-   * Roles administrativos exigen MFA según FR-CORE-02.
+   * Política global de MFA por rol. **Default = NO obligatorio.**
    *
-   * El operador puede deshabilitar la enforcement automática para roles
-   * admin via env var `DIDACTA_REQUIRE_MFA_ADMIN=false`. Útil en
-   * deployments self-host donde el admin único acepta el riesgo de no
-   * tener segundo factor (ej. lab interno, instalación local, primer
-   * onboarding antes de configurar TOTP). El default sigue siendo `true`
-   * — la regla solo cae si el operador lo opta-out explícitamente.
+   * El operador puede activar enforcement automática para roles admin
+   * con `DIDACTA_REQUIRE_MFA_ADMIN=true` (ver `mfa-config.ts` para los
+   * valores aceptados). Sin la env var, los admins NO son redirigidos
+   * automáticamente a `/mfa/setup` — pueden configurar MFA opcionalmente
+   * desde su perfil de seguridad.
    *
-   * NOTA: este toggle afecta SOLO la regla automática por rol. La
-   * política tenant-wide (`feat:mfa.enforcement`) sigue activa cuando el
-   * tenant la haya habilitado — esa se gestiona en `MfaPolicyService` y
-   * NO se ve afectada por la env var.
+   * NOTA: la política tenant-wide (`feat:mfa.enforcement`) sigue activa
+   * con su propio flujo (`MfaPolicyService`). Si el tenant_admin la
+   * habilita en `/admin/seguridad`, los usuarios reciben el aviso
+   * `mfaRequiredSoon` independientemente del valor de esta env var.
    *
    * - Si no configuró MFA: hay que forzar setup en primer login.
    * - Si ya lo configuró: hay que pedir el segundo factor en runtime.

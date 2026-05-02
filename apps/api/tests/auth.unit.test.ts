@@ -19,45 +19,45 @@ describe('AuthService.shouldRequireMfa', () => {
 
   const service = dummy();
 
-  it('exige MFA a super_admin sin MFA configurado', () => {
-    expect(service.shouldRequireMfa(['super_admin'], false)).toBe(true);
+  it('default (env no seteada): NO exige MFA a admins — opt-in del operador', () => {
+    expect(service.shouldRequireMfa(['super_admin'], false)).toBe(false);
+    expect(service.shouldRequireMfa(['tenant_admin'], false)).toBe(false);
+    expect(service.shouldRequireMfa(['tenant_admin'], true)).toBe(false);
   });
 
-  it('exige MFA a tenant_admin sin MFA configurado', () => {
-    expect(service.shouldRequireMfa(['tenant_admin'], false)).toBe(true);
-  });
-
-  it('exige MFA a admin aun con mfaEnabled=true (segundo factor en runtime)', () => {
-    expect(service.shouldRequireMfa(['tenant_admin'], true)).toBe(true);
-  });
-
-  it('NO exige MFA a alumno', () => {
+  it('NO exige MFA a alumno (sea cual sea el flag)', () => {
+    expect(service.shouldRequireMfa(['alumno'], false)).toBe(false);
+    process.env[ENV] = 'true';
     expect(service.shouldRequireMfa(['alumno'], false)).toBe(false);
   });
 
-  it('NO exige MFA a formador', () => {
+  it('NO exige MFA a formador (sea cual sea el flag)', () => {
+    expect(service.shouldRequireMfa(['formador'], false)).toBe(false);
+    process.env[ENV] = 'true';
     expect(service.shouldRequireMfa(['formador'], false)).toBe(false);
   });
 
   it('NO exige MFA si no hay roles', () => {
     expect(service.shouldRequireMfa([], false)).toBe(false);
+    process.env[ENV] = 'true';
+    expect(service.shouldRequireMfa([], false)).toBe(false);
   });
 
-  it.each(['false', 'FALSE', '0', 'no', 'off'])(
-    'DIDACTA_REQUIRE_MFA_ADMIN=%s desactiva la enforcement automática',
+  it.each(['true', 'TRUE', '1', 'yes', 'on'])(
+    'DIDACTA_REQUIRE_MFA_ADMIN=%s activa la enforcement automática',
     (value) => {
       process.env[ENV] = value;
-      expect(service.shouldRequireMfa(['super_admin'], false)).toBe(false);
-      expect(service.shouldRequireMfa(['tenant_admin'], false)).toBe(false);
+      expect(service.shouldRequireMfa(['super_admin'], false)).toBe(true);
+      expect(service.shouldRequireMfa(['tenant_admin'], false)).toBe(true);
+      expect(service.shouldRequireMfa(['tenant_admin'], true)).toBe(true);
     },
   );
 
-  it('valor "true" (o cualquier otro) mantiene la enforcement', () => {
-    process.env[ENV] = 'true';
-    expect(service.shouldRequireMfa(['super_admin'], false)).toBe(true);
-    process.env[ENV] = 'maybe';
-    expect(service.shouldRequireMfa(['super_admin'], false)).toBe(true);
-    process.env[ENV] = '';
-    expect(service.shouldRequireMfa(['super_admin'], false)).toBe(true);
-  });
+  it.each(['false', '0', '', 'maybe', 'no'])(
+    'DIDACTA_REQUIRE_MFA_ADMIN=%s mantiene el default (no exige)',
+    (value) => {
+      process.env[ENV] = value;
+      expect(service.shouldRequireMfa(['super_admin'], false)).toBe(false);
+    },
+  );
 });

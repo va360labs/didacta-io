@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { FastifyRequest } from 'fastify';
+import { isAdminMfaEnforced } from './mfa-config';
 import { TokenService, type SessionClaims } from './token.service';
 
 export const REQUIRES_MFA_KEY = 'requiresMfa';
@@ -83,7 +84,12 @@ export class JwtAuthGuard implements CanActivate {
     return true;
   }
 
+  /// Misma política que `AuthService.shouldRequireMfa`: respeta el
+  /// flag global `DIDACTA_REQUIRE_MFA_ADMIN`. Sin él, el guard NO
+  /// rechaza a admins por falta de MFA verificada — es responsabilidad
+  /// del usuario activar TOTP desde su perfil si lo desea.
   private requiresAdminMfa(user: SessionClaims): boolean {
+    if (!isAdminMfaEnforced()) return false;
     return user.roles.some((r) => ADMIN_ROLES_REQUIRING_MFA.has(r));
   }
 }
