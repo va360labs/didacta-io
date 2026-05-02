@@ -23,7 +23,7 @@ import {
   type InvoiceRow,
   type SubscriptionRow,
   type SubscriptionStatus,
-} from '@/lib/subscriptions';
+} from '@/modules/subscriptions';
 
 export default function MisSuscripcionesPage() {
   const [loading, setLoading] = useState(true);

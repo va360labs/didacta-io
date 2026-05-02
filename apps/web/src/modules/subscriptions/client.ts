@@ -11,7 +11,7 @@
  * No es EE — todo CE. Sin `<EeGate>`.
  */
 
-import { apiFetch } from './api-client';
+import { apiFetch } from '@/lib/api-client';
 
 export type SubscriptionStatus = 'PENDING' | 'ACTIVE' | 'PAST_DUE' | 'UNPAID' | 'CANCELED';
 export type InvoiceStatus = 'OPEN' | 'PAID' | 'UNCOLLECTIBLE' | 'VOID';

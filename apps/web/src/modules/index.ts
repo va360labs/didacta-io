@@ -12,14 +12,18 @@
 
 import type { ModuleWebExtension } from '@/lib/module-registry';
 import { assessmentsExtension } from './assessments';
+import { billingExtension } from './billing';
 import { fundaeExtension } from './fundae';
 import { notificationsExtension } from './notifications';
+import { subscriptionsExtension } from './subscriptions';
 import { zoomLiveExtension } from './zoom-live';
 
 export const moduleExtensions: readonly ModuleWebExtension[] = [
   assessmentsExtension,
+  billingExtension,
   fundaeExtension,
   notificationsExtension,
+  subscriptionsExtension,
   zoomLiveExtension,
 ];
 

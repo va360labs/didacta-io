@@ -8,7 +8,7 @@ import {
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
-import { ModuleRegistryService } from './module-registry.service';
+import { ModuleRegistryService } from '../module-registry.service';
 
 const QUEUE_NAME = 'didacta.subscriptions.grace-expiration';
 const REPEAT_PATTERN = process.env['SUBSCRIPTIONS_GRACE_EXPIRATION_CRON'] ?? '0 * * * *'; // Cada hora en punto UTC

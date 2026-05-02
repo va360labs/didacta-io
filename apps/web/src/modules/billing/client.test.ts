@@ -11,8 +11,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiHttpError } from './api-client';
-import { billingApi } from './billing';
+import { ApiHttpError } from '@/lib/api-client';
+import { billingApi } from './client';
 
 describe('billingApi.startCheckout', () => {
   const originalFetch = global.fetch;

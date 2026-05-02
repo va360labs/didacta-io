@@ -10,7 +10,7 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { WebhookSignatureInvalidError } from '@didacta/mod-subscriptions';
 import type { FastifyRequest } from 'fastify';
-import { ModuleRegistryService } from './module-registry.service';
+import { ModuleRegistryService } from '../module-registry.service';
 
 /**
  * Endpoint público de webhooks de Stripe específico de mod.subscriptions.

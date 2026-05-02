@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { SubscriptionsGraceExpirationWorker } from '../src/modules/subscriptions-grace-expiration.worker';
+import { SubscriptionsGraceExpirationWorker } from '../src/modules/subscriptions/subscriptions-grace-expiration.worker';
 
 const noopLogger = {
   log: vi.fn(),

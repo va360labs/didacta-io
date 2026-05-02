@@ -24,7 +24,7 @@
  * El módulo es CE — sin `<EeGate>`.
  */
 
-import { apiFetch } from './api-client';
+import { apiFetch } from '@/lib/api-client';
 
 /**
  * Forma exacta del retorno del backend `BillingService.startCheckout`:

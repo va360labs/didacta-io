@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DomainEvent } from '@didacta/core-kernel';
 import { AlreadyEnrolledError } from '@didacta/mod-learning';
-import { BillingLearningBridge } from '../src/modules/billing-learning.bridge';
+import { BillingLearningBridge } from '../src/modules/billing/billing-learning.bridge';
 
 interface BillingOrderCompletedPayload {
   orderId: string;

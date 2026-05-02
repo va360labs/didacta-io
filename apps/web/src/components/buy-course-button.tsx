@@ -28,7 +28,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
-import { billingApi } from '@/lib/billing';
+import { billingApi } from '@/modules/billing';
 
 interface BuyCourseButtonProps {
   courseId: string;

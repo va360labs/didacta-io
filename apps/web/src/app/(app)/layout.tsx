@@ -283,15 +283,6 @@ function buildGroups({
     label: 'Facturación',
     icon: 'package',
     items: [
-      // "Pagos" — mod.billing (CE). Vincula cursos a Stripe Price IDs para
-      // que el catálogo abra Checkout. NO es feature EE — sin gate de
-      // capability. SÍ se filtra por módulo activo (mod.billing).
-      {
-        href: '/admin/billing/products',
-        label: 'Productos (Stripe)',
-        icon: 'package',
-        requiresModule: 'mod.billing',
-      },
     ],
   };
 

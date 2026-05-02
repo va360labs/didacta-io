@@ -25,7 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
-import { billingApi, formatPrice, type BillingProduct } from '@/lib/billing';
+import { billingApi, formatPrice, type BillingProduct } from '@/modules/billing';
 import { coursesApi, type Course } from '@/lib/courses';
 
 const PRICE_ID_PATTERN = /^price_[A-Za-z0-9]+$/;

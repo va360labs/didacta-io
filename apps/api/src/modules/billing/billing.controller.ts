@@ -1,10 +1,10 @@
 import { Controller, Param, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CurrentUser } from '../auth/decorators';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import type { SessionClaims } from '../auth/token.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { ModuleRegistryService } from './module-registry.service';
+import { CurrentUser } from '../../auth/decorators';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import type { SessionClaims } from '../../auth/token.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { ModuleRegistryService } from '../module-registry.service';
 
 /**
  * Endpoint de checkout para el ALUMNO (rol student/alumno o cualquier user
