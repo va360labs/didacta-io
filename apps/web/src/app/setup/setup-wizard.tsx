@@ -426,7 +426,7 @@ function StepOrganization(props: {
             placeholder="didacta.miempresa.com"
           />
           <p className="text-xs text-text-subtle">
-            Detectado automáticamente. Cambialo si vas a acceder por otro dominio o si configurás un
+            Detectado automáticamente. Cambialo si vas a acceder por otro dominio o si configuras un
             CDN delante.
           </p>
         </div>

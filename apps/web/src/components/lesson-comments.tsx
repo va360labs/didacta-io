@@ -123,7 +123,7 @@ export function LessonComments({ lessonId, courseId }: Props) {
             rows={3}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="¿Tenés una pregunta o anotación sobre esta lección?"
+            placeholder="¿Tienes una pregunta o anotación sobre esta lección?"
             maxLength={4000}
           />
           <div className="flex items-center justify-end gap-2">

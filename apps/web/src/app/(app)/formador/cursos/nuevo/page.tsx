@@ -42,7 +42,7 @@ export default function NuevoCursoPage() {
             <div className="min-w-0">
               <CardTitle>Nuevo curso</CardTitle>
               <CardDescription>
-                El curso queda en estado borrador hasta que lo publiques. Luego añadís secciones,
+                El curso queda en estado borrador hasta que lo publiques. Luego añades secciones,
                 lecciones y contenido.
               </CardDescription>
             </div>

@@ -338,7 +338,7 @@ export function CustomDomainsUpsellCard() {
         <CardDescription>
           Los dominios personalizados son parte del paquete Didacta Enterprise. Tu plan actual
           (community) usa el subdominio compartido{' '}
-          <code className="font-mono">&lt;slug&gt;.didacta.io</code>; con Enterprise podés servir tu
+          <code className="font-mono">&lt;slug&gt;.didacta.io</code>; con Enterprise puedes servir tu
           LMS desde tu propio hostname (ej. <code className="font-mono">learn.acme.com</code>).
         </CardDescription>
       </CardHeader>

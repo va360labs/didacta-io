@@ -353,7 +353,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
             ? 'Tu intento contiene respuestas abiertas. Cuando el formador termine de corregir, vas a poder ver el resultado y, si aprobaste, la lección queda completada automáticamente.'
             : a.passed
               ? 'La lección queda marcada como completada. Si era la última que te faltaba, tu certificado se está emitiendo en este momento.'
-              : 'Si el quiz lo permite, podés reintentar. Repasá las lecciones anteriores y volvé cuando estés listo.'}
+              : 'Si el quiz lo permite, puedes reintentar. Repasá las lecciones anteriores y volvé cuando estés listo.'}
         </p>
 
         <div className="mt-6 flex flex-wrap justify-center gap-2">

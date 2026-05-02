@@ -665,7 +665,7 @@ function PublishChecklist({
             </h3>
             <p className="mt-0.5 text-xs text-text-muted">
               {allDone
-                ? 'Todos los requisitos están cumplidos. Podés publicar cuando quieras.'
+                ? 'Todos los requisitos están cumplidos. Puedes publicar cuando quieras.'
                 : 'Completá estos elementos para que tu curso esté listo:'}
             </p>
             <ul className="mt-3 space-y-1.5">
@@ -1196,7 +1196,7 @@ function CertificateTemplateCard({
           <div className="min-w-0">
             <CardTitle className="text-base">Plantilla de certificado</CardTitle>
             <CardDescription>
-              Si no elegís ninguna, se usa la default del tenant
+              Si no eliges ninguna, se usa la default del tenant
               {defaultName ? (
                 <>
                   {' '}

@@ -117,7 +117,7 @@ export default function NotificacionesPage() {
           <h1 className="font-display text-3xl font-bold tracking-tight">Notificaciones</h1>
           <p className="mt-1 text-text-muted">
             {unread > 0
-              ? `Tenés ${unread} sin leer.`
+              ? `Tienes ${unread} sin leer.`
               : 'Al día. Te avisaremos cuando haya algo nuevo.'}
           </p>
         </div>

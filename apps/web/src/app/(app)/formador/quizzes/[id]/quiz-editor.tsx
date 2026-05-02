@@ -337,7 +337,7 @@ export function QuizEditor({
                 Empezá añadiendo tu primera pregunta
               </h3>
               <p className="mx-auto mt-1 max-w-md text-sm text-text-muted">
-                Tipo de pregunta, enunciado y opciones. Podés mezclar tipos en un mismo quiz.
+                Tipo de pregunta, enunciado y opciones. Puedes mezclar tipos en un mismo quiz.
               </p>
             </div>
           ) : (

@@ -261,7 +261,7 @@ export default function CorreccionDetailPage() {
           <div className="min-w-0 flex-1 text-sm">
             <p className="font-semibold text-text">Asistente IA de corrección</p>
             <p className="text-xs text-text-subtle">
-              Genera sugerencias basadas en la rúbrica de cada pregunta. Vos seguís siendo quien
+              Genera sugerencias basadas en la rúbrica de cada pregunta. Vos sigues siendo quien
               decide la nota final.
             </p>
             {suggestNotice ? <p className="mt-1 text-xs text-text">{suggestNotice}</p> : null}

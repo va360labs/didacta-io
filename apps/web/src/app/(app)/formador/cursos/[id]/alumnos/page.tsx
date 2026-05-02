@@ -195,7 +195,7 @@ export default function AlumnosPage() {
             <div className="flex flex-col items-center gap-3 p-12 text-center">
               <h3 className="font-display text-xl font-semibold">No hay matriculaciones</h3>
               <p className="max-w-md text-text-muted">
-                Cuando alguien se matricule en este curso, aparecerá acá. Podés generar invitaciones
+                Cuando alguien se matricule en este curso, aparecerá acá. Puedes generar invitaciones
                 desde la pestaña Invitaciones.
               </p>
             </div>

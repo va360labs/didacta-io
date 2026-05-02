@@ -127,7 +127,7 @@ export default function AulaVirtualPage() {
             </div>
             <h3 className="font-display text-2xl font-semibold">Sin sesiones todavía</h3>
             <p className="max-w-md text-text-muted">
-              Programá tu primera sesión Zoom desde el botón de arriba. Podés vincularla a un curso
+              Programá tu primera sesión Zoom desde el botón de arriba. Puedes vincularla a un curso
               o dejarla como sesión libre del tenant.
             </p>
           </CardContent>
@@ -267,7 +267,7 @@ function CreateSessionForm({
     const form = new FormData(e.target as HTMLFormElement);
     const startTimeRaw = String(form.get('startTime') ?? '');
     if (!startTimeRaw) {
-      setError('Tenés que indicar fecha y hora.');
+      setError('Tienes que indicar fecha y hora.');
       return;
     }
     setPending(true);

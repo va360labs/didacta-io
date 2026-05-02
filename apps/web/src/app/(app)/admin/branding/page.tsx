@@ -178,7 +178,7 @@ export default function BrandingPage() {
           <h1 className="font-display text-3xl font-bold tracking-tight">Branding</h1>
           <p className="mt-1 text-text-muted">
             Personalizá la identidad visual de tu organización. Los cambios se guardan al hacer clic
-            en <span className="font-semibold">Guardar</span>; podés ver una vista previa mientras
+            en <span className="font-semibold">Guardar</span>; puedes ver una vista previa mientras
             editás.
           </p>
         </div>
@@ -343,7 +343,7 @@ export default function BrandingPage() {
                   className="mt-1.5"
                 />
                 <p className="mt-1 text-xs text-text-subtle">
-                  Si pegás aquí una URL externa pisará el logo subido (al guardar).
+                  Si pegas aquí una URL externa pisará el logo subido (al guardar).
                 </p>
               </div>
               <div>

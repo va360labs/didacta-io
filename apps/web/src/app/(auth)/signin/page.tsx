@@ -26,7 +26,7 @@ export default function SignInPage() {
         <SignInForm />
       </CardContent>
       <CardFooter className="text-sm text-text-muted">
-        <span>¿Todavía no tenés cuenta?</span>
+        <span>¿Todavía no tienes cuenta?</span>
         <Link href="/signup" className="ml-2 font-semibold text-brand-700 hover:underline">
           Crear cuenta
         </Link>

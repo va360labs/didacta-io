@@ -304,7 +304,7 @@ function QuizLink({
       ) : (
         <div className="space-y-2 rounded-lg border-2 border-dashed border-border-strong bg-surface-2 p-4">
           <p className="text-sm text-text-muted">
-            Esta lección no tiene quiz todavía. Podés crear uno nuevo o pegar el UUID de uno
+            Esta lección no tiene quiz todavía. Puedes crear uno nuevo o pegar el UUID de uno
             existente.
           </p>
           <div className="flex flex-wrap gap-2">

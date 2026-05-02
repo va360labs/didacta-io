@@ -114,7 +114,7 @@ export default function MisSuscripcionesPage() {
       <header className="flex flex-col gap-1">
         <h1 className="font-display text-3xl font-bold tracking-tight">Mis suscripciones</h1>
         <p className="text-text-muted">
-          Gestiona tus suscripciones recurrentes a cursos. Podés cancelar al final del periodo
+          Gestiona tus suscripciones recurrentes a cursos. Puedes cancelar al final del periodo
           (mantenés acceso hasta esa fecha) o de inmediato.
         </p>
       </header>
@@ -139,7 +139,7 @@ export default function MisSuscripcionesPage() {
       {subs.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-center text-text-muted">
-            <p className="mb-2 font-semibold">Aún no tenés ninguna suscripción.</p>
+            <p className="mb-2 font-semibold">Aún no tienes ninguna suscripción.</p>
             <p className="text-sm">
               Cuando te suscribas a un curso desde el catálogo, aparecerá aquí.
             </p>

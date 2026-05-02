@@ -27,7 +27,7 @@ export interface CourseCardData {
 
 interface Props {
   course: CourseCardData;
-  /** Si querés un href custom (ej. detalle de formador). Default: /cursos/{slug}. */
+  /** Si quieres un href custom (ej. detalle de formador). Default: /cursos/{slug}. */
   href?: string;
 }
 

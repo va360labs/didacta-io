@@ -281,7 +281,7 @@ function ScimPanel() {
             <p className="text-xs">
               Groups (sincronización de grupos) NO está soportado todavía — los IdPs lo intentarán y
               recibirán <code className="font-mono">501 Not Implemented</code> o{' '}
-              <code className="font-mono">404</code>. Las asignaciones de roles las seguís haciendo
+              <code className="font-mono">404</code>. Las asignaciones de roles las sigues haciendo
               desde <a href="/admin/usuarios">Usuarios</a>.
             </p>
           </div>

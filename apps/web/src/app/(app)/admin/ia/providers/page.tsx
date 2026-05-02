@@ -110,7 +110,7 @@ export default function AiProvidersAdminPage() {
     e.preventDefault();
     const d = drafts[purpose];
     if (!d.provider || !d.apiKey) {
-      setError('Tenés que elegir un proveedor y una API key.');
+      setError('Tienes que elegir un proveedor y una API key.');
       return;
     }
     setPending(purpose);

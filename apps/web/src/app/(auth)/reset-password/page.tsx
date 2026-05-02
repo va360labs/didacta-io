@@ -38,7 +38,7 @@ export default function ResetPasswordPage() {
         </Suspense>
       </CardContent>
       <CardFooter className="text-sm text-text-muted">
-        ¿No tenés un enlace válido?{' '}
+        ¿No tienes un enlace válido?{' '}
         <Link href="/forgot-password" className="ml-1 font-semibold text-brand-700 hover:underline">
           Pedí uno nuevo
         </Link>

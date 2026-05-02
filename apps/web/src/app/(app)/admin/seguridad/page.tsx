@@ -239,7 +239,7 @@ function MfaEnforcementUpsellCard() {
         <CardDescription>
           Forzar MFA a todos los usuarios del tenant es parte del paquete de seguridad Didacta
           Enterprise. Tu plan actual (community) ya obliga MFA a los administradores; con Enterprise
-          podés extenderlo a alumnos, formadores y managers con período de gracia configurable.
+          puedes extenderlo a alumnos, formadores y managers con período de gracia configurable.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

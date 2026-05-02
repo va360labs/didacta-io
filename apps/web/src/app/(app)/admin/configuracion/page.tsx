@@ -14,6 +14,7 @@ import {
   type NotificationTemplateOverride,
 } from '@/lib/admin-notifications';
 import { adminModulesApi, type TenantModuleListItem } from '@/lib/admin-modules';
+import { meApi } from '@/lib/me';
 import { adminTenantsApi, type TenantListItem } from '@/lib/admin-tenants';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
@@ -85,7 +86,21 @@ const SMTP_PRESETS: Record<SmtpProvider, { host: string; port: string; hint: str
 // Se removió la tab acá para no duplicar entry-point y confundir al admin.
 type TabKey = 'notifications' | 'modules' | 'aula-virtual' | 'storage' | 'plantillas' | 'raw';
 
-const TABS: Array<{ key: TabKey; label: string; description: string }> = [
+/// Cada tab declara opcionalmente `requiresModule`. Si el módulo está
+/// desactivado en este tenant, el tab desaparece. Misma política que
+/// el sidebar (`filterByActiveModules`).
+///
+/// IMPORTANTE: este filtro es UX. La defensa real está en el backend —
+/// cualquier endpoint del módulo desactivado responde 403 vía
+/// `ModuleAccessInterceptor`. El tab oculto solo evita confusión visual
+/// del operador (PR a futuro: mover esta UI dentro del propio módulo
+/// en lugar de tenerla en el core, ver ADR-008).
+const TABS: Array<{
+  key: TabKey;
+  label: string;
+  description: string;
+  requiresModule?: string;
+}> = [
   {
     key: 'notifications',
     label: 'Notificaciones',
@@ -94,12 +109,13 @@ const TABS: Array<{ key: TabKey; label: string; description: string }> = [
   {
     key: 'modules',
     label: 'Módulos',
-    description: 'Activá o desactivá módulos del producto para tu organización.',
+    description: 'Activa o desactiva módulos del producto para tu organización.',
   },
   {
     key: 'aula-virtual',
     label: 'Aula virtual',
-    description: 'Credenciales Zoom para sesiones síncronas (próximamente con mod.zoom-live).',
+    description: 'Credenciales Zoom para sesiones síncronas (mod.zoom-live).',
+    requiresModule: 'mod.zoom-live',
   },
   {
     key: 'storage',
@@ -110,6 +126,7 @@ const TABS: Array<{ key: TabKey; label: string; description: string }> = [
     key: 'plantillas',
     label: 'Plantillas',
     description: 'Override del copy de las notificaciones (próximamente).',
+    requiresModule: 'mod.notifications',
   },
   {
     key: 'raw',
@@ -123,6 +140,48 @@ export default function ConfiguracionPage() {
   const [items, setItems] = useState<TenantSettingMetadata[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>('notifications');
+  const [activeModules, setActiveModules] = useState<Set<string> | null>(null);
+
+  // Carga la lista de módulos activos del tenant para filtrar tabs cuyo
+  // módulo está desactivado (ej. mod.zoom-live → oculta "Aula virtual").
+  useEffect(() => {
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    let cancelled = false;
+    meApi
+      .getMyModules(token)
+      .then((res) => {
+        if (!cancelled) setActiveModules(new Set(res.activeModules));
+      })
+      .catch(() => {
+        // Si falla (red, módulo registry indisponible), dejamos null —
+        // mostramos todas las tabs para no bloquear al admin.
+        if (!cancelled) setActiveModules(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /// Filtra tabs cuyo `requiresModule` no está activo. Mientras
+  /// `activeModules` es null (loading o error) mostramos todas — fallback
+  /// permisivo para no esconder accidentalmente acciones legítimas. El
+  /// backend sigue devolviendo 403 si se intenta acceder a un endpoint
+  /// del módulo desactivado.
+  const visibleTabs = TABS.filter((t) => {
+    if (!t.requiresModule) return true;
+    if (!activeModules) return true;
+    return activeModules.has(t.requiresModule);
+  });
+
+  // Si la tab seleccionada queda oculta tras el filtro (ej. el admin
+  // desactivó mod.zoom-live mientras estaba en el tab "Aula virtual"),
+  // saltamos a la primera visible.
+  useEffect(() => {
+    if (!visibleTabs.find((t) => t.key === tab) && visibleTabs[0]) {
+      setTab(visibleTabs[0].key);
+    }
+  }, [activeModules, tab, visibleTabs]);
   const [smtp, setSmtp] = useState<SmtpDraft>(EMPTY_SMTP);
   const [smtpStatus, setSmtpStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [smtpError, setSmtpError] = useState<string | null>(null);
@@ -137,7 +196,7 @@ export default function ConfiguracionPage() {
       setError(
         e instanceof ApiHttpError
           ? e.message
-          : 'No pudimos cargar la configuración. Probá refrescar la página.',
+          : 'No pudimos cargar la configuración. Prueba a refrescar la página.',
       );
     }
   }
@@ -246,7 +305,7 @@ export default function ConfiguracionPage() {
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-1 border-b border-border" role="tablist">
-        {TABS.map((t) => {
+        {visibleTabs.map((t) => {
           const isActive = tab === t.key;
           return (
             <button
@@ -278,7 +337,7 @@ export default function ConfiguracionPage() {
           <CardHeader>
             <CardTitle>Notificaciones · SMTP</CardTitle>
             <CardDescription>
-              Servidor saliente para enviar emails. Si no configurás esto, las notificaciones
+              Servidor saliente para enviar emails. Si no configuras esto, las notificaciones
               quedarán registradas pero no se enviarán. Soporta SMTP genérico, Brevo, AWS SES (via
               SMTP), Gmail, Mailgun, Sendgrid y Postmark.
             </CardDescription>
@@ -1041,7 +1100,7 @@ function StorageTab() {
 
         <div className="mt-6 rounded-lg border border-success-200 bg-success-50/50 p-3 text-xs text-success-800">
           <strong>Activo:</strong> los uploads de imágenes y los archivos del tenant ya usan esta
-          configuración cuando el driver es <code>s3</code>. Si elegís disco local o no completás el
+          configuración cuando el driver es <code>s3</code>. Si eliges disco local o no completás el
           bucket, el server cae al adapter global del env.
         </div>
       </CardContent>
@@ -1246,7 +1305,7 @@ function NotificationTemplatesTab() {
                   }
                   required
                   className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  placeholder="Acabás de matricularte en el curso {{course}}…"
+                  placeholder="Acabas de matricularte en el curso {{course}}…"
                 />
               </div>
             </div>
@@ -1270,7 +1329,7 @@ function NotificationTemplatesTab() {
         <CardHeader>
           <CardTitle>Plantillas de notificación</CardTitle>
           <CardDescription>
-            Personalizá el copy de cada notificación enviada por la plataforma. Si no creás un
+            Personalizá el copy de cada notificación enviada por la plataforma. Si no creas un
             override, se usa el texto por defecto del producto. Soportado por canal (Email, In-app,
             Webhook) y por idioma. El fallback de idioma es <code>es-ES</code>.
           </CardDescription>

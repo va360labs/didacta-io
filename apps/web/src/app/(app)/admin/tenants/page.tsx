@@ -178,7 +178,7 @@ function CapacityBanner({ capacity }: { capacity: TenantCapacityInfo }) {
     return (
       <Card>
         <CardContent className="p-4 text-sm text-text-muted">
-          Plan community · usás <strong className="tabular-nums">{capacity.tenantCount}</strong> de{' '}
+          Plan community · usas <strong className="tabular-nums">{capacity.tenantCount}</strong> de{' '}
           <strong>{capacity.limit}</strong> tenants. Activá Enterprise para crear varias
           organizaciones aisladas en esta misma instancia.
         </CardContent>

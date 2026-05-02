@@ -203,7 +203,7 @@ export function CatalogView() {
             <p className="max-w-md text-text-muted">
               {hasActiveFilters
                 ? 'Probá con otra búsqueda o limpiá los filtros para ver todo el catálogo.'
-                : 'Cuando un formador publique el primer curso, aparecerá acá. Si sos formador, podés empezar a crear uno.'}
+                : 'Cuando un formador publique el primer curso, aparecerá acá. Si eres formador, puedes empezar a crear uno.'}
             </p>
             {hasActiveFilters ? (
               <Button variant="ghost" type="button" onClick={clearFilters} className="mt-2">

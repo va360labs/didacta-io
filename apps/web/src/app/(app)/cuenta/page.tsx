@@ -371,7 +371,7 @@ export default function CuentaPage() {
                     </span>
                     <span className="block text-sm text-text-muted">
                       Email cada lunes con tus menciones y respuestas de la semana. Si lo
-                      desactivás, no recibirás este resumen pero seguís viendo todo en{' '}
+                      desactivás, no recibirás este resumen pero sigues viendo todo en{' '}
                       <Link href="/comunidad" className="underline">
                         Comunidad
                       </Link>

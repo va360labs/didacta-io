@@ -93,7 +93,7 @@ export default function FormadorCoursesPage() {
             >
               <Icon name="book" size={40} />
             </div>
-            <h3 className="font-display text-2xl font-semibold">Aún no tenés cursos</h3>
+            <h3 className="font-display text-2xl font-semibold">Aún no tienes cursos</h3>
             <p className="max-w-md text-text-muted">
               Empezá creando tu primer curso. Vas a poder añadir secciones, lecciones, quizzes y
               certificados después.

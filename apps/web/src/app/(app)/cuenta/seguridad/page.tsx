@@ -225,7 +225,7 @@ export default function SeguridadPage() {
               <div className="skeleton h-12 w-full" />
             </div>
           ) : sessions.length === 0 ? (
-            <p className="text-sm text-text-subtle">No tenés sesiones activas registradas.</p>
+            <p className="text-sm text-text-subtle">No tienes sesiones activas registradas.</p>
           ) : (
             <ul className="divide-y divide-border-soft">
               {sessions.map((s) => (

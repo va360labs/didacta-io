@@ -49,7 +49,7 @@ const REASON_MESSAGES: Record<string, { title: string; description: string }> = 
       'El email de tu IdP no pertenece a los dominios permitidos para SSO en este tenant. Contactá al admin para que lo añada.',
   },
   user_not_provisioned: {
-    title: 'No tenés cuenta en este tenant',
+    title: 'No tienes cuenta en este tenant',
     description:
       'El SSO te autenticó pero el admin no activó la creación automática de cuentas. Pedile al admin que te dé de alta.',
   },

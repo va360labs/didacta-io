@@ -19,7 +19,7 @@ export default function SignUpPage() {
       <CardHeader>
         <CardTitle className="text-2xl">Sumate a tu organización</CardTitle>
         <CardDescription>
-          Si tenés un código de invitación, completalo en el campo de la organización. Si no, pedí
+          Si tienes un código de invitación, completalo en el campo de la organización. Si no, pedí
           ayuda al admin de tu equipo.
         </CardDescription>
       </CardHeader>
@@ -27,7 +27,7 @@ export default function SignUpPage() {
         <SignUpForm />
       </CardContent>
       <CardFooter className="text-sm text-text-muted">
-        <span>¿Ya tenés cuenta?</span>
+        <span>¿Ya tienes cuenta?</span>
         <Link href="/signin" className="ml-2 font-semibold text-brand-700 hover:underline">
           Iniciá sesión
         </Link>

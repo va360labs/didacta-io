@@ -83,7 +83,7 @@ export function SignInForm() {
         const issuesAny = (e as { issues?: unknown }).issues as AmbiguousTenantError | undefined;
         if (issuesAny && (issuesAny as { candidateSlugs?: string[] }).candidateSlugs) {
           setTenantCandidates((issuesAny as { candidateSlugs: string[] }).candidateSlugs);
-          setError('Tu email pertenece a más de una organización. Elegí cuál querés usar:');
+          setError('Tu email pertenece a más de una organización. Elegí cuál quieres usar:');
         } else {
           setError(e.message);
         }
@@ -136,7 +136,7 @@ export function SignInForm() {
           (dev local sin domain configurado, o multi-tenant). */}
         {tenant ? (
           <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
-            <span className="text-text-muted">Iniciás sesión en</span>{' '}
+            <span className="text-text-muted">Inicias sesión en</span>{' '}
             <strong className="text-brand-700">{tenant.name}</strong>
           </div>
         ) : (
@@ -151,7 +151,7 @@ export function SignInForm() {
               placeholder="Si tu admin te dio un nombre corto, escribilo aquí"
             />
             <p className="text-xs text-text-subtle">
-              Si no lo sabés, dejá vacío — intentamos identificar tu organización por tu email.
+              Si no lo sabes, dejá vacío — intentamos identificar tu organización por tu email.
             </p>
           </div>
         )}

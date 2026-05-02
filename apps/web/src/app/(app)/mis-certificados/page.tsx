@@ -101,7 +101,7 @@ export default function MisCertificadosPage() {
             >
               <Icon name="award" size={40} />
             </div>
-            <h3 className="font-display text-2xl font-semibold">Aún no tenés certificados</h3>
+            <h3 className="font-display text-2xl font-semibold">Aún no tienes certificados</h3>
             <p className="max-w-md text-text-muted">
               Cuando completes tu primer curso, vas a verlo acá listo para descargar y compartir.
             </p>
