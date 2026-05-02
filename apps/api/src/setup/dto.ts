@@ -24,6 +24,11 @@ export const setupInitSchema = z.object({
     email: z.string().email().max(200),
     password: z.string().min(12).max(128),
   }),
+  /// Lista de módulos que el operador quiere activos en el tenant inicial.
+  /// Si se omite, se aplican los `enabledByDefault=true` del registry. Los
+  /// módulos `category='core'` (theming, courses, learning…) se activan
+  /// SIEMPRE — el wizard frontend los renderiza pre-marcados y disabled.
+  enabledModules: z.array(z.string().min(1).max(80)).max(60).optional(),
 });
 
 export type SetupInitDto = z.infer<typeof setupInitSchema>;

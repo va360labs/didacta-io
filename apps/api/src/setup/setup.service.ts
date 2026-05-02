@@ -37,6 +37,18 @@ export interface SetupInitResult {
   };
 }
 
+export interface AvailableModule {
+  name: string;
+  displayName: string;
+  description: string | null;
+  /// Módulos `category='core'` no son desactivables: theming, courses,
+  /// learning, etc. El frontend los renderiza pre-marcados y disabled.
+  isCore: boolean;
+  /// Default policy del registry. El wizard pre-marca con este valor
+  /// para los módulos NO core; los core siempre van forzados a true.
+  enabledByDefault: boolean;
+}
+
 /**
  * Bootstrap de primer arranque.
  *
@@ -63,6 +75,23 @@ export class SetupService {
     return { initialized: count > 0 };
   }
 
+  /// Devuelve la lista de módulos disponibles en la imagen, decorados con
+  /// flags útiles para el wizard de setup (`isCore`, `enabledByDefault`).
+  /// El campo `manifest.category` no está modelado como columna, así que
+  /// lo leemos del JSON `manifest` que cada módulo declara en el registry.
+  async listAvailableModules(): Promise<AvailableModule[]> {
+    const rows = await this.prisma.module.findMany({
+      orderBy: [{ enabledByDefault: 'desc' }, { name: 'asc' }],
+    });
+    return rows.map((row) => ({
+      name: row.name,
+      displayName: row.displayName,
+      description: row.description,
+      isCore: extractCategory(row.manifest) === 'core',
+      enabledByDefault: row.enabledByDefault,
+    }));
+  }
+
   async init(
     dto: SetupInitDto,
     requestHostname: string | null,
@@ -71,7 +100,7 @@ export class SetupService {
     const slug = (dto.organization.slug ?? this.slugify(dto.organization.name)).toLowerCase();
     if (!SLUG_RE.test(slug)) {
       throw new ConflictException(
-        'No pudimos generar un slug válido a partir del nombre. Indicá uno manualmente (minúsculas, números, guiones).',
+        'No pudimos generar un slug válido a partir del nombre. Indica uno manualmente (minúsculas, números, guiones).',
       );
     }
     const hostname = (dto.organization.primaryHostname ?? requestHostname ?? 'localhost')
@@ -90,7 +119,7 @@ export class SetupService {
       if (tenantsCount > 0) {
         throw new ConflictException({
           code: 'ALREADY_INITIALIZED',
-          message: 'La plataforma ya fue inicializada. Iniciá sesión con tu cuenta admin.',
+          message: 'La plataforma ya fue inicializada. Inicia sesión con tu cuenta admin.',
         });
       }
 
@@ -146,6 +175,29 @@ export class SetupService {
         data: { userId: user.id, roleId: superAdminRole.id },
       });
 
+      // 4. Activación de módulos en el tenant inicial. La política:
+      //    - Si el operador pasó `enabledModules`, activamos esa lista
+      //      + los core (forzados; el wizard no permite desmarcarlos).
+      //    - Si no la pasó, fallback a `enabledByDefault=true` del registry.
+      const allModules = await tx.module.findMany();
+      const requested = dto.enabledModules ? new Set(dto.enabledModules) : null;
+      const toEnable = allModules.filter((m) => {
+        const isCore = extractCategory(m.manifest) === 'core';
+        if (isCore) return true;
+        if (requested) return requested.has(m.name);
+        return m.enabledByDefault;
+      });
+      if (toEnable.length > 0) {
+        await tx.tenantModule.createMany({
+          data: toEnable.map((m) => ({
+            tenantId: tenant.id,
+            moduleId: m.id,
+            enabled: true,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
       return { tenant, user };
     });
 
@@ -198,4 +250,14 @@ export class SetupService {
       .replace(/^-+|-+$/g, '')
       .slice(0, 63);
   }
+}
+
+/// Lee `manifest.category` con guards para no romperse si un módulo viejo
+/// no lo declara. Vive aquí (helper privado del service) porque solo el
+/// flujo de setup necesita esta heurística — el resto del core ya consume
+/// `category` desde su propio loader.
+function extractCategory(manifest: unknown): string | undefined {
+  if (!manifest || typeof manifest !== 'object') return undefined;
+  const cat = (manifest as Record<string, unknown>)['category'];
+  return typeof cat === 'string' ? cat : undefined;
 }

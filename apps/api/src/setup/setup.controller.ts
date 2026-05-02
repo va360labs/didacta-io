@@ -20,6 +20,15 @@ export class SetupController {
     return this.service.getStatus();
   }
 
+  @Get('available-modules')
+  @ApiOperation({
+    summary:
+      'Listado de módulos del registry para el wizard de setup. Cada item indica si es core (no desactivable) y si está marcado como default. Endpoint público — solo útil ANTES de inicializar la plataforma.',
+  })
+  async availableModules() {
+    return { modules: await this.service.listAvailableModules() };
+  }
+
   @Post('init')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
