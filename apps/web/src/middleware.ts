@@ -3,16 +3,19 @@ import { NextResponse, type NextRequest } from 'next/server';
 /**
  * First-run gate.
  *
- * Cuando la instancia está virgen (sin tenants), redirige las rutas públicas
- * de entrada al wizard `/setup`. Una vez creado el primer tenant, el
+ * Cuando la instancia está virgen (sin tenants), redirige CUALQUIER ruta
+ * de la app al wizard `/setup`. Una vez creado el primer tenant, el
  * middleware no toca nada y se vuelve un no-op (cacheamos `true` en memoria
- * del runtime).
+ * del runtime — se invalida sólo al restart del worker).
  *
- * Matcher EXPLÍCITO de las únicas rutas que necesitamos interceptar (`/`,
- * `/signin`, `/signup`, `/forgot-password`, `/reset-password`). Cualquier
- * otra cosa — rutas internas de Next, assets, /api, /setup — pasa sin
- * tocarse. Esto evita el problema de capturar `_not-found` u otras rutas
- * internas que rompen la resolución de Next 15.
+ * Bug previo: el matcher solo cubría rutas de auth (`/`, `/signin`, etc.).
+ * Las rutas autenticadas dentro de `(app)` (`/cursos`, `/admin`, etc.)
+ * pasaban directo y el shell de la app se renderizaba aunque el sistema
+ * no tuviera tenants, dejando un estado roto pero accesible.
+ *
+ * Fix: el matcher ahora cubre TODO excepto rutas que NO deben gatearse
+ * (api, internals de Next, assets estáticos, el propio /setup). Sin
+ * tenants, cualquier path → /setup. Con tenants, cero overhead.
  */
 
 let initializedCache = false;
@@ -47,6 +50,19 @@ export async function middleware(req: NextRequest) {
   return NextResponse.redirect(url);
 }
 
+/// Matcher negativo: capturamos cualquier path EXCEPTO los listados.
+///
+///   - `api`            → endpoints REST del propio API, no UI.
+///   - `_next` (todo)   → bundle, optimización imágenes, data RSC, etc.
+///   - `_not-found` /
+///     `_error`         → páginas internas de Next (rompe routing si las
+///                        capturamos).
+///   - `favicon.ico`    → asset.
+///   - `setup`          → el destino del redirect (sin loop).
+///   - `healthz` /
+///     `readyz` / `livez` → probes Easypanel/k8s, no UI.
 export const config = {
-  matcher: ['/', '/signin', '/signup', '/forgot-password', '/reset-password'],
+  matcher: [
+    '/((?!api|_next|_not-found|_error|favicon\\.ico|setup|healthz|readyz|livez).*)',
+  ],
 };
