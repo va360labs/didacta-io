@@ -104,10 +104,19 @@ function detectAwsExe(): string {
 }
 
 function awsKmsSign(message: Buffer, region: string, keyAlias: string): Buffer {
-  // Escribimos el message en un archivo temporal y se lo pasamos a `aws kms sign`.
-  // KMS devuelve la firma en formato DER (base64 string en `Signature`).
-  const tmp = resolve(process.cwd(), `.kms-sign-input-${Date.now()}.b64`);
-  writeFileSync(tmp, message.toString('base64'), 'utf8');
+  // Escribimos el message como bytes RAW (NO base64) y lo pasamos con
+  // `fileb://`. fileb:// instruye a aws-cli a leer el archivo como
+  // binario sin decodificar — eso es exactamente lo que necesita KMS
+  // con `--message-type RAW`.
+  //
+  // BUG previo (alpha.29 inicial): se escribía `message.toString('base64')`
+  // al archivo, así que KMS firmaba los bytes ASCII de la string base64
+  // en lugar del message original. Resultado: el JWT producido tenía
+  // firma sobre `base64(header.payload)` y los verifiers (que firman
+  // `header.payload` directamente) fallaban con
+  // "signature verification failed".
+  const tmp = resolve(process.cwd(), `.kms-sign-input-${Date.now()}.bin`);
+  writeFileSync(tmp, message);
   const awsExe = detectAwsExe();
   const cmd = [
     'kms',
