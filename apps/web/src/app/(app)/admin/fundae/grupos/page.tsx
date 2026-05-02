@@ -9,10 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
-import { formatCents } from '@/lib/fundae-companies';
 import {
   fundaeGroupParticipantsApi,
   fundaeGroupsApi,
+  formatCents,
   STATUS_LABELS,
   TIPO_LABELS,
   MODALIDAD_LABELS,
@@ -24,7 +24,7 @@ import {
   type GroupCompletionResult,
   type GroupStatus,
   type Modalidad,
-} from '@/lib/fundae-groups';
+} from '@/modules/fundae';
 
 const STATUS_VARIANT: Record<GroupStatus, 'info' | 'success' | 'muted' | 'warning'> = {
   DRAFT: 'muted',

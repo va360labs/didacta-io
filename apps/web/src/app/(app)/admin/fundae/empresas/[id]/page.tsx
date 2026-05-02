@@ -21,7 +21,7 @@ import {
   type RlptNotice,
   type RlptNoticeType,
   type UploadRlptInput,
-} from '@/lib/fundae-companies';
+} from '@/modules/fundae';
 
 const TIPO_LABEL: Record<RlptNoticeType, string> = {
   NOTIFICACION_INICIAL: 'Notificación inicial',

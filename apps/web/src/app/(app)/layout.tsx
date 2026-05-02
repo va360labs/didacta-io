@@ -269,7 +269,6 @@ function buildGroups({
       // CRUD endpoints funcional en community con límites estrictos.
       { href: '/admin/webhooks', label: 'Webhooks API', icon: 'package' },
       { href: '/admin/dominios', label: 'Dominios propios', icon: 'building' },
-      { href: '/admin/fundae', label: 'Fundae', icon: 'file', requiresModule: 'mod.fundae' },
     ],
   };
   if (isSuperAdmin) {

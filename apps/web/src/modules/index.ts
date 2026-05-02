@@ -11,10 +11,12 @@
 /// estático.
 
 import type { ModuleWebExtension } from '@/lib/module-registry';
+import { fundaeExtension } from './fundae';
 import { notificationsExtension } from './notifications';
 import { zoomLiveExtension } from './zoom-live';
 
 export const moduleExtensions: readonly ModuleWebExtension[] = [
+  fundaeExtension,
   notificationsExtension,
   zoomLiveExtension,
 ];

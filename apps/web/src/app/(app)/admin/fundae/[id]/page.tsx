@@ -19,7 +19,7 @@ import {
   type FundaeBlock,
   type FundaeParticipant,
   type Modalidad,
-} from '@/lib/fundae';
+} from '@/modules/fundae';
 
 const MODALIDAD_OPTIONS: Modalidad[] = ['PRESENCIAL', 'TELEFORMACION', 'MIXTA'];
 

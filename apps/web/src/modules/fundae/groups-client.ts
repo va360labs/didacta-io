@@ -1,5 +1,5 @@
-import { apiFetch, ApiHttpError } from './api-client';
-import { authStorage } from './auth-storage';
+import { apiFetch, ApiHttpError } from '@/lib/api-client';
+import { authStorage } from '@/lib/auth-storage';
 
 /**
  * Cliente HTTP de grupos bonificables Fundae (LMS-81).

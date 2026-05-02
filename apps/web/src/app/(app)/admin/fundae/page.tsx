@@ -12,7 +12,12 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
-import { fundaeApi, type ActionStatus, type FundaeAction, type Modalidad } from '@/lib/fundae';
+import {
+  fundaeApi,
+  type ActionStatus,
+  type FundaeAction,
+  type Modalidad,
+} from '@/modules/fundae';
 
 const STATUS_VARIANT: Record<ActionStatus, 'success' | 'warning' | 'muted' | 'danger'> = {
   ACTIVE: 'success',

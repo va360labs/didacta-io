@@ -49,12 +49,7 @@ import { TenantSettingsController } from './tenant-settings.controller';
 import { ThemingController } from './theming.controller';
 import { ThemingErrorFilter } from './theming-error.filter';
 import { ZoomLiveModule } from './zoom-live/zoom-live.module';
-import { FundaeController } from './fundae.controller';
-import { FundaeCompaniesController } from './fundae-companies.controller';
-import { FundaeGroupsController } from './fundae-groups.controller';
-import { FundaeGroupParticipantsController } from './fundae-group-participants.controller';
-import { FundaeRlptController } from './fundae-rlpt.controller';
-import { FundaeErrorFilter } from './fundae-error.filter';
+import { FundaeModule } from './fundae/fundae.module';
 import { CommunityDigestWorker } from './community-digest.worker';
 import { SubscriptionsGraceExpirationWorker } from './subscriptions-grace-expiration.worker';
 import {
@@ -69,6 +64,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     AiModule,
     forwardRef(() => ZoomLiveModule),
     forwardRef(() => NotificationsModule),
+    forwardRef(() => FundaeModule),
   ],
   controllers: [
     CoursesController,
@@ -81,11 +77,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     CommunityController,
     TenantSettingsController,
     ThemingController,
-    FundaeController,
-    FundaeCompaniesController,
-    FundaeGroupsController,
-    FundaeGroupParticipantsController,
-    FundaeRlptController,
     AdminSystemController,
     StorageController,
     AiTutorController,
@@ -125,7 +116,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     { provide: APP_FILTER, useClass: CertificatesErrorFilter },
     { provide: APP_FILTER, useClass: CommunityErrorFilter },
     { provide: APP_FILTER, useClass: ThemingErrorFilter },
-    { provide: APP_FILTER, useClass: FundaeErrorFilter },
     { provide: APP_FILTER, useClass: TenantModulesErrorFilter },
     { provide: APP_FILTER, useClass: AiTutorErrorFilter },
     { provide: APP_FILTER, useClass: AiGraderErrorFilter },

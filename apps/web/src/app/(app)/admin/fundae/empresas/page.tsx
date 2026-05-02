@@ -16,7 +16,7 @@ import {
   type CreateCompanyInput,
   type FundaeCompany,
   type UpdateCompanyInput,
-} from '@/lib/fundae-companies';
+} from '@/modules/fundae';
 
 /**
  * Vista admin de empresas bonificadas Fundae (LMS-79).

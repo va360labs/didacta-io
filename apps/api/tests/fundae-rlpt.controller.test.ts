@@ -1,6 +1,6 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
-import { FundaeRlptController } from '../src/modules/fundae-rlpt.controller';
+import { FundaeRlptController } from '../src/modules/fundae/fundae-rlpt.controller';
 import type { ModuleRegistryService } from '../src/modules/module-registry.service';
 import type { SessionClaims } from '../src/auth/token.service';
 

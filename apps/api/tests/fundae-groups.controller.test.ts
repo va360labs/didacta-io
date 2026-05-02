@@ -1,6 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
-import { FundaeGroupsController } from '../src/modules/fundae-groups.controller';
+import { FundaeGroupsController } from '../src/modules/fundae/fundae-groups.controller';
 import type { ModuleRegistryService } from '../src/modules/module-registry.service';
 import type { SessionClaims } from '../src/auth/token.service';
 
