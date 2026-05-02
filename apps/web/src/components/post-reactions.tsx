@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import type { Reaction } from '@/lib/community';
+import type { Reaction } from '@/modules/community';
 
 /**
  * Cuatro emojis fijos. Si en el futuro se vuelve configurable por tenant,

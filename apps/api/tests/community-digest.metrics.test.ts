@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { Counter, Histogram, Registry } from 'prom-client';
-import { CommunityDigestMetrics } from '../src/modules/community-digest.metrics';
+import { CommunityDigestMetrics } from '../src/modules/community/community-digest.metrics';
 
 /**
  * Tests del facade `CommunityDigestMetrics`. Verificamos que cada método

@@ -14,9 +14,14 @@ import { PostDetailView } from '@/components/post-detail-view';
 import { PostReactions } from '@/components/post-reactions';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
-import { useCommunityTags } from '@/lib/community-tags';
 import { cn } from '@/lib/utils';
-import { communityApi, type CommunityTag, type Post, type PostSort } from '@/lib/community';
+import {
+  communityApi,
+  useCommunityTags,
+  type CommunityTag,
+  type Post,
+  type PostSort,
+} from '@/modules/community';
 
 const SORT_LABELS: Record<PostSort, string> = {
   recent: 'Más recientes',

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ApiHttpError } from './api-client';
-import { communityApi, type CommunityTag } from './community';
+import { ApiHttpError } from '@/lib/api-client';
+import { communityApi, type CommunityTag } from './client';
 
 /**
  * Cache module-level de los tags curados del tenant. Como la sesión sólo

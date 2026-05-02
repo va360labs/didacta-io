@@ -12,10 +12,10 @@ import { authStorage } from '@/lib/auth-storage';
 import {
   COMMUNITY_TAG_ICONS,
   communityApi,
+  invalidateCommunityTagsCache,
   type CommunityTag,
   type CommunityTagIcon,
-} from '@/lib/community';
-import { invalidateCommunityTagsCache } from '@/lib/community-tags';
+} from '@/modules/community';
 
 /**
  * Paleta sugerida para que el admin no tenga que tipear hex a mano.

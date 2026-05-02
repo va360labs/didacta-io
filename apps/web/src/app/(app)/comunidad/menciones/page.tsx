@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { Icon } from '@/components/icon';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
-import { communityApi } from '@/lib/community';
+import { communityApi } from '@/modules/community';
 
 interface Mention {
   id: string;

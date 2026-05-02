@@ -169,13 +169,6 @@ function buildGroups({
     icon: 'book',
     items: [
       { href: '/cursos', label: 'Catálogo', icon: 'book' },
-      { href: '/comunidad', label: 'Comunidad', icon: 'users', requiresModule: 'mod.community' },
-      {
-        href: '/comunidad/menciones',
-        label: 'Mis menciones',
-        icon: 'message',
-        requiresModule: 'mod.community',
-      },
       {
         href: '/mis-certificados',
         label: 'Mis certificados',

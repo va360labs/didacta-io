@@ -5,7 +5,7 @@ import {
   PostNotFoundError,
   ReactionTargetMissingError,
 } from '@didacta/mod-community';
-import { CommunityErrorFilter } from '../src/modules/community-error.filter';
+import { CommunityErrorFilter } from '../src/modules/community/community-error.filter';
 
 function makeHost(captured: { status?: number; body?: unknown }) {
   const reply = {

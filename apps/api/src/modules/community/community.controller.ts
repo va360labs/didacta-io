@@ -32,13 +32,13 @@ import {
   type UserPreferencesDto,
 } from '@didacta/mod-community';
 import { z } from 'zod';
-import { CurrentUser } from '../auth/decorators';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { ZodValidationPipe } from '../auth/zod-validation.pipe';
-import { PrismaService } from '../prisma/prisma.service';
-import type { SessionClaims } from '../auth/token.service';
+import { CurrentUser } from '../../auth/decorators';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
+import { PrismaService } from '../../prisma/prisma.service';
+import type { SessionClaims } from '../../auth/token.service';
 import { CommunityDigestWorker } from './community-digest.worker';
-import { ModuleRegistryService } from './module-registry.service';
+import { ModuleRegistryService } from '../module-registry.service';
 
 @ApiTags('Modules · Community')
 @ApiBearerAuth()

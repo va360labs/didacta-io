@@ -9,8 +9,8 @@ import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { CommunityDigestMetrics } from './community-digest.metrics';
-import { ModuleContextFactory } from './module-context.factory';
-import { ModuleRegistryService } from './module-registry.service';
+import { ModuleContextFactory } from '../module-context.factory';
+import { ModuleRegistryService } from '../module-registry.service';
 
 const QUEUE_NAME = 'didacta.community.digest';
 const REPEAT_PATTERN = process.env['COMMUNITY_DIGEST_CRON'] ?? '0 9 * * 1'; // Lun 09:00 UTC

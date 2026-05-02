@@ -1,0 +1,40 @@
+/// Extension point del módulo `mod.community` hacia el core.
+///
+/// El catálogo `apps/web/src/modules/index.ts` importa esta constante y la
+/// agrega al `moduleExtensions[]`. Aporta los items de sidebar de
+/// `/comunidad` y `/comunidad/menciones` (grupo Aprendizaje, visibles
+/// para cualquier rol que vea el grupo).
+
+import type { ModuleWebExtension } from '@/lib/module-registry';
+
+export const communityExtension: ModuleWebExtension = {
+  name: 'mod.community',
+  sidebarItems: [
+    {
+      group: 'Aprendizaje',
+      href: '/comunidad',
+      label: 'Comunidad',
+      icon: 'users',
+    },
+    {
+      group: 'Aprendizaje',
+      href: '/comunidad/menciones',
+      label: 'Mis menciones',
+      icon: 'message',
+    },
+  ],
+};
+
+export {
+  communityApi,
+  COMMUNITY_TAG_ICONS,
+  type Post,
+  type Comment,
+  type Reaction,
+  type PostDetail,
+  type PostSort,
+  type CommunityTag,
+  type CommunityTagIcon,
+} from './client';
+
+export { useCommunityTags, invalidateCommunityTagsCache } from './tags-client';

@@ -9,9 +9,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { MentionTextarea } from '@/components/mention-textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
-import { useCommunityTags } from '@/lib/community-tags';
 import { cn } from '@/lib/utils';
-import { communityApi, type Comment, type PostDetail, type Reaction } from '@/lib/community';
+import {
+  communityApi,
+  useCommunityTags,
+  type Comment,
+  type PostDetail,
+  type Reaction,
+} from '@/modules/community';
 
 const EMOJIS = ['👍', '❤️', '🎉', '🤔'];
 

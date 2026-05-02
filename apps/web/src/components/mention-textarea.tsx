@@ -10,7 +10,7 @@ import {
   type ComponentProps,
 } from 'react';
 import { Textarea } from '@/components/ui/textarea';
-import { communityApi } from '@/lib/community';
+import { communityApi } from '@/modules/community';
 
 interface UserMatch {
   userId: string;

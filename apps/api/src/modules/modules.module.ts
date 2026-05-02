@@ -17,8 +17,7 @@ import { BillingModule } from './billing/billing.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { CertificatesController } from './certificates.controller';
 import { CertificatesErrorFilter } from './certificates-error.filter';
-import { CommunityController } from './community.controller';
-import { CommunityErrorFilter } from './community-error.filter';
+import { CommunityModule } from './community/community.module';
 import { CoursesController } from './courses.controller';
 import { CoursesErrorFilter } from './courses-error.filter';
 import { FormadorStatsController } from './formador-stats.controller';
@@ -40,11 +39,6 @@ import { ThemingController } from './theming.controller';
 import { ThemingErrorFilter } from './theming-error.filter';
 import { ZoomLiveModule } from './zoom-live/zoom-live.module';
 import { FundaeModule } from './fundae/fundae.module';
-import { CommunityDigestWorker } from './community-digest.worker';
-import {
-  CommunityDigestMetrics,
-  communityDigestMetricsProviders,
-} from './community-digest.metrics';
 import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
 
 @Module({
@@ -57,6 +51,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     forwardRef(() => AssessmentsModule),
     forwardRef(() => BillingModule),
     forwardRef(() => SubscriptionsModule),
+    forwardRef(() => CommunityModule),
   ],
   controllers: [
     CoursesController,
@@ -64,7 +59,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     CertificatesController,
     AuditController,
     FormadorStatsController,
-    CommunityController,
     TenantSettingsController,
     ThemingController,
     AdminSystemController,
@@ -77,15 +71,12 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     MeModulesController,
   ],
   providers: [
-    ...communityDigestMetricsProviders,
-    CommunityDigestMetrics,
     ...outboxMetricsProviders,
     OutboxMetrics,
     OutboxQueueService,
     ModuleContextFactory,
     ModuleRegistryService,
     OutboxRecoveryWorker,
-    CommunityDigestWorker,
     AiTutorBridge,
     ScormLearningBridge,
     TenantModulesService,
@@ -94,7 +85,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     { provide: APP_FILTER, useClass: CoursesErrorFilter },
     { provide: APP_FILTER, useClass: LearningErrorFilter },
     { provide: APP_FILTER, useClass: CertificatesErrorFilter },
-    { provide: APP_FILTER, useClass: CommunityErrorFilter },
     { provide: APP_FILTER, useClass: ThemingErrorFilter },
     { provide: APP_FILTER, useClass: TenantModulesErrorFilter },
     { provide: APP_FILTER, useClass: AiTutorErrorFilter },

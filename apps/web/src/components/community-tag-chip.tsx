@@ -3,7 +3,7 @@
 import { Icon, type IconName } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import type { CommunityTag } from '@/lib/community';
+import type { CommunityTag } from '@/modules/community';
 
 interface CommunityTagChipProps {
   name: string;
