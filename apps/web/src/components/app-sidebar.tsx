@@ -86,7 +86,7 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
 
   if (groups.length === 0) {
     return (
-      <aside className="grid h-dvh w-60 shrink-0 place-items-center bg-[#0D1B2A] p-6 text-center text-sm text-white/60">
+      <aside className="sticky top-0 grid h-dvh w-60 shrink-0 place-items-center self-start bg-[#0D1B2A] p-6 text-center text-sm text-white/60">
         Activá módulos en{' '}
         <Link href="/admin/configuracion" className="ml-1 underline">
           configuración
@@ -100,7 +100,7 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
   const area = groups[safeIdx];
 
   return (
-    <aside className="flex h-dvh w-[300px] shrink-0 bg-[#0D1B2A] text-white">
+    <aside className="sticky top-0 flex h-dvh w-[300px] shrink-0 self-start bg-[#0D1B2A] text-white">
       {/* RAIL */}
       <div className="relative flex w-[72px] flex-col border-r border-white/[0.06] bg-[#0a1421]">
         <Link

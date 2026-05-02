@@ -78,6 +78,10 @@ function Shell({
   // render) no filtramos — el sidebar se pinta completo y se reordena al
   // resolver la promesa. El backend sigue gateando con ModuleAccessInterceptor
   // aunque el usuario haga clic antes de que llegue la respuesta.
+  // Cargamos el estado de módulos al montar Y cada vez que cambia el
+  // pathname. El re-fetch al navegar cubre el caso típico: el admin
+  // desactiva un módulo en /admin/configuracion y al saltar a cualquier
+  // otra ruta el sidebar refleja el cambio sin necesidad de recargar.
   const [activeModules, setActiveModules] = useState<Set<string> | null>(null);
   useEffect(() => {
     const token = authStorage.getAccessToken();
@@ -97,6 +101,25 @@ function Shell({
     return () => {
       cancelled = true;
     };
+  }, [pathname]);
+
+  // Listener para actualización en caliente desde la misma página: cuando
+  // /admin/configuracion termina un toggle, dispatchea
+  // `window.dispatchEvent(new Event('didacta:modules-changed'))` y el
+  // sidebar se refresca sin esperar a la próxima navegación.
+  useEffect(() => {
+    function refresh() {
+      const token = authStorage.getAccessToken();
+      if (!token) return;
+      meApi
+        .getMyModules(token)
+        .then((res) => setActiveModules(new Set(res.activeModules)))
+        .catch(() => {
+          /* mantener estado anterior si el refresh falla */
+        });
+    }
+    window.addEventListener('didacta:modules-changed', refresh);
+    return () => window.removeEventListener('didacta:modules-changed', refresh);
   }, []);
 
   const allGroups = buildGroups({

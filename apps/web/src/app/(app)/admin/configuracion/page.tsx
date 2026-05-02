@@ -682,6 +682,11 @@ function ModulesTab() {
       }
       setConfirmCascade(null);
       await reload(targetTenantId);
+      // Notificar al layout para que el sidebar se refresque sin recargar
+      // la página. Listener en apps/web/src/app/(app)/layout.tsx.
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('didacta:modules-changed'));
+      }
     } catch (e) {
       if (previous) setItems(previous);
       if (e instanceof ApiHttpError && e.status === 409) {
