@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
-import { certificatesApi, type Certificate } from '@/lib/certificates';
+import { certificatesApi, type Certificate } from '@/modules/certificates';
 
 function formatDate(iso: string): string {
   try {

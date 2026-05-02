@@ -13,6 +13,7 @@
 import type { ModuleWebExtension } from '@/lib/module-registry';
 import { assessmentsExtension } from './assessments';
 import { billingExtension } from './billing';
+import { certificatesExtension } from './certificates';
 import { communityExtension } from './community';
 import { fundaeExtension } from './fundae';
 import { notificationsExtension } from './notifications';
@@ -22,6 +23,7 @@ import { zoomLiveExtension } from './zoom-live';
 export const moduleExtensions: readonly ModuleWebExtension[] = [
   assessmentsExtension,
   billingExtension,
+  certificatesExtension,
   communityExtension,
   fundaeExtension,
   notificationsExtension,

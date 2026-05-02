@@ -13,7 +13,7 @@ import {
   certificateTemplatesApi,
   type CertificateTemplate,
   type CertificateTemplateInput,
-} from '@/lib/certificates';
+} from '@/modules/certificates';
 
 const EMPTY: CertificateTemplateInput = {
   name: '',

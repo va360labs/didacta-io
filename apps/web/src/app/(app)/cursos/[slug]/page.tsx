@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { ApiHttpError } from '@/lib/api-client';
-import { certificatesApi, type Certificate } from '@/lib/certificates';
+import { certificatesApi, type Certificate } from '@/modules/certificates';
 import { coursesApi, type CourseDetail, type CourseLesson } from '@/lib/courses';
 import { formatDuration } from '@/lib/format';
 import { learningApi, type Enrollment } from '@/lib/learning';

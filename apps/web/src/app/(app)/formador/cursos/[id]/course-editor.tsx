@@ -29,7 +29,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
-import { certificateTemplatesApi, type CertificateTemplate } from '@/lib/certificates';
+import { certificateTemplatesApi, type CertificateTemplate } from '@/modules/certificates';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import {
   coursesApi,

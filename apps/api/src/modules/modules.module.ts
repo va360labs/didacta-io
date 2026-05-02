@@ -15,8 +15,7 @@ import { AssessmentsModule } from './assessments/assessments.module';
 import { AuditController } from './audit.controller';
 import { BillingModule } from './billing/billing.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
-import { CertificatesController } from './certificates.controller';
-import { CertificatesErrorFilter } from './certificates-error.filter';
+import { CertificatesModule } from './certificates/certificates.module';
 import { CommunityModule } from './community/community.module';
 import { CoursesController } from './courses.controller';
 import { CoursesErrorFilter } from './courses-error.filter';
@@ -52,11 +51,11 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     forwardRef(() => BillingModule),
     forwardRef(() => SubscriptionsModule),
     forwardRef(() => CommunityModule),
+    forwardRef(() => CertificatesModule),
   ],
   controllers: [
     CoursesController,
     LearningController,
-    CertificatesController,
     AuditController,
     FormadorStatsController,
     TenantSettingsController,
@@ -84,7 +83,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     { provide: APP_INTERCEPTOR, useExisting: ModuleAccessInterceptor },
     { provide: APP_FILTER, useClass: CoursesErrorFilter },
     { provide: APP_FILTER, useClass: LearningErrorFilter },
-    { provide: APP_FILTER, useClass: CertificatesErrorFilter },
     { provide: APP_FILTER, useClass: ThemingErrorFilter },
     { provide: APP_FILTER, useClass: TenantModulesErrorFilter },
     { provide: APP_FILTER, useClass: AiTutorErrorFilter },

@@ -169,12 +169,6 @@ function buildGroups({
     icon: 'book',
     items: [
       { href: '/cursos', label: 'Catálogo', icon: 'book' },
-      {
-        href: '/mis-certificados',
-        label: 'Mis certificados',
-        icon: 'award',
-        requiresModule: 'mod.certificates',
-      },
       { href: '/notificaciones', label: 'Notificaciones', icon: 'bell' },
     ],
   };
@@ -200,12 +194,6 @@ function buildGroups({
         label: 'Correcciones',
         icon: 'check',
         requiresModule: 'mod.ai-grader',
-      },
-      {
-        href: '/formador/certificados/templates',
-        label: 'Plantillas certificado',
-        icon: 'award',
-        requiresModule: 'mod.certificates',
       },
     ],
   };
