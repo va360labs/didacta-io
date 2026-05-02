@@ -20,6 +20,15 @@ export class AmbiguousTenantError extends UnauthorizedException {
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
+/// Default policy: cualquier admin debe configurar MFA. El operador
+/// puede opt-out con `DIDACTA_REQUIRE_MFA_ADMIN=false`. Strings tratados
+/// como falsy: `'false'`, `'0'`, `'no'`, `'off'`. Cualquier otro valor —
+/// incluido vacío — mantiene la enforcement activa.
+function isAdminMfaEnforced(): boolean {
+  const raw = (process.env['DIDACTA_REQUIRE_MFA_ADMIN'] ?? '').trim().toLowerCase();
+  return raw !== 'false' && raw !== '0' && raw !== 'no' && raw !== 'off';
+}
+
 const NO_CLIENT_CONTEXT: ClientContext = { ip: null, userAgent: null };
 
 /**
@@ -313,12 +322,26 @@ export class AuthService {
 
   /**
    * Roles administrativos exigen MFA según FR-CORE-02.
+   *
+   * El operador puede deshabilitar la enforcement automática para roles
+   * admin via env var `DIDACTA_REQUIRE_MFA_ADMIN=false`. Útil en
+   * deployments self-host donde el admin único acepta el riesgo de no
+   * tener segundo factor (ej. lab interno, instalación local, primer
+   * onboarding antes de configurar TOTP). El default sigue siendo `true`
+   * — la regla solo cae si el operador lo opta-out explícitamente.
+   *
+   * NOTA: este toggle afecta SOLO la regla automática por rol. La
+   * política tenant-wide (`feat:mfa.enforcement`) sigue activa cuando el
+   * tenant la haya habilitado — esa se gestiona en `MfaPolicyService` y
+   * NO se ve afectada por la env var.
+   *
    * - Si no configuró MFA: hay que forzar setup en primer login.
    * - Si ya lo configuró: hay que pedir el segundo factor en runtime.
    * En ambos casos, mfaRequired=true. mfaEnabled solo cambia el flujo
    * (setup vs verify), no si se exige o no.
    */
   shouldRequireMfa(roles: readonly string[], _mfaEnabled: boolean): boolean {
+    if (!isAdminMfaEnforced()) return false;
     return roles.some((r) => ADMIN_ROLES.has(r));
   }
 
