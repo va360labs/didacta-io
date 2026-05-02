@@ -122,6 +122,33 @@ describe('InstalledModuleService', () => {
     expect(updated.errorMessage?.length).toBe(4000);
   });
 
+  it('appendMigrationsApplied: array vacío solo actualiza timestamp', async () => {
+    const { prisma } = makePrismaMock([
+      { id: 'r1', name: 'mod.example', migrationsApplied: [] } as InstalledModule,
+    ]);
+    const svc = new InstalledModuleService(prisma);
+    const updated = await svc.appendMigrationsApplied('r1', []);
+    expect(updated.migrationsAppliedAt).toBeInstanceOf(Date);
+  });
+
+  it('appendMigrationsApplied: mergea sin duplicados y ordena', async () => {
+    const seed = {
+      id: 'r1',
+      name: 'mod.example',
+      migrationsApplied: ['02_b.sql'],
+    } as InstalledModule;
+    const { prisma } = makePrismaMock([seed]);
+    // Necesitamos extender el mock de findUnique para soportar select.
+    (prisma.installedModule as any).findUnique = vi.fn(async ({ where }: any) => {
+      if (where.id === 'r1') return seed;
+      return null;
+    });
+    const svc = new InstalledModuleService(prisma);
+    await svc.appendMigrationsApplied('r1', ['01_a.sql', '03_c.sql', '02_b.sql']);
+    const updateCall = (prisma.installedModule as any).update.mock.calls[0][0];
+    expect(updateCall.data.migrationsApplied).toEqual(['01_a.sql', '02_b.sql', '03_c.sql']);
+  });
+
   it('list filtra por status y vendor', async () => {
     const { prisma } = makePrismaMock([
       { name: 'a', status: 'INSTALLED', vendor: 'VA360' } as InstalledModule,

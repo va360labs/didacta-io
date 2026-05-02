@@ -2220,6 +2220,12 @@ model InstalledModule {
   isolation     String                @default("vm")
   status        InstalledModuleStatus @default(INSTALLING)
   errorMessage  String?               @map("error_message")
+  /// Migraciones SQL del paquete (subdir `prisma/migrations/` del ZIP)
+  /// aplicadas con éxito a la BD de la instancia, en orden alfabético.
+  /// El array crece append-only por install/upgrade. NULL si el paquete
+  /// no traía migrations o si aún no se intentó aplicarlas.
+  migrationsApplied String[]           @default([]) @map("migrations_applied")
+  migrationsAppliedAt DateTime?        @map("migrations_applied_at")
   /// Super_admin que inició la instalación. FK lógica (sin REFERENCES) para
   /// no acoplar marketplace al ciclo de vida del usuario; si el user se
   /// borra, el row queda con la traza histórica.

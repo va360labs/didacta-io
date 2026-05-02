@@ -5,6 +5,7 @@ import { ModuleContextFactory } from '../modules/module-context.factory';
 import { InstalledModuleService } from './installed-module.service';
 import type { ModuleManifest } from './module-manifest.schema';
 import { MarketplacePackageError } from './module-package.errors';
+import { ModuleMigrationService } from './module-migration.service';
 import { ModulePackageService } from './module-package.service';
 import { ModuleSandboxService } from './module-sandbox.service';
 
@@ -62,6 +63,7 @@ export class InstallPackageService {
     private readonly installedModules: InstalledModuleService,
     private readonly contextFactory: ModuleContextFactory,
     private readonly sandbox: ModuleSandboxService,
+    private readonly migrations: ModuleMigrationService,
   ) {}
 
   async install(packageBuffer: Buffer, installedById: string): Promise<InstallResult> {
@@ -101,21 +103,40 @@ export class InstallPackageService {
       const storage = this.contextFactory.getStorage();
       await storage.upload(storageKey, packageBuffer, 'application/zip');
 
-      // 11. Extraer `dist/index.js` y bootear en VM aislada. Si el lint o
+      // 11. Migraciones SQL del paquete (`prisma/migrations/*.sql`).
+      // Se lintean (`tablePrefix` enforcement, sin REFERENCES cross-module,
+      // no DDL prohibida) y luego se aplican en una transacción Prisma.
+      // Se hace ANTES del boot del módulo para que el código pueda asumir
+      // que sus tablas ya existen. Si algo falla, transacción rollback +
+      // markFailed.
+      const migrationFiles = this.migrations.extractMigrations(packageBuffer);
+      const previouslyApplied = previous?.migrationsApplied ?? [];
+      const migrationResult = await this.migrations.applyMigrations(
+        migrationFiles,
+        validated.manifest.tablePrefix,
+        previouslyApplied,
+      );
+      if (migrationResult.applied.length > 0 || migrationResult.skipped.length > 0) {
+        await this.installedModules.appendMigrationsApplied(row.id, migrationResult.applied);
+      }
+
+      // 12. Extraer `dist/index.js` y bootear en VM aislada. Si el lint o
       // el boot fallan, lanzamos `MODULE_LINT_FAILED` / `MODULE_BOOT_FAILED`
       // y el catch externo marca el row como FAILED. El blob queda en
-      // storage para diagnóstico postmortem.
+      // storage para diagnóstico postmortem (las migrations ya aplicadas
+      // NO se rollback — son commits separados; un retry verá las
+      // migrations en `migrationsApplied` y no las re-correrá).
       const distSource = extractDistSource(packageBuffer);
       const sandboxed = this.sandbox.loadModule(distSource, validated.manifest.name);
 
-      // 12. Hook de instalación del módulo, si lo declara.
+      // 13. Hook de instalación del módulo, si lo declara.
       await this.sandbox.runOnInstall(
         sandboxed,
         validated.manifest.name,
         validated.manifest.version,
       );
 
-      // 13. Cierre OK. El módulo queda registrado y su código boote-able.
+      // 14. Cierre OK.
       const installed = await this.installedModules.markInstalled(row.id);
       this.logger.log(
         `Módulo "${installed.name}@${installed.version}" instalado y booteado en sandbox ` +

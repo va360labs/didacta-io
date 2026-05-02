@@ -105,6 +105,27 @@ export class InstalledModuleService {
     });
   }
 
+  /// Registra qué migraciones SQL del paquete se aplicaron con éxito. El
+  /// array es append-only y se mergea con lo que ya hubiera (importante en
+  /// upgrades donde el paquete nuevo trae migrations viejas + nuevas).
+  async appendMigrationsApplied(id: string, filenames: string[]): Promise<InstalledModule> {
+    if (filenames.length === 0) {
+      return this.prisma.installedModule.update({
+        where: { id },
+        data: { migrationsAppliedAt: new Date() },
+      });
+    }
+    const current = await this.prisma.installedModule.findUnique({
+      where: { id },
+      select: { migrationsApplied: true },
+    });
+    const merged = Array.from(new Set([...(current?.migrationsApplied ?? []), ...filenames])).sort();
+    return this.prisma.installedModule.update({
+      where: { id },
+      data: { migrationsApplied: merged, migrationsAppliedAt: new Date() },
+    });
+  }
+
   async deleteById(id: string): Promise<void> {
     await this.prisma.installedModule.delete({ where: { id } });
   }
