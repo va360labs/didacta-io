@@ -262,11 +262,14 @@ function InstalledRow({
 }
 
 function StatusBadge({ status }: { status: InstalledModuleStatus }) {
-  const map: Record<InstalledModuleStatus, { variant: 'default' | 'secondary' | 'destructive'; label: string }> = {
-    INSTALLING: { variant: 'secondary', label: 'Instalando…' },
-    INSTALLED: { variant: 'default', label: 'Instalado' },
-    FAILED: { variant: 'destructive', label: 'Falló' },
-    DEPRECATED: { variant: 'secondary', label: 'Deprecated' },
+  const map: Record<
+    InstalledModuleStatus,
+    { variant: 'info' | 'success' | 'danger' | 'muted'; label: string }
+  > = {
+    INSTALLING: { variant: 'info', label: 'Instalando…' },
+    INSTALLED: { variant: 'success', label: 'Instalado' },
+    FAILED: { variant: 'danger', label: 'Falló' },
+    DEPRECATED: { variant: 'muted', label: 'Deprecated' },
   };
   const { variant, label } = map[status];
   return <Badge variant={variant}>{label}</Badge>;
@@ -274,7 +277,7 @@ function StatusBadge({ status }: { status: InstalledModuleStatus }) {
 
 function VendorBadge({ vendor }: { vendor: InstalledModuleSummary['vendor'] }) {
   return (
-    <Badge variant="secondary" className="text-[10px] uppercase">
+    <Badge variant="outline" className="text-[10px] uppercase">
       {vendor === 'DIDACTA' ? 'Didacta' : 'Community'}
     </Badge>
   );

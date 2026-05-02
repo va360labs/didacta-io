@@ -124,6 +124,7 @@ export class ModuleLintService {
     const detected = new Set<string>();
     for (const match of distSource.matchAll(REQUIRE_REGEX)) {
       const id = match[2];
+      if (!id) continue;
       detected.add(id);
       if (FORBIDDEN_BUILTINS.has(id)) {
         throw new MarketplacePackageError(
