@@ -16,11 +16,11 @@ import {
   type SuggestForAttemptDto,
   type UpsertRubricDto,
 } from '@didacta/mod-ai-grader';
-import { CurrentUser } from '../auth/decorators';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { ZodValidationPipe } from '../auth/zod-validation.pipe';
-import type { SessionClaims } from '../auth/token.service';
-import { ModuleRegistryService } from './module-registry.service';
+import { CurrentUser } from '../../auth/decorators';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
+import type { SessionClaims } from '../../auth/token.service';
+import { ModuleRegistryService } from '../module-registry.service';
 
 const FORMADOR_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
 

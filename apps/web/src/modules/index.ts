@@ -11,6 +11,7 @@
 /// estático.
 
 import type { ModuleWebExtension } from '@/lib/module-registry';
+import { aiGraderExtension } from './ai-grader';
 import { aiTutorExtension } from './ai-tutor';
 import { assessmentsExtension } from './assessments';
 import { billingExtension } from './billing';
@@ -22,6 +23,7 @@ import { subscriptionsExtension } from './subscriptions';
 import { zoomLiveExtension } from './zoom-live';
 
 export const moduleExtensions: readonly ModuleWebExtension[] = [
+  aiGraderExtension,
   aiTutorExtension,
   assessmentsExtension,
   billingExtension,

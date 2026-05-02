@@ -4,8 +4,7 @@ import { AiModule } from '../ai/ai.module';
 import { AuthModule } from '../auth/auth.module';
 import { AiContentController } from './ai-content.controller';
 import { AiContentErrorFilter } from './ai-content-error.filter';
-import { AiGraderController } from './ai-grader.controller';
-import { AiGraderErrorFilter } from './ai-grader-error.filter';
+import { AiGraderModule } from './ai-grader/ai-grader.module';
 import { AiProvidersController } from './ai-providers.controller';
 import { AiTutorModule } from './ai-tutor/ai-tutor.module';
 import { AdminSystemController } from './admin-system.controller';
@@ -51,6 +50,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     forwardRef(() => CommunityModule),
     forwardRef(() => CertificatesModule),
     forwardRef(() => AiTutorModule),
+    forwardRef(() => AiGraderModule),
   ],
   controllers: [
     CoursesController,
@@ -62,7 +62,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     AdminSystemController,
     StorageController,
     AiProvidersController,
-    AiGraderController,
     AiContentController,
     // GET /me/modules — sidebar gating UI (módulos activos + capabilities EE).
     MeModulesController,
@@ -82,7 +81,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     { provide: APP_FILTER, useClass: LearningErrorFilter },
     { provide: APP_FILTER, useClass: ThemingErrorFilter },
     { provide: APP_FILTER, useClass: TenantModulesErrorFilter },
-    { provide: APP_FILTER, useClass: AiGraderErrorFilter },
     { provide: APP_FILTER, useClass: AiContentErrorFilter },
   ],
   exports: [
