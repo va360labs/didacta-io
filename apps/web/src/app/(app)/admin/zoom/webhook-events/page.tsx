@@ -12,7 +12,7 @@ import {
   type PaginatedWebhookEvents,
   type WebhookEventResult,
   type ZoomWebhookEventItem,
-} from '@/lib/zoom-live';
+} from '@/modules/zoom-live';
 
 const RESULT_VARIANT: Record<WebhookEventResult, 'success' | 'muted' | 'danger'> = {
   OK: 'success',

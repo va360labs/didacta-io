@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { coursesApi, type Course, type CourseDetail } from '@/lib/courses';
-import { zoomLiveApi, type SessionStatus, type ZoomSession } from '@/lib/zoom-live';
+import { zoomLiveApi, type SessionStatus, type ZoomSession } from '@/modules/zoom-live';
 
 const STATUS_VARIANT: Record<SessionStatus, 'success' | 'warning' | 'muted' | 'danger'> = {
   SCHEDULED: 'warning',

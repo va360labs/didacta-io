@@ -19,7 +19,7 @@ import { coursesApi, type CourseDetail, type CourseLesson } from '@/lib/courses'
 import { formatDuration } from '@/lib/format';
 import { learningApi, type Enrollment } from '@/lib/learning';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
-import { zoomLiveApi, type ZoomSession } from '@/lib/zoom-live';
+import { zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
 
 const LESSON_TYPE_LABEL: Record<string, string> = {
   VIDEO: 'Video',

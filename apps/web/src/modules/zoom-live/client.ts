@@ -1,6 +1,6 @@
-import { apiFetch } from './api-client';
-import { authStorage } from './auth-storage';
-import { ApiHttpError } from './api-client';
+import { apiFetch } from '@/lib/api-client';
+import { authStorage } from '@/lib/auth-storage';
+import { ApiHttpError } from '@/lib/api-client';
 
 export type SessionStatus = 'SCHEDULED' | 'STARTED' | 'ENDED' | 'CANCELLED';
 

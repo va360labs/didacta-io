@@ -10,7 +10,7 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { verifyZoomSignature, webhookEventSchema } from '@didacta/mod-zoom-live';
 import type { FastifyRequest } from 'fastify';
-import { ModuleRegistryService } from './module-registry.service';
+import { ModuleRegistryService } from '../module-registry.service';
 
 /**
  * Endpoint público de webhooks de Zoom. NO usa JwtAuthGuard porque Zoom

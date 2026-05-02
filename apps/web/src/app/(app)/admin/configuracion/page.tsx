@@ -19,7 +19,7 @@ import { adminTenantsApi, type TenantListItem } from '@/lib/admin-tenants';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { tenantSettingsApi, type TenantSettingMetadata } from '@/lib/tenant-settings';
-import { zoomLiveApi } from '@/lib/zoom-live';
+import { flatAdminConfigTabs } from '@/modules';
 
 type SmtpProvider = 'custom' | 'brevo' | 'ses' | 'gmail' | 'mailgun' | 'sendgrid' | 'postmark';
 
@@ -84,23 +84,28 @@ const SMTP_PRESETS: Record<SmtpProvider, { host: string; port: string; hint: str
 
 // Branding tiene su propia pantalla en /admin/branding con preview live.
 // Se removió la tab acá para no duplicar entry-point y confundir al admin.
-type TabKey = 'notifications' | 'modules' | 'aula-virtual' | 'storage' | 'plantillas' | 'raw';
+//
+// Tabs DEL CORE: notifications, modules, storage, plantillas, raw. Otros
+// tabs los aportan los módulos vía `moduleExtensions` (ver
+// `apps/web/src/modules/`). El extension point convierte tabs como
+// "Aula virtual" del módulo `mod.zoom-live` en una declaración del
+// propio módulo en lugar de un hard-code en el core.
 
-/// Cada tab declara opcionalmente `requiresModule`. Si el módulo está
-/// desactivado en este tenant, el tab desaparece. Misma política que
-/// el sidebar (`filterByActiveModules`).
-///
-/// IMPORTANTE: este filtro es UX. La defensa real está en el backend —
-/// cualquier endpoint del módulo desactivado responde 403 vía
-/// `ModuleAccessInterceptor`. El tab oculto solo evita confusión visual
-/// del operador (PR a futuro: mover esta UI dentro del propio módulo
-/// en lugar de tenerla en el core, ver ADR-008).
-const TABS: Array<{
-  key: TabKey;
+interface ConfigTabSpec {
+  key: string;
   label: string;
   description: string;
+  /// Solo set para tabs aportados por un módulo. Si el módulo NO está
+  /// activo para el tenant, el tab desaparece. Tabs del core NO declaran
+  /// `requiresModule`.
   requiresModule?: string;
-}> = [
+  /// Componente que renderiza el contenido del tab. Para tabs del core
+  /// es null y el switch `renderTabContent` selecciona; para tabs de
+  /// extensión es el `Component` declarado por el módulo.
+  Component?: React.ComponentType;
+}
+
+const CORE_TABS: ConfigTabSpec[] = [
   {
     key: 'notifications',
     label: 'Notificaciones',
@@ -110,12 +115,6 @@ const TABS: Array<{
     key: 'modules',
     label: 'Módulos',
     description: 'Activa o desactiva módulos del producto para tu organización.',
-  },
-  {
-    key: 'aula-virtual',
-    label: 'Aula virtual',
-    description: 'Credenciales Zoom para sesiones síncronas (mod.zoom-live).',
-    requiresModule: 'mod.zoom-live',
   },
   {
     key: 'storage',
@@ -135,6 +134,23 @@ const TABS: Array<{
       'Vista cruda (debug) de todos los valores guardados en este tenant, agrupados por módulo. Útil para troubleshooting; lo normal es usar las tabs específicas.',
   },
 ];
+
+/// Lista combinada CORE + EXTENSIONS, calculada una vez por mount. El
+/// orden es: tabs del core en su orden declarado, seguido de los tabs
+/// de extensión en el orden del catálogo. Ningún módulo puede pisar el
+/// `key` de un tab del core (validado en runtime).
+const ALL_TABS: ConfigTabSpec[] = [
+  ...CORE_TABS,
+  ...flatAdminConfigTabs().map(({ moduleName, tab }) => ({
+    key: tab.key,
+    label: tab.label,
+    description: tab.description,
+    requiresModule: moduleName,
+    Component: tab.Component,
+  })),
+];
+
+type TabKey = string;
 
 export default function ConfiguracionPage() {
   const [items, setItems] = useState<TenantSettingMetadata[] | null>(null);
@@ -168,7 +184,7 @@ export default function ConfiguracionPage() {
   /// permisivo para no esconder accidentalmente acciones legítimas. El
   /// backend sigue devolviendo 403 si se intenta acceder a un endpoint
   /// del módulo desactivado.
-  const visibleTabs = TABS.filter((t) => {
+  const visibleTabs = ALL_TABS.filter((t) => {
     if (!t.requiresModule) return true;
     if (!activeModules) return true;
     return activeModules.has(t.requiresModule);
@@ -450,7 +466,16 @@ export default function ConfiguracionPage() {
 
       {tab === 'modules' ? <ModulesTab /> : null}
 
-      {tab === 'aula-virtual' ? <ZoomCredentialsCard /> : null}
+      {/* Tabs aportados por módulos vía extension point. Se renderiza el
+          Component declarado en `moduleExtensions` cuando el tab activo
+          coincide con su `key`. Filtrado por activeModules ya aplicado
+          en `visibleTabs`. */}
+      {(() => {
+        const ext = ALL_TABS.find((t) => t.key === tab && t.Component);
+        if (!ext || !ext.Component) return null;
+        const Component = ext.Component;
+        return <Component />;
+      })()}
 
       {tab === 'storage' ? <StorageTab /> : null}
 
@@ -539,145 +564,6 @@ export default function ConfiguracionPage() {
   );
 }
 
-function ZoomCredentialsCard() {
-  const [draft, setDraft] = useState({ accountId: '', clientId: '', clientSecret: '' });
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [errMsg, setErrMsg] = useState<string | null>(null);
-  const [testStatus, setTestStatus] = useState<
-    'idle' | 'testing' | { kind: 'real' | 'stub'; accountId: string } | { error: string }
-  >('idle');
-
-  async function handleSave(e: FormEvent) {
-    e.preventDefault();
-    setStatus('saving');
-    setErrMsg(null);
-    try {
-      await tenantSettingsApi.upsert('zoom-live', 'credentials', {
-        isSecret: true,
-        value: {
-          accountId: draft.accountId.trim(),
-          clientId: draft.clientId.trim(),
-          clientSecret: draft.clientSecret,
-        },
-      });
-      setStatus('saved');
-      setDraft((s) => ({ ...s, clientSecret: '' }));
-    } catch (e) {
-      setStatus('error');
-      setErrMsg(e instanceof ApiHttpError ? e.message : 'No pudimos guardar las credenciales.');
-    }
-  }
-
-  async function handleClear() {
-    if (!confirm('¿Borrar las credenciales Zoom S2S? Las sesiones nuevas caerán al stub.')) return;
-    setStatus('saving');
-    setErrMsg(null);
-    try {
-      await tenantSettingsApi.remove('zoom-live', 'credentials');
-      setStatus('saved');
-      setDraft({ accountId: '', clientId: '', clientSecret: '' });
-    } catch (e) {
-      setStatus('error');
-      setErrMsg(e instanceof ApiHttpError ? e.message : 'No pudimos borrar las credenciales.');
-    }
-  }
-
-  async function handleTest() {
-    setTestStatus('testing');
-    try {
-      const res = await zoomLiveApi.testCredentials();
-      setTestStatus(res);
-    } catch (e) {
-      setTestStatus({
-        error: e instanceof ApiHttpError ? e.message : 'No pudimos validar las credenciales.',
-      });
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Aula virtual · Zoom Server-to-Server</CardTitle>
-        <CardDescription>
-          Pegá las credenciales Server-to-Server OAuth de tu cuenta Zoom. Se guardan cifradas
-          (AES-256-GCM) y nunca se devuelven en claro. Si las dejás vacías, el módulo cae al stub de
-          desarrollo.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSave} className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="zoom-account">Account ID</Label>
-            <Input
-              id="zoom-account"
-              required
-              value={draft.accountId}
-              onChange={(e) => setDraft({ ...draft, accountId: e.target.value })}
-              className="font-mono"
-              autoComplete="off"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="zoom-client">Client ID</Label>
-            <Input
-              id="zoom-client"
-              required
-              value={draft.clientId}
-              onChange={(e) => setDraft({ ...draft, clientId: e.target.value })}
-              className="font-mono"
-              autoComplete="off"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="zoom-secret">Client Secret</Label>
-            <Input
-              id="zoom-secret"
-              required
-              type="password"
-              value={draft.clientSecret}
-              onChange={(e) => setDraft({ ...draft, clientSecret: e.target.value })}
-              autoComplete="new-password"
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
-            <Button type="submit" disabled={status === 'saving'}>
-              {status === 'saving' ? 'Guardando…' : 'Guardar credenciales'}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleTest}
-              disabled={testStatus === 'testing'}
-            >
-              {testStatus === 'testing' ? 'Probando…' : 'Probar credenciales'}
-            </Button>
-            <Button type="button" variant="ghost" onClick={handleClear}>
-              Borrar credenciales
-            </Button>
-            {status === 'saved' ? (
-              <span className="text-sm text-success-700">✓ Guardado cifrado.</span>
-            ) : null}
-            {status === 'error' && errMsg ? (
-              <span className="text-sm text-danger-700">{errMsg}</span>
-            ) : null}
-          </div>
-          {typeof testStatus === 'object' && 'kind' in testStatus ? (
-            <div className="sm:col-span-2 rounded-lg border border-success-100 bg-success-50 p-3 text-sm text-success-700">
-              {testStatus.kind === 'real'
-                ? `✓ Credenciales válidas. Vinculado a la cuenta Zoom ${testStatus.accountId}.`
-                : '⚠ El módulo está usando el stub local — no hay credenciales reales configuradas todavía.'}
-            </div>
-          ) : null}
-          {typeof testStatus === 'object' && 'error' in testStatus ? (
-            <div className="sm:col-span-2 rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700">
-              ✗ {testStatus.error}
-            </div>
-          ) : null}
-        </form>
-      </CardContent>
-    </Card>
-  );
-}
 
 function ModulesTab() {
   const [items, setItems] = useState<TenantModuleListItem[] | null>(null);

@@ -50,9 +50,7 @@ import { MeModulesController } from './me-modules.controller';
 import { TenantSettingsController } from './tenant-settings.controller';
 import { ThemingController } from './theming.controller';
 import { ThemingErrorFilter } from './theming-error.filter';
-import { ZoomLiveController } from './zoom-live.controller';
-import { ZoomLiveErrorFilter } from './zoom-live-error.filter';
-import { ZoomWebhookController } from './zoom-webhook.controller';
+import { ZoomLiveModule } from './zoom-live/zoom-live.module';
 import { FundaeController } from './fundae.controller';
 import { FundaeCompaniesController } from './fundae-companies.controller';
 import { FundaeGroupsController } from './fundae-groups.controller';
@@ -68,7 +66,7 @@ import {
 import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
 
 @Module({
-  imports: [AuthModule, AiModule],
+  imports: [AuthModule, AiModule, ZoomLiveModule],
   controllers: [
     CoursesController,
     LearningController,
@@ -82,8 +80,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     CommunityController,
     TenantSettingsController,
     ThemingController,
-    ZoomLiveController,
-    ZoomWebhookController,
     FundaeController,
     FundaeCompaniesController,
     FundaeGroupsController,
@@ -129,7 +125,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     { provide: APP_FILTER, useClass: CertificatesErrorFilter },
     { provide: APP_FILTER, useClass: CommunityErrorFilter },
     { provide: APP_FILTER, useClass: ThemingErrorFilter },
-    { provide: APP_FILTER, useClass: ZoomLiveErrorFilter },
     { provide: APP_FILTER, useClass: FundaeErrorFilter },
     { provide: APP_FILTER, useClass: TenantModulesErrorFilter },
     { provide: APP_FILTER, useClass: AiTutorErrorFilter },
