@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
-import { assessmentsApi, type QuizFormadorView } from '@/lib/assessments';
+import { assessmentsApi, type QuizFormadorView } from '@/modules/assessments';
 import { QuizEditor } from './quiz-editor';
 
 export default function QuizEditorPage() {

@@ -16,7 +16,7 @@ import {
   type QuestionType,
   type QuizFormadorView,
   type QuizStatus,
-} from '@/lib/assessments';
+} from '@/modules/assessments';
 
 const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
   { value: 'SINGLE_CHOICE', label: 'Opción única' },

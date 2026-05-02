@@ -1,8 +1,8 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import type { DomainEvent } from '@didacta/core-kernel';
 import { Logger as PinoLogger } from 'nestjs-pino';
-import { ModuleContextFactory } from './module-context.factory';
-import { ModuleRegistryService } from './module-registry.service';
+import { ModuleContextFactory } from '../module-context.factory';
+import { ModuleRegistryService } from '../module-registry.service';
 
 /**
  * Puente cross-module: cuando un alumno pasa un quiz que estaba asociado a una

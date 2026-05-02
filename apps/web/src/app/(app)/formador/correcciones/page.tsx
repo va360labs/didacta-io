@@ -6,7 +6,7 @@ import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
-import { assessmentsApi, type AttemptSummary } from '@/lib/assessments';
+import { assessmentsApi, type AttemptSummary } from '@/modules/assessments';
 
 interface PendingAttempt extends AttemptSummary {
   quiz: { id: string; title: string; lessonId: string | null };

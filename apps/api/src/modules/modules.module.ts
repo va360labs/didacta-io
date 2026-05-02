@@ -11,10 +11,7 @@ import { AiTutorBridge } from './ai-tutor.bridge';
 import { AiTutorController } from './ai-tutor.controller';
 import { AiTutorErrorFilter } from './ai-tutor-error.filter';
 import { AdminSystemController } from './admin-system.controller';
-import { AssessmentsController } from './assessments.controller';
-import { AssessmentsAttemptsController } from './assessments-attempts.controller';
-import { AssessmentsErrorFilter } from './assessments-error.filter';
-import { AssessmentsLearningBridge } from './assessments-learning.bridge';
+import { AssessmentsModule } from './assessments/assessments.module';
 import { AuditController } from './audit.controller';
 import { BillingAdminController } from './billing-admin.controller';
 import { BillingController } from './billing.controller';
@@ -65,14 +62,13 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     forwardRef(() => ZoomLiveModule),
     forwardRef(() => NotificationsModule),
     forwardRef(() => FundaeModule),
+    forwardRef(() => AssessmentsModule),
   ],
   controllers: [
     CoursesController,
     LearningController,
     CertificatesController,
     AuditController,
-    AssessmentsController,
-    AssessmentsAttemptsController,
     FormadorStatsController,
     CommunityController,
     TenantSettingsController,
@@ -102,7 +98,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     OutboxRecoveryWorker,
     CommunityDigestWorker,
     SubscriptionsGraceExpirationWorker,
-    AssessmentsLearningBridge,
     AiTutorBridge,
     ScormLearningBridge,
     BillingLearningBridge,
@@ -112,7 +107,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     { provide: APP_INTERCEPTOR, useExisting: ModuleAccessInterceptor },
     { provide: APP_FILTER, useClass: CoursesErrorFilter },
     { provide: APP_FILTER, useClass: LearningErrorFilter },
-    { provide: APP_FILTER, useClass: AssessmentsErrorFilter },
     { provide: APP_FILTER, useClass: CertificatesErrorFilter },
     { provide: APP_FILTER, useClass: CommunityErrorFilter },
     { provide: APP_FILTER, useClass: ThemingErrorFilter },

@@ -17,11 +17,11 @@ import {
   type SubmitAttemptDto,
 } from '@didacta/mod-assessments';
 import { z } from 'zod';
-import { CurrentUser } from '../auth/decorators';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { ZodValidationPipe } from '../auth/zod-validation.pipe';
-import type { SessionClaims } from '../auth/token.service';
-import { ModuleRegistryService } from './module-registry.service';
+import { CurrentUser } from '../../auth/decorators';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
+import type { SessionClaims } from '../../auth/token.service';
+import { ModuleRegistryService } from '../module-registry.service';
 
 const listAttemptsQuerySchema = z.object({
   quizId: z.string().uuid(),

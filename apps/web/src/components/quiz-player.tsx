@@ -12,7 +12,7 @@ import {
   type AlumnoQuestion,
   type AttemptSummary,
   type QuizAlumnoView,
-} from '@/lib/assessments';
+} from '@/modules/assessments';
 
 interface Props {
   quizId: string;

@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
-import { assessmentsApi, type AttemptStatus } from '@/lib/assessments';
+import { assessmentsApi, type AttemptStatus } from '@/modules/assessments';
 import { aiGraderApi, type Suggestion } from '@/lib/ai-grader';
 
 const OPEN_TYPES = new Set(['SHORT_ANSWER', 'LONG_ANSWER']);

@@ -9,7 +9,7 @@ import {
   QuizNotFoundError,
   QuizNotPublishedError,
 } from '@didacta/mod-assessments';
-import { AssessmentsErrorFilter } from '../src/modules/assessments-error.filter';
+import { AssessmentsErrorFilter } from '../src/modules/assessments/assessments-error.filter';
 
 function makeHost(captured: { status?: number; body?: unknown }) {
   const reply = {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DomainEvent } from '@didacta/core-kernel';
-import { AssessmentsLearningBridge } from '../src/modules/assessments-learning.bridge';
+import { AssessmentsLearningBridge } from '../src/modules/assessments/assessments-learning.bridge';
 
 interface AttemptPassedPayload {
   attemptId: string;
