@@ -1,7 +1,7 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
-import { PrismaService } from '../prisma/prisma.service';
-import { ModuleContextFactory } from './module-context.factory';
+import { PrismaService } from '../../prisma/prisma.service';
+import { ModuleContextFactory } from '../module-context.factory';
 
 /**
  * Suscribe el NotificationHub a los eventos de negocio relevantes y dispara

@@ -13,11 +13,11 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
-import { CurrentUser } from '../auth/decorators';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { ZodValidationPipe } from '../auth/zod-validation.pipe';
-import type { SessionClaims } from '../auth/token.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { CurrentUser } from '../../auth/decorators';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
+import type { SessionClaims } from '../../auth/token.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 // Forma serializable del modelo Prisma. Lo declaramos explícito para
 // evitar que el typecheck infiera un tipo que referencia paths internos

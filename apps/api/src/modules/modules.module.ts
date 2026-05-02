@@ -37,9 +37,7 @@ import { LearningErrorFilter } from './learning-error.filter';
 import { ModuleAccessInterceptor } from './module-access.interceptor';
 import { ModuleContextFactory } from './module-context.factory';
 import { ModuleRegistryService } from './module-registry.service';
-import { NotificationsBridge } from './notifications.bridge';
-import { NotificationsController } from './notifications.controller';
-import { NotificationTemplatesController } from './notification-templates.controller';
+import { NotificationsModule } from './notifications/notifications.module';
 import { OutboxQueueService } from './outbox-queue.service';
 import { OutboxRecoveryWorker } from './outbox-recovery.worker';
 import { ScormLearningBridge } from './scorm-learning.bridge';
@@ -66,7 +64,12 @@ import {
 import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
 
 @Module({
-  imports: [AuthModule, AiModule, forwardRef(() => ZoomLiveModule)],
+  imports: [
+    AuthModule,
+    AiModule,
+    forwardRef(() => ZoomLiveModule),
+    forwardRef(() => NotificationsModule),
+  ],
   controllers: [
     CoursesController,
     LearningController,
@@ -74,8 +77,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     AuditController,
     AssessmentsController,
     AssessmentsAttemptsController,
-    NotificationsController,
-    NotificationTemplatesController,
     FormadorStatsController,
     CommunityController,
     TenantSettingsController,
@@ -111,7 +112,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     CommunityDigestWorker,
     SubscriptionsGraceExpirationWorker,
     AssessmentsLearningBridge,
-    NotificationsBridge,
     AiTutorBridge,
     ScormLearningBridge,
     BillingLearningBridge,

@@ -11,9 +11,13 @@
 /// estático.
 
 import type { ModuleWebExtension } from '@/lib/module-registry';
+import { notificationsExtension } from './notifications';
 import { zoomLiveExtension } from './zoom-live';
 
-export const moduleExtensions: readonly ModuleWebExtension[] = [zoomLiveExtension];
+export const moduleExtensions: readonly ModuleWebExtension[] = [
+  notificationsExtension,
+  zoomLiveExtension,
+];
 
 /// Devuelve todos los `adminConfigTabs` declarados por el conjunto de
 /// extensions, en el orden en que vienen del catálogo. El caller filtra

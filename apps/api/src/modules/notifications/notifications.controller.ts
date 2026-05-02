@@ -8,10 +8,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CurrentUser } from '../auth/decorators';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { PrismaService } from '../prisma/prisma.service';
-import type { SessionClaims } from '../auth/token.service';
+import { CurrentUser } from '../../auth/decorators';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { PrismaService } from '../../prisma/prisma.service';
+import type { SessionClaims } from '../../auth/token.service';
 
 @ApiTags('Modules · Notifications (alumno)')
 @ApiBearerAuth()
