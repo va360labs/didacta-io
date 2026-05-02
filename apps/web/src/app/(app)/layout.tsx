@@ -143,6 +143,7 @@ function buildGroups({
 }): SidebarGroup[] {
   const learning: SidebarGroup = {
     label: 'Aprendizaje',
+    icon: 'book',
     items: [
       { href: '/cursos', label: 'Catálogo', icon: 'book' },
       { href: '/comunidad', label: 'Comunidad', icon: 'users', requiresModule: 'mod.community' },
@@ -162,21 +163,13 @@ function buildGroups({
     ],
   };
 
-  const account: SidebarGroup = {
-    label: 'Mi cuenta',
-    items: [
-      { href: '/cuenta', label: 'Perfil', icon: 'user', exactMatch: true },
-      { href: '/cuenta/seguridad', label: 'Seguridad', icon: 'lock' },
-      { href: '/cuenta/suscripciones', label: 'Suscripciones', icon: 'package' },
-    ],
-  };
-
   if (!isAdminOrFormador) {
-    return [learning, account];
+    return [learning];
   }
 
   const formadorAdmin: SidebarGroup = {
     label: 'Formador',
+    icon: 'chart',
     items: [
       { href: '/formador', label: 'Panel', icon: 'home', exactMatch: true },
       { href: '/formador/cursos', label: 'Mis cursos', icon: 'book' },
@@ -201,38 +194,25 @@ function buildGroups({
     ],
   };
 
-  const admin: SidebarGroup = {
-    label: 'Administración',
+  // ─── Áreas Admin (rediseño D: una casilla por área en el rail) ────────────
+  // Agrupación semántica: items relacionados van juntos. Antes existía un
+  // único grupo "Administración" con 12+ items en una lista plana — ahora
+  // el rail sub-divide por contexto operativo del admin.
+
+  const tenant: SidebarGroup = {
+    label: 'Tenant',
+    icon: 'building',
     items: [
       { href: '/admin', label: 'Panel del tenant', icon: 'chart', exactMatch: true },
       { href: '/admin/usuarios', label: 'Usuarios', icon: 'users' },
       { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
       { href: '/admin/branding', label: 'Branding', icon: 'palette' },
-      { href: '/admin/seguridad', label: 'Seguridad', icon: 'lock' },
-      { href: '/admin/fundae', label: 'Fundae', icon: 'file', requiresModule: 'mod.fundae' },
-      { href: '/admin/auditoria', label: 'Auditoría', icon: 'shield' },
-      // "Límites API" — sexto piloto License SDK (gate
-      // `feat:api.rate_limit.elevated`). El item es SIEMPRE visible: la
-      // página informa al admin community del rate "fair" actual y le
-      // ofrece upsell a Enterprise sin tener que llamar a ventas. El gate
-      // EE solo aplica al botón de upgrade dentro de la página.
-      { href: '/admin/rate-limit', label: 'Límites API', icon: 'trending' },
-      // "Webhooks API" — 10º piloto License SDK (gate
-      // `feat:api.webhooks.high_throughput`). El item es SIEMPRE visible:
-      // CRUD endpoints es funcional en community con límites estrictos
-      // (1 endpoint, 3 eventos), y EE desbloquea cola BullMQ + HMAC + DLQ.
-      { href: '/admin/webhooks', label: 'Webhooks API', icon: 'package' },
-      // "Pagos" — mod.billing (CE). Vincula cursos a Stripe Price IDs para
-      // que el catálogo abra Checkout. NO es feature EE — sin gate de
-      // capability. SÍ se filtra por módulo activo (mod.billing).
-      {
-        href: '/admin/billing/products',
-        label: 'Pagos (Stripe)',
-        icon: 'package',
-        requiresModule: 'mod.billing',
-      },
     ],
   };
+  if (isSuperAdmin) {
+    tenant.items.push({ href: '/admin/tenants', label: 'Tenants', icon: 'building' });
+    tenant.items.push({ href: '/super/users', label: 'Usuarios cross-tenant', icon: 'users' });
+  }
 
   // Features Enterprise con UI: SIEMPRE visibles para community (patrón n8n,
   // documentado en docs/UI-EE-GATING.md). Cada página aplica <EeGate> por
@@ -240,14 +220,51 @@ function buildGroups({
   // backend mantiene @RequiresCapability en cada endpoint admin → 402 sin
   // licencia. La discoverability de la feature es parte del valor para
   // community → enterprise (cada página es una superficie de pricing).
-  admin.items.push({ href: '/admin/dominios', label: 'Dominios propios', icon: 'building' });
-  admin.items.push({ href: '/admin/scim', label: 'SCIM Provisioning', icon: 'users' });
-  admin.items.push({ href: '/admin/sso', label: 'SSO (OIDC)', icon: 'lock' });
-  admin.items.push({ href: '/admin/sso-saml', label: 'SSO (SAML)', icon: 'lock' });
+  const seguridad: SidebarGroup = {
+    label: 'Seguridad',
+    icon: 'shield',
+    items: [
+      { href: '/admin/seguridad', label: 'Seguridad (MFA)', icon: 'lock' },
+      { href: '/admin/auditoria', label: 'Auditoría', icon: 'shield' },
+      { href: '/admin/sso', label: 'SSO (OIDC)', icon: 'lock' },
+      { href: '/admin/sso-saml', label: 'SSO (SAML)', icon: 'lock' },
+      { href: '/admin/scim', label: 'SCIM Provisioning', icon: 'users' },
+    ],
+  };
 
-  if (isSuperAdmin) {
-    admin.items.push({ href: '/admin/tenants', label: 'Tenants', icon: 'building' });
-  }
+  const integraciones: SidebarGroup = {
+    label: 'Integraciones',
+    icon: 'package',
+    items: [
+      // "Límites API" — sexto piloto License SDK (gate
+      // `feat:api.rate_limit.elevated`). El item es SIEMPRE visible: la
+      // página informa al admin community del rate "fair" actual y le
+      // ofrece upsell a Enterprise sin tener que llamar a ventas.
+      { href: '/admin/rate-limit', label: 'Límites API', icon: 'trending' },
+      // "Webhooks API" — 10º piloto License SDK (gate
+      // `feat:api.webhooks.high_throughput`). El item es SIEMPRE visible:
+      // CRUD endpoints funcional en community con límites estrictos.
+      { href: '/admin/webhooks', label: 'Webhooks API', icon: 'package' },
+      { href: '/admin/dominios', label: 'Dominios propios', icon: 'building' },
+      { href: '/admin/fundae', label: 'Fundae', icon: 'file', requiresModule: 'mod.fundae' },
+    ],
+  };
 
-  return [learning, formadorAdmin, admin, account];
+  const facturacion: SidebarGroup = {
+    label: 'Facturación',
+    icon: 'package',
+    items: [
+      // "Pagos" — mod.billing (CE). Vincula cursos a Stripe Price IDs para
+      // que el catálogo abra Checkout. NO es feature EE — sin gate de
+      // capability. SÍ se filtra por módulo activo (mod.billing).
+      {
+        href: '/admin/billing/products',
+        label: 'Productos (Stripe)',
+        icon: 'package',
+        requiresModule: 'mod.billing',
+      },
+    ],
+  };
+
+  return [learning, formadorAdmin, tenant, seguridad, integraciones, facturacion];
 }
