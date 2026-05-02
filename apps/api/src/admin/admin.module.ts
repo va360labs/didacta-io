@@ -15,6 +15,8 @@ import { CustomDomainsService } from './custom-domains/custom-domains.service';
 import { ScimAdminTokenController } from './scim/scim-admin.controller';
 import { OidcAdminController } from './sso/oidc-admin.controller';
 import { SamlAdminController } from './sso/saml-admin.controller';
+import { SuperUsersController } from './super/super-users.controller';
+import { SuperUsersService } from './super/super-users.service';
 
 /**
  * Módulo administrativo: agrupa controllers y services destinados al panel
@@ -45,8 +47,17 @@ import { SamlAdminController } from './sso/saml-admin.controller';
     // 9º piloto License SDK — gestión config SAML del tenant. Reutiliza
     // SamlService importado vía SsoSamlModule.
     SamlAdminController,
+    // Follow-up `feat:multi_tenant.real` — listings cross-tenant para
+    // super_admin (holdings con varias filiales). Gateado por capability EE.
+    SuperUsersController,
   ],
-  providers: [AdminUsersService, AdminTenantsService, AdminStatsService, CustomDomainsService],
-  exports: [AdminUsersService, AdminTenantsService, AdminStatsService],
+  providers: [
+    AdminUsersService,
+    AdminTenantsService,
+    AdminStatsService,
+    CustomDomainsService,
+    SuperUsersService,
+  ],
+  exports: [AdminUsersService, AdminTenantsService, AdminStatsService, SuperUsersService],
 })
 export class AdminModule {}
