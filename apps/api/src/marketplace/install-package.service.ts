@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { StorageService } from '@didacta/core-kernel';
+import AdmZip from 'adm-zip';
 import type { InstalledModule } from '@didacta/database';
 import { ModuleContextFactory } from '../modules/module-context.factory';
 import { InstalledModuleService } from './installed-module.service';
 import type { ModuleManifest } from './module-manifest.schema';
 import { MarketplacePackageError } from './module-package.errors';
 import { ModulePackageService } from './module-package.service';
+import { ModuleSandboxService } from './module-sandbox.service';
 
 /// Versión del core a la que apunta esta instancia. Inyectada en runtime,
 /// no en build time, para permitir overrides en tests sin recompilar. Si
@@ -28,11 +29,24 @@ export interface InstallResult {
   installedAt: Date | null;
 }
 
-/// Orquestador del pipeline de instalación de un `*.didactamod` (ADR-009 §3,
-/// pasos 1-9). NO ejecuta el módulo todavía — los pasos de migración Prisma,
-/// boot en VM y registro NestJS llegan en PR C. El estado final aquí es
-/// `INSTALLED` solo en el sentido de "paquete validado y persistido en
-/// storage"; el módulo aún no responde a peticiones.
+/// Orquestador del pipeline de instalación de un `*.didactamod` (ADR-009 §3).
+///
+/// Pasos:
+///   1-8. Validación del paquete (firma, schema, etc.) — PR A.
+///   9.   Persistencia del row `installed_module` en estado INSTALLING.
+///   10.  Upload del ZIP a object storage.
+///   11.  Lint estático del `dist/index.js` + boot en VM aislada (PR C).
+///   12.  Ejecución de `onInstall(ctx)` del módulo, si existe.
+///   13.  Marcado a INSTALLED (o FAILED si algún paso 10-12 explotó).
+///
+/// Out of scope todavía:
+///   - Aplicación de las migraciones Prisma `prisma/migrations/` del paquete.
+///     Hoy ignoramos ese subdir; un módulo que necesite tablas propias se
+///     limita a las que ya estén en BD. Esto se aborda en un PR siguiente
+///     junto con el linter SQL `tablePrefix`.
+///   - Registro `DynamicModule` para que el módulo responda a HTTP — un PR
+///     más adelante. La VM ya ejecuta el código pero los exports quedan en
+///     memoria sin enrutar.
 ///
 /// Idempotencia: si un install para el mismo `name` se reintenta tras un
 /// FAILED previo, sobreescribimos el row y subimos un nuevo objeto en
@@ -47,6 +61,7 @@ export class InstallPackageService {
     private readonly packageService: ModulePackageService,
     private readonly installedModules: InstalledModuleService,
     private readonly contextFactory: ModuleContextFactory,
+    private readonly sandbox: ModuleSandboxService,
   ) {}
 
   async install(packageBuffer: Buffer, installedById: string): Promise<InstallResult> {
@@ -58,8 +73,6 @@ export class InstallPackageService {
     const previous = await this.installedModules.findByName(validated.manifest.name);
     if (previous && previous.version === validated.manifest.version && previous.status === 'INSTALLED') {
       // Idempotencia explícita: misma versión ya instalada y sana.
-      // Devolvemos el row existente sin re-subir el ZIP. El caller decide
-      // si esto es 200 (ok, no-op) o 409 (conflict).
       throw new MarketplacePackageError(
         'ALREADY_INSTALLED',
         `El módulo "${validated.manifest.name}" ya está instalado en esta versión.`,
@@ -88,28 +101,52 @@ export class InstallPackageService {
       const storage = this.contextFactory.getStorage();
       await storage.upload(storageKey, packageBuffer, 'application/zip');
 
-      // 11-12. Boot en VM + registro NestJS — TODO en PR C. De momento
-      // marcamos INSTALLED para reflejar que el paquete está aceptado y
-      // persistido. La activación real per-tenant sigue requiriendo el
-      // boot que llegará en PR C.
+      // 11. Extraer `dist/index.js` y bootear en VM aislada. Si el lint o
+      // el boot fallan, lanzamos `MODULE_LINT_FAILED` / `MODULE_BOOT_FAILED`
+      // y el catch externo marca el row como FAILED. El blob queda en
+      // storage para diagnóstico postmortem.
+      const distSource = extractDistSource(packageBuffer);
+      const sandboxed = this.sandbox.loadModule(distSource, validated.manifest.name);
+
+      // 12. Hook de instalación del módulo, si lo declara.
+      await this.sandbox.runOnInstall(
+        sandboxed,
+        validated.manifest.name,
+        validated.manifest.version,
+      );
+
+      // 13. Cierre OK. El módulo queda registrado y su código boote-able.
       const installed = await this.installedModules.markInstalled(row.id);
       this.logger.log(
-        `Módulo "${installed.name}@${installed.version}" instalado (vendor=${installed.vendor}). ` +
-          `Boot en VM pendiente — llega en PR C de ADR-009.`,
+        `Módulo "${installed.name}@${installed.version}" instalado y booteado en sandbox ` +
+          `(vendor=${installed.vendor}). Registro DynamicModule para enrutado HTTP llegará en PR siguiente.`,
       );
 
       return toInstallResult(installed, validated.manifest);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await this.installedModules.markFailed(row.id, msg).catch(() => {
-        // Si BD también falla, hay poco más que loguear — el resto del
-        // sistema sigue operativo y el siguiente retry verá el row
-        // anterior y lo reescribirá.
         this.logger.error(`No se pudo marcar FAILED el row ${row.id}: ${msg}`);
       });
       throw err;
     }
   }
+}
+
+/// Extrae `dist/index.js` del paquete ya validado. La presencia del archivo
+/// fue verificada en `ModulePackageService` (PR A); aquí solo lo leemos.
+/// Lanza `MODULE_BOOT_FAILED` si por algún motivo (corrupción del buffer
+/// entre validación y boot) ya no existe.
+function extractDistSource(packageBuffer: Buffer): string {
+  const zip = new AdmZip(packageBuffer);
+  const entry = zip.getEntry('dist/index.js');
+  if (!entry) {
+    throw new MarketplacePackageError(
+      'MODULE_BOOT_FAILED',
+      'dist/index.js desapareció del paquete entre validación y boot — paquete corrupto.',
+    );
+  }
+  return entry.getData().toString('utf8');
 }
 
 /// Clave estable en object storage para el paquete. Pattern:

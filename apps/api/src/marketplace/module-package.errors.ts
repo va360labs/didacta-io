@@ -25,7 +25,13 @@ export type MarketplaceErrorCode =
   | 'NOT_FOUND'
   /// Fallo persistiendo el paquete en object storage. La validación pasó,
   /// pero el blob no llegó al bucket. El row queda `FAILED`. 502 al cliente.
-  | 'STORAGE_FAILED';
+  | 'STORAGE_FAILED'
+  /// El lint estático del `dist/index.js` rechazó el código antes del boot
+  /// (require fuera de allowlist, eval/Function, import ESM, etc.). 422.
+  | 'MODULE_LINT_FAILED'
+  /// Fallo al bootear el módulo en la VM aislada (sintaxis, throw inicial,
+  /// `module.exports` con shape inválida, timeout). 422.
+  | 'MODULE_BOOT_FAILED';
 
 export class MarketplacePackageError extends Error {
   readonly code: MarketplaceErrorCode;

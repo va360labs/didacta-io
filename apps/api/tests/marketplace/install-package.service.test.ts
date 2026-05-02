@@ -5,8 +5,10 @@ import {
   buildStorageKey,
   InstallPackageService,
 } from '../../src/marketplace/install-package.service';
+import { ModuleLintService } from '../../src/marketplace/module-lint.service';
 import { MarketplacePackageError } from '../../src/marketplace/module-package.errors';
 import { ModulePackageService } from '../../src/marketplace/module-package.service';
+import { ModuleSandboxService } from '../../src/marketplace/module-sandbox.service';
 import { ModuleSignatureService } from '../../src/marketplace/module-signature.service';
 import { buildTestPackage } from './fixtures/build-test-package';
 
@@ -21,6 +23,14 @@ function makeStorageMock(): { upload: ReturnType<typeof vi.fn>; ctx: any } {
       getStorage: () => ({ upload }),
     },
   };
+}
+
+/// Sandbox real (no mockeado): el `dist/index.js` del fixture es trivial
+/// (`module.exports = { onInstall: () => {} };`) — pasa lint y boot sin
+/// tocar I/O ni red. Cubre el camino feliz; los casos negativos del
+/// sandbox los cubre `module-sandbox.service.test.ts`.
+function makeRealSandbox(): ModuleSandboxService {
+  return new ModuleSandboxService(new ModuleLintService());
 }
 
 function makeInstalledModuleServiceMock(seed?: InstalledModule | null) {
@@ -91,7 +101,7 @@ describe('InstallPackageService.install', () => {
     const pkg = new ModulePackageService(sig);
     const installed = makeInstalledModuleServiceMock();
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx);
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox());
 
     const result = await svc.install(fixture.buffer, 'user-1');
 
@@ -116,7 +126,7 @@ describe('InstallPackageService.install', () => {
     const installed = makeInstalledModuleServiceMock();
     const storage = makeStorageMock();
     storage.upload.mockRejectedValueOnce(new Error('S3 unreachable'));
-    const svc = new InstallPackageService(pkg, installed, storage.ctx);
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox());
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toThrow(/S3 unreachable/);
     expect(installed.markFailed).toHaveBeenCalledWith('row-1', 'S3 unreachable');
@@ -136,7 +146,7 @@ describe('InstallPackageService.install', () => {
       status: 'INSTALLED',
     } as InstalledModule);
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx);
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox());
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toMatchObject({
       code: 'ALREADY_INSTALLED',
@@ -158,7 +168,7 @@ describe('InstallPackageService.install', () => {
       status: 'FAILED',
     } as InstalledModule);
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx);
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox());
     const result = await svc.install(fixture.buffer, 'user-1');
     expect(result.status).toBe('INSTALLED');
   });
@@ -176,7 +186,7 @@ describe('InstallPackageService.install', () => {
       status: 'INSTALLED',
     } as InstalledModule);
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx);
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox());
 
     await svc.install(fixture.buffer, 'user-1');
     expect(installed.createInstalling).toHaveBeenCalledWith(
@@ -192,13 +202,57 @@ describe('InstallPackageService.install', () => {
     const pkg = new ModulePackageService(sig);
     const installed = makeInstalledModuleServiceMock();
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx);
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox());
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toBeInstanceOf(
       MarketplacePackageError,
     );
     expect(installed.createInstalling).not.toHaveBeenCalled();
     expect(storage.upload).not.toHaveBeenCalled();
+  });
+
+  it('si el lint del bundle falla, marca FAILED después del upload', async () => {
+    const fixture = buildTestPackage({
+      files: { 'dist/index.js': "const lodash = require('lodash');\nmodule.exports = {};" },
+    });
+    process.env[ENV_VA360] = fixture.publicKeyPem;
+    const sig = new ModuleSignatureService();
+    sig.onModuleInit();
+    const pkg = new ModulePackageService(sig);
+    const installed = makeInstalledModuleServiceMock();
+    const storage = makeStorageMock();
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox());
+
+    await expect(svc.install(fixture.buffer, 'user-1')).rejects.toMatchObject({
+      code: 'MODULE_LINT_FAILED',
+    });
+    // El upload sí ocurrió antes del lint (orden ADR-009 §3): el blob queda
+    // en storage para diagnóstico postmortem.
+    expect(storage.upload).toHaveBeenCalledOnce();
+    expect(installed.markFailed).toHaveBeenCalledOnce();
+    expect(installed.markFailed.mock.calls[0][1]).toMatch(/lodash/);
+  });
+
+  it('si el onInstall del módulo lanza, marca FAILED', async () => {
+    const fixture = buildTestPackage({
+      files: {
+        'dist/index.js':
+          "module.exports = { onInstall: function () { throw new Error('install boom'); } };",
+      },
+    });
+    process.env[ENV_VA360] = fixture.publicKeyPem;
+    const sig = new ModuleSignatureService();
+    sig.onModuleInit();
+    const pkg = new ModulePackageService(sig);
+    const installed = makeInstalledModuleServiceMock();
+    const storage = makeStorageMock();
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox());
+
+    await expect(svc.install(fixture.buffer, 'user-1')).rejects.toMatchObject({
+      code: 'MODULE_BOOT_FAILED',
+    });
+    expect(installed.markFailed).toHaveBeenCalledOnce();
+    expect(installed.markFailed.mock.calls[0][1]).toMatch(/install boom/);
   });
 });
 

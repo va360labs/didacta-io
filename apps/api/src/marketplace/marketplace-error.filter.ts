@@ -21,6 +21,8 @@ const STATUS_BY_CODE: Record<MarketplaceErrorCode, number> = {
   ALREADY_INSTALLED: HttpStatus.CONFLICT, // 409
   NOT_FOUND: HttpStatus.NOT_FOUND, // 404
   STORAGE_FAILED: HttpStatus.BAD_GATEWAY, // 502
+  MODULE_LINT_FAILED: HttpStatus.UNPROCESSABLE_ENTITY, // 422
+  MODULE_BOOT_FAILED: HttpStatus.UNPROCESSABLE_ENTITY, // 422
 };
 
 @Catch(MarketplacePackageError)

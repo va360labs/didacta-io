@@ -6,16 +6,21 @@ import { AdminMarketplaceController } from './admin-marketplace.controller';
 import { InstalledModuleService } from './installed-module.service';
 import { InstallPackageService } from './install-package.service';
 import { MarketplaceErrorFilter } from './marketplace-error.filter';
+import { ModuleLintService } from './module-lint.service';
 import { ModulePackageService } from './module-package.service';
+import { ModuleSandboxService } from './module-sandbox.service';
 import { ModuleSignatureService } from './module-signature.service';
 
 /// Marketplace de módulos (ADR-009).
 ///
 /// Estado por PR:
-///   - PR A (mergeado): validador de paquetes + verificador de firma.
-///   - PR B (este PR): endpoint `POST /admin/modules/install` + storage +
-///     persistencia del row `InstalledModule`. Sin ejecutar el módulo aún.
-///   - PR C: VM aislada, `DynamicModule` hot-reload, UI super_admin.
+///   - PR A: validador de paquetes + verificador de firma.
+///   - PR B: endpoint `POST /admin/modules/install` + storage + persistencia
+///     del row `InstalledModule`.
+///   - PR C (este PR): lint estático del bundle + boot del módulo en VM
+///     aislada (`node:vm`) + ejecución del hook `onInstall(ctx)`. Aún sin
+///     enrutado HTTP del módulo (DynamicModule llega en PR D) ni UI
+///     super_admin (PR E).
 ///
 /// Importa `AuthModule` para el `JwtAuthGuard` (regla de oro NestJS de este
 /// repo: cualquier módulo con `JwtAuthGuard` importa `AuthModule`).
@@ -27,6 +32,8 @@ import { ModuleSignatureService } from './module-signature.service';
   providers: [
     ModuleSignatureService,
     ModulePackageService,
+    ModuleLintService,
+    ModuleSandboxService,
     InstalledModuleService,
     InstallPackageService,
     MarketplaceErrorFilter,
