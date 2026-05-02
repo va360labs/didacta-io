@@ -12,7 +12,7 @@ Hoy los módulos viven dentro del monorepo y se compilan en la imagen Docker `di
 Esto bloquea dos casos de uso clave para el modelo open-core:
 
 1. **Operador self-host instala un módulo de terceros** (escuela quiere `mod.gamification` de un dev externo).
-2. **VA360 entrega módulos verticales sin rebuild** (cliente Fundae recibe `mod.ifapa` sin esperar la siguiente alpha).
+2. **Didacta entrega módulos verticales sin rebuild** (cliente Fundae recibe `mod.ifapa` sin esperar la siguiente alpha).
 
 n8n, WordPress, Strapi y Drupal resuelven esto con un marketplace + upload de paquete. Didacta debe seguir el mismo patrón para que la promesa de "modularidad extrema" sea operativa, no solo arquitectónica.
 
@@ -23,7 +23,7 @@ Permitir que un `super_admin` suba un paquete `*.didactamod` (ZIP firmado) desde
 ### Alcance MVP (Sprint 4-5, esfuerzo XL)
 
 - **Solo super_admin** puede instalar; tenant_admins solo activan/desactivan los ya instalados.
-- **Solo módulos firmados por VA360** en MVP. Marketplace de terceros = Fase 2+.
+- **Solo módulos firmados por Didacta** en MVP. Marketplace de terceros = Fase 2+.
 - **Solo modules CE**. Capabilities EE siguen siendo del core (no se cargan dinámicamente).
 - **Sin marketplace público todavía**: el operador descarga el ZIP de un canal interno (Notion/Drive privado) y lo sube al panel.
 
@@ -36,7 +36,7 @@ ZIP con estructura fija:
 ```
 mod.example-1.0.0.didactamod
 ├── manifest.json           # ADR-008 manifest serializado
-├── manifest.sig            # Firma RSA-PSS-SHA256 del manifest (clave VA360)
+├── manifest.jwt            # JWT compact ES256 (manifest como payload) (clave Didacta)
 ├── dist/                   # Código JS compilado (output tsc, no TS source)
 │   ├── service.js
 │   ├── controller.js
@@ -81,8 +81,8 @@ super_admin → POST /api/v1/admin/modules/install (multipart, file=mod.example-
   │
   ├─ 1. Validate mime + size (max 50MB por módulo)
   ├─ 2. Extract ZIP a /tmp/<uuid>/ (adm-zip, ya usado por mod.learning para SCORM)
-  ├─ 3. Read manifest.json + manifest.sig
-  ├─ 4. Verify firma con VA360 public key (env DIDACTA_TRUSTED_VENDORS_PUBKEY)
+  ├─ 3. Read manifest.jwt
+  ├─ 4. Verify firma con Didacta public key (env MARKETPLACE_PUBLIC_KEYS_DIR)
   ├─ 5. Parse manifest contra schema Zod (reusa ADR-008)
   ├─ 6. Check coreVersionRequired ≤ core actual
   ├─ 7. Check name único (no colisiona con módulos ya instalados ni built-in)
@@ -112,7 +112,7 @@ Para MVP usamos `node:vm` nativo (vm2 es deprecated). El módulo NO tiene acceso
 
 ### 5. Distribución (NO marketplace público en MVP)
 
-VA360 publica `*.didactamod` en un canal privado (Notion → "Módulos disponibles" + Drive con assets). El operador descarga manualmente. Marketplace público (catálogo browseable, ratings, payments) = work item separado en Fase 2+.
+Didacta publica `*.didactamod` en un canal privado (Notion → "Módulos disponibles" + Drive con assets). El operador descarga manualmente. Marketplace público (catálogo browseable, ratings, payments) = work item separado en Fase 2+.
 
 ### 6. Lifecycle por tenant tras instalación global
 
@@ -140,7 +140,7 @@ Para evitar SLA hits durante install, registramos el módulo via `DynamicModule.
 
 | Riesgo | Severidad | Mitigación |
 |---|---|---|
-| Módulo malicioso ejecuta código en el host | Alta | VM + lint allowlist + firma RSA. Solo VA360 firma en MVP. |
+| Módulo malicioso ejecuta código en el host | Alta | VM + lint allowlist + firma ES256 (KMS). Solo Didacta firma en MVP. |
 | Migración Prisma del módulo rompe schema del core | Alta | `tablePrefix` obligatorio + check estático antes de aplicar. Tests del migrator validan idempotencia. |
 | Módulo consume demasiados recursos | Media | Cuotas CPU/memoria por VM. Limit p99 latency del módulo en interceptor. Kill si excede. |
 | FKs cross-module se cuelan en migraciones | Alta | Linter SQL rechaza `REFERENCES` fuera del propio `tablePrefix`. |
@@ -159,7 +159,7 @@ Cada módulo = container separado. Comunicación HTTP/gRPC. Ventaja: aislamiento
 
 ### Alternativa C — Solo activación de built-ins, marketplace fuera del core
 
-Built-ins en imagen + un "loader" que en runtime descarga módulos del CDN VA360. Ventaja: no hay upload-zip en el panel, todo controlado por VA360. Desventaja: rompe la promesa self-host (operador no decide qué instala). Rechazada.
+Built-ins en imagen + un "loader" que en runtime descarga módulos del CDN Didacta. Ventaja: no hay upload-zip en el panel, todo controlado por Didacta. Desventaja: rompe la promesa self-host (operador no decide qué instala). Rechazada.
 
 ## Decisión final
 
@@ -183,7 +183,7 @@ Marketplace público de terceros queda explícitamente **out of scope** y se tra
 
 1. **RLS strict (`docs/RLS-STRICT-PLAN.md`) debe estar en producción** antes de aceptar el primer módulo de terceros. Sin enforcement BD, un módulo malicioso lee tablas de otros módulos.
 2. **Suite de regresión completa** del core debe correr automáticamente en cada install (validar que el módulo no rompe core).
-3. **ADR pública del esquema de firma**: clave VA360 + rotación + revocación. Sin esto, no hay seguridad operativa.
+3. **ADR pública del esquema de firma**: clave Didacta + rotación + revocación. Sin esto, no hay seguridad operativa.
 
 ## Estimación
 

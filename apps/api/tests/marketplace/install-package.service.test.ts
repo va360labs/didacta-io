@@ -13,7 +13,6 @@ import { ModuleSandboxService } from '../../src/marketplace/module-sandbox.servi
 import { ModuleSignatureService } from '../../src/marketplace/module-signature.service';
 import { buildTestPackage } from './fixtures/build-test-package';
 
-const ENV_VA360 = 'MARKETPLACE_TRUSTED_VENDOR_KEYS_VA360';
 const ENV_CORE = 'DIDACTA_CORE_VERSION';
 
 function makeStorageMock(): { upload: ReturnType<typeof vi.fn>; ctx: any } {
@@ -26,17 +25,14 @@ function makeStorageMock(): { upload: ReturnType<typeof vi.fn>; ctx: any } {
   };
 }
 
-/// Sandbox real (no mockeado): el `dist/index.js` del fixture es trivial
+/// Sandbox real: el `dist/index.js` del fixture es trivial
 /// (`module.exports = { onInstall: () => {} };`) — pasa lint y boot sin
-/// tocar I/O ni red. Cubre el camino feliz; los casos negativos del
-/// sandbox los cubre `module-sandbox.service.test.ts`.
+/// tocar I/O ni red.
 function makeRealSandbox(): ModuleSandboxService {
   return new ModuleSandboxService(new ModuleLintService());
 }
 
-/// Migrator no-op: el fixture base no incluye `prisma/migrations/`, así que
-/// `extractMigrations` devuelve [] y `applyMigrations` es no-op. Los casos
-/// reales de migrations los cubre `module-migration.service.test.ts`.
+/// Migrator no-op: el fixture base no incluye `prisma/migrations/`.
 function makeNoopMigrations() {
   return {
     extractMigrations: vi.fn(() => []),
@@ -54,7 +50,7 @@ function makeInstalledModuleServiceMock(seed?: InstalledModule | null) {
         id: 'row-1',
         ...input.manifest,
         vendor: input.manifest.vendor.toUpperCase(),
-        signatureB64: input.signatureB64,
+        manifestJwt: input.manifestJwt,
         signedAt: new Date(input.manifest.signedAt),
         packageStorageKey: input.packageStorageKey,
         packageSha256: input.packageSha256,
@@ -75,17 +71,17 @@ function makeInstalledModuleServiceMock(seed?: InstalledModule | null) {
       } as unknown as InstalledModule;
       return row;
     }),
-    markInstalled: vi.fn(async (id: string) => {
+    markInstalled: vi.fn(async () => {
       if (!row) throw new Error('no row');
       row = { ...row, status: 'INSTALLED', installedAt: new Date() } as InstalledModule;
       return row;
     }),
-    markFailed: vi.fn(async (id: string, msg: string) => {
+    markFailed: vi.fn(async (_id: string, msg: string) => {
       if (!row) throw new Error('no row');
       row = { ...row, status: 'FAILED', errorMessage: msg } as InstalledModule;
       return row;
     }),
-    appendMigrationsApplied: vi.fn(async (id: string, _: string[]) => {
+    appendMigrationsApplied: vi.fn(async () => {
       if (!row) throw new Error('no row');
       row = { ...row, migrationsAppliedAt: new Date() } as InstalledModule;
       return row;
@@ -95,30 +91,39 @@ function makeInstalledModuleServiceMock(seed?: InstalledModule | null) {
   } satisfies Partial<InstalledModuleService> as unknown as InstalledModuleService;
 }
 
+/// Helper: construye sandbox + signature service, para que el fixture
+/// pueda registrar su pública directamente. Cada test instancia un par
+/// distinto para aislamiento.
+function makeServices() {
+  const sig = new ModuleSignatureService();
+  sig.onModuleInit();
+  return { sig, pkg: new ModulePackageService(sig) };
+}
+
 describe('InstallPackageService.install', () => {
-  let originalKey: string | undefined;
   let originalCore: string | undefined;
   beforeEach(() => {
-    originalKey = process.env[ENV_VA360];
     originalCore = process.env[ENV_CORE];
     process.env[ENV_CORE] = '1.0.0';
   });
   afterEach(() => {
-    if (originalKey === undefined) delete process.env[ENV_VA360];
-    else process.env[ENV_VA360] = originalKey;
     if (originalCore === undefined) delete process.env[ENV_CORE];
     else process.env[ENV_CORE] = originalCore;
   });
 
   it('flujo feliz: validate → createInstalling → upload → markInstalled', async () => {
-    const fixture = buildTestPackage();
-    process.env[ENV_VA360] = fixture.publicKeyPem;
-    const sig = new ModuleSignatureService();
-    sig.onModuleInit();
-    const pkg = new ModulePackageService(sig);
+    const { sig, pkg } = makeServices();
+    const fixture = await buildTestPackage({ signatureService: sig });
     const installed = makeInstalledModuleServiceMock();
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
+    const svc = new InstallPackageService(
+      pkg,
+      installed,
+      storage.ctx,
+      makeRealSandbox(),
+      makeNoopMigrations(),
+      new ModuleRouterService(),
+    );
 
     const result = await svc.install(fixture.buffer, 'user-1');
 
@@ -135,15 +140,19 @@ describe('InstallPackageService.install', () => {
   });
 
   it('si storage upload falla, marca FAILED y propaga error', async () => {
-    const fixture = buildTestPackage();
-    process.env[ENV_VA360] = fixture.publicKeyPem;
-    const sig = new ModuleSignatureService();
-    sig.onModuleInit();
-    const pkg = new ModulePackageService(sig);
+    const { sig, pkg } = makeServices();
+    const fixture = await buildTestPackage({ signatureService: sig });
     const installed = makeInstalledModuleServiceMock();
     const storage = makeStorageMock();
     storage.upload.mockRejectedValueOnce(new Error('S3 unreachable'));
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
+    const svc = new InstallPackageService(
+      pkg,
+      installed,
+      storage.ctx,
+      makeRealSandbox(),
+      makeNoopMigrations(),
+      new ModuleRouterService(),
+    );
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toThrow(/S3 unreachable/);
     expect(installed.markFailed).toHaveBeenCalledWith('row-1', 'S3 unreachable');
@@ -151,11 +160,8 @@ describe('InstallPackageService.install', () => {
   });
 
   it('rechaza con ALREADY_INSTALLED si misma versión ya está INSTALLED', async () => {
-    const fixture = buildTestPackage();
-    process.env[ENV_VA360] = fixture.publicKeyPem;
-    const sig = new ModuleSignatureService();
-    sig.onModuleInit();
-    const pkg = new ModulePackageService(sig);
+    const { sig, pkg } = makeServices();
+    const fixture = await buildTestPackage({ signatureService: sig });
     const installed = makeInstalledModuleServiceMock({
       id: 'row-existing',
       name: 'mod.example',
@@ -163,7 +169,14 @@ describe('InstallPackageService.install', () => {
       status: 'INSTALLED',
     } as InstalledModule);
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
+    const svc = new InstallPackageService(
+      pkg,
+      installed,
+      storage.ctx,
+      makeRealSandbox(),
+      makeNoopMigrations(),
+      new ModuleRouterService(),
+    );
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toMatchObject({
       code: 'ALREADY_INSTALLED',
@@ -173,11 +186,8 @@ describe('InstallPackageService.install', () => {
   });
 
   it('permite reinstalar si la versión previa quedó FAILED', async () => {
-    const fixture = buildTestPackage();
-    process.env[ENV_VA360] = fixture.publicKeyPem;
-    const sig = new ModuleSignatureService();
-    sig.onModuleInit();
-    const pkg = new ModulePackageService(sig);
+    const { sig, pkg } = makeServices();
+    const fixture = await buildTestPackage({ signatureService: sig });
     const installed = makeInstalledModuleServiceMock({
       id: 'row-old',
       name: 'mod.example',
@@ -185,17 +195,24 @@ describe('InstallPackageService.install', () => {
       status: 'FAILED',
     } as InstalledModule);
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
+    const svc = new InstallPackageService(
+      pkg,
+      installed,
+      storage.ctx,
+      makeRealSandbox(),
+      makeNoopMigrations(),
+      new ModuleRouterService(),
+    );
     const result = await svc.install(fixture.buffer, 'user-1');
     expect(result.status).toBe('INSTALLED');
   });
 
   it('upgrade in-place: setea prevVersion correctamente', async () => {
-    const fixture = buildTestPackage({ manifest: { version: '2.0.0' } });
-    process.env[ENV_VA360] = fixture.publicKeyPem;
-    const sig = new ModuleSignatureService();
-    sig.onModuleInit();
-    const pkg = new ModulePackageService(sig);
+    const { sig, pkg } = makeServices();
+    const fixture = await buildTestPackage({
+      signatureService: sig,
+      manifest: { version: '2.0.0' },
+    });
     const installed = makeInstalledModuleServiceMock({
       id: 'row-old',
       name: 'mod.example',
@@ -203,7 +220,14 @@ describe('InstallPackageService.install', () => {
       status: 'INSTALLED',
     } as InstalledModule);
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
+    const svc = new InstallPackageService(
+      pkg,
+      installed,
+      storage.ctx,
+      makeRealSandbox(),
+      makeNoopMigrations(),
+      new ModuleRouterService(),
+    );
 
     await svc.install(fixture.buffer, 'user-1');
     expect(installed.createInstalling).toHaveBeenCalledWith(
@@ -212,14 +236,21 @@ describe('InstallPackageService.install', () => {
   });
 
   it('error de validación NO crea row (corta antes)', async () => {
-    const fixture = buildTestPackage({ tamperSignature: true });
-    process.env[ENV_VA360] = fixture.publicKeyPem;
-    const sig = new ModuleSignatureService();
-    sig.onModuleInit();
-    const pkg = new ModulePackageService(sig);
+    const { sig, pkg } = makeServices();
+    const fixture = await buildTestPackage({
+      signatureService: sig,
+      manifestJwtOverride: 'no-soy-un-jwt',
+    });
     const installed = makeInstalledModuleServiceMock();
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
+    const svc = new InstallPackageService(
+      pkg,
+      installed,
+      storage.ctx,
+      makeRealSandbox(),
+      makeNoopMigrations(),
+      new ModuleRouterService(),
+    );
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toBeInstanceOf(
       MarketplacePackageError,
@@ -229,29 +260,61 @@ describe('InstallPackageService.install', () => {
   });
 
   it('si el lint del bundle falla, marca FAILED después del upload', async () => {
-    const fixture = buildTestPackage({
+    const { sig, pkg } = makeServices();
+    const fixture = await buildTestPackage({
+      signatureService: sig,
       files: { 'dist/index.js': "const lodash = require('lodash');\nmodule.exports = {};" },
     });
-    process.env[ENV_VA360] = fixture.publicKeyPem;
-    const sig = new ModuleSignatureService();
-    sig.onModuleInit();
-    const pkg = new ModulePackageService(sig);
     const installed = makeInstalledModuleServiceMock();
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
+    const svc = new InstallPackageService(
+      pkg,
+      installed,
+      storage.ctx,
+      makeRealSandbox(),
+      makeNoopMigrations(),
+      new ModuleRouterService(),
+    );
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toMatchObject({
       code: 'MODULE_LINT_FAILED',
     });
-    // El upload sí ocurrió antes del lint (orden ADR-009 §3): el blob queda
-    // en storage para diagnóstico postmortem.
     expect(storage.upload).toHaveBeenCalledOnce();
     expect(installed.markFailed).toHaveBeenCalledOnce();
-    expect(installed.markFailed.mock.calls[0][1]).toMatch(/lodash/);
+    expect((installed.markFailed as any).mock.calls[0][1]).toMatch(/lodash/);
+  });
+
+  it('si el onInstall del módulo lanza, marca FAILED', async () => {
+    const { sig, pkg } = makeServices();
+    const fixture = await buildTestPackage({
+      signatureService: sig,
+      files: {
+        'dist/index.js':
+          "module.exports = { onInstall: function () { throw new Error('install boom'); } };",
+      },
+    });
+    const installed = makeInstalledModuleServiceMock();
+    const storage = makeStorageMock();
+    const svc = new InstallPackageService(
+      pkg,
+      installed,
+      storage.ctx,
+      makeRealSandbox(),
+      makeNoopMigrations(),
+      new ModuleRouterService(),
+    );
+
+    await expect(svc.install(fixture.buffer, 'user-1')).rejects.toMatchObject({
+      code: 'MODULE_BOOT_FAILED',
+    });
+    expect(installed.markFailed).toHaveBeenCalledOnce();
+    expect((installed.markFailed as any).mock.calls[0][1]).toMatch(/install boom/);
   });
 
   it('registra routes del módulo en el router cuando install termina OK', async () => {
-    const fixture = buildTestPackage({
+    const { sig, pkg } = makeServices();
+    const fixture = await buildTestPackage({
+      signatureService: sig,
       files: {
         'dist/index.js': `module.exports = {
           routes: [
@@ -260,10 +323,6 @@ describe('InstallPackageService.install', () => {
         };`,
       },
     });
-    process.env[ENV_VA360] = fixture.publicKeyPem;
-    const sig = new ModuleSignatureService();
-    sig.onModuleInit();
-    const pkg = new ModulePackageService(sig);
     const installed = makeInstalledModuleServiceMock();
     const storage = makeStorageMock();
     const router = new ModuleRouterService();
@@ -282,13 +341,11 @@ describe('InstallPackageService.install', () => {
   });
 
   it('upgrade: la nueva versión sin routes desregistra las de la anterior', async () => {
-    const fixture = buildTestPackage({
+    const { sig, pkg } = makeServices();
+    const fixture = await buildTestPackage({
+      signatureService: sig,
       files: { 'dist/index.js': 'module.exports = {};' },
     });
-    process.env[ENV_VA360] = fixture.publicKeyPem;
-    const sig = new ModuleSignatureService();
-    sig.onModuleInit();
-    const pkg = new ModulePackageService(sig);
     const installed = makeInstalledModuleServiceMock({
       id: 'old',
       name: 'mod.example',
@@ -310,28 +367,6 @@ describe('InstallPackageService.install', () => {
     );
     await svc.install(fixture.buffer, 'user-1');
     expect(router.match('GET', '/modules/example/old')).toBeNull();
-  });
-
-  it('si el onInstall del módulo lanza, marca FAILED', async () => {
-    const fixture = buildTestPackage({
-      files: {
-        'dist/index.js':
-          "module.exports = { onInstall: function () { throw new Error('install boom'); } };",
-      },
-    });
-    process.env[ENV_VA360] = fixture.publicKeyPem;
-    const sig = new ModuleSignatureService();
-    sig.onModuleInit();
-    const pkg = new ModulePackageService(sig);
-    const installed = makeInstalledModuleServiceMock();
-    const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
-
-    await expect(svc.install(fixture.buffer, 'user-1')).rejects.toMatchObject({
-      code: 'MODULE_BOOT_FAILED',
-    });
-    expect(installed.markFailed).toHaveBeenCalledOnce();
-    expect(installed.markFailed.mock.calls[0][1]).toMatch(/install boom/);
   });
 });
 

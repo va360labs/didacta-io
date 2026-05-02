@@ -90,7 +90,7 @@ export class InstallPackageService {
     // de S3 deje la traza en BD.
     const row = await this.installedModules.createInstalling({
       manifest: validated.manifest,
-      signatureB64: validated.signatureB64,
+      manifestJwt: validated.manifestJwt,
       packageStorageKey: storageKey,
       packageSha256: validated.packageSha256,
       packageSizeBytes: validated.packageSizeBytes,

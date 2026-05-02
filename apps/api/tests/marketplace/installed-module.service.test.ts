@@ -66,7 +66,7 @@ describe('InstalledModuleService', () => {
     const svc = new InstalledModuleService(prisma);
     const row = await svc.createInstalling({
       manifest: baseManifest,
-      signatureB64: 'sig',
+      manifestJwt: 'fake.jwt.token',
       packageStorageKey: 'modules/mod.example/1.0.0-x.didactamod',
       packageSha256: 'a'.repeat(64),
       packageSizeBytes: 1024,
@@ -74,8 +74,8 @@ describe('InstalledModuleService', () => {
     });
     expect(row.status).toBe('INSTALLING');
     expect(row.name).toBe('mod.example');
-    expect(row.vendor).toBe('VA360');
-    expect(store.get('mod.example')?.signatureB64).toBe('sig');
+    expect(row.vendor).toBe('DIDACTA');
+    expect(store.get('mod.example')?.manifestJwt).toBe('sig');
   });
 
   it('createInstalling actúa como upsert: reinstall sobreescribe row previo', async () => {
@@ -91,7 +91,7 @@ describe('InstalledModuleService', () => {
     const svc = new InstalledModuleService(prisma);
     await svc.createInstalling({
       manifest: baseManifest,
-      signatureB64: 'sig',
+      manifestJwt: 'fake.jwt.token',
       packageStorageKey: 'modules/mod.example/1.0.0-x.didactamod',
       packageSha256: 'b'.repeat(64),
       packageSizeBytes: 2048,
@@ -151,14 +151,14 @@ describe('InstalledModuleService', () => {
 
   it('list filtra por status y vendor', async () => {
     const { prisma } = makePrismaMock([
-      { name: 'a', status: 'INSTALLED', vendor: 'VA360' } as InstalledModule,
-      { name: 'b', status: 'FAILED', vendor: 'VA360' } as InstalledModule,
+      { name: 'a', status: 'INSTALLED', vendor: 'DIDACTA' } as InstalledModule,
+      { name: 'b', status: 'FAILED', vendor: 'DIDACTA' } as InstalledModule,
       { name: 'c', status: 'INSTALLED', vendor: 'COMMUNITY' } as InstalledModule,
     ]);
     const svc = new InstalledModuleService(prisma);
     const onlyInstalled = await svc.list({ status: 'INSTALLED' });
     expect(onlyInstalled.map((r) => r.name).sort()).toEqual(['a', 'c']);
-    const onlyVa360 = await svc.list({ vendor: 'VA360' });
-    expect(onlyVa360.map((r) => r.name).sort()).toEqual(['a', 'b']);
+    const onlyDidacta = await svc.list({ vendor: 'DIDACTA' });
+    expect(onlyDidacta.map((r) => r.name).sort()).toEqual(['a', 'b']);
   });
 });

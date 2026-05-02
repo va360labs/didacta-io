@@ -1,12 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import { createHash } from 'node:crypto';
-import {
-  canonicalManifestBytes,
-  moduleManifestSchema,
-  validateManifestConsistency,
-  type ModuleManifest,
-} from './module-manifest.schema';
+import { validateManifestConsistency, type ModuleManifest } from './module-manifest.schema';
 import { MarketplacePackageError } from './module-package.errors';
 import { ModuleSignatureService } from './module-signature.service';
 
@@ -19,9 +14,11 @@ export const MAX_PACKAGE_BYTES = 50 * 1024 * 1024;
 /// implica `PACKAGE_MISSING_FILE`. La presencia se valida case-sensitive
 /// (POSIX) — un ZIP creado en Windows con casing distinto se rechaza para
 /// evitar comportamiento divergente entre instancias linux/mac.
+///
+/// `manifest.jwt` reemplaza el par `manifest.json` + `manifest.sig` del
+/// diseño inicial: el JWT lleva manifest+firma en una sola línea ES256.
 export const REQUIRED_FILES = [
-  'manifest.json',
-  'manifest.sig',
+  'manifest.jwt',
   'package.json',
   'dist/index.js',
 ] as const;
@@ -48,15 +45,12 @@ export const RESERVED_MODULE_NAMES = new Set<string>([
 
 export interface ValidatedPackage {
   manifest: ModuleManifest;
-  signatureB64: string;
+  /// JWT compact tal cual viene en el ZIP. Se persiste para auditoría.
+  manifestJwt: string;
   /// SHA-256 hex del paquete tal cual fue subido (antes de extraer).
   /// Se persiste para detectar tampering al releerlo del object storage.
   packageSha256: string;
   packageSizeBytes: number;
-  /// Bytes canónicos del manifest tal cual se firmó/verificó. Útil para
-  /// re-verificación posterior en otros nodos sin tener que reconstruir
-  /// la canonicalización.
-  canonicalManifest: Buffer;
 }
 
 @Injectable()
@@ -69,19 +63,14 @@ export class ModulePackageService {
   /// solo valida y devuelve los datos extraídos para que el caller decida
   /// qué hacer con ellos (persistir en S3, abrir transacción Prisma, etc.).
   ///
-  /// Pasos (ADR-009 §3, fases 1-7):
+  /// Pasos:
   ///   1. Tamaño del buffer.
   ///   2. ZIP parseable.
   ///   3. Ficheros requeridos presentes.
-  ///   4. manifest.json es JSON válido.
-  ///   5. Manifest cumple el schema Zod.
-  ///   6. Coherencia name ↔ tablePrefix ↔ apiNamespace.
-  ///   7. Verificación de firma RSA-PSS-SHA256 contra clave del vendor.
-  ///   8. name no es un slug reservado (built-in del core).
-  ///
-  /// Lanza `MarketplacePackageError` con un `code` estable en cualquier
-  /// fallo. La excepción NO se loguea aquí (el caller decide nivel y
-  /// contexto) excepto eventos de seguridad muy claros.
+  ///   4. JWT verify (firma KMS + iss + aud + schema del manifest).
+  ///   5. Coherencia name ↔ tablePrefix ↔ apiNamespace.
+  ///   6. name no es un slug reservado (built-in del core).
+  ///   7. coreVersionRequired compatible con el core que corre.
   async validatePackage(
     packageBuffer: Buffer,
     options: { coreVersion: string },
@@ -123,26 +112,12 @@ export class ModulePackageService {
       }
     }
 
-    const manifestRaw = entries.get('manifest.json')!.getData().toString('utf8');
-    let manifestJson: unknown;
-    try {
-      manifestJson = JSON.parse(manifestRaw);
-    } catch (err) {
-      throw new MarketplacePackageError(
-        'MANIFEST_INVALID_JSON',
-        `manifest.json no es JSON válido: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
+    const manifestJwt = entries.get('manifest.jwt')!.getData().toString('utf8').trim();
 
-    const parsed = moduleManifestSchema.safeParse(manifestJson);
-    if (!parsed.success) {
-      throw new MarketplacePackageError(
-        'MANIFEST_SCHEMA_INVALID',
-        'manifest.json no cumple el schema del contrato de módulo.',
-        { issues: parsed.error.issues },
-      );
-    }
-    const manifest = parsed.data;
+    // El verifier hace en una sola pasada: parse JWT → verify firma con
+    // jose → match issuer/audience → parse payload contra el schema Zod →
+    // enforce vendor=didacta. Devuelve el manifest tipado.
+    const manifest = await this.signatures.verifyManifestJwt(manifestJwt);
 
     const consistencyErrors = validateManifestConsistency(manifest);
     if (consistencyErrors.length > 0) {
@@ -161,10 +136,6 @@ export class ModulePackageService {
       );
     }
 
-    const canonical = canonicalManifestBytes(manifest);
-    const signatureB64 = entries.get('manifest.sig')!.getData().toString('utf8').trim();
-    this.signatures.verifyManifestSignature(manifest.vendor, canonical, signatureB64);
-
     if (!isCoreVersionCompatible(manifest.coreVersionRequired, options.coreVersion)) {
       throw new MarketplacePackageError(
         'CORE_VERSION_INCOMPATIBLE',
@@ -175,10 +146,9 @@ export class ModulePackageService {
 
     return {
       manifest,
-      signatureB64,
+      manifestJwt,
       packageSha256: createHash('sha256').update(packageBuffer).digest('hex'),
       packageSizeBytes: packageBuffer.length,
-      canonicalManifest: canonical,
     };
   }
 }

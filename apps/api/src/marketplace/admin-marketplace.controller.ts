@@ -29,7 +29,7 @@ const ALLOWED_STATUSES = new Set<InstalledModuleStatus>([
   'FAILED',
   'DEPRECATED',
 ]);
-const ALLOWED_VENDORS = new Set<InstalledModuleVendor>(['VA360', 'COMMUNITY']);
+const ALLOWED_VENDORS = new Set<InstalledModuleVendor>(['DIDACTA', 'COMMUNITY']);
 
 /// Vista pública de un row `installed_module`. Filtra metadata sensible
 /// (storage key, sha256) que solo el super_admin necesita; aún así toda
@@ -95,7 +95,7 @@ export class AdminMarketplaceController {
   @Post('install')
   @ApiOperation({
     summary:
-      'Instala un paquete *.didactamod previamente firmado por VA360. Requiere rol super_admin.',
+      'Instala un paquete *.didactamod firmado por Didacta (KMS alias/didacta-issuer-2026, ES256). Requiere rol super_admin.',
   })
   async installPackage(
     @CurrentUser() user: SessionClaims | undefined,

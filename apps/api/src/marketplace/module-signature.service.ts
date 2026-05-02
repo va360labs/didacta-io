@@ -1,118 +1,177 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createPublicKey, createVerify, type KeyObject } from 'node:crypto';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { importSPKI, jwtVerify, type JWTPayload, type KeyLike } from 'jose';
+import { moduleManifestSchema, type ModuleManifest } from './module-manifest.schema';
 import { MarketplacePackageError } from './module-package.errors';
 
-/// Verifica firmas RSA-PSS-SHA256 de los manifests de paquetes `*.didactamod`.
+/// Verifica firmas JWS (ES256) de los manifests de paquetes `*.didactamod`.
 ///
-/// Configuración:
-///   - `MARKETPLACE_TRUSTED_VENDOR_KEYS_VA360`: clave pública PEM (RSA, 2048+) del
-///     vendor `va360`. Si falta, el servicio rechaza cualquier paquete VA360
-///     con `VENDOR_NOT_TRUSTED`.
+/// **Mismo esquema que el License SDK**: ECDSA P-256 + SHA-256, JWT compact,
+/// firmado por AWS KMS `alias/didacta-issuer-2026` (eu-west-1). La
+/// distinción entre licencias y módulos viaja en el claim `aud`:
 ///
-/// Por qué RSA-PSS y no Ed25519: para el FORMATO del paquete (firma del
-/// manifest dentro del ZIP) usamos RSA-PSS porque el ecosistema OpenSSL/HSM
-/// de los clientes self-host lo soporta universalmente. Para el CANAL
-/// web→instancia (push install) usamos Ed25519 (otro vector, otra clave) —
-/// ver `docs/MARKETPLACE-WEB-SPEC.md` §5.2. Son dos firmas distintas que
-/// protegen capas distintas.
+///   - License SDK:     `iss=didacta.io`, `aud=didacta-runtime`
+///   - Marketplace:     `iss=didacta.io`, `aud=didacta-marketplace`
+///
+/// Las claves públicas viven en disco bajo `MARKETPLACE_PUBLIC_KEYS_DIR`
+/// (default: la misma carpeta que `license-sdk/src/public-keys/`). Cada
+/// archivo `<kid>.pem` se carga al primer uso. Sin env vars con claves —
+/// las claves públicas no son secretos y se versionan en el repo.
+///
+/// Tests: registramos claves efímeras vía `registerPublicKeyForTest()`
+/// para no depender de KMS real.
 
-export const TRUSTED_VENDORS = ['va360'] as const;
-export type TrustedVendor = (typeof TRUSTED_VENDORS)[number];
+export const MARKETPLACE_ISSUER = 'didacta.io';
+export const MARKETPLACE_AUDIENCE = 'didacta-marketplace';
+const ALG = 'ES256';
 
-const RSA_MIN_MODULUS_BITS = 2048;
-const SALT_LENGTH = 32; // SHA-256 digest length, recomendado para RSA-PSS
+/// Path por defecto de las claves públicas. Reusa el directorio del
+/// license-sdk porque la KMS key es la misma en MVP. Si en el futuro se
+/// crea un alias separado (`didacta-marketplace-2026`), este path puede
+/// apuntar a un directorio dedicado vía `MARKETPLACE_PUBLIC_KEYS_DIR`.
+function defaultPublicKeysDir(): string {
+  return resolve(process.cwd(), 'packages/license-sdk/src/public-keys');
+}
 
 @Injectable()
 export class ModuleSignatureService {
   private readonly logger = new Logger(ModuleSignatureService.name);
-  private readonly vendorKeys: Map<TrustedVendor, KeyObject> = new Map();
+  private publicKeysCache: Map<string, Promise<KeyLike>> | null = null;
 
   onModuleInit(): void {
-    for (const vendor of TRUSTED_VENDORS) {
-      const envName = `MARKETPLACE_TRUSTED_VENDOR_KEYS_${vendor.toUpperCase()}`;
-      const pem = process.env[envName];
-      if (!pem || pem.trim() === '') {
-        this.logger.warn(
-          `Vendor "${vendor}" sin clave pública configurada (env ${envName}). ` +
-            `Los paquetes firmados por este vendor serán rechazados con VENDOR_NOT_TRUSTED.`,
-        );
-        continue;
-      }
-      try {
-        const key = createPublicKey({ key: pem, format: 'pem' });
-        this.assertRsaKey(vendor, key);
-        this.vendorKeys.set(vendor, key);
-        this.logger.log(`Vendor "${vendor}" registrado con clave pública RSA.`);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        this.logger.error(`No se pudo cargar la clave del vendor "${vendor}": ${msg}`);
-      }
-    }
+    // Lazy: cargamos al primer verify para que el servicio arranque incluso
+    // si el directorio aún no está poblado en algunos deploys (ej. tests
+    // que registran clave efímera).
+    this.publicKeysCache = null;
   }
 
-  /// Devuelve true si el servicio confía en este vendor (clave pública cargada).
-  /// Usado por `ModulePackageService` antes de intentar verificar la firma —
-  /// permite distinguir "vendor desconocido" de "firma inválida".
-  isVendorTrusted(vendor: string): vendor is TrustedVendor {
-    return (TRUSTED_VENDORS as readonly string[]).includes(vendor)
-      ? this.vendorKeys.has(vendor as TrustedVendor)
-      : false;
+  /// **Solo tests**: registra una clave pública con un `kid` arbitrario en
+  /// la cache. Permite firmar fixtures con un par efímero sin depender de
+  /// KMS real. Equivalente al `registerPublicKeyForTest` del license-sdk.
+  registerPublicKeyForTest(kid: string, key: KeyLike): void {
+    if (!this.publicKeysCache) this.publicKeysCache = new Map();
+    this.publicKeysCache.set(kid, Promise.resolve(key));
   }
 
-  /// Verifica la firma RSA-PSS-SHA256 de los bytes canónicos del manifest.
+  /// **Solo tests**: limpia la cache de claves públicas para que el
+  /// próximo verify recargue desde disco. Usado en tests que mutan
+  /// `MARKETPLACE_PUBLIC_KEYS_DIR`.
+  resetPublicKeysCacheForTest(): void {
+    this.publicKeysCache = null;
+  }
+
+  /// Verifica un `manifest.jwt` (JWS compact ES256). Devuelve el manifest
+  /// parseado y validado contra el schema Zod, listo para usar.
   ///
-  /// `signatureB64` es la firma tal cual viene en `manifest.sig` dentro del
-  /// ZIP, en base64 estándar (no urlsafe). Lanza `MarketplacePackageError`
-  /// con `code='SIGNATURE_VERIFY_FAILED'` si la firma no valida.
-  verifyManifestSignature(
-    vendor: string,
-    canonicalBytes: Buffer,
-    signatureB64: string,
-  ): void {
-    if (!this.isVendorTrusted(vendor)) {
+  /// Errores:
+  ///   - `SIGNATURE_INVALID` — JWT malformado o algoritmo no soportado.
+  ///   - `SIGNATURE_VERIFY_FAILED` — firma inválida, kid desconocido,
+  ///     issuer/audience incorrectos, expiración (si el JWT trae `exp`).
+  ///   - `MANIFEST_SCHEMA_INVALID` — el payload no cumple el schema.
+  async verifyManifestJwt(token: string): Promise<ModuleManifest> {
+    if (!token || typeof token !== 'string' || !token.includes('.')) {
       throw new MarketplacePackageError(
-        'VENDOR_NOT_TRUSTED',
-        `Vendor "${vendor}" no es de confianza para esta instancia.`,
-        { vendor },
+        'SIGNATURE_INVALID',
+        'manifest.jwt no es un JWT válido (formato compact esperado).',
       );
     }
-    const key = this.vendorKeys.get(vendor as TrustedVendor)!;
 
-    let signature: Buffer;
+    let payload: JWTPayload;
     try {
-      signature = Buffer.from(signatureB64, 'base64');
-    } catch {
-      throw new MarketplacePackageError('SIGNATURE_INVALID', 'manifest.sig no es base64 válido.');
-    }
-    if (signature.length === 0) {
-      throw new MarketplacePackageError('SIGNATURE_INVALID', 'manifest.sig vacío.');
-    }
-
-    const verifier = createVerify('sha256');
-    verifier.update(canonicalBytes);
-    verifier.end();
-    const ok = verifier.verify(
-      { key, padding: 6 /* RSA_PKCS1_PSS_PADDING */, saltLength: SALT_LENGTH },
-      signature,
-    );
-    if (!ok) {
+      const result = await jwtVerify(token, async (header) => this.resolveKey(header.kid), {
+        algorithms: [ALG],
+        issuer: MARKETPLACE_ISSUER,
+        audience: MARKETPLACE_AUDIENCE,
+      });
+      payload = result.payload;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       throw new MarketplacePackageError(
         'SIGNATURE_VERIFY_FAILED',
-        'La firma del manifest no valida con la clave pública del vendor.',
-        { vendor },
+        `No se pudo verificar la firma del manifest: ${msg}`,
       );
     }
+
+    // El payload del JWT ES el manifest. Quitamos los claims estándar
+    // (iss/aud/iat/exp/nbf/sub/jti) antes de parsear contra el schema
+    // del módulo, que es estricto (`.strict()`).
+    const stripped = stripJwtClaims(payload);
+    const parsed = moduleManifestSchema.safeParse(stripped);
+    if (!parsed.success) {
+      throw new MarketplacePackageError(
+        'MANIFEST_SCHEMA_INVALID',
+        'El payload del manifest.jwt no cumple el schema del contrato de módulo.',
+        { issues: parsed.error.issues },
+      );
+    }
+
+    // Defensa adicional: el vendor declarado en el manifest debe coincidir
+    // con un vendor confiado por la instancia. Hoy solo `didacta`.
+    if (parsed.data.vendor !== 'didacta') {
+      throw new MarketplacePackageError(
+        'VENDOR_NOT_TRUSTED',
+        `Vendor "${parsed.data.vendor}" no es de confianza para esta instancia. Solo "didacta" en MVP.`,
+        { vendor: parsed.data.vendor },
+      );
+    }
+
+    return parsed.data;
   }
 
-  private assertRsaKey(vendor: TrustedVendor, key: KeyObject): void {
-    if (key.asymmetricKeyType !== 'rsa') {
-      throw new Error(`vendor "${vendor}": se esperaba RSA, recibido ${key.asymmetricKeyType}`);
-    }
-    const modulus = key.asymmetricKeyDetails?.modulusLength ?? 0;
-    if (modulus < RSA_MIN_MODULUS_BITS) {
-      throw new Error(
-        `vendor "${vendor}": módulo RSA insuficiente (${modulus} bits, mínimo ${RSA_MIN_MODULUS_BITS}).`,
+  private async resolveKey(kid: string | undefined): Promise<KeyLike> {
+    if (!kid) {
+      throw new MarketplacePackageError(
+        'SIGNATURE_VERIFY_FAILED',
+        'manifest.jwt sin `kid` en el header. Reusa la KMS key del license-sdk.',
       );
     }
+    if (!this.publicKeysCache) {
+      this.publicKeysCache = this.loadPublicKeysFromDisk();
+    }
+    const cached = this.publicKeysCache.get(kid);
+    if (!cached) {
+      throw new MarketplacePackageError(
+        'SIGNATURE_VERIFY_FAILED',
+        `Unknown kid "${kid}". La clave pública no está embebida en este build.`,
+        { kid },
+      );
+    }
+    return cached;
   }
+
+  private loadPublicKeysFromDisk(): Map<string, Promise<KeyLike>> {
+    const dir = process.env['MARKETPLACE_PUBLIC_KEYS_DIR'] ?? defaultPublicKeysDir();
+    const map = new Map<string, Promise<KeyLike>>();
+    if (!existsSync(dir)) {
+      this.logger.warn(
+        `Directorio de claves públicas del marketplace no existe: ${dir}. ` +
+          `Cualquier verify fallará con SIGNATURE_VERIFY_FAILED hasta que se publique al menos una clave.`,
+      );
+      return map;
+    }
+    const files = readdirSync(dir).filter((f) => f.endsWith('.pem'));
+    for (const filename of files) {
+      const kid = filename.replace(/\.pem$/, '');
+      const pem = readFileSync(join(dir, filename), 'utf8');
+      map.set(kid, importSPKI(pem, ALG));
+    }
+    if (map.size === 0) {
+      this.logger.warn(`Sin claves públicas en ${dir} — el marketplace no aceptará paquetes.`);
+    } else {
+      this.logger.log(`Marketplace: cargadas ${map.size} clave(s) pública(s) desde ${dir}.`);
+    }
+    return map;
+  }
+}
+
+const JWT_RESERVED_CLAIMS = new Set(['iss', 'sub', 'aud', 'exp', 'nbf', 'iat', 'jti']);
+
+function stripJwtClaims(payload: JWTPayload): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(payload)) {
+    if (JWT_RESERVED_CLAIMS.has(k)) continue;
+    out[k] = v;
+  }
+  return out;
 }

@@ -4,7 +4,7 @@ import { ApiHttpError } from './api-client';
 import { authStorage } from './auth-storage';
 
 export type InstalledModuleStatus = 'INSTALLING' | 'INSTALLED' | 'FAILED' | 'DEPRECATED';
-export type InstalledModuleVendor = 'VA360' | 'COMMUNITY';
+export type InstalledModuleVendor = 'DIDACTA' | 'COMMUNITY';
 
 export interface InstalledModuleSummary {
   id: string;

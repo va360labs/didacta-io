@@ -20,7 +20,9 @@ import type { ModuleManifest } from './module-manifest.schema';
 
 export interface CreateInstallingInput {
   manifest: ModuleManifest;
-  signatureB64: string;
+  /// JWT compact (manifest.jwt del paquete). Tras refactor KMS sustituye al
+  /// par manifest+firma separada del diseño anterior.
+  manifestJwt: string;
   packageStorageKey: string;
   packageSha256: string;
   packageSizeBytes: number;
@@ -67,7 +69,7 @@ export class InstalledModuleService {
       displayName: input.manifest.displayName,
       description: input.manifest.description ?? null,
       manifestJson: input.manifest as unknown as Prisma.InputJsonValue,
-      signatureB64: input.signatureB64,
+      manifestJwt: input.manifestJwt,
       signedAt: new Date(input.manifest.signedAt),
       packageStorageKey: input.packageStorageKey,
       packageSha256: input.packageSha256,

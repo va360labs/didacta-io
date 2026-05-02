@@ -90,8 +90,8 @@ describe('AdminMarketplaceController.list', () => {
       list: vi.fn(async () => [row]),
     };
     const ctrl = makeController({ installed });
-    const out = await ctrl.list(userWith(['super_admin']), 'installed', 'va360');
-    expect(installed.list).toHaveBeenCalledWith({ status: 'INSTALLED', vendor: 'VA360' });
+    const out = await ctrl.list(userWith(['super_admin']), 'installed', 'didacta');
+    expect(installed.list).toHaveBeenCalledWith({ status: 'INSTALLED', vendor: 'DIDACTA' });
     expect(out.modules).toHaveLength(1);
     expect(out.modules[0].name).toBe('mod.example');
     expect(out.modules[0]).not.toHaveProperty('manifestJson'); // no exponemos el JSON crudo
@@ -162,11 +162,11 @@ function sampleRow(): InstalledModule {
     name: 'mod.example',
     version: '1.0.0',
     prevVersion: null,
-    vendor: 'VA360',
+    vendor: 'DIDACTA',
     displayName: 'Example',
     description: null,
     manifestJson: {},
-    signatureB64: 'sig',
+    manifestJwt: 'fake.jwt.token',
     signedAt: new Date('2026-05-01T00:00:00Z'),
     packageStorageKey: 'modules/mod.example/1.0.0-1.didactamod',
     packageSha256: 'a'.repeat(64),

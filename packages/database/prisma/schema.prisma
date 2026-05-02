@@ -2160,7 +2160,11 @@ model ModAiContentDraft {
 // (Fase 2+, ADR pendiente).
 
 enum InstalledModuleVendor {
-  VA360
+  /// Paquetes firmados por Didacta (KMS `alias/didacta-issuer-2026`,
+  /// ES256). En MVP solo este vendor está confiado por el verifier.
+  DIDACTA
+  /// Reservado para Fase 2+: marketplace público con vendors de terceros
+  /// que tendrán su propia clave de firma tras un proceso de revisión.
   COMMUNITY
 }
 
@@ -2191,12 +2195,15 @@ model InstalledModule {
   displayName  String                @map("display_name")
   description  String?
   /// Manifest del módulo serializado (ADR-008 + extensiones ADR-009).
-  /// Se persiste tal cual viene en el ZIP para auditoría y para diff entre
-  /// versiones tras un upgrade.
+  /// Se persiste como JSON ya verificado para queries rápidas y para diff
+  /// entre versiones tras un upgrade.
   manifestJson Json                  @map("manifest_json")
-  /// Firma RSA-PSS-SHA256 base64 del manifest. La instancia la verifica
-  /// contra la clave pública del vendor confiado antes de aceptar el ZIP.
-  signatureB64 String                @map("signature_b64")
+  /// JWT compact tal cual viene en el ZIP (`manifest.jwt`). Es el
+  /// artefacto autoritativo: lleva el manifest + firma ES256 firmada por
+  /// AWS KMS `alias/didacta-issuer-2026`. Re-verificable en cualquier
+  /// momento — útil para auditoría y para re-checkear tras rotación de
+  /// claves públicas.
+  manifestJwt  String                @map("manifest_jwt")
   /// `signedAt` declarado por el publisher. Solo informativo, no se compara
   /// con el reloj del receiver — los relojes de los clientes self-host no
   /// son confiables.

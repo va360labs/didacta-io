@@ -7,12 +7,10 @@ import { z } from 'zod';
 /// extensiones específicas del marketplace (ADR-009 §2): vendor, signedAt,
 /// requiredCapabilities, requiredEnvVars, isolation.
 ///
-/// El manifest viaja DOS veces dentro del paquete:
-///  - como `manifest.json` (canonical, lo que se firma)
-///  - como `manifest.sig` (firma RSA-PSS-SHA256 del JSON canonicalizado)
-///
-/// La canonicalización para firma se hace con `canonicalManifestBytes` para
-/// evitar que diferencias de whitespace/orden de claves invaliden la firma.
+/// Distribución de la firma: el paquete trae un único archivo `manifest.jwt`
+/// (JWS compact ES256 firmado por AWS KMS `alias/didacta-issuer-2026`). El
+/// payload del JWT ES el manifest serializado. La canonicalización la hace
+/// `jose` — no necesitamos lógica propia. Ver ADR-009 §"Esquema de firma".
 
 export const MODULE_NAME_REGEX = /^mod\.[a-z0-9][a-z0-9-]{0,40}$/;
 export const TABLE_PREFIX_REGEX = /^mod_[a-z0-9_]{1,40}_$/;
@@ -20,7 +18,11 @@ export const API_NAMESPACE_REGEX = /^\/modules\/[a-z0-9-]{1,40}$/;
 export const SEMVER_REGEX = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 export const SEMVER_RANGE_REGEX = /^[\^~>=<]?\s?\d+\.\d+\.\d+/;
 
-export const MODULE_VENDOR = ['va360', 'community'] as const;
+/// Vendors confiados por la instancia. En MVP solo `didacta` (Didacta firma
+/// todos los paquetes con su KMS, incluso los de terceros tras revisión
+/// manual). El valor `community` queda reservado para Fase 2+ cuando
+/// exista marketplace público con review automatizado y firma propia.
+export const MODULE_VENDOR = ['didacta', 'community'] as const;
 export const MODULE_ISOLATION = ['vm', 'worker_thread'] as const;
 
 const eventSchema = z.object({
@@ -95,24 +97,4 @@ export function validateManifestConsistency(manifest: ModuleManifest): string[] 
     );
   }
   return errors;
-}
-
-/// Serializa un manifest a la forma canónica que se firma. Reglas:
-///   - JSON con claves ordenadas alfabéticamente (recursivo).
-///   - Sin espacios extra, sin trailing newline.
-///   - Encoding UTF-8.
-/// Cualquier cambio en este formato rompe la verificación de firmas
-/// existentes — versiones futuras requieren un campo `manifestVersion`
-/// y un negotiator de algoritmos. Por ahora, v1 implícita.
-export function canonicalManifestBytes(manifest: ModuleManifest): Buffer {
-  return Buffer.from(stableStringify(manifest), 'utf8');
-}
-
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-  const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
-  const entries = keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`);
-  return `{${entries.join(',')}}`;
 }

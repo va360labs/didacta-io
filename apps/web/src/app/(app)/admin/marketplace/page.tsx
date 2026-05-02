@@ -4,7 +4,7 @@
  * Panel super_admin · Marketplace de módulos (ADR-009 PR F).
  *
  * Permite al operador self-host:
- *   1. Subir un paquete `*.didactamod` firmado por VA360 vía drag&drop o
+ *   1. Subir un paquete `*.didactamod` firmado por Didacta vía drag&drop o
  *      file picker. El paquete viaja como body `application/zip` directo
  *      al endpoint `POST /admin/modules/install` (sin multipart, sin
  *      base64 — coherente con el body parser registrado en `main.ts`).
@@ -37,7 +37,7 @@ export default function AdminMarketplacePage() {
       <header className="flex flex-col gap-1">
         <h1 className="font-display text-3xl font-bold tracking-tight">Marketplace de módulos</h1>
         <p className="text-text-muted">
-          Subí un paquete <code>*.didactamod</code> firmado por VA360 para añadir un módulo a esta
+          Subí un paquete <code>*.didactamod</code> firmado por Didacta para añadir un módulo a esta
           instancia sin reiniciar el API. Los módulos quedan disponibles para ser activados por
           tenant en <a href="/admin/configuracion" className="underline">Configuración</a>.
         </p>
@@ -133,7 +133,7 @@ function UploadCard() {
               e.target.value = ''; // permite re-seleccionar el mismo archivo
             }}
           />
-          <p className="mt-4 text-xs text-text-muted">Máximo 50 MiB · solo paquetes firmados por VA360</p>
+          <p className="mt-4 text-xs text-text-muted">Máximo 50 MiB · solo paquetes firmados por Didacta</p>
         </div>
 
         {feedback?.kind === 'success' && (
@@ -275,7 +275,7 @@ function StatusBadge({ status }: { status: InstalledModuleStatus }) {
 function VendorBadge({ vendor }: { vendor: InstalledModuleSummary['vendor'] }) {
   return (
     <Badge variant="secondary" className="text-[10px] uppercase">
-      {vendor === 'VA360' ? 'VA360' : 'Community'}
+      {vendor === 'DIDACTA' ? 'Didacta' : 'Community'}
     </Badge>
   );
 }

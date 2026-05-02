@@ -21,7 +21,7 @@
 ///
 /// Si un módulo necesita una operación no soportada, el linter falla con
 /// `MODULE_LINT_FAILED`; el módulo debe rediseñar la migración o el
-/// equipo VA360 debe ampliar el linter caso por caso.
+/// equipo Didacta debe ampliar el linter caso por caso.
 
 import { MarketplacePackageError } from './module-package.errors';
 

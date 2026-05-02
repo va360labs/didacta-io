@@ -33,7 +33,7 @@ Beneficio: misma promesa de self-host (la instancia decide si acepta y valida to
 - **Cuenta web**: usuario en didacta.io. Puede tener N instancias enlazadas.
 - **Pairing**: proceso one-time de enlazar una instancia con una cuenta web.
 - **Push install**: la web inicia la instalación de un módulo en una instancia ya pareada.
-- **Paquete `*.didactamod`**: ZIP firmado por VA360 con el módulo. Definido en ADR-009 §1.
+- **Paquete `*.didactamod`**: ZIP firmado por Didacta con el módulo. Definido en ADR-009 §1.
 
 ---
 
@@ -85,7 +85,7 @@ version             text                     -- "1.2.0"
 zip_url             text                     -- "https://cdn.didacta.io/modules/mod.gamification-1.2.0.didactamod"
 zip_sha256          text                     -- hex
 manifest_json       jsonb                    -- copia legible del manifest (para preview)
-signature_b64       text                     -- firma RSA-PSS-SHA256 base64 (la misma que va dentro del ZIP)
+manifest_jwt       text                     -- firma JWT compact ES256 (mismo flujo que license-sdk) (la misma que va dentro del ZIP)
 signed_at           timestamptz
 released_at         timestamptz
 changelog           md
@@ -227,7 +227,7 @@ Se usa un flujo similar a OAuth Device Code, pero iniciado desde la instancia (m
         │                             │     zip_url,             │
         │                             │     zip_sha256,          │
         │                             │     manifest_preview,    │
-        │                             │     signature_b64,       │
+        │                             │     manifest_jwt,       │
         │                             │     web_install_id }     │
         │                             │                          │
         │                             │ ◄────── 202 Accepted     │
@@ -236,7 +236,7 @@ Se usa un flujo similar a OAuth Device Code, pero iniciado desde la instancia (m
         │                             │   (instancia descarga    │
         │                             │    ZIP de zip_url,       │
         │                             │    valida sha256 + firma │
-        │                             │    VA360 dentro del ZIP, │
+        │                             │    Didacta dentro del ZIP,│
         │                             │    ejecuta flujo ADR-009)│
         │ ◄──── poll /installs/:id    │                          │
         │   "running"                 │                          │
@@ -267,7 +267,7 @@ Se usa un flujo similar a OAuth Device Code, pero iniciado desde la instancia (m
   "zip_url": "https://cdn.didacta.io/modules/mod.gamification-1.2.0.didactamod",
   "zip_sha256": "abc123...",
   "manifest_preview": { ...ADR-008 manifest... },
-  "signature_b64": "...",
+  "manifest_jwt": "...",
   "web_install_id": "uuid-de-la-fila-en-installations",
   "callback_url": "https://didacta.io/api/v1/installs/<web_install_id>/webhook",
   "callback_secret": "random-32b-hmac-key"
@@ -285,7 +285,7 @@ Se usa un flujo similar a OAuth Device Code, pero iniciado desde la instancia (m
 - `403` — Ed25519 inválido
 - `409` — módulo ya instalado en esta versión (idempotente)
 - `412` — `coreVersionRequired` no compatible con la instancia
-- `422` — firma VA360 dentro del ZIP no valida
+- `422` — firma Didacta dentro del ZIP no valida
 - `500` — error interno
 
 Mismas respuestas que retornaría una validación local (ADR-009 §3 pasos 1-8); la web debe renderizarlas como mensajes legibles.
@@ -337,7 +337,7 @@ Los ZIP firmados deben servirse desde un **CDN público** (`cdn.didacta.io`) con
 - Cache larga (los archivos son inmutables por versión)
 - `ETag` con el sha256
 
-VA360 sube los ZIP a un bucket privado (S3/R2); la web los expone vía CDN con URL firmadas opcionales o públicas estables.
+Didacta sube los ZIP a un bucket privado (S3/R2); la web los expone vía CDN con URL firmadas opcionales o públicas estables.
 
 ---
 
@@ -349,7 +349,7 @@ Antes de que la web pueda lanzar el marketplace, faltan piezas que dependen de l
 
 | ID | Pieza | Estado | Bloquea |
 |---|---|---|---|
-| D1 | ADR-009 implementado: endpoint `POST /admin/modules/install` (subida ZIP local), VM aislada, prisma migrate por módulo, firma VA360 verify | propuesto, no iniciado | TODO el marketplace |
+| D1 | ADR-009 implementado: endpoint `POST /admin/modules/install` (subida ZIP local), VM aislada, prisma migrate por módulo, firma Didacta verify | propuesto, no iniciado | TODO el marketplace |
 | D2 | Endpoints `/api/v1/marketplace/pair/*` en la instancia | no existe | pairing |
 | D3 | Endpoint `/api/v1/marketplace/install` (push receiver) | no existe | push install |
 | D4 | Endpoint `/api/v1/marketplace/jobs/:id` | no existe | UX feedback |
@@ -362,9 +362,9 @@ Antes de que la web pueda lanzar el marketplace, faltan piezas que dependen de l
 
 | ID | Pieza | Estado | Bloquea |
 |---|---|---|---|
-| S1 | Esquema definitivo de firma de módulos: clave VA360, rotación, revocación, formato `manifest.sig` | propuesto en ADR-009, sin implementación | firma push install |
-| S2 | KMS o HSM para custodiar la private key VA360 (no puede vivir en un repo) | no existe | firma producción |
-| S3 | Pipeline CI VA360 que firma los `.didactamod` al publicar | no existe | publicar versión |
+| S1 | Esquema definitivo de firma de módulos: clave Didacta, rotación, revocación. Reusa flujo del license-sdk (KMS alias/didacta-issuer-2026, ES256) | propuesto en ADR-009, sin implementación | firma push install |
+| S2 | KMS o HSM para custodiar la private key Didacta (no puede vivir en un repo) | no existe | firma producción |
+| S3 | Pipeline CI Didacta que firma los `.didactamod` al publicar | no existe | publicar versión |
 | S4 | CDN público `cdn.didacta.io` con bucket detrás | no existe | distribuir ZIP |
 | S5 | RLS strict en producción (`docs/RLS-STRICT-PLAN.md`) — pre-requisito de ADR-009 §"Pre-requisitos" | parcial, plan escrito, no aplicado | ACEPTAR primer módulo de terceros |
 

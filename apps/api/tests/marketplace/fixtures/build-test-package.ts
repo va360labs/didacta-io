@@ -1,20 +1,22 @@
 import AdmZip from 'adm-zip';
+import { generateKeyPair, SignJWT, type KeyLike } from 'jose';
+import type { ModuleManifest } from '../../../src/marketplace/module-manifest.schema';
 import {
-  createSign,
-  generateKeyPairSync,
-  type KeyObject,
-  type KeyPairKeyObjectResult,
-} from 'node:crypto';
-import { canonicalManifestBytes, type ModuleManifest } from '../../../src/marketplace/module-manifest.schema';
+  MARKETPLACE_AUDIENCE,
+  MARKETPLACE_ISSUER,
+  ModuleSignatureService,
+} from '../../../src/marketplace/module-signature.service';
 
-/// Fixture builder: genera un par RSA, construye un manifest válido,
-/// firma el manifest y arma un buffer `*.didactamod` listo para alimentar a
-/// `ModulePackageService.validatePackage`. Usado por los tests unitarios.
+/// Fixture builder: genera un par ES256 efímero, construye un manifest
+/// válido, lo firma como JWT y arma un buffer `*.didactamod` listo para
+/// alimentar a `ModulePackageService.validatePackage`.
 ///
-/// El builder vive en tests (no en src) porque genera claves nuevas cada
-/// llamada y NO debe usarse en producción. La clave pública se devuelve en
-/// PEM para que el test la inyecte por env var antes de instanciar
-/// `ModuleSignatureService`.
+/// Mismo patrón que `packages/license-sdk/tests/setup-test-keys.ts` —
+/// las claves privadas viven solo en memoria del proceso de test, y la
+/// pública se registra en el verifier vía `registerPublicKeyForTest()`.
+/// No tocamos AWS KMS en tests.
+
+const TEST_KID = 'didacta-test-marketplace';
 
 export const baseManifest: ModuleManifest = {
   name: 'mod.example',
@@ -24,7 +26,7 @@ export const baseManifest: ModuleManifest = {
   coreVersionRequired: '^1.0.0',
   tablePrefix: 'mod_example_',
   apiNamespace: '/modules/example',
-  vendor: 'va360',
+  vendor: 'didacta',
   signedAt: '2026-05-02T00:00:00.000Z',
   permissions: [],
   eventsEmitted: [],
@@ -38,45 +40,65 @@ export const baseManifest: ModuleManifest = {
 
 export interface BuildOptions {
   manifest?: Partial<ModuleManifest>;
-  keypair?: KeyPairKeyObjectResult;
+  /// Override del par ES256 a usar para firmar. Por default cada llamada
+  /// genera uno fresh. Útil cuando un test necesita firmar varios
+  /// paquetes con la misma clave (escenario "vendor consistente").
+  keypair?: { privateKey: KeyLike; publicKey: KeyLike };
   /// Override de archivos. Pasar `null` para omitir el archivo del ZIP.
   /// Útil para probar `PACKAGE_MISSING_FILE`.
-  files?: Partial<Record<'manifest.json' | 'manifest.sig' | 'package.json' | 'dist/index.js', string | Buffer | null>>;
-  /// Si true, NO firma — devuelve un signature aleatorio (usado para
-  /// probar SIGNATURE_VERIFY_FAILED).
-  tamperSignature?: boolean;
+  files?: Partial<
+    Record<'manifest.jwt' | 'package.json' | 'dist/index.js', string | Buffer | null>
+  >;
+  /// Override del JWT a meter en `manifest.jwt`. Si se pasa, ignora el
+  /// manifest derivado. Útil para probar SIGNATURE_VERIFY_FAILED.
+  manifestJwtOverride?: string;
+  /// Override del kid del JWT — útil para probar `Unknown kid`.
+  kid?: string;
+  /// Override del audience del JWT — útil para probar audience inválido.
+  audience?: string;
+  /// Override del issuer del JWT.
+  issuer?: string;
+  /// Servicio donde registrar la pública. Si se omite, NO se registra y
+  /// el test puede preparar su propio escenario (kid desconocido).
+  signatureService?: ModuleSignatureService;
 }
 
 export interface BuildResult {
   buffer: Buffer;
-  publicKeyPem: string;
-  privateKey: KeyObject;
+  privateKey: KeyLike;
+  publicKey: KeyLike;
   manifest: ModuleManifest;
+  manifestJwt: string;
+  kid: string;
 }
 
-export function generateTestKeypair(): KeyPairKeyObjectResult {
-  return generateKeyPairSync('rsa', { modulusLength: 2048 });
+export async function generateTestKeypair(): Promise<{
+  privateKey: KeyLike;
+  publicKey: KeyLike;
+}> {
+  return generateKeyPair('ES256');
 }
 
-export function buildTestPackage(options: BuildOptions = {}): BuildResult {
-  const keypair = options.keypair ?? generateTestKeypair();
+export async function buildTestPackage(options: BuildOptions = {}): Promise<BuildResult> {
+  const { privateKey, publicKey } = options.keypair ?? (await generateKeyPair('ES256'));
   const manifest: ModuleManifest = { ...baseManifest, ...options.manifest };
+  const kid = options.kid ?? TEST_KID;
 
-  const canonical = canonicalManifestBytes(manifest);
-  let signatureB64: string;
-  if (options.tamperSignature) {
-    signatureB64 = Buffer.alloc(256, 0xff).toString('base64');
-  } else {
-    const signer = createSign('sha256');
-    signer.update(canonical);
-    signer.end();
-    const signature = signer.sign({ key: keypair.privateKey, padding: 6, saltLength: 32 });
-    signatureB64 = signature.toString('base64');
+  const manifestJwt =
+    options.manifestJwtOverride ??
+    (await new SignJWT(manifest as unknown as Record<string, unknown>)
+      .setProtectedHeader({ alg: 'ES256', kid, typ: 'JWT' })
+      .setIssuer(options.issuer ?? MARKETPLACE_ISSUER)
+      .setAudience(options.audience ?? MARKETPLACE_AUDIENCE)
+      .setIssuedAt()
+      .sign(privateKey));
+
+  if (options.signatureService) {
+    options.signatureService.registerPublicKeyForTest(kid, publicKey);
   }
 
   const defaultFiles: Record<string, string | Buffer> = {
-    'manifest.json': JSON.stringify(manifest, null, 2),
-    'manifest.sig': signatureB64,
+    'manifest.jwt': manifestJwt,
     'package.json': JSON.stringify(
       { name: manifest.name, version: manifest.version, main: 'dist/index.js' },
       null,
@@ -106,12 +128,12 @@ export function buildTestPackage(options: BuildOptions = {}): BuildResult {
     zip.addFile(name, buf);
   }
 
-  const publicKeyPem = keypair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
-
   return {
     buffer: zip.toBuffer(),
-    publicKeyPem,
-    privateKey: keypair.privateKey,
+    privateKey,
+    publicKey,
     manifest,
+    manifestJwt,
+    kid,
   };
 }
