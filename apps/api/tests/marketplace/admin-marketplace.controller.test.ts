@@ -5,6 +5,7 @@ import { AdminMarketplaceController } from '../../src/marketplace/admin-marketpl
 import type { InstalledModuleService } from '../../src/marketplace/installed-module.service';
 import type { InstallPackageService } from '../../src/marketplace/install-package.service';
 import { MarketplacePackageError } from '../../src/marketplace/module-package.errors';
+import { ModuleRouterService } from '../../src/marketplace/module-router.service';
 import type { SessionClaims } from '../../src/auth/token.service';
 
 function userWith(roles: string[]): SessionClaims {
@@ -19,10 +20,12 @@ function userWith(roles: string[]): SessionClaims {
 function makeController(opts: {
   install?: Partial<InstallPackageService>;
   installed?: Partial<InstalledModuleService>;
+  router?: ModuleRouterService;
 }): AdminMarketplaceController {
   const install = (opts.install ?? {}) as InstallPackageService;
   const installed = (opts.installed ?? {}) as InstalledModuleService;
-  return new AdminMarketplaceController(install, installed);
+  const router = opts.router ?? new ModuleRouterService();
+  return new AdminMarketplaceController(install, installed, router);
 }
 
 describe('AdminMarketplaceController.installPackage', () => {
@@ -122,6 +125,34 @@ describe('AdminMarketplaceController.findOne / uninstall', () => {
       ctrl.uninstall(userWith(['super_admin']), 'mod.ghost'),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(installed.deleteById).not.toHaveBeenCalled();
+  });
+
+  it('uninstall desregistra las routes del router', async () => {
+    const row = sampleRow();
+    const installed = {
+      findByName: vi.fn(async () => row),
+      deleteById: vi.fn(async () => undefined),
+    };
+    const router = new ModuleRouterService();
+    router.registerModule('mod.example', '/modules/example', [
+      { method: 'GET', path: '/x', handler: async () => ({ status: 200, body: 'ok' }) },
+    ]);
+    const ctrl = makeController({ installed, router });
+    await ctrl.uninstall(userWith(['super_admin']), 'mod.example');
+    expect(router.match('GET', '/modules/example/x')).toBeNull();
+  });
+
+  it('listRoutes devuelve los routes registrados del módulo', async () => {
+    const row = sampleRow();
+    const installed = { findByName: vi.fn(async () => row) };
+    const router = new ModuleRouterService();
+    router.registerModule('mod.example', '/modules/example', [
+      { method: 'GET', path: '/x', handler: async () => ({ status: 200, body: 'ok' }) },
+      { method: 'POST', path: '/y', handler: async () => ({ status: 200, body: 'ok' }) },
+    ]);
+    const ctrl = makeController({ installed, router });
+    const out = await ctrl.listRoutes(userWith(['super_admin']), 'mod.example');
+    expect(out.routes).toHaveLength(2);
   });
 });
 

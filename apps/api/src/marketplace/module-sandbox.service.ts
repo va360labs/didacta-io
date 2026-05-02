@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createContext, runInContext, type Context } from 'node:vm';
 import { ALLOWED_REQUIRES, ModuleLintService } from './module-lint.service';
 import { MarketplacePackageError } from './module-package.errors';
+import type { ModuleRoute } from './module-router.service';
 
 /// Hook que un módulo puede declarar en su `module.exports`. Todos opcionales:
 /// si falta `onInstall`, el módulo se considera puramente declarativo
@@ -10,10 +11,11 @@ import { MarketplacePackageError } from './module-package.errors';
 export interface SandboxedModule {
   onInstall?: (ctx: ModuleInstallContext) => Promise<void> | void;
   onUninstall?: (ctx: ModuleInstallContext) => Promise<void> | void;
-  /// Reservado para PR D — registro de controllers/services NestJS via
-  /// DynamicModule. Hoy ignorado.
-  controllers?: unknown[];
-  providers?: unknown[];
+  /// Routes HTTP que el módulo expone bajo su `apiNamespace`. El
+  /// dispatcher (`modules-dispatcher.controller.ts`) las matchea contra
+  /// requests entrantes a `/api/v1/modules/<slug>/*`. Forma esperada en
+  /// `module-router.service.ts`.
+  routes?: ModuleRoute[];
 }
 
 /// Contexto restringido que se pasa a los hooks del módulo. Ningún acceso
@@ -78,6 +80,16 @@ export class ModuleSandboxService {
         'MODULE_BOOT_FAILED',
         '`onUninstall` debe ser una función (recibido: ' + typeof sandboxed.onUninstall + ').',
       );
+    }
+    if (sandboxed.routes !== undefined) {
+      if (!Array.isArray(sandboxed.routes)) {
+        throw new MarketplacePackageError(
+          'MODULE_BOOT_FAILED',
+          '`routes` debe ser un array (recibido: ' + typeof sandboxed.routes + ').',
+        );
+      }
+      // Validación detallada del shape de cada route la hace el router al
+      // registrar — aquí solo aseguramos que es un array.
     }
     return sandboxed;
   }

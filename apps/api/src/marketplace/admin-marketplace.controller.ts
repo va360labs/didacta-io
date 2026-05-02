@@ -21,6 +21,7 @@ import { InstalledModuleService } from './installed-module.service';
 import { InstallPackageService, type InstallResult } from './install-package.service';
 import { MarketplaceErrorFilter } from './marketplace-error.filter';
 import { MarketplacePackageError } from './module-package.errors';
+import { ModuleRouterService } from './module-router.service';
 
 const ALLOWED_STATUSES = new Set<InstalledModuleStatus>([
   'INSTALLING',
@@ -88,6 +89,7 @@ export class AdminMarketplaceController {
   constructor(
     private readonly install: InstallPackageService,
     private readonly installed: InstalledModuleService,
+    private readonly router: ModuleRouterService,
   ) {}
 
   @Post('install')
@@ -171,6 +173,24 @@ export class AdminMarketplaceController {
     if (!row) {
       throw new MarketplacePackageError('NOT_FOUND', `Módulo "${name}" no está instalado.`);
     }
+    // Desregistro del dispatcher runtime ANTES del delete BD: una vez
+    // borrado el row, los handlers en memoria no pueden volver a
+    // resolverse, así que no queremos seguir sirviéndolos.
+    this.router.unregisterModule(row.name);
     await this.installed.deleteById(row.id);
+  }
+
+  @Get('installed/:name/routes')
+  @ApiOperation({ summary: 'Listado de routes HTTP que el módulo expone via dispatcher runtime.' })
+  async listRoutes(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('name') name: string,
+  ): Promise<{ routes: ReturnType<ModuleRouterService['listRoutes']> }> {
+    requireSuperAdmin(user);
+    const row = await this.installed.findByName(name);
+    if (!row) {
+      throw new MarketplacePackageError('NOT_FOUND', `Módulo "${name}" no está instalado.`);
+    }
+    return { routes: this.router.listRoutes(name) };
   }
 }

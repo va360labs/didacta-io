@@ -7,6 +7,7 @@ import type { ModuleManifest } from './module-manifest.schema';
 import { MarketplacePackageError } from './module-package.errors';
 import { ModuleMigrationService } from './module-migration.service';
 import { ModulePackageService } from './module-package.service';
+import { ModuleRouterService } from './module-router.service';
 import { ModuleSandboxService } from './module-sandbox.service';
 
 /// Versión del core a la que apunta esta instancia. Inyectada en runtime,
@@ -64,6 +65,7 @@ export class InstallPackageService {
     private readonly contextFactory: ModuleContextFactory,
     private readonly sandbox: ModuleSandboxService,
     private readonly migrations: ModuleMigrationService,
+    private readonly router: ModuleRouterService,
   ) {}
 
   async install(packageBuffer: Buffer, installedById: string): Promise<InstallResult> {
@@ -136,7 +138,30 @@ export class InstallPackageService {
         validated.manifest.version,
       );
 
-      // 14. Cierre OK.
+      // 14. Registro de routes en el dispatcher runtime. Si el módulo
+      // declara `routes`, el dispatcher las atenderá inmediatamente bajo
+      // `/api/v1<apiNamespace>/<route.path>`. Si lanza por shape inválida
+      // (validación dentro de `register`), el catch externo marca FAILED.
+      if (sandboxed.routes && sandboxed.routes.length > 0) {
+        try {
+          this.router.registerModule(
+            validated.manifest.name,
+            validated.manifest.apiNamespace,
+            sandboxed.routes,
+          );
+        } catch (err) {
+          throw new MarketplacePackageError(
+            'MODULE_BOOT_FAILED',
+            `Routes inválidas: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      } else {
+        // Upgrade in-place: la versión anterior podría haber registrado
+        // routes; si la nueva no declara, las anteriores deben morir.
+        this.router.unregisterModule(validated.manifest.name);
+      }
+
+      // 15. Cierre OK.
       const installed = await this.installedModules.markInstalled(row.id);
       this.logger.log(
         `Módulo "${installed.name}@${installed.version}" instalado y booteado en sandbox ` +

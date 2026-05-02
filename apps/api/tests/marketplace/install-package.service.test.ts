@@ -8,6 +8,7 @@ import {
 import { ModuleLintService } from '../../src/marketplace/module-lint.service';
 import { MarketplacePackageError } from '../../src/marketplace/module-package.errors';
 import { ModulePackageService } from '../../src/marketplace/module-package.service';
+import { ModuleRouterService } from '../../src/marketplace/module-router.service';
 import { ModuleSandboxService } from '../../src/marketplace/module-sandbox.service';
 import { ModuleSignatureService } from '../../src/marketplace/module-signature.service';
 import { buildTestPackage } from './fixtures/build-test-package';
@@ -117,7 +118,7 @@ describe('InstallPackageService.install', () => {
     const pkg = new ModulePackageService(sig);
     const installed = makeInstalledModuleServiceMock();
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations());
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
 
     const result = await svc.install(fixture.buffer, 'user-1');
 
@@ -142,7 +143,7 @@ describe('InstallPackageService.install', () => {
     const installed = makeInstalledModuleServiceMock();
     const storage = makeStorageMock();
     storage.upload.mockRejectedValueOnce(new Error('S3 unreachable'));
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations());
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toThrow(/S3 unreachable/);
     expect(installed.markFailed).toHaveBeenCalledWith('row-1', 'S3 unreachable');
@@ -162,7 +163,7 @@ describe('InstallPackageService.install', () => {
       status: 'INSTALLED',
     } as InstalledModule);
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations());
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toMatchObject({
       code: 'ALREADY_INSTALLED',
@@ -184,7 +185,7 @@ describe('InstallPackageService.install', () => {
       status: 'FAILED',
     } as InstalledModule);
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations());
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
     const result = await svc.install(fixture.buffer, 'user-1');
     expect(result.status).toBe('INSTALLED');
   });
@@ -202,7 +203,7 @@ describe('InstallPackageService.install', () => {
       status: 'INSTALLED',
     } as InstalledModule);
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations());
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
 
     await svc.install(fixture.buffer, 'user-1');
     expect(installed.createInstalling).toHaveBeenCalledWith(
@@ -218,7 +219,7 @@ describe('InstallPackageService.install', () => {
     const pkg = new ModulePackageService(sig);
     const installed = makeInstalledModuleServiceMock();
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations());
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toBeInstanceOf(
       MarketplacePackageError,
@@ -237,7 +238,7 @@ describe('InstallPackageService.install', () => {
     const pkg = new ModulePackageService(sig);
     const installed = makeInstalledModuleServiceMock();
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations());
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toMatchObject({
       code: 'MODULE_LINT_FAILED',
@@ -247,6 +248,68 @@ describe('InstallPackageService.install', () => {
     expect(storage.upload).toHaveBeenCalledOnce();
     expect(installed.markFailed).toHaveBeenCalledOnce();
     expect(installed.markFailed.mock.calls[0][1]).toMatch(/lodash/);
+  });
+
+  it('registra routes del módulo en el router cuando install termina OK', async () => {
+    const fixture = buildTestPackage({
+      files: {
+        'dist/index.js': `module.exports = {
+          routes: [
+            { method: 'GET', path: '/hello', handler: function () { return { status: 200, body: 'ok' }; } },
+          ],
+        };`,
+      },
+    });
+    process.env[ENV_VA360] = fixture.publicKeyPem;
+    const sig = new ModuleSignatureService();
+    sig.onModuleInit();
+    const pkg = new ModulePackageService(sig);
+    const installed = makeInstalledModuleServiceMock();
+    const storage = makeStorageMock();
+    const router = new ModuleRouterService();
+    const svc = new InstallPackageService(
+      pkg,
+      installed,
+      storage.ctx,
+      makeRealSandbox(),
+      makeNoopMigrations(),
+      router,
+    );
+
+    await svc.install(fixture.buffer, 'user-1');
+    const matched = router.match('GET', '/modules/example/hello');
+    expect(matched).not.toBeNull();
+  });
+
+  it('upgrade: la nueva versión sin routes desregistra las de la anterior', async () => {
+    const fixture = buildTestPackage({
+      files: { 'dist/index.js': 'module.exports = {};' },
+    });
+    process.env[ENV_VA360] = fixture.publicKeyPem;
+    const sig = new ModuleSignatureService();
+    sig.onModuleInit();
+    const pkg = new ModulePackageService(sig);
+    const installed = makeInstalledModuleServiceMock({
+      id: 'old',
+      name: 'mod.example',
+      version: '0.9.0',
+      status: 'INSTALLED',
+    } as InstalledModule);
+    const storage = makeStorageMock();
+    const router = new ModuleRouterService();
+    router.registerModule('mod.example', '/modules/example', [
+      { method: 'GET', path: '/old', handler: async () => ({ status: 200, body: 'old' }) },
+    ]);
+    const svc = new InstallPackageService(
+      pkg,
+      installed,
+      storage.ctx,
+      makeRealSandbox(),
+      makeNoopMigrations(),
+      router,
+    );
+    await svc.install(fixture.buffer, 'user-1');
+    expect(router.match('GET', '/modules/example/old')).toBeNull();
   });
 
   it('si el onInstall del módulo lanza, marca FAILED', async () => {
@@ -262,7 +325,7 @@ describe('InstallPackageService.install', () => {
     const pkg = new ModulePackageService(sig);
     const installed = makeInstalledModuleServiceMock();
     const storage = makeStorageMock();
-    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations());
+    const svc = new InstallPackageService(pkg, installed, storage.ctx, makeRealSandbox(), makeNoopMigrations(), new ModuleRouterService());
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toMatchObject({
       code: 'MODULE_BOOT_FAILED',

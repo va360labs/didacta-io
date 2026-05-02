@@ -9,8 +9,10 @@ import { MarketplaceErrorFilter } from './marketplace-error.filter';
 import { ModuleLintService } from './module-lint.service';
 import { ModuleMigrationService } from './module-migration.service';
 import { ModulePackageService } from './module-package.service';
+import { ModuleRouterService } from './module-router.service';
 import { ModuleSandboxService } from './module-sandbox.service';
 import { ModuleSignatureService } from './module-signature.service';
+import { ModulesDispatcherController } from './modules-dispatcher.controller';
 
 /// Marketplace de módulos (ADR-009).
 ///
@@ -20,11 +22,13 @@ import { ModuleSignatureService } from './module-signature.service';
 ///     del row `InstalledModule`.
 ///   - PR C: lint estático del bundle + boot del módulo en VM aislada
 ///     (`node:vm`) + ejecución del hook `onInstall(ctx)`.
-///   - PR D (este PR): aplicación de las migraciones SQL del paquete
+///   - PR D: aplicación de las migraciones SQL del paquete
 ///     (`prisma/migrations/*.sql`) dentro de transacción Prisma + linter
-///     SQL que enforce `tablePrefix` y rechaza FKs cross-module. Aún sin
-///     enrutado HTTP del módulo (DynamicModule llega en PR E) ni UI
-///     super_admin (PR F).
+///     SQL que enforce `tablePrefix` y rechaza FKs cross-module.
+///   - PR E (este PR): runtime router + dispatcher controller. Las
+///     `routes` declaradas por un módulo en su `module.exports` se
+///     enrutan automáticamente bajo `/api/v1<apiNamespace>/...` sin
+///     restart de la API. Sin UI super_admin todavía (PR F).
 ///
 /// Importa `AuthModule` para el `JwtAuthGuard` (regla de oro NestJS de este
 /// repo: cualquier módulo con `JwtAuthGuard` importa `AuthModule`).
@@ -32,17 +36,23 @@ import { ModuleSignatureService } from './module-signature.service';
 /// resuelve el storage backend según `STORAGE_DRIVER`.
 @Module({
   imports: [PrismaModule, AuthModule, ModulesModule],
-  controllers: [AdminMarketplaceController],
+  controllers: [AdminMarketplaceController, ModulesDispatcherController],
   providers: [
     ModuleSignatureService,
     ModulePackageService,
     ModuleLintService,
     ModuleSandboxService,
     ModuleMigrationService,
+    ModuleRouterService,
     InstalledModuleService,
     InstallPackageService,
     MarketplaceErrorFilter,
   ],
-  exports: [ModuleSignatureService, ModulePackageService, InstalledModuleService],
+  exports: [
+    ModuleSignatureService,
+    ModulePackageService,
+    InstalledModuleService,
+    ModuleRouterService,
+  ],
 })
 export class MarketplaceModule {}
