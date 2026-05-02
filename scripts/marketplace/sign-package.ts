@@ -40,6 +40,13 @@ interface Args {
   keyAlias: string;
   issuer: string;
   audience: string;
+  /// URL del `apps/license-issuer` cuando queremos firmar via API en
+  /// lugar de invocar AWS CLI local. Modo recomendado en producción
+  /// (ver didacta-cloud/docs/MARKETPLACE-CI-SIGNING.md): solo el
+  /// service tiene `kms:Sign`; los release managers le hablan via
+  /// HTTPS con un Bearer token.
+  remoteIssuer?: string;
+  remoteIssuerToken?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -61,6 +68,12 @@ function parseArgs(argv: string[]): Args {
     keyAlias: get('key', 'alias/didacta-issuer-2026'),
     issuer: get('issuer', 'didacta.io'),
     audience: get('audience', 'didacta-marketplace'),
+    remoteIssuer: argv.includes('--remote-issuer')
+      ? get('remote-issuer')
+      : process.env['LICENSE_ISSUER_URL'],
+    remoteIssuerToken: argv.includes('--remote-issuer-token')
+      ? get('remote-issuer-token')
+      : process.env['LICENSE_ISSUER_BEARER_TOKEN'],
   };
 }
 
@@ -144,7 +157,25 @@ function derToRaw(derSig: Buffer): Buffer {
   return Buffer.concat([rPadded, sPadded]);
 }
 
-function buildJwt(payload: Record<string, unknown>, args: Args): string {
+async function buildJwt(payload: Record<string, unknown>, args: Args): Promise<string> {
+  // Modo `--remote-issuer`: pide al license-issuer (didacta-cloud) que
+  // firme el manifest. Es el modo correcto en producción (ver
+  // `didacta-cloud/docs/MARKETPLACE-CI-SIGNING.md`). El runner CI no
+  // necesita credenciales AWS — el license-issuer es el único con
+  // `kms:Sign` y nos devuelve el JWT ya armado.
+  if (args.remoteIssuer) {
+    if (!args.remoteIssuerToken) {
+      throw new Error(
+        '--remote-issuer requiere --remote-issuer-token o env LICENSE_ISSUER_BEARER_TOKEN.',
+      );
+    }
+    return buildJwtRemote(payload, args.remoteIssuer, args.remoteIssuerToken);
+  }
+
+  // Modo legacy/dev: AWS CLI local. Requiere `kms:Sign` en el user
+  // configurado, lo cual hoy NO recomendamos a release managers
+  // (ver opción C en MARKETPLACE-CI-SIGNING.md). Útil para pruebas
+  // locales si ya tienes el rol asumido.
   const header = { alg: 'ES256', kid: args.kid, typ: 'JWT' };
   const fullPayload = {
     iss: args.issuer,
@@ -160,6 +191,31 @@ function buildJwt(payload: Record<string, unknown>, args: Args): string {
   return `${signingInput}.${base64UrlEncode(rawSig)}`;
 }
 
+async function buildJwtRemote(
+  manifest: Record<string, unknown>,
+  issuerUrl: string,
+  bearer: string,
+): Promise<string> {
+  const url = `${issuerUrl.replace(/\/$/, '')}/v1/modules/sign-manifest`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${bearer}`,
+    },
+    body: JSON.stringify({ manifest }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`license-issuer respondió ${res.status}: ${body}`);
+  }
+  const data = (await res.json()) as { manifest_jwt?: string };
+  if (!data.manifest_jwt) {
+    throw new Error('license-issuer devolvió respuesta sin manifest_jwt');
+  }
+  return data.manifest_jwt;
+}
+
 function addDirToZip(zip: AdmZip, srcDir: string, zipPrefix: string): void {
   if (!existsSync(srcDir)) return;
   for (const entry of readdirSync(srcDir)) {
@@ -173,7 +229,7 @@ function addDirToZip(zip: AdmZip, srcDir: string, zipPrefix: string): void {
   }
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const manifest = JSON.parse(readFileSync(args.manifestPath, 'utf8')) as Record<string, unknown>;
 
@@ -184,7 +240,7 @@ function main(): void {
   }
 
   // El JWT lleva el manifest entero como payload.
-  const jwt = buildJwt(manifest, args);
+  const jwt = await buildJwt(manifest, args);
 
   const zip = new AdmZip();
   zip.addFile('manifest.jwt', Buffer.from(jwt, 'utf8'));
@@ -226,4 +282,8 @@ function main(): void {
   console.log(`  audience: ${args.audience}`);
 }
 
-main();
+main().catch((err: unknown) => {
+  // eslint-disable-next-line no-console
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+});
