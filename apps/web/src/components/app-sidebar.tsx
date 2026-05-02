@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Icon, type IconName } from '@/components/icon';
+import { VersionUpdateBanner } from '@/components/version-update-banner';
 import type { StoredSession } from '@/lib/auth-storage';
 import { APP_CHANNEL, APP_VERSION } from '@/lib/version';
 
@@ -263,6 +264,7 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
             </span>
           ) : null}
         </div>
+        <VersionUpdateBanner />
       </div>
     </aside>
   );
