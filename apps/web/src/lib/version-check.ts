@@ -1,32 +1,26 @@
-/// Polling a Docker Hub para detectar versión nueva publicada de
-/// `didactaio/community` y avisar al operador desde el sidebar.
+/// Polling para detectar versión nueva publicada en Docker Hub y avisar
+/// al operador desde el sidebar.
 ///
-/// Ventajas vs hostear nuestro propio endpoint:
-///   - Cero infra adicional (Docker Hub ya hostea la lista de tags).
-///   - El usuario solo ve versiones que efectivamente están publicadas.
-///
-/// Contras conocidos:
-///   - Rate limit de Docker Hub API (no autenticada): 100 req/6h por IP.
-///     Polling 1×/4h por usuario → 6 req/24h, más que suficiente.
-///   - CORS: Docker Hub responde `Access-Control-Allow-Origin: *` a
-///     este endpoint público (verificado 2026-05-02 con curl -I).
-///   - Si Docker Hub está caído, el banner simplemente no aparece —
-///     no rompe la app.
+/// Implementación: el frontend pega a `/api/v1/system/version-check`
+/// (mismo origen) y el backend hace el fetch real a Docker Hub. Sin
+/// proxy server-side teníamos CORS bloqueado — Docker Hub NO sirve
+/// `Access-Control-Allow-Origin` desde browser. El backend cachea 4h
+/// en memoria; un solo poll global atiende a todos los browsers.
 ///
 /// Ignoramos:
-///   - `latest` y `alpha` (rolling tags, no son versión).
+///   - `latest`, `alpha`, `beta`, `stable` (rolling tags, no son versión).
 ///   - Tags que parezcan SHA short (`^[a-f0-9]{7}$`).
 ///   - Cualquier tag que no parsee como `<MAJOR>.<MINOR>.<PATCH>(-PRE)?`.
 
 import { APP_VERSION } from './version';
 
-const DOCKERHUB_API = 'https://hub.docker.com/v2/repositories/didactaio/community/tags';
+const VERSION_CHECK_ENDPOINT = '/api/v1/system/version-check';
 const POLL_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 horas
 const STORAGE_KEY_LAST_CHECK = 'didacta:version-check:last-check';
 const STORAGE_KEY_DISMISSED = 'didacta:version-check:dismissed';
 
-interface DockerHubTagsResponse {
-  results: Array<{ name: string; last_updated: string }>;
+interface VersionCheckResponse {
+  tags: Array<{ name: string; lastUpdated: string }>;
 }
 
 export interface ParsedVersion {
@@ -91,16 +85,15 @@ export function compareVersions(a: ParsedVersion, b: ParsedVersion): number {
   return 0;
 }
 
-/// Fetch a la API pública de Docker Hub (sin auth). Devuelve la lista
-/// de versiones SemVer publicadas, ordenadas DESCendente. Lanza si
-/// la red falla o el JSON no parsea.
+/// Fetch al proxy server-side (`/api/v1/system/version-check`). Sin
+/// auth — endpoint marcado `@Public()`. Devuelve la lista de versiones
+/// SemVer publicadas, ordenadas DESC.
 export async function fetchPublishedVersions(): Promise<ParsedVersion[]> {
-  const url = `${DOCKERHUB_API}?ordering=last_updated&page_size=25`;
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`Docker Hub API: HTTP ${res.status}`);
-  const data = (await res.json()) as DockerHubTagsResponse;
+  const res = await fetch(VERSION_CHECK_ENDPOINT, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`version-check API: HTTP ${res.status}`);
+  const data = (await res.json()) as VersionCheckResponse;
   const versions: ParsedVersion[] = [];
-  for (const t of data.results ?? []) {
+  for (const t of data.tags ?? []) {
     const parsed = parseVersion(t.name);
     if (parsed) versions.push(parsed);
   }

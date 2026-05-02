@@ -17,6 +17,7 @@ import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { RegistryModule } from './registry/registry.module';
 import { ScimModule } from './scim/scim.module';
 import { SetupModule } from './setup/setup.module';
+import { SystemModule } from './system/system.module';
 import { SsoOidcModule } from './sso/oidc/oidc.module';
 import { SsoSamlModule } from './sso/saml/saml.module';
 import { TenancyModule } from './tenancy/tenancy.module';
@@ -74,6 +75,8 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     // Bootstrap del primer arranque. Endpoints públicos /setup/status + /setup/init.
     // Va después de AuthModule porque reusa PasswordService + TokenService.
     SetupModule,
+    // Endpoints transversales (proxy a Docker Hub para "versión nueva", etc.).
+    SystemModule,
     AdminModule,
     TenancyModule,
     AiModule,
