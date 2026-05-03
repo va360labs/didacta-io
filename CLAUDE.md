@@ -2,6 +2,25 @@
 
 > Instrucciones base para Claude Code (o cualquier otro asistente IA) al trabajar en este repositorio.
 
+## ⚠️ REGLAS CRÍTICAS (NO NEGOCIABLES)
+
+### 1. Documentación SOLO en Notion
+**TODA la documentación vive en Notion, NUNCA en el repositorio.**
+- Fuente de verdad: [LMS Ship](https://www.notion.so/LMS-Ship-34cb609a124c80aa996bfec23268cad4)
+- PRD, ADRs, HANDOFFs, Estado, Arquitectura → TODO en Notion
+- Si necesitas documentar algo, hazlo en Notion
+- Si encuentras documentación en el repo, migrala a Notion y elimínala
+
+### 2. No avanzar sin documentación y tests
+**PROHIBIDO avanzar a nuevas tareas si:**
+- La tarea actual no está correctamente documentada en Notion
+- Los tests no pasan o no existen para la funcionalidad
+- Hay decisiones arquitectónicas sin ADR
+
+Aunque el usuario lo pida, NO avanzar. Primero documentar y probar.
+
+---
+
 ## Sobre el proyecto
 
 **Didacta** es una plataforma LMS modular propiedad de **VA360 LABS S.L.**
@@ -10,12 +29,15 @@ Arquitectura: NestJS 11 + Next.js 15 + PostgreSQL 16 (con Row-Level Security) + 
 
 **Principio rector**: modularidad extrema. Core mínimo + módulos activables con contratos estables.
 
-## Documentos clave (leer antes de cualquier tarea)
+## Documentación (Notion)
 
-1. [`docs/PRD.md`](docs/PRD.md) — Product Requirements Document completo (v2.0).
-2. [`docs/PLAN-FASES.md`](docs/PLAN-FASES.md) — Plan por fases con entregables y criterios de éxito.
-3. [`docs/ARQUITECTURA-MODULAR.md`](docs/ARQUITECTURA-MODULAR.md) — **Contrato de módulo** (crítico — no tocar sin ADR).
-4. [`docs/CHECKLIST-ARRANQUE.md`](docs/CHECKLIST-ARRANQUE.md) — Pre-flight y decisiones pendientes.
+Toda la documentación vive en Notion → [LMS Ship](https://www.notion.so/LMS-Ship-34cb609a124c80aa996bfec23268cad4):
+- **PRD — Didacta**: Product Requirements Document
+- **ADRs**: Architecture Decision Records (12 ADRs)
+- **HANDOFFs**: Notas de sesión
+- **Módulos — Registry**: 15 módulos documentados
+- **Skills y Asistentes IA**: Sistema de skills para desarrollo
+- **Estado del arte**: Cobertura actual vs competencia
 
 ## Reglas de trabajo
 
