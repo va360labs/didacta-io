@@ -107,6 +107,9 @@ importers:
       '@didacta/mod-zoom-live':
         specifier: workspace:*
         version: link:../../modules/zoom-live
+      '@didacta/module-package-spec':
+        specifier: workspace:*
+        version: link:../../packages/module-package-spec
       '@fastify/static':
         specifier: ^7.0.4
         version: 7.0.4
@@ -783,6 +786,18 @@ importers:
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
+
+  packages/module-package-spec:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.17
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

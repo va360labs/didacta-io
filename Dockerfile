@@ -81,7 +81,10 @@ RUN pnpm --filter @didacta/database db:generate
 # Wave 1: paquetes core sin deps internas.
 RUN pnpm --filter @didacta/core-kernel --filter @didacta/database run build
 # Wave 2: paquetes core que dependen de wave 1.
-RUN pnpm --filter @didacta/core-registry --filter @didacta/license-sdk run build
+# module-package-spec: zero-deps (solo Node builtins) pero apps/api lo importa,
+# tiene que estar compilado antes de wave 4. Va aquí por consistencia con el
+# patron de paquetes core.
+RUN pnpm --filter @didacta/core-registry --filter @didacta/license-sdk --filter @didacta/module-package-spec run build
 # Wave 3: módulos que dependen de wave 1+2.
 RUN pnpm --filter "@didacta/mod-*" run build
 # Wave 4: apps (api + web) que dependen de todo lo anterior.
@@ -140,7 +143,13 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 # ----------------------------------------------------------------------------
 # Stage 5: runner — imagen final desde alpine LIMPIO (no hereda del builder)
 # ----------------------------------------------------------------------------
+# DIDACTA_VERSION: version de la app, inyectada en build time.
+# Sobreescribible con: docker build --build-arg DIDACTA_VERSION=0.0.1-alpha.45
+ARG DIDACTA_VERSION=0.0.1-alpha.45
+
 FROM node:22-alpine AS runner
+# Re-declarar ARG para que este disponible en este stage (Docker multi-stage)
+ARG DIDACTA_VERSION
 # Deps de RUNTIME (no build):
 #   - bash: entrypoint.sh usa bashismos ([[, arrays, `wait -n`).
 #   - ca-certificates + openssl: TLS para S3, Anthropic, SMTP.
@@ -163,7 +172,8 @@ ENV NODE_ENV=production \
     HUSKY=0 \
     NEXT_TELEMETRY_DISABLED=1 \
     API_PORT=4000 \
-    WEB_PORT=3000
+    WEB_PORT=3000 \
+    DIDACTA_CORE_VERSION=${DIDACTA_VERSION:-0.0.1-alpha.45}
 
 # Usuario no-root.
 RUN addgroup -S -g 1001 didacta \

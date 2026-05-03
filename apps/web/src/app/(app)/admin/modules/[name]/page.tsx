@@ -324,6 +324,8 @@ function InfoRow({ label, value, mono }: { label: string; value: string; mono?: 
 }
 
 function StatusBadge({ status }: { status: InstalledModuleSummary['status'] }) {
+  // Fallback defensivo: si la API devuelve un status fuera del enum tipado
+  // (rows legacy, futuras extensiones), no rompemos la página completa.
   const map: Record<
     typeof status,
     { variant: 'info' | 'success' | 'danger' | 'muted'; label: string }
@@ -333,8 +335,8 @@ function StatusBadge({ status }: { status: InstalledModuleSummary['status'] }) {
     FAILED: { variant: 'danger', label: 'Falló' },
     DEPRECATED: { variant: 'muted', label: 'Deprecated' },
   };
-  const { variant, label } = map[status];
-  return <Badge variant={variant}>{label}</Badge>;
+  const entry = map[status] ?? { variant: 'muted' as const, label: String(status ?? '—') };
+  return <Badge variant={entry.variant}>{entry.label}</Badge>;
 }
 
 function VendorBadge({ vendor }: { vendor: InstalledModuleSummary['vendor'] }) {

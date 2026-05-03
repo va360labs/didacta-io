@@ -15,9 +15,14 @@
 /// Limitaciones:
 ///   - No entiende DSL ni triggers complejos con `EXECUTE PROCEDURE` que
 ///     llamen a funciones existentes — los rechaza por seguridad.
-///   - No entiende identifiers con quotes y embedded comments (`"my""tbl"`).
-///     Lo aceptable: rechazar quotes en identifiers de DDL y forzar
-///     identifiers limpios.
+///   - Identifiers con escape doble dentro de quotes (`"my""tbl"`) no se
+///     soportan (se desambiguarían como dos identifiers). Forzamos
+///     identifiers que solo contengan caracteres ASCII alfanuméricos y
+///     underscore, opcionalmente entre comillas dobles.
+///
+/// Soporta identifiers `bare` (`mod_foo`) y `quoted` (`"mod_foo"`) — Prisma
+/// genera DDL siempre con comillas y es el stack oficial (ADR-005), por lo
+/// que el linter DEBE entenderlos para no bloquear el flujo estándar.
 ///
 /// Si un módulo necesita una operación no soportada, el linter falla con
 /// `MODULE_LINT_FAILED`; el módulo debe rediseñar la migración o el
@@ -58,8 +63,14 @@ interface ParsedStatement {
   raw: string;
 }
 
-const IDENTIFIER = '([a-z_][a-z0-9_]*)';
-const QUALIFIED_IDENT = `(?:[a-z_][a-z0-9_]*\\.)?${IDENTIFIER}`;
+/// Identifier: bare (`foo`) o quoted (`"foo"`). El grupo de captura
+/// extrae SIEMPRE el contenido sin las comillas, por lo que `match[1]` es
+/// el identifier "limpio" en cualquier caso. Las comillas alrededor son
+/// opcionales pero no obligatorias en pareja: `"foo` o `foo"` se aceptan
+/// (Postgres real los rechazaría, pero un linter superficial no debe ser
+/// más estricto que el motor que después correrá el SQL).
+const IDENTIFIER = '"?([a-z_][a-z0-9_]*)"?';
+const QUALIFIED_IDENT = `(?:"?[a-z_][a-z0-9_]*"?\\.)?${IDENTIFIER}`;
 
 const STATEMENT_PATTERNS: Array<{ kind: StatementKind; regex: RegExp }> = [
   { kind: 'CREATE_TABLE', regex: new RegExp(`^\\s*create\\s+(?:unlogged\\s+)?table(?:\\s+if\\s+not\\s+exists)?\\s+${QUALIFIED_IDENT}`, 'i') },

@@ -197,4 +197,43 @@ describe('isCoreVersionCompatible', () => {
   it('rangos no soportados se tratan como incompatibles', () => {
     expect(isCoreVersionCompatible('>=1.0.0', '1.5.0')).toBe(false);
   });
+  describe('pre-release support', () => {
+    it('caret con pre-release: ^0.0.1-alpha.0 matchea 0.0.1-alpha.41', () => {
+      expect(isCoreVersionCompatible('^0.0.1-alpha.0', '0.0.1-alpha.41')).toBe(true);
+    });
+
+    it('caret con pre-release: ^0.0.1-alpha.0 matchea 0.0.1-alpha.0', () => {
+      expect(isCoreVersionCompatible('^0.0.1-alpha.0', '0.0.1-alpha.0')).toBe(true);
+    });
+
+    it('caret con pre-release: ^0.0.1-alpha.50 NO matchea 0.0.1-alpha.41', () => {
+      expect(isCoreVersionCompatible('^0.0.1-alpha.50', '0.0.1-alpha.41')).toBe(false);
+    });
+
+    it('caret sin pre-release matchea version con pre-release', () => {
+      expect(isCoreVersionCompatible('^0.0.1', '0.0.1-alpha.41')).toBe(true);
+    });
+
+    it('caret: pre-release con mayor minor es compatible', () => {
+      expect(isCoreVersionCompatible('^0.0.1-alpha.0', '0.0.2')).toBe(true);
+    });
+
+    it('tilde con pre-release: ~0.0.1-alpha.0 matchea 0.0.1-alpha.41', () => {
+      expect(isCoreVersionCompatible('~0.0.1-alpha.0', '0.0.1-alpha.41')).toBe(true);
+    });
+
+    it('tilde con pre-release: ~0.0.1-alpha.0 NO matchea 0.0.2', () => {
+      expect(isCoreVersionCompatible('~0.0.1-alpha.0', '0.0.2')).toBe(false);
+    });
+
+    it('exact con pre-release: solo si coincide literalmente', () => {
+      expect(isCoreVersionCompatible('0.0.1-alpha.41', '0.0.1-alpha.41')).toBe(true);
+      expect(isCoreVersionCompatible('0.0.1-alpha.40', '0.0.1-alpha.41')).toBe(false);
+    });
+
+    it('pre-release beta > alpha alfabeticamente', () => {
+      expect(isCoreVersionCompatible('^0.0.1-alpha.0', '0.0.1-beta.0')).toBe(true);
+    });
+  });
+
 });

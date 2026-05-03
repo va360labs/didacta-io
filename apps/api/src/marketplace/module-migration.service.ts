@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import AdmZip from 'adm-zip';
+import { MIGRATIONS_PREFIX, MIGRATION_FILENAME_REGEX } from '@didacta/module-package-spec';
 import { PrismaService } from '../prisma/prisma.service';
 import { MarketplacePackageError } from './module-package.errors';
 import { lintMigrationSql, splitStatements } from './sql-lint';
@@ -14,8 +15,13 @@ import { lintMigrationSql, splitStatements } from './sql-lint';
 /// un `migration.toml` con `lock` mutable. La convención de timestamp
 /// prefix (`20260502000001_xxx.sql`) emerge naturalmente de `prisma
 /// migrate dev` del módulo y nos da orden estable.
+///
+/// FUENTE DE VERDAD: el contrato de paths/extensiones vive en
+/// `@didacta/module-package-spec` (ADR-013). Las reglas se importan de
+/// allí — defense-in-depth: el validador upstream (`ModulePackageService`)
+/// ya rechazó subdirs antes de llegar acá, pero mantenemos el chequeo
+/// local para que `extractMigrations` sea seguro de invocar aislado.
 
-const MIGRATIONS_PREFIX = 'prisma/migrations/';
 const SQL_EXT_REGEX = /\.sql$/i;
 
 export interface MigrationFile {
@@ -48,12 +54,20 @@ export class ModuleMigrationService {
       if (!entry.entryName.startsWith(MIGRATIONS_PREFIX)) continue;
       if (!SQL_EXT_REGEX.test(entry.entryName)) continue;
       const filename = entry.entryName.slice(MIGRATIONS_PREFIX.length);
-      // Rechazo de subdirs: el contrato es plano (todos los .sql al mismo
-      // nivel). Esto evita que un atacante use traversal en los names.
+      // Rechazo de subdirs: el contrato del spec es plano (todos los .sql
+      // al mismo nivel). Esto evita path-traversal en los names.
       if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
         throw new MarketplacePackageError(
           'MODULE_LINT_FAILED',
           `Path de migration inválido: "${entry.entryName}". Las migrations deben vivir directamente bajo prisma/migrations/.`,
+        );
+      }
+      // Whitelist estricto del filename (mismo regex que el spec). Defensa
+      // contra caracteres raros que el packager pudiera dejar pasar.
+      if (!MIGRATION_FILENAME_REGEX.test(filename)) {
+        throw new MarketplacePackageError(
+          'MODULE_LINT_FAILED',
+          `Nombre de migration inválido: "${filename}". Permitido: alfanuméricos, guion, underscore, punto, terminando en .sql.`,
         );
       }
       files.push({

@@ -336,6 +336,9 @@ function InstalledRow({
 }
 
 function StatusBadge({ status }: { status: InstalledModuleStatus }) {
+  // El map cubre los valores tipados, pero la API puede devolver rows legacy
+  // o futuros con un status que el frontend todavía no conoce. Fallback antes
+  // de destructurar para que la página no se rompa entera por una fila exótica.
   const map: Record<
     InstalledModuleStatus,
     { variant: 'info' | 'success' | 'danger' | 'muted'; label: string }
@@ -345,11 +348,15 @@ function StatusBadge({ status }: { status: InstalledModuleStatus }) {
     FAILED: { variant: 'danger', label: 'Falló' },
     DEPRECATED: { variant: 'muted', label: 'Deprecated' },
   };
-  const { variant, label } = map[status];
-  return <Badge variant={variant}>{label}</Badge>;
+  const entry = map[status] ?? { variant: 'muted' as const, label: String(status ?? '—') };
+  return <Badge variant={entry.variant}>{entry.label}</Badge>;
 }
 
 function SourceBadge({ source }: { source: InstalledModuleSource }) {
+  // Mismo principio que StatusBadge: la API puede devolver módulos built-in
+  // del core con `source` null o con un valor legacy fuera del enum tipado.
+  // Si destructuramos sin fallback, un solo módulo exótico revienta toda
+  // la página /admin/marketplace.
   const config: Record<
     InstalledModuleSource,
     { variant: 'success' | 'info' | 'warning'; label: string; icon: IconName }
@@ -358,11 +365,15 @@ function SourceBadge({ source }: { source: InstalledModuleSource }) {
     MARKETPLACE_COMMUNITY: { variant: 'info', label: 'Comunidad', icon: 'users' },
     DIRECT_UPLOAD: { variant: 'warning', label: 'No verificado', icon: 'alert' },
   };
-  const { variant, label, icon } = config[source];
+  const entry = config[source] ?? {
+    variant: 'warning' as const,
+    label: String(source ?? 'Desconocido'),
+    icon: 'alert' as IconName,
+  };
   return (
-    <Badge variant={variant} className="gap-1 text-[10px]">
-      <Icon name={icon} className="h-3 w-3" />
-      {label}
+    <Badge variant={entry.variant} className="gap-1 text-[10px]">
+      <Icon name={entry.icon} className="h-3 w-3" />
+      {entry.label}
     </Badge>
   );
 }

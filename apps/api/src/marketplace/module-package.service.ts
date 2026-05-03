@@ -2,6 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import { createHash } from 'node:crypto';
 import {
+  validatePackageLayout,
+  type PackageEntries,
+} from '@didacta/module-package-spec';
+import {
   validateManifestConsistency,
   validateSurfaceBundles,
   type ModuleManifest,
@@ -110,11 +114,34 @@ export class ModulePackageService {
     }
 
     const entries = new Map<string, AdmZip.IZipEntry>();
+    const layoutEntries = new Map<string, Buffer>();
     for (const entry of zip.getEntries()) {
       if (entry.isDirectory) continue;
       entries.set(entry.entryName, entry);
+      layoutEntries.set(entry.entryName, entry.getData());
     }
 
+    // Gate estructural del spec @didacta/module-package-spec (ADR-013).
+    // Es la única fuente de verdad para layout: subdirs prohibidos en
+    // prisma/migrations/, extensiones permitidas, path safety, tamaño,
+    // ficheros requeridos. El packager (oficial o de terceros) genera
+    // contra el mismo spec, así que la simetría está garantizada.
+    const layout = validatePackageLayout(layoutEntries as PackageEntries);
+    if (!layout.valid) {
+      // Reportamos el primer error con su código nativo (mismo
+      // MarketplaceErrorCode que esperan los handlers HTTP), pero
+      // adjuntamos la lista completa para que la UI/debug muestre todo.
+      const first = layout.errors[0]!;
+      throw new MarketplacePackageError(first.code, first.message, {
+        ...first.details,
+        path: first.path,
+        allErrors: layout.errors,
+      });
+    }
+
+    // Defense-in-depth: el spec ya cubre REQUIRED_FILES, pero mantenemos
+    // el check explícito por si en el futuro evoluciona el spec y queremos
+    // un fail-loud aquí en lugar de que el bug pase silencioso.
     for (const required of REQUIRED_FILES) {
       if (!entries.has(required)) {
         throw new MarketplacePackageError(
@@ -191,45 +218,116 @@ export class ModulePackageService {
 }
 
 /// Resolver de `coreVersionRequired` (rango SemVer) contra la versión actual
-/// de la instancia. Implementación mínima: soporta `^X.Y.Z`, `~X.Y.Z` y
-/// versión exacta. Cualquier otro operador (`>=`, ranges con AND) se trata
-/// como restrictivo para no admitir un módulo que no podemos validar.
+/// de la instancia. Implementación mínima: soporta `^X.Y.Z[-prerelease]`,
+/// `~X.Y.Z[-prerelease]` y versión exacta con pre-releases opcionales.
+/// Cualquier otro operador (`>=`, ranges con AND) se trata como restrictivo
+/// para no admitir un módulo que no podemos validar.
 ///
 /// MOTIVACIÓN de no usar `semver` aquí: añadir una dep para tres reglas
 /// concretas no compensa. Si la lógica crece, swap a `semver` es trivial.
+///
+/// PRE-RELEASE SUPPORT (alpha.X, beta.X, rc.X):
+/// - `^0.0.1-alpha.0` matchea `0.0.1-alpha.41` (same base, prerelease >= required)
+/// - `^0.0.1` matchea `0.0.1-alpha.41` (base version compatible, prerelease ignored)
 export function isCoreVersionCompatible(required: string, actual: string): boolean {
   const r = required.trim();
   const a = actual.trim();
-  const exact = /^(\d+)\.(\d+)\.(\d+)$/;
-  const caret = /^\^(\d+)\.(\d+)\.(\d+)$/;
-  const tilde = /^~(\d+)\.(\d+)\.(\d+)$/;
 
-  const actualParsed = a.match(exact);
+  // Regex con soporte para pre-release opcional: X.Y.Z o X.Y.Z-prerelease
+  const semver = /^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/;
+  const caretSemver = /^\^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/;
+  const tildeSemver = /^~(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/;
+
+  const actualParsed = a.match(semver);
   if (!actualParsed) return false;
-  const [, aMajor, aMinor, aPatch] = actualParsed.map(Number) as [number, number, number, number];
+  const [, aMajorStr, aMinorStr, aPatchStr, aPrerelease] = actualParsed;
+  const aMajor = Number(aMajorStr);
+  const aMinor = Number(aMinorStr);
+  const aPatch = Number(aPatchStr);
 
-  const exactMatch = r.match(exact);
-  if (exactMatch) {
+  // Exact match (sin operador): debe coincidir completamente
+  const exactMatch = r.match(semver);
+  if (exactMatch && !r.startsWith('^') && !r.startsWith('~')) {
     return r === a;
   }
 
-  const caretMatch = r.match(caret);
+  // Caret (^): mismo major, minor+patch >= required
+  const caretMatch = r.match(caretSemver);
   if (caretMatch) {
-    const [, rMajor, rMinor, rPatch] = caretMatch.map(Number) as [number, number, number, number];
+    const [, rMajorStr, rMinorStr, rPatchStr, rPrerelease] = caretMatch;
+    const rMajor = Number(rMajorStr);
+    const rMinor = Number(rMinorStr);
+    const rPatch = Number(rPatchStr);
+
     if (aMajor !== rMajor) return false;
     if (aMinor < rMinor) return false;
     if (aMinor === rMinor && aPatch < rPatch) return false;
+
+    // Si base versions iguales y ambos tienen prerelease, comparar prereleases
+    if (aMinor === rMinor && aPatch === rPatch && rPrerelease && aPrerelease) {
+      return comparePrerelease(aPrerelease, rPrerelease) >= 0;
+    }
+
     return true;
   }
 
-  const tildeMatch = r.match(tilde);
+  // Tilde (~): mismo major+minor, patch >= required
+  const tildeMatch = r.match(tildeSemver);
   if (tildeMatch) {
-    const [, rMajor, rMinor, rPatch] = tildeMatch.map(Number) as [number, number, number, number];
+    const [, rMajorStr, rMinorStr, rPatchStr, rPrerelease] = tildeMatch;
+    const rMajor = Number(rMajorStr);
+    const rMinor = Number(rMinorStr);
+    const rPatch = Number(rPatchStr);
+
     if (aMajor !== rMajor) return false;
     if (aMinor !== rMinor) return false;
     if (aPatch < rPatch) return false;
+
+    // Misma lógica de prerelease que caret
+    if (aPatch === rPatch && rPrerelease && aPrerelease) {
+      return comparePrerelease(aPrerelease, rPrerelease) >= 0;
+    }
+
     return true;
   }
 
   return false;
+}
+
+/// Compara identificadores de prerelease: alpha.0 vs alpha.41
+/// Retorna: negativo si a < b, 0 si iguales, positivo si a > b
+/// Sigue SemVer spec: partes numéricas se comparan como números,
+/// alfanuméricas como strings, numeric < alphanumeric.
+function comparePrerelease(a: string, b: string): number {
+  const aParts = a.split('.');
+  const bParts = b.split('.');
+
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+    const aPart = aParts[i];
+    const bPart = bParts[i];
+
+    // Parte faltante es menor (menos partes = versión menor)
+    if (aPart === undefined) return -1;
+    if (bPart === undefined) return 1;
+
+    const aNum = parseInt(aPart, 10);
+    const bNum = parseInt(bPart, 10);
+    const aIsNum = !isNaN(aNum) && String(aNum) === aPart;
+    const bIsNum = !isNaN(bNum) && String(bNum) === bPart;
+
+    // Ambos numéricos: comparar como números
+    if (aIsNum && bIsNum) {
+      if (aNum !== bNum) return aNum - bNum;
+      continue;
+    }
+
+    // Numérico < alfanumérico (SemVer spec)
+    if (aIsNum && !bIsNum) return -1;
+    if (!aIsNum && bIsNum) return 1;
+
+    // Ambos alfanuméricos: comparar como strings
+    if (aPart !== bPart) return aPart < bPart ? -1 : 1;
+  }
+
+  return 0;
 }
