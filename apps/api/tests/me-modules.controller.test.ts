@@ -7,6 +7,7 @@
  * Reglas:
  *  - Sin auth → 401 (cubierto por JwtAuthGuard, no por el controller).
  *  - Devuelve los módulos `enabled=true` del tenant del JWT.
+ *  - Mergea third-party de `installed_module.status='INSTALLED'`.
  *  - `enabledCapabilities` refleja exactamente las capabilities activas en
  *    LicenseService (subset de ALL_CAPABILITIES).
  */
@@ -35,6 +36,14 @@ function makeTenantModules(items: Array<{ name: string; enabled: boolean }>) {
         updatedAt: null,
       })),
     ),
+  };
+}
+
+function makePrisma(installedNames: string[] = []) {
+  return {
+    installedModule: {
+      findMany: vi.fn().mockResolvedValue(installedNames.map((name) => ({ name }))),
+    },
   };
 }
 
@@ -67,18 +76,47 @@ describe('MeModulesController · GET /me/modules', () => {
       { name: 'mod.community', enabled: false },
       { name: 'mod.zoom-live', enabled: true },
     ]);
+    const prisma = makePrisma();
     const ctrl = new MeModulesController(
-      ...([tenantModules, license] as unknown as ServiceCtor),
+      ...([tenantModules, license, prisma] as unknown as ServiceCtor),
     );
     const result = await ctrl.list(makeUser());
     expect(result.activeModules).toEqual(['mod.courses', 'mod.zoom-live']);
     expect(tenantModules.list).toHaveBeenCalledWith('tenant-1');
   });
 
+  it('REGRESIÓN: mergea módulos third-party instalados (installed_module.status=INSTALLED)', async () => {
+    await license.load({ key: null });
+    const tenantModules = makeTenantModules([{ name: 'mod.courses', enabled: true }]);
+    const prisma = makePrisma(['mod.migrator-learndash']);
+    const ctrl = new MeModulesController(
+      ...([tenantModules, license, prisma] as unknown as ServiceCtor),
+    );
+    const result = await ctrl.list(makeUser());
+    expect(result.activeModules).toEqual(
+      expect.arrayContaining(['mod.courses', 'mod.migrator-learndash']),
+    );
+    expect(prisma.installedModule.findMany).toHaveBeenCalledWith({
+      where: { status: 'INSTALLED' },
+      select: { name: true },
+    });
+  });
+
+  it('REGRESIÓN: dedupe si un nombre aparece tanto en built-in activo como en installed_module', async () => {
+    await license.load({ key: null });
+    const tenantModules = makeTenantModules([{ name: 'mod.courses', enabled: true }]);
+    const prisma = makePrisma(['mod.courses']);
+    const ctrl = new MeModulesController(
+      ...([tenantModules, license, prisma] as unknown as ServiceCtor),
+    );
+    const result = await ctrl.list(makeUser());
+    expect(result.activeModules.filter((n) => n === 'mod.courses')).toHaveLength(1);
+  });
+
   it('devuelve enabledCapabilities=[] sin licencia (community)', async () => {
     await license.load({ key: null });
     const ctrl = new MeModulesController(
-      ...([makeTenantModules([]), license] as unknown as ServiceCtor),
+      ...([makeTenantModules([]), license, makePrisma()] as unknown as ServiceCtor),
     );
     const result = await ctrl.list(makeUser());
     expect(result.enabledCapabilities).toEqual([]);
@@ -87,7 +125,7 @@ describe('MeModulesController · GET /me/modules', () => {
   it('devuelve TODAS las capabilities con dev bypass', async () => {
     await license.load({ allowDevBypass: true, key: 'dev-key' });
     const ctrl = new MeModulesController(
-      ...([makeTenantModules([]), license] as unknown as ServiceCtor),
+      ...([makeTenantModules([]), license, makePrisma()] as unknown as ServiceCtor),
     );
     const result = await ctrl.list(makeUser());
     expect(result.enabledCapabilities).toContain('feat:multi_tenant.real');
@@ -98,7 +136,7 @@ describe('MeModulesController · GET /me/modules', () => {
   it('lanza UnauthorizedException sin user (defensa-en-profundidad)', async () => {
     await license.load({ key: null });
     const ctrl = new MeModulesController(
-      ...([makeTenantModules([]), license] as unknown as ServiceCtor),
+      ...([makeTenantModules([]), license, makePrisma()] as unknown as ServiceCtor),
     );
     await expect(ctrl.list(undefined)).rejects.toThrow(/Unauthorized/);
   });

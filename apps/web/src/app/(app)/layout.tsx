@@ -2,14 +2,14 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { AppSidebar, type SidebarGroup, type SidebarItem } from '@/components/app-sidebar';
-import type { IconName } from '@/components/icon';
+import { AppSidebar, type SidebarGroup } from '@/components/app-sidebar';
 import { Icon } from '@/components/icon';
 import { LicenseProvider } from '@/components/license-provider';
 import { NotificationsBell } from '@/components/notifications-bell';
 import { TenantThemeProvider } from '@/components/tenant-theme-provider';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
 import { meApi } from '@/lib/me';
+import { mergeExtensionSidebarItems } from '@/lib/sidebar-extensions-merge';
 import { filterByActiveModules } from '@/lib/sidebar-modules-filter';
 import { moduleExtensions } from '@/modules';
 
@@ -129,7 +129,7 @@ function Shell({
     isSuperAdmin,
   });
   const userRoles = new Set(session.user.roles);
-  const mergedGroups = mergeExtensionSidebarItems(baseGroups, userRoles);
+  const mergedGroups = mergeExtensionSidebarItems(baseGroups, moduleExtensions, userRoles);
   const groups = filterByActiveModules(mergedGroups, activeModules);
 
   return (
@@ -266,64 +266,3 @@ function buildGroups({
   return [learning, formadorAdmin, tenant, seguridad, integraciones, facturacion];
 }
 
-/**
- * Mergea los `sidebarItems` declarados por cada módulo en `moduleExtensions`
- * a los grupos existentes. Cada item se inserta en el grupo cuyo `label`
- * coincide con el `group` del item. Si el grupo no existe, el item se ignora
- * silenciosamente.
- *
- * El merge añade automáticamente `requiresModule: extension.name` a cada item,
- * de modo que `filterByActiveModules` los oculta cuando el módulo no está
- * activo para el tenant.
- *
- * Garantías:
- *  - Respeta `requiresRole` para CUALQUIER rol (`super_admin`,
- *    `tenant_admin`, `formador`), no solo super_admin.
- *  - Dedupe defensiva por `(group, href)` — si dos extensions o un
- *    hardcoded + extension declaran el mismo href en el mismo grupo, gana
- *    el primero (el del core hardcoded) y la extension se ignora.
- */
-function mergeExtensionSidebarItems(
-  groups: SidebarGroup[],
-  userRoles: Set<string>,
-): SidebarGroup[] {
-  // Construimos un mapa group.label → grupo para lookup O(1)
-  const groupByLabel = new Map(groups.map((g) => [g.label, g]));
-
-  // Set de hrefs ya presentes en cada grupo (clave: `${group}::${href}`).
-  // Cualquier item de una extension que coincida con un hardcoded gana
-  // el del core para cumplir el principio "un href, un origen" y evitar
-  // duplicados visuales.
-  const seenByGroupHref = new Set<string>();
-  for (const group of groups) {
-    for (const item of group.items) {
-      seenByGroupHref.add(`${group.label}::${item.href}`);
-    }
-  }
-
-  for (const ext of moduleExtensions) {
-    for (const item of ext.sidebarItems ?? []) {
-      // Filtrar por rol si el item lo requiere. Si el rol pedido no está
-      // en los roles del usuario, saltamos. Items sin requiresRole pasan
-      // siempre (visibles para todos los que ven el grupo).
-      if (item.requiresRole && !userRoles.has(item.requiresRole)) continue;
-
-      const group = groupByLabel.get(item.group);
-      if (!group) continue;
-
-      const dedupeKey = `${item.group}::${item.href}`;
-      if (seenByGroupHref.has(dedupeKey)) continue;
-      seenByGroupHref.add(dedupeKey);
-
-      const sidebarItem: SidebarItem = {
-        href: item.href,
-        label: item.label,
-        icon: item.icon as IconName,
-        requiresModule: ext.name,
-      };
-      group.items.push(sidebarItem);
-    }
-  }
-
-  return groups;
-}
