@@ -1,17 +1,21 @@
 'use client';
 
 /**
- * Panel super_admin · Marketplace de módulos (ADR-009 PR F).
+ * Panel super_admin · Marketplace de módulos (ADR-009 PR F + DISC-002).
  *
  * Permite al operador self-host:
- *   1. Subir un paquete `*.zip` firmado por Didacta vía drag&drop o
- *      file picker. El paquete viaja como body `application/zip` directo
- *      al endpoint `POST /admin/modules/install` (sin multipart, sin
- *      base64 — coherente con el body parser registrado en `main.ts`).
+ *   1. Subir un paquete `*.zip` vía drag&drop o file picker. Acepta tanto
+ *      paquetes firmados por Didacta como uploads directos sin firma
+ *      (DISC-002). El paquete viaja como body `application/zip` directo
+ *      al endpoint `POST /admin/modules/install`.
  *   2. Ver los módulos instalados con su estado (INSTALLING, INSTALLED,
- *      FAILED, DEPRECATED) y `errorMessage` cuando falló.
+ *      FAILED, DEPRECATED) y badges de origen (Oficial, Comunidad, No
+ *      verificado) según DISC-002.
  *   3. Desinstalar un módulo (borra row + invalida runtime router; NO
  *      borra el blob en object storage para diagnóstico postmortem).
+ *
+ * Cuando se sube un módulo sin firma válida, se muestra un AlertDialog de
+ * advertencia para que el operador sea consciente del nivel de confianza.
  *
  * Tab "Desde marketplace web" es informativo: el flujo push install vive
  * en didacta.io y aún no está construido (ver `docs/MARKETPLACE-WEB-SPEC.md`).
@@ -19,14 +23,25 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/icon';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
 import {
   marketplaceApi,
+  type InstalledModuleSource,
   type InstalledModuleStatus,
   type InstalledModuleSummary,
+  type InstallSuccessResponse,
 } from '@/lib/marketplace';
 
 const MAX_BYTES = 50 * 1024 * 1024;
@@ -55,10 +70,12 @@ function UploadCard() {
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<
-    | { kind: 'success'; name: string; version: string }
+    | { kind: 'success'; name: string; version: string; signatureVerified: boolean; signatureError?: string }
     | { kind: 'error'; message: string; code?: string }
     | null
   >(null);
+  // Modal de warning para módulos no verificados (DISC-002)
+  const [warningOpen, setWarningOpen] = useState(false);
 
   const handleFiles = async (file: File) => {
     setFeedback(null);
@@ -69,8 +86,19 @@ function UploadCard() {
     setBusy(true);
     try {
       const result = await marketplaceApi.install(file);
-      setFeedback({ kind: 'success', name: result.name, version: result.version });
+      const successFeedback = {
+        kind: 'success' as const,
+        name: result.name,
+        version: result.version,
+        signatureVerified: result.signatureVerified,
+        signatureError: result.signatureError,
+      };
+      setFeedback(successFeedback);
       window.dispatchEvent(new CustomEvent('marketplace:installed'));
+      // Si el módulo no está verificado, mostrar warning (DISC-002)
+      if (!result.signatureVerified) {
+        setWarningOpen(true);
+      }
     } catch (e) {
       setFeedback({
         kind: 'error',
@@ -137,8 +165,18 @@ function UploadCard() {
         </div>
 
         {feedback?.kind === 'success' && (
-          <div className="mt-4 rounded border border-green-300 bg-green-50 p-3 text-sm text-green-900">
+          <div className={[
+            'mt-4 rounded border p-3 text-sm',
+            feedback.signatureVerified
+              ? 'border-green-300 bg-green-50 text-green-900'
+              : 'border-amber-300 bg-amber-50 text-amber-900',
+          ].join(' ')}>
             <strong>{feedback.name}@{feedback.version}</strong> instalado correctamente.
+            {!feedback.signatureVerified && (
+              <span className="ml-2 font-normal">
+                (sin verificar — ver advertencia)
+              </span>
+            )}
           </div>
         )}
         {feedback?.kind === 'error' && (
@@ -147,6 +185,42 @@ function UploadCard() {
             {feedback.message}
           </div>
         )}
+
+        {/* Modal de advertencia para módulos no verificados (DISC-002) */}
+        <AlertDialog open={warningOpen} onOpenChange={setWarningOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
+                <Icon name="alert-triangle" className="h-5 w-5" />
+                Módulo no verificado
+              </AlertDialogTitle>
+              <AlertDialogDescription className="space-y-3">
+                <p>
+                  El módulo <strong>{feedback?.kind === 'success' ? `${feedback.name}@${feedback.version}` : ''}</strong>{' '}
+                  se instaló correctamente pero <strong>no tiene firma verificada</strong> de Didacta.
+                </p>
+                <p>
+                  Esto significa que el paquete fue subido directamente y no pasó por el proceso de
+                  revisión y firma del marketplace oficial.
+                </p>
+                {feedback?.kind === 'success' && feedback.signatureError && (
+                  <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                    <strong>Detalle:</strong> {feedback.signatureError}
+                  </div>
+                )}
+                <p className="text-amber-700">
+                  Solo confía en módulos de fuentes que conozcas. Si no reconoces este paquete,
+                  considera desinstalarlo desde la lista de módulos.
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={() => setWarningOpen(false)}>
+                Entendido
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
@@ -239,7 +313,7 @@ function InstalledRow({
             <strong className="font-medium">{row.displayName}</strong>
             <code className="text-xs text-text-muted">{row.name}@{row.version}</code>
             <StatusBadge status={row.status} />
-            <VendorBadge vendor={row.vendor} />
+            <SourceBadge source={row.source} />
           </div>
           {row.description && <p className="text-sm text-text-muted">{row.description}</p>}
           <p className="text-xs text-text-muted">
@@ -275,10 +349,20 @@ function StatusBadge({ status }: { status: InstalledModuleStatus }) {
   return <Badge variant={variant}>{label}</Badge>;
 }
 
-function VendorBadge({ vendor }: { vendor: InstalledModuleSummary['vendor'] }) {
+function SourceBadge({ source }: { source: InstalledModuleSource }) {
+  const config: Record<
+    InstalledModuleSource,
+    { variant: 'success' | 'info' | 'warning'; label: string; icon: string }
+  > = {
+    MARKETPLACE_OFFICIAL: { variant: 'success', label: 'Oficial', icon: 'check-circle' },
+    MARKETPLACE_COMMUNITY: { variant: 'info', label: 'Comunidad', icon: 'users' },
+    DIRECT_UPLOAD: { variant: 'warning', label: 'No verificado', icon: 'alert-triangle' },
+  };
+  const { variant, label, icon } = config[source];
   return (
-    <Badge variant="outline" className="text-[10px] uppercase">
-      {vendor === 'DIDACTA' ? 'Didacta' : 'Community'}
+    <Badge variant={variant} className="gap-1 text-[10px]">
+      <Icon name={icon} className="h-3 w-3" />
+      {label}
     </Badge>
   );
 }

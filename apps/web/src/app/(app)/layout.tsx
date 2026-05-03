@@ -2,7 +2,8 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { AppSidebar, type SidebarGroup } from '@/components/app-sidebar';
+import { AppSidebar, type SidebarGroup, type SidebarItem } from '@/components/app-sidebar';
+import type { IconName } from '@/components/icon';
 import { Icon } from '@/components/icon';
 import { LicenseProvider } from '@/components/license-provider';
 import { NotificationsBell } from '@/components/notifications-bell';
@@ -10,6 +11,7 @@ import { TenantThemeProvider } from '@/components/tenant-theme-provider';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
 import { meApi } from '@/lib/me';
 import { filterByActiveModules } from '@/lib/sidebar-modules-filter';
+import { moduleExtensions } from '@/modules';
 
 /**
  * Shell de la app autenticada — sidebar persistente Didacta + main canvas.
@@ -122,11 +124,12 @@ function Shell({
     return () => window.removeEventListener('didacta:modules-changed', refresh);
   }, []);
 
-  const allGroups = buildGroups({
+  const baseGroups = buildGroups({
     isAdminOrFormador,
     isSuperAdmin,
   });
-  const groups = filterByActiveModules(allGroups, activeModules);
+  const mergedGroups = mergeExtensionSidebarItems(baseGroups, isSuperAdmin);
+  const groups = filterByActiveModules(mergedGroups, activeModules);
 
   return (
     <div className="flex min-h-dvh bg-bg-subtle">
@@ -268,4 +271,42 @@ function buildGroups({
   };
 
   return [learning, formadorAdmin, tenant, seguridad, integraciones, facturacion];
+}
+
+/**
+ * Mergea los `sidebarItems` declarados por cada módulo en `moduleExtensions`
+ * a los grupos existentes. Cada item se inserta en el grupo cuyo `label`
+ * coincide con el `group` del item. Si el grupo no existe, el item se ignora
+ * silenciosamente.
+ *
+ * El merge añade automáticamente `requiresModule: extension.name` a cada item,
+ * de modo que `filterByActiveModules` los oculta cuando el módulo no está
+ * activo para el tenant.
+ */
+function mergeExtensionSidebarItems(
+  groups: SidebarGroup[],
+  isSuperAdmin: boolean,
+): SidebarGroup[] {
+  // Construimos un mapa group.label → grupo para lookup O(1)
+  const groupByLabel = new Map(groups.map((g) => [g.label, g]));
+
+  for (const ext of moduleExtensions) {
+    for (const item of ext.sidebarItems ?? []) {
+      // Filtrar por rol si el item lo requiere
+      if (item.requiresRole === 'super_admin' && !isSuperAdmin) continue;
+
+      const group = groupByLabel.get(item.group);
+      if (!group) continue;
+
+      const sidebarItem: SidebarItem = {
+        href: item.href,
+        label: item.label,
+        icon: item.icon as IconName,
+        requiresModule: ext.name,
+      };
+      group.items.push(sidebarItem);
+    }
+  }
+
+  return groups;
 }

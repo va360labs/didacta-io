@@ -1,0 +1,30 @@
+{
+  "name": "migrator-learndash",
+  "version": "1.0.0",
+  "edition": "enterprise",
+  "displayName": "Migrador desde WordPress + LearnDash",
+  "description": "Importa cursos, lecciones, temas, quizzes, preguntas, usuarios, grupos, matrículas, media y progreso desde una instalación WordPress + LearnDash hacia Didacta. Wizard didáctico paso a paso, ETL con staging, idempotencia por checksum, reportes auditables.",
+  "category": "migration",
+  "coreVersionRequired": "^1.0.0",
+  "tablePrefix": "mod_migrator_learndash_",
+  "permissions": [
+    "migrator-learndash.import.create",
+    "migrator-learndash.import.read",
+    "migrator-learndash.import.cancel",
+    "migrator-learndash.import.rollback",
+    "migrator-learndash.report.read",
+    "migrator-learndash.report.export"
+  ],
+  "events": [
+    { "name": "migrator-learndash.import.started" },
+    { "name": "migrator-learndash.import.completed" },
+    { "name": "migrator-learndash.import.failed" },
+    { "name": "migrator-learndash.import.cancelled" },
+    { "name": "migrator-learndash.import.rollback.started" },
+    { "name": "migrator-learndash.import.rollback.completed" }
+  ],
+  "apiNamespace": "/modules/migrator-learndash",
+  "surfaces": ["admin"],
+  "requiredCapabilities": ["feat:migrators.learndash"],
+  "requiredLicenseFeature": "feat:migrators.learndash"
+}

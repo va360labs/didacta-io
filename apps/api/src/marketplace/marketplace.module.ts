@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { ModulesModule } from '../modules/modules.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AdminMarketplaceController } from './admin-marketplace.controller';
+import { ModuleAssetsController } from './module-assets.controller';
 import { InstalledModuleService } from './installed-module.service';
 import { InstallPackageService } from './install-package.service';
 import { MarketplaceErrorFilter } from './marketplace-error.filter';
@@ -36,7 +37,7 @@ import { ModulesDispatcherController } from './modules-dispatcher.controller';
 /// resuelve el storage backend según `STORAGE_DRIVER`.
 @Module({
   imports: [PrismaModule, AuthModule, ModulesModule],
-  controllers: [AdminMarketplaceController, ModulesDispatcherController],
+  controllers: [AdminMarketplaceController, ModulesDispatcherController, ModuleAssetsController],
   providers: [
     ModuleSignatureService,
     ModulePackageService,

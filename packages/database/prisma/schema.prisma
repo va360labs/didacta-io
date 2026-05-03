@@ -2168,6 +2168,20 @@ enum InstalledModuleVendor {
   COMMUNITY
 }
 
+/// Origen de instalación del módulo (DISC-002).
+/// Determina el nivel de confianza y el badge mostrado en UI.
+enum InstalledModuleSource {
+  /// Descargado del marketplace oficial, firmado por Didacta, publisher=didacta.
+  /// Badge: "✅ Oficial"
+  MARKETPLACE_OFFICIAL
+  /// Descargado del marketplace, firmado por Didacta tras review, publisher=third-party.
+  /// Badge: "👥 Comunidad"
+  MARKETPLACE_COMMUNITY
+  /// Subido manualmente por el admin sin pasar por marketplace.
+  /// Sin firma o firma inválida. Badge: "⚠️ No verificado"
+  DIRECT_UPLOAD
+}
+
 enum InstalledModuleStatus {
   /// El paquete fue subido y validado pero la instalación aún no terminó.
   /// Estados intermedios del pipeline (extract → migrate → boot).
@@ -2192,6 +2206,8 @@ model InstalledModule {
   /// Versión anterior si este row es resultado de un upgrade. Permite revert.
   prevVersion  String?               @map("prev_version")
   vendor       InstalledModuleVendor
+  /// Origen de la instalación (DISC-002). Determina badge y nivel de confianza.
+  source       InstalledModuleSource @default(DIRECT_UPLOAD)
   displayName  String                @map("display_name")
   description  String?
   /// Manifest del módulo serializado (ADR-008 + extensiones ADR-009).
@@ -2203,11 +2219,13 @@ model InstalledModule {
   /// AWS KMS `alias/didacta-issuer-2026`. Re-verificable en cualquier
   /// momento — útil para auditoría y para re-checkear tras rotación de
   /// claves públicas.
-  manifestJwt  String                @map("manifest_jwt")
+  /// NULL si el módulo fue subido directamente sin firma válida (DISC-002).
+  manifestJwt  String?               @map("manifest_jwt")
   /// `signedAt` declarado por el publisher. Solo informativo, no se compara
   /// con el reloj del receiver — los relojes de los clientes self-host no
   /// son confiables.
-  signedAt     DateTime              @map("signed_at")
+  /// NULL si el módulo fue subido sin firma (source=DIRECT_UPLOAD).
+  signedAt     DateTime?             @map("signed_at")
   /// Clave del *.didactamod en object storage de la instancia (S3/MinIO).
   /// Ejemplo: "modules/mod.gamification-1.2.0.didactamod".
   packageStorageKey String            @map("package_storage_key")

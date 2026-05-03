@@ -16,6 +16,9 @@ export type MarketplaceErrorCode =
   | 'VENDOR_NOT_TRUSTED'
   | 'CORE_VERSION_INCOMPATIBLE'
   | 'NAME_RESERVED'
+  /// El manifest declara `surfaces` pero faltan los bundles UI correspondientes
+  /// en dist/ui/<surface>.js. 422.
+  | 'SURFACE_BUNDLE_MISSING'
   /// La misma versión del módulo ya está instalada y `INSTALLED`. No es un
   /// error técnico, pero el endpoint lo expone como 409 para que el cliente
   /// distinga "no-op idempotente" de "instalación nueva".

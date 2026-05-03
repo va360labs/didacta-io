@@ -83,6 +83,65 @@ export class ModuleSignatureService {
     this.publicKeysCache = null;
   }
 
+  /// Resultado de intentar verificar un manifest (DISC-002).
+  /// `verified=true` significa firma válida de Didacta; `verified=false`
+  /// significa que el manifest es válido pero no está firmado correctamente.
+  tryVerifyResult?: {
+    verified: boolean;
+    manifest: ModuleManifest;
+    signatureError?: string;
+  };
+
+  /// Intenta verificar un `manifest.jwt`. Si la firma es inválida, parsea
+  /// el manifest de todos modos y devuelve `verified=false`.
+  /// Útil para subida directa donde la firma es opcional (DISC-002).
+  ///
+  /// @returns { verified, manifest, signatureError? }
+  async tryVerifyManifestJwt(
+    token: string,
+  ): Promise<{ verified: boolean; manifest: ModuleManifest; signatureError?: string }> {
+    try {
+      const manifest = await this.verifyManifestJwt(token);
+      return { verified: true, manifest };
+    } catch (err) {
+      // Si falló la firma pero podemos parsear el manifest, lo permitimos
+      if (
+        err instanceof MarketplacePackageError &&
+        (err.code === 'SIGNATURE_VERIFY_FAILED' || err.code === 'VENDOR_NOT_TRUSTED')
+      ) {
+        // Intentar parsear el payload del JWT sin verificar firma
+        const manifest = this.parseManifestWithoutVerify(token);
+        if (manifest) {
+          return {
+            verified: false,
+            manifest,
+            signatureError: err.message,
+          };
+        }
+      }
+      throw err;
+    }
+  }
+
+  /// Parsea el payload de un JWT sin verificar firma. Útil para subida
+  /// directa donde aceptamos módulos no firmados (DISC-002).
+  private parseManifestWithoutVerify(token: string): ModuleManifest | null {
+    try {
+      // JWT es header.payload.signature en base64url
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      const payloadB64 = parts[1]!;
+      const payloadJson = Buffer.from(payloadB64, 'base64url').toString('utf8');
+      const payload = JSON.parse(payloadJson) as Record<string, unknown>;
+      const stripped = stripJwtClaims(payload);
+      const parsed = moduleManifestSchema.safeParse(stripped);
+      if (!parsed.success) return null;
+      return parsed.data;
+    } catch {
+      return null;
+    }
+  }
+
   /// Verifica un `manifest.jwt` (JWS compact ES256). Devuelve el manifest
   /// parseado y validado contra el schema Zod, listo para usar.
   ///

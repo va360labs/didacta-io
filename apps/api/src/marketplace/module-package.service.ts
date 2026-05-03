@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import { createHash } from 'node:crypto';
-import { validateManifestConsistency, type ModuleManifest } from './module-manifest.schema';
+import {
+  validateManifestConsistency,
+  validateSurfaceBundles,
+  type ModuleManifest,
+} from './module-manifest.schema';
 import { MarketplacePackageError } from './module-package.errors';
 import { ModuleSignatureService } from './module-signature.service';
 
@@ -43,14 +47,23 @@ export const RESERVED_MODULE_NAMES = new Set<string>([
   'mod.notifications',
 ]);
 
+/// Origen de instalación (DISC-002). Determina badge y nivel de confianza.
+export type ModuleSource = 'MARKETPLACE_OFFICIAL' | 'MARKETPLACE_COMMUNITY' | 'DIRECT_UPLOAD';
+
 export interface ValidatedPackage {
   manifest: ModuleManifest;
-  /// JWT compact tal cual viene en el ZIP. Se persiste para auditoría.
-  manifestJwt: string;
+  /// JWT compact tal cual viene en el ZIP. NULL si firma inválida/ausente.
+  manifestJwt: string | null;
   /// SHA-256 hex del paquete tal cual fue subido (antes de extraer).
   /// Se persiste para detectar tampering al releerlo del object storage.
   packageSha256: string;
   packageSizeBytes: number;
+  /// Origen de la instalación (DISC-002).
+  source: ModuleSource;
+  /// `true` si la firma ES256 fue verificada correctamente.
+  signatureVerified: boolean;
+  /// Error de firma si `signatureVerified=false`. Para mostrar en UI.
+  signatureError?: string;
 }
 
 @Injectable()
@@ -114,10 +127,20 @@ export class ModulePackageService {
 
     const manifestJwt = entries.get('manifest.jwt')!.getData().toString('utf8').trim();
 
-    // El verifier hace en una sola pasada: parse JWT → verify firma con
-    // jose → match issuer/audience → parse payload contra el schema Zod →
-    // enforce vendor=didacta. Devuelve el manifest tipado.
-    const manifest = await this.signatures.verifyManifestJwt(manifestJwt);
+    // DISC-002: Intentamos verificar la firma pero no bloqueamos si falla.
+    // Solo guardamos el resultado para determinar el source y mostrar warning.
+    const verifyResult = await this.signatures.tryVerifyManifestJwt(manifestJwt);
+    const { verified: signatureVerified, manifest, signatureError } = verifyResult;
+
+    // Determinar el source basándose en la firma y el vendor
+    let source: ModuleSource;
+    if (signatureVerified) {
+      // Firma válida: es de marketplace
+      source = manifest.vendor === 'didacta' ? 'MARKETPLACE_OFFICIAL' : 'MARKETPLACE_COMMUNITY';
+    } else {
+      // Sin firma válida: subida directa
+      source = 'DIRECT_UPLOAD';
+    }
 
     const consistencyErrors = validateManifestConsistency(manifest);
     if (consistencyErrors.length > 0) {
@@ -125,6 +148,17 @@ export class ModulePackageService {
         'MANIFEST_CONSISTENCY_INVALID',
         `Manifest incoherente: ${consistencyErrors.join('; ')}`,
         { errors: consistencyErrors },
+      );
+    }
+
+    // DISC-001.5: Validar que las surfaces declaradas tienen sus bundles
+    const zipEntries = new Set(entries.keys());
+    const surfaceErrors = validateSurfaceBundles(manifest, zipEntries);
+    if (surfaceErrors.length > 0) {
+      throw new MarketplacePackageError(
+        'SURFACE_BUNDLE_MISSING',
+        `Bundles UI faltantes: ${surfaceErrors.join('; ')}`,
+        { errors: surfaceErrors },
       );
     }
 
@@ -146,9 +180,12 @@ export class ModulePackageService {
 
     return {
       manifest,
-      manifestJwt,
+      manifestJwt: signatureVerified ? manifestJwt : null,
       packageSha256: createHash('sha256').update(packageBuffer).digest('hex'),
       packageSizeBytes: packageBuffer.length,
+      source,
+      signatureVerified,
+      signatureError,
     };
   }
 }

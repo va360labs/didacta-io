@@ -19,6 +19,9 @@ function resolveCoreVersion(): string {
   return process.env['DIDACTA_CORE_VERSION'] ?? '0.0.0';
 }
 
+/// Origen de instalación (DISC-002). Exportado para uso en controller.
+export type { ModuleSource } from './module-package.service';
+
 /// Resultado de una instalación, alineado con lo que el endpoint devuelve.
 export interface InstallResult {
   id: string;
@@ -29,6 +32,12 @@ export interface InstallResult {
   packageStorageKey: string;
   packageSha256: string;
   installedAt: Date | null;
+  /// Origen de la instalación (DISC-002).
+  source: 'MARKETPLACE_OFFICIAL' | 'MARKETPLACE_COMMUNITY' | 'DIRECT_UPLOAD';
+  /// `true` si la firma fue verificada correctamente.
+  signatureVerified: boolean;
+  /// Error de firma si `signatureVerified=false`. Para mostrar warning en UI.
+  signatureError?: string;
 }
 
 /// Orquestador del pipeline de instalación de un `*.zip` (ADR-009 §3).
@@ -96,6 +105,7 @@ export class InstallPackageService {
       packageSizeBytes: validated.packageSizeBytes,
       installedById,
       prevVersion: previous?.version ?? null,
+      source: validated.source,
     });
 
     try {
@@ -168,7 +178,13 @@ export class InstallPackageService {
           `(vendor=${installed.vendor}). Registro DynamicModule para enrutado HTTP llegará en PR siguiente.`,
       );
 
-      return toInstallResult(installed, validated.manifest);
+      return toInstallResult({
+        row: installed,
+        manifest: validated.manifest,
+        source: validated.source,
+        signatureVerified: validated.signatureVerified,
+        signatureError: validated.signatureError,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await this.installedModules.markFailed(row.id, msg).catch(() => {
@@ -207,15 +223,26 @@ export function buildStorageKey(name: string, version: string): string {
   return `modules/${safeName}/${safeVersion}-${ts}.zip`;
 }
 
-function toInstallResult(row: InstalledModule, manifest: ModuleManifest): InstallResult {
+interface ToInstallResultOptions {
+  row: InstalledModule;
+  manifest: ModuleManifest;
+  source: InstallResult['source'];
+  signatureVerified: boolean;
+  signatureError?: string;
+}
+
+function toInstallResult(opts: ToInstallResultOptions): InstallResult {
   return {
-    id: row.id,
-    name: row.name,
-    version: row.version,
-    status: row.status,
-    manifest,
-    packageStorageKey: row.packageStorageKey,
-    packageSha256: row.packageSha256,
-    installedAt: row.installedAt,
+    id: opts.row.id,
+    name: opts.row.name,
+    version: opts.row.version,
+    status: opts.row.status,
+    manifest: opts.manifest,
+    packageStorageKey: opts.row.packageStorageKey,
+    packageSha256: opts.row.packageSha256,
+    installedAt: opts.row.installedAt,
+    source: opts.source,
+    signatureVerified: opts.signatureVerified,
+    signatureError: opts.signatureError,
   };
 }

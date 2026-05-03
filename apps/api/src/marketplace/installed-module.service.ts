@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type {
   InstalledModule,
+  InstalledModuleSource,
   InstalledModuleStatus,
   InstalledModuleVendor,
   Prisma,
@@ -20,9 +21,9 @@ import type { ModuleManifest } from './module-manifest.schema';
 
 export interface CreateInstallingInput {
   manifest: ModuleManifest;
-  /// JWT compact (manifest.jwt del paquete). Tras refactor KMS sustituye al
-  /// par manifest+firma separada del diseño anterior.
-  manifestJwt: string;
+  /// JWT compact (manifest.jwt del paquete). NULL si firma inválida/ausente
+  /// en módulos DIRECT_UPLOAD (DISC-002).
+  manifestJwt: string | null;
   packageStorageKey: string;
   packageSha256: string;
   packageSizeBytes: number;
@@ -30,6 +31,8 @@ export interface CreateInstallingInput {
   /// Si la instalación reemplaza una versión previa (upgrade in-place),
   /// guardamos el número de la versión anterior para permitir revert.
   prevVersion?: string | null;
+  /// Origen de la instalación (DISC-002).
+  source: InstalledModuleSource;
 }
 
 export interface ListFilters {
@@ -61,16 +64,20 @@ export class InstalledModuleService {
   /// retry de install para el mismo `name` debe sobreescribir el row
   /// anterior — los rows FAILED no bloquean reintentos.
   async createInstalling(input: CreateInstallingInput): Promise<InstalledModule> {
+    // signedAt solo existe si el manifest tiene firma válida (DISC-002)
+    const signedAt = input.manifest.signedAt ? new Date(input.manifest.signedAt) : null;
+
     const data: Prisma.InstalledModuleUncheckedCreateInput = {
       name: input.manifest.name,
       version: input.manifest.version,
       prevVersion: input.prevVersion ?? null,
       vendor: input.manifest.vendor.toUpperCase() as InstalledModuleVendor,
+      source: input.source,
       displayName: input.manifest.displayName,
       description: input.manifest.description ?? null,
       manifestJson: input.manifest as unknown as Prisma.InputJsonValue,
       manifestJwt: input.manifestJwt,
-      signedAt: new Date(input.manifest.signedAt),
+      signedAt,
       packageStorageKey: input.packageStorageKey,
       packageSha256: input.packageSha256,
       packageSizeBytes: input.packageSizeBytes,

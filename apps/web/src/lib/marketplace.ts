@@ -5,6 +5,8 @@ import { authStorage } from './auth-storage';
 
 export type InstalledModuleStatus = 'INSTALLING' | 'INSTALLED' | 'FAILED' | 'DEPRECATED';
 export type InstalledModuleVendor = 'DIDACTA' | 'COMMUNITY';
+/// Origen de instalación (DISC-002). Determina badge y nivel de confianza.
+export type InstalledModuleSource = 'MARKETPLACE_OFFICIAL' | 'MARKETPLACE_COMMUNITY' | 'DIRECT_UPLOAD';
 
 export interface InstalledModuleSummary {
   id: string;
@@ -12,6 +14,8 @@ export interface InstalledModuleSummary {
   version: string;
   prevVersion: string | null;
   vendor: InstalledModuleVendor;
+  /// Origen de la instalación (DISC-002).
+  source: InstalledModuleSource;
   displayName: string;
   description: string | null;
   coreVersionRequired: string;
@@ -22,7 +26,7 @@ export interface InstalledModuleSummary {
   isolation: string;
   status: InstalledModuleStatus;
   errorMessage: string | null;
-  signedAt: string;
+  signedAt: string | null;
   packageStorageKey: string;
   packageSha256: string;
   packageSizeBytes: number;
@@ -41,6 +45,12 @@ export interface InstallSuccessResponse {
   packageStorageKey: string;
   packageSha256: string;
   installedAt: string | null;
+  /// Origen de la instalación (DISC-002).
+  source: InstalledModuleSource;
+  /// `true` si la firma ES256 fue verificada correctamente.
+  signatureVerified: boolean;
+  /// Error de firma si `signatureVerified=false`. Para mostrar warning en UI.
+  signatureError?: string;
 }
 
 export interface ModuleRouteSummary {
