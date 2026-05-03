@@ -8,7 +8,7 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { FastifyReply } from 'fastify';
 import AdmZip from 'adm-zip';
 import { ModuleContextFactory } from '../modules/module-context.factory';
 import { InstalledModuleService } from './installed-module.service';
@@ -49,7 +49,7 @@ export class ModuleAssetsController {
   async getUIBundle(
     @Param('slug') slug: string,
     @Param('surface') surface: string,
-    @Res({ passthrough: true }) res: Response,
+    @Res({ passthrough: true }) res: FastifyReply,
   ): Promise<StreamableFile> {
     // Validar surface
     if (!MODULE_SURFACES.includes(surface as ModuleSurface)) {
@@ -63,9 +63,9 @@ export class ModuleAssetsController {
     // Cache hit
     const cached = bundleCache.get(cacheKey);
     if (cached) {
-      res.setHeader('ETag', `"${cached.version}"`);
-      res.setHeader('Cache-Control', `public, max-age=${CACHE_MAX_AGE}`);
-      res.setHeader('X-Module-Version', cached.version);
+      res.header('ETag', `"${cached.version}"`);
+      res.header('Cache-Control', `public, max-age=${CACHE_MAX_AGE}`);
+      res.header('X-Module-Version', cached.version);
       return new StreamableFile(cached.data);
     }
 
@@ -107,9 +107,9 @@ export class ModuleAssetsController {
     bundleCache.set(cacheKey, { data: bundleData, version: module.version });
 
     // Headers de cache
-    res.setHeader('ETag', `"${module.version}"`);
-    res.setHeader('Cache-Control', `public, max-age=${CACHE_MAX_AGE}`);
-    res.setHeader('X-Module-Version', module.version);
+    res.header('ETag', `"${module.version}"`);
+    res.header('Cache-Control', `public, max-age=${CACHE_MAX_AGE}`);
+    res.header('X-Module-Version', module.version);
 
     return new StreamableFile(bundleData);
   }

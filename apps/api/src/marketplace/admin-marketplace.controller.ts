@@ -52,7 +52,7 @@ function toPublicInstall(row: InstalledModule): Record<string, unknown> {
     isolation: row.isolation,
     status: row.status,
     errorMessage: row.errorMessage,
-    signedAt: row.signedAt.toISOString(),
+    signedAt: row.signedAt?.toISOString() ?? null,
     packageStorageKey: row.packageStorageKey,
     packageSha256: row.packageSha256,
     packageSizeBytes: row.packageSizeBytes,

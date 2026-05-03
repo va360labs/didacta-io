@@ -19,4 +19,4 @@ export { PrismaClient, Prisma } from '@prisma/client';
 /// en este package. Los modelos y enums se añaden conforme los consume
 /// el resto del repo.
 export type { InstalledModule } from '@prisma/client';
-export type { InstalledModuleStatus, InstalledModuleVendor } from '@prisma/client';
+export type { InstalledModuleSource, InstalledModuleStatus, InstalledModuleVendor } from '@prisma/client';

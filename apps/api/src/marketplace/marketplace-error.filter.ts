@@ -23,6 +23,7 @@ const STATUS_BY_CODE: Record<MarketplaceErrorCode, number> = {
   STORAGE_FAILED: HttpStatus.BAD_GATEWAY, // 502
   MODULE_LINT_FAILED: HttpStatus.UNPROCESSABLE_ENTITY, // 422
   MODULE_BOOT_FAILED: HttpStatus.UNPROCESSABLE_ENTITY, // 422
+  SURFACE_BUNDLE_MISSING: HttpStatus.UNPROCESSABLE_ENTITY, // 422
 };
 
 @Catch(MarketplacePackageError)

@@ -48,7 +48,9 @@ export type IconName =
   | 'trash'
   | 'eye'
   | 'circle'
-  | 'download-cloud';
+  | 'download-cloud'
+  | 'arrow-left'
+  | 'layout';
 
 interface Props extends Omit<SVGProps<SVGSVGElement>, 'name'> {
   name: IconName;
@@ -337,6 +339,21 @@ export function Icon({ name, size = 20, strokeWidth = 1.75, className, ...rest }
           <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
           <path d="M12 12v9" />
           <path d="m8 17 4 4 4-4" />
+        </svg>
+      );
+    case 'arrow-left':
+      return (
+        <svg {...common}>
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </svg>
+      );
+    case 'layout':
+      return (
+        <svg {...common}>
+          <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+          <line x1="3" x2="21" y1="9" y2="9" />
+          <line x1="9" x2="9" y1="21" y2="9" />
         </svg>
       );
   }

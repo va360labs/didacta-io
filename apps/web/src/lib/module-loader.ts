@@ -157,7 +157,7 @@ export async function loadModuleUI(
     }
 
     // Capturar exports
-    const exports = window.__didacta_module_exports__;
+    const exports = window.__didacta_module_exports__ as Record<string, unknown> | undefined;
     if (!exports || typeof exports !== 'object') {
       throw new ModuleUILoadError(
         moduleName,

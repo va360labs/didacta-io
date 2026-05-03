@@ -1,11 +1,11 @@
 'use client';
 
-import { forwardRef, type ButtonHTMLAttributes } from 'react';
+import { forwardRef, useState, type ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
-interface SwitchProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onChange' | 'value'> {
-  checked: boolean;
-  onCheckedChange: (next: boolean) => void;
+export interface SwitchProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onChange' | 'value'> {
+  checked?: boolean;
+  onCheckedChange?: (next: boolean) => void;
   /** Etiqueta accesible cuando no hay un Label asociado vía aria-labelledby. */
   label?: string;
 }
@@ -17,9 +17,21 @@ interface SwitchProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onC
  * dure el round-trip si quiere bloquear el doble-click.
  */
 export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch(
-  { checked, onCheckedChange, label, disabled, className, ...rest },
+  { checked: controlledChecked, onCheckedChange, label, disabled, className, ...rest },
   ref,
 ) {
+  const [internalChecked, setInternalChecked] = useState(false);
+  const checked = controlledChecked ?? internalChecked;
+
+  const handleChange = () => {
+    if (disabled) return;
+    const newValue = !checked;
+    if (controlledChecked === undefined) {
+      setInternalChecked(newValue);
+    }
+    onCheckedChange?.(newValue);
+  };
+
   return (
     <button
       ref={ref}
@@ -28,9 +40,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
       aria-checked={checked}
       aria-label={label}
       disabled={disabled}
-      onClick={() => {
-        if (!disabled) onCheckedChange(!checked);
-      }}
+      onClick={handleChange}
       className={cn(
         'relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg',

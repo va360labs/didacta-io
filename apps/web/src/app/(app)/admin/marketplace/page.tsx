@@ -22,7 +22,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Icon } from '@/components/icon';
+import { Icon, type IconName } from '@/components/icon';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -191,7 +191,7 @@ function UploadCard() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
-                <Icon name="alert-triangle" className="h-5 w-5" />
+                <Icon name="alert" className="h-5 w-5" />
                 Módulo no verificado
               </AlertDialogTitle>
               <AlertDialogDescription className="space-y-3">
@@ -352,11 +352,11 @@ function StatusBadge({ status }: { status: InstalledModuleStatus }) {
 function SourceBadge({ source }: { source: InstalledModuleSource }) {
   const config: Record<
     InstalledModuleSource,
-    { variant: 'success' | 'info' | 'warning'; label: string; icon: string }
+    { variant: 'success' | 'info' | 'warning'; label: string; icon: IconName }
   > = {
-    MARKETPLACE_OFFICIAL: { variant: 'success', label: 'Oficial', icon: 'check-circle' },
+    MARKETPLACE_OFFICIAL: { variant: 'success', label: 'Oficial', icon: 'check' },
     MARKETPLACE_COMMUNITY: { variant: 'info', label: 'Comunidad', icon: 'users' },
-    DIRECT_UPLOAD: { variant: 'warning', label: 'No verificado', icon: 'alert-triangle' },
+    DIRECT_UPLOAD: { variant: 'warning', label: 'No verificado', icon: 'alert' },
   };
   const { variant, label, icon } = config[source];
   return (

@@ -36,7 +36,7 @@ function useTabsContext(label: string): TabsContextValue {
 }
 
 export interface TabsProps {
-  defaultValue: string;
+  defaultValue?: string;
   value?: string;
   onValueChange?: (next: string) => void;
   children: React.ReactNode;
@@ -50,7 +50,7 @@ export function Tabs({
   children,
   className,
 }: TabsProps): React.JSX.Element {
-  const [internal, setInternal] = useState(defaultValue);
+  const [internal, setInternal] = useState(defaultValue ?? "");
   const current = value ?? internal;
   const baseId = useId();
 
