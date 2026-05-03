@@ -128,7 +128,8 @@ function Shell({
     isAdminOrFormador,
     isSuperAdmin,
   });
-  const mergedGroups = mergeExtensionSidebarItems(baseGroups, isSuperAdmin);
+  const userRoles = new Set(session.user.roles);
+  const mergedGroups = mergeExtensionSidebarItems(baseGroups, userRoles);
   const groups = filterByActiveModules(mergedGroups, activeModules);
 
   return (
@@ -180,24 +181,16 @@ function buildGroups({
     return [learning];
   }
 
+  // El item "Aula virtual" del módulo `mod.zoom-live` y "Correcciones" de
+  // `mod.ai-grader` NO se hardcodean acá — los aporta cada extensión vía
+  // `moduleExtensions[].sidebarItems`. El core no debe conocer features de
+  // un módulo (rompe el contrato de módulo).
   const formadorAdmin: SidebarGroup = {
     label: 'Formador',
     icon: 'chart',
     items: [
       { href: '/formador', label: 'Panel', icon: 'home', exactMatch: true },
       { href: '/formador/cursos', label: 'Mis cursos', icon: 'book' },
-      {
-        href: '/formador/aula-virtual',
-        label: 'Aula virtual',
-        icon: 'calendar',
-        requiresModule: 'mod.zoom-live',
-      },
-      {
-        href: '/formador/correcciones',
-        label: 'Correcciones',
-        icon: 'check',
-        requiresModule: 'mod.ai-grader',
-      },
     ],
   };
 
@@ -282,21 +275,45 @@ function buildGroups({
  * El merge añade automáticamente `requiresModule: extension.name` a cada item,
  * de modo que `filterByActiveModules` los oculta cuando el módulo no está
  * activo para el tenant.
+ *
+ * Garantías:
+ *  - Respeta `requiresRole` para CUALQUIER rol (`super_admin`,
+ *    `tenant_admin`, `formador`), no solo super_admin.
+ *  - Dedupe defensiva por `(group, href)` — si dos extensions o un
+ *    hardcoded + extension declaran el mismo href en el mismo grupo, gana
+ *    el primero (el del core hardcoded) y la extension se ignora.
  */
 function mergeExtensionSidebarItems(
   groups: SidebarGroup[],
-  isSuperAdmin: boolean,
+  userRoles: Set<string>,
 ): SidebarGroup[] {
   // Construimos un mapa group.label → grupo para lookup O(1)
   const groupByLabel = new Map(groups.map((g) => [g.label, g]));
 
+  // Set de hrefs ya presentes en cada grupo (clave: `${group}::${href}`).
+  // Cualquier item de una extension que coincida con un hardcoded gana
+  // el del core para cumplir el principio "un href, un origen" y evitar
+  // duplicados visuales.
+  const seenByGroupHref = new Set<string>();
+  for (const group of groups) {
+    for (const item of group.items) {
+      seenByGroupHref.add(`${group.label}::${item.href}`);
+    }
+  }
+
   for (const ext of moduleExtensions) {
     for (const item of ext.sidebarItems ?? []) {
-      // Filtrar por rol si el item lo requiere
-      if (item.requiresRole === 'super_admin' && !isSuperAdmin) continue;
+      // Filtrar por rol si el item lo requiere. Si el rol pedido no está
+      // en los roles del usuario, saltamos. Items sin requiresRole pasan
+      // siempre (visibles para todos los que ven el grupo).
+      if (item.requiresRole && !userRoles.has(item.requiresRole)) continue;
 
       const group = groupByLabel.get(item.group);
       if (!group) continue;
+
+      const dedupeKey = `${item.group}::${item.href}`;
+      if (seenByGroupHref.has(dedupeKey)) continue;
+      seenByGroupHref.add(dedupeKey);
 
       const sidebarItem: SidebarItem = {
         href: item.href,

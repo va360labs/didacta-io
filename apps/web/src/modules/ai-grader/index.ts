@@ -1,15 +1,22 @@
 /// Extension point del módulo `mod.ai-grader` hacia el core.
 ///
-/// `mod.ai-grader` no aporta sidebar items: la única superficie es la
-/// vista de corrección del formador (`/formador/correcciones/:id`) que
-/// usa `aiGraderApi` para sugerencias inline. El entry sigue
-/// declarándose para que `filterByActiveModulesOptional` reconozca el
-/// módulo.
+/// Aporta el item "Correcciones" al sidebar del formador. La página
+/// `/formador/correcciones` lista los attempts pendientes y el detalle
+/// vive en `/formador/correcciones/:id`.
 
 import type { ModuleWebExtension } from '@/lib/module-registry';
 
 export const aiGraderExtension: ModuleWebExtension = {
   name: 'mod.ai-grader',
+  sidebarItems: [
+    {
+      group: 'Formador',
+      href: '/formador/correcciones',
+      label: 'Correcciones',
+      icon: 'check',
+      requiresRole: 'formador',
+    },
+  ],
 };
 
 export {
