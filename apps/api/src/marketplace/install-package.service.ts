@@ -9,6 +9,9 @@ import { ModuleMigrationService } from './module-migration.service';
 import { ModulePackageService } from './module-package.service';
 import { ModuleRouterService } from './module-router.service';
 import { ModuleSandboxService } from './module-sandbox.service';
+import { RateLimitedHttp, RateLimiterService } from './rate-limiter.service';
+import { SandboxedHttpService } from './sandboxed-http.service';
+import { BlockedSandboxedHttp, type SandboxedHttp } from './sandboxed-http.types';
 
 /// Versión del core a la que apunta esta instancia. Inyectada en runtime,
 /// no en build time, para permitir overrides en tests sin recompilar. Si
@@ -75,6 +78,8 @@ export class InstallPackageService {
     private readonly sandbox: ModuleSandboxService,
     private readonly migrations: ModuleMigrationService,
     private readonly router: ModuleRouterService,
+    private readonly httpService: SandboxedHttpService,
+    private readonly rateLimiter: RateLimiterService,
   ) {}
 
   async install(packageBuffer: Buffer, installedById: string): Promise<InstallResult> {
@@ -141,23 +146,36 @@ export class InstallPackageService {
       const distSource = extractDistSource(packageBuffer);
       const sandboxed = this.sandbox.loadModule(distSource, validated.manifest.name);
 
-      // 13. Hook de instalación del módulo, si lo declara.
+      // 13. Hook de instalación del módulo, si lo declara. El http
+      // scoped (alpha.49) llega también aquí para que `onInstall` pueda
+      // validar credenciales contra el sistema externo antes de marcar
+      // INSTALLED. Sin AbortSignal — el lifecycle hook tiene su propio
+      // timeout en `runOnInstall` (DEFAULT_TIMEOUT_MS = 5s).
+      const installHttp = this.buildScopedHttp(
+        validated.manifest.name,
+        validated.manifest.http ?? null,
+      );
       await this.sandbox.runOnInstall(
         sandboxed,
         validated.manifest.name,
         validated.manifest.version,
+        installHttp,
       );
 
       // 14. Registro de routes en el dispatcher runtime. Si el módulo
       // declara `routes`, el dispatcher las atenderá inmediatamente bajo
       // `/api/v1<apiNamespace>/<route.path>`. Si lanza por shape inválida
       // (validación dentro de `register`), el catch externo marca FAILED.
+      // El `httpConfig` del manifest se memoriza junto a las routes para
+      // que el dispatcher pueda construir el cliente HTTP scoped por
+      // request sin volver a Postgres.
       if (sandboxed.routes && sandboxed.routes.length > 0) {
         try {
           this.router.registerModule(
             validated.manifest.name,
             validated.manifest.apiNamespace,
             sandboxed.routes,
+            { httpConfig: validated.manifest.http ?? null },
           );
         } catch (err) {
           throw new MarketplacePackageError(
@@ -192,6 +210,18 @@ export class InstallPackageService {
       });
       throw err;
     }
+  }
+
+  /// Construye el cliente HTTP scoped para `onInstall/onUninstall`. Mismo
+  /// contrato que el del dispatcher; sin AbortSignal porque los lifecycle
+  /// hooks tienen su propio timeout (`runOnInstall` en `module-sandbox`).
+  private buildScopedHttp(
+    moduleName: string,
+    httpConfig: import('./module-manifest.schema').ModuleHttpConfig | null,
+  ): SandboxedHttp {
+    if (!httpConfig) return new BlockedSandboxedHttp(moduleName);
+    const inner = this.httpService.build(moduleName, httpConfig);
+    return new RateLimitedHttp(inner, this.rateLimiter, moduleName, httpConfig.rateLimitPerHost);
   }
 }
 

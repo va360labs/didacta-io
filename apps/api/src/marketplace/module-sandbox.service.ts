@@ -3,6 +3,7 @@ import { createContext, runInContext, type Context } from 'node:vm';
 import { ALLOWED_REQUIRES, ModuleLintService } from './module-lint.service';
 import { MarketplacePackageError } from './module-package.errors';
 import type { ModuleRoute } from './module-router.service';
+import { NoopSandboxedHttp, type SandboxedHttp } from './sandboxed-http.types';
 
 /// Hook que un módulo puede declarar en su `module.exports`. Todos opcionales:
 /// si falta `onInstall`, el módulo se considera puramente declarativo
@@ -20,13 +21,19 @@ export interface SandboxedModule {
 
 /// Contexto restringido que se pasa a los hooks del módulo. Ningún acceso
 /// directo a Prisma, S3 ni red — sólo lo que el core decide exponer.
-/// MVP minimalista: logger scoped + nombre/versión del módulo. La
-/// inyección de StorageService scoped y EventBus scoped llega cuando
+/// alpha.49 añade `http` scoped: cliente HTTP saliente con allowlist por
+/// host, rate limit por (módulo, host), SSRF guard y timeout/body cap.
+/// La inyección de StorageService scoped y EventBus scoped llega cuando
 /// haya use cases reales que la pidan.
 export interface ModuleInstallContext {
   moduleName: string;
   moduleVersion: string;
   log: (level: 'log' | 'warn' | 'error', message: string) => void;
+  /// Cliente HTTP saliente. Mismo contrato que el de
+  /// `ModuleRouteRequestContext.http`. Útil cuando un `onInstall` necesita
+  /// validar credenciales contra el sistema externo antes de marcar el
+  /// módulo como INSTALLED. Ver `sandboxed-http.types.ts`.
+  http: SandboxedHttp;
 }
 
 /// Timeout por defecto para la ejecución del top-level del módulo y de los
@@ -95,11 +102,15 @@ export class ModuleSandboxService {
   }
 
   /// Ejecuta `onInstall(ctx)` con timeout. Si el hook lanza, se propaga
-  /// como `MODULE_BOOT_FAILED` con el mensaje del módulo.
+  /// como `MODULE_BOOT_FAILED` con el mensaje del módulo. `http` scoped
+  /// puede pasarse explícitamente — si no, el ctx recibe un Noop que
+  /// lanza `HTTP_NETWORK` ante cualquier intento de uso (placeholder
+  /// alpha.49 hasta que la task 5 cablee el real).
   async runOnInstall(
     sandboxed: SandboxedModule,
     moduleName: string,
     moduleVersion: string,
+    http: SandboxedHttp = new NoopSandboxedHttp(),
   ): Promise<void> {
     if (!sandboxed.onInstall) return;
     const ctx: ModuleInstallContext = {
@@ -108,6 +119,7 @@ export class ModuleSandboxService {
       log: (level, message) => {
         this.logger[level](`[mod:${moduleName}] ${message}`);
       },
+      http,
     };
     try {
       await withTimeout(sandboxed.onInstall(ctx), DEFAULT_TIMEOUT_MS);

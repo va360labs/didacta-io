@@ -62,6 +62,107 @@ const permissionSchema = z.object({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Schema para HTTP saliente (alpha.49)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Si el módulo necesita hacer requests HTTP a sistemas externos (ej.
+// migrator-learndash → WordPress origen del cliente, mod.zoom → API de
+// Zoom), debe declarar el bloque `http` en su manifest. Sin él, los
+// handlers que invoquen `ctx.http.get/post(...)` reciben un cliente que
+// rechaza TODA URL con `HTTP_BLOCKED_HOST`.
+//
+// Caps duros del core: NO se pueden superar declarando un valor más alto
+// en el manifest. Si lo hacés, el manifest se rechaza con `MANIFEST_INVALID`.
+// La razón es defense-in-depth — un módulo malicioso podría declarar
+// `requestsPerSecond: 10000` para tirar a un upstream. El dev legítimo
+// que necesite throughput mayor abre un PR al core para subir el cap
+// global o pide whitelist explícita por (módulo, host).
+
+/// Caps duros del cliente HTTP scoped a un módulo. Mirror de los defaults
+/// + caps en `sandboxed-http.types.ts` (alpha.49). Cualquier cambio
+/// requiere actualizar los dos sitios + bumpar la versión del paquete
+/// `@didacta/module-package-spec` (caps son parte del contrato público).
+export const HTTP_CAPS = {
+  /// Tope de requests por segundo por (módulo, host). Más alto que esto
+  /// ya está abusando del upstream (5rps contra una API es muchísimo).
+  /// Si necesitás más, hablá con el upstream o usá batching/bulk endpoints.
+  MAX_REQUESTS_PER_SECOND: 50,
+  /// Tope de burst del token bucket. Permite ráfagas cortas sobre el rate
+  /// medio sin bloquear inmediatamente.
+  MAX_BURST: 100,
+  /// Tope del body de respuesta (bytes). 100 MB. Más que esto no se
+  /// procesa en memoria — usá streaming externo.
+  MAX_BODY_BYTES: 100 * 1024 * 1024,
+} as const;
+
+const httpRateLimitSchema = z
+  .object({
+    requestsPerSecond: z
+      .number()
+      .int()
+      .min(1)
+      .max(HTTP_CAPS.MAX_REQUESTS_PER_SECOND, {
+        message: `requestsPerSecond no puede superar ${HTTP_CAPS.MAX_REQUESTS_PER_SECOND} (cap del core).`,
+      }),
+    burst: z
+      .number()
+      .int()
+      .min(1)
+      .max(HTTP_CAPS.MAX_BURST, {
+        message: `burst no puede superar ${HTTP_CAPS.MAX_BURST} (cap del core).`,
+      }),
+  })
+  .strict();
+
+const httpSchema = z
+  .object({
+    /// Lista de hosts contra los que el módulo puede hacer requests.
+    /// Wildcard `*` permite cualquier host (subject al SSRF guard que
+    /// igual bloquea privadas/loopback). Para usar `*` hay que poner
+    /// `unrestrictedHosts: true` como reconocimiento explícito.
+    /// Hosts específicos: `wp.cliente.com` (exacto), `*.cliente.com`
+    /// (subdominios). Sin scheme ni path — solo el host.
+    allowedHosts: z
+      .array(
+        z
+          .string()
+          .min(1)
+          .max(253) // RFC 1035 limit
+          .regex(/^(\*|(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*)$/i, {
+            message:
+              'Host inválido. Usá `*`, `dominio.tld`, o `*.dominio.tld` (sin scheme ni path).',
+          }),
+      )
+      .min(1)
+      .max(20),
+    /// REQUIRED si `allowedHosts` contiene `*`. Refuerzo: el dev tiene
+    /// que reconocer explícitamente que el módulo puede salir a cualquier
+    /// host. Para módulos con destino conocido (Zoom, Stripe, Fundae),
+    /// debe ser `false` o omitido.
+    unrestrictedHosts: z.boolean().optional(),
+    rateLimitPerHost: httpRateLimitSchema,
+    /// Tope del body de respuesta (bytes) para requests del módulo.
+    /// Si una respuesta excede este valor, el cliente aborta el stream y
+    /// lanza HTTP_BODY_TOO_LARGE. Cap del core: 100 MB.
+    maxBodyBytes: z
+      .number()
+      .int()
+      .min(1024) // 1 KB mínimo — si necesitás menos, hay un bug en el handler
+      .max(HTTP_CAPS.MAX_BODY_BYTES, {
+        message: `maxBodyBytes no puede superar ${HTTP_CAPS.MAX_BODY_BYTES} bytes (100 MB cap del core).`,
+      }),
+  })
+  .strict()
+  .refine(
+    (h) => !h.allowedHosts.includes('*') || h.unrestrictedHosts === true,
+    {
+      message:
+        'Si allowedHosts contiene "*", debés declarar unrestrictedHosts: true como reconocimiento explícito de que el módulo puede salir a cualquier host (sujeto al SSRF guard del core).',
+      path: ['unrestrictedHosts'],
+    },
+  );
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Schemas para UI Surfaces (DISC-001.5)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -177,10 +278,16 @@ export const moduleManifestSchema = z
 
     // Assets: iconos, banners, screenshots para el marketplace
     assets: assetsSchema.optional(),
+
+    // HTTP saliente (alpha.49). Opcional — si falta, el módulo recibe un
+    // cliente que rechaza toda URL con HTTP_BLOCKED_HOST (defensa: módulos
+    // que no piden http no obtienen http).
+    http: httpSchema.optional(),
   })
   .strict();
 
 export type ModuleManifest = z.infer<typeof moduleManifestSchema>;
+export type ModuleHttpConfig = z.infer<typeof httpSchema>;
 export type ModuleSurfaceConfig = z.infer<typeof surfaceSchema>;
 export type ModuleConfigField = z.infer<typeof configFieldSchema>;
 export type ModuleAssets = z.infer<typeof assetsSchema>;

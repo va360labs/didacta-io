@@ -1,16 +1,31 @@
 import { HttpException, NotFoundException } from '@nestjs/common';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModuleRouterService } from '../../src/marketplace/module-router.service';
 import { ModulesDispatcherController } from '../../src/marketplace/modules-dispatcher.controller';
-import type { SessionClaims } from '../../src/auth/token.service';
+import { RateLimiterService } from '../../src/marketplace/rate-limiter.service';
+import { SandboxedHttpService } from '../../src/marketplace/sandboxed-http.service';
+import type { SessionClaims, TokenService } from '../../src/auth/token.service';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-function makeReq(overrides: Partial<FastifyRequest>): FastifyRequest {
+/// Tests del dispatcher dinámico del marketplace.
+///
+/// Regresión cubierta (alpha.48): el dispatcher decodifica el Bearer
+/// MANUALMENTE — antes de alpha.48 el comentario asumía un "JwtAuthGuard
+/// opcional automático" que NO existe en NestJS, y `user` siempre llegaba
+/// undefined. Resultado: cualquier handler de módulo third-party que
+/// llamara `requireUser` rebotaba 401 aunque el cliente mandase Bearer
+/// válido. Estos tests fijan el contrato corregido: con Bearer válido →
+/// user poblado; sin Bearer / con Bearer inválido → user null y el
+/// handler decide qué hacer.
+
+function makeReq(overrides: Partial<FastifyRequest> & { headers?: Record<string, string> }): FastifyRequest {
+  const { headers, ...rest } = overrides;
   return {
     method: 'GET',
     url: '/api/v1/modules/example/hello',
     query: {},
-    ...overrides,
+    headers: headers ?? {},
+    ...rest,
   } as FastifyRequest;
 }
 
@@ -36,9 +51,31 @@ function makeReply(): {
   return { reply, state };
 }
 
-function user(overrides: Partial<SessionClaims> = {}): SessionClaims {
+function claims(overrides: Partial<SessionClaims> = {}): SessionClaims {
   return { sub: 'u-1', tenantId: 't-1', roles: ['alumno'], mfaVerified: true, ...overrides } as SessionClaims;
 }
+
+/// Doble del TokenService. Acepta un mapa `token → claims` para los
+/// tokens válidos; cualquier otro token rechaza como verifyAccess real.
+function makeTokens(validTokens: Record<string, SessionClaims> = {}): TokenService {
+  return {
+    verifyAccess: vi.fn(async (token: string) => {
+      if (token in validTokens) return validTokens[token];
+      throw new Error('token inválido');
+    }),
+  } as unknown as TokenService;
+}
+
+const VALID_TOKEN = 'valid.bearer.jwt';
+
+// Services compartidos. Singletons para los tests — el dispatcher los
+// recibe siempre por inyección. Reset entre describes vía afterEach abajo.
+const httpSvc = new SandboxedHttpService();
+const rateLimiter = new RateLimiterService();
+
+afterEach(() => {
+  rateLimiter.reset();
+});
 
 describe('ModulesDispatcherController.dispatch', () => {
   it('despacha al handler registrado y devuelve su body', async () => {
@@ -50,11 +87,16 @@ describe('ModulesDispatcherController.dispatch', () => {
     router.registerModule('mod.example', '/modules/example', [
       { method: 'GET', path: '/items/:id', handler },
     ]);
-    const ctrl = new ModulesDispatcherController(router);
-    const req = makeReq({ url: '/api/v1/modules/example/items/42', method: 'GET' });
+    const tokens = makeTokens({ [VALID_TOKEN]: claims() });
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const req = makeReq({
+      url: '/api/v1/modules/example/items/42',
+      method: 'GET',
+      headers: { authorization: `Bearer ${VALID_TOKEN}` },
+    });
     const { reply, state } = makeReply();
 
-    await ctrl.dispatch(req, reply, user(), undefined);
+    await ctrl.dispatch(req, reply, undefined);
 
     expect(handler).toHaveBeenCalledOnce();
     expect(state.status).toBe(200);
@@ -63,29 +105,31 @@ describe('ModulesDispatcherController.dispatch', () => {
 
   it('404 si no hay handler', async () => {
     const router = new ModuleRouterService();
-    const ctrl = new ModulesDispatcherController(router);
+    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter);
     const req = makeReq({ url: '/api/v1/modules/ghost/foo' });
     const { reply } = makeReply();
-    await expect(ctrl.dispatch(req, reply, user(), undefined)).rejects.toBeInstanceOf(
+    await expect(ctrl.dispatch(req, reply, undefined)).rejects.toBeInstanceOf(
       NotFoundException,
     );
   });
 
-  it('passes query, body y user al handler', async () => {
+  it('passes query, body y user al handler cuando el Bearer es válido', async () => {
     const router = new ModuleRouterService();
     const handler = vi.fn(async () => ({ status: 200, body: 'ok' }));
     router.registerModule('mod.example', '/modules/example', [
       { method: 'POST', path: '/echo', handler },
     ]);
-    const ctrl = new ModulesDispatcherController(router);
+    const tokens = makeTokens({ [VALID_TOKEN]: claims({ roles: ['formador'] }) });
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
     const req = makeReq({
       url: '/api/v1/modules/example/echo?a=1',
       method: 'POST',
       query: { a: '1' },
+      headers: { authorization: `Bearer ${VALID_TOKEN}` },
     });
     const { reply } = makeReply();
 
-    await ctrl.dispatch(req, reply, user({ roles: ['formador'] }), { hello: 'world' });
+    await ctrl.dispatch(req, reply, { hello: 'world' });
 
     const ctx = handler.mock.calls[0][0];
     expect(ctx.query).toEqual({ a: '1' });
@@ -93,17 +137,68 @@ describe('ModulesDispatcherController.dispatch', () => {
     expect(ctx.user).toEqual({ sub: 'u-1', tenantId: 't-1', roles: ['formador'] });
   });
 
-  it('user=null si no hay sesión', async () => {
+  it('user=null si no hay header Authorization', async () => {
     const router = new ModuleRouterService();
     const handler = vi.fn(async () => ({ status: 200, body: 'ok' }));
     router.registerModule('mod.example', '/modules/example', [
       { method: 'GET', path: '/public', handler },
     ]);
-    const ctrl = new ModulesDispatcherController(router);
+    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter);
     const req = makeReq({ url: '/api/v1/modules/example/public' });
     const { reply } = makeReply();
-    await ctrl.dispatch(req, reply, undefined, undefined);
+    await ctrl.dispatch(req, reply, undefined);
     expect(handler.mock.calls[0][0].user).toBeNull();
+  });
+
+  it('user=null si el Bearer es inválido (no rompe la request)', async () => {
+    const router = new ModuleRouterService();
+    const handler = vi.fn(async () => ({ status: 200, body: 'ok' }));
+    router.registerModule('mod.example', '/modules/example', [
+      { method: 'GET', path: '/public', handler },
+    ]);
+    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter);
+    const req = makeReq({
+      url: '/api/v1/modules/example/public',
+      headers: { authorization: 'Bearer this-is-garbage' },
+    });
+    const { reply } = makeReply();
+    await ctrl.dispatch(req, reply, undefined);
+    expect(handler.mock.calls[0][0].user).toBeNull();
+  });
+
+  it('user=null si el header no empieza con "Bearer "', async () => {
+    const router = new ModuleRouterService();
+    const handler = vi.fn(async () => ({ status: 200, body: 'ok' }));
+    router.registerModule('mod.example', '/modules/example', [
+      { method: 'GET', path: '/public', handler },
+    ]);
+    const ctrl = new ModulesDispatcherController(router, makeTokens({ [VALID_TOKEN]: claims() }), httpSvc, rateLimiter);
+    const req = makeReq({
+      url: '/api/v1/modules/example/public',
+      headers: { authorization: `Basic ${VALID_TOKEN}` },
+    });
+    const { reply } = makeReply();
+    await ctrl.dispatch(req, reply, undefined);
+    expect(handler.mock.calls[0][0].user).toBeNull();
+  });
+
+  it('user=null si "Bearer " va seguido de string vacío', async () => {
+    const router = new ModuleRouterService();
+    const handler = vi.fn(async () => ({ status: 200, body: 'ok' }));
+    router.registerModule('mod.example', '/modules/example', [
+      { method: 'GET', path: '/public', handler },
+    ]);
+    const tokens = makeTokens({ [VALID_TOKEN]: claims() });
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const req = makeReq({
+      url: '/api/v1/modules/example/public',
+      headers: { authorization: 'Bearer    ' },
+    });
+    const { reply } = makeReply();
+    await ctrl.dispatch(req, reply, undefined);
+    expect(handler.mock.calls[0][0].user).toBeNull();
+    // Y NO debe haber intentado verificar un token vacío.
+    expect((tokens.verifyAccess as any)).not.toHaveBeenCalled();
   });
 
   it('500 si el handler lanza', async () => {
@@ -117,10 +212,14 @@ describe('ModulesDispatcherController.dispatch', () => {
         },
       },
     ]);
-    const ctrl = new ModulesDispatcherController(router);
-    const req = makeReq({ url: '/api/v1/modules/example/boom' });
+    const tokens = makeTokens({ [VALID_TOKEN]: claims() });
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const req = makeReq({
+      url: '/api/v1/modules/example/boom',
+      headers: { authorization: `Bearer ${VALID_TOKEN}` },
+    });
     const { reply } = makeReply();
-    await expect(ctrl.dispatch(req, reply, user(), undefined)).rejects.toBeInstanceOf(
+    await expect(ctrl.dispatch(req, reply, undefined)).rejects.toBeInstanceOf(
       HttpException,
     );
   });
@@ -138,10 +237,14 @@ describe('ModulesDispatcherController.dispatch', () => {
         }),
       },
     ]);
-    const ctrl = new ModulesDispatcherController(router);
-    const req = makeReq({ url: '/api/v1/modules/example/with-headers' });
+    const tokens = makeTokens({ [VALID_TOKEN]: claims() });
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const req = makeReq({
+      url: '/api/v1/modules/example/with-headers',
+      headers: { authorization: `Bearer ${VALID_TOKEN}` },
+    });
     const { reply, state } = makeReply();
-    await ctrl.dispatch(req, reply, user(), undefined);
+    await ctrl.dispatch(req, reply, undefined);
     expect(state.headers['x-mod']).toBe('example');
     expect(state.status).toBe(201);
   });
@@ -151,10 +254,80 @@ describe('ModulesDispatcherController.dispatch', () => {
     router.registerModule('mod.example', '/modules/example', [
       { method: 'DELETE', path: '/x', handler: async () => undefined as never },
     ]);
-    const ctrl = new ModulesDispatcherController(router);
-    const req = makeReq({ url: '/api/v1/modules/example/x', method: 'DELETE' });
+    const tokens = makeTokens({ [VALID_TOKEN]: claims() });
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const req = makeReq({
+      url: '/api/v1/modules/example/x',
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${VALID_TOKEN}` },
+    });
     const { reply, state } = makeReply();
-    await ctrl.dispatch(req, reply, user(), undefined);
+    await ctrl.dispatch(req, reply, undefined);
     expect(state.status).toBe(204);
+  });
+
+  // Contrato `ctx.http` (alpha.49 task 5): el handler SIEMPRE recibe un
+  // cliente HTTP saliente. Cuando el módulo NO declara `manifest.http`,
+  // el dispatcher inyecta `BlockedSandboxedHttp` que rechaza toda URL
+  // con HTTP_BLOCKED_HOST y mensaje claro. Esto fuerza al dev a declarar
+  // la salida HTTP en el manifest antes de poder usarla.
+  it('módulo sin manifest.http → ctx.http es BlockedSandboxedHttp', async () => {
+    const router = new ModuleRouterService();
+    const handler = vi.fn(async () => ({ status: 200, body: 'ok' }));
+    router.registerModule('mod.example', '/modules/example', [
+      { method: 'GET', path: '/probe', handler },
+    ]);
+    const tokens = makeTokens({ [VALID_TOKEN]: claims() });
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const req = makeReq({
+      url: '/api/v1/modules/example/probe',
+      headers: { authorization: `Bearer ${VALID_TOKEN}` },
+    });
+    const { reply } = makeReply();
+    await ctrl.dispatch(req, reply, undefined);
+
+    const ctx = handler.mock.calls[0][0];
+    expect(typeof ctx.http?.get).toBe('function');
+    expect(typeof ctx.http?.post).toBe('function');
+
+    await expect(ctx.http.get('https://api.zoom.us/x')).rejects.toMatchObject({
+      name: 'HttpError',
+      code: 'HTTP_BLOCKED_HOST',
+    });
+  });
+
+  // Contrato cuando el módulo SÍ declara `manifest.http`: el dispatcher
+  // arma RateLimitedHttp(SandboxedHttpService.build(...)) — allowlist
+  // + SSRF + rate limit. Verificamos que invocar un host válido fuera
+  // de la allowlist devuelve HTTP_BLOCKED_HOST (no Noop, no garbage).
+  it('módulo con manifest.http restrictivo → ctx.http aplica allowlist', async () => {
+    const router = new ModuleRouterService();
+    const handler = vi.fn(async () => ({ status: 200, body: 'ok' }));
+    router.registerModule(
+      'mod.zoom',
+      '/modules/zoom',
+      [{ method: 'GET', path: '/probe', handler }],
+      {
+        httpConfig: {
+          allowedHosts: ['api.zoom.us'],
+          rateLimitPerHost: { requestsPerSecond: 5, burst: 10 },
+          maxBodyBytes: 1024,
+        },
+      },
+    );
+    const tokens = makeTokens({ [VALID_TOKEN]: claims() });
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const req = makeReq({
+      url: '/api/v1/modules/zoom/probe',
+      headers: { authorization: `Bearer ${VALID_TOKEN}` },
+    });
+    const { reply } = makeReply();
+    await ctrl.dispatch(req, reply, undefined);
+
+    const ctx = handler.mock.calls[0][0];
+    // Host fuera de allowlist → HTTP_BLOCKED_HOST
+    await expect(ctx.http.get('https://otro.host.com/x')).rejects.toMatchObject({
+      code: 'HTTP_BLOCKED_HOST',
+    });
   });
 });

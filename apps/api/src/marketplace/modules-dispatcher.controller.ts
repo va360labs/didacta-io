@@ -11,8 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { CurrentUser } from '../auth/decorators';
-import type { SessionClaims } from '../auth/token.service';
+import { TokenService, type SessionClaims } from '../auth/token.service';
 import {
   ALLOWED_METHODS,
   ModuleRouterService,
@@ -20,24 +19,32 @@ import {
   type ModuleRouteRequestContext,
   type ModuleRouteResponse,
 } from './module-router.service';
+import type { ModuleHttpConfig } from './module-manifest.schema';
+import { RateLimitedHttp, RateLimiterService } from './rate-limiter.service';
+import { SandboxedHttpService } from './sandboxed-http.service';
+import { BlockedSandboxedHttp, type SandboxedHttp } from './sandboxed-http.types';
 
 /// Controller wildcard que recibe TODO request bajo `/modules/*` y lo
 /// despacha al módulo dinámico correspondiente. Vive fuera del flow
 /// estándar de NestJS porque los módulos cargados en runtime no están en
 /// el dependency graph; aquí actuamos como adapter manual.
 ///
-/// Auth: este controller NO aplica `JwtAuthGuard` global. Cada module
-/// route declara su propia política via `requiresAuth` (TODO en futuro).
-/// Por ahora, el `req.user` se popula desde el JWT si viene válido (el
-/// `JwtAuthGuard` opcional de Nest ya lo decoró si el header está
-/// presente). Implementación: el dispatcher invoca con `user=null` si no
-/// hay claims y deja al handler decidir; para MVP esperamos que los
-/// módulos validen ellos mismos qué quieren autenticado.
+/// Auth (auth opcional, decodificación manual):
+/// El dispatcher NO aplica `@UseGuards(JwtAuthGuard)` porque algunos
+/// módulos exponen rutas públicas pensadas para alumnos finales (ej.
+/// catálogo público de un mod.community). Pero SÍ decodifica el Bearer
+/// manualmente — si viene un token válido, popula `user` en el contexto
+/// del handler; si no viene o es inválido, `user = null` y cada handler
+/// decide qué hacer (devolver 401 si requiere auth, o servir contenido
+/// público si no).
 ///
-/// Una alternativa más segura sería gateado obligatorio super_admin a
-/// nivel del marketplace. Lo descartamos porque la promesa de los
-/// módulos es servir endpoints que el alumno final pueda llamar — un
-/// gate global a super_admin rompería el use case.
+/// Antes de alpha.48 esta decodificación NO existía: el comentario
+/// asumía que Nest tiene un "JwtAuthGuard opcional automático" que NO
+/// existe. Resultado: TODOS los módulos third-party que llamaban
+/// `requireUser` recibían `user: null` aunque el cliente mandara Bearer
+/// válido → 401 sistemático. Bug latente desde alpha.27, descubierto
+/// con el primer módulo real (mod.migrator-learndash) que tiró un
+/// preflight autenticado desde el wizard.
 
 @ApiTags('Marketplace · Dispatcher dinámico')
 @ApiBearerAuth()
@@ -45,7 +52,12 @@ import {
 export class ModulesDispatcherController {
   private readonly logger = new Logger(ModulesDispatcherController.name);
 
-  constructor(private readonly router: ModuleRouterService) {}
+  constructor(
+    private readonly router: ModuleRouterService,
+    private readonly tokens: TokenService,
+    private readonly httpService: SandboxedHttpService,
+    private readonly rateLimiter: RateLimiterService,
+  ) {}
 
   /// Atrapa todos los métodos bajo `/modules/*`. NestJS no soporta
   /// wildcard `*` en path con todos los HTTP methods en un decorator
@@ -59,13 +71,17 @@ export class ModulesDispatcherController {
   async dispatch(
     @Req() req: FastifyRequest,
     @Res() reply: FastifyReply,
-    @CurrentUser() user: SessionClaims | undefined,
     @Body() body: unknown,
   ): Promise<void> {
     const method = (req.method ?? '').toUpperCase();
     if (!ALLOWED_METHODS.includes(method as AllowedMethod)) {
       throw new HttpException('Método no soportado por el dispatcher', HttpStatus.METHOD_NOT_ALLOWED);
     }
+
+    // Decodificación opcional del Bearer. Si viene válido, populamos `user`;
+    // si no viene o es inválido, dejamos `user = undefined` y el handler
+    // decide. NO lanzamos 401 acá — algunos módulos exponen rutas públicas.
+    const user = await this.resolveOptionalUser(req);
 
     // El path llega con el prefijo `/api/v1` aplicado por NestFactory; lo
     // quitamos para que matchee contra `apiNamespace` declarado en el
@@ -79,6 +95,20 @@ export class ModulesDispatcherController {
       throw new NotFoundException(`No hay módulo registrado para ${method} ${stripped}`);
     }
 
+    // ctx.http: cliente saliente scoped a este módulo + esta request.
+    // - Si el módulo no declara `manifest.http` → BlockedSandboxedHttp
+    //   (rechaza toda URL con HTTP_BLOCKED_HOST y mensaje claro al dev).
+    // - Si lo declara → RateLimitedHttp(SandboxedHttpService.build(...)) con
+    //   allowlist + SSRF guard + rate limit por (módulo, host) + retry/backoff
+    //   en 429. El AbortSignal del reply de Fastify se propaga al cliente
+    //   para cancelar in-flight si el cliente cierra la conexión.
+    const requestSignal = makeRequestAbortSignal(reply);
+    const http: SandboxedHttp = this.buildScopedHttp(
+      matched.moduleName,
+      matched.httpConfig,
+      requestSignal,
+    );
+
     const ctx: ModuleRouteRequestContext = {
       method: method as AllowedMethod,
       path: stripped,
@@ -88,6 +118,7 @@ export class ModulesDispatcherController {
       user: user
         ? { sub: user.sub, tenantId: user.tenantId, roles: user.roles }
         : null,
+      http,
     };
 
     let result: ModuleRouteResponse;
@@ -109,6 +140,39 @@ export class ModulesDispatcherController {
     }
     reply.status(status).send(result.body);
   }
+
+  /// Construye el cliente HTTP scoped a un módulo + request. Compone
+  /// `SandboxedHttpService` (allowlist + SSRF + timeout + body cap) y
+  /// `RateLimitedHttp` (token bucket por host + retry/backoff en 429).
+  /// `protected` para permitir override en tests del dispatcher.
+  protected buildScopedHttp(
+    moduleName: string,
+    httpConfig: ModuleHttpConfig | null,
+    requestSignal: AbortSignal | undefined,
+  ): SandboxedHttp {
+    if (!httpConfig) return new BlockedSandboxedHttp(moduleName);
+    const inner = this.httpService.build(moduleName, httpConfig, requestSignal);
+    return new RateLimitedHttp(inner, this.rateLimiter, moduleName, httpConfig.rateLimitPerHost);
+  }
+
+  /// Extrae el Bearer del header Authorization y lo verifica con
+  /// `TokenService.verifyAccess`. Si todo OK devuelve los claims; si no
+  /// hay header, no es Bearer, o el token es inválido/expirado, devuelve
+  /// `undefined`. NUNCA lanza — el handler del módulo decide la política
+  /// en función de si recibe `user` o `null`.
+  private async resolveOptionalUser(
+    req: FastifyRequest,
+  ): Promise<SessionClaims | undefined> {
+    const header = req.headers['authorization'];
+    if (typeof header !== 'string' || !header.startsWith('Bearer ')) return undefined;
+    const token = header.slice('Bearer '.length).trim();
+    if (!token) return undefined;
+    try {
+      return await this.tokens.verifyAccess(token);
+    } catch {
+      return undefined;
+    }
+  }
 }
 
 /// Quita el global prefix `/api/v1` del path entrante. NestJS lo aplica
@@ -120,4 +184,25 @@ function stripGlobalPrefix(path: string): string {
   if (path.startsWith(GLOBAL_PREFIX + '/')) return path.slice(GLOBAL_PREFIX.length);
   if (path === GLOBAL_PREFIX) return '/';
   return path;
+}
+
+/// Construye un AbortSignal que se dispara si el cliente cierra la
+/// conexión antes de que terminemos de responder. Lo escuchamos en el
+/// `reply.raw` (raw HTTP socket de Node). Si `reply.raw.writableEnded`
+/// ya es true al recibir el `close`, significa que NOSOTROS terminamos
+/// la respuesta — no es cancel del cliente, no abortamos.
+///
+/// Devuelve `undefined` si el environment no expone `reply.raw` (tests,
+/// Fastify mockeado). El cliente HTTP saliente seguirá funcionando, solo
+/// que sin propagación de cancelación del frontend.
+function makeRequestAbortSignal(reply: FastifyReply): AbortSignal | undefined {
+  const raw = (reply as { raw?: { on?: (ev: string, cb: () => void) => unknown; writableEnded?: boolean } }).raw;
+  if (!raw || typeof raw.on !== 'function') return undefined;
+  const ctrl = new AbortController();
+  raw.on('close', () => {
+    if (raw.writableEnded === false) {
+      ctrl.abort(new Error('Cliente cerró la conexión antes de que terminara la respuesta.'));
+    }
+  });
+  return ctrl.signal;
 }

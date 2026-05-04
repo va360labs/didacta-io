@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
+import type { ModuleHttpConfig } from './module-manifest.schema';
+import type { SandboxedHttp } from './sandboxed-http.types';
 
 /// Métodos HTTP que un módulo dinámico puede declarar como ruta. Sin
 /// HEAD/OPTIONS/CONNECT/TRACE: el dispatcher añade soporte CORS y HEAD
@@ -30,6 +32,12 @@ export interface ModuleRouteRequestContext {
   /// User claims si el request va autenticado; null si es anónimo. El
   /// gate de auth lo aplica el dispatcher antes de invocar.
   user: { sub: string; tenantId: string; roles: string[] } | null;
+  /// Cliente HTTP saliente scoped al módulo. Aplica allowlist por host
+  /// (manifest.http.allowedHosts), rate limit (token bucket por host),
+  /// SSRF guard (bloquea IPs privadas/loopback), timeout y body cap.
+  /// Contrato en `sandboxed-http.types.ts`. Hasta el wiring real (task 5)
+  /// es un `NoopSandboxedHttp` que lanza `HTTP_NETWORK` si se invoca.
+  http: SandboxedHttp;
 }
 
 export type ModuleRouteHandler = (
@@ -52,6 +60,18 @@ interface RegisteredRoute {
   pattern: RegExp;
   paramNames: string[];
   handler: ModuleRouteHandler;
+  /// Config HTTP del manifest (alpha.49). NULL si el módulo no declara
+  /// `http` — el dispatcher inyecta `BlockedSandboxedHttp`. Si declara,
+  /// el dispatcher arma `RateLimitedHttp` con allowlist + rate limit.
+  httpConfig: ModuleHttpConfig | null;
+}
+
+export interface RegisterModuleOptions {
+  /// Bloque `http` del manifest del módulo (alpha.49). Si está, el
+  /// dispatcher cablea un cliente HTTP saliente con allowlist + rate
+  /// limit + SSRF guard. Si es null/undefined, el módulo recibe un
+  /// `BlockedSandboxedHttp` que rechaza toda URL.
+  httpConfig?: ModuleHttpConfig | null;
 }
 
 /// Registro runtime de routes expuestas por módulos dinámicos. Usado por
@@ -69,9 +89,15 @@ export class ModuleRouterService {
   /// Registra todas las routes de un módulo. Si el módulo ya tenía routes
   /// (caso upgrade in-place), las anteriores se borran ANTES de registrar
   /// las nuevas — evita rutas zombie de versiones previas.
-  registerModule(moduleName: string, apiNamespace: string, routes: ModuleRoute[]): void {
+  registerModule(
+    moduleName: string,
+    apiNamespace: string,
+    routes: ModuleRoute[],
+    options: RegisterModuleOptions = {},
+  ): void {
     this.unregisterModule(moduleName);
     if (routes.length === 0) return;
+    const httpConfig = options.httpConfig ?? null;
     const registered: RegisteredRoute[] = [];
     for (const r of routes) {
       validateRoute(r);
@@ -85,11 +111,12 @@ export class ModuleRouterService {
         pattern,
         paramNames,
         handler: r.handler,
+        httpConfig,
       });
     }
     this.routesByModule.set(moduleName, registered);
     this.logger.log(
-      `Módulo "${moduleName}" registró ${registered.length} ruta(s) bajo ${apiNamespace}.`,
+      `Módulo "${moduleName}" registró ${registered.length} ruta(s) bajo ${apiNamespace} (http=${httpConfig ? 'enabled' : 'blocked'}).`,
     );
   }
 
@@ -109,6 +136,7 @@ export class ModuleRouterService {
     moduleName: string;
     handler: ModuleRouteHandler;
     params: Record<string, string>;
+    httpConfig: ModuleHttpConfig | null;
   } | null {
     const upperMethod = method.toUpperCase();
     for (const list of this.routesByModule.values()) {
@@ -120,7 +148,12 @@ export class ModuleRouterService {
         route.paramNames.forEach((name, i) => {
           params[name] = decodeURIComponent(m[i + 1] ?? '');
         });
-        return { moduleName: route.moduleName, handler: route.handler, params };
+        return {
+          moduleName: route.moduleName,
+          handler: route.handler,
+          params,
+          httpConfig: route.httpConfig,
+        };
       }
     }
     return null;

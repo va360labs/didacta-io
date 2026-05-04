@@ -21,6 +21,15 @@ export interface ModuleManifest {
   permissions: string[];
   eventsEmitted: string[];
   eventsConsumed: string[];
+  /// HTTP saliente (alpha.49). Si el módulo necesita salir a internet,
+  /// declara aquí los hosts permitidos + rate limit + body cap. El packager
+  /// (didacta-modules-skill) serializa este bloque al manifest.jwt.
+  http?: {
+    allowedHosts: string[];
+    unrestrictedHosts?: boolean;
+    rateLimitPerHost: { requestsPerSecond: number; burst: number };
+    maxBodyBytes: number;
+  };
 }
 
 export const manifest: ModuleManifest = {
@@ -52,4 +61,16 @@ export const manifest: ModuleManifest = {
     'migrator-learndash.import.rollback.completed',
   ],
   eventsConsumed: [],
+  // Origen del cliente es arbitrario (cada usuario apunta a su propio
+  // WordPress) — `*` con reconocimiento explícito vía `unrestrictedHosts`.
+  // El SSRF guard del core sigue bloqueando IPs privadas/loopback. Rate
+  // limit conservador para no tirar el WP del cliente (5rps con burst 10
+  // ≈ 300 req/min — suficiente para un preflight de ~8 reqs y para el
+  // extract phase paginando entidades una a una).
+  http: {
+    allowedHosts: ['*'],
+    unrestrictedHosts: true,
+    rateLimitPerHost: { requestsPerSecond: 5, burst: 10 },
+    maxBodyBytes: 10 * 1024 * 1024, // 10 MB — un dump de cursos serializado
+  },
 };
