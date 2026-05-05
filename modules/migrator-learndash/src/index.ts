@@ -177,57 +177,135 @@ function genJobId(): string {
   return c?.randomUUID ? c.randomUUID() : `job-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/// Base64 sin depender de Node's Buffer (no está en la allowlist del
-/// sandbox para módulos third-party). Usamos `btoa` global de Node 22.
+/// Base64 sin Buffer ni btoa: el sandbox del host NO expone ninguno de
+/// los dos (Buffer no está en la allowlist de requires; btoa no está
+/// expuesto como global). Implementación manual usando solo primitivas
+/// permitidas: Uint8Array + bitwise ops + String.fromCharCode.
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 function b64encode(s: string): string {
-  return (globalThis as unknown as { btoa: (s: string) => string }).btoa(s);
+  // UTF-8 encode → bytes
+  const bytes = new TextEncoder().encode(s);
+  let out = '';
+  let i = 0;
+  for (; i + 2 < bytes.length; i += 3) {
+    const b0 = bytes[i]!, b1 = bytes[i + 1]!, b2 = bytes[i + 2]!;
+    out += B64[b0 >> 2]!;
+    out += B64[((b0 & 0x03) << 4) | (b1 >> 4)]!;
+    out += B64[((b1 & 0x0f) << 2) | (b2 >> 6)]!;
+    out += B64[b2 & 0x3f]!;
+  }
+  const rem = bytes.length - i;
+  if (rem === 1) {
+    const b0 = bytes[i]!;
+    out += B64[b0 >> 2]!;
+    out += B64[(b0 & 0x03) << 4]!;
+    out += '==';
+  } else if (rem === 2) {
+    const b0 = bytes[i]!, b1 = bytes[i + 1]!;
+    out += B64[b0 >> 2]!;
+    out += B64[((b0 & 0x03) << 4) | (b1 >> 4)]!;
+    out += B64[(b1 & 0x0f) << 2]!;
+    out += '=';
+  }
+  return out;
 }
 
-/// Conteo por entidad: hace un request `?per_page=1` y lee `X-WP-Total`.
-/// Si el endpoint 404 (CPT desactivado), devuelve `unknown` y suma un
-/// warning explícito en lugar de petar todo el preflight.
-async function countEntity(
+/// Item de muestra para que el usuario VEA qué hay en su WP origen sin
+/// tener que migrar primero. Solo metadata legible — sin payloads pesados.
+interface Sample {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  modified: string;
+}
+
+interface EntityProbe {
+  count: number | 'unknown';
+  samples: Sample[];
+}
+
+/// Sondeo por entidad: 1 request con `per_page=5` + `_fields` minimalista
+/// + `orderby=modified&order=desc`. Devuelve count (header X-WP-Total) y
+/// las 5 entidades más recientes con metadata legible.
+///
+/// Para `users` el shape es distinto (no tienen status/modified — usamos
+/// `name` en lugar de `title.rendered` y `registered_date` en lugar de
+/// `modified`). Lo normalizamos al shape uniforme `Sample`.
+async function probeEntity(
   http: SandboxedHttp,
   baseUrl: string,
   cpt: string,
   authHeader: string,
   warnings: Array<{ code: string; message: string }>,
-): Promise<number | 'unknown'> {
+): Promise<EntityProbe> {
+  const isUsers = cpt === 'users';
+  const fields = isUsers ? 'id,name,slug,registered_date' : 'id,title,slug,status,modified';
+  // status=any para ver TODO (publish + draft + private + future); WP por
+  // default solo lista publish. Si el endpoint no acepta status (users),
+  // simplemente lo ignora.
+  const statusParam = isUsers ? '' : '&status=any';
+  const orderParam = isUsers ? '' : '&orderby=modified&order=desc';
+  const url = `${baseUrl}/wp-json/wp/v2/${cpt}?per_page=5&_fields=${fields}${statusParam}${orderParam}`;
   try {
-    const r = await http.get(`${baseUrl}/wp-json/wp/v2/${cpt}?per_page=1`, {
+    const r = await http.get(url, {
       headers: { Authorization: authHeader, Accept: 'application/json' },
-      timeoutMs: 10_000,
+      timeoutMs: 5_000,
     });
     if (r.status === 404) {
       warnings.push({
         code: 'CPT_NOT_FOUND',
         message: `${cpt}: endpoint /wp-json/wp/v2/${cpt} devolvió 404. Puede ser por permalinks rotos o plugin desactivado.`,
       });
-      return 'unknown';
+      return { count: 'unknown', samples: [] };
     }
     if (r.status === 401 || r.status === 403) {
       warnings.push({
         code: 'CPT_FORBIDDEN',
         message: `${cpt}: el usuario no tiene permiso para listar este endpoint (HTTP ${r.status}).`,
       });
-      return 'unknown';
+      return { count: 'unknown', samples: [] };
     }
     if (r.status >= 400) {
       warnings.push({
         code: 'CPT_ERROR',
         message: `${cpt}: HTTP ${r.status} al consultar /wp-json/wp/v2/${cpt}.`,
       });
-      return 'unknown';
+      return { count: 'unknown', samples: [] };
     }
-    const total = Number(r.headers['x-wp-total']);
-    return Number.isFinite(total) ? total : 'unknown';
+    const totalRaw = Number(r.headers['x-wp-total']);
+    const count: number | 'unknown' = Number.isFinite(totalRaw) ? totalRaw : 'unknown';
+    let samples: Sample[] = [];
+    try {
+      const items = JSON.parse(r.body) as Array<{
+        id: number | string;
+        title?: { rendered?: string };
+        name?: string;
+        slug?: string;
+        status?: string;
+        modified?: string;
+        registered_date?: string;
+      }>;
+      if (Array.isArray(items)) {
+        samples = items.map((it) => ({
+          id: String(it.id),
+          title: it.title?.rendered ?? it.name ?? it.slug ?? `(sin título · id=${it.id})`,
+          slug: it.slug ?? '',
+          status: it.status ?? (isUsers ? 'user' : 'unknown'),
+          modified: it.modified ?? it.registered_date ?? '',
+        }));
+      }
+    } catch {
+      // Body no JSON — devolvemos count pero samples vacío.
+    }
+    return { count, samples };
   } catch (e: unknown) {
     const ce = e as { code?: string; message?: string };
     warnings.push({
       code: ce.code ?? 'CPT_NETWORK_ERROR',
       message: `${cpt}: ${ce.message ?? String(e)}`,
     });
-    return 'unknown';
+    return { count: 'unknown', samples: [] };
   }
 }
 
@@ -306,22 +384,31 @@ export async function* paginateWp<T>(
   }
 }
 
-async function countAll(
+async function probeAll(
   http: SandboxedHttp,
   baseUrl: string,
   authHeader: string,
   warnings: Array<{ code: string; message: string }>,
-): Promise<Record<string, number | 'unknown'>> {
-  // Secuencial por construcción — el rate limiter del host pace en 5rps,
-  // así que paralelizar no compraría tiempo y sí complica el flujo de
-  // warnings.
-  const courses = await countEntity(http, baseUrl, 'sfwd-courses', authHeader, warnings);
-  const lessons = await countEntity(http, baseUrl, 'sfwd-lessons', authHeader, warnings);
-  const topics = await countEntity(http, baseUrl, 'sfwd-topic', authHeader, warnings);
-  const quizzes = await countEntity(http, baseUrl, 'sfwd-quiz', authHeader, warnings);
-  const groups = await countEntity(http, baseUrl, 'groups', authHeader, warnings);
-  const users = await countEntity(http, baseUrl, 'users', authHeader, warnings);
-  return { courses, lessons, topics, quizzes, groups, users };
+): Promise<{
+  counts: Record<string, number | 'unknown'>;
+  samples: Record<string, Sample[]>;
+}> {
+  // Paralelo: los 6 sondeos arrancan a la vez, el rate limiter del host
+  // (5rps + burst 10) los pace si hace falta. Cada probe trae count
+  // (X-WP-Total) Y los 5 items más recientes con metadata legible para
+  // que el usuario decida qué migrar antes de confirmar.
+  const entities = ['sfwd-courses', 'sfwd-lessons', 'sfwd-topic', 'sfwd-quiz', 'groups', 'users'] as const;
+  const labels = ['courses', 'lessons', 'topics', 'quizzes', 'groups', 'users'] as const;
+  const results = await Promise.all(
+    entities.map((cpt) => probeEntity(http, baseUrl, cpt, authHeader, warnings)),
+  );
+  const counts: Record<string, number | 'unknown'> = {};
+  const samples: Record<string, Sample[]> = {};
+  for (let i = 0; i < entities.length; i += 1) {
+    counts[labels[i]!] = results[i]!.count;
+    samples[labels[i]!] = results[i]!.samples;
+  }
+  return { counts, samples };
 }
 
 // ---- Routes -------------------------------------------------------
@@ -394,7 +481,11 @@ const routes: ModuleRoute[] = [
           return err(401, 'WP_AUTH_FAILED', `Las credenciales no son válidas en ${baseUrl} (HTTP ${root.status}).`);
         }
         if (root.status >= 400) {
-          return err(502, 'WP_UNREACHABLE', `${baseUrl} respondió ${root.status} a /wp-json/. ¿Es un WordPress?`);
+          // 422 (no 502): es un error del USUARIO (URL mal, WP caído desde su
+          // perspectiva). 5xx haría que el reverse proxy de Easypanel/Traefik
+          // reemplace el body JSON con su propia página HTML "Bad Gateway"
+          // y el frontend pete con "Unexpected token '<'" al hacer JSON.parse.
+          return err(422, 'WP_UNREACHABLE', `${baseUrl} respondió ${root.status} a /wp-json/. ¿Es un WordPress?`);
         }
         wpVersion = root.headers['x-wp-version'];
         try {
@@ -405,8 +496,13 @@ const routes: ModuleRoute[] = [
         }
       } catch (e: unknown) {
         const ce = e as { code?: string; message?: string };
+        // 422 (no 502): mismo razonamiento que arriba — Easypanel/Traefik
+        // reemplaza 5xx con HTML, rompiendo el JSON.parse del frontend.
+        // Causa típica: HTTP_BLOCKED_HOST (user puso http://localhost o IP
+        // privada — bloqueado por SSRF guard), HTTP_NETWORK (DNS no resuelve),
+        // HTTP_TIMEOUT (WP no responde a tiempo).
         return err(
-          502,
+          422,
           ce.code ?? 'WP_UNREACHABLE',
           `No se pudo contactar ${baseUrl}: ${ce.message ?? String(e)}`,
         );
@@ -431,8 +527,11 @@ const routes: ModuleRoute[] = [
         });
       }
 
-      // 3-8) Conteos reales con per_page=1 + lectura de X-WP-Total
-      const counts = await countAll(req.http, baseUrl, authHeader, warnings);
+      // 3-8) Sondeo real por entidad: count (X-WP-Total) + 5 muestras con
+      //      metadata legible (id, title, slug, status, modified). Esto
+      //      permite al usuario VER qué hay en su WP antes de confirmar
+      //      la migración.
+      const { counts, samples } = await probeAll(req.http, baseUrl, authHeader, warnings);
       const latencyMs = Date.now() - startedAt;
 
       return ok({
@@ -441,6 +540,7 @@ const routes: ModuleRoute[] = [
         wpVersion,
         latencyMs,
         counts,
+        samples,
         warnings,
         capabilities: {
           learndashV1: learndashRestAvailable,
@@ -452,6 +552,14 @@ const routes: ModuleRoute[] = [
   },
 
   // POST /jobs — crea un job y lo deja en pending.
+  //
+  // ⚠️ Estado actual del migrador (alpha.49): el preflight es funcional —
+  // valida credenciales del WP origen y muestra count + samples reales por
+  // entidad. PERO el procesamiento real del job (extract → transform →
+  // load → reconcile) NO está implementado todavía. El job se registra y
+  // queda en `pending` para siempre. La respuesta incluye un campo
+  // `notice` que el wizard debería mostrar al usuario para que sepa que
+  // la migración real es manual hasta próximas versiones.
   {
     method: 'POST',
     path: '/jobs',
@@ -475,7 +583,18 @@ const routes: ModuleRoute[] = [
         options: body.options,
       };
       saveJob(job);
-      return ok({ jobId: job.id }, 201);
+      return ok(
+        {
+          jobId: job.id,
+          notice: {
+            code: 'EXTRACT_PIPELINE_NOT_READY',
+            severity: 'warning',
+            message:
+              'El job se registró correctamente. El procesamiento real (extract → transform → load) NO está habilitado todavía: hoy el preflight valida tu origen y muestra qué hay para migrar, pero la importación efectiva llegará en próximas versiones de Didacta. Este job queda en estado pending y NO se ejecutará automáticamente.',
+          },
+        },
+        201,
+      );
     },
   },
 

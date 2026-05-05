@@ -4,19 +4,24 @@
 /// Wizard multi-paso del migrador LearnDash. Implementación MVP:
 /// bienvenida → conectar → resumen → opciones → comprobación → migrar → done.
 ///
-/// El backend hoy responde en modo stub (no hace fetch real al WordPress
-/// del usuario; el host alpha.38 no inyecta HttpService scoped a la VM
-/// del módulo todavía). El wizard ya navega por los pasos y muestra el
-/// flujo correcto end-to-end. Cuando el host exponga http scoped, el
-/// wizard arrancará a recibir conteos reales sin cambios en la UI.
+/// alpha.49 cambió el contrato del backend:
+///   - `/preflight` ahora hace fetch real al WP origen (8 reqs paralelos)
+///     y devuelve `counts` reales + `samples` (5 últimas entidades por
+///     CPT) leyendo `X-WP-Total` y `?per_page=5&_fields=...`.
+///   - `POST /jobs` devuelve un `notice` con `code: EXTRACT_PIPELINE_NOT_READY`
+///     hasta que el extract phase esté implementado. El wizard muestra
+///     ese notice al usuario para que sepa que la importación NO va a
+///     ocurrir automáticamente todavía.
 
 import * as React from 'react';
 import {
   migratorLearndashApi,
   type ImportOptions,
+  type JobNotice,
   type JobReport,
   type JobStatus,
   type PreflightResult,
+  type PreflightSample,
   type SourceCredentials,
 } from './client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -63,6 +68,7 @@ export function MigratorWizard(): React.ReactElement {
   const [step, setStep] = React.useState<Step>('welcome');
   const [creds, setCreds] = React.useState<SourceCredentials>({ baseUrl: '', username: '', appPassword: '' });
   const [preflight, setPreflight] = React.useState<PreflightResult | null>(null);
+  const [jobNotice, setJobNotice] = React.useState<JobNotice | null>(null);
   const [options, setOptions] = React.useState<ImportOptions>(DEFAULT_OPTIONS);
   const [job, setJob] = React.useState<JobStatus | null>(null);
   const [report, setReport] = React.useState<JobReport | null>(null);
@@ -103,9 +109,10 @@ export function MigratorWizard(): React.ReactElement {
     setError(null);
     setBusy(true);
     try {
-      const { jobId } = await migratorLearndashApi.startJob(creds, { ...options, dryRun });
-      const status = await migratorLearndashApi.getJob(jobId);
+      const resp = await migratorLearndashApi.startJob(creds, { ...options, dryRun });
+      const status = await migratorLearndashApi.getJob(resp.jobId);
       setJob(status);
+      setJobNotice(resp.notice ?? null);
       setStep(dryRun ? 'dryrun' : 'execute');
     } catch (e: any) {
       setError({ code: e?.code, message: e?.message ?? 'No se pudo crear el job' });
@@ -211,21 +218,45 @@ export function MigratorWizard(): React.ReactElement {
           <CardHeader>
             <CardTitle>Esto es lo que vamos a migrar</CardTitle>
             <CardDescription>
-              {preflight.siteName ?? 'Origen'} · latencia {preflight.latencyMs} ms
+              {preflight.siteName ?? 'Origen'}
+              {preflight.wpVersion ? ` · WP ${preflight.wpVersion}` : ''}
+              {' · '}latencia {preflight.latencyMs} ms
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <table className="w-full text-sm">
               <tbody>
-                <tr><td>Cursos</td><td className="text-right font-mono">{preflight.counts.courses}</td></tr>
-                <tr><td>Lecciones</td><td className="text-right font-mono">{preflight.counts.lessons}</td></tr>
-                <tr><td>Temas</td><td className="text-right font-mono">{preflight.counts.topics}</td></tr>
-                <tr><td>Quizzes</td><td className="text-right font-mono">{preflight.counts.quizzes}</td></tr>
-                <tr><td>Grupos</td><td className="text-right font-mono">{preflight.counts.groups}</td></tr>
-                <tr><td>Alumnos</td><td className="text-right font-mono">{preflight.counts.users}</td></tr>
-                <tr><td>Imágenes</td><td className="text-right font-mono">{preflight.counts.media}</td></tr>
+                <tr><td>Cursos</td><td className="text-right font-mono">{String(preflight.counts.courses)}</td></tr>
+                <tr><td>Lecciones</td><td className="text-right font-mono">{String(preflight.counts.lessons)}</td></tr>
+                <tr><td>Temas</td><td className="text-right font-mono">{String(preflight.counts.topics)}</td></tr>
+                <tr><td>Quizzes</td><td className="text-right font-mono">{String(preflight.counts.quizzes)}</td></tr>
+                <tr><td>Grupos</td><td className="text-right font-mono">{String(preflight.counts.groups)}</td></tr>
+                <tr><td>Alumnos</td><td className="text-right font-mono">{String(preflight.counts.users)}</td></tr>
               </tbody>
             </table>
+
+            {preflight.samples && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold">Muestras de las últimas 5 entidades por tipo</h3>
+                {(['courses', 'lessons', 'topics', 'quizzes', 'groups', 'users'] as const).map((key) => {
+                  const items = preflight.samples?.[key] ?? [];
+                  if (items.length === 0) return null;
+                  return (
+                    <SampleList
+                      key={key}
+                      label={LABELS[key]}
+                      items={items}
+                    />
+                  );
+                })}
+                <p className="text-xs text-muted-foreground">
+                  Mostramos las 5 más recientes por tipo (incluye drafts, privadas y futuras
+                  programadas). Para revisar todo en detalle, abrí tu WordPress origen — la
+                  migración traerá lo que coincida con las opciones que elijas en el siguiente paso.
+                </p>
+              </div>
+            )}
+
             {preflight.warnings.length > 0 && (
               <Alert>
                 <AlertTitle>Avisos del origen</AlertTitle>
@@ -306,12 +337,15 @@ export function MigratorWizard(): React.ReactElement {
               </Button>
             )}
             {job && (
-              <Alert>
-                <AlertTitle>Job creado</AlertTitle>
-                <AlertDescription>
-                  ID: <code>{job.id}</code> · estado: {job.status}
-                </AlertDescription>
-              </Alert>
+              <>
+                <Alert>
+                  <AlertTitle>Job creado</AlertTitle>
+                  <AlertDescription>
+                    ID: <code>{job.id}</code> · estado: {job.status}
+                  </AlertDescription>
+                </Alert>
+                {jobNotice && <NoticeAlert notice={jobNotice} />}
+              </>
             )}
             <div className="flex gap-2">
               <Button variant="outline" onClick={goBack}>Ajustar opciones</Button>
@@ -332,14 +366,17 @@ export function MigratorWizard(): React.ReactElement {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Alert>
-              <AlertTitle>Modo stub (alpha.38)</AlertTitle>
-              <AlertDescription>
-                El módulo aún no tiene HTTP scoped en la VM del host. La migración real arrancará
-                cuando el item del backlog se cierre. Hoy puedes navegar el flujo y verificar la
-                instalación end-to-end.
-              </AlertDescription>
-            </Alert>
+            {jobNotice ? (
+              <NoticeAlert notice={jobNotice} />
+            ) : (
+              <Alert>
+                <AlertTitle>Esperando al worker</AlertTitle>
+                <AlertDescription>
+                  El job se creó correctamente. El procesamiento real comenzará cuando el
+                  worker tome la cola.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="flex gap-2">
               <Button onClick={() => void onFinalize()} disabled={busy}>
                 Ver reporte
@@ -370,6 +407,72 @@ export function MigratorWizard(): React.ReactElement {
         </Card>
       )}
     </div>
+  );
+}
+
+const LABELS: Record<'courses' | 'lessons' | 'topics' | 'quizzes' | 'groups' | 'users', string> = {
+  courses: 'Cursos',
+  lessons: 'Lecciones',
+  topics: 'Temas',
+  quizzes: 'Quizzes',
+  groups: 'Grupos',
+  users: 'Alumnos',
+};
+
+const STATUS_BADGE: Record<string, string> = {
+  publish: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+  draft: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  private: 'bg-slate-500/10 text-slate-700 dark:text-slate-400',
+  future: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+  pending: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  user: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+};
+
+function SampleList({
+  label,
+  items,
+}: {
+  label: string;
+  items: PreflightSample[];
+}): React.ReactElement {
+  return (
+    <details className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
+      <summary className="cursor-pointer select-none font-medium">
+        {label} <span className="text-muted-foreground">({items.length})</span>
+      </summary>
+      <ul className="mt-2 space-y-1">
+        {items.map((it) => (
+          <li key={it.id} className="flex items-baseline gap-2">
+            <span
+              className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_BADGE[it.status] ?? 'bg-muted text-muted-foreground'}`}
+            >
+              {it.status}
+            </span>
+            <span className="flex-1 truncate" title={it.slug}>
+              {it.title || `(sin título · id=${it.id})`}
+            </span>
+            {it.modified && (
+              <span className="text-xs text-muted-foreground" title={it.modified}>
+                {it.modified.slice(0, 10)}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function NoticeAlert({ notice }: { notice: JobNotice }): React.ReactElement {
+  const variant: 'default' | 'destructive' = notice.severity === 'error' ? 'destructive' : 'default';
+  const icon = notice.severity === 'error' ? '⛔' : notice.severity === 'warning' ? '⚠️' : 'ℹ️';
+  return (
+    <Alert variant={variant}>
+      <AlertTitle>
+        {icon} {notice.severity === 'warning' ? 'Importante' : notice.severity === 'error' ? 'Error' : 'Info'}
+      </AlertTitle>
+      <AlertDescription>{notice.message}</AlertDescription>
+    </Alert>
   );
 }
 

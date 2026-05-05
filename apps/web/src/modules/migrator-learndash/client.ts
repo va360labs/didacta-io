@@ -31,22 +31,61 @@ export interface ImportOptions {
   retentionDays: number;
 }
 
+/// Sample item devuelto por el preflight: las 5 entidades más recientes
+/// por entidad para que el usuario vea qué hay en su WP origen antes de
+/// confirmar la migración. Shape uniforme entre courses/lessons/topics/
+/// quizzes/groups/users; algunos campos son '' o 'unknown' según la entidad.
+export interface PreflightSample {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  modified: string;
+}
+
 export interface PreflightResult {
   ok: boolean;
   siteName?: string;
+  wpVersion?: string;
   latencyMs: number;
   counts: {
-    courses: number;
-    lessons: number;
-    topics: number;
-    quizzes: number;
-    groups: number;
-    users: number;
-    media: number;
+    courses: number | 'unknown';
+    lessons: number | 'unknown';
+    topics: number | 'unknown';
+    quizzes: number | 'unknown';
+    groups: number | 'unknown';
+    users: number | 'unknown';
+  };
+  /// Las 5 entidades más recientes por CPT (alpha.49+). Permite mostrar
+  /// lista al usuario antes de confirmar para que decida qué migrar.
+  samples?: {
+    courses?: PreflightSample[];
+    lessons?: PreflightSample[];
+    topics?: PreflightSample[];
+    quizzes?: PreflightSample[];
+    groups?: PreflightSample[];
+    users?: PreflightSample[];
   };
   warnings: { code: string; message: string }[];
   capabilities: { learndashV1: boolean; learndashV2: boolean; wpRest: boolean };
   error?: { code: string; message: string };
+}
+
+/// Notice que el backend devuelve junto al jobId cuando la creación del
+/// job es exitosa pero el procesamiento real NO está disponible (alpha.49:
+/// extract → transform → load → reconcile no implementado). El wizard
+/// debería mostrar este notice como banner antes del estado "pending"
+/// para que el usuario sepa que la importación NO va a ocurrir
+/// automáticamente.
+export interface JobNotice {
+  code: string;
+  severity: 'info' | 'warning' | 'error';
+  message: string;
+}
+
+export interface StartJobResponse {
+  jobId: string;
+  notice?: JobNotice;
 }
 
 export interface JobStatus {
@@ -106,7 +145,7 @@ export const migratorLearndashApi = {
       withAuth(),
     );
   },
-  async startJob(credentials: SourceCredentials, options: ImportOptions): Promise<{ jobId: string }> {
+  async startJob(credentials: SourceCredentials, options: ImportOptions): Promise<StartJobResponse> {
     return apiFetch(
       `${BASE}/jobs`,
       { method: 'POST', body: JSON.stringify({ credentials, options }) },
