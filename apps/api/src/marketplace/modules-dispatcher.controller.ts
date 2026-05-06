@@ -12,6 +12,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { TokenService, type SessionClaims } from '../auth/token.service';
+import { TenantContextService } from '../tenancy/tenant-context.service';
 import {
   ALLOWED_METHODS,
   ModuleRouterService,
@@ -21,8 +22,10 @@ import {
 } from './module-router.service';
 import type { ModuleHttpConfig } from './module-manifest.schema';
 import { RateLimitedHttp, RateLimiterService } from './rate-limiter.service';
+import { SandboxedDbService } from './sandboxed-db.service';
 import { SandboxedHttpService } from './sandboxed-http.service';
 import { BlockedSandboxedHttp, type SandboxedHttp } from './sandboxed-http.types';
+import { BlockedSandboxedDb, type SandboxedDb } from './sandboxed-db.types';
 
 /// Controller wildcard que recibe TODO request bajo `/modules/*` y lo
 /// despacha al módulo dinámico correspondiente. Vive fuera del flow
@@ -57,6 +60,8 @@ export class ModulesDispatcherController {
     private readonly tokens: TokenService,
     private readonly httpService: SandboxedHttpService,
     private readonly rateLimiter: RateLimiterService,
+    private readonly dbService: SandboxedDbService,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   /// Atrapa todos los métodos bajo `/modules/*`. NestJS no soporta
@@ -108,6 +113,14 @@ export class ModulesDispatcherController {
       matched.httpConfig,
       requestSignal,
     );
+    // ctx.db: hasta el wiring real (alpha.51 task DB-004) inyectamos un
+    // BlockedSandboxedDb si requiresDb=false en manifest. La task DB-004
+    // reemplaza esto por SandboxedDbService.build(...) cuando dbEnabled=true.
+    const db: SandboxedDb = this.buildScopedDb(
+      matched.moduleName,
+      matched.dbEnabled,
+      matched.tablePrefix,
+    );
 
     const ctx: ModuleRouteRequestContext = {
       method: method as AllowedMethod,
@@ -119,6 +132,7 @@ export class ModulesDispatcherController {
         ? { sub: user.sub, tenantId: user.tenantId, roles: user.roles }
         : null,
       http,
+      db,
     };
 
     let result: ModuleRouteResponse;
@@ -153,6 +167,25 @@ export class ModulesDispatcherController {
     if (!httpConfig) return new BlockedSandboxedHttp(moduleName);
     const inner = this.httpService.build(moduleName, httpConfig, requestSignal);
     return new RateLimitedHttp(inner, this.rateLimiter, moduleName, httpConfig.rateLimitPerHost);
+  }
+
+  /// Construye el cliente de BD scoped al `tablePrefix` del módulo.
+  /// - `dbEnabled=false` → `BlockedSandboxedDb` (rechaza con
+  ///    DB_PREFIX_VIOLATION + mensaje explicando cómo activarlo).
+  /// - `dbEnabled=true` → `SandboxedDbService.build(...)` con tenantId
+  ///    resuelto del request actual (TenantContextService — middleware
+  ///    lo pobla con el tenantId del Bearer JWT). Si el request no
+  ///    pasó por el middleware o llegó sin Bearer válido, tenantId=null
+  ///    y RLS bloqueará tablas tenant-scoped — comportamiento conservador.
+  /// `protected` para override en tests.
+  protected buildScopedDb(
+    moduleName: string,
+    dbEnabled: boolean,
+    tablePrefix: string,
+  ): SandboxedDb {
+    if (!dbEnabled) return new BlockedSandboxedDb(moduleName);
+    const tenantId = this.tenantContext.get()?.tenantId ?? null;
+    return this.dbService.build(moduleName, tablePrefix, tenantId);
   }
 
   /// Extrae el Bearer del header Authorization y lo verifica con

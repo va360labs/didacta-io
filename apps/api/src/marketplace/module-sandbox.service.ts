@@ -3,6 +3,7 @@ import { createContext, runInContext, type Context } from 'node:vm';
 import { ALLOWED_REQUIRES, ModuleLintService } from './module-lint.service';
 import { MarketplacePackageError } from './module-package.errors';
 import type { ModuleRoute } from './module-router.service';
+import { NoopSandboxedDb, type SandboxedDb } from './sandboxed-db.types';
 import { NoopSandboxedHttp, type SandboxedHttp } from './sandboxed-http.types';
 
 /// Hook que un módulo puede declarar en su `module.exports`. Todos opcionales:
@@ -34,6 +35,10 @@ export interface ModuleInstallContext {
   /// validar credenciales contra el sistema externo antes de marcar el
   /// módulo como INSTALLED. Ver `sandboxed-http.types.ts`.
   http: SandboxedHttp;
+  /// Cliente de BD scoped al tablePrefix del módulo (alpha.51+). Útil
+  /// para `onInstall` que necesite poblar tablas iniciales (seed data).
+  /// Ver `sandboxed-db.types.ts`.
+  db: SandboxedDb;
 }
 
 /// Timeout por defecto para la ejecución del top-level del módulo y de los
@@ -111,6 +116,7 @@ export class ModuleSandboxService {
     moduleName: string,
     moduleVersion: string,
     http: SandboxedHttp = new NoopSandboxedHttp(),
+    db: SandboxedDb = new NoopSandboxedDb(),
   ): Promise<void> {
     if (!sandboxed.onInstall) return;
     const ctx: ModuleInstallContext = {
@@ -120,6 +126,7 @@ export class ModuleSandboxService {
         this.logger[level](`[mod:${moduleName}] ${message}`);
       },
       http,
+      db,
     };
     try {
       await withTimeout(sandboxed.onInstall(ctx), DEFAULT_TIMEOUT_MS);

@@ -3,8 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModuleRouterService } from '../../src/marketplace/module-router.service';
 import { ModulesDispatcherController } from '../../src/marketplace/modules-dispatcher.controller';
 import { RateLimiterService } from '../../src/marketplace/rate-limiter.service';
+import { SandboxedDbService } from '../../src/marketplace/sandboxed-db.service';
 import { SandboxedHttpService } from '../../src/marketplace/sandboxed-http.service';
 import type { SessionClaims, TokenService } from '../../src/auth/token.service';
+import { TenantContextService } from '../../src/tenancy/tenant-context.service';
+import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 /// Tests del dispatcher dinámico del marketplace.
@@ -72,6 +75,19 @@ const VALID_TOKEN = 'valid.bearer.jwt';
 // recibe siempre por inyección. Reset entre describes vía afterEach abajo.
 const httpSvc = new SandboxedHttpService();
 const rateLimiter = new RateLimiterService();
+// Stub de Prisma que devuelve siempre [] para queries — basta para los
+// tests del dispatcher que solo verifican wiring de ctx.db, no la
+// ejecución real de SQL (cubierta en sandboxed-db.service.test.ts).
+const fakePrisma = {
+  $transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) =>
+    cb({
+      $queryRawUnsafe: vi.fn(async () => []),
+      $executeRawUnsafe: vi.fn(async () => 0),
+    }),
+  ),
+} as unknown as PrismaService;
+const dbSvc = new SandboxedDbService(fakePrisma);
+const tenantContext = new TenantContextService();
 
 afterEach(() => {
   rateLimiter.reset();
@@ -88,7 +104,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'GET', path: '/items/:id', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/items/42',
       method: 'GET',
@@ -105,7 +121,7 @@ describe('ModulesDispatcherController.dispatch', () => {
 
   it('404 si no hay handler', async () => {
     const router = new ModuleRouterService();
-    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter);
+    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter, dbSvc, tenantContext);
     const req = makeReq({ url: '/api/v1/modules/ghost/foo' });
     const { reply } = makeReply();
     await expect(ctrl.dispatch(req, reply, undefined)).rejects.toBeInstanceOf(
@@ -120,7 +136,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'POST', path: '/echo', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims({ roles: ['formador'] }) });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/echo?a=1',
       method: 'POST',
@@ -143,7 +159,7 @@ describe('ModulesDispatcherController.dispatch', () => {
     router.registerModule('mod.example', '/modules/example', [
       { method: 'GET', path: '/public', handler },
     ]);
-    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter);
+    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter, dbSvc, tenantContext);
     const req = makeReq({ url: '/api/v1/modules/example/public' });
     const { reply } = makeReply();
     await ctrl.dispatch(req, reply, undefined);
@@ -156,7 +172,7 @@ describe('ModulesDispatcherController.dispatch', () => {
     router.registerModule('mod.example', '/modules/example', [
       { method: 'GET', path: '/public', handler },
     ]);
-    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter);
+    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter, dbSvc, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/public',
       headers: { authorization: 'Bearer this-is-garbage' },
@@ -172,7 +188,7 @@ describe('ModulesDispatcherController.dispatch', () => {
     router.registerModule('mod.example', '/modules/example', [
       { method: 'GET', path: '/public', handler },
     ]);
-    const ctrl = new ModulesDispatcherController(router, makeTokens({ [VALID_TOKEN]: claims() }), httpSvc, rateLimiter);
+    const ctrl = new ModulesDispatcherController(router, makeTokens({ [VALID_TOKEN]: claims() }), httpSvc, rateLimiter, dbSvc, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/public',
       headers: { authorization: `Basic ${VALID_TOKEN}` },
@@ -189,7 +205,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'GET', path: '/public', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/public',
       headers: { authorization: 'Bearer    ' },
@@ -213,7 +229,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/boom',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -238,7 +254,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/with-headers',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -255,7 +271,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'DELETE', path: '/x', handler: async () => undefined as never },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/x',
       method: 'DELETE',
@@ -278,7 +294,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'GET', path: '/probe', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/probe',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -316,7 +332,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       },
     );
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/zoom/probe',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -328,6 +344,71 @@ describe('ModulesDispatcherController.dispatch', () => {
     // Host fuera de allowlist → HTTP_BLOCKED_HOST
     await expect(ctx.http.get('https://otro.host.com/x')).rejects.toMatchObject({
       code: 'HTTP_BLOCKED_HOST',
+    });
+  });
+
+  // Contrato `ctx.db` (alpha.51 task DB-004): el handler SIEMPRE recibe
+  // un cliente de BD. Si el módulo NO declara `requiresDb: true` → recibe
+  // BlockedSandboxedDb que rechaza con DB_PREFIX_VIOLATION explicando
+  // cómo activarlo. Si lo declara → recibe SandboxedDbService.build(...)
+  // scoped al tablePrefix + tenantId del request.
+  it('módulo sin requiresDb → ctx.db es BlockedSandboxedDb', async () => {
+    const router = new ModuleRouterService();
+    const handler = vi.fn(async () => ({ status: 200, body: 'ok' }));
+    router.registerModule('mod.example', '/modules/example', [
+      { method: 'GET', path: '/probe', handler },
+    ]);
+    const tokens = makeTokens({ [VALID_TOKEN]: claims() });
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
+    const req = makeReq({
+      url: '/api/v1/modules/example/probe',
+      headers: { authorization: `Bearer ${VALID_TOKEN}` },
+    });
+    const { reply } = makeReply();
+    await ctrl.dispatch(req, reply, undefined);
+
+    const ctx = handler.mock.calls[0][0];
+    expect(typeof ctx.db?.query).toBe('function');
+    expect(typeof ctx.db?.execute).toBe('function');
+    expect(typeof ctx.db?.transaction).toBe('function');
+
+    await expect(ctx.db.query('SELECT 1 FROM mod_example_jobs')).rejects.toMatchObject({
+      name: 'DbError',
+      code: 'DB_PREFIX_VIOLATION',
+      message: expect.stringContaining('requiresDb'),
+    });
+  });
+
+  it('módulo con requiresDb=true → ctx.db ejecuta queries scoped (con SQL guard activo)', async () => {
+    const router = new ModuleRouterService();
+    const handler = vi.fn(async () => ({ status: 200, body: 'ok' }));
+    router.registerModule(
+      'mod.example',
+      '/modules/example',
+      [{ method: 'GET', path: '/probe', handler }],
+      {
+        dbEnabled: true,
+        tablePrefix: 'mod_example_',
+      },
+    );
+    const tokens = makeTokens({ [VALID_TOKEN]: claims() });
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
+    const req = makeReq({
+      url: '/api/v1/modules/example/probe',
+      headers: { authorization: `Bearer ${VALID_TOKEN}` },
+    });
+    const { reply } = makeReply();
+    await ctrl.dispatch(req, reply, undefined);
+
+    const ctx = handler.mock.calls[0][0];
+    // Query dentro del prefix → pasa el guard, llega al fakePrisma stub.
+    await expect(ctx.db.query('SELECT * FROM mod_example_jobs')).resolves.toEqual({
+      rows: [],
+      rowCount: 0,
+    });
+    // Query fuera del prefix → DB_PREFIX_VIOLATION (SQL guard).
+    await expect(ctx.db.query('SELECT * FROM "user"')).rejects.toMatchObject({
+      code: 'DB_PREFIX_VIOLATION',
     });
   });
 });

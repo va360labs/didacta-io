@@ -15,6 +15,7 @@ import { ModuleSandboxService } from './module-sandbox.service';
 import { ModuleSignatureService } from './module-signature.service';
 import { ModulesDispatcherController } from './modules-dispatcher.controller';
 import { RateLimiterService } from './rate-limiter.service';
+import { SandboxedDbService } from './sandboxed-db.service';
 import { SandboxedHttpService } from './sandboxed-http.service';
 
 /// Marketplace de módulos (ADR-009).
@@ -50,6 +51,7 @@ import { SandboxedHttpService } from './sandboxed-http.service';
     InstalledModuleService,
     InstallPackageService,
     SandboxedHttpService,
+    SandboxedDbService,
     RateLimiterService,
     MarketplaceErrorFilter,
   ],

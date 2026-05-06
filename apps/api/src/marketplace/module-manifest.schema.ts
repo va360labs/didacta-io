@@ -82,6 +82,20 @@ const permissionSchema = z.object({
 /// + caps en `sandboxed-http.types.ts` (alpha.49). Cualquier cambio
 /// requiere actualizar los dos sitios + bumpar la versión del paquete
 /// `@didacta/module-package-spec` (caps son parte del contrato público).
+/// Caps duros del cliente de BD scoped a un módulo (alpha.51). Mirror
+/// de los defaults + caps en `sandboxed-db.types.ts`. Cualquier cambio
+/// requiere actualizar los dos sitios.
+export const DB_CAPS = {
+  /// Tope del timeout por query (ms). 10s. Más alto sería I/O bloqueante
+  /// mal diseñado.
+  MAX_QUERY_TIMEOUT_MS: 10_000,
+  /// Tope de filas devueltas por SELECT. 10_000. Para volúmenes mayores
+  /// el módulo debe paginar.
+  MAX_ROWS: 10_000,
+  /// Tope del statement SQL (chars). 50 KB.
+  MAX_STATEMENT_LENGTH: 50_000,
+} as const;
+
 export const HTTP_CAPS = {
   /// Tope de requests por segundo por (módulo, host). Más alto que esto
   /// ya está abusando del upstream (5rps contra una API es muchísimo).
@@ -283,6 +297,15 @@ export const moduleManifestSchema = z
     // cliente que rechaza toda URL con HTTP_BLOCKED_HOST (defensa: módulos
     // que no piden http no obtienen http).
     http: httpSchema.optional(),
+
+    // ctx.db scoped al tablePrefix del módulo (alpha.51). Cuando es true,
+    // el dispatcher cablea un SandboxedDbService que aplica SQL guard:
+    // toda query DEBE referenciar solo tablas que empiezan con
+    // `tablePrefix`. DDL prohibida (CREATE/DROP/ALTER) — la estructura
+    // viene de prisma/migrations/*.sql aplicadas en install (ADR-013).
+    // Si false/undefined, el módulo recibe BlockedSandboxedDb con mensaje
+    // accionable explicando cómo activarlo.
+    requiresDb: z.boolean().optional(),
   })
   .strict();
 

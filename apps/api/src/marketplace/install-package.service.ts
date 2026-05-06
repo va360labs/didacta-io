@@ -10,8 +10,11 @@ import { ModulePackageService } from './module-package.service';
 import { ModuleRouterService } from './module-router.service';
 import { ModuleSandboxService } from './module-sandbox.service';
 import { RateLimitedHttp, RateLimiterService } from './rate-limiter.service';
+import { SandboxedDbService } from './sandboxed-db.service';
+import { BlockedSandboxedDb, type SandboxedDb } from './sandboxed-db.types';
 import { SandboxedHttpService } from './sandboxed-http.service';
 import { BlockedSandboxedHttp, type SandboxedHttp } from './sandboxed-http.types';
+import { TenantContextService } from '../tenancy/tenant-context.service';
 
 /// Versión del core a la que apunta esta instancia. Inyectada en runtime,
 /// no en build time, para permitir overrides en tests sin recompilar. Si
@@ -80,6 +83,8 @@ export class InstallPackageService {
     private readonly router: ModuleRouterService,
     private readonly httpService: SandboxedHttpService,
     private readonly rateLimiter: RateLimiterService,
+    private readonly dbService: SandboxedDbService,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   async install(packageBuffer: Buffer, installedById: string): Promise<InstallResult> {
@@ -155,11 +160,22 @@ export class InstallPackageService {
         validated.manifest.name,
         validated.manifest.http ?? null,
       );
+      // ctx.db scoped para `onInstall` (alpha.51). Si el módulo declara
+      // `requiresDb: true`, el hook recibe el cliente real para sembrar
+      // tablas iniciales o validar invariantes; si no, recibe Blocked.
+      // tenantId se resuelve del request del super_admin que disparó el
+      // install — en esos requests, el TenantMiddleware ya pobló el ALS.
+      const installDb = this.buildScopedDb(
+        validated.manifest.name,
+        validated.manifest.requiresDb === true,
+        validated.manifest.tablePrefix,
+      );
       await this.sandbox.runOnInstall(
         sandboxed,
         validated.manifest.name,
         validated.manifest.version,
         installHttp,
+        installDb,
       );
 
       // 14. Registro de routes en el dispatcher runtime. Si el módulo
@@ -175,7 +191,11 @@ export class InstallPackageService {
             validated.manifest.name,
             validated.manifest.apiNamespace,
             sandboxed.routes,
-            { httpConfig: validated.manifest.http ?? null },
+            {
+              httpConfig: validated.manifest.http ?? null,
+              dbEnabled: validated.manifest.requiresDb === true,
+              tablePrefix: validated.manifest.tablePrefix,
+            },
           );
         } catch (err) {
           throw new MarketplacePackageError(
@@ -222,6 +242,22 @@ export class InstallPackageService {
     if (!httpConfig) return new BlockedSandboxedHttp(moduleName);
     const inner = this.httpService.build(moduleName, httpConfig);
     return new RateLimitedHttp(inner, this.rateLimiter, moduleName, httpConfig.rateLimitPerHost);
+  }
+
+  /// Construye el cliente de BD scoped para `onInstall/onUninstall`.
+  /// Mismo contrato que el del dispatcher: si `requiresDb=false` →
+  /// Blocked (rechaza con DB_PREFIX_VIOLATION). Si true → Sandboxed
+  /// real con tenantId del request actual (super_admin que disparó el
+  /// install). El `onInstall` típicamente solo siembra tablas globales
+  /// del módulo, pero pasamos el tenantId por si el módulo lo necesita.
+  private buildScopedDb(
+    moduleName: string,
+    requiresDb: boolean,
+    tablePrefix: string,
+  ): SandboxedDb {
+    if (!requiresDb) return new BlockedSandboxedDb(moduleName);
+    const tenantId = this.tenantContext.get()?.tenantId ?? null;
+    return this.dbService.build(moduleName, tablePrefix, tenantId);
   }
 }
 

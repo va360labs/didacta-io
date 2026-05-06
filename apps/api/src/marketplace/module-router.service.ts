@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import type { ModuleHttpConfig } from './module-manifest.schema';
+import type { SandboxedDb } from './sandboxed-db.types';
 import type { SandboxedHttp } from './sandboxed-http.types';
 
 /// Métodos HTTP que un módulo dinámico puede declarar como ruta. Sin
@@ -38,6 +39,11 @@ export interface ModuleRouteRequestContext {
   /// Contrato en `sandboxed-http.types.ts`. Hasta el wiring real (task 5)
   /// es un `NoopSandboxedHttp` que lanza `HTTP_NETWORK` si se invoca.
   http: SandboxedHttp;
+  /// Cliente de BD scoped a las tablas del módulo (alpha.51+). SQL guard
+  /// bloquea cualquier query que toque tablas fuera del `tablePrefix` del
+  /// manifest. Si el módulo no declara `requiresDb: true`, recibe un
+  /// `BlockedSandboxedDb` que rechaza con DB_PREFIX_VIOLATION.
+  db: SandboxedDb;
 }
 
 export type ModuleRouteHandler = (
@@ -64,6 +70,11 @@ interface RegisteredRoute {
   /// `http` — el dispatcher inyecta `BlockedSandboxedHttp`. Si declara,
   /// el dispatcher arma `RateLimitedHttp` con allowlist + rate limit.
   httpConfig: ModuleHttpConfig | null;
+  /// `manifest.requiresDb` (alpha.51). Si true → SandboxedDbService scoped
+  /// al `tablePrefix` del módulo. Si false → BlockedSandboxedDb.
+  dbEnabled: boolean;
+  /// `manifest.tablePrefix`. Usado para SQL guard en SandboxedDbService.
+  tablePrefix: string;
 }
 
 export interface RegisterModuleOptions {
@@ -72,6 +83,15 @@ export interface RegisterModuleOptions {
   /// limit + SSRF guard. Si es null/undefined, el módulo recibe un
   /// `BlockedSandboxedHttp` que rechaza toda URL.
   httpConfig?: ModuleHttpConfig | null;
+  /// `manifest.requiresDb` (alpha.51). Si true, el dispatcher cablea un
+  /// `SandboxedDbService` scoped al `tablePrefix` del manifest. Si false
+  /// o undefined, el módulo recibe un `BlockedSandboxedDb` que rechaza
+  /// con DB_PREFIX_VIOLATION explicando cómo activarlo.
+  dbEnabled?: boolean;
+  /// `manifest.tablePrefix` (siempre presente — required en el manifest).
+  /// Necesario aquí para que el dispatcher arme el SandboxedDbService
+  /// scoped sin volver al row de installed_module por request.
+  tablePrefix?: string;
 }
 
 /// Registro runtime de routes expuestas por módulos dinámicos. Usado por
@@ -98,6 +118,8 @@ export class ModuleRouterService {
     this.unregisterModule(moduleName);
     if (routes.length === 0) return;
     const httpConfig = options.httpConfig ?? null;
+    const dbEnabled = options.dbEnabled === true;
+    const tablePrefix = options.tablePrefix ?? '';
     const registered: RegisteredRoute[] = [];
     for (const r of routes) {
       validateRoute(r);
@@ -112,11 +134,13 @@ export class ModuleRouterService {
         paramNames,
         handler: r.handler,
         httpConfig,
+        dbEnabled,
+        tablePrefix,
       });
     }
     this.routesByModule.set(moduleName, registered);
     this.logger.log(
-      `Módulo "${moduleName}" registró ${registered.length} ruta(s) bajo ${apiNamespace} (http=${httpConfig ? 'enabled' : 'blocked'}).`,
+      `Módulo "${moduleName}" registró ${registered.length} ruta(s) bajo ${apiNamespace} (http=${httpConfig ? 'enabled' : 'blocked'}, db=${dbEnabled ? 'enabled' : 'blocked'}).`,
     );
   }
 
@@ -137,6 +161,8 @@ export class ModuleRouterService {
     handler: ModuleRouteHandler;
     params: Record<string, string>;
     httpConfig: ModuleHttpConfig | null;
+    dbEnabled: boolean;
+    tablePrefix: string;
   } | null {
     const upperMethod = method.toUpperCase();
     for (const list of this.routesByModule.values()) {
@@ -153,6 +179,8 @@ export class ModuleRouterService {
           handler: route.handler,
           params,
           httpConfig: route.httpConfig,
+          dbEnabled: route.dbEnabled,
+          tablePrefix: route.tablePrefix,
         };
       }
     }
