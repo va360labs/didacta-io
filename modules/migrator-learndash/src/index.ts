@@ -52,6 +52,56 @@ interface SandboxedHttp {
   post(url: string, opts?: HttpRequestOptions): Promise<HttpResponse>;
 }
 
+/// Cliente de BD scoped al tablePrefix del módulo (alpha.51+). El host
+/// aplica SQL guard: cualquier referencia a tabla fuera de
+/// `mod_migrator_learndash_*` se rechaza con `DB_PREFIX_VIOLATION`. DDL
+/// prohibida — la estructura de las tablas viene de
+/// `prisma/migrations/20260503000000_init.sql` aplicadas en install.
+type DbErrorCode =
+  | 'DB_PREFIX_VIOLATION'
+  | 'DB_INVALID_SQL'
+  | 'DB_STATEMENT_TOO_LONG'
+  | 'DB_TIMEOUT'
+  | 'DB_TOO_MANY_ROWS'
+  | 'DB_TX_ABORTED'
+  | 'DB_TX_NESTED'
+  | 'DB_UNIQUE_VIOLATION'
+  | 'DB_FK_VIOLATION'
+  | 'DB_NOT_NULL'
+  | 'DB_CHECK_VIOLATION'
+  | 'DB_NETWORK';
+
+interface DbQueryOptions {
+  timeoutMs?: number;
+  maxRows?: number;
+}
+
+interface DbQueryResult<TRow = Record<string, unknown>> {
+  rows: TRow[];
+  rowCount: number;
+}
+
+interface SandboxedDb {
+  query<TRow = Record<string, unknown>>(
+    sql: string,
+    params?: ReadonlyArray<unknown>,
+    opts?: DbQueryOptions,
+  ): Promise<DbQueryResult<TRow>>;
+  execute(
+    sql: string,
+    params?: ReadonlyArray<unknown>,
+    opts?: DbQueryOptions,
+  ): Promise<{ rowCount: number }>;
+  transaction<TResult>(fn: (tx: SandboxedDb) => Promise<TResult>): Promise<TResult>;
+}
+
+/// Forma del error que el cliente de BD lanza. El módulo SOLO debe
+/// confiar en `code` — `message` está pensado para logs / debug, NO
+/// para mostrar al usuario tal cual (puede contener detalle del schema).
+interface DbError extends Error {
+  code: DbErrorCode;
+}
+
 interface ModuleRouteRequestContext {
   method: AllowedMethod;
   path: string;
@@ -63,6 +113,12 @@ interface ModuleRouteRequestContext {
   /// alpha.48 o anterior, `ctx.http` será `undefined` — los handlers que
   /// lo necesiten deben validar y responder error claro al usuario.
   http?: SandboxedHttp;
+  /// Inyectado por el host (alpha.51+). Si `requiresDb: true` está en el
+  /// manifest, el host pasa el cliente real; si no, un cliente que
+  /// rechaza todo con DB_PREFIX_VIOLATION. En hosts < alpha.51 será
+  /// `undefined` — los handlers que dependan de persistencia deben
+  /// validar y devolver 503 explicando que el host no soporta ctx.db.
+  db?: SandboxedDb;
 }
 
 interface ModuleRouteResponse {
@@ -85,6 +141,13 @@ interface ModuleInstallContext {
   moduleName: string;
   moduleVersion: string;
   log: (level: 'log' | 'warn' | 'error', message: string) => void;
+  http?: SandboxedHttp;
+  /// alpha.51+: cliente de BD scoped al tablePrefix del módulo. Si el
+  /// `onInstall` necesita sembrar tablas iniciales (defaults de config,
+  /// índices warm-up, etc.), lo hace via este cliente. El `onUninstall`
+  /// recibe el mismo shape para limpieza opcional (DELETE FROM, no DROP
+  /// — DDL prohibida).
+  db?: SandboxedDb;
 }
 
 // ---- Helpers de respuesta uniforme --------------------------------
@@ -126,14 +189,40 @@ function isResponse(v: unknown): v is ModuleRouteResponse {
   return typeof v === 'object' && v !== null && ('status' in v || 'body' in v);
 }
 
-// ---- Stub de almacenamiento en memoria del job (MVP) --------------
+// ---- Persistencia de jobs (alpha.51+) ----------------------------
 //
-// El módulo NO tiene acceso a Prisma desde la VM aislada (no está en
-// la allowlist de requires). Hasta que el host inyecte un PrismaService
-// scoped en `ModuleInstallContext`, el módulo guarda jobs en memoria.
-// Esto es suficiente para validar el flujo end-to-end del wizard;
-// pierde estado al restart de la API. El item Notion del PrismaService
-// scoped queda pendiente.
+// Antes de alpha.51 los jobs vivían en un `Map<tenantId, Map<jobId,
+// JobRecord>>` en memoria. Eso significaba que un restart de la API
+// perdía TODOS los jobs en curso — inaceptable para un migrador que
+// puede correr horas. alpha.51 introdujo `ctx.db` (cliente sandbox
+// con SQL guard scoped al tablePrefix) y este módulo declara
+// `requiresDb: true` en el manifest para activarlo.
+//
+// Las tablas se crean en install via `prisma/migrations/
+// 20260503000000_init.sql`. La de jobs es `mod_migrator_learndash_jobs`
+// con columnas: id, tenant_id, status, phase, source_profile, options,
+// started_at, completed_at, progress, error, created_by, retention_days,
+// purged_at. RLS aplica filtrado por tenant — el host setea
+// `app.current_tenant_id` antes de cada query.
+//
+// Diseño: helpers async que reciben `db: SandboxedDb` (no globales). La
+// columna `tenant_id` se filtra en cada query por defensa en
+// profundidad — RLS la hace redundante pero el módulo no debe asumir
+// que RLS siempre está activa (futura ejecución desde worker, etc.).
+
+interface JobRow {
+  id: string;
+  tenant_id: string;
+  status: string;
+  phase: string | null;
+  source_profile: Record<string, unknown>;
+  options: Record<string, unknown>;
+  started_at: string | Date;
+  completed_at: string | Date | null;
+  progress: { current: number; total: number; lastUpdate: string } | null;
+  error: { code: string; message: string } | null;
+  created_by: string;
+}
 
 interface JobRecord {
   id: string;
@@ -149,32 +238,141 @@ interface JobRecord {
   preflight?: Record<string, unknown>;
 }
 
-const jobsByTenant = new Map<string, Map<string, JobRecord>>();
-
-function listTenantJobs(tenantId: string): JobRecord[] {
-  return Array.from(jobsByTenant.get(tenantId)?.values() ?? []);
+function rowToJob(row: JobRow): JobRecord {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    status: row.status as JobRecord['status'],
+    phase: row.phase,
+    startedAt: typeof row.started_at === 'string' ? row.started_at : row.started_at.toISOString(),
+    completedAt: row.completed_at
+      ? typeof row.completed_at === 'string'
+        ? row.completed_at
+        : row.completed_at.toISOString()
+      : null,
+    progress: row.progress,
+    error: row.error,
+    createdBy: row.created_by,
+    options: row.options,
+  };
 }
 
-function getJob(tenantId: string, jobId: string): JobRecord | undefined {
-  return jobsByTenant.get(tenantId)?.get(jobId);
+// Postgres NO autocastea `text → uuid` en parámetros prepared statements
+// (SQLSTATE 42804: "column is of type uuid but expression is of type text").
+// Forzamos cast explícito `$N::uuid` en cada parámetro UUID. Idem `::jsonb`
+// para columnas JSONB. Sin estos casts, INSERT/SELECT con WHERE tenant_id
+// fallan en runtime aunque los strings sean UUIDs válidos.
+
+async function listTenantJobs(db: SandboxedDb, tenantId: string): Promise<JobRecord[]> {
+  // RLS ya filtra por tenant_id, pero filtramos también explícitamente:
+  // (a) defensa en profundidad, (b) el plan del query es mejor con el
+  // filtro en el WHERE que delegando todo a la policy.
+  const result = await db.query<JobRow>(
+    `SELECT id, tenant_id, status, phase, source_profile, options, started_at,
+            completed_at, progress, error, created_by
+       FROM mod_migrator_learndash_jobs
+      WHERE tenant_id = $1::uuid
+      ORDER BY started_at DESC
+      LIMIT 200`,
+    [tenantId],
+  );
+  return result.rows.map(rowToJob);
 }
 
-function saveJob(job: JobRecord): void {
-  let tenantMap = jobsByTenant.get(job.tenantId);
-  if (!tenantMap) {
-    tenantMap = new Map();
-    jobsByTenant.set(job.tenantId, tenantMap);
+async function getJob(db: SandboxedDb, tenantId: string, jobId: string): Promise<JobRecord | undefined> {
+  const result = await db.query<JobRow>(
+    `SELECT id, tenant_id, status, phase, source_profile, options, started_at,
+            completed_at, progress, error, created_by
+       FROM mod_migrator_learndash_jobs
+      WHERE tenant_id = $1::uuid AND id = $2::uuid
+      LIMIT 1`,
+    [tenantId, jobId],
+  );
+  if (result.rows.length === 0) return undefined;
+  return rowToJob(result.rows[0]!);
+}
+
+/// Inserta un job nuevo. `id` es UUID v4 generado por gen_random_uuid()
+/// del motor (Postgres) — el módulo NO genera IDs en JS para garantizar
+/// uniqueness sin coordinación. Devuelve el id asignado.
+async function insertJob(
+  db: SandboxedDb,
+  tenantId: string,
+  createdBy: string,
+  sourceProfile: Record<string, unknown>,
+  options: Record<string, unknown>,
+): Promise<string> {
+  const result = await db.query<{ id: string }>(
+    `INSERT INTO mod_migrator_learndash_jobs
+       (tenant_id, status, source_profile, options, created_by)
+     VALUES ($1::uuid, 'pending', $2::jsonb, $3::jsonb, $4)
+     RETURNING id::text AS id`,
+    [tenantId, JSON.stringify(sourceProfile), JSON.stringify(options), createdBy],
+  );
+  if (result.rows.length === 0) {
+    throw new Error('insertJob: INSERT no devolvió id (¿el manifest no declara requiresDb?).');
   }
-  tenantMap.set(job.id, job);
+  return result.rows[0]!.id;
+}
+
+/// UPDATE escapado a status + completed_at. Lo hacemos como UPDATE
+/// específico para evitar exponer el helper genérico de `saveJob` que
+/// permitía sobreescribir cualquier campo (vector de bugs en el código
+/// original — un handler que olvidara setear `tenantId` corrompería
+/// otros tenants). Cualquier transición nueva (e.g. set phase, set
+/// progress) requiere su propio helper estrecho.
+async function setJobStatus(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+  status: JobRecord['status'],
+  completedAt: string | null,
+): Promise<number> {
+  const result = await db.execute(
+    `UPDATE mod_migrator_learndash_jobs
+        SET status = $3,
+            completed_at = $4::timestamp
+      WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+    [tenantId, jobId, status, completedAt],
+  );
+  return result.rowCount;
 }
 
 function nowIso(): string {
   return new Date().toISOString();
 }
 
-function genJobId(): string {
-  const c = (globalThis as unknown as { crypto?: { randomUUID?: () => string } }).crypto;
-  return c?.randomUUID ? c.randomUUID() : `job-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+/// Helper para handlers que requieren `ctx.db`. Devuelve el cliente o
+/// un `ModuleRouteResponse` 503 con mensaje accionable que el handler
+/// debe propagar al usuario. Mantiene el patrón de control flow uniforme
+/// con `requireUser`/`requireAdmin`.
+function requireDb(req: ModuleRouteRequestContext): SandboxedDb | ModuleRouteResponse {
+  if (!req.db) {
+    return err(
+      503,
+      'DB_NOT_AVAILABLE',
+      'Este módulo requiere persistencia (alpha.51+) y el host actual no la expone. Actualizá Didacta a alpha.51 o superior y reinstalá el módulo.',
+    );
+  }
+  return req.db;
+}
+
+/// Mapea un DbError lanzado por ctx.db al ModuleRouteResponse correcto.
+/// Códigos del sandbox:
+///   - DB_PREFIX_VIOLATION → 500 (bug del módulo, NO del usuario).
+///   - DB_TIMEOUT → 504 (la query tardó demasiado).
+///   - DB_TOO_MANY_ROWS → 500 (paginación rota).
+///   - DB_UNIQUE_VIOLATION/DB_FK_VIOLATION/DB_CHECK_VIOLATION → 409 conflict.
+///   - todos los demás → 500 con el code en el body.
+function dbErrToResponse(e: unknown): ModuleRouteResponse {
+  const dbe = e as Partial<DbError> & { code?: string; message?: string };
+  const code = dbe?.code ?? 'DB_NETWORK';
+  const message = dbe?.message ?? 'Error en BD del módulo.';
+  if (code === 'DB_TIMEOUT') return err(504, code, 'La consulta tardó demasiado, intentá de nuevo.');
+  if (code === 'DB_UNIQUE_VIOLATION' || code === 'DB_FK_VIOLATION' || code === 'DB_CHECK_VIOLATION') {
+    return err(409, code, 'Conflicto al guardar el registro.', { detail: message });
+  }
+  return err(500, code, 'Error en BD del módulo.', { detail: message });
 }
 
 /// Base64 sin Buffer ni btoa: el sandbox del host NO expone ninguno de
@@ -553,48 +751,52 @@ const routes: ModuleRoute[] = [
 
   // POST /jobs — crea un job y lo deja en pending.
   //
-  // ⚠️ Estado actual del migrador (alpha.49): el preflight es funcional —
+  // ⚠️ Estado actual del migrador (alpha.51): el preflight es funcional —
   // valida credenciales del WP origen y muestra count + samples reales por
-  // entidad. PERO el procesamiento real del job (extract → transform →
-  // load → reconcile) NO está implementado todavía. El job se registra y
-  // queda en `pending` para siempre. La respuesta incluye un campo
-  // `notice` que el wizard debería mostrar al usuario para que sepa que
-  // la migración real es manual hasta próximas versiones.
+  // entidad. El job se persiste en `mod_migrator_learndash_jobs` (cliente
+  // ctx.db inyectado por el host). PERO el procesamiento real (extract →
+  // transform → load → reconcile) NO está implementado todavía: el job
+  // queda en `pending` y NO se ejecuta automáticamente. La respuesta
+  // incluye un `notice` que el wizard debería mostrar al usuario.
   {
     method: 'POST',
     path: '/jobs',
-    handler: (req) => {
+    handler: async (req) => {
       const auth = requireAdmin(req);
       if (isResponse(auth)) return auth;
-      const body = (req.body ?? {}) as { credentials?: unknown; options?: Record<string, unknown> };
+      const db = requireDb(req);
+      if (isResponse(db)) return db;
+      const body = (req.body ?? {}) as {
+        credentials?: { baseUrl?: string; username?: string };
+        options?: Record<string, unknown>;
+      };
       if (!body.credentials || !body.options) {
         return err(400, 'VALIDATION_ERROR', 'credentials + options requeridos.');
       }
-      const job: JobRecord = {
-        id: genJobId(),
-        tenantId: auth.tenantId,
-        status: 'pending',
-        phase: null,
-        startedAt: nowIso(),
-        completedAt: null,
-        progress: null,
-        error: null,
-        createdBy: auth.sub,
-        options: body.options,
+      // NO persistimos `appPassword` — solo metadata identificativa del
+      // origen (baseUrl + username). El secret se queda en el job runner
+      // cuando el extract real se cablee, fuera de la BD.
+      const sourceProfile = {
+        baseUrl: body.credentials.baseUrl ?? null,
+        username: body.credentials.username ?? null,
       };
-      saveJob(job);
-      return ok(
-        {
-          jobId: job.id,
-          notice: {
-            code: 'EXTRACT_PIPELINE_NOT_READY',
-            severity: 'warning',
-            message:
-              'El job se registró correctamente. El procesamiento real (extract → transform → load) NO está habilitado todavía: hoy el preflight valida tu origen y muestra qué hay para migrar, pero la importación efectiva llegará en próximas versiones de Didacta. Este job queda en estado pending y NO se ejecutará automáticamente.',
+      try {
+        const jobId = await insertJob(db, auth.tenantId, auth.sub, sourceProfile, body.options);
+        return ok(
+          {
+            jobId,
+            notice: {
+              code: 'EXTRACT_PIPELINE_NOT_READY',
+              severity: 'warning',
+              message:
+                'El job se registró correctamente y quedó persistido en BD. El procesamiento real (extract → transform → load) NO está habilitado todavía: hoy el preflight valida tu origen y muestra qué hay para migrar, pero la importación efectiva llegará en próximas versiones de Didacta. Este job queda en estado pending y NO se ejecutará automáticamente.',
+            },
           },
-        },
-        201,
-      );
+          201,
+        );
+      } catch (e) {
+        return dbErrToResponse(e);
+      }
     },
   },
 
@@ -602,10 +804,17 @@ const routes: ModuleRoute[] = [
   {
     method: 'GET',
     path: '/jobs',
-    handler: (req) => {
+    handler: async (req) => {
       const auth = requireAdmin(req);
       if (isResponse(auth)) return auth;
-      return ok({ items: listTenantJobs(auth.tenantId) });
+      const db = requireDb(req);
+      if (isResponse(db)) return db;
+      try {
+        const items = await listTenantJobs(db, auth.tenantId);
+        return ok({ items });
+      } catch (e) {
+        return dbErrToResponse(e);
+      }
     },
   },
 
@@ -613,14 +822,20 @@ const routes: ModuleRoute[] = [
   {
     method: 'GET',
     path: '/jobs/:id',
-    handler: (req) => {
+    handler: async (req) => {
       const auth = requireAdmin(req);
       if (isResponse(auth)) return auth;
+      const db = requireDb(req);
+      if (isResponse(db)) return db;
       const id = req.params['id'];
       if (!id) return err(400, 'VALIDATION_ERROR', 'falta :id.');
-      const job = getJob(auth.tenantId, id);
-      if (!job) return err(404, 'JOB_NOT_FOUND', `job ${id} no encontrado en este tenant.`);
-      return ok(job);
+      try {
+        const job = await getJob(db, auth.tenantId, id);
+        if (!job) return err(404, 'JOB_NOT_FOUND', `job ${id} no encontrado en este tenant.`);
+        return ok(job);
+      } catch (e) {
+        return dbErrToResponse(e);
+      }
     },
   },
 
@@ -628,20 +843,32 @@ const routes: ModuleRoute[] = [
   {
     method: 'POST',
     path: '/jobs/:id/cancel',
-    handler: (req) => {
+    handler: async (req) => {
       const auth = requireAdmin(req);
       if (isResponse(auth)) return auth;
+      const db = requireDb(req);
+      if (isResponse(db)) return db;
       const id = req.params['id'];
       if (!id) return err(400, 'VALIDATION_ERROR', 'falta :id.');
-      const job = getJob(auth.tenantId, id);
-      if (!job) return err(404, 'JOB_NOT_FOUND', `job ${id} no encontrado.`);
-      if (['completed', 'failed', 'cancelled'].includes(job.status)) {
-        return err(409, 'JOB_NOT_CANCELLABLE', `el job en estado '${job.status}' no se puede cancelar.`);
+      try {
+        const job = await getJob(db, auth.tenantId, id);
+        if (!job) return err(404, 'JOB_NOT_FOUND', `job ${id} no encontrado.`);
+        if (['completed', 'failed', 'cancelled'].includes(job.status)) {
+          return err(
+            409,
+            'JOB_NOT_CANCELLABLE',
+            `el job en estado '${job.status}' no se puede cancelar.`,
+          );
+        }
+        const affected = await setJobStatus(db, auth.tenantId, id, 'cancelled', nowIso());
+        if (affected === 0) {
+          // Race: alguien lo cambió justo ahora. Reportar 409.
+          return err(409, 'JOB_RACE', 'el estado del job cambió durante la cancelación, recargá y reintentá.');
+        }
+        return ok({ ok: true });
+      } catch (e) {
+        return dbErrToResponse(e);
       }
-      job.status = 'cancelled';
-      job.completedAt = nowIso();
-      saveJob(job);
-      return ok({ ok: true });
     },
   },
 
@@ -649,20 +876,26 @@ const routes: ModuleRoute[] = [
   {
     method: 'GET',
     path: '/jobs/:id/report',
-    handler: (req) => {
+    handler: async (req) => {
       const auth = requireAdmin(req);
       if (isResponse(auth)) return auth;
+      const db = requireDb(req);
+      if (isResponse(db)) return db;
       const id = req.params['id'];
       if (!id) return err(400, 'VALIDATION_ERROR', 'falta :id.');
-      const job = getJob(auth.tenantId, id);
-      if (!job) return err(404, 'JOB_NOT_FOUND', `job ${id} no encontrado.`);
-      return ok({
-        jobId: job.id,
-        generatedAt: nowIso(),
-        totals: { sourceCount: 0, loadedCount: 0, skippedCount: 0, failedCount: 0 },
-        byEntity: [],
-        auditChain: { eventsCount: 0, verified: true },
-      });
+      try {
+        const job = await getJob(db, auth.tenantId, id);
+        if (!job) return err(404, 'JOB_NOT_FOUND', `job ${id} no encontrado.`);
+        return ok({
+          jobId: job.id,
+          generatedAt: nowIso(),
+          totals: { sourceCount: 0, loadedCount: 0, skippedCount: 0, failedCount: 0 },
+          byEntity: [],
+          auditChain: { eventsCount: 0, verified: true },
+        });
+      } catch (e) {
+        return dbErrToResponse(e);
+      }
     },
   },
 ];
@@ -670,12 +903,26 @@ const routes: ModuleRoute[] = [
 // ---- Lifecycle hooks -----------------------------------------------
 
 async function onInstall(ctx: ModuleInstallContext): Promise<void> {
-  ctx.log('log', `mod.migrator-learndash: onInstall (v${ctx.moduleVersion}) — ${routes.length} rutas registradas.`);
+  ctx.log(
+    'log',
+    `mod.migrator-learndash: onInstall (v${ctx.moduleVersion}) — ${routes.length} rutas registradas. Persistencia ctx.db ${ctx.db ? 'activa' : 'NO disponible (host < alpha.51)'}.`,
+  );
+  if (!ctx.db) {
+    // No bloqueamos el install — el módulo todavía sirve preflight sin
+    // BD. Pero el job pipeline no funcionará. Aviso para que el operador
+    // lo vea en logs.
+    ctx.log(
+      'warn',
+      'mod.migrator-learndash: ctx.db NO inyectado — los handlers /jobs devolverán 503 hasta que actualicés el host a alpha.51+.',
+    );
+  }
 }
 
 async function onUninstall(ctx: ModuleInstallContext): Promise<void> {
-  ctx.log('log', `mod.migrator-learndash: onUninstall — limpiando jobs en memoria.`);
-  jobsByTenant.clear();
+  ctx.log(
+    'log',
+    `mod.migrator-learndash: onUninstall — las tablas mod_migrator_learndash_* persisten (DDL DROP la haría el operador via psql tras backup; nunca el módulo).`,
+  );
 }
 
 // ---- Export con el shape EXACTO del host -----------------------------
