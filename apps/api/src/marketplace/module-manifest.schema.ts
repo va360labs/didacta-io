@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  DIDACTA_EXTERNAL_SOURCE_REGEX,
+  DIDACTA_PERMISSIONS,
+  type DidactaPermission,
+} from './sandboxed-didacta.types.js';
 
 /// Schema Zod del manifest de un módulo `*.zip`.
 ///
@@ -177,6 +182,50 @@ const httpSchema = z
   );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Schema para ctx.didacta (alpha.52, Sprint 2 / DD-001)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Si el módulo necesita crear o actualizar entidades del core (users, courses,
+// lessons, enrollments, etc.), debe declarar el bloque `didacta` en su
+// manifest con dos campos obligatorios:
+//
+//  - `externalSource`: identifica el origen de las entidades importadas. Ej.
+//    "learndash" para mod.migrator-learndash. Forma parte de la clave de
+//    idempotencia (junto a `externalId`) por lo que NO debe cambiar entre
+//    versiones del módulo — si cambia, los upserts del job actual ven datos
+//    de cero (otro `external_source`) y van a duplicar entidades.
+//  - `permissions`: lista cerrada de métodos a los que el módulo puede
+//    invocar. Cualquier llamada a un método NO declarado → DIDACTA_PERMISSION_DENIED.
+//    Defense-in-depth: aunque el TS lo permita, el host valida en runtime.
+//
+// Cualquier permiso fuera de DIDACTA_PERMISSIONS → manifest inválido. La
+// lista completa está en `sandboxed-didacta.types.ts` para que módulos y
+// host la importen del mismo lugar.
+
+const didactaSchema = z
+  .object({
+    /// Source del módulo origen (lower-snake-case, max 40 chars). Ej.
+    /// "learndash". Forma parte de la clave de idempotencia.
+    externalSource: z
+      .string()
+      .min(1)
+      .max(40)
+      .regex(DIDACTA_EXTERNAL_SOURCE_REGEX, {
+        message:
+          'externalSource inválido. Usá lower-snake-case (a-z 0-9 _ -), max 40 chars. Ej: "learndash", "moodle", "thinkific".',
+      }),
+    /// Lista de métodos permitidos. Cualquier valor fuera de
+    /// DIDACTA_PERMISSIONS → manifest rechazado.
+    permissions: z
+      .array(
+        z.enum(DIDACTA_PERMISSIONS as readonly [DidactaPermission, ...DidactaPermission[]]),
+      )
+      .min(1)
+      .max(DIDACTA_PERMISSIONS.length),
+  })
+  .strict();
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Schemas para UI Surfaces (DISC-001.5)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -306,10 +355,18 @@ export const moduleManifestSchema = z
     // Si false/undefined, el módulo recibe BlockedSandboxedDb con mensaje
     // accionable explicando cómo activarlo.
     requiresDb: z.boolean().optional(),
+
+    // ctx.didacta — API pública del core (alpha.52, Sprint 2). Permite
+    // al módulo crear/upsertear users/courses/lessons/enrollments del
+    // core sin tocar Prisma directo. Idempotencia por (externalSource,
+    // externalId). Permission matrix declarada explícitamente. Si falta
+    // el bloque, el módulo recibe BlockedDidactaApi con mensaje accionable.
+    didacta: didactaSchema.optional(),
   })
   .strict();
 
 export type ModuleManifest = z.infer<typeof moduleManifestSchema>;
+export type ModuleDidactaConfig = z.infer<typeof didactaSchema>;
 export type ModuleHttpConfig = z.infer<typeof httpSchema>;
 export type ModuleSurfaceConfig = z.infer<typeof surfaceSchema>;
 export type ModuleConfigField = z.infer<typeof configFieldSchema>;
