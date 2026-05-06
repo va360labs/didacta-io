@@ -1,6 +1,6 @@
 {
   "name": "@didacta/mod-migrator-learndash",
-  "version": "1.0.0",
+  "version": "1.0.7",
   "private": true,
   "description": "Módulo migrador WordPress+LearnDash → Didacta. Wizard didáctico, ETL con staging, reportes auditables.",
   "main": "./dist/index.js",
@@ -17,7 +17,8 @@
     "prisma/migrations"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --external:@didacta/core-kernel --external:@nestjs/common --external:zod --outfile=dist/index.js",
+    "build:tsc": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "esbuild": "^0.24.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }

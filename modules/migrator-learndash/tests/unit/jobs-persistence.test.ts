@@ -225,7 +225,7 @@ describe('migrator-learndash · POST /jobs/:id/cancel con ctx.db stub', () => {
     const update = calls.find((c) => c.kind === 'execute' && c.sql.includes('UPDATE mod_migrator_learndash_jobs'));
     expect(update).toBeDefined();
     expect(update!.sql).toContain("SET status = $3");
-    expect(update!.sql).toContain('WHERE tenant_id = $1 AND id = $2');
+    expect(update!.sql).toContain('WHERE tenant_id = $1::uuid AND id = $2::uuid');
   });
 
   it('409 JOB_NOT_CANCELLABLE si ya está completed', async () => {

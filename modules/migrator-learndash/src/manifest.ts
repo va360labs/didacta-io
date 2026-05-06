@@ -37,6 +37,15 @@ export interface ModuleManifest {
   /// accionable. La estructura de tablas viene de prisma/migrations/*.sql
   /// aplicadas en install (ADR-013) — DDL prohibida en runtime.
   requiresDb?: boolean;
+  /// ctx.didacta — API pública del core scoped al módulo (alpha.52).
+  /// Permite crear/upsertear users, courses, lessons, etc. del core sin
+  /// tocar Prisma directo. Idempotencia por (externalSource, externalId).
+  /// `permissions` es lista cerrada validada por el host. Sin este bloque,
+  /// el módulo recibe un cliente que rechaza con DIDACTA_PERMISSION_DENIED.
+  didacta?: {
+    externalSource: string;
+    permissions: string[];
+  };
 }
 
 export const manifest: ModuleManifest = {
@@ -44,7 +53,7 @@ export const manifest: ModuleManifest = {
   displayName: 'Migrador desde WordPress + LearnDash',
   description:
     'Importa cursos, lecciones, temas, quizzes, preguntas, usuarios, grupos, matrículas, media y progreso desde WordPress + LearnDash hacia Didacta. Wizard didáctico paso a paso, ETL con staging, idempotencia por checksum, reportes auditables.',
-  version: '1.0.6',
+  version: '1.0.7',
   author: 'Didacta',
   license: 'Proprietary',
   category: 'migration',
@@ -86,4 +95,38 @@ export const manifest: ModuleManifest = {
   // `Map` en memoria y se perdían al restart de la API. Con `requiresDb:
   // true` el host inyecta un cliente SQL scoped al tablePrefix.
   requiresDb: true,
+  // alpha.52: el load phase del migrator (Sprint 4 / ET-003) crea entidades
+  // reales en el core (users, courses, modules, lessons, quizzes,
+  // enrollments, media) usando ctx.didacta. Idempotencia por externalRef:
+  // re-correr un job NO duplica. Source identificador "learndash" (matchea
+  // el ADR-014 — `external_source` permanece estable entre versiones del
+  // módulo). Lista completa de permisos porque el migrador toca todas las
+  // entidades importables; otros módulos third-party deberían declarar
+  // SOLO los permisos que necesitan (least privilege).
+  didacta: {
+    externalSource: 'learndash',
+    permissions: [
+      'users.upsertByExternalRef',
+      'users.findByExternalRef',
+      'users.deleteByExternalRef',
+      'courses.upsertByExternalRef',
+      'courses.findByExternalRef',
+      'courses.publish',
+      'courses.deleteByExternalRef',
+      'modules.upsertByExternalRef',
+      'modules.findByExternalRef',
+      'modules.deleteByExternalRef',
+      'lessons.upsertByExternalRef',
+      'lessons.findByExternalRef',
+      'lessons.deleteByExternalRef',
+      'quizzes.upsertByExternalRef',
+      'quizzes.findByExternalRef',
+      'quizzes.deleteByExternalRef',
+      'enrollments.upsertByExternalRef',
+      'enrollments.findByExternalRef',
+      'enrollments.deleteByExternalRef',
+      'media.uploadFromUrl',
+      'media.uploadFromBytes',
+    ],
+  },
 };
