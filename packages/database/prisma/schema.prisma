@@ -185,6 +185,14 @@ model User {
   /// separadores. Requerido para Fundae cuando el usuario participa
   /// en una acción formativa bonificada. Único por tenant si está set.
   documentId       String?    @map("document_id") @db.VarChar(20)
+  /// Origen de los datos cuando el user fue importado por un módulo
+  /// third-party (ej. "learndash"). Combinado con `externalId`, forma la
+  /// clave de idempotencia que usa `ctx.didacta.users.upsertByExternalRef`.
+  /// Null para users creados directamente en Didacta. Ver ADR-014.
+  externalSource   String?    @map("external_source") @db.VarChar(40)
+  /// ID del user en el sistema origen (ej. WordPress user_id). Free-form.
+  /// Solo significativo en combinación con `externalSource`. Ver ADR-014.
+  externalId       String?    @map("external_id") @db.VarChar(200)
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
   deletedAt        DateTime?  @map("deleted_at")
@@ -198,6 +206,7 @@ model User {
   @@unique([tenantId, email])
   @@unique([tenantId, documentId], map: "user_tenant_document_id_key")
   @@index([tenantId, status])
+  @@index([tenantId, externalSource, externalId], map: "user_external_ref_idx")
   @@map("user")
 }
 
@@ -743,6 +752,10 @@ model ModCoursesCourse {
   /// default del tenant (mod_certificates_template.is_default = true).
   /// Sin @relation cross-module: es UUID lógico.
   certificateTemplateId String?      @map("certificate_template_id") @db.Uuid
+  /// Origen del curso cuando fue importado por un módulo third-party
+  /// (ej. "learndash"). Idempotencia con `externalId`. Ver ADR-014.
+  externalSource        String?      @map("external_source") @db.VarChar(40)
+  externalId            String?      @map("external_id") @db.VarChar(200)
   createdAt             DateTime     @default(now()) @map("created_at")
   updatedAt             DateTime     @updatedAt @map("updated_at")
   publishedAt           DateTime?    @map("published_at")
@@ -754,25 +767,30 @@ model ModCoursesCourse {
   @@index([tenantId, status])
   @@index([tenantId, category])
   @@index([certificateTemplateId])
+  @@index([tenantId, externalSource, externalId], map: "mod_courses_course_external_ref_idx")
   @@map("mod_courses_course")
 }
 
 model ModCoursesModule {
-  id          String    @id @default(uuid()) @db.Uuid
-  tenantId    String    @map("tenant_id") @db.Uuid
-  courseId    String    @map("course_id") @db.Uuid
-  title       String
-  description String?
-  position    Int
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  courseId       String    @map("course_id") @db.Uuid
+  title          String
+  description    String?
+  position       Int
+  /// Origen de la sección cuando fue importada (ej. "learndash"). Ver ADR-014.
+  externalSource String?   @map("external_source") @db.VarChar(40)
+  externalId     String?   @map("external_id") @db.VarChar(200)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
 
   course  ModCoursesCourse   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   lessons ModCoursesLesson[]
 
   @@unique([courseId, position])
   @@index([tenantId, courseId])
+  @@index([tenantId, externalSource, externalId], map: "mod_courses_module_external_ref_idx")
   @@map("mod_courses_module")
 }
 
@@ -786,6 +804,9 @@ model ModCoursesLesson {
   /// Contenido por tipo: { videoUrl, html, pdfUrl, text, quizId } según LessonType
   content         Json       @default("{}")
   durationMinutes Int?       @map("duration_minutes")
+  /// Origen de la lección cuando fue importada (ej. "learndash"). Ver ADR-014.
+  externalSource  String?    @map("external_source") @db.VarChar(40)
+  externalId      String?    @map("external_id") @db.VarChar(200)
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
   deletedAt       DateTime?  @map("deleted_at")
@@ -794,6 +815,7 @@ model ModCoursesLesson {
 
   @@unique([moduleId, position])
   @@index([tenantId, moduleId])
+  @@index([tenantId, externalSource, externalId], map: "mod_courses_lesson_external_ref_idx")
   @@map("mod_courses_lesson")
 }
 
@@ -837,12 +859,16 @@ model ModLearningEnrollment {
   startedAt           DateTime?        @map("started_at")
   completedAt         DateTime?        @map("completed_at")
   cancelledAt         DateTime?        @map("cancelled_at")
+  /// Origen del enrollment cuando fue importado (ej. "learndash"). Ver ADR-014.
+  externalSource      String?          @map("external_source") @db.VarChar(40)
+  externalId          String?          @map("external_id") @db.VarChar(200)
 
   progress ModLearningProgress[]
 
   @@unique([tenantId, userId, courseId])
   @@index([tenantId, courseId, status])
   @@index([userId, status])
+  @@index([tenantId, externalSource, externalId], map: "mod_learning_enrollment_external_ref_idx")
   @@map("mod_learning_enrollment")
 }
 
@@ -1052,6 +1078,9 @@ model ModAssessmentsQuiz {
   /// Si true, al terminar el alumno ve la corrección por pregunta.
   showFeedback     Boolean    @default(true) @map("show_feedback")
   createdById      String?    @map("created_by_id") @db.Uuid
+  /// Origen del quiz cuando fue importado (ej. "learndash"). Ver ADR-014.
+  externalSource   String?    @map("external_source") @db.VarChar(40)
+  externalId       String?    @map("external_id") @db.VarChar(200)
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
   publishedAt      DateTime?  @map("published_at")
@@ -1062,6 +1091,7 @@ model ModAssessmentsQuiz {
 
   @@index([tenantId, status])
   @@index([tenantId, lessonId])
+  @@index([tenantId, externalSource, externalId], map: "mod_assessments_quiz_external_ref_idx")
   @@map("mod_assessments_quiz")
 }
 
