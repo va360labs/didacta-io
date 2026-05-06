@@ -4,6 +4,7 @@ import { ALLOWED_REQUIRES, ModuleLintService } from './module-lint.service';
 import { MarketplacePackageError } from './module-package.errors';
 import type { ModuleRoute } from './module-router.service';
 import { NoopSandboxedDb, type SandboxedDb } from './sandboxed-db.types';
+import { NoopDidactaApi, type DidactaApi } from './sandboxed-didacta.types';
 import { NoopSandboxedHttp, type SandboxedHttp } from './sandboxed-http.types';
 
 /// Hook que un módulo puede declarar en su `module.exports`. Todos opcionales:
@@ -39,6 +40,10 @@ export interface ModuleInstallContext {
   /// para `onInstall` que necesite poblar tablas iniciales (seed data).
   /// Ver `sandboxed-db.types.ts`.
   db: SandboxedDb;
+  /// API pública del core scoped al módulo (alpha.52+). Útil para
+  /// `onInstall` que necesite crear roles iniciales o validar invariantes
+  /// del core. Ver `sandboxed-didacta.types.ts`.
+  didacta: DidactaApi;
 }
 
 /// Timeout por defecto para la ejecución del top-level del módulo y de los
@@ -117,6 +122,7 @@ export class ModuleSandboxService {
     moduleVersion: string,
     http: SandboxedHttp = new NoopSandboxedHttp(),
     db: SandboxedDb = new NoopSandboxedDb(),
+    didacta: DidactaApi = new NoopDidactaApi(),
   ): Promise<void> {
     if (!sandboxed.onInstall) return;
     const ctx: ModuleInstallContext = {
@@ -127,6 +133,7 @@ export class ModuleSandboxService {
       },
       http,
       db,
+      didacta,
     };
     try {
       await withTimeout(sandboxed.onInstall(ctx), DEFAULT_TIMEOUT_MS);

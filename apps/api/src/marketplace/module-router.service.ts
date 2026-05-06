@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
-import type { ModuleHttpConfig } from './module-manifest.schema';
+import type { ModuleDidactaConfig, ModuleHttpConfig } from './module-manifest.schema';
+import type { DidactaApi } from './sandboxed-didacta.types';
 import type { SandboxedDb } from './sandboxed-db.types';
 import type { SandboxedHttp } from './sandboxed-http.types';
 
@@ -44,6 +45,13 @@ export interface ModuleRouteRequestContext {
   /// manifest. Si el módulo no declara `requiresDb: true`, recibe un
   /// `BlockedSandboxedDb` que rechaza con DB_PREFIX_VIOLATION.
   db: SandboxedDb;
+  /// API pública del core scoped al módulo (alpha.52). Permite crear y
+  /// upsertear users, courses, lessons, enrollments, quizzes, media del
+  /// core sin acceder a Prisma directo. Permission matrix declarada en
+  /// `manifest.didacta.permissions`. Si el módulo NO declara el bloque
+  /// `didacta`, recibe un `BlockedDidactaApi` que rechaza con
+  /// DIDACTA_PERMISSION_DENIED. Ver `sandboxed-didacta.types.ts`.
+  didacta: DidactaApi;
 }
 
 export type ModuleRouteHandler = (
@@ -75,6 +83,12 @@ interface RegisteredRoute {
   dbEnabled: boolean;
   /// `manifest.tablePrefix`. Usado para SQL guard en SandboxedDbService.
   tablePrefix: string;
+  /// Bloque `didacta` del manifest (alpha.52). NULL si el módulo no
+  /// declara permisos sobre la API pública del core; el dispatcher
+  /// inyecta `BlockedDidactaApi`. Si declara, el dispatcher arma
+  /// `ScopedDidactaApi` con permission matrix + idempotencia por
+  /// (externalSource, externalId).
+  didactaConfig: ModuleDidactaConfig | null;
 }
 
 export interface RegisterModuleOptions {
@@ -92,6 +106,10 @@ export interface RegisterModuleOptions {
   /// Necesario aquí para que el dispatcher arme el SandboxedDbService
   /// scoped sin volver al row de installed_module por request.
   tablePrefix?: string;
+  /// Bloque `didacta` del manifest (alpha.52). NULL si el módulo no lo
+  /// declara — recibe `BlockedDidactaApi`. Si declara, el dispatcher
+  /// memoiza la config para construir `ScopedDidactaApi` por request.
+  didactaConfig?: ModuleDidactaConfig | null;
 }
 
 /// Registro runtime de routes expuestas por módulos dinámicos. Usado por
@@ -120,6 +138,7 @@ export class ModuleRouterService {
     const httpConfig = options.httpConfig ?? null;
     const dbEnabled = options.dbEnabled === true;
     const tablePrefix = options.tablePrefix ?? '';
+    const didactaConfig = options.didactaConfig ?? null;
     const registered: RegisteredRoute[] = [];
     for (const r of routes) {
       validateRoute(r);
@@ -136,11 +155,12 @@ export class ModuleRouterService {
         httpConfig,
         dbEnabled,
         tablePrefix,
+        didactaConfig,
       });
     }
     this.routesByModule.set(moduleName, registered);
     this.logger.log(
-      `Módulo "${moduleName}" registró ${registered.length} ruta(s) bajo ${apiNamespace} (http=${httpConfig ? 'enabled' : 'blocked'}, db=${dbEnabled ? 'enabled' : 'blocked'}).`,
+      `Módulo "${moduleName}" registró ${registered.length} ruta(s) bajo ${apiNamespace} (http=${httpConfig ? 'enabled' : 'blocked'}, db=${dbEnabled ? 'enabled' : 'blocked'}, didacta=${didactaConfig ? 'enabled' : 'blocked'}).`,
     );
   }
 
@@ -163,6 +183,7 @@ export class ModuleRouterService {
     httpConfig: ModuleHttpConfig | null;
     dbEnabled: boolean;
     tablePrefix: string;
+    didactaConfig: ModuleDidactaConfig | null;
   } | null {
     const upperMethod = method.toUpperCase();
     for (const list of this.routesByModule.values()) {
@@ -181,6 +202,7 @@ export class ModuleRouterService {
           httpConfig: route.httpConfig,
           dbEnabled: route.dbEnabled,
           tablePrefix: route.tablePrefix,
+          didactaConfig: route.didactaConfig,
         };
       }
     }

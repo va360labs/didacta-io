@@ -16,7 +16,11 @@ import { ModuleSignatureService } from './module-signature.service';
 import { ModulesDispatcherController } from './modules-dispatcher.controller';
 import { RateLimiterService } from './rate-limiter.service';
 import { SandboxedDbService } from './sandboxed-db.service';
+import { ScopedDidactaApiFactory } from './sandboxed-didacta.service';
 import { SandboxedHttpService } from './sandboxed-http.service';
+import { AdminUsersService } from '../admin/admin-users.service';
+import { PasswordResetService } from '../auth/password-reset.service';
+import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 
 /// Marketplace de módulos (ADR-009).
 ///
@@ -52,6 +56,10 @@ import { SandboxedHttpService } from './sandboxed-http.service';
     InstallPackageService,
     SandboxedHttpService,
     SandboxedDbService,
+    ScopedDidactaApiFactory,
+    AdminUsersService,
+    PasswordResetService,
+    PrismaAuditLogService,
     RateLimiterService,
     MarketplaceErrorFilter,
   ],

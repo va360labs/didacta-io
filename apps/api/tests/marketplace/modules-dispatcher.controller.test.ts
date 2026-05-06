@@ -88,6 +88,14 @@ const fakePrisma = {
 } as unknown as PrismaService;
 const dbSvc = new SandboxedDbService(fakePrisma);
 const tenantContext = new TenantContextService();
+// Stubs de los providers de DD-002/003. Los tests del dispatcher NO ejercen
+// ctx.didacta (didactaConfig=null en todos los routes registrados), así que
+// el dispatcher devuelve BlockedDidactaApi sin tocar el factory ni el
+// resolver. Stubs vacíos suficientes — si alguno se invoca, el cast `as any`
+// falla y el test se rompe explícitamente.
+const didactaFactory = {} as any;
+const moduleRegistry = {} as any;
+const contextFactory = {} as any;
 
 afterEach(() => {
   rateLimiter.reset();
@@ -104,7 +112,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'GET', path: '/items/:id', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/items/42',
       method: 'GET',
@@ -121,7 +129,7 @@ describe('ModulesDispatcherController.dispatch', () => {
 
   it('404 si no hay handler', async () => {
     const router = new ModuleRouterService();
-    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter, dbSvc, tenantContext);
+    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
     const req = makeReq({ url: '/api/v1/modules/ghost/foo' });
     const { reply } = makeReply();
     await expect(ctrl.dispatch(req, reply, undefined)).rejects.toBeInstanceOf(
@@ -136,7 +144,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'POST', path: '/echo', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims({ roles: ['formador'] }) });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/echo?a=1',
       method: 'POST',
@@ -159,7 +167,7 @@ describe('ModulesDispatcherController.dispatch', () => {
     router.registerModule('mod.example', '/modules/example', [
       { method: 'GET', path: '/public', handler },
     ]);
-    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter, dbSvc, tenantContext);
+    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
     const req = makeReq({ url: '/api/v1/modules/example/public' });
     const { reply } = makeReply();
     await ctrl.dispatch(req, reply, undefined);
@@ -172,7 +180,7 @@ describe('ModulesDispatcherController.dispatch', () => {
     router.registerModule('mod.example', '/modules/example', [
       { method: 'GET', path: '/public', handler },
     ]);
-    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter, dbSvc, tenantContext);
+    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/public',
       headers: { authorization: 'Bearer this-is-garbage' },
@@ -188,7 +196,7 @@ describe('ModulesDispatcherController.dispatch', () => {
     router.registerModule('mod.example', '/modules/example', [
       { method: 'GET', path: '/public', handler },
     ]);
-    const ctrl = new ModulesDispatcherController(router, makeTokens({ [VALID_TOKEN]: claims() }), httpSvc, rateLimiter, dbSvc, tenantContext);
+    const ctrl = new ModulesDispatcherController(router, makeTokens({ [VALID_TOKEN]: claims() }), httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/public',
       headers: { authorization: `Basic ${VALID_TOKEN}` },
@@ -205,7 +213,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'GET', path: '/public', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/public',
       headers: { authorization: 'Bearer    ' },
@@ -229,7 +237,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/boom',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -254,7 +262,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/with-headers',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -271,7 +279,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'DELETE', path: '/x', handler: async () => undefined as never },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/x',
       method: 'DELETE',
@@ -294,7 +302,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'GET', path: '/probe', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/probe',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -332,7 +340,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       },
     );
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/zoom/probe',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -359,7 +367,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'GET', path: '/probe', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/probe',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -392,7 +400,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       },
     );
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, tenantContext);
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
     const req = makeReq({
       url: '/api/v1/modules/example/probe',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -409,6 +417,79 @@ describe('ModulesDispatcherController.dispatch', () => {
     // Query fuera del prefix → DB_PREFIX_VIOLATION (SQL guard).
     await expect(ctx.db.query('SELECT * FROM "user"')).rejects.toMatchObject({
       code: 'DB_PREFIX_VIOLATION',
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Regresión DD-003 (alpha.52): cableado de ctx.didacta
+  // ─────────────────────────────────────────────────────────────────────────
+
+  it('módulo SIN bloque didacta → ctx.didacta rechaza con DIDACTA_PERMISSION_DENIED', async () => {
+    const router = new ModuleRouterService();
+    const handler = vi.fn(async () => ({ status: 200, body: 'ok' }));
+    router.registerModule('mod.example', '/modules/example', [
+      { method: 'GET', path: '/probe', handler },
+    ]);
+    const tokens = makeTokens({ [VALID_TOKEN]: claims() });
+    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, moduleRegistry, contextFactory, tenantContext);
+    const req = makeReq({
+      url: '/api/v1/modules/example/probe',
+      headers: { authorization: `Bearer ${VALID_TOKEN}` },
+    });
+    const { reply } = makeReply();
+    await ctrl.dispatch(req, reply, undefined);
+
+    const ctx = handler.mock.calls[0][0];
+    expect(typeof ctx.didacta?.users?.upsertByExternalRef).toBe('function');
+
+    await expect(
+      ctx.didacta.users.upsertByExternalRef({
+        externalSource: 'learndash',
+        externalId: '1',
+        email: 'a@b.com',
+      }),
+    ).rejects.toMatchObject({
+      name: 'DidactaError',
+      code: 'DIDACTA_PERMISSION_DENIED',
+      message: expect.stringContaining('manifest'),
+    });
+  });
+
+  it('módulo CON bloque didacta → llamada llega al ScopedDidactaApiFactory.build (con permisos)', async () => {
+    const router = new ModuleRouterService();
+    const handler = vi.fn(async () => ({ status: 200, body: 'ok' }));
+    router.registerModule(
+      'mod.example',
+      '/modules/example',
+      [{ method: 'GET', path: '/probe', handler }],
+      {
+        didactaConfig: {
+          externalSource: 'learndash',
+          permissions: ['users.upsertByExternalRef'],
+        },
+      },
+    );
+    // Stub: factory.build devuelve un cliente de prueba que graba la
+    // invocación. Verifica que el dispatcher pasó moduleId + didactaConfig.
+    const buildSpy = vi.fn(() => ({
+      users: {
+        upsertByExternalRef: vi.fn(async () => ({ id: 'u-1' } as any)),
+      },
+    }));
+    const fakeFactory = { build: buildSpy } as any;
+    const ctrl = new ModulesDispatcherController(router, makeTokens({ [VALID_TOKEN]: claims() }), httpSvc, rateLimiter, dbSvc, fakeFactory, moduleRegistry, contextFactory, tenantContext);
+    const req = makeReq({
+      url: '/api/v1/modules/example/probe',
+      headers: { authorization: `Bearer ${VALID_TOKEN}` },
+    });
+    const { reply } = makeReply();
+    await ctrl.dispatch(req, reply, undefined);
+
+    expect(buildSpy).toHaveBeenCalledTimes(1);
+    expect(buildSpy.mock.calls[0][0]).toBe('mod.example');
+    expect(buildSpy.mock.calls[0][1]).toEqual({
+      externalSource: 'learndash',
+      permissions: ['users.upsertByExternalRef'],
     });
   });
 });

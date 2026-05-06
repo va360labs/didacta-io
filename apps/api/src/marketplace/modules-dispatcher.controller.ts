@@ -13,6 +13,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { TokenService, type SessionClaims } from '../auth/token.service';
 import { TenantContextService } from '../tenancy/tenant-context.service';
+import { ModuleContextFactory } from '../modules/module-context.factory';
+import { ModuleRegistryService } from '../modules/module-registry.service';
 import {
   ALLOWED_METHODS,
   ModuleRouterService,
@@ -20,9 +22,14 @@ import {
   type ModuleRouteRequestContext,
   type ModuleRouteResponse,
 } from './module-router.service';
-import type { ModuleHttpConfig } from './module-manifest.schema';
+import type { ModuleDidactaConfig, ModuleHttpConfig } from './module-manifest.schema';
 import { RateLimitedHttp, RateLimiterService } from './rate-limiter.service';
 import { SandboxedDbService } from './sandboxed-db.service';
+import {
+  ScopedDidactaApiFactory,
+  type CoreServicesResolver,
+} from './sandboxed-didacta.service';
+import { BlockedDidactaApi, type DidactaApi } from './sandboxed-didacta.types';
 import { SandboxedHttpService } from './sandboxed-http.service';
 import { BlockedSandboxedHttp, type SandboxedHttp } from './sandboxed-http.types';
 import { BlockedSandboxedDb, type SandboxedDb } from './sandboxed-db.types';
@@ -61,6 +68,9 @@ export class ModulesDispatcherController {
     private readonly httpService: SandboxedHttpService,
     private readonly rateLimiter: RateLimiterService,
     private readonly dbService: SandboxedDbService,
+    private readonly didactaFactory: ScopedDidactaApiFactory,
+    private readonly moduleRegistry: ModuleRegistryService,
+    private readonly contextFactory: ModuleContextFactory,
     private readonly tenantContext: TenantContextService,
   ) {}
 
@@ -121,6 +131,16 @@ export class ModulesDispatcherController {
       matched.dbEnabled,
       matched.tablePrefix,
     );
+    // ctx.didacta: API pública del core scoped al módulo (alpha.52).
+    // - Sin manifest.didacta → BlockedDidactaApi (rechaza con
+    //   DIDACTA_PERMISSION_DENIED + mensaje accionable).
+    // - Con manifest.didacta → ScopedDidactaApi con permission matrix +
+    //   idempotencia por (externalSource, externalId) + delegación a
+    //   services del core (Courses/Learning/Assessments/AdminUsers).
+    const didacta: DidactaApi = this.buildScopedDidacta(
+      matched.moduleName,
+      matched.didactaConfig,
+    );
 
     const ctx: ModuleRouteRequestContext = {
       method: method as AllowedMethod,
@@ -133,6 +153,7 @@ export class ModulesDispatcherController {
         : null,
       http,
       db,
+      didacta,
     };
 
     let result: ModuleRouteResponse;
@@ -186,6 +207,25 @@ export class ModulesDispatcherController {
     if (!dbEnabled) return new BlockedSandboxedDb(moduleName);
     const tenantId = this.tenantContext.get()?.tenantId ?? null;
     return this.dbService.build(moduleName, tablePrefix, tenantId);
+  }
+
+  /// Construye el cliente `ctx.didacta` scoped al módulo + tenant del
+  /// request. El resolver es lazy porque ModuleRegistryService.onModuleInit
+  /// instancia los services del core, y ese hook ya corrió antes de que
+  /// llegue cualquier request HTTP. `protected` para override en tests.
+  protected buildScopedDidacta(
+    moduleName: string,
+    didactaConfig: ModuleDidactaConfig | null,
+  ): DidactaApi {
+    if (!didactaConfig) return new BlockedDidactaApi(moduleName);
+    const resolver: CoreServicesResolver = {
+      getCoursesService: () => this.moduleRegistry.getCoursesService(),
+      getLearningService: () => this.moduleRegistry.getLearningService(),
+      getAssessmentsService: () => this.moduleRegistry.getAssessmentsService(),
+      getWebBaseUrl: () => process.env['WEB_BASE_URL'] ?? 'http://localhost:3000',
+      getStorage: () => this.contextFactory.getStorage(),
+    };
+    return this.didactaFactory.build(moduleName, didactaConfig, resolver);
   }
 
   /// Extrae el Bearer del header Authorization y lo verifica con

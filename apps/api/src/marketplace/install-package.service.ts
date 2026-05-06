@@ -2,14 +2,18 @@ import { Injectable, Logger } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import type { InstalledModule } from '@didacta/database';
 import { ModuleContextFactory } from '../modules/module-context.factory';
+import { ModuleRegistryService } from '../modules/module-registry.service';
+import { AdminUsersService } from '../admin/admin-users.service';
 import { InstalledModuleService } from './installed-module.service';
-import type { ModuleManifest } from './module-manifest.schema';
+import type { ModuleDidactaConfig, ModuleManifest } from './module-manifest.schema';
 import { MarketplacePackageError } from './module-package.errors';
 import { ModuleMigrationService } from './module-migration.service';
 import { ModulePackageService } from './module-package.service';
 import { ModuleRouterService } from './module-router.service';
 import { ModuleSandboxService } from './module-sandbox.service';
 import { RateLimitedHttp, RateLimiterService } from './rate-limiter.service';
+import { ScopedDidactaApiFactory, type CoreServicesResolver } from './sandboxed-didacta.service';
+import { BlockedDidactaApi, type DidactaApi } from './sandboxed-didacta.types';
 import { SandboxedDbService } from './sandboxed-db.service';
 import { BlockedSandboxedDb, type SandboxedDb } from './sandboxed-db.types';
 import { SandboxedHttpService } from './sandboxed-http.service';
@@ -84,6 +88,8 @@ export class InstallPackageService {
     private readonly httpService: SandboxedHttpService,
     private readonly rateLimiter: RateLimiterService,
     private readonly dbService: SandboxedDbService,
+    private readonly didactaFactory: ScopedDidactaApiFactory,
+    private readonly moduleRegistry: ModuleRegistryService,
     private readonly tenantContext: TenantContextService,
   ) {}
 
@@ -170,12 +176,20 @@ export class InstallPackageService {
         validated.manifest.requiresDb === true,
         validated.manifest.tablePrefix,
       );
+      // ctx.didacta scoped para `onInstall` (alpha.52). Si el módulo
+      // declara `manifest.didacta.permissions`, recibe ScopedDidactaApi
+      // con permission matrix; si no, BlockedDidactaApi (rechazo claro).
+      const installDidacta = this.buildScopedDidacta(
+        validated.manifest.name,
+        validated.manifest.didacta ?? null,
+      );
       await this.sandbox.runOnInstall(
         sandboxed,
         validated.manifest.name,
         validated.manifest.version,
         installHttp,
         installDb,
+        installDidacta,
       );
 
       // 14. Registro de routes en el dispatcher runtime. Si el módulo
@@ -195,6 +209,7 @@ export class InstallPackageService {
               httpConfig: validated.manifest.http ?? null,
               dbEnabled: validated.manifest.requiresDb === true,
               tablePrefix: validated.manifest.tablePrefix,
+              didactaConfig: validated.manifest.didacta ?? null,
             },
           );
         } catch (err) {
@@ -258,6 +273,29 @@ export class InstallPackageService {
     if (!requiresDb) return new BlockedSandboxedDb(moduleName);
     const tenantId = this.tenantContext.get()?.tenantId ?? null;
     return this.dbService.build(moduleName, tablePrefix, tenantId);
+  }
+
+  /// Construye el cliente `ctx.didacta` scoped para `onInstall/onUninstall`.
+  /// Mismo contrato que el del dispatcher. Si el módulo no declara permisos
+  /// → BlockedDidactaApi (rechaza con DIDACTA_PERMISSION_DENIED + mensaje
+  /// accionable). Si declara → ScopedDidactaApi con resolver lazy de los
+  /// services del core (CoursesService, LearningService, AssessmentsService,
+  /// Storage). El resolver es lazy porque ModuleRegistryService.onModuleInit
+  /// instancia los services, y ese hook puede aún no haber corrido cuando se
+  /// construye este service.
+  private buildScopedDidacta(
+    moduleName: string,
+    didactaConfig: ModuleDidactaConfig | null,
+  ): DidactaApi {
+    if (!didactaConfig) return new BlockedDidactaApi(moduleName);
+    const resolver: CoreServicesResolver = {
+      getCoursesService: () => this.moduleRegistry.getCoursesService(),
+      getLearningService: () => this.moduleRegistry.getLearningService(),
+      getAssessmentsService: () => this.moduleRegistry.getAssessmentsService(),
+      getWebBaseUrl: () => process.env['WEB_BASE_URL'] ?? 'http://localhost:3000',
+      getStorage: () => this.contextFactory.getStorage(),
+    };
+    return this.didactaFactory.build(moduleName, didactaConfig, resolver);
   }
 }
 
