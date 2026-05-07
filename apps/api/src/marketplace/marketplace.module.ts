@@ -6,6 +6,13 @@ import { AdminMarketplaceController } from './admin-marketplace.controller';
 import { ModuleAssetsController } from './module-assets.controller';
 import { InstalledModuleService } from './installed-module.service';
 import { InstallPackageService } from './install-package.service';
+import { ModuleJobLifecycleRegistry } from './job-runner/mod-jobs-lifecycle.registry';
+import {
+  ModJobsMetrics,
+  modJobsMetricsProviders,
+} from './job-runner/mod-jobs.metrics';
+import { ModJobsQueueService } from './job-runner/mod-jobs.queue';
+import { ModJobsWorkerService } from './job-runner/mod-jobs.worker';
 import { MarketplaceErrorFilter } from './marketplace-error.filter';
 import { ModuleLintService } from './module-lint.service';
 import { ModuleMigrationService } from './module-migration.service';
@@ -62,12 +69,20 @@ import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
     PrismaAuditLogService,
     RateLimiterService,
     MarketplaceErrorFilter,
+    // Sprint 3 — runtime de jobs `mod-jobs` (BullMQ + worker + registry).
+    ModuleJobLifecycleRegistry,
+    ModJobsQueueService,
+    ModJobsWorkerService,
+    ...modJobsMetricsProviders,
+    ModJobsMetrics,
   ],
   exports: [
     ModuleSignatureService,
     ModulePackageService,
     InstalledModuleService,
     ModuleRouterService,
+    ModuleJobLifecycleRegistry,
+    ModJobsQueueService,
   ],
 })
 export class MarketplaceModule {}

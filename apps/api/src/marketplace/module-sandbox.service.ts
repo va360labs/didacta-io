@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createContext, runInContext, type Context } from 'node:vm';
+import type { ModuleJobTickHandler } from './job-runner/mod-jobs.types';
 import { ALLOWED_REQUIRES, ModuleLintService } from './module-lint.service';
+import type { ModuleJobLifecycleConfig } from './module-manifest.schema';
 import { MarketplacePackageError } from './module-package.errors';
 import type { ModuleRoute } from './module-router.service';
 import { NoopSandboxedDb, type SandboxedDb } from './sandboxed-db.types';
@@ -19,6 +21,12 @@ export interface SandboxedModule {
   /// requests entrantes a `/api/v1/modules/<slug>/*`. Forma esperada en
   /// `module-router.service.ts`.
   routes?: ModuleRoute[];
+  /// Handler invocado por el `ModJobsWorkerService` (Sprint 3 / JR-002)
+  /// por cada tick de un job encolado en `didacta.mod-jobs`. Su
+  /// existencia se infiere de `manifest.jobLifecycle.onTickFn` — el
+  /// sandbox normaliza el export al campo `onJobTick` para que los
+  /// callers (registry, worker) consuman un nombre fijo.
+  onJobTick?: ModuleJobTickHandler;
 }
 
 /// Contexto restringido que se pasa a los hooks del módulo. Ningún acceso
@@ -62,7 +70,21 @@ export class ModuleSandboxService {
   /// asumiendo el shape `SandboxedModule`. El bundle pasa primero por el
   /// lint estático; luego se ejecuta con un `require` proxy que solo
   /// resuelve módulos de la allowlist.
-  loadModule(distSource: string, moduleName: string): SandboxedModule {
+  ///
+  /// Si el manifest declara `jobLifecycle.onTickFn`, validamos que el
+  /// bundle exporte esa función bajo ese nombre y la normalizamos al
+  /// campo fijo `onJobTick` para que el worker/registry no tengan que
+  /// volver a leer el manifest. Si la función no existe → MODULE_BOOT_FAILED.
+  ///
+  /// `manifest` es opcional para no romper callers existentes que no lo
+  /// pasan (algunos tests del sandbox cargan código directamente sin
+  /// manifest). En el flujo real de install (`InstallPackageService`)
+  /// siempre se pasa.
+  loadModule(
+    distSource: string,
+    moduleName: string,
+    manifest?: { jobLifecycle?: ModuleJobLifecycleConfig },
+  ): SandboxedModule {
     this.lint.lintBundle(distSource);
 
     const sandbox = this.buildSandbox(moduleName);
@@ -108,6 +130,22 @@ export class ModuleSandboxService {
       // Validación detallada del shape de cada route la hace el router al
       // registrar — aquí solo aseguramos que es un array.
     }
+
+    // jobLifecycle: si el manifest declara `onTickFn`, exigimos que el
+    // bundle lo exporte como función. Lo copiamos al alias fijo
+    // `onJobTick` para que el resto del host consuma un único nombre.
+    const onTickFn = manifest?.jobLifecycle?.onTickFn;
+    if (onTickFn) {
+      const exported = (moduleExports as Record<string, unknown>)[onTickFn];
+      if (typeof exported !== 'function') {
+        throw new MarketplacePackageError(
+          'MODULE_BOOT_FAILED',
+          `manifest.jobLifecycle.onTickFn declara "${onTickFn}" pero el bundle no exporta una función con ese nombre. Asegurate de hacer \`module.exports.${onTickFn} = async (ctx) => { ... };\` (recibido: ${typeof exported}).`,
+        );
+      }
+      sandboxed.onJobTick = exported as ModuleJobTickHandler;
+    }
+
     return sandboxed;
   }
 

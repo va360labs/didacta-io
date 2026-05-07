@@ -226,6 +226,52 @@ const didactaSchema = z
   .strict();
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Schema para jobLifecycle — onJobTick worker (Sprint 3 / JR-003)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Si el módulo necesita ejecutar trabajo de larga duración fuera del ciclo
+// de un request HTTP (ej. mod.migrator-learndash importando 5_000 cursos
+// de WordPress), declara el bloque `jobLifecycle` con el nombre de la
+// función que el host debe invocar en cada tick. La función vive en el
+// `dist/index.js` del bundle y recibe un `ctx` similar al de un request
+// (db, http, didacta scoped) más { jobId, tenantId, tickIndex }. Retorna
+// `{ status: 'continue' | 'completed' | 'failed' }` para indicar al
+// worker qué hacer a continuación.
+//
+// Reglas:
+//   - Si el manifest declara `jobLifecycle` pero el bundle NO exporta la
+//     función referenciada → MODULE_BOOT_FAILED (rechazo en install).
+//   - Si el manifest declara `requiresDb=true` y/o `didacta` PERO NO
+//     `jobLifecycle`, el host emite warning en boot — esos recursos
+//     suelen acompañar jobs largos, y un módulo síncrono que los
+//     declare puede ser un anti-pattern (procesamiento en handlers HTTP).
+//     El warning NO bloquea el install.
+//   - El cap `maxTicksPerHour` actúa como circuit breaker contra bucles
+//     infinitos: si un módulo con bug retorna `continue` para siempre
+//     sin avanzar trabajo, el worker lo abortará al superar el cap (la
+//     enforcement vive en el worker, esto solo declara el límite).
+//     Default 600 = 1 tick cada 6s en promedio. Cap duro 3600 = 1/s.
+
+const jobLifecycleSchema = z
+  .object({
+    /// Nombre del export en `module.exports` que el worker invoca por
+    /// cada tick. Debe ser un identifier JS válido — el sandbox lo lee
+    /// con `module.exports[onTickFn]` (sin eval).
+    onTickFn: z
+      .string()
+      .min(1)
+      .max(60)
+      .regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, {
+        message:
+          'onTickFn debe ser un identifier JS válido (^[a-zA-Z_][a-zA-Z0-9_]*$).',
+      }),
+    /// Tope de ticks por hora — defensa anti-bucle infinito. Default
+    /// 600 (1 tick/6s en media). Cap duro 3600.
+    maxTicksPerHour: z.number().int().min(1).max(3600).default(600).optional(),
+  })
+  .strict();
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Schemas para UI Surfaces (DISC-001.5)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -362,6 +408,14 @@ export const moduleManifestSchema = z
     // externalId). Permission matrix declarada explícitamente. Si falta
     // el bloque, el módulo recibe BlockedDidactaApi con mensaje accionable.
     didacta: didactaSchema.optional(),
+
+    // jobLifecycle — onJobTick worker (Sprint 3 / JR-003). Si el módulo
+    // declara este bloque, el host registra el handler exportado bajo
+    // `manifest.jobLifecycle.onTickFn` en el ModuleJobLifecycleRegistry
+    // y lo invoca por cada job de la queue `didacta.mod-jobs` que
+    // referencia al módulo. Si el bundle NO exporta esa función → el
+    // install falla con MODULE_BOOT_FAILED (validado en sandbox).
+    jobLifecycle: jobLifecycleSchema.optional(),
   })
   .strict();
 
@@ -371,6 +425,7 @@ export type ModuleHttpConfig = z.infer<typeof httpSchema>;
 export type ModuleSurfaceConfig = z.infer<typeof surfaceSchema>;
 export type ModuleConfigField = z.infer<typeof configFieldSchema>;
 export type ModuleAssets = z.infer<typeof assetsSchema>;
+export type ModuleJobLifecycleConfig = z.infer<typeof jobLifecycleSchema>;
 
 /// Coherencia cruzada: el `tablePrefix` y el `apiNamespace` deben derivar del
 /// mismo slug que `name`. Evita que un módulo declare un nombre y use el

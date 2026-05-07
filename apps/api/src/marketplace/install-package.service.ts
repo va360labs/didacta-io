@@ -4,6 +4,7 @@ import type { InstalledModule } from '@didacta/database';
 import { ModuleContextFactory } from '../modules/module-context.factory';
 import { ModuleRegistryService } from '../modules/module-registry.service';
 import { AdminUsersService } from '../admin/admin-users.service';
+import { ModuleJobLifecycleRegistry } from './job-runner/mod-jobs-lifecycle.registry';
 import { InstalledModuleService } from './installed-module.service';
 import type { ModuleDidactaConfig, ModuleManifest } from './module-manifest.schema';
 import { MarketplacePackageError } from './module-package.errors';
@@ -91,6 +92,7 @@ export class InstallPackageService {
     private readonly didactaFactory: ScopedDidactaApiFactory,
     private readonly moduleRegistry: ModuleRegistryService,
     private readonly tenantContext: TenantContextService,
+    private readonly jobLifecycle: ModuleJobLifecycleRegistry,
   ) {}
 
   async install(packageBuffer: Buffer, installedById: string): Promise<InstallResult> {
@@ -155,7 +157,14 @@ export class InstallPackageService {
       // NO se rollback — son commits separados; un retry verá las
       // migrations en `migrationsApplied` y no las re-correrá).
       const distSource = extractDistSource(packageBuffer);
-      const sandboxed = this.sandbox.loadModule(distSource, validated.manifest.name);
+      // Pasamos el manifest para que el sandbox valide jobLifecycle.onTickFn
+      // contra los exports del bundle (Sprint 3 / JR-003). Si el manifest
+      // declara la función pero el bundle no la exporta → MODULE_BOOT_FAILED.
+      const sandboxed = this.sandbox.loadModule(
+        distSource,
+        validated.manifest.name,
+        validated.manifest,
+      );
 
       // 13. Hook de instalación del módulo, si lo declara. El http
       // scoped (alpha.49) llega también aquí para que `onInstall` pueda
@@ -222,6 +231,26 @@ export class InstallPackageService {
         // Upgrade in-place: la versión anterior podría haber registrado
         // routes; si la nueva no declara, las anteriores deben morir.
         this.router.unregisterModule(validated.manifest.name);
+      }
+
+      // 14b. Registro del onJobTick en el ModuleJobLifecycleRegistry
+      // (Sprint 3 / JR-003). Si el módulo expone la función referenciada
+      // por `manifest.jobLifecycle.onTickFn`, el sandbox ya la copió a
+      // `sandboxed.onJobTick` (alias fijo). Memorizamos el wiring de
+      // recursos (httpConfig, dbEnabled, tablePrefix, didactaConfig)
+      // para que el worker pueda armar el ctx scoped sin volver a leer
+      // el manifest. Si no expone, limpiamos cualquier registro previo
+      // (caso upgrade in-place donde la versión anterior tenía jobs).
+      if (sandboxed.onJobTick) {
+        this.jobLifecycle.register(validated.manifest.name, sandboxed.onJobTick, {
+          httpConfig: validated.manifest.http ?? null,
+          dbEnabled: validated.manifest.requiresDb === true,
+          tablePrefix: validated.manifest.tablePrefix,
+          didactaConfig: validated.manifest.didacta ?? null,
+          moduleVersion: validated.manifest.version,
+        });
+      } else {
+        this.jobLifecycle.unregister(validated.manifest.name);
       }
 
       // 15. Cierre OK.
