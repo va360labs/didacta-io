@@ -106,7 +106,7 @@ services:
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
 
   didacta:
-    image: didactaio/community:${DIDACTA_IMAGE_TAG:-0.0.1-alpha.52}
+    image: didactaio/community:${DIDACTA_IMAGE_TAG:-0.0.1-alpha.53}
     container_name: didacta-app
     restart: unless-stopped
     depends_on:
@@ -117,7 +117,7 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       # DIDACTA_CORE_VERSION: Fuente de verdad para compatibilidad de modulos.
-      DIDACTA_CORE_VERSION: ${DIDACTA_IMAGE_TAG:-0.0.1-alpha.52}
+      DIDACTA_CORE_VERSION: ${DIDACTA_IMAGE_TAG:-0.0.1-alpha.53}
       DATABASE_URL: postgresql://${POSTGRES_USER:-didacta}:${POSTGRES_PASSWORD:-didacta_dev}@postgres:5432/${POSTGRES_DB:-didacta}?schema=public
       REDIS_URL: redis://redis:6379
       AUTH_SECRET: ${AUTH_SECRET}
