@@ -46,6 +46,19 @@ export interface ModuleManifest {
     externalSource: string;
     permissions: string[];
   };
+  /// Job lifecycle (alpha.53+). Si el módulo expone `onJobTick`, declarar
+  /// el nombre de la función exportada aquí. El host valida en install
+  /// que `module.exports[onTickFn]` existe — si no, MODULE_BOOT_FAILED.
+  /// El worker BullMQ del host invoca `onJobTick(ctx)` por cada tick del
+  /// job (después de POST /jobs lo encolar). Sin este bloque, el módulo
+  /// es síncrono — los handlers HTTP responden, pero los jobs persisten
+  /// en `pending` para siempre.
+  jobLifecycle?: {
+    onTickFn: string;
+    /// Tope de ticks por hora (defensa anti-bucle infinito). El host
+    /// puede aplicar throttling si excede. Default 600 (1 tick/6s).
+    maxTicksPerHour?: number;
+  };
 }
 
 export const manifest: ModuleManifest = {
@@ -53,7 +66,7 @@ export const manifest: ModuleManifest = {
   displayName: 'Migrador desde WordPress + LearnDash',
   description:
     'Importa cursos, lecciones, temas, quizzes, preguntas, usuarios, grupos, matrículas, media y progreso desde WordPress + LearnDash hacia Didacta. Wizard didáctico paso a paso, ETL con staging, idempotencia por checksum, reportes auditables.',
-  version: '1.0.7',
+  version: '1.0.8',
   author: 'Didacta',
   license: 'Proprietary',
   category: 'migration',
@@ -128,5 +141,14 @@ export const manifest: ModuleManifest = {
       'media.uploadFromUrl',
       'media.uploadFromBytes',
     ],
+  },
+  // alpha.53: el módulo expone `onJobTick` para que el worker BullMQ del
+  // host avance el state machine del job. Ver src/index.ts para la
+  // implementación. Sin este bloque, el host NO encolaría los jobs y
+  // quedarían en `pending` para siempre. Tope de 600 ticks/h por job
+  // (1 tick cada 6s) para limitar abuso si el módulo cae en un bucle.
+  jobLifecycle: {
+    onTickFn: 'onJobTick',
+    maxTicksPerHour: 600,
   },
 };

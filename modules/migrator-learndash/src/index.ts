@@ -150,6 +150,38 @@ interface ModuleInstallContext {
   db?: SandboxedDb;
 }
 
+/// Resultado que `onJobTick` retorna al worker BullMQ del host (alpha.53+).
+/// El worker decide si re-encolar (continue), marcar como done (completed),
+/// o marcar fallido (failed). State machine y batching dependen del módulo.
+type JobTickResult =
+  | { status: 'continue'; delaySec?: number }
+  | { status: 'completed' }
+  | { status: 'failed'; reason: string };
+
+/// Context que el worker BullMQ pasa al `onJobTick` del módulo (alpha.53+).
+/// Mismo patrón que `ModuleRouteRequestContext` pero sin user/method/path —
+/// los jobs corren fuera de un request HTTP, sin actor humano vivo. El
+/// `tenantId` viaja explícitamente porque el ALS del worker NO tiene el
+/// del request original (BullMQ procesa fuera del flow HTTP).
+interface ModuleJobTickContext {
+  moduleName: string;
+  moduleVersion: string;
+  jobId: string;
+  tenantId: string;
+  /// Iteración (0 = primer tick tras encolar). Útil para detección de
+  /// stuck jobs (si supera N para la fase actual, abortar).
+  tickIndex: number;
+  log: (level: 'log' | 'warn' | 'error', message: string) => void;
+  db: SandboxedDb;
+  http: SandboxedHttp;
+  didacta: DidactaApi;
+}
+
+// Tipo placeholder — el contrato real de DidactaApi vive en el host. Lo
+// declaramos local para evitar acoplarse a imports que el sandbox rechaza.
+// Solo necesitamos el shape mínimo que invocará el load phase (ET-003).
+type DidactaApi = unknown;
+
 // ---- Helpers de respuesta uniforme --------------------------------
 
 function ok(body: unknown, status = 200): ModuleRouteResponse {
@@ -336,6 +368,35 @@ async function setJobStatus(
     [tenantId, jobId, status, completedAt],
   );
   return result.rowCount;
+}
+
+/// Transición atómica vía CAS (compare-and-set). Solo aplica el UPDATE si
+/// el status actual del job es exactamente `from`. Si otro tick (o el
+/// endpoint de cancelación) cambió el status entre el read y el write,
+/// el UPDATE devuelve `rowCount=0` y el caller sabe que debe re-leer +
+/// reintentar la lógica con el estado nuevo.
+///
+/// Esto evita race conditions cuando dos workers procesan jobs del mismo
+/// tenant en paralelo y permite cancelación cooperativa: si alguien hace
+/// `setJobStatus(...,'cancelled')` justo antes de un tick, este tick lo
+/// ve y NO transiciona la fase.
+///
+/// Postgres garantiza atomicidad del UPDATE — sin SELECT FOR UPDATE
+/// adicional, la condición está en el WHERE.
+async function tryTransition(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+  from: JobRecord['status'],
+  to: JobRecord['status'],
+): Promise<boolean> {
+  const result = await db.execute(
+    `UPDATE mod_migrator_learndash_jobs
+        SET status = $4
+      WHERE tenant_id = $1::uuid AND id = $2::uuid AND status = $3`,
+    [tenantId, jobId, from, to],
+  );
+  return result.rowCount === 1;
 }
 
 function nowIso(): string {
@@ -925,14 +986,160 @@ async function onUninstall(ctx: ModuleInstallContext): Promise<void> {
   );
 }
 
+// ---- onJobTick: state machine cooperativa (alpha.53+ / Sprint 3) ------
+//
+// El worker BullMQ del host invoca esta función por cada tick del job.
+// El módulo decide qué hacer en cada tick según `job.status`. Cada tick
+// avanza UNA fase O un batch dentro de una fase y devuelve un resultado
+// que indica al worker si re-encolar (continue), terminar (completed),
+// o fallar (failed).
+//
+// Estados:
+//   pending → preflight → extracting → transforming → loading
+//                                                  → reconciling
+//                                                  → completed
+//                       ↘ cancelled
+//                       ↘ failed
+//
+// Reglas:
+// 1. Cancelación cooperativa (JR-005): cada tick lee el status actual
+//    PRIMERO. Si está `cancelled`, retornamos `completed` sin trabajo —
+//    el cambio de status lo dispara `POST /jobs/:id/cancel` de forma
+//    asíncrona, este tick lo respeta sin race.
+// 2. Transiciones atómicas (JR-004): cada cambio de fase usa CAS
+//    (`tryTransition`). Si dos workers procesan el mismo job en
+//    paralelo, solo uno tiene éxito en cada transición; el otro re-lee
+//    y procede con el nuevo estado.
+// 3. Idempotencia: re-correr el mismo tick (BullMQ retry, network
+//    glitch, restart del worker) no debe corromper. Las transiciones
+//    son CAS-protected; los batches dentro de una fase ya tienen
+//    idempotencia via externalRef (ctx.didacta.upsertByExternalRef).
+//
+// Sprint 4 (ET-001..ET-005) implementa las fases reales de extracting/
+// transforming/loading/reconciling. En alpha.53 son STUBs que solo
+// avanzan al siguiente estado para validar el wiring end-to-end.
+
+async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
+  const { db, tenantId, jobId, tickIndex } = ctx;
+
+  // 1. Leer estado actual. Si el job no existe, abortamos (puede haber
+  //    sido borrado por un cleanup del operador entre encolado y tick).
+  let job: JobRecord | undefined;
+  try {
+    job = await getJob(db, tenantId, jobId);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    ctx.log('error', `tick ${tickIndex}: error leyendo job ${jobId}: ${msg}`);
+    return { status: 'failed', reason: `db_error_reading_job: ${msg}` };
+  }
+  if (!job) {
+    ctx.log('warn', `tick ${tickIndex}: job ${jobId} no encontrado — fue borrado o el ID es inválido.`);
+    return { status: 'failed', reason: 'JOB_NOT_FOUND' };
+  }
+
+  // 2. Cancelación cooperativa (JR-005). Si POST /jobs/:id/cancel marcó
+  //    el status como 'cancelled', este tick respeta el cambio y
+  //    completa sin trabajo. Sin signals globales ni race condition:
+  //    el read-then-decide en cada tick es la garantía.
+  if (job.status === 'cancelled') {
+    ctx.log('log', `tick ${tickIndex}: job ${jobId} cancelado — completando tick sin trabajo.`);
+    return { status: 'completed' };
+  }
+
+  // 3. Estados terminales: nada más que hacer. Esto sucede si BullMQ
+  //    re-encola un job tras una completion exitosa por error de
+  //    deduplicación, o si el worker re-procesa un job ya finalizado.
+  if (job.status === 'completed' || job.status === 'failed') {
+    return { status: 'completed' };
+  }
+
+  // 4. State machine. Cada case avanza UNA fase. En Sprint 4 cada case
+  //    procesará UN batch dentro de la fase y solo transicionará al
+  //    siguiente estado cuando ese batch sea el último.
+  try {
+    switch (job.status) {
+      case 'pending': {
+        const advanced = await tryTransition(db, tenantId, jobId, 'pending', 'preflight');
+        if (!advanced) {
+          // Otro tick ya cambió el estado. Re-encolamos sin delay para
+          // procesar el nuevo estado en el próximo tick.
+          return { status: 'continue', delaySec: 0 };
+        }
+        ctx.log('log', `tick ${tickIndex}: job ${jobId} pending → preflight.`);
+        return { status: 'continue', delaySec: 0 };
+      }
+
+      case 'preflight': {
+        // El preflight real ya se ejecuta en POST /preflight (handler
+        // sincrónico, antes de crear el job). En esta fase solo
+        // confirmamos el setup y avanzamos. Sprint 4 podría mover el
+        // preflight async aquí si fuera muy lento.
+        const advanced = await tryTransition(db, tenantId, jobId, 'preflight', 'extracting');
+        if (!advanced) return { status: 'continue', delaySec: 0 };
+        ctx.log('log', `tick ${tickIndex}: job ${jobId} preflight → extracting.`);
+        return { status: 'continue', delaySec: 0 };
+      }
+
+      case 'extracting': {
+        // STUB Sprint 4 / ET-001. Por ahora solo avanza para validar el
+        // wiring de la state machine end-to-end.
+        ctx.log('warn', `tick ${tickIndex}: extract phase es STUB (ET-001 pendiente Sprint 4) — avanzando a transforming.`);
+        const advanced = await tryTransition(db, tenantId, jobId, 'extracting', 'transforming');
+        if (!advanced) return { status: 'continue', delaySec: 0 };
+        return { status: 'continue', delaySec: 0 };
+      }
+
+      case 'transforming': {
+        // STUB Sprint 4 / ET-002.
+        ctx.log('warn', `tick ${tickIndex}: transform phase es STUB (ET-002 pendiente Sprint 4) — avanzando a loading.`);
+        const advanced = await tryTransition(db, tenantId, jobId, 'transforming', 'loading');
+        if (!advanced) return { status: 'continue', delaySec: 0 };
+        return { status: 'continue', delaySec: 0 };
+      }
+
+      case 'loading': {
+        // STUB Sprint 4 / ET-003. Será donde ctx.didacta entre en juego
+        // con upsertByExternalRef de cada entidad.
+        ctx.log('warn', `tick ${tickIndex}: load phase es STUB (ET-003 pendiente Sprint 4) — avanzando a reconciling.`);
+        const advanced = await tryTransition(db, tenantId, jobId, 'loading', 'reconciling');
+        if (!advanced) return { status: 'continue', delaySec: 0 };
+        return { status: 'continue', delaySec: 0 };
+      }
+
+      case 'reconciling': {
+        // STUB Sprint 4 / ET-004 (validation_reports + audit chain ET-005).
+        ctx.log('warn', `tick ${tickIndex}: reconcile phase es STUB (ET-004 pendiente Sprint 4) — completando job.`);
+        const advanced = await tryTransition(db, tenantId, jobId, 'reconciling', 'completed');
+        if (!advanced) return { status: 'continue', delaySec: 0 };
+        await setJobStatus(db, tenantId, jobId, 'completed', nowIso());
+        ctx.log('log', `tick ${tickIndex}: job ${jobId} completed (todas las fases en STUB).`);
+        return { status: 'completed' };
+      }
+
+      default: {
+        ctx.log('error', `tick ${tickIndex}: estado inesperado ${job.status} en job ${jobId}.`);
+        return { status: 'failed', reason: `unexpected_status:${job.status}` };
+      }
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    ctx.log('error', `tick ${tickIndex}: error en state machine de job ${jobId}: ${msg}`);
+    // Re-encolar con backoff — error transitorio (deadlock Postgres,
+    // network glitch). Si persiste, BullMQ dará up tras `attempts`.
+    return { status: 'continue', delaySec: 30 };
+  }
+}
+
 // ---- Export con el shape EXACTO del host -----------------------------
 //
-// CRÍTICO: module.exports debe ser { onInstall, onUninstall, routes }.
-// NO envolver en `migratorLearndashModule` ni añadir `manifest`/re-exports.
-// El sandbox lee `module.exports` directamente y aplica casting al
-// shape `SandboxedModule` (apps/api/src/marketplace/module-sandbox.service.ts).
+// CRÍTICO: module.exports debe ser { onInstall, onUninstall, routes,
+// onJobTick }. NO envolver en `migratorLearndashModule` ni añadir
+// `manifest`/re-exports. El sandbox lee `module.exports` directamente y
+// aplica casting al shape `SandboxedModule` (apps/api/src/marketplace/
+// module-sandbox.service.ts). El host enrutará `onJobTick` al worker
+// BullMQ si el manifest declara `jobLifecycle.onTickFn = 'onJobTick'`.
 
-export { manifest, routes, onInstall, onUninstall };
+export { manifest, routes, onInstall, onUninstall, onJobTick };
 // `paginateWp` se exporta para tests + para el extract phase del job
 // cuando se cablee. NO se incluye en module.exports porque el host
 // solo consume `{ onInstall, onUninstall, routes }` — el helper es
