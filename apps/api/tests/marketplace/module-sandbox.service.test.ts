@@ -135,4 +135,66 @@ describe('ModuleSandboxService.loadModule', () => {
       code: 'MODULE_BOOT_FAILED',
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // jobLifecycle.onTickFn — Sprint 3 / JR-003
+  // ─────────────────────────────────────────────────────────────────────────
+
+  it('detecta y normaliza onJobTick cuando manifest.jobLifecycle.onTickFn existe', () => {
+    const code = `
+      module.exports = {
+        myTick: async (ctx) => ({ status: 'completed' }),
+      };
+    `;
+    const svc = makeSandbox();
+    const sandboxed = svc.loadModule(code, 'mod.test', {
+      jobLifecycle: { onTickFn: 'myTick' },
+    });
+    expect(typeof sandboxed.onJobTick).toBe('function');
+  });
+
+  it('rechaza con MODULE_BOOT_FAILED si jobLifecycle.onTickFn no existe en el bundle', () => {
+    const code = `
+      module.exports = {
+        // myTick NO está exportado.
+        someOther: () => {},
+      };
+    `;
+    const svc = makeSandbox();
+    expect(() =>
+      svc.loadModule(code, 'mod.test', { jobLifecycle: { onTickFn: 'myTick' } }),
+    ).toThrowError(/MODULE_BOOT_FAILED|myTick/);
+  });
+
+  it('rechaza con MODULE_BOOT_FAILED si jobLifecycle.onTickFn apunta a algo que no es función', () => {
+    const code = `
+      module.exports = {
+        myTick: 'soy un string',
+      };
+    `;
+    const svc = makeSandbox();
+    // El error es MarketplacePackageError con code='MODULE_BOOT_FAILED' y
+    // mensaje narrativo. Verificamos por code (no por regex en message,
+    // que solo tiene la guía de cómo arreglar el bundle).
+    try {
+      svc.loadModule(code, 'mod.test', { jobLifecycle: { onTickFn: 'myTick' } });
+      expect.fail('debería haber rechazado');
+    } catch (err) {
+      expect((err as { code?: string }).code).toBe('MODULE_BOOT_FAILED');
+      expect((err as Error).message).toContain('myTick');
+      expect((err as Error).message).toContain('string');
+    }
+  });
+
+  it('si manifest no declara jobLifecycle, sandboxed.onJobTick queda undefined', () => {
+    const code = `
+      module.exports = {
+        myTick: async () => ({ status: 'completed' }),
+      };
+    `;
+    const svc = makeSandbox();
+    // No pasamos manifest → no hay validación del onTickFn.
+    const sandboxed = svc.loadModule(code, 'mod.test');
+    expect(sandboxed.onJobTick).toBeUndefined();
+  });
 });

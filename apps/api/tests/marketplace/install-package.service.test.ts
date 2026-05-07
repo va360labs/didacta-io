@@ -100,6 +100,26 @@ function makeServices() {
   return { sig, pkg: new ModulePackageService(sig) };
 }
 
+/// Stubs para los providers añadidos al constructor entre alpha.49 y alpha.53:
+/// httpService, rateLimiter, dbService (alpha.49/.51), didactaFactory +
+/// moduleRegistry + tenantContext (alpha.52 / DD-003) y jobLifecycle (alpha.53
+/// / JR-003). Los fixtures base no activan ninguna de estas capacidades
+/// (no http, no requiresDb, no didacta, no jobLifecycle), así que los stubs
+/// no se invocan más que en `jobLifecycle.unregister(...)` y los `buildScoped*`
+/// que devuelven Blocked* sin tocar el resto. Si algún test futuro habilita
+/// alguna capacidad, sustituir el stub correspondiente por un mock real.
+function makeExtraDeps() {
+  return [
+    {} as any, // httpService
+    {} as any, // rateLimiter
+    {} as any, // dbService
+    {} as any, // didactaFactory
+    {} as any, // moduleRegistry
+    { get: () => undefined } as any, // tenantContext
+    { register: vi.fn(), unregister: vi.fn() } as any, // jobLifecycle
+  ] as const;
+}
+
 describe('InstallPackageService.install', () => {
   let originalCore: string | undefined;
   beforeEach(() => {
@@ -123,6 +143,7 @@ describe('InstallPackageService.install', () => {
       makeRealSandbox(),
       makeNoopMigrations(),
       new ModuleRouterService(),
+      ...makeExtraDeps(),
     );
 
     const result = await svc.install(fixture.buffer, 'user-1');
@@ -152,6 +173,7 @@ describe('InstallPackageService.install', () => {
       makeRealSandbox(),
       makeNoopMigrations(),
       new ModuleRouterService(),
+      ...makeExtraDeps(),
     );
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toThrow(/S3 unreachable/);
@@ -176,6 +198,7 @@ describe('InstallPackageService.install', () => {
       makeRealSandbox(),
       makeNoopMigrations(),
       new ModuleRouterService(),
+      ...makeExtraDeps(),
     );
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toMatchObject({
@@ -202,6 +225,7 @@ describe('InstallPackageService.install', () => {
       makeRealSandbox(),
       makeNoopMigrations(),
       new ModuleRouterService(),
+      ...makeExtraDeps(),
     );
     const result = await svc.install(fixture.buffer, 'user-1');
     expect(result.status).toBe('INSTALLED');
@@ -227,6 +251,7 @@ describe('InstallPackageService.install', () => {
       makeRealSandbox(),
       makeNoopMigrations(),
       new ModuleRouterService(),
+      ...makeExtraDeps(),
     );
 
     await svc.install(fixture.buffer, 'user-1');
@@ -250,6 +275,7 @@ describe('InstallPackageService.install', () => {
       makeRealSandbox(),
       makeNoopMigrations(),
       new ModuleRouterService(),
+      ...makeExtraDeps(),
     );
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toBeInstanceOf(
@@ -274,6 +300,7 @@ describe('InstallPackageService.install', () => {
       makeRealSandbox(),
       makeNoopMigrations(),
       new ModuleRouterService(),
+      ...makeExtraDeps(),
     );
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toMatchObject({
@@ -302,6 +329,7 @@ describe('InstallPackageService.install', () => {
       makeRealSandbox(),
       makeNoopMigrations(),
       new ModuleRouterService(),
+      ...makeExtraDeps(),
     );
 
     await expect(svc.install(fixture.buffer, 'user-1')).rejects.toMatchObject({
@@ -333,6 +361,7 @@ describe('InstallPackageService.install', () => {
       makeRealSandbox(),
       makeNoopMigrations(),
       router,
+      ...makeExtraDeps(),
     );
 
     await svc.install(fixture.buffer, 'user-1');
@@ -364,6 +393,7 @@ describe('InstallPackageService.install', () => {
       makeRealSandbox(),
       makeNoopMigrations(),
       router,
+      ...makeExtraDeps(),
     );
     await svc.install(fixture.buffer, 'user-1');
     expect(router.match('GET', '/modules/example/old')).toBeNull();
