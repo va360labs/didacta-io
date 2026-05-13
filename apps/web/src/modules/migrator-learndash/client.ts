@@ -112,6 +112,7 @@ export interface JobStatus {
 
 export interface JobReport {
   jobId: string;
+  status?: JobStatus['status'];
   generatedAt: string;
   totals: { sourceCount: number; loadedCount: number; skippedCount: number; failedCount: number };
   byEntity: {
@@ -123,7 +124,24 @@ export interface JobReport {
     skippedCount: number;
     failedCount: number;
   }[];
-  auditChain: { eventsCount: number; firstHash?: string; lastHash?: string; verified: boolean };
+  auditChain: { eventsCount: number; firstHash?: string | null; lastHash?: string | null; verified: boolean };
+}
+
+export interface DlqEntry {
+  entityType: string;
+  sourceId: string | null;
+  phase: string;
+  errorCode: string;
+  errorMessage: string;
+  createdAt: string;
+}
+
+export interface DlqPage {
+  items: DlqEntry[];
+  total: number;
+  limit: number;
+  phase: string | null;
+  entity: string | null;
 }
 
 const BASE = '/api/v1/modules/migrator-learndash';
@@ -167,5 +185,17 @@ export const migratorLearndashApi = {
   },
   async getReport(jobId: string): Promise<JobReport> {
     return apiFetch(`${BASE}/jobs/${jobId}/report`, { method: 'GET' }, withAuth());
+  },
+  async getDlq(jobId: string, opts: { limit?: number; phase?: string; entity?: string } = {}): Promise<DlqPage> {
+    const params = new URLSearchParams();
+    if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.phase) params.set('phase', opts.phase);
+    if (opts.entity) params.set('entity', opts.entity);
+    const qs = params.toString();
+    return apiFetch(
+      `${BASE}/jobs/${jobId}/dlq${qs ? '?' + qs : ''}`,
+      { method: 'GET' },
+      withAuth(),
+    );
   },
 };

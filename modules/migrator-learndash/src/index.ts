@@ -1795,7 +1795,10 @@ const routes: ModuleRoute[] = [
     },
   },
 
-  // GET /jobs/:id/report — reporte (stub MVP).
+  // GET /jobs/:id/report — reporte real desde validation_reports + audit_events.
+  // alpha.58: ya no es STUB. Lee mod_migrator_learndash_validation_reports
+  // (escrito por ET-004) + mod_migrator_learndash_audit_events (escrito por
+  // ET-005) y agrega totales. La UI Monitor lo consume al expandir un job.
   {
     method: 'GET',
     path: '/jobs/:id/report',
@@ -1809,12 +1812,141 @@ const routes: ModuleRoute[] = [
       try {
         const job = await getJob(db, auth.tenantId, id);
         if (!job) return err(404, 'JOB_NOT_FOUND', `job ${id} no encontrado.`);
+
+        const reportsR = await db.query<{
+          entity_type: string;
+          source_count: number | string;
+          staged_count: number | string;
+          valid_count: number | string;
+          loaded_count: number | string;
+          skipped_count: number | string;
+          failed_count: number | string;
+        }>(
+          `SELECT entity_type, source_count, staged_count, valid_count,
+                  loaded_count, skipped_count, failed_count
+             FROM mod_migrator_learndash_validation_reports
+            WHERE tenant_id = $1::uuid AND job_id = $2::uuid
+            ORDER BY entity_type`,
+          [auth.tenantId, id],
+        );
+        const byEntity = reportsR.rows.map((r) => ({
+          entityType: r.entity_type,
+          sourceCount: Number(r.source_count),
+          stagedCount: Number(r.staged_count),
+          validCount: Number(r.valid_count),
+          loadedCount: Number(r.loaded_count),
+          skippedCount: Number(r.skipped_count),
+          failedCount: Number(r.failed_count),
+        }));
+        const totals = byEntity.reduce(
+          (acc, e) => ({
+            sourceCount: acc.sourceCount + e.sourceCount,
+            loadedCount: acc.loadedCount + e.loadedCount,
+            skippedCount: acc.skippedCount + e.skippedCount,
+            failedCount: acc.failedCount + e.failedCount,
+          }),
+          { sourceCount: 0, loadedCount: 0, skippedCount: 0, failedCount: 0 },
+        );
+
+        const auditR = await db.query<{ count: string; first_hash: string | null; last_hash: string | null }>(
+          `SELECT COUNT(*)::text AS count,
+                  MIN(hash) FILTER (WHERE prev_hash IS NULL) AS first_hash,
+                  (SELECT hash FROM mod_migrator_learndash_audit_events
+                    WHERE tenant_id = $1::uuid AND job_id = $2::uuid
+                    ORDER BY occurred_at DESC LIMIT 1) AS last_hash
+             FROM mod_migrator_learndash_audit_events
+            WHERE tenant_id = $1::uuid AND job_id = $2::uuid`,
+          [auth.tenantId, id],
+        );
+        const audit = auditR.rows[0];
+        const eventsCount = Number(audit?.count ?? '0');
+
         return ok({
           jobId: job.id,
+          status: job.status,
           generatedAt: nowIso(),
-          totals: { sourceCount: 0, loadedCount: 0, skippedCount: 0, failedCount: 0 },
-          byEntity: [],
-          auditChain: { eventsCount: 0, verified: true },
+          totals,
+          byEntity,
+          auditChain: {
+            eventsCount,
+            firstHash: audit?.first_hash ?? null,
+            lastHash: audit?.last_hash ?? null,
+            verified: eventsCount > 0,
+          },
+        });
+      } catch (e) {
+        return dbErrToResponse(e);
+      }
+    },
+  },
+
+  // GET /jobs/:id/dlq — listado paginado de filas en DLQ del job. La UI
+  // Monitor lo usa al expandir un job para mostrar las primeras N causas
+  // de fallo (transform: MISSING_EMAIL / MISSING_DEPENDENCY / MALFORMED_PAYLOAD;
+  // load: DIDACTA_VALIDATION_ERROR / DIDACTA_FOREIGN_REFERENCE / etc.).
+  // Query params:
+  //   - limit (default 20, cap 200)
+  //   - phase (optional: 'transform' | 'load' — filtro)
+  //   - entity (optional: filtro por entity_type)
+  {
+    method: 'GET',
+    path: '/jobs/:id/dlq',
+    handler: async (req) => {
+      const auth = requireAdmin(req);
+      if (isResponse(auth)) return auth;
+      const db = requireDb(req);
+      if (isResponse(db)) return db;
+      const id = req.params['id'];
+      if (!id) return err(400, 'VALIDATION_ERROR', 'falta :id.');
+      const rawLimit = Number(req.query['limit']);
+      const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(200, Math.floor(rawLimit)) : 20;
+      const phaseFilter = typeof req.query['phase'] === 'string' ? (req.query['phase'] as string) : null;
+      const entityFilter = typeof req.query['entity'] === 'string' ? (req.query['entity'] as string) : null;
+      try {
+        const conditions = ['tenant_id = $1::uuid', 'job_id = $2::uuid'];
+        const params: unknown[] = [auth.tenantId, id];
+        if (phaseFilter) {
+          params.push(phaseFilter);
+          conditions.push(`phase = $${params.length}`);
+        }
+        if (entityFilter) {
+          params.push(entityFilter);
+          conditions.push(`entity_type = $${params.length}`);
+        }
+        const result = await db.query<{
+          entity_type: string;
+          source_id: string | null;
+          phase: string;
+          error_code: string;
+          error_message: string;
+          created_at: string;
+        }>(
+          `SELECT entity_type, source_id, phase, error_code, error_message, created_at
+             FROM mod_migrator_learndash_dlq
+            WHERE ${conditions.join(' AND ')}
+            ORDER BY created_at DESC
+            LIMIT ${limit}`,
+          params,
+        );
+        const countR = await db.query<{ total: string }>(
+          `SELECT COUNT(*)::text AS total
+             FROM mod_migrator_learndash_dlq
+            WHERE ${conditions.join(' AND ')}`,
+          params,
+        );
+        return ok({
+          items: result.rows.map((r) => ({
+            entityType: r.entity_type,
+            sourceId: r.source_id,
+            phase: r.phase,
+            errorCode: r.error_code,
+            errorMessage: r.error_message,
+            createdAt: r.created_at,
+          })),
+          total: Number(countR.rows[0]?.total ?? '0'),
+          limit,
+          phase: phaseFilter,
+          entity: entityFilter,
         });
       } catch (e) {
         return dbErrToResponse(e);

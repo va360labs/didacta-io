@@ -38,4 +38,5 @@ export const migratorLearndashExtension: ModuleWebExtension = {
 
 export { migratorLearndashApi } from './client';
 export { MigratorAdminCard } from './admin-config-card';
+export { JobsMonitor } from './jobs-monitor';
 export { MigratorWizard } from './wizard';

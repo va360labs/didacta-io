@@ -4,8 +4,10 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { authStorage } from '@/lib/auth-storage';
 import { MigratorWizard } from '@/modules/migrator-learndash';
+import { JobsMonitor } from '@/modules/migrator-learndash/jobs-monitor';
 
 /**
  * Wizard de migración LearnDash → Didacta.
@@ -78,7 +80,18 @@ export default function MigratorLearndashPage(): React.ReactElement | null {
           modifica.
         </p>
       </header>
-      <MigratorWizard />
+      <Tabs defaultValue="wizard" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="wizard">Crear migración</TabsTrigger>
+          <TabsTrigger value="monitor">Monitor de migraciones</TabsTrigger>
+        </TabsList>
+        <TabsContent value="wizard">
+          <MigratorWizard />
+        </TabsContent>
+        <TabsContent value="monitor">
+          <JobsMonitor />
+        </TabsContent>
+      </Tabs>
     </section>
   );
 }
