@@ -33,6 +33,9 @@ import { BlockedDidactaApi, type DidactaApi } from './sandboxed-didacta.types';
 import { SandboxedHttpService } from './sandboxed-http.service';
 import { BlockedSandboxedHttp, type SandboxedHttp } from './sandboxed-http.types';
 import { BlockedSandboxedDb, type SandboxedDb } from './sandboxed-db.types';
+import { ScopedJobsApiFactory } from './sandboxed-jobs.service';
+import { BlockedSandboxedJobs, type SandboxedJobs } from './sandboxed-jobs.types';
+import type { ModuleJobLifecycleConfig } from './module-manifest.schema';
 
 /// Controller wildcard que recibe TODO request bajo `/modules/*` y lo
 /// despacha al módulo dinámico correspondiente. Vive fuera del flow
@@ -69,6 +72,7 @@ export class ModulesDispatcherController {
     private readonly rateLimiter: RateLimiterService,
     private readonly dbService: SandboxedDbService,
     private readonly didactaFactory: ScopedDidactaApiFactory,
+    private readonly jobsFactory: ScopedJobsApiFactory,
     private readonly moduleRegistry: ModuleRegistryService,
     private readonly contextFactory: ModuleContextFactory,
     private readonly tenantContext: TenantContextService,
@@ -141,6 +145,20 @@ export class ModulesDispatcherController {
       matched.moduleName,
       matched.didactaConfig,
     );
+    // ctx.jobs: cliente para encolar primer tick (alpha.55).
+    // - Sin manifest.jobLifecycle → BlockedSandboxedJobs (rechaza con
+    //   JOBS_NOT_DECLARED + mensaje accionable sobre cómo declarar el bloque).
+    // - Con manifest.jobLifecycle + user autenticado → ScopedJobs con
+    //   tenantId+moduleName congelados en la closure (no cross-tenant ni
+    //   cross-module por bug del módulo).
+    // - Con manifest.jobLifecycle pero sin user (route pública) → BlockedJobs
+    //   con mensaje pidiendo auth. Encolar jobs requiere tenantId del JWT;
+    //   no aceptamos tenantId del body.
+    const jobs: SandboxedJobs = this.buildScopedJobs(
+      matched.moduleName,
+      matched.jobLifecycleConfig,
+      user?.tenantId ?? null,
+    );
 
     const ctx: ModuleRouteRequestContext = {
       method: method as AllowedMethod,
@@ -154,6 +172,7 @@ export class ModulesDispatcherController {
       http,
       db,
       didacta,
+      jobs,
     };
 
     let result: ModuleRouteResponse;
@@ -226,6 +245,23 @@ export class ModulesDispatcherController {
       getStorage: () => this.contextFactory.getStorage(),
     };
     return this.didactaFactory.build(moduleName, didactaConfig, resolver);
+  }
+
+  /// Construye el cliente `ctx.jobs` scoped al módulo + tenant del request
+  /// (alpha.55). Solo funciona si:
+  ///  1. el manifest declara `jobLifecycle`,
+  ///  2. el request viene autenticado (tenemos tenantId del JWT).
+  /// Si falla cualquier condición → `BlockedSandboxedJobs` con mensaje
+  /// específico. Las routes anónimas NO pueden encolar jobs porque la
+  /// queue del host requiere tenantId fijado.
+  protected buildScopedJobs(
+    moduleName: string,
+    jobLifecycleConfig: ModuleJobLifecycleConfig | null,
+    tenantId: string | null,
+  ): SandboxedJobs {
+    if (!jobLifecycleConfig) return new BlockedSandboxedJobs(moduleName);
+    if (!tenantId) return new BlockedSandboxedJobs(moduleName);
+    return this.jobsFactory.build(moduleName, tenantId, jobLifecycleConfig);
   }
 
   /// Extrae el Bearer del header Authorization y lo verifica con

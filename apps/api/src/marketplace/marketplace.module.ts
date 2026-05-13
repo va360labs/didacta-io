@@ -26,6 +26,7 @@ import { RateLimiterService } from './rate-limiter.service';
 import { SandboxedDbService } from './sandboxed-db.service';
 import { ScopedDidactaApiFactory } from './sandboxed-didacta.service';
 import { SandboxedHttpService } from './sandboxed-http.service';
+import { ScopedJobsApiFactory } from './sandboxed-jobs.service';
 
 /// Marketplace de módulos (ADR-009).
 ///
@@ -62,6 +63,7 @@ import { SandboxedHttpService } from './sandboxed-http.service';
     SandboxedHttpService,
     SandboxedDbService,
     ScopedDidactaApiFactory,
+    ScopedJobsApiFactory,
     RateLimiterService,
     MarketplaceErrorFilter,
     // Sprint 3 — runtime de jobs `mod-jobs` (BullMQ + worker + registry).

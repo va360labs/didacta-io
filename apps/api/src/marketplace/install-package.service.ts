@@ -219,6 +219,7 @@ export class InstallPackageService {
               dbEnabled: validated.manifest.requiresDb === true,
               tablePrefix: validated.manifest.tablePrefix,
               didactaConfig: validated.manifest.didacta ?? null,
+              jobLifecycleConfig: validated.manifest.jobLifecycle ?? null,
             },
           );
         } catch (err) {

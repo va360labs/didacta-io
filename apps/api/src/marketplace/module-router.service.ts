@@ -1,9 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
-import type { ModuleDidactaConfig, ModuleHttpConfig } from './module-manifest.schema';
+import type {
+  ModuleDidactaConfig,
+  ModuleHttpConfig,
+  ModuleJobLifecycleConfig,
+} from './module-manifest.schema';
 import type { DidactaApi } from './sandboxed-didacta.types';
 import type { SandboxedDb } from './sandboxed-db.types';
 import type { SandboxedHttp } from './sandboxed-http.types';
+import type { SandboxedJobs } from './sandboxed-jobs.types';
 
 /// Métodos HTTP que un módulo dinámico puede declarar como ruta. Sin
 /// HEAD/OPTIONS/CONNECT/TRACE: el dispatcher añade soporte CORS y HEAD
@@ -52,6 +57,11 @@ export interface ModuleRouteRequestContext {
   /// `didacta`, recibe un `BlockedDidactaApi` que rechaza con
   /// DIDACTA_PERMISSION_DENIED. Ver `sandboxed-didacta.types.ts`.
   didacta: DidactaApi;
+  /// Cliente para encolar el primer tick de un job en la queue del host
+  /// (alpha.55). Solo disponible si el manifest declara `jobLifecycle`;
+  /// si no, el módulo recibe `BlockedSandboxedJobs` que rechaza con
+  /// `JOBS_NOT_DECLARED`. Ver `sandboxed-jobs.types.ts`.
+  jobs: SandboxedJobs;
 }
 
 export type ModuleRouteHandler = (
@@ -89,6 +99,11 @@ interface RegisteredRoute {
   /// `ScopedDidactaApi` con permission matrix + idempotencia por
   /// (externalSource, externalId).
   didactaConfig: ModuleDidactaConfig | null;
+  /// Bloque `jobLifecycle` del manifest (alpha.55). NULL si el módulo
+  /// no declara handler de jobs; el dispatcher inyecta
+  /// `BlockedSandboxedJobs`. Si declara, el dispatcher arma `ScopedJobs`
+  /// con tenantId+moduleName congelados en la closure.
+  jobLifecycleConfig: ModuleJobLifecycleConfig | null;
 }
 
 export interface RegisterModuleOptions {
@@ -110,6 +125,10 @@ export interface RegisterModuleOptions {
   /// declara — recibe `BlockedDidactaApi`. Si declara, el dispatcher
   /// memoiza la config para construir `ScopedDidactaApi` por request.
   didactaConfig?: ModuleDidactaConfig | null;
+  /// Bloque `jobLifecycle` del manifest (alpha.55). NULL si el módulo no
+  /// lo declara — recibe `BlockedSandboxedJobs`. Si declara, el dispatcher
+  /// arma `ScopedJobs` por request con tenantId+moduleName congelados.
+  jobLifecycleConfig?: ModuleJobLifecycleConfig | null;
 }
 
 /// Registro runtime de routes expuestas por módulos dinámicos. Usado por
@@ -139,6 +158,7 @@ export class ModuleRouterService {
     const dbEnabled = options.dbEnabled === true;
     const tablePrefix = options.tablePrefix ?? '';
     const didactaConfig = options.didactaConfig ?? null;
+    const jobLifecycleConfig = options.jobLifecycleConfig ?? null;
     const registered: RegisteredRoute[] = [];
     for (const r of routes) {
       validateRoute(r);
@@ -156,11 +176,12 @@ export class ModuleRouterService {
         dbEnabled,
         tablePrefix,
         didactaConfig,
+        jobLifecycleConfig,
       });
     }
     this.routesByModule.set(moduleName, registered);
     this.logger.log(
-      `Módulo "${moduleName}" registró ${registered.length} ruta(s) bajo ${apiNamespace} (http=${httpConfig ? 'enabled' : 'blocked'}, db=${dbEnabled ? 'enabled' : 'blocked'}, didacta=${didactaConfig ? 'enabled' : 'blocked'}).`,
+      `Módulo "${moduleName}" registró ${registered.length} ruta(s) bajo ${apiNamespace} (http=${httpConfig ? 'enabled' : 'blocked'}, db=${dbEnabled ? 'enabled' : 'blocked'}, didacta=${didactaConfig ? 'enabled' : 'blocked'}, jobs=${jobLifecycleConfig ? 'enabled' : 'blocked'}).`,
     );
   }
 
@@ -184,6 +205,7 @@ export class ModuleRouterService {
     dbEnabled: boolean;
     tablePrefix: string;
     didactaConfig: ModuleDidactaConfig | null;
+    jobLifecycleConfig: ModuleJobLifecycleConfig | null;
   } | null {
     const upperMethod = method.toUpperCase();
     for (const list of this.routesByModule.values()) {
@@ -203,6 +225,7 @@ export class ModuleRouterService {
           dbEnabled: route.dbEnabled,
           tablePrefix: route.tablePrefix,
           didactaConfig: route.didactaConfig,
+          jobLifecycleConfig: route.jobLifecycleConfig,
         };
       }
     }
