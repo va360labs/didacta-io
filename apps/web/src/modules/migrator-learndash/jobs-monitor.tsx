@@ -128,11 +128,19 @@ export function JobsMonitor(): React.ReactElement {
   const [detail, setDetail] = React.useState<{ report?: JobReport; dlq?: DlqPage; loading: boolean } | null>(null);
   const [, forceTick] = React.useState(0);
   const pollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  // Ref con la versión actual de jobs para que el setInterval callback no
+  // capture el closure inicial (null) y deje de re-fetchear para siempre.
+  // BUG alpha.58: el monitor mostraba el primer fetch sin actualizar nunca
+  // los datos del job; solo el reloj de elapsedSince se refrescaba porque
+  // viene de Date.now() en cada render.
+  const jobsRef = React.useRef<JobStatus[] | null>(null);
+  const expandedIdRef = React.useRef<string | null>(null);
 
   const fetchJobs = React.useCallback(async (): Promise<void> => {
     try {
       const result = await migratorLearndashApi.listJobs();
       setJobs(result.items);
+      jobsRef.current = result.items;
       setLoadError(null);
     } catch (e: any) {
       setLoadError(e?.message ?? 'Error cargando jobs');
@@ -152,16 +160,26 @@ export function JobsMonitor(): React.ReactElement {
     }
   }, []);
 
-  // Inicial + polling.
+  // Inicial + polling. El callback del setInterval lee `jobsRef.current`
+  // (no del closure) para tomar decisiones siempre con datos actualizados.
   React.useEffect(() => {
     void fetchJobs();
     pollRef.current = setInterval(() => {
-      // Re-fetch lista. También refrescamos el reloj para los elapsedSince.
+      // Re-render para refrescar elapsedSince() en cada card.
       forceTick((n) => n + 1);
-      if (jobs && jobs.some((j) => ACTIVE_STATES.has(j.status))) {
+      const current = jobsRef.current;
+      const hasActive = !!current && current.some((j) => ACTIVE_STATES.has(j.status));
+      // Re-fetch lista siempre si hay activos. También re-fetch detail si
+      // hay un job expandido que está activo.
+      if (hasActive) {
         void fetchJobs();
-      } else {
-        // Sin jobs activos: solo el reloj se actualiza, no pegamos al backend.
+        const expanded = expandedIdRef.current;
+        if (expanded) {
+          const job = current!.find((j) => j.id === expanded);
+          if (job && ACTIVE_STATES.has(job.status)) {
+            void fetchDetail(expanded);
+          }
+        }
       }
     }, POLL_INTERVAL_MS);
     return () => {
@@ -170,15 +188,9 @@ export function JobsMonitor(): React.ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-evaluar si hay activos en cada render para tomar la decisión actualizada
-  // (el callback de setInterval captura el closure inicial sin refresh).
   React.useEffect(() => {
-    if (!jobs) return;
-    if (jobs.some((j) => ACTIVE_STATES.has(j.status))) {
-      // Forzar fetch porque el polling decide leyendo el closure viejo.
-      // Tirar uno manual al detectar transición.
-    }
-  }, [jobs]);
+    expandedIdRef.current = expandedId;
+  }, [expandedId]);
 
   const handleExpand = (jobId: string): void => {
     if (expandedId === jobId) {
