@@ -35,7 +35,12 @@ import { BlockedSandboxedHttp, type SandboxedHttp } from './sandboxed-http.types
 import { BlockedSandboxedDb, type SandboxedDb } from './sandboxed-db.types';
 import { ScopedJobsApiFactory } from './sandboxed-jobs.service';
 import { BlockedSandboxedJobs, type SandboxedJobs } from './sandboxed-jobs.types';
-import type { ModuleJobLifecycleConfig } from './module-manifest.schema';
+import { ScopedSecretsApiFactory } from './sandboxed-secrets.service';
+import { type SandboxedSecrets } from './sandboxed-secrets.types';
+import type {
+  ModuleJobLifecycleConfig,
+  ModuleSecretsLifecycleConfig,
+} from './module-manifest.schema';
 
 /// Controller wildcard que recibe TODO request bajo `/modules/*` y lo
 /// despacha al módulo dinámico correspondiente. Vive fuera del flow
@@ -73,6 +78,7 @@ export class ModulesDispatcherController {
     private readonly dbService: SandboxedDbService,
     private readonly didactaFactory: ScopedDidactaApiFactory,
     private readonly jobsFactory: ScopedJobsApiFactory,
+    private readonly secretsFactory: ScopedSecretsApiFactory,
     private readonly moduleRegistry: ModuleRegistryService,
     private readonly contextFactory: ModuleContextFactory,
     private readonly tenantContext: TenantContextService,
@@ -159,6 +165,19 @@ export class ModulesDispatcherController {
       matched.jobLifecycleConfig,
       user?.tenantId ?? null,
     );
+    // ctx.secrets: store cifrado scoped al módulo + tenant (alpha.56).
+    //  - Sin manifest.requiresSecrets → BlockedSandboxedSecrets (rechaza
+    //    con SECRETS_NOT_DECLARED + mensaje accionable).
+    //  - Con requiresSecrets pero sin user (route pública) →
+    //    AnonymousSandboxedSecrets (secrets son tenant-scoped, no aceptamos
+    //    tenantId del body).
+    //  - Con todo OK → ScopedSecretsApi con tenantId+moduleName congelados.
+    const secrets: SandboxedSecrets = this.buildScopedSecrets(
+      matched.moduleName,
+      matched.requiresSecrets,
+      matched.secretsLifecycleConfig,
+      user?.tenantId ?? null,
+    );
 
     const ctx: ModuleRouteRequestContext = {
       method: method as AllowedMethod,
@@ -173,6 +192,7 @@ export class ModulesDispatcherController {
       db,
       didacta,
       jobs,
+      secrets,
     };
 
     let result: ModuleRouteResponse;
@@ -262,6 +282,24 @@ export class ModulesDispatcherController {
     if (!jobLifecycleConfig) return new BlockedSandboxedJobs(moduleName);
     if (!tenantId) return new BlockedSandboxedJobs(moduleName);
     return this.jobsFactory.build(moduleName, tenantId, jobLifecycleConfig);
+  }
+
+  /// Construye `ctx.secrets` scoped al módulo + tenant del request (alpha.56).
+  /// El factory.resolve() centraliza la decisión: Blocked / Anonymous /
+  /// real, según `requiresSecrets` y `tenantId`. `protected` para override
+  /// en tests del dispatcher.
+  protected buildScopedSecrets(
+    moduleName: string,
+    requiresSecrets: boolean,
+    secretsLifecycleConfig: ModuleSecretsLifecycleConfig | null,
+    tenantId: string | null,
+  ): SandboxedSecrets {
+    return this.secretsFactory.resolve(
+      moduleName,
+      tenantId,
+      requiresSecrets,
+      secretsLifecycleConfig ?? undefined,
+    );
   }
 
   /// Extrae el Bearer del header Authorization y lo verifica con

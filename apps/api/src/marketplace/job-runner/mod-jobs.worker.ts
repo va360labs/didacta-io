@@ -22,6 +22,8 @@ import {
   BlockedSandboxedHttp,
   type SandboxedHttp,
 } from '../sandboxed-http.types';
+import { ScopedSecretsApiFactory } from '../sandboxed-secrets.service';
+import { type SandboxedSecrets } from '../sandboxed-secrets.types';
 import { ModuleJobLifecycleRegistry } from './mod-jobs-lifecycle.registry';
 import { ModJobsMetrics } from './mod-jobs.metrics';
 import {
@@ -104,6 +106,7 @@ export class ModJobsWorkerService
     private readonly httpService: SandboxedHttpService,
     private readonly rateLimiter: RateLimiterService,
     private readonly didactaFactory: ScopedDidactaApiFactory,
+    private readonly secretsFactory: ScopedSecretsApiFactory,
     private readonly moduleRegistry: ModuleRegistryService,
     private readonly contextFactory: ModuleContextFactory,
     private readonly tenantContext: TenantContextService,
@@ -319,6 +322,8 @@ export class ModJobsWorkerService
       dbEnabled: boolean;
       tablePrefix: string;
       didactaConfig: import('../module-manifest.schema').ModuleDidactaConfig | null;
+      requiresSecrets: boolean;
+      secretsLifecycleConfig: import('../module-manifest.schema').ModuleSecretsLifecycleConfig | null;
       moduleVersion: string;
     },
   ): ModuleJobTickContext {
@@ -358,6 +363,17 @@ export class ModJobsWorkerService
       didacta = new BlockedDidactaApi(payload.moduleName);
     }
 
+    // ctx.secrets para onJobTick (alpha.56). En el worker SIEMPRE tenemos
+    // tenantId del payload del job — no hay caso AnonymousSandboxedSecrets
+    // como sí ocurre en routes públicas del dispatcher. Si el manifest no
+    // declara requiresSecrets → BlockedSandboxedSecrets.
+    const secrets: SandboxedSecrets = this.secretsFactory.resolve(
+      payload.moduleName,
+      payload.tenantId,
+      manifest.requiresSecrets,
+      manifest.secretsLifecycleConfig ?? undefined,
+    );
+
     return {
       moduleName: payload.moduleName,
       moduleVersion: manifest.moduleVersion,
@@ -374,6 +390,7 @@ export class ModJobsWorkerService
       db,
       http,
       didacta,
+      secrets,
     };
   }
 

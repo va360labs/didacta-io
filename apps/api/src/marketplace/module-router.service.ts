@@ -4,11 +4,13 @@ import type {
   ModuleDidactaConfig,
   ModuleHttpConfig,
   ModuleJobLifecycleConfig,
+  ModuleSecretsLifecycleConfig,
 } from './module-manifest.schema';
 import type { DidactaApi } from './sandboxed-didacta.types';
 import type { SandboxedDb } from './sandboxed-db.types';
 import type { SandboxedHttp } from './sandboxed-http.types';
 import type { SandboxedJobs } from './sandboxed-jobs.types';
+import type { SandboxedSecrets } from './sandboxed-secrets.types';
 
 /// Métodos HTTP que un módulo dinámico puede declarar como ruta. Sin
 /// HEAD/OPTIONS/CONNECT/TRACE: el dispatcher añade soporte CORS y HEAD
@@ -62,6 +64,12 @@ export interface ModuleRouteRequestContext {
   /// si no, el módulo recibe `BlockedSandboxedJobs` que rechaza con
   /// `JOBS_NOT_DECLARED`. Ver `sandboxed-jobs.types.ts`.
   jobs: SandboxedJobs;
+  /// Store de secretos cifrados scoped al módulo + tenant (alpha.56).
+  /// Solo disponible si el manifest declara `requiresSecrets: true`; si
+  /// no, el módulo recibe `BlockedSandboxedSecrets`. Para routes anónimas
+  /// (sin Bearer) recibe `AnonymousSandboxedSecrets` aunque el manifest
+  /// lo declare — secrets son tenant-scoped. Ver `sandboxed-secrets.types.ts`.
+  secrets: SandboxedSecrets;
 }
 
 export type ModuleRouteHandler = (
@@ -104,6 +112,13 @@ interface RegisteredRoute {
   /// `BlockedSandboxedJobs`. Si declara, el dispatcher arma `ScopedJobs`
   /// con tenantId+moduleName congelados en la closure.
   jobLifecycleConfig: ModuleJobLifecycleConfig | null;
+  /// `manifest.requiresSecrets` (alpha.56). Si true → ScopedSecretsApi.
+  /// Si false → BlockedSandboxedSecrets.
+  requiresSecrets: boolean;
+  /// `manifest.secretsLifecycle` (alpha.56). NULL si el módulo no declara
+  /// caps específicos; el factory aplica defaults (32 keys, 8 KB/value, sin
+  /// pattern extra). Si declara, los caps del manifest gobiernan.
+  secretsLifecycleConfig: ModuleSecretsLifecycleConfig | null;
 }
 
 export interface RegisterModuleOptions {
@@ -129,6 +144,12 @@ export interface RegisterModuleOptions {
   /// lo declara — recibe `BlockedSandboxedJobs`. Si declara, el dispatcher
   /// arma `ScopedJobs` por request con tenantId+moduleName congelados.
   jobLifecycleConfig?: ModuleJobLifecycleConfig | null;
+  /// `manifest.requiresSecrets` (alpha.56). Si true, dispatcher cablea
+  /// `ScopedSecretsApi`. Si false/undefined → `BlockedSandboxedSecrets`.
+  requiresSecrets?: boolean;
+  /// `manifest.secretsLifecycle` (alpha.56). Caps específicos del módulo.
+  /// NULL si no declara — defaults razonables del factory.
+  secretsLifecycleConfig?: ModuleSecretsLifecycleConfig | null;
 }
 
 /// Registro runtime de routes expuestas por módulos dinámicos. Usado por
@@ -159,6 +180,8 @@ export class ModuleRouterService {
     const tablePrefix = options.tablePrefix ?? '';
     const didactaConfig = options.didactaConfig ?? null;
     const jobLifecycleConfig = options.jobLifecycleConfig ?? null;
+    const requiresSecrets = options.requiresSecrets === true;
+    const secretsLifecycleConfig = options.secretsLifecycleConfig ?? null;
     const registered: RegisteredRoute[] = [];
     for (const r of routes) {
       validateRoute(r);
@@ -177,11 +200,13 @@ export class ModuleRouterService {
         tablePrefix,
         didactaConfig,
         jobLifecycleConfig,
+        requiresSecrets,
+        secretsLifecycleConfig,
       });
     }
     this.routesByModule.set(moduleName, registered);
     this.logger.log(
-      `Módulo "${moduleName}" registró ${registered.length} ruta(s) bajo ${apiNamespace} (http=${httpConfig ? 'enabled' : 'blocked'}, db=${dbEnabled ? 'enabled' : 'blocked'}, didacta=${didactaConfig ? 'enabled' : 'blocked'}, jobs=${jobLifecycleConfig ? 'enabled' : 'blocked'}).`,
+      `Módulo "${moduleName}" registró ${registered.length} ruta(s) bajo ${apiNamespace} (http=${httpConfig ? 'enabled' : 'blocked'}, db=${dbEnabled ? 'enabled' : 'blocked'}, didacta=${didactaConfig ? 'enabled' : 'blocked'}, jobs=${jobLifecycleConfig ? 'enabled' : 'blocked'}, secrets=${requiresSecrets ? 'enabled' : 'blocked'}).`,
     );
   }
 
@@ -206,6 +231,8 @@ export class ModuleRouterService {
     tablePrefix: string;
     didactaConfig: ModuleDidactaConfig | null;
     jobLifecycleConfig: ModuleJobLifecycleConfig | null;
+    requiresSecrets: boolean;
+    secretsLifecycleConfig: ModuleSecretsLifecycleConfig | null;
   } | null {
     const upperMethod = method.toUpperCase();
     for (const list of this.routesByModule.values()) {
@@ -226,6 +253,8 @@ export class ModuleRouterService {
           tablePrefix: route.tablePrefix,
           didactaConfig: route.didactaConfig,
           jobLifecycleConfig: route.jobLifecycleConfig,
+          requiresSecrets: route.requiresSecrets,
+          secretsLifecycleConfig: route.secretsLifecycleConfig,
         };
       }
     }

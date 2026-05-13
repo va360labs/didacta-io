@@ -15,6 +15,20 @@
  * al shape `ModuleRoute { method, path, handler(req) }`.
  */
 import { manifest } from './manifest.js';
+// Mappers reusados desde el skeleton de etl/. Cada uno retorna MapResult con
+// `ok` + `canonical` o `errorCode` + `errorMessage`. Idempotencia garantizada
+// por el load phase via externalRef.
+import {
+  mapUser,
+  mapCourse,
+  mapLesson,
+  mapTopic,
+  mapQuiz,
+  mapGroup,
+  mapDirectEnrollment,
+  mapGroupEnrollment,
+  type MapResult,
+} from './mappers/index.js';
 
 // Tipos del host (declarados localmente para no acoplarse al import del core).
 type AllowedMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -102,6 +116,45 @@ interface DbError extends Error {
   code: DbErrorCode;
 }
 
+/// Store de secretos cifrados scoped al módulo + tenant (alpha.56+). El host
+/// inyecta este cliente si el manifest declara `requiresSecrets: true`. Si
+/// no, recibimos un cliente que rechaza con SECRETS_NOT_DECLARED + mensaje
+/// accionable. Cripto at-rest (AES-256-GCM) la maneja el host con la key
+/// resuelta via `loadCipherKey()` — el módulo solo ve plaintext.
+///
+/// Necesario para ET-001 (extract phase): el worker BullMQ recibe ctx
+/// fresco por cada tick — sin store de secrets no podríamos recordar el
+/// appPassword de WP entre POST /jobs y el primer tick del worker.
+type SecretsErrorCode =
+  | 'SECRETS_NOT_DECLARED'
+  | 'SECRETS_TENANT_REQUIRED'
+  | 'SECRETS_KEY_INVALID'
+  | 'SECRETS_VALUE_TOO_LARGE'
+  | 'SECRETS_QUOTA_EXCEEDED'
+  | 'SECRETS_KEY_PATTERN_MISMATCH'
+  | 'SECRETS_NETWORK';
+
+interface SecretsError extends Error {
+  code: SecretsErrorCode;
+}
+
+interface SetSecretOptions {
+  expiresAt?: Date;
+}
+
+interface SecretMeta {
+  key: string;
+  expiresAt: Date | null;
+  approxValueBytes: number;
+}
+
+interface SandboxedSecrets {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, opts?: SetSecretOptions): Promise<void>;
+  delete(key: string): Promise<void>;
+  list(): Promise<SecretMeta[]>;
+}
+
 interface ModuleRouteRequestContext {
   method: AllowedMethod;
   path: string;
@@ -119,6 +172,12 @@ interface ModuleRouteRequestContext {
   /// `undefined` — los handlers que dependan de persistencia deben
   /// validar y devolver 503 explicando que el host no soporta ctx.db.
   db?: SandboxedDb;
+  /// Inyectado por el host (alpha.56+). Si `requiresSecrets: true` está
+  /// en el manifest, el host pasa el cliente real; si no, un cliente que
+  /// rechaza todo con SECRETS_NOT_DECLARED. En hosts < alpha.56 será
+  /// `undefined` — los handlers que necesiten persistir secrets deben
+  /// validar y devolver 503 explicando que el host no soporta ctx.secrets.
+  secrets?: SandboxedSecrets;
 }
 
 interface ModuleRouteResponse {
@@ -175,6 +234,9 @@ interface ModuleJobTickContext {
   db: SandboxedDb;
   http: SandboxedHttp;
   didacta: DidactaApi;
+  /// alpha.56+. Store de secretos cifrados scoped al módulo + tenant.
+  /// Necesario para que ET-001 lea el appPassword de WP cada tick.
+  secrets: SandboxedSecrets;
 }
 
 // Tipo placeholder — el contrato real de DidactaApi vive en el host. Lo
@@ -370,6 +432,26 @@ async function setJobStatus(
   return result.rowCount;
 }
 
+/// UPDATE escapado a `progress` JSONB. Necesario para que ET-001..ET-004
+/// puedan persistir el cursor de la fase actual (entity+page+completed)
+/// entre ticks. La columna ya existe en `mod_migrator_learndash_jobs`
+/// (init.sql alpha.51) pero `setJobStatus` no la toca para evitar
+/// sobrescrituras accidentales.
+async function setJobProgress(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+  progress: Record<string, unknown>,
+): Promise<number> {
+  const result = await db.execute(
+    `UPDATE mod_migrator_learndash_jobs
+        SET progress = $3::jsonb
+      WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+    [tenantId, jobId, JSON.stringify(progress)],
+  );
+  return result.rowCount;
+}
+
 /// Transición atómica vía CAS (compare-and-set). Solo aplica el UPDATE si
 /// el status actual del job es exactamente `from`. Si otro tick (o el
 /// endpoint de cancelación) cambió el status entre el read y el write,
@@ -401,6 +483,667 @@ async function tryTransition(
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+// ---- Checksum + WP REST helpers (Sprint 4 / ET-001) --------------------
+
+/// SHA-256 hex de un payload con serialización estable. Idempotencia de
+/// `stg_*` se basa en checksum: re-extract de la misma página NO duplica,
+/// solo sobrescribe `raw_payload` con datos idénticos.
+///
+/// Implementación inline (sin fast-json-stable-stringify) — el sort de
+/// keys garantiza estabilidad cross-version del cliente, sin dep externa.
+function stableStringify(value: unknown): string {
+  return JSON.stringify(value, function (this: unknown, _k: string, v: unknown): unknown {
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const sorted: Record<string, unknown> = {};
+      for (const k of Object.keys(v as Record<string, unknown>).sort()) {
+        sorted[k] = (v as Record<string, unknown>)[k];
+      }
+      return sorted;
+    }
+    return v;
+  });
+}
+
+function computeChecksum(payload: unknown): string {
+  // node:crypto está en la allowlist del sandbox.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const crypto = require('node:crypto') as typeof import('node:crypto');
+  return crypto.createHash('sha256').update(stableStringify(payload)).digest('hex');
+}
+
+/// Header HTTP Basic con username:appPassword.
+function basicAuthHeader(username: string, appPassword: string): string {
+  return `Basic ${b64encode(`${username}:${appPassword}`)}`;
+}
+
+/// Fetch UNA página de un endpoint WP REST. Distinto al async-iterator
+/// `paginateWp` porque ET-001 procesa 1 página por tick — el cursor vive
+/// en BD entre ticks, no en una closure de generator.
+async function fetchOneWpPage<T>(
+  http: SandboxedHttp,
+  baseUrl: string,
+  cpt: string,
+  authHeader: string,
+  page: number,
+  perPage: number,
+): Promise<{ items: T[]; totalPages: number | undefined; status: number }> {
+  const url = `${baseUrl}/wp-json/wp/v2/${cpt}?per_page=${perPage}&page=${page}&status=any&orderby=id&order=asc`;
+  const resp = await http.get(url, {
+    headers: { Authorization: authHeader, Accept: 'application/json' },
+    timeoutMs: 30_000,
+  });
+  // WP devuelve 400 con code rest_post_invalid_page_number cuando el page
+  // está más allá del total. Lo tratamos como fin natural.
+  if (resp.status === 400 && resp.body.includes('rest_post_invalid_page_number')) {
+    return { items: [], totalPages: page - 1, status: 200 };
+  }
+  if (resp.status >= 400) {
+    throw new Error(`HTTP ${resp.status} fetching ${url}`);
+  }
+  let items: T[];
+  try {
+    items = JSON.parse(resp.body) as T[];
+  } catch (e) {
+    throw new Error(`Respuesta no JSON: ${(e as Error).message}`);
+  }
+  if (!Array.isArray(items)) {
+    throw new Error(`Respuesta esperada array, recibido ${typeof items}`);
+  }
+  const tpRaw = Number(resp.headers['x-wp-totalpages']);
+  const totalPages = Number.isFinite(tpRaw) && tpRaw > 0 ? tpRaw : undefined;
+  return { items, totalPages, status: resp.status };
+}
+
+// ---- Staging UPSERTs por entidad (Sprint 4 / ET-001) -------------------
+//
+// Cada entidad tiene una tabla stg_<entity> con columnas similares pero
+// no idénticas (lessons + topics tienen parent_*; quizzes tiene 3 parents;
+// enrollments tiene shape compuesto). Una función por entidad para no
+// inventar abstracciones que oculten la columna.
+//
+// Idempotencia: ON CONFLICT (tenant_id, job_id, source_id) DO UPDATE
+// reset is_valid=false y validation_errors=NULL para que re-extract
+// dispare re-transform.
+
+async function upsertStgUser(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+  sourceId: string,
+  raw: unknown,
+  checksum: string,
+): Promise<void> {
+  await db.execute(
+    `INSERT INTO mod_migrator_learndash_stg_users
+       (tenant_id, job_id, source_id, raw_payload, checksum)
+     VALUES ($1::uuid, $2::uuid, $3, $4::jsonb, $5)
+     ON CONFLICT (tenant_id, job_id, source_id) DO UPDATE
+       SET raw_payload = EXCLUDED.raw_payload,
+           checksum = EXCLUDED.checksum,
+           is_valid = FALSE,
+           validation_errors = NULL`,
+    [tenantId, jobId, sourceId, JSON.stringify(raw), checksum],
+  );
+}
+
+async function upsertStgCourse(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+  sourceId: string,
+  raw: unknown,
+  checksum: string,
+): Promise<void> {
+  await db.execute(
+    `INSERT INTO mod_migrator_learndash_stg_courses
+       (tenant_id, job_id, source_id, raw_payload, checksum)
+     VALUES ($1::uuid, $2::uuid, $3, $4::jsonb, $5)
+     ON CONFLICT (tenant_id, job_id, source_id) DO UPDATE
+       SET raw_payload = EXCLUDED.raw_payload,
+           checksum = EXCLUDED.checksum,
+           is_valid = FALSE,
+           validation_errors = NULL`,
+    [tenantId, jobId, sourceId, JSON.stringify(raw), checksum],
+  );
+}
+
+async function upsertStgLesson(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+  sourceId: string,
+  parentCourseId: string | null,
+  orderIdx: number,
+  raw: unknown,
+  checksum: string,
+): Promise<void> {
+  await db.execute(
+    `INSERT INTO mod_migrator_learndash_stg_lessons
+       (tenant_id, job_id, source_id, parent_course_id, order_idx, raw_payload, checksum)
+     VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6::jsonb, $7)
+     ON CONFLICT (tenant_id, job_id, source_id) DO UPDATE
+       SET parent_course_id = EXCLUDED.parent_course_id,
+           order_idx = EXCLUDED.order_idx,
+           raw_payload = EXCLUDED.raw_payload,
+           checksum = EXCLUDED.checksum,
+           is_valid = FALSE,
+           validation_errors = NULL`,
+    [tenantId, jobId, sourceId, parentCourseId, orderIdx, JSON.stringify(raw), checksum],
+  );
+}
+
+async function upsertStgTopic(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+  sourceId: string,
+  parentLessonId: string | null,
+  parentCourseId: string | null,
+  orderIdx: number,
+  raw: unknown,
+  checksum: string,
+): Promise<void> {
+  await db.execute(
+    `INSERT INTO mod_migrator_learndash_stg_topics
+       (tenant_id, job_id, source_id, parent_lesson_id, parent_course_id, order_idx, raw_payload, checksum)
+     VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8)
+     ON CONFLICT (tenant_id, job_id, source_id) DO UPDATE
+       SET parent_lesson_id = EXCLUDED.parent_lesson_id,
+           parent_course_id = EXCLUDED.parent_course_id,
+           order_idx = EXCLUDED.order_idx,
+           raw_payload = EXCLUDED.raw_payload,
+           checksum = EXCLUDED.checksum,
+           is_valid = FALSE,
+           validation_errors = NULL`,
+    [tenantId, jobId, sourceId, parentLessonId, parentCourseId, orderIdx, JSON.stringify(raw), checksum],
+  );
+}
+
+async function upsertStgQuiz(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+  sourceId: string,
+  parentCourseId: string | null,
+  parentLessonId: string | null,
+  parentTopicId: string | null,
+  raw: unknown,
+  checksum: string,
+): Promise<void> {
+  await db.execute(
+    `INSERT INTO mod_migrator_learndash_stg_quizzes
+       (tenant_id, job_id, source_id, parent_course_id, parent_lesson_id, parent_topic_id, raw_payload, checksum)
+     VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8)
+     ON CONFLICT (tenant_id, job_id, source_id) DO UPDATE
+       SET parent_course_id = EXCLUDED.parent_course_id,
+           parent_lesson_id = EXCLUDED.parent_lesson_id,
+           parent_topic_id = EXCLUDED.parent_topic_id,
+           raw_payload = EXCLUDED.raw_payload,
+           checksum = EXCLUDED.checksum,
+           is_valid = FALSE,
+           validation_errors = NULL`,
+    [tenantId, jobId, sourceId, parentCourseId, parentLessonId, parentTopicId, JSON.stringify(raw), checksum],
+  );
+}
+
+async function upsertStgGroup(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+  sourceId: string,
+  raw: unknown,
+  checksum: string,
+): Promise<void> {
+  await db.execute(
+    `INSERT INTO mod_migrator_learndash_stg_groups
+       (tenant_id, job_id, source_id, raw_payload, checksum)
+     VALUES ($1::uuid, $2::uuid, $3, $4::jsonb, $5)
+     ON CONFLICT (tenant_id, job_id, source_id) DO UPDATE
+       SET raw_payload = EXCLUDED.raw_payload,
+           checksum = EXCLUDED.checksum,
+           is_valid = FALSE,
+           validation_errors = NULL`,
+    [tenantId, jobId, sourceId, JSON.stringify(raw), checksum],
+  );
+}
+
+/// Catálogo de entidades paginables vía WP REST. ORDEN IMPORTA: courses
+/// antes de lessons/topics (lessons llevan parent_course_id derivado del
+/// payload pero el load phase de Sprint 4 / ET-003 los carga al core
+/// en orden — courses primero, luego sus hijos). Users es independiente.
+/// Groups es independiente.
+///
+/// `questions` y `enrollments` NO están aquí: son entidades "fan-out" que
+/// requieren leer staging (parent IDs) para iterar — se procesarán como
+/// fase aparte tras agotar las paginables. Documentado como ET-001b.
+const EXTRACT_ENTITIES: Array<{ name: string; cpt: string }> = [
+  { name: 'users', cpt: 'users' },
+  { name: 'courses', cpt: 'sfwd-courses' },
+  { name: 'lessons', cpt: 'sfwd-lessons' },
+  { name: 'topics', cpt: 'sfwd-topic' },
+  { name: 'quizzes', cpt: 'sfwd-quiz' },
+  { name: 'groups', cpt: 'groups' },
+];
+
+interface ExtractCursor {
+  phase: 'extract';
+  current: string;
+  page: number;
+  completed: string[];
+  totalsPerEntity: Record<string, number>;
+}
+
+function emptyExtractCursor(): ExtractCursor {
+  return {
+    phase: 'extract',
+    current: EXTRACT_ENTITIES[0]!.name,
+    page: 1,
+    completed: [],
+    totalsPerEntity: {},
+  };
+}
+
+function parseExtractCursor(progress: unknown): ExtractCursor {
+  if (
+    progress &&
+    typeof progress === 'object' &&
+    (progress as { phase?: string }).phase === 'extract' &&
+    typeof (progress as { current?: unknown }).current === 'string' &&
+    typeof (progress as { page?: unknown }).page === 'number'
+  ) {
+    return progress as ExtractCursor;
+  }
+  return emptyExtractCursor();
+}
+
+function nextEntity(cursor: ExtractCursor): string | null {
+  const idx = EXTRACT_ENTITIES.findIndex((e) => e.name === cursor.current);
+  if (idx < 0) return EXTRACT_ENTITIES[0]!.name;
+  for (let i = idx + 1; i < EXTRACT_ENTITIES.length; i += 1) {
+    const name = EXTRACT_ENTITIES[i]!.name;
+    if (!cursor.completed.includes(name)) return name;
+  }
+  return null;
+}
+
+// ---- Transform + Load + Reconcile helpers (Sprint 4 / ET-002..ET-005) --
+//
+// Cada entidad tiene su stg_<entity> table con columnas comunes
+// (canonical JSONB, is_valid, validation_errors, target_id, loaded_at).
+// El transform actualiza canonical + is_valid; el load actualiza
+// target_id + loaded_at; el reconcile cuenta.
+
+interface StgRow {
+  id: string;
+  source_id: string;
+  raw_payload: unknown;
+  canonical: unknown;
+  is_valid: boolean;
+  target_id: string | null;
+  parent_course_id?: string | null;
+  parent_lesson_id?: string | null;
+  parent_topic_id?: string | null;
+}
+
+const TRANSFORM_BATCH_SIZE = 100;
+const LOAD_BATCH_SIZE = 50;
+
+/// Tabla stg_<entity> mapping. Las entidades fan-out (questions, enrollments)
+/// se procesan en ET-002b/ET-003b — no incluidas en ET-001 simplificado.
+const STG_TABLES: Record<string, string> = {
+  users: 'mod_migrator_learndash_stg_users',
+  courses: 'mod_migrator_learndash_stg_courses',
+  lessons: 'mod_migrator_learndash_stg_lessons',
+  topics: 'mod_migrator_learndash_stg_topics',
+  quizzes: 'mod_migrator_learndash_stg_quizzes',
+  groups: 'mod_migrator_learndash_stg_groups',
+};
+
+async function listInvalidStg(
+  db: SandboxedDb,
+  table: string,
+  tenantId: string,
+  jobId: string,
+  limit: number,
+): Promise<StgRow[]> {
+  // SELECT escapando el nombre de tabla — usamos un literal validado contra
+  // STG_TABLES, NO interpolación de input del usuario.
+  const result = await db.query<StgRow>(
+    `SELECT id::text AS id, source_id, raw_payload, canonical, is_valid, target_id
+       FROM ${table}
+      WHERE tenant_id = $1::uuid AND job_id = $2::uuid AND is_valid = FALSE
+      LIMIT ${Math.max(1, Math.min(1000, limit))}`,
+    [tenantId, jobId],
+  );
+  return result.rows;
+}
+
+async function listValidUnloadedStg(
+  db: SandboxedDb,
+  table: string,
+  tenantId: string,
+  jobId: string,
+  limit: number,
+): Promise<StgRow[]> {
+  const result = await db.query<StgRow>(
+    `SELECT id::text AS id, source_id, raw_payload, canonical, is_valid, target_id
+       FROM ${table}
+      WHERE tenant_id = $1::uuid AND job_id = $2::uuid AND is_valid = TRUE AND target_id IS NULL
+      LIMIT ${Math.max(1, Math.min(1000, limit))}`,
+    [tenantId, jobId],
+  );
+  return result.rows;
+}
+
+async function setStgCanonical(
+  db: SandboxedDb,
+  table: string,
+  rowId: string,
+  canonical: unknown,
+  validationErrors: unknown | null,
+): Promise<void> {
+  await db.execute(
+    `UPDATE ${table}
+        SET canonical = $2::jsonb,
+            is_valid = $3,
+            validation_errors = $4::jsonb
+      WHERE id = $1::uuid`,
+    [rowId, JSON.stringify(canonical), canonical !== null, validationErrors ? JSON.stringify(validationErrors) : null],
+  );
+}
+
+async function setStgLoaded(
+  db: SandboxedDb,
+  table: string,
+  rowId: string,
+  targetId: string,
+): Promise<void> {
+  await db.execute(
+    `UPDATE ${table}
+        SET target_id = $2,
+            loaded_at = CURRENT_TIMESTAMP
+      WHERE id = $1::uuid`,
+    [rowId, targetId],
+  );
+}
+
+async function appendDlq(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+  entityType: string,
+  sourceId: string | null,
+  phase: string,
+  errorCode: string,
+  errorMessage: string,
+  rawPayload: unknown,
+  canonical?: unknown,
+): Promise<void> {
+  await db.execute(
+    `INSERT INTO mod_migrator_learndash_dlq
+       (tenant_id, job_id, entity_type, source_id, phase, error_code, error_message, raw_payload, canonical)
+     VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)`,
+    [
+      tenantId,
+      jobId,
+      entityType,
+      sourceId,
+      phase,
+      errorCode,
+      errorMessage,
+      JSON.stringify(rawPayload),
+      canonical ? JSON.stringify(canonical) : null,
+    ],
+  );
+}
+
+interface TransformCursor {
+  phase: 'transform';
+  current: string;
+  completed: string[];
+}
+
+function parseTransformCursor(progress: unknown): TransformCursor {
+  if (progress && typeof progress === 'object' && (progress as { phase?: string }).phase === 'transform') {
+    return progress as TransformCursor;
+  }
+  return { phase: 'transform', current: EXTRACT_ENTITIES[0]!.name, completed: [] };
+}
+
+interface LoadCursor {
+  phase: 'load';
+  current: string;
+  completed: string[];
+}
+
+function parseLoadCursor(progress: unknown): LoadCursor {
+  if (progress && typeof progress === 'object' && (progress as { phase?: string }).phase === 'load') {
+    return progress as LoadCursor;
+  }
+  // Orden load: users → courses → lessons → topics → quizzes → groups.
+  // (Los module-courses como agrupador opcional se omiten en MVP.)
+  return { phase: 'load', current: 'users', completed: [] };
+}
+
+function nextTransformEntity(cursor: TransformCursor): string | null {
+  const idx = EXTRACT_ENTITIES.findIndex((e) => e.name === cursor.current);
+  for (let i = idx + 1; i < EXTRACT_ENTITIES.length; i += 1) {
+    const name = EXTRACT_ENTITIES[i]!.name;
+    if (!cursor.completed.includes(name)) return name;
+  }
+  return null;
+}
+
+// ---- Adapter canonical → DidactaUpsertXInput (Sprint 4 / ET-003 hardening) -
+//
+// Los mappers de src/mappers/ producen el "canonical" interno (CanonicalUser
+// etc.) que pre-data el contrato final de ctx.didacta (alpha.52). Las shapes
+// NO matchean 1:1 — `displayName → name`, `roles[] → role` (singular),
+// lessons necesitan `moduleExternalRef`, etc. Este adapter centraliza el
+// transform para que el load phase no rompa con DIDACTA_VALIDATION_ERROR.
+//
+// Decisiones documentadas:
+//   - `topics`: skipped (LearnDash topic vs Didacta lesson-flat — sin
+//     equivalencia 1:1 sin crear synthetic course modules). target_id='!SKIP:TOPIC'.
+//   - `groups`: skipped (sin target directo en ctx.didacta — los grupos
+//     materializan via enrollments en ET-001b cuando se cablee).
+//   - `lessons`: `moduleExternalRef` se manda apuntando al COURSE (no a un
+//     module/section), aceptando que el host del core lo trate como sección
+//     implícita. Si el host lo rechaza → DLQ, fixable en iteración futura.
+//   - `roles`: mapping de WP roles a Didacta roles. Default 'alumno'.
+//   - `users.email`: si el canonical no trae email, fail (Didacta requiere).
+
+type DidactaRole = 'tenant_admin' | 'formador' | 'alumno' | 'auditor' | 'empresa_manager';
+
+function mapWpToDidactaRole(roles: unknown): DidactaRole {
+  if (!Array.isArray(roles) || roles.length === 0) return 'alumno';
+  const set = new Set(roles.map((r) => String(r)));
+  if (set.has('administrator') || set.has('tenant_admin')) return 'tenant_admin';
+  if (set.has('group_leader') || set.has('instructor') || set.has('formador')) return 'formador';
+  if (set.has('auditor')) return 'auditor';
+  return 'alumno';
+}
+
+type AdapterResult =
+  | { ok: true; ns: string; input: Record<string, unknown> }
+  | { ok: false; skip: boolean; code: string; message: string };
+
+function adaptCanonicalToDidacta(entity: string, canonical: Record<string, unknown>): AdapterResult {
+  const sourceId = String(canonical['sourceId'] ?? '');
+  if (!sourceId) {
+    return { ok: false, skip: false, code: 'ADAPTER_NO_SOURCE_ID', message: 'canonical sin sourceId' };
+  }
+  const externalRef = { externalSource: 'learndash', externalId: sourceId };
+
+  switch (entity) {
+    case 'users': {
+      const email = String(canonical['email'] ?? '').trim();
+      if (!email || !email.includes('@')) {
+        return { ok: false, skip: false, code: 'ADAPTER_USER_NO_EMAIL', message: `user ${sourceId} sin email válido` };
+      }
+      const input: Record<string, unknown> = {
+        ...externalRef,
+        email,
+        role: mapWpToDidactaRole(canonical['roles']),
+      };
+      const dn = canonical['displayName'];
+      if (typeof dn === 'string' && dn.trim()) input['name'] = dn.trim();
+      return { ok: true, ns: 'users', input };
+    }
+
+    case 'courses': {
+      const slug = String(canonical['slug'] ?? '').trim();
+      const title = String(canonical['title'] ?? '').trim();
+      if (!slug || !title) {
+        return { ok: false, skip: false, code: 'ADAPTER_COURSE_MISSING_FIELDS', message: `course ${sourceId} sin slug/title` };
+      }
+      const input: Record<string, unknown> = { ...externalRef, slug, title };
+      const desc = canonical['description'];
+      if (typeof desc === 'string' && desc.trim()) input['description'] = desc.trim();
+      return { ok: true, ns: 'courses', input };
+    }
+
+    case 'lessons': {
+      const parentCourseId = String(canonical['parentCourseSourceId'] ?? '').trim();
+      if (!parentCourseId) {
+        return { ok: false, skip: false, code: 'ADAPTER_LESSON_NO_PARENT', message: `lesson ${sourceId} sin parentCourseSourceId` };
+      }
+      const title = String(canonical['title'] ?? '').trim() || `(sin título · ${sourceId})`;
+      const orderIdx = typeof canonical['orderIdx'] === 'number' ? canonical['orderIdx'] : 0;
+      const contentHtml = typeof canonical['contentHtml'] === 'string' ? canonical['contentHtml'] : '';
+      return {
+        ok: true,
+        ns: 'lessons',
+        input: {
+          ...externalRef,
+          moduleExternalRef: { externalSource: 'learndash', externalId: parentCourseId },
+          type: 'HTML',
+          title,
+          position: orderIdx,
+          content: { html: contentHtml },
+        },
+      };
+    }
+
+    case 'topics':
+      // LD topic = sub-unidad de lesson. Didacta es lesson-flat — sin
+      // course modules sintéticos no hay donde colgarlos limpio. Skip.
+      return { ok: false, skip: true, code: 'ADAPTER_TOPIC_SKIPPED', message: 'topics no se cargan en MVP (no hay course modules sintéticos)' };
+
+    case 'quizzes': {
+      const title = String(canonical['title'] ?? '').trim() || `(quiz sin título · ${sourceId})`;
+      const input: Record<string, unknown> = { ...externalRef, title };
+      const parentLessonId = canonical['parentLessonSourceId'];
+      if (typeof parentLessonId === 'string' && parentLessonId.trim()) {
+        input['lessonExternalRef'] = { externalSource: 'learndash', externalId: parentLessonId };
+      }
+      const passPct = canonical['passingPercentage'];
+      if (typeof passPct === 'number' && passPct >= 0 && passPct <= 100) {
+        input['passThreshold'] = passPct;
+      }
+      // questions queda para DD-006 — el contrato lo permite (questions?: unknown[])
+      // pero el host actual NO las persiste. Pasarlas vacías para no triggerar
+      // el warning de bulk-create pendiente.
+      return { ok: true, ns: 'quizzes', input };
+    }
+
+    case 'groups':
+      // Sin target directo. Se materializan vía enrollments en ET-001b.
+      return { ok: false, skip: true, code: 'ADAPTER_GROUPS_NO_TARGET', message: 'groups se materializan vía enrollments (ET-001b)' };
+
+    default:
+      return { ok: false, skip: false, code: 'ADAPTER_UNKNOWN_ENTITY', message: `entidad ${entity} sin adapter` };
+  }
+}
+
+/// Aplica el mapper apropiado a un row de stg. Retorna MapResult.
+function applyMapper(entity: string, raw: unknown): MapResult<unknown> {
+  switch (entity) {
+    case 'users':
+      return mapUser(raw as Parameters<typeof mapUser>[0]);
+    case 'courses':
+      return mapCourse(raw as Parameters<typeof mapCourse>[0]);
+    case 'lessons':
+      return mapLesson(raw as Parameters<typeof mapLesson>[0]);
+    case 'topics':
+      return mapTopic(raw as Parameters<typeof mapTopic>[0]);
+    case 'quizzes':
+      return mapQuiz(raw as Parameters<typeof mapQuiz>[0]);
+    case 'groups':
+      return mapGroup(raw as Parameters<typeof mapGroup>[0]);
+    default:
+      return {
+        ok: false,
+        errorCode: 'UNSUPPORTED_ENTITY' as never,
+        errorMessage: `Mapper no implementado para ${entity}`,
+        warnings: [],
+      };
+  }
+}
+
+// ---- ctx.secrets helpers (alpha.56+) -----------------------------------
+//
+// El appPassword del WP origen viaja en POST /jobs (cliente lo envía con
+// las credenciales). NO se persiste en `source_profile` JSONB porque el
+// row del job es legible por todo super_admin del tenant. En lugar de
+// eso, lo guardamos cifrado via ctx.secrets bajo una key job-scoped que
+// el manifest fuerza con allowedKeyPattern.
+//
+// Clave: `job:<jobId>:learndash:appPassword`. El UUID v4 del jobId hace
+// la key globalmente única dentro del tenant + módulo; el sufijo
+// `learndash:appPassword` deja espacio para futuras keys del mismo job
+// (ej. refresh tokens si en alguna iteración necesitamos OAuth en lugar
+// de Application Passwords).
+//
+// Expiración: alineada con `options.retentionDays` (default 30 días en el
+// HANDOFF alpha.51). El secret expira y queda invisible para get()/list()
+// — un GC futuro lo borrará físico. Mientras tanto el cleanup explícito
+// en setJobStatus(terminal) lo borra al cerrar el job (caso normal).
+
+function secretKeyForAppPassword(jobId: string): string {
+  return `job:${jobId}:learndash:appPassword`;
+}
+
+/// Guarda el appPassword cifrado vía ctx.secrets. Lanza si falla — el
+/// caller (POST /jobs) debe rollback el row del job para no dejar un
+/// job huérfano que el worker no pueda autenticar.
+async function persistJobAppPassword(
+  secrets: SandboxedSecrets,
+  jobId: string,
+  appPassword: string,
+  retentionDays: number,
+): Promise<void> {
+  const expiresAt = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000);
+  await secrets.set(secretKeyForAppPassword(jobId), appPassword, { expiresAt });
+}
+
+/// Lee el appPassword. Si retorna null → secret expiró o nunca se creó.
+/// El caller (onJobTick extract phase) debe marcar el job como failed
+/// con reason CREDENTIALS_NOT_FOUND.
+async function readJobAppPassword(
+  secrets: SandboxedSecrets,
+  jobId: string,
+): Promise<string | null> {
+  return secrets.get(secretKeyForAppPassword(jobId));
+}
+
+/// Borra el secret. Idempotente — silente si no existe. Llamar al cerrar
+/// el job (completed/failed/cancelled) para liberar slot de la quota
+/// antes del expiry natural.
+async function cleanupJobAppPassword(
+  secrets: SandboxedSecrets | undefined,
+  jobId: string,
+  log: (level: 'log' | 'warn' | 'error', message: string) => void,
+): Promise<void> {
+  if (!secrets) return;
+  try {
+    await secrets.delete(secretKeyForAppPassword(jobId));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log('warn', `cleanup secret falló para job ${jobId}: ${msg}. El expiry natural lo limpiará.`);
+  }
 }
 
 /// Helper para handlers que requieren `ctx.db`. Devuelve el cliente o
@@ -837,15 +1580,29 @@ const routes: ModuleRoute[] = [
       const db = requireDb(req);
       if (isResponse(db)) return db;
       const body = (req.body ?? {}) as {
-        credentials?: { baseUrl?: string; username?: string };
+        credentials?: { baseUrl?: string; username?: string; appPassword?: string };
         options?: Record<string, unknown>;
       };
       if (!body.credentials || !body.options) {
         return err(400, 'VALIDATION_ERROR', 'credentials + options requeridos.');
       }
-      // NO persistimos `appPassword` — solo metadata identificativa del
-      // origen (baseUrl + username). El secret se queda en el job runner
-      // cuando el extract real se cablee, fuera de la BD.
+      if (!body.credentials.appPassword) {
+        return err(400, 'VALIDATION_ERROR', 'credentials.appPassword es obligatorio (Application Password de WP).');
+      }
+      // ctx.secrets es REQUERIDO desde alpha.56 — sin él no podemos
+      // guardar el appPassword cifrado y el worker BullMQ del primer
+      // tick no tendría cómo autenticar contra WP. Si el host es
+      // alpha.55 o anterior → 503 con mensaje accionable para que el
+      // admin actualice antes de crear jobs.
+      const secrets = req.secrets;
+      if (!secrets) {
+        return err(
+          503,
+          'SECRETS_NOT_AVAILABLE',
+          'Este módulo requiere ctx.secrets (alpha.56+) y el host actual no lo expone. ' +
+            'Actualizá Didacta a alpha.56 o superior y reinstalá el módulo.',
+        );
+      }
       const sourceProfile = {
         baseUrl: body.credentials.baseUrl ?? null,
         username: body.credentials.username ?? null,
@@ -855,6 +1612,32 @@ const routes: ModuleRoute[] = [
         jobId = await insertJob(db, auth.tenantId, auth.sub, sourceProfile, body.options);
       } catch (e) {
         return dbErrToResponse(e);
+      }
+      // Guardar el appPassword cifrado ANTES de encolar el primer tick.
+      // Si falla, hacemos rollback del row (DELETE) para no dejar un job
+      // huérfano que el worker no pueda procesar. Si el rollback falla,
+      // logueamos pero respondemos al cliente con el error de secrets —
+      // el admin verá un job en `pending` que ya nunca avanza y deberá
+      // cancelarlo manualmente.
+      const retentionDays = typeof body.options?.['retentionDays'] === 'number'
+        ? (body.options['retentionDays'] as number)
+        : 30;
+      try {
+        await persistJobAppPassword(secrets, jobId, body.credentials.appPassword, retentionDays);
+      } catch (e) {
+        const code = (e as { code?: string })?.code ?? 'SECRETS_WRITE_FAILED';
+        const msg = e instanceof Error ? e.message : String(e);
+        // Best-effort rollback. Si esto también falla, el job queda en
+        // pending sin credenciales — el operador deberá cancelar manual.
+        try {
+          await db.execute(
+            `DELETE FROM mod_migrator_learndash_jobs WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+            [auth.tenantId, jobId],
+          );
+        } catch {
+          /* ignore */
+        }
+        return err(500, code, `No se pudo guardar appPassword cifrado: ${msg}. Job descartado.`);
       }
       // Encolar primer tick. Si la queue del host está deshabilitada
       // (REDIS_URL ausente) ctx.jobs lanza JOBS_QUEUE_DISABLED y NO
@@ -978,6 +1761,14 @@ const routes: ModuleRoute[] = [
           // Race: alguien lo cambió justo ahora. Reportar 409.
           return err(409, 'JOB_RACE', 'el estado del job cambió durante la cancelación, recargá y reintentá.');
         }
+        // alpha.56: limpiar el appPassword cifrado para liberar slot de
+        // quota antes del expiry natural. Best-effort: si falla, el log
+        // queda y el expiry natural eventualmente lo limpia.
+        await cleanupJobAppPassword(
+          req.secrets,
+          id,
+          (level, message) => console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](`[mod.migrator-learndash] ${message}`),
+        );
         return ok({ ok: true });
       } catch (e) {
         return dbErrToResponse(e);
@@ -1133,38 +1924,414 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
       }
 
       case 'extracting': {
-        // STUB Sprint 4 / ET-001. Por ahora solo avanza para validar el
-        // wiring de la state machine end-to-end.
-        ctx.log('warn', `tick ${tickIndex}: extract phase es STUB (ET-001 pendiente Sprint 4) — avanzando a transforming.`);
-        const advanced = await tryTransition(db, tenantId, jobId, 'extracting', 'transforming');
-        if (!advanced) return { status: 'continue', delaySec: 0 };
+        // Sprint 4 / ET-001 — extract phase per-tick.
+        //
+        // Cada tick:
+        //   1. Leer cursor de progress JSONB. Inicial = users page 1.
+        //   2. Recuperar appPassword via ctx.secrets (escrito en POST /jobs).
+        //   3. Fetch UNA página de la entity actual via paginateWp (1 req WP).
+        //   4. Para cada item de la página, upsert a stg_<entity>.
+        //   5. Avanzar cursor: page++ si la página llegó completa; si fue
+        //      la última página de la entity (vacía o page>=totalPages),
+        //      marcar entity completed y mover a la siguiente entity (page=1).
+        //   6. Cuando completed.length == EXTRACT_ENTITIES.length →
+        //      tryTransition a 'transforming'.
+        //
+        // Idempotencia: re-extract por re-tick del BullMQ no duplica porque
+        // upsert por (tenant_id, job_id, source_id). El checksum SHA-256
+        // permite a la transform phase saltar items idénticos.
+        //
+        // Limitación documentada: entities "fan-out" (questions por quiz,
+        // enrollments por course/group) NO están en este loop. Quedan para
+        // ET-001b — necesitan leer staging para listar parents y luego
+        // hacer N requests por parent. La phase termina sin ellas; se
+        // ejecutarán al final del extract antes de transicionar.
+
+        const job0 = job;
+        const sourceProfile = (job0 as unknown as { sourceProfile?: Record<string, unknown> }).sourceProfile;
+        // sourceProfile no viene en JobRecord — leemos de BD si falta.
+        let baseUrl: string | null = (sourceProfile?.['baseUrl'] as string) ?? null;
+        let username: string | null = (sourceProfile?.['username'] as string) ?? null;
+        if (!baseUrl || !username) {
+          const r = await db.query<{ source_profile: { baseUrl?: string; username?: string } }>(
+            `SELECT source_profile FROM mod_migrator_learndash_jobs WHERE tenant_id = $1::uuid AND id = $2::uuid LIMIT 1`,
+            [tenantId, jobId],
+          );
+          const sp = r.rows[0]?.source_profile ?? {};
+          baseUrl = baseUrl ?? sp.baseUrl ?? null;
+          username = username ?? sp.username ?? null;
+        }
+        if (!baseUrl || !username) {
+          await setJobStatus(db, tenantId, jobId, 'failed', nowIso());
+          await cleanupJobAppPassword(ctx.secrets, jobId, ctx.log);
+          return { status: 'failed', reason: 'SOURCE_PROFILE_INCOMPLETE' };
+        }
+
+        const appPassword = await readJobAppPassword(ctx.secrets, jobId);
+        if (!appPassword) {
+          ctx.log('error', `tick ${tickIndex}: appPassword no encontrado para job ${jobId}. Marcando failed.`);
+          await setJobStatus(db, tenantId, jobId, 'failed', nowIso());
+          return { status: 'failed', reason: 'CREDENTIALS_NOT_FOUND' };
+        }
+        const authHeader = basicAuthHeader(username, appPassword);
+
+        const cursor = parseExtractCursor(job0.progress);
+        const entity = EXTRACT_ENTITIES.find((e) => e.name === cursor.current);
+        if (!entity) {
+          // Cursor con entity inválida → reset al primero.
+          await setJobProgress(db, tenantId, jobId, emptyExtractCursor() as unknown as Record<string, unknown>);
+          return { status: 'continue', delaySec: 0 };
+        }
+
+        let pageResult;
+        try {
+          pageResult = await fetchOneWpPage<{ id: number; course?: number; lesson?: number; topic?: number }>(
+            ctx.http,
+            baseUrl,
+            entity.cpt,
+            authHeader,
+            cursor.page,
+            100,
+          );
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          ctx.log('warn', `tick ${tickIndex}: extract page ${entity.name}#${cursor.page} falló: ${msg}. Re-encolando con backoff.`);
+          return { status: 'continue', delaySec: 30 };
+        }
+
+        // Upsert items a la stg table apropiada.
+        for (const item of pageResult.items) {
+          const sourceId = String(item.id);
+          const checksum = computeChecksum(item);
+          try {
+            switch (entity.name) {
+              case 'users':
+                await upsertStgUser(db, tenantId, jobId, sourceId, item, checksum);
+                break;
+              case 'courses':
+                await upsertStgCourse(db, tenantId, jobId, sourceId, item, checksum);
+                break;
+              case 'lessons':
+                await upsertStgLesson(
+                  db,
+                  tenantId,
+                  jobId,
+                  sourceId,
+                  item.course ? String(item.course) : null,
+                  0,
+                  item,
+                  checksum,
+                );
+                break;
+              case 'topics':
+                await upsertStgTopic(
+                  db,
+                  tenantId,
+                  jobId,
+                  sourceId,
+                  item.lesson ? String(item.lesson) : null,
+                  item.course ? String(item.course) : null,
+                  0,
+                  item,
+                  checksum,
+                );
+                break;
+              case 'quizzes':
+                await upsertStgQuiz(
+                  db,
+                  tenantId,
+                  jobId,
+                  sourceId,
+                  item.course ? String(item.course) : null,
+                  item.lesson ? String(item.lesson) : null,
+                  item.topic ? String(item.topic) : null,
+                  item,
+                  checksum,
+                );
+                break;
+              case 'groups':
+                await upsertStgGroup(db, tenantId, jobId, sourceId, item, checksum);
+                break;
+            }
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            ctx.log('warn', `extract upsert falló para ${entity.name}#${sourceId}: ${msg}. Saltando item.`);
+          }
+        }
+
+        // Avanzar cursor.
+        const newTotals = { ...cursor.totalsPerEntity };
+        newTotals[entity.name] = (newTotals[entity.name] ?? 0) + pageResult.items.length;
+
+        let newCursor: ExtractCursor;
+        const isLastPage =
+          pageResult.items.length === 0 ||
+          (pageResult.totalPages !== undefined && cursor.page >= pageResult.totalPages);
+        if (isLastPage) {
+          const completed = [...cursor.completed, entity.name];
+          const next = nextEntity({ ...cursor, completed });
+          if (next === null) {
+            // Todas las paginables terminadas. Para ET-001 simplificado,
+            // transicionamos a 'transforming' aunque questions/enrollments
+            // (fan-out) NO se hayan extraído. ET-001b extenderá esto.
+            newCursor = { ...cursor, current: entity.name, page: cursor.page, completed, totalsPerEntity: newTotals };
+            await setJobProgress(db, tenantId, jobId, newCursor as unknown as Record<string, unknown>);
+            const advanced = await tryTransition(db, tenantId, jobId, 'extracting', 'transforming');
+            if (!advanced) return { status: 'continue', delaySec: 0 };
+            ctx.log(
+              'log',
+              `tick ${tickIndex}: extract completed (${Object.entries(newTotals).map(([k, v]) => `${k}=${v}`).join(', ')}). Transition a transforming.`,
+            );
+            return { status: 'continue', delaySec: 0 };
+          }
+          newCursor = { ...cursor, current: next, page: 1, completed, totalsPerEntity: newTotals };
+        } else {
+          newCursor = { ...cursor, page: cursor.page + 1, totalsPerEntity: newTotals };
+        }
+        await setJobProgress(db, tenantId, jobId, newCursor as unknown as Record<string, unknown>);
+        ctx.log(
+          'log',
+          `tick ${tickIndex}: extract ${entity.name} page ${cursor.page}, items=${pageResult.items.length}. Próximo: ${newCursor.current} page ${newCursor.page}.`,
+        );
         return { status: 'continue', delaySec: 0 };
       }
 
       case 'transforming': {
-        // STUB Sprint 4 / ET-002.
-        ctx.log('warn', `tick ${tickIndex}: transform phase es STUB (ET-002 pendiente Sprint 4) — avanzando a loading.`);
-        const advanced = await tryTransition(db, tenantId, jobId, 'transforming', 'loading');
-        if (!advanced) return { status: 'continue', delaySec: 0 };
+        // Sprint 4 / ET-002 — transform phase per-tick.
+        //
+        // Cada tick: lee batch de stg_<entity> con is_valid=false, aplica
+        // mapper (reusando src/mappers/), calcula canonical, escribe.
+        // Errores tipados van a DLQ con phase='transform'.
+        //
+        // Cursor: { phase: 'transform', current: entity, completed[] }.
+        // Cuando un batch llega vacío para la entity actual, marca
+        // completed y mueve a la siguiente. Cuando todas completas
+        // → tryTransition('transforming','loading').
+
+        const cursor = parseTransformCursor(job.progress);
+        const table = STG_TABLES[cursor.current];
+        if (!table) {
+          // Cursor con entity desconocida — reset.
+          await setJobProgress(db, tenantId, jobId, { phase: 'transform', current: EXTRACT_ENTITIES[0]!.name, completed: [] } as unknown as Record<string, unknown>);
+          return { status: 'continue', delaySec: 0 };
+        }
+        const batch = await listInvalidStg(db, table, tenantId, jobId, TRANSFORM_BATCH_SIZE);
+        if (batch.length === 0) {
+          const completed = [...cursor.completed, cursor.current];
+          const next = nextTransformEntity({ ...cursor, completed });
+          if (next === null) {
+            await setJobProgress(db, tenantId, jobId, { ...cursor, completed } as unknown as Record<string, unknown>);
+            const advanced = await tryTransition(db, tenantId, jobId, 'transforming', 'loading');
+            if (!advanced) return { status: 'continue', delaySec: 0 };
+            ctx.log('log', `tick ${tickIndex}: transform completed. Transition a loading.`);
+            return { status: 'continue', delaySec: 0 };
+          }
+          await setJobProgress(db, tenantId, jobId, { ...cursor, current: next, completed } as unknown as Record<string, unknown>);
+          return { status: 'continue', delaySec: 0 };
+        }
+        let okCount = 0;
+        let dlqCount = 0;
+        for (const row of batch) {
+          const result = applyMapper(cursor.current, row.raw_payload);
+          if (result.ok) {
+            await setStgCanonical(db, table, row.id, result.canonical, null);
+            okCount += 1;
+          } else {
+            const errs = { errorCode: result.errorCode, errorMessage: result.errorMessage, warnings: result.warnings };
+            await setStgCanonical(db, table, row.id, null, errs);
+            await appendDlq(db, tenantId, jobId, cursor.current, row.source_id, 'transform', result.errorCode, result.errorMessage, row.raw_payload);
+            dlqCount += 1;
+          }
+        }
+        ctx.log('log', `tick ${tickIndex}: transform ${cursor.current} batch ok=${okCount} dlq=${dlqCount}.`);
         return { status: 'continue', delaySec: 0 };
       }
 
       case 'loading': {
-        // STUB Sprint 4 / ET-003. Será donde ctx.didacta entre en juego
-        // con upsertByExternalRef de cada entidad.
-        ctx.log('warn', `tick ${tickIndex}: load phase es STUB (ET-003 pendiente Sprint 4) — avanzando a reconciling.`);
-        const advanced = await tryTransition(db, tenantId, jobId, 'loading', 'reconciling');
-        if (!advanced) return { status: 'continue', delaySec: 0 };
+        // Sprint 4 / ET-003 — load phase per-tick.
+        //
+        // Cada tick: lee batch de stg_<entity> con is_valid=true AND
+        // target_id IS NULL. Llama ctx.didacta.<entity>.upsertByExternalRef
+        // con externalRef = { externalSource: 'learndash', externalId: source_id }.
+        // Idempotencia garantizada por el core (alpha.52 ADR-014). Escribe
+        // target_id devuelto por el core. Errores tipados → DLQ.
+        //
+        // Orden de carga (deps de FK lógicas):
+        //   users → courses → lessons → topics → quizzes → groups
+        //
+        // Limitación documentada: quizzes carga solo el shell (sin las
+        // questions) hasta que se cierre DD-006 (ctx.didacta.quizzes.upsertQuestions
+        // bulk-create). Por ahora el shell se crea con externalRef y queda
+        // marcado como cargado; las questions persisten en stg pero no se
+        // suben al core. Pendiente: ET-003b cuando DD-006 esté listo.
+
+        const cursor = parseLoadCursor(job.progress);
+        const table = STG_TABLES[cursor.current];
+        const didacta = ctx.didacta as Record<string, { upsertByExternalRef: (input: Record<string, unknown>) => Promise<{ id: string }> }>;
+        if (!table) {
+          await setJobProgress(db, tenantId, jobId, { phase: 'load', current: 'users', completed: [] } as unknown as Record<string, unknown>);
+          return { status: 'continue', delaySec: 0 };
+        }
+        const batch = await listValidUnloadedStg(db, table, tenantId, jobId, LOAD_BATCH_SIZE);
+        if (batch.length === 0) {
+          const completed = [...cursor.completed, cursor.current];
+          const loadOrder = ['users', 'courses', 'lessons', 'topics', 'quizzes', 'groups'];
+          const idx = loadOrder.indexOf(cursor.current);
+          const next = idx >= 0 && idx + 1 < loadOrder.length ? loadOrder[idx + 1]! : null;
+          if (next === null) {
+            await setJobProgress(db, tenantId, jobId, { ...cursor, completed } as unknown as Record<string, unknown>);
+            const advanced = await tryTransition(db, tenantId, jobId, 'loading', 'reconciling');
+            if (!advanced) return { status: 'continue', delaySec: 0 };
+            ctx.log('log', `tick ${tickIndex}: load completed. Transition a reconciling.`);
+            return { status: 'continue', delaySec: 0 };
+          }
+          await setJobProgress(db, tenantId, jobId, { ...cursor, current: next, completed } as unknown as Record<string, unknown>);
+          return { status: 'continue', delaySec: 0 };
+        }
+        // Adapter canonical → DidactaUpsertXInput por entity. Maneja los
+        // mismatches entre el shape canonical (escrito alpha.51, pre-ctx.didacta)
+        // y el contrato actual del host (alpha.52+). Decide si entity es
+        // skippable (topics, groups) — esos no se intentan cargar, target_id
+        // se marca '!SKIP:<code>' para excluirlos del re-procesado.
+        let okCount = 0;
+        let dlqCount = 0;
+        let skipCount = 0;
+        for (const row of batch) {
+          const canonical = (row.canonical ?? {}) as Record<string, unknown>;
+          const adapted = adaptCanonicalToDidacta(cursor.current, canonical);
+          if (!adapted.ok) {
+            if (adapted.skip) {
+              // Skippable conscientemente — marcamos target con sentinel para
+              // no reprocesar pero sin contar como loaded ni failed.
+              await setStgLoaded(db, table, row.id, `!SKIP:${adapted.code}`);
+              skipCount += 1;
+            } else {
+              await appendDlq(db, tenantId, jobId, cursor.current, row.source_id, 'load', adapted.code, adapted.message, row.raw_payload, canonical);
+              // Marcamos también con sentinel para no reprocesar en bucle.
+              await setStgLoaded(db, table, row.id, `!FAIL:${adapted.code}`);
+              dlqCount += 1;
+            }
+            continue;
+          }
+          const apiObj = didacta[adapted.ns];
+          if (!apiObj || typeof apiObj.upsertByExternalRef !== 'function') {
+            await appendDlq(db, tenantId, jobId, cursor.current, row.source_id, 'load', 'DIDACTA_NS_MISSING', `ctx.didacta.${adapted.ns} no disponible`, row.raw_payload, canonical);
+            await setStgLoaded(db, table, row.id, '!FAIL:NS');
+            dlqCount += 1;
+            continue;
+          }
+          try {
+            const result = await apiObj.upsertByExternalRef(adapted.input);
+            await setStgLoaded(db, table, row.id, result.id);
+            okCount += 1;
+          } catch (e) {
+            const code = (e as { code?: string })?.code ?? 'DIDACTA_UPSERT_FAILED';
+            const msg = e instanceof Error ? e.message : String(e);
+            await appendDlq(db, tenantId, jobId, cursor.current, row.source_id, 'load', code, msg, row.raw_payload, canonical);
+            await setStgLoaded(db, table, row.id, '!FAIL:DIDACTA');
+            dlqCount += 1;
+          }
+        }
+        ctx.log('log', `tick ${tickIndex}: load ${cursor.current} batch ok=${okCount} dlq=${dlqCount} skip=${skipCount}.`);
         return { status: 'continue', delaySec: 0 };
       }
 
       case 'reconciling': {
-        // STUB Sprint 4 / ET-004 (validation_reports + audit chain ET-005).
-        ctx.log('warn', `tick ${tickIndex}: reconcile phase es STUB (ET-004 pendiente Sprint 4) — completando job.`);
+        // Sprint 4 / ET-004 + ET-005 — reconcile + audit chain en un tick.
+        //
+        // ET-004: agrega counts por entidad (source/staged/valid/loaded/failed)
+        // a mod_migrator_learndash_validation_reports. UPSERT por (tenant,
+        // job, entity_type) para idempotencia si el tick se re-corre.
+        //
+        // ET-005: append a mod_migrator_learndash_audit_events con cadena
+        // SHA-256. Cada evento incluye prev_hash (último hash del job) +
+        // body; hash = SHA-256(prev_hash + body_json). Permite verificar
+        // integridad post-mortem en GET /jobs/:id/report.
+        //
+        // Por simplicidad el reconcile se hace en un único tick (operación
+        // mayormente count + insert; escala bien hasta ~50 entidades).
+        // Si necesitamos partir por entidad en el futuro, refactor a cursor.
+
+        const entities = ['users', 'courses', 'lessons', 'topics', 'quizzes', 'groups'];
+        for (const entity of entities) {
+          const table = STG_TABLES[entity];
+          if (!table) continue;
+          const counts = await db.query<{
+            staged_count: string;
+            valid_count: string;
+            loaded_count: string;
+            skipped_count: string;
+            failed_target_count: string;
+          }>(
+            `SELECT
+               COUNT(*)::text AS staged_count,
+               COUNT(*) FILTER (WHERE is_valid = TRUE)::text AS valid_count,
+               COUNT(*) FILTER (WHERE target_id IS NOT NULL AND target_id NOT LIKE '!%')::text AS loaded_count,
+               COUNT(*) FILTER (WHERE target_id LIKE '!SKIP:%')::text AS skipped_count,
+               COUNT(*) FILTER (WHERE target_id LIKE '!FAIL:%')::text AS failed_target_count
+               FROM ${table}
+              WHERE tenant_id = $1::uuid AND job_id = $2::uuid`,
+            [tenantId, jobId],
+          );
+          const c = counts.rows[0] ?? { staged_count: '0', valid_count: '0', loaded_count: '0', skipped_count: '0', failed_target_count: '0' };
+          const staged = Number(c.staged_count);
+          const valid = Number(c.valid_count);
+          const loaded = Number(c.loaded_count);
+          const skipped = Number(c.skipped_count);
+
+          // Failed por entity = filas en DLQ para esta entity (puede contar
+          // doble vs failed_target si una fila falló transform Y load).
+          const failedR = await db.query<{ failed_count: string }>(
+            `SELECT COUNT(*)::text AS failed_count
+               FROM mod_migrator_learndash_dlq
+              WHERE tenant_id = $1::uuid AND job_id = $2::uuid AND entity_type = $3`,
+            [tenantId, jobId, entity],
+          );
+          const failed = Number(failedR.rows[0]?.failed_count ?? '0');
+
+          await db.execute(
+            `INSERT INTO mod_migrator_learndash_validation_reports
+               (tenant_id, job_id, entity_type, source_count, staged_count, valid_count, loaded_count, skipped_count, failed_count)
+             VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (tenant_id, job_id, entity_type) DO UPDATE
+               SET staged_count = EXCLUDED.staged_count,
+                   valid_count = EXCLUDED.valid_count,
+                   loaded_count = EXCLUDED.loaded_count,
+                   skipped_count = EXCLUDED.skipped_count,
+                   failed_count = EXCLUDED.failed_count,
+                   generated_at = CURRENT_TIMESTAMP`,
+            [tenantId, jobId, entity, staged, staged, valid, loaded, skipped, failed],
+          );
+        }
+
+        // ET-005: append audit event "phase.reconcile.completed" con cadena.
+        // node:crypto está en la allowlist del sandbox.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const crypto = require('node:crypto') as typeof import('node:crypto');
+        const prevR = await db.query<{ hash: string }>(
+          `SELECT hash FROM mod_migrator_learndash_audit_events
+            WHERE tenant_id = $1::uuid AND job_id = $2::uuid
+            ORDER BY occurred_at DESC LIMIT 1`,
+          [tenantId, jobId],
+        );
+        const prevHash = prevR.rows[0]?.hash ?? null;
+        const body = { phase: 'reconcile', completedAt: nowIso() };
+        const hash = crypto
+          .createHash('sha256')
+          .update(stableStringify({ prevHash: prevHash ?? '', body }))
+          .digest('hex');
+        await db.execute(
+          `INSERT INTO mod_migrator_learndash_audit_events
+             (tenant_id, job_id, actor, action, entity_type, entity_id, meta, prev_hash, hash)
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8, $9)`,
+          [tenantId, jobId, 'system', 'phase.completed', null, null, JSON.stringify(body), prevHash, hash],
+        );
+
         const advanced = await tryTransition(db, tenantId, jobId, 'reconciling', 'completed');
         if (!advanced) return { status: 'continue', delaySec: 0 };
         await setJobStatus(db, tenantId, jobId, 'completed', nowIso());
-        ctx.log('log', `tick ${tickIndex}: job ${jobId} completed (todas las fases en STUB).`);
+        await cleanupJobAppPassword(ctx.secrets, jobId, ctx.log);
+        ctx.log('log', `tick ${tickIndex}: job ${jobId} completed (ET-004 reports + ET-005 audit chain emitidos).`);
         return { status: 'completed' };
       }
 

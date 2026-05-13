@@ -220,6 +220,8 @@ export class InstallPackageService {
               tablePrefix: validated.manifest.tablePrefix,
               didactaConfig: validated.manifest.didacta ?? null,
               jobLifecycleConfig: validated.manifest.jobLifecycle ?? null,
+              requiresSecrets: validated.manifest.requiresSecrets === true,
+              secretsLifecycleConfig: validated.manifest.secretsLifecycle ?? null,
             },
           );
         } catch (err) {
@@ -249,6 +251,8 @@ export class InstallPackageService {
           tablePrefix: validated.manifest.tablePrefix,
           didactaConfig: validated.manifest.didacta ?? null,
           moduleVersion: validated.manifest.version,
+          requiresSecrets: validated.manifest.requiresSecrets === true,
+          secretsLifecycleConfig: validated.manifest.secretsLifecycle ?? null,
         });
       } else {
         this.jobLifecycle.unregister(validated.manifest.name);

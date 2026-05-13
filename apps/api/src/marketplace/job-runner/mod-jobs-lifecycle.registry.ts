@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type {
   ModuleDidactaConfig,
   ModuleHttpConfig,
+  ModuleSecretsLifecycleConfig,
 } from '../module-manifest.schema';
 import type { ModuleJobTickHandler } from './mod-jobs.types';
 
@@ -24,6 +25,10 @@ export interface ModuleJobLifecycleEntry {
     /// `manifest.didacta` (alpha.52). NULL si el módulo no declara la
     /// API pública del core — el worker inyecta `BlockedDidactaApi`.
     didactaConfig: ModuleDidactaConfig | null;
+    /// `manifest.requiresSecrets` (alpha.56). Si false → BlockedSandboxedSecrets.
+    requiresSecrets: boolean;
+    /// `manifest.secretsLifecycle` (alpha.56). NULL → defaults del factory.
+    secretsLifecycleConfig: ModuleSecretsLifecycleConfig | null;
     /// Versión del módulo. Se inyecta en el ctx.moduleVersion para que
     /// el handler pueda branch lógica condicional a la versión instalada.
     moduleVersion: string;
@@ -54,7 +59,7 @@ export class ModuleJobLifecycleRegistry {
     const existed = this.entries.has(moduleName);
     this.entries.set(moduleName, { handler, manifest });
     this.logger.log(
-      `Módulo "${moduleName}" ${existed ? 're-registró' : 'registró'} onJobTick (db=${manifest.dbEnabled ? 'enabled' : 'blocked'}, http=${manifest.httpConfig ? 'enabled' : 'blocked'}, didacta=${manifest.didactaConfig ? 'enabled' : 'blocked'}, version=${manifest.moduleVersion}).`,
+      `Módulo "${moduleName}" ${existed ? 're-registró' : 'registró'} onJobTick (db=${manifest.dbEnabled ? 'enabled' : 'blocked'}, http=${manifest.httpConfig ? 'enabled' : 'blocked'}, didacta=${manifest.didactaConfig ? 'enabled' : 'blocked'}, secrets=${manifest.requiresSecrets ? 'enabled' : 'blocked'}, version=${manifest.moduleVersion}).`,
     );
   }
 

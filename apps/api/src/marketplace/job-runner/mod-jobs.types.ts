@@ -1,6 +1,7 @@
 import type { SandboxedDb } from '../sandboxed-db.types';
 import type { SandboxedHttp } from '../sandboxed-http.types';
 import type { DidactaApi } from '../sandboxed-didacta.types';
+import type { SandboxedSecrets } from '../sandboxed-secrets.types';
 
 /**
  * Tipos del runtime de jobs del marketplace (Sprint 3 / JR-002).
@@ -71,6 +72,12 @@ export interface ModuleJobTickContext {
   db: SandboxedDb;
   http: SandboxedHttp;
   didacta: DidactaApi;
+  /// Store cifrado scoped al módulo + tenant (alpha.56). Si el manifest
+  /// no declara `requiresSecrets: true`, recibe `BlockedSandboxedSecrets`
+  /// que rechaza con SECRETS_NOT_DECLARED. En workers BullMQ el tenantId
+  /// SIEMPRE está disponible (lo trae el payload del job), así que nunca
+  /// recibe `AnonymousSandboxedSecrets` aquí — solo en routes anónimas.
+  secrets: SandboxedSecrets;
 }
 
 /// Handler que un módulo declara y exporta como

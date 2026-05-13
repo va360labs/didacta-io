@@ -52,6 +52,8 @@ import {
   type DidactaUpsertCourseModuleInput,
   type DidactaUpsertEnrollmentInput,
   type DidactaUpsertLessonInput,
+  type DidactaUpsertQuestionsInput,
+  type DidactaQuestionsResult,
   type DidactaUpsertQuizInput,
   type DidactaUpsertUserInput,
   type DidactaUser,
@@ -492,6 +494,8 @@ class ScopedDidactaApi implements DidactaApi {
         this.gate('quizzes.findByExternalRef', () => this.quizzesFind(ref)),
       deleteByExternalRef: (ref) =>
         this.gate('quizzes.deleteByExternalRef', () => this.quizzesDelete(ref)),
+      upsertQuestions: (input) =>
+        this.gate('quizzes.upsertQuestions', () => this.quizzesUpsertQuestions(input)),
     };
     this.enrollments = {
       upsertByExternalRef: (input) =>
@@ -1063,7 +1067,7 @@ class ScopedDidactaApi implements DidactaApi {
     // método separado por question — pendiente.
     if (input.questions && input.questions.length > 0) {
       this.logger.warn(
-        `[mod:${this.moduleId}] quizzes.upsertByExternalRef recibió ${input.questions.length} questions inline pero el bulk-create todavía no está cableado (DD-006 pendiente). Las questions NO se persistieron — usá un método dedicado en Sprint 4.`,
+        `[mod:${this.moduleId}] quizzes.upsertByExternalRef recibió ${input.questions.length} questions inline — desde alpha.56 (DD-006) los questions se cargan vía ctx.didacta.quizzes.upsertQuestions(...) que tiene semántica REPLACE explícita. Las questions del input.questions NO se persistieron desde esta call.`,
       );
     }
 
@@ -1092,6 +1096,72 @@ class ScopedDidactaApi implements DidactaApi {
       },
     });
     return row ? toDidactaQuiz(row) : null;
+  }
+
+  /// DD-006 (alpha.56) — bulk-create/replace de questions del quiz.
+  /// Semántica REPLACE: borra todas las questions existentes del quiz y
+  /// crea las nuevas. Idempotente (re-llamar con el mismo input produce
+  /// el mismo estado final). El módulo es responsable de mappear su tipo
+  /// de pregunta nativo al `DidactaQuestionType` antes de invocar.
+  private async quizzesUpsertQuestions(
+    input: DidactaUpsertQuestionsInput,
+  ): Promise<DidactaQuestionsResult> {
+    const refParsed = externalRefSchema.safeParse(input.quizExternalRef);
+    if (!refParsed.success) failValidation(refParsed.error);
+    this.assertExternalSourceMatches(refParsed.data.externalSource);
+    const { tenantId } = this.requireTenant();
+
+    // Resolver quizId via externalRef.
+    const quiz = await this.prisma.modAssessmentsQuiz.findFirst({
+      where: {
+        tenantId,
+        externalSource: refParsed.data.externalSource,
+        externalId: refParsed.data.externalId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (!quiz) {
+      throw new DidactaError(
+        'DIDACTA_FOREIGN_REFERENCE',
+        `Quiz con externalRef ${refParsed.data.externalSource}/${refParsed.data.externalId} no existe en el tenant. Crealo primero con quizzes.upsertByExternalRef antes de cargar questions.`,
+      );
+    }
+
+    // 1. Borrar todas las questions existentes (soft delete por consistencia
+    // con AssessmentsService.deleteQuestion). updateMany porque addQuestion
+    // pone deletedAt=null al crear y filtramos por deletedAt=null al leer.
+    const deletedRes = await this.prisma.modAssessmentsQuestion.updateMany({
+      where: { tenantId, quizId: quiz.id, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+
+    // 2. Crear las nuevas via AssessmentsService.addQuestion para reusar la
+    // lógica de position auto-increment + options nested create + audit
+    // (lo que sea que el service emita). Una a una porque addQuestion no
+    // soporta bulk — para N=10..50 preguntas/quiz es aceptable, si crece
+    // mucho refactor a bulk SQL directo.
+    const assessmentsSvc = this.coreServices.getAssessmentsService();
+    let createdCount = 0;
+    for (const q of input.questions) {
+      // Mapeo del tipo Didacta → CreateQuestionDto. Validation extra del
+      // schema interno del service hará el resto.
+      await assessmentsSvc.addQuestion(tenantId, quiz.id, {
+        type: q.type,
+        prompt: q.prompt,
+        feedback: q.feedback,
+        points: q.points,
+        acceptedAnswers: q.acceptedAnswers,
+        options: q.options?.map((o) => ({ label: o.label, isCorrect: o.isCorrect })),
+      } as Parameters<typeof assessmentsSvc.addQuestion>[2]);
+      createdCount += 1;
+    }
+
+    return {
+      quizId: quiz.id,
+      createdCount,
+      deletedCount: deletedRes.count,
+    };
   }
 
   private async quizzesDelete(rawRef: DidactaExternalRef): Promise<DidactaDeleteResult> {

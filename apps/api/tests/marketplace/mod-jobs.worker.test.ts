@@ -42,6 +42,8 @@ function makeWorkerHarness(
       dbEnabled: opts.dbEnabled ?? false,
       tablePrefix: 'mod_test_',
       didactaConfig: (opts.didactaConfig as never) ?? null,
+      requiresSecrets: false,
+      secretsLifecycleConfig: null,
       moduleVersion: '1.0.0',
     });
   }
@@ -96,6 +98,9 @@ function makeWorkerHarness(
     httpService,
     rateLimiter,
     didactaFactory,
+    // alpha.56 — ScopedSecretsApiFactory stub; los tests del worker no
+    // ejercen ctx.secrets (registran entries con requiresSecrets=false).
+    { resolve: () => ({ get: async () => null, set: async () => undefined, delete: async () => undefined, list: async () => [] }) } as never,
     moduleRegistry,
     contextFactory,
     tenantContext,
@@ -302,6 +307,8 @@ describe('ModJobsWorkerService.processTick — TenantContext', () => {
       dbEnabled: false,
       tablePrefix: 'mod_test_',
       didactaConfig: null,
+      requiresSecrets: false,
+      secretsLifecycleConfig: null,
       moduleVersion: '1.0.0',
     });
     const queueService = {
@@ -320,6 +327,7 @@ describe('ModJobsWorkerService.processTick — TenantContext', () => {
       { build: vi.fn() } as never,
       {} as never,
       { build: vi.fn() } as never,
+      { resolve: () => ({ get: async () => null, set: async () => undefined, delete: async () => undefined, list: async () => [] }) } as never,
       {} as never,
       { getStorage: () => ({}) } as never,
       tenantContext,

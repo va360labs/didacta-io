@@ -114,6 +114,7 @@ export const DIDACTA_PERMISSIONS = [
   'quizzes.upsertByExternalRef',
   'quizzes.findByExternalRef',
   'quizzes.deleteByExternalRef',
+  'quizzes.upsertQuestions',
   // enrollments
   'enrollments.upsertByExternalRef',
   'enrollments.findByExternalRef',
@@ -323,6 +324,56 @@ export interface DidactaUpsertQuizInput extends DidactaExternalRef {
   questions?: unknown[];
 }
 
+/// Tipo de pregunta soportado por el AssessmentsService del core.
+/// Si LearnDash trae un tipo no soportado (matrix, cloze, etc.) el módulo
+/// debe convertirlo a uno soportado o mandarlo a DLQ.
+export type DidactaQuestionType =
+  | 'SINGLE_CHOICE'
+  | 'MULTIPLE_CHOICE'
+  | 'TRUE_FALSE'
+  | 'FILL_IN'
+  | 'OPEN_ENDED';
+
+export interface DidactaQuestionOptionInput {
+  /// Texto visible de la opción.
+  label: string;
+  /// Marca si es la respuesta correcta. Para SINGLE_CHOICE / TRUE_FALSE
+  /// exactly una; para MULTIPLE_CHOICE puede haber varias.
+  isCorrect: boolean;
+}
+
+export interface DidactaQuestionInput {
+  type: DidactaQuestionType;
+  /// Texto del enunciado de la pregunta. HTML permitido.
+  prompt: string;
+  /// Feedback general mostrado tras submit. HTML permitido. Opcional.
+  feedback?: string;
+  /// Puntos otorgados si la respuesta es correcta. Default 1.
+  points?: number;
+  /// Para FILL_IN / OPEN_ENDED: respuestas aceptadas. Para opciones,
+  /// usar `options[]` en su lugar.
+  acceptedAnswers?: string[];
+  /// Opciones de respuesta. Vacío para FILL_IN / OPEN_ENDED.
+  options?: DidactaQuestionOptionInput[];
+}
+
+export interface DidactaUpsertQuestionsInput {
+  /// Quiz padre. El host lo resuelve a `quizId` del core via
+  /// externalSource+externalId. Si el quiz no existe → DIDACTA_FOREIGN_REFERENCE.
+  quizExternalRef: DidactaExternalRef;
+  /// Lista de questions. **Semántica REPLACE**: el host borra TODAS las
+  /// questions existentes del quiz antes de insertar las nuevas. Esto da
+  /// idempotencia simple sin necesidad de externalId por pregunta. Si
+  /// `questions = []` se borran todas las existentes (clear quiz).
+  questions: DidactaQuestionInput[];
+}
+
+export interface DidactaQuestionsResult {
+  quizId: string;
+  createdCount: number;
+  deletedCount: number;
+}
+
 export interface DidactaUpsertEnrollmentInput extends DidactaExternalRef {
   userExternalRef: DidactaExternalRef;
   courseExternalRef: DidactaExternalRef;
@@ -392,6 +443,11 @@ export interface DidactaQuizzes {
   upsertByExternalRef(input: DidactaUpsertQuizInput): Promise<DidactaQuiz>;
   findByExternalRef(ref: DidactaExternalRef): Promise<DidactaQuiz | null>;
   deleteByExternalRef(ref: DidactaExternalRef): Promise<DidactaDeleteResult>;
+  /// DD-006 (alpha.56): bulk-create/replace de questions del quiz. Cierra
+  /// el gap del warning emitido por upsertByExternalRef cuando recibe
+  /// `questions` inline (hoy se ignoran). Semántica REPLACE: borra todas
+  /// las existentes y crea las nuevas. Idempotente.
+  upsertQuestions(input: DidactaUpsertQuestionsInput): Promise<DidactaQuestionsResult>;
 }
 
 export interface DidactaEnrollments {
@@ -472,6 +528,7 @@ export class BlockedDidactaApi implements DidactaApi {
     upsertByExternalRef: async () => this.reject('quizzes.upsertByExternalRef'),
     findByExternalRef: async () => this.reject('quizzes.findByExternalRef'),
     deleteByExternalRef: async () => this.reject('quizzes.deleteByExternalRef'),
+    upsertQuestions: async () => this.reject('quizzes.upsertQuestions'),
   };
   readonly enrollments: DidactaEnrollments = {
     upsertByExternalRef: async () => this.reject('enrollments.upsertByExternalRef'),
@@ -506,7 +563,10 @@ export class NoopDidactaApi implements DidactaApi {
   };
   readonly courseModules: DidactaCourseModules = noopResource('modules');
   readonly lessons: DidactaLessons = noopResource('lessons');
-  readonly quizzes: DidactaQuizzes = noopResource('quizzes');
+  readonly quizzes: DidactaQuizzes = {
+    ...noopResource<DidactaQuizzes>('quizzes'),
+    upsertQuestions: async () => noopReject('quizzes.upsertQuestions'),
+  };
   readonly enrollments: DidactaEnrollments = noopResource('enrollments');
   readonly media: DidactaMedia = {
     uploadFromUrl: async () => noopReject('media.uploadFromUrl'),

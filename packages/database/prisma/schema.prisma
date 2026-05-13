@@ -2293,3 +2293,54 @@ model InstalledModule {
   @@index([vendor])
   @@map("installed_module")
 }
+
+/// Store de secretos cifrados para módulos third-party (alpha.56 / SE-002).
+///
+/// Cuando un módulo declara `requiresSecrets: true` en su manifest, el host
+/// le inyecta `ctx.secrets` con get/set/delete/list scoped a `(tenant_id,
+/// module_id)`. Esta tabla persiste los values cifrados con AES-256-GCM
+/// usando `SecretCipherService`. La key de cifrado se resuelve via
+/// `loadCipherKey()` (env → file → file-new → ephemeral) — la misma que
+/// cifra `tenant_setting`, mismo dominio (secrets-at-rest tenant-level),
+/// mismo blast radius si se rota.
+///
+/// `ciphertext` + `iv` + `tag` son los tres componentes de AES-GCM:
+///  - ciphertext: el value plaintext cifrado (1 byte de overhead vs plaintext).
+///  - iv: nonce aleatorio 96-bit, distinto por cada `set()` (incluso para el
+///    mismo plaintext) — necesario para que GCM sea IND-CCA2.
+///  - tag: 128-bit MAC que verifica integridad; si alguien altera ciphertext
+///    o iv en BD, el decrypt() del cipher lanza al validar el tag.
+///
+/// `module_id` es el slug del módulo (`manifest.name`, ej. "mod.migrator-learndash").
+/// NO usamos FK a `InstalledModule.name` porque un módulo puede ser
+/// desinstalado y reinstalado — queremos que los secrets sobrevivan si el
+/// admin reinstala la misma versión (caso típico de upgrade fallido).
+///
+/// `expires_at` opcional: secrets job-scoped (WP appPassword del migrator)
+/// se setean con expiresAt = now + retentionDays. get()/list() filtran
+/// expired; un GC periódico borra los rows físicos para que la quota no
+/// crezca con basura caducada.
+model ModSecret {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  moduleId  String    @map("module_id") @db.VarChar(60)
+  secretKey String    @map("secret_key") @db.VarChar(128)
+  /// Value cifrado (AES-256-GCM). `Bytes` se mapea a `bytea` en Postgres.
+  ciphertext Bytes
+  /// Nonce 96-bit del GCM. Distinto por cada `set()`.
+  iv         Bytes
+  /// Auth tag 128-bit. Verifica integridad al decrypt.
+  tag        Bytes
+  /// Tamaño aproximado del value plaintext (bytes). Cacheado para que
+  /// `list()` pueda devolverlo sin descifrar (que requiere round-trip al
+  /// cipher service por cada row).
+  approxValueBytes Int      @map("approx_value_bytes")
+  expiresAt        DateTime? @map("expires_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@unique([tenantId, moduleId, secretKey], name: "mod_secret_unique")
+  @@index([expiresAt])
+  @@index([tenantId, moduleId])
+  @@map("mod_secret")
+}

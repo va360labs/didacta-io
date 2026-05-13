@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AdminModule } from '../admin/admin.module';
 import { AuthModule } from '../auth/auth.module';
+import { loadCipherKey } from '../auth/cipher-key';
+import { SecretCipherService } from '../modules/secret-cipher.service';
 import { ModulesModule } from '../modules/modules.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AdminMarketplaceController } from './admin-marketplace.controller';
@@ -27,6 +29,7 @@ import { SandboxedDbService } from './sandboxed-db.service';
 import { ScopedDidactaApiFactory } from './sandboxed-didacta.service';
 import { SandboxedHttpService } from './sandboxed-http.service';
 import { ScopedJobsApiFactory } from './sandboxed-jobs.service';
+import { ScopedSecretsApiFactory } from './sandboxed-secrets.service';
 
 /// Marketplace de módulos (ADR-009).
 ///
@@ -64,6 +67,17 @@ import { ScopedJobsApiFactory } from './sandboxed-jobs.service';
     SandboxedDbService,
     ScopedDidactaApiFactory,
     ScopedJobsApiFactory,
+    // alpha.56 — SecretCipherService como provider local del Marketplace
+    // para que ScopedSecretsApiFactory lo inyecte. AuthModule lo construye
+    // con la MISMA key (loadCipherKey()) — son instancias separadas pero
+    // descifran/encriptan equivalente porque la key es la misma. El WARN
+    // del boot ya lo emite AuthModule (que arranca primero); aquí lo
+    // suprimimos para no duplicar la línea.
+    {
+      provide: SecretCipherService,
+      useFactory: () => new SecretCipherService(loadCipherKey().key),
+    },
+    ScopedSecretsApiFactory,
     RateLimiterService,
     MarketplaceErrorFilter,
     // Sprint 3 — runtime de jobs `mod-jobs` (BullMQ + worker + registry).

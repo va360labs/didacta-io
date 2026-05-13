@@ -4,6 +4,10 @@ import {
   DIDACTA_PERMISSIONS,
   type DidactaPermission,
 } from './sandboxed-didacta.types.js';
+import {
+  SECRETS_BASE_KEY_REGEX,
+  SECRETS_CAPS,
+} from './sandboxed-secrets.types.js';
 
 /// Schema Zod del manifest de un módulo `*.zip`.
 ///
@@ -272,6 +276,82 @@ const jobLifecycleSchema = z
   .strict();
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Schema para ctx.secrets — store de credenciales cifradas (alpha.56 / SE-001)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Si el módulo necesita persistir credenciales del usuario (WP appPassword del
+// migrator, futuras API keys de mod.stripe/mod.zoom-live/mod.fundae), declara
+// `requiresSecrets: true`. Sin él, el host inyecta `BlockedSandboxedSecrets`
+// y cualquier `ctx.secrets.get/set/delete/list(...)` rechaza con mensaje
+// accionable que explica cómo activarlo.
+//
+// El bloque `secretsLifecycle` es opcional — si falta, se aplican los
+// defaults razonables (maxKeys=32, maxValueBytes=8 KB, sin restricción de
+// pattern más allá del regex base del core). Cuando está, el módulo declara
+// caps más estrictos para auto-defenderse:
+//
+//   - `maxKeys`: tope de keys vivas para este módulo en este tenant. Cap
+//     duro del core SECRETS_CAPS.MAX_KEYS_PER_MODULE=256. Más allá de 32
+//     suele ser señal de leak (job-scoped que el módulo olvida limpiar).
+//
+//   - `maxValueBytes`: tope del value plaintext. Cap duro SECRETS_CAPS.
+//     MAX_VALUE_BYTES=64 KB. Más allá de 8 KB suele ser uso indebido
+//     (caché o storage de blobs — usá ctx.db para eso).
+//
+//   - `allowedKeyPattern`: regex que TODA key seteada debe matchear (además
+//     del SECRETS_BASE_KEY_REGEX del core). Útil para forzar prefijos que
+//     indiquen scope, ej. `^job:[a-f0-9-]+:learndash:.+$` para garantizar
+//     que el módulo solo escriba secrets job-scoped y nunca tenant-globales
+//     sin pensar.
+//
+// Cripto at-rest y key resolution son transparentes al módulo — los hace
+// el host con `SecretCipherService` (AES-256-GCM) + `loadCipherKey()`
+// (env > file > file-new > ephemeral, sin fricción al primer install).
+
+const secretsLifecycleSchema = z
+  .object({
+    maxKeys: z
+      .number()
+      .int()
+      .min(1)
+      .max(SECRETS_CAPS.MAX_KEYS_PER_MODULE, {
+        message: `maxKeys no puede superar ${SECRETS_CAPS.MAX_KEYS_PER_MODULE} (cap del core).`,
+      })
+      .default(32)
+      .optional(),
+    maxValueBytes: z
+      .number()
+      .int()
+      .min(1)
+      .max(SECRETS_CAPS.MAX_VALUE_BYTES, {
+        message: `maxValueBytes no puede superar ${SECRETS_CAPS.MAX_VALUE_BYTES} (cap del core: 64 KB).`,
+      })
+      .default(8 * 1024)
+      .optional(),
+    /// Regex extra que TODA key debe matchear (además del regex base del
+    /// core que valida charset y longitud). El módulo lo usa para forzar
+    /// prefijos que indiquen scope (job-scoped vs tenant-scoped) y evitar
+    /// que un bug propio le haga escribir keys con shape inesperado.
+    allowedKeyPattern: z
+      .string()
+      .min(1)
+      .max(500)
+      .refine(
+        (p) => {
+          try {
+            new RegExp(p);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        { message: 'allowedKeyPattern debe ser una expresión regular JavaScript válida.' },
+      )
+      .optional(),
+  })
+  .strict();
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Schemas para UI Surfaces (DISC-001.5)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -416,8 +496,31 @@ export const moduleManifestSchema = z
     // referencia al módulo. Si el bundle NO exporta esa función → el
     // install falla con MODULE_BOOT_FAILED (validado en sandbox).
     jobLifecycle: jobLifecycleSchema.optional(),
+
+    // ctx.secrets — store de credenciales cifradas (alpha.56 / SE-001).
+    // Si true, el dispatcher cablea un ScopedSecretsApi que el módulo
+    // recibe en ctx.secrets para guardar/leer secretos at-rest (AES-256-GCM,
+    // tenant + módulo scoped). Sin él, el módulo recibe BlockedSandboxedSecrets
+    // con mensaje accionable explicando cómo activarlo.
+    requiresSecrets: z.boolean().optional(),
+
+    // Configuración opcional del lifecycle de secrets — caps que el módulo
+    // se auto-impone (más estrictos que los del core) + pattern de keys
+    // permitido para reforzar disciplina (ej. forzar prefijo `job:<uuid>:`
+    // para que el módulo solo escriba secrets job-scoped por accidente).
+    // Solo aplica si requiresSecrets=true.
+    secretsLifecycle: secretsLifecycleSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (m) => m.secretsLifecycle === undefined || m.requiresSecrets === true,
+    {
+      message:
+        'secretsLifecycle declarado sin requiresSecrets=true. Si tu módulo necesita secrets, ' +
+        'añadí "requiresSecrets": true al manifest; si no, eliminá el bloque secretsLifecycle.',
+      path: ['secretsLifecycle'],
+    },
+  );
 
 export type ModuleManifest = z.infer<typeof moduleManifestSchema>;
 export type ModuleDidactaConfig = z.infer<typeof didactaSchema>;
@@ -426,6 +529,7 @@ export type ModuleSurfaceConfig = z.infer<typeof surfaceSchema>;
 export type ModuleConfigField = z.infer<typeof configFieldSchema>;
 export type ModuleAssets = z.infer<typeof assetsSchema>;
 export type ModuleJobLifecycleConfig = z.infer<typeof jobLifecycleSchema>;
+export type ModuleSecretsLifecycleConfig = z.infer<typeof secretsLifecycleSchema>;
 
 /// Coherencia cruzada: el `tablePrefix` y el `apiNamespace` deben derivar del
 /// mismo slug que `name`. Evita que un módulo declare un nombre y use el

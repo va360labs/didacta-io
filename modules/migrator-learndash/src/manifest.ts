@@ -59,6 +59,22 @@ export interface ModuleManifest {
     /// puede aplicar throttling si excede. Default 600 (1 tick/6s).
     maxTicksPerHour?: number;
   };
+  /// ctx.secrets store cifrado scoped al módulo + tenant (alpha.56). Si
+  /// `true`, el host inyecta `SandboxedSecrets` con get/set/delete/list.
+  /// Necesario para que POST /jobs guarde el appPassword de WP y onJobTick
+  /// (cada tick fresco, sin estado in-process) lo descifre por demanda.
+  /// Sin este bloque el módulo no podría autenticar contra WordPress en
+  /// las phases de extract (ET-001).
+  requiresSecrets?: boolean;
+  /// Caps específicos del módulo (más estrictos que los defaults del core).
+  /// `allowedKeyPattern` fuerza que TODA key matchee la regex — guard
+  /// contra bugs en el propio módulo que escriban keys tenant-globales por
+  /// accidente cuando solo queremos job-scoped.
+  secretsLifecycle?: {
+    maxKeys?: number;
+    maxValueBytes?: number;
+    allowedKeyPattern?: string;
+  };
 }
 
 export const manifest: ModuleManifest = {
@@ -66,7 +82,7 @@ export const manifest: ModuleManifest = {
   displayName: 'Migrador desde WordPress + LearnDash',
   description:
     'Importa cursos, lecciones, temas, quizzes, preguntas, usuarios, grupos, matrículas, media y progreso desde WordPress + LearnDash hacia Didacta. Wizard didáctico paso a paso, ETL con staging, idempotencia por checksum, reportes auditables.',
-  version: '1.0.8',
+  version: '1.0.10',
   author: 'Didacta',
   license: 'Proprietary',
   category: 'migration',
@@ -135,6 +151,7 @@ export const manifest: ModuleManifest = {
       'quizzes.upsertByExternalRef',
       'quizzes.findByExternalRef',
       'quizzes.deleteByExternalRef',
+      'quizzes.upsertQuestions',
       'enrollments.upsertByExternalRef',
       'enrollments.findByExternalRef',
       'enrollments.deleteByExternalRef',
@@ -150,5 +167,31 @@ export const manifest: ModuleManifest = {
   jobLifecycle: {
     onTickFn: 'onJobTick',
     maxTicksPerHour: 600,
+  },
+  // alpha.56: el migrador necesita persistir el appPassword de WP entre
+  // POST /jobs y el primer tick del worker BullMQ. Antes de alpha.56 el
+  // password se descartaba al persistir el job (regla "appPassword NUNCA
+  // se persiste en source_profile") — eso bloqueaba ET-001 porque el
+  // worker arranca con ctx fresco y no tiene cómo autenticar contra WP.
+  // ctx.secrets resuelve: cipher AES-256-GCM at-rest, key resuelta via
+  // loadCipherKey() (sin fricción primer install). allowedKeyPattern
+  // fuerza que TODA key sea job-scoped (^job:<uuid>:learndash:...) para
+  // que un bug del módulo no escriba secretos tenant-globales por accidente.
+  requiresSecrets: true,
+  secretsLifecycle: {
+    // Defensa profundidad: cap conservador. Cada job vivo guarda 1 key
+    // (appPassword). 16 jobs concurrentes por tenant es ya mucho — más
+    // que eso huele a leak de cleanup. Si llegamos al cap, set() falla y
+    // el handler responde 503 al wizard pidiendo al admin que limpie.
+    maxKeys: 16,
+    // 1 KB cubre cualquier appPassword realista (WP los limita a 24 chars
+    // por defecto, pero algunas extensiones permiten más). Más que eso
+    // huele a basura embebida.
+    maxValueBytes: 1024,
+    // Forzar prefix job:<uuid>:learndash:* para no permitir keys
+    // tenant-globales. Si el día de mañana queremos agregar settings
+    // tenant-level (ej. webhook secret persistido cross-jobs), cambiamos
+    // este pattern explícitamente — pero hoy NO queremos eso.
+    allowedKeyPattern: '^job:[a-f0-9-]{36}:learndash:[a-zA-Z0-9_]{1,40}$',
   },
 };

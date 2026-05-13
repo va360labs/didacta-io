@@ -26,6 +26,7 @@
 
 import AdmZip from 'adm-zip';
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
@@ -104,19 +105,23 @@ function detectAwsExe(): string {
 }
 
 function awsKmsSign(message: Buffer, region: string, keyAlias: string): Buffer {
-  // Escribimos el message como bytes RAW (NO base64) y lo pasamos con
-  // `fileb://`. fileb:// instruye a aws-cli a leer el archivo como
-  // binario sin decodificar — eso es exactamente lo que necesita KMS
-  // con `--message-type RAW`.
+  // alpha.56: cambio de --message-type RAW a DIGEST. KMS rechaza payloads
+  // RAW > 4096 bytes; el manifest del migrator (con permissions verbosas y
+  // los bloques nuevos requiresSecrets/secretsLifecycle) cruzó ese límite.
+  // ECDSA_SHA_256 firma siempre SHA-256(message); KMS lo computa internamente
+  // en modo RAW, o lo recibe pre-computado en modo DIGEST. La firma
+  // resultante es BIT-A-BIT IDÉNTICA — el verifier (jose en el host) no
+  // distingue, sigue funcionando igual.
   //
   // BUG previo (alpha.29 inicial): se escribía `message.toString('base64')`
-  // al archivo, así que KMS firmaba los bytes ASCII de la string base64
-  // en lugar del message original. Resultado: el JWT producido tenía
-  // firma sobre `base64(header.payload)` y los verifiers (que firman
-  // `header.payload` directamente) fallaban con
-  // "signature verification failed".
+  // al archivo en lugar del message original. Resultado: el JWT producido
+  // tenía firma sobre `base64(header.payload)` y los verifiers (que firman
+  // `header.payload` directamente) fallaban con "signature verification failed".
+  // Pre-hash client-side (SHA-256 de 32 bytes) sortea ese caso porque enviamos
+  // exactamente el digest que firmaría el verifier.
+  const digest = createHash('sha256').update(message).digest();
   const tmp = resolve(process.cwd(), `.kms-sign-input-${Date.now()}.bin`);
-  writeFileSync(tmp, message);
+  writeFileSync(tmp, digest);
   const awsExe = detectAwsExe();
   const cmd = [
     'kms',
@@ -128,7 +133,7 @@ function awsKmsSign(message: Buffer, region: string, keyAlias: string): Buffer {
     '--message',
     `fileb://${tmp}`,
     '--message-type',
-    'RAW',
+    'DIGEST',
     '--signing-algorithm',
     'ECDSA_SHA_256',
     '--query',
