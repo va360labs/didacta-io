@@ -816,12 +816,22 @@ async function listInvalidStg(
   jobId: string,
   limit: number,
 ): Promise<StgRow[]> {
-  // SELECT escapando el nombre de tabla — usamos un literal validado contra
-  // STG_TABLES, NO interpolación de input del usuario.
+  // alpha.59 fix: añadido `validation_errors IS NULL` al WHERE para evitar
+  // bucle infinito en transform phase. ANTES: si una fila fallaba el mapper,
+  // setStgCanonical guardaba validation_errors pero dejaba is_valid=FALSE;
+  // el SELECT volvía a traer las mismas filas en cada tick → 1792 ticks
+  // reportados por Valen en alpha.58 contra 600+ users sin email.
+  //
+  // AHORA:
+  //   - Fila virgen (recién extraída): is_valid=FALSE, validation_errors=NULL → se procesa
+  //   - Fila transformada OK: is_valid=TRUE → no se procesa más
+  //   - Fila que falló transform: is_valid=FALSE, validation_errors=<errs> → no se reintenta
+  //   - Fila re-extraída (UPSERT del extract): is_valid=FALSE, validation_errors=NULL → se re-procesa
   const result = await db.query<StgRow>(
     `SELECT id::text AS id, source_id, raw_payload, canonical, is_valid, target_id
        FROM ${table}
-      WHERE tenant_id = $1::uuid AND job_id = $2::uuid AND is_valid = FALSE
+      WHERE tenant_id = $1::uuid AND job_id = $2::uuid
+        AND is_valid = FALSE AND validation_errors IS NULL
       LIMIT ${Math.max(1, Math.min(1000, limit))}`,
     [tenantId, jobId],
   );
