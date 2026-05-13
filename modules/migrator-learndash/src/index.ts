@@ -1146,4 +1146,7 @@ export { manifest, routes, onInstall, onUninstall, onJobTick };
 // uso interno del módulo.
 
 // CommonJS export — esbuild --format=cjs respeta esta forma.
-module.exports = { onInstall, onUninstall, routes };
+// IMPORTANTE: incluir onJobTick aquí o el sandbox falla con MODULE_BOOT_FAILED
+// porque solo lee `module.exports` (las líneas `export { ... }` quedan como
+// código muerto en el bundle CJS final emitido por esbuild).
+module.exports = { onInstall, onUninstall, routes, onJobTick };
