@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AdminModule } from '../admin/admin.module';
 import { AuthModule } from '../auth/auth.module';
 import { ModulesModule } from '../modules/modules.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -25,9 +26,6 @@ import { RateLimiterService } from './rate-limiter.service';
 import { SandboxedDbService } from './sandboxed-db.service';
 import { ScopedDidactaApiFactory } from './sandboxed-didacta.service';
 import { SandboxedHttpService } from './sandboxed-http.service';
-import { AdminUsersService } from '../admin/admin-users.service';
-import { PasswordResetService } from '../auth/password-reset.service';
-import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 
 /// Marketplace de módulos (ADR-009).
 ///
@@ -50,7 +48,7 @@ import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 /// Importa `ModulesModule` para reusar el `ModuleContextFactory` que ya
 /// resuelve el storage backend según `STORAGE_DRIVER`.
 @Module({
-  imports: [PrismaModule, AuthModule, ModulesModule],
+  imports: [PrismaModule, AuthModule, AdminModule, ModulesModule],
   controllers: [AdminMarketplaceController, ModulesDispatcherController, ModuleAssetsController],
   providers: [
     ModuleSignatureService,
@@ -64,9 +62,6 @@ import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
     SandboxedHttpService,
     SandboxedDbService,
     ScopedDidactaApiFactory,
-    AdminUsersService,
-    PasswordResetService,
-    PrismaAuditLogService,
     RateLimiterService,
     MarketplaceErrorFilter,
     // Sprint 3 — runtime de jobs `mod-jobs` (BullMQ + worker + registry).
