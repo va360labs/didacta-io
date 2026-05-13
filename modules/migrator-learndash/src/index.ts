@@ -810,15 +810,24 @@ const routes: ModuleRoute[] = [
     },
   },
 
-  // POST /jobs — crea un job y lo deja en pending.
+  // POST /jobs — crea un job y lo encola en el job runner del host.
   //
-  // ⚠️ Estado actual del migrador (alpha.51): el preflight es funcional —
-  // valida credenciales del WP origen y muestra count + samples reales por
-  // entidad. El job se persiste en `mod_migrator_learndash_jobs` (cliente
-  // ctx.db inyectado por el host). PERO el procesamiento real (extract →
-  // transform → load → reconcile) NO está implementado todavía: el job
-  // queda en `pending` y NO se ejecuta automáticamente. La respuesta
-  // incluye un `notice` que el wizard debería mostrar al usuario.
+  // Flujo (alpha.55+):
+  //   1. Persiste el row en `mod_migrator_learndash_jobs` con status='pending'
+  //      (ctx.db inyectado por el host).
+  //   2. Llama `ctx.jobs.scheduleTick({ jobId })` — encola tickIndex=0 en la
+  //      queue BullMQ `didacta.mod-jobs` del host. El worker invocará nuestro
+  //      `onJobTick` en cuanto haya cupo (concurrency=4 por host).
+  //   3. Devuelve 201 con jobId y un notice 'JOB_ENQUEUED' que el wizard
+  //      muestra al usuario.
+  //
+  // Estado del pipeline (alpha.55):
+  //   - State machine completa cableada en `onJobTick` (pending → preflight →
+  //     extracting → transforming → loading → reconciling → completed).
+  //   - Las fases `extracting` / `transforming` / `loading` / `reconciling`
+  //     son STUBs (Sprint 4: ET-001..ET-005). Avanzan sin procesar datos.
+  //   - El job llega a `completed` en ≤5 ticks pero NO migra contenido real
+  //     hasta que el Sprint 4 reemplace los STUBs. El wizard debería avisar.
   {
     method: 'POST',
     path: '/jobs',
@@ -841,23 +850,66 @@ const routes: ModuleRoute[] = [
         baseUrl: body.credentials.baseUrl ?? null,
         username: body.credentials.username ?? null,
       };
+      let jobId: string;
       try {
-        const jobId = await insertJob(db, auth.tenantId, auth.sub, sourceProfile, body.options);
+        jobId = await insertJob(db, auth.tenantId, auth.sub, sourceProfile, body.options);
+      } catch (e) {
+        return dbErrToResponse(e);
+      }
+      // Encolar primer tick. Si la queue del host está deshabilitada
+      // (REDIS_URL ausente) ctx.jobs lanza JOBS_QUEUE_DISABLED y NO
+      // intentamos rollback del row — el operador puede setear Redis,
+      // reiniciar el API y re-encolar manualmente con
+      // POST /jobs/:id/retry (Sprint 4) sin perder el row.
+      const ctxJobs = (req as { jobs?: { scheduleTick: (a: { jobId: string }) => Promise<void> } }).jobs;
+      if (!ctxJobs || typeof ctxJobs.scheduleTick !== 'function') {
         return ok(
           {
             jobId,
             notice: {
-              code: 'EXTRACT_PIPELINE_NOT_READY',
+              code: 'JOBS_HOST_TOO_OLD',
               severity: 'warning',
               message:
-                'El job se registró correctamente y quedó persistido en BD. El procesamiento real (extract → transform → load) NO está habilitado todavía: hoy el preflight valida tu origen y muestra qué hay para migrar, pero la importación efectiva llegará en próximas versiones de Didacta. Este job queda en estado pending y NO se ejecutará automáticamente.',
+                'Job registrado pero el host es < alpha.55 — ctx.jobs.scheduleTick no está disponible. Actualizá el container para que el worker recoja el job.',
             },
           },
           201,
         );
-      } catch (e) {
-        return dbErrToResponse(e);
       }
+      try {
+        await ctxJobs.scheduleTick({ jobId });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        const code =
+          e instanceof Error && 'code' in e && typeof (e as { code?: string }).code === 'string'
+            ? (e as { code: string }).code
+            : 'JOBS_ENQUEUE_FAILED';
+        return ok(
+          {
+            jobId,
+            notice: {
+              code,
+              severity: 'warning',
+              message: `Job persistido pero NO se pudo encolar: ${msg}. Verificá REDIS_URL en el host.`,
+            },
+          },
+          201,
+        );
+      }
+      return ok(
+        {
+          jobId,
+          notice: {
+            code: 'JOB_ENQUEUED',
+            severity: 'info',
+            message:
+              'Job encolado en el runner. El worker procesará los ticks automáticamente. ' +
+              'Avance visible en GET /jobs/:id (status: pending → preflight → extracting → transforming → loading → reconciling → completed). ' +
+              'NOTA Sprint 4 pendiente: las fases extract/transform/load son STUBs todavía — el job llega a `completed` pero no migra contenido real hasta ET-001..ET-005.',
+          },
+        },
+        201,
+      );
     },
   },
 
