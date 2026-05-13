@@ -521,6 +521,14 @@ function basicAuthHeader(username: string, appPassword: string): string {
 /// Fetch UNA página de un endpoint WP REST. Distinto al async-iterator
 /// `paginateWp` porque ET-001 procesa 1 página por tick — el cursor vive
 /// en BD entre ticks, no en una closure de generator.
+///
+/// **context=edit**: alpha.58 fix. WP REST con `context=view` (default)
+/// devuelve solo campos públicos — para `users` el `email` queda OUT,
+/// resultado: MISSING_EMAIL en transform phase. Forzamos `context=edit`
+/// que pide la representación administrativa completa. Requiere que la
+/// credential tenga capability suficiente (list_users para /users;
+/// edit_posts para CPTs). Application Passwords de admin las tienen.
+/// Para `users` específicamente sin esto el migrator es 100% inútil.
 async function fetchOneWpPage<T>(
   http: SandboxedHttp,
   baseUrl: string,
@@ -529,7 +537,7 @@ async function fetchOneWpPage<T>(
   page: number,
   perPage: number,
 ): Promise<{ items: T[]; totalPages: number | undefined; status: number }> {
-  const url = `${baseUrl}/wp-json/wp/v2/${cpt}?per_page=${perPage}&page=${page}&status=any&orderby=id&order=asc`;
+  const url = `${baseUrl}/wp-json/wp/v2/${cpt}?per_page=${perPage}&page=${page}&context=edit&status=any&orderby=id&order=asc`;
   const resp = await http.get(url, {
     headers: { Authorization: authHeader, Accept: 'application/json' },
     timeoutMs: 30_000,
