@@ -503,6 +503,30 @@ export function extractTableRefs(sql: string): Set<string> {
   for (const match of sql.matchAll(re)) {
     const ident = match[1];
     if (!ident) continue;
+    const kw = match[0].slice(0, match[0].search(/\s/)).toLowerCase();
+
+    // alpha.56: filtrar el caso `... ON CONFLICT (cols) DO UPDATE SET ...`.
+    // El extractor matchea `UPDATE SET` y captura `set` como ident — false
+    // positive porque `SET` es la cláusula de assignment, no una tabla.
+    // PostgreSQL UPSERT estándar: `INSERT ... ON CONFLICT (...) DO UPDATE SET col=...`.
+    // Detección: si la keyword es `update` y el token anterior es `do`,
+    // skipear este match (es parte del DO UPDATE, no un UPDATE top-level).
+    if (kw === 'update') {
+      const startIdx = match.index ?? 0;
+      // Mirar atrás hasta encontrar el token previo (saltando whitespace).
+      let k = startIdx - 1;
+      while (k >= 0 && /\s/.test(sql[k]!)) k--;
+      // Capturar palabra anterior.
+      let prevEnd = k + 1;
+      while (k >= 0 && /[a-z_]/i.test(sql[k]!)) k--;
+      const prev = sql.slice(k + 1, prevEnd).toLowerCase();
+      if (prev === 'do') {
+        // DO UPDATE SET — no es table ref. El INSERT INTO de la misma
+        // statement ya añadió la table real al set.
+        continue;
+      }
+    }
+
     // Filtrar el caso `JOIN USING (col)` — cuando la kw es USING y
     // viene seguido de `(`, no es una table ref. También filtra
     // `LATERAL <subquery>` que matchea pero no es tabla.
@@ -518,7 +542,6 @@ export function extractTableRefs(sql: string): Set<string> {
       // distinguir: si la keyword es `into` o `update`, el `(` de
       // después es la lista de columnas — es VÁLIDO. Si es `using`, el
       // `(` indica USING(col) que NO es una table ref.
-      const kw = match[0].slice(0, match[0].search(/\s/)).toLowerCase();
       if (kw === 'using') continue;
       // for from/join, table-with-paren no es una sintaxis válida de PG
       // — las funciones table-valued usan `from func(args)` pero esas

@@ -1688,7 +1688,8 @@ const routes: ModuleRoute[] = [
             message:
               'Job encolado en el runner. El worker procesará los ticks automáticamente. ' +
               'Avance visible en GET /jobs/:id (status: pending → preflight → extracting → transforming → loading → reconciling → completed). ' +
-              'NOTA Sprint 4 pendiente: las fases extract/transform/load son STUBs todavía — el job llega a `completed` pero no migra contenido real hasta ET-001..ET-005.',
+              'Sprint 4 (alpha.56) implementó las fases reales: extract paginable (users/courses/lessons/topics/quizzes/groups), transform vía mappers + DLQ, load vía ctx.didacta.upsertByExternalRef, reconcile con validation_reports, audit chain SHA-256. ' +
+              'Pendiente Sprint 5 (ET-001b): fan-out de questions per-quiz, enrollments per-course/group, media y progress. Hasta entonces, quizzes migran solo el shell (sin preguntas).',
           },
         },
         201,
