@@ -144,8 +144,8 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 # Stage 5: runner — imagen final desde alpine LIMPIO (no hereda del builder)
 # ----------------------------------------------------------------------------
 # DIDACTA_VERSION: version de la app, inyectada en build time.
-# Sobreescribible con: docker build --build-arg DIDACTA_VERSION=0.0.1-alpha.53
-ARG DIDACTA_VERSION=0.0.1-alpha.53
+# Sobreescribible con: docker build --build-arg DIDACTA_VERSION=0.0.1-alpha.54
+ARG DIDACTA_VERSION=0.0.1-alpha.54
 
 FROM node:22-alpine AS runner
 # Re-declarar ARG para que este disponible en este stage (Docker multi-stage)
@@ -173,7 +173,7 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     API_PORT=4000 \
     WEB_PORT=3000 \
-    DIDACTA_CORE_VERSION=${DIDACTA_VERSION:-0.0.1-alpha.53}
+    DIDACTA_CORE_VERSION=${DIDACTA_VERSION:-0.0.1-alpha.54}
 
 # Usuario no-root.
 RUN addgroup -S -g 1001 didacta \
