@@ -1,30 +1,25 @@
-/// Extension point del módulo `mod.migrator-learndash` hacia el core.
+/// Sidebar item del migrador LearnDash en el shell admin del host.
 ///
-/// El catálogo `apps/web/src/modules/index.ts` importa esta constante y la
-/// agrega al `moduleExtensions[]`. El módulo expone:
-///   - Un sidebar item bajo "Integraciones" para super_admin que abre el wizard.
-///   - Una tab en `/admin/configuracion` con el resumen del módulo + acceso al wizard.
+/// alpha.60 (ADR-015): este archivo es lo ÚNICO específico del módulo que
+/// queda en `apps/web/`. Solo registra el sidebar item — la UI completa
+/// (wizard + monitor + admin config card) vive ahora en
+/// `modules/migrator-learndash/src/ui/` y se distribuye dentro del ZIP
+/// firmado del módulo.
 ///
-/// La página real del wizard (multi-paso, conecta-preflight-opciones-dryrun-execute)
-/// vive en `apps/web/src/app/(app)/admin/integraciones/migrator-learndash/page.tsx`
-/// — DENTRO del route group `(app)` para heredar el auth guard y el shell admin
-/// (sidebar + chrome). La page enforce además un role-gate explícito a
-/// `super_admin` antes de montar el wizard.
+/// El sidebar item apunta a `/admin/integraciones/migrator-learndash`, una
+/// page genérica del host que hace `loadModuleUI('mod.migrator-learndash',
+/// 'admin')` y renderiza el componente default del bundle.
+///
+/// DEUDA PENDIENTE: este archivo debería desaparecer cuando el host
+/// implemente sidebar discovery runtime-driven leyendo `manifest.surfaces.
+/// admin.menu` de cada módulo instalado. Mientras tanto, vive aquí como
+/// puente — el sidebar item se registra estático, pero el componente que
+/// muestra es 100% del módulo.
 
 import type { ModuleWebExtension } from '@/lib/module-registry';
-import { MigratorAdminCard } from './admin-config-card';
 
 export const migratorLearndashExtension: ModuleWebExtension = {
   name: 'mod.migrator-learndash',
-  adminConfigTabs: [
-    {
-      key: 'migrator-learndash',
-      label: 'Migrar desde LearnDash',
-      description:
-        'Importa cursos, lecciones, alumnos, grupos y matrículas desde una instalación WordPress + LearnDash.',
-      Component: MigratorAdminCard,
-    },
-  ],
   sidebarItems: [
     {
       group: 'Integraciones',
@@ -35,8 +30,3 @@ export const migratorLearndashExtension: ModuleWebExtension = {
     },
   ],
 };
-
-export { migratorLearndashApi } from './client';
-export { MigratorAdminCard } from './admin-config-card';
-export { JobsMonitor } from './jobs-monitor';
-export { MigratorWizard } from './wizard';

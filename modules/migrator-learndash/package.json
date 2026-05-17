@@ -1,6 +1,6 @@
 {
   "name": "@didacta/mod-migrator-learndash",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "private": true,
   "description": "Módulo migrador WordPress+LearnDash → Didacta. Wizard didáctico, ETL con staging, reportes auditables.",
   "main": "./dist/index.js",
@@ -17,10 +17,12 @@
     "prisma/migrations"
   ],
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --external:@didacta/core-kernel --external:@nestjs/common --external:zod --outfile=dist/index.js",
+    "build": "pnpm run build:server && pnpm run build:ui",
+    "build:server": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --external:@didacta/core-kernel --external:@nestjs/common --external:zod --outfile=dist/index.js",
+    "build:ui": "esbuild src/ui/admin.tsx --bundle --platform=browser --target=es2020 --format=iife --global-name=__didacta_module_exports__ --jsx=transform --jsx-factory=React.createElement --jsx-fragment=React.Fragment --outfile=dist/ui/admin.js",
     "build:tsc": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.ui.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist .turbo .vitest-cache"
@@ -32,6 +34,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/react": "^19.0.0",
     "esbuild": "^0.24.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

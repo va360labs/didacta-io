@@ -1,0 +1,19 @@
+{
+  "//": "TS config para el bundle UI del surface 'admin' del módulo. Distinto del tsconfig.json principal (que cubre src/index.ts + src/etl etc., código Node del módulo). Este cubre src/ui/*.tsx que se bundlea con esbuild a dist/ui/admin.js usando los componentes de window.__didacta__ del host.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "./src/ui",
+    "jsx": "react",
+    "jsxFactory": "React.createElement",
+    "jsxFragmentFactory": "React.Fragment",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "skipLibCheck": true,
+    "composite": false
+  },
+  "include": ["src/ui/**/*"],
+  "exclude": ["node_modules", "dist", "tests"]
+}

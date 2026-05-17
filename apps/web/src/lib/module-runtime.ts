@@ -36,6 +36,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // Utilities
 import { cn } from '@/lib/utils';
@@ -44,6 +54,7 @@ import { cn } from '@/lib/utils';
 import { apiFetch, ApiHttpError } from '@/lib/api-client';
 import { meApi } from '@/lib/me';
 import { marketplaceApi } from '@/lib/marketplace';
+import { authStorage } from '@/lib/auth-storage';
 
 // Hooks/Context
 import { useTenantContext } from '@/lib/tenant-context';
@@ -95,6 +106,14 @@ export interface DidactaRuntime {
     TabsList: typeof TabsList;
     TabsTrigger: typeof TabsTrigger;
     Textarea: typeof Textarea;
+    AlertDialog: typeof AlertDialog;
+    AlertDialogAction: typeof AlertDialogAction;
+    AlertDialogCancel: typeof AlertDialogCancel;
+    AlertDialogContent: typeof AlertDialogContent;
+    AlertDialogDescription: typeof AlertDialogDescription;
+    AlertDialogFooter: typeof AlertDialogFooter;
+    AlertDialogHeader: typeof AlertDialogHeader;
+    AlertDialogTitle: typeof AlertDialogTitle;
   };
 
   /** Hooks y contextos del host. */
@@ -106,6 +125,14 @@ export interface DidactaRuntime {
   /** APIs del core. */
   api: {
     fetch: typeof apiFetch;
+    /**
+     * Wrapper de fetch que resuelve el bearer token desde `authStorage`
+     * automáticamente. Pensado para los módulos que no necesitan auth
+     * granular y solo quieren llamar a sus propias rutas autenticadas
+     * sin reimplementar el storage del token. Lanza `ApiHttpError(401)`
+     * si no hay sesión vigente.
+     */
+    fetchAuth: <T>(path: string, init?: RequestInit) => Promise<T>;
     ApiHttpError: typeof ApiHttpError;
     me: typeof meApi;
     marketplace: typeof marketplaceApi;
@@ -180,6 +207,14 @@ export function initModuleRuntime(): DidactaRuntime {
       TabsList,
       TabsTrigger,
       Textarea,
+      AlertDialog,
+      AlertDialogAction,
+      AlertDialogCancel,
+      AlertDialogContent,
+      AlertDialogDescription,
+      AlertDialogFooter,
+      AlertDialogHeader,
+      AlertDialogTitle,
     },
 
     hooks: {
@@ -188,6 +223,13 @@ export function initModuleRuntime(): DidactaRuntime {
 
     api: {
       fetch: apiFetch,
+      fetchAuth: <T,>(path: string, init: RequestInit = {}): Promise<T> => {
+        const token = authStorage.getAccessToken();
+        if (!token) {
+          throw new ApiHttpError({ message: 'Sesión expirada', status: 401 });
+        }
+        return apiFetch<T>(path, init, token);
+      },
       ApiHttpError,
       me: meApi,
       marketplace: marketplaceApi,

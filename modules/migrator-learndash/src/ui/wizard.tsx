@@ -1,19 +1,16 @@
-'use client';
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/// Wizard multi-paso del migrador LearnDash. Implementación MVP:
-/// bienvenida → conectar → resumen → opciones → comprobación → migrar → done.
-///
-/// alpha.49 cambió el contrato del backend:
-///   - `/preflight` ahora hace fetch real al WP origen (8 reqs paralelos)
-///     y devuelve `counts` reales + `samples` (5 últimas entidades por
-///     CPT) leyendo `X-WP-Total` y `?per_page=5&_fields=...`.
-///   - `POST /jobs` devuelve un `notice` con `code: EXTRACT_PIPELINE_NOT_READY`
-///     hasta que el extract phase esté implementado. El wizard muestra
-///     ese notice al usuario para que sepa que la importación NO va a
-///     ocurrir automáticamente todavía.
+/// Wizard multi-paso del migrador LearnDash.
+/// alpha.60: movido a modules/migrator-learndash/src/ui/ desde apps/web/.
+/// Imports SOLO desde `./_runtime` y `./client` (ADR-015).
 
-import * as React from 'react';
+import {
+  React,
+  useState,
+  Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Button,
+  Input,
+  Label,
+} from './_runtime';
 import {
   migratorLearndashApi,
   type ImportOptions,
@@ -24,10 +21,7 @@ import {
   type PreflightSample,
   type SourceCredentials,
 } from './client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+
 // Alert component no existe en este repo; usamos divs estilados como en otros módulos.
 function Alert({ children, variant = 'default' }: { children: React.ReactNode; variant?: 'default' | 'destructive' }): React.ReactElement {
   const cls =
@@ -180,7 +174,7 @@ export function MigratorWizard(): React.ReactElement {
                 type="url"
                 placeholder="https://miacademia.com"
                 value={creds.baseUrl}
-                onChange={(e) => setCreds({ ...creds, baseUrl: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCreds({ ...creds, baseUrl: e.target.value })}
               />
             </div>
             <div>
@@ -189,7 +183,7 @@ export function MigratorWizard(): React.ReactElement {
                 id="ld-user"
                 placeholder="admin"
                 value={creds.username}
-                onChange={(e) => setCreds({ ...creds, username: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCreds({ ...creds, username: e.target.value })}
               />
             </div>
             <div>
@@ -199,7 +193,7 @@ export function MigratorWizard(): React.ReactElement {
                 type="password"
                 placeholder="abcd EFGH ijkl MNOP"
                 value={creds.appPassword}
-                onChange={(e) => setCreds({ ...creds, appPassword: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCreds({ ...creds, appPassword: e.target.value })}
                 autoComplete="off"
               />
             </div>

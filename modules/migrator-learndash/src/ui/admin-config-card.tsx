@@ -1,13 +1,15 @@
-'use client';
-
-import * as React from 'react';
-import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-
 /// Tab del panel `/admin/configuracion` para el módulo migrator-learndash.
-/// Resumen del propósito + CTA al wizard real (vive en
-/// `/admin/integraciones/migrator-learndash`).
+/// Resumen del propósito + CTA al wizard real (vive en `/admin/integraciones/migrator-learndash`).
+///
+/// alpha.60: movido a modules/migrator-learndash/src/ui/ desde apps/web/.
+/// Usa `<a href>` plain en lugar de Next.js `<Link>` porque el runtime
+/// del host no expone Next.js a los bundles (y no debe — un módulo
+/// publicado por un third-party puede no estar en un host Next.js).
+/// Trade-off: el click hace full page navigation, no client-side route.
+/// Para módulos que QUIEREN navigation suave, el host puede exponer un
+/// helper `__didacta__.nav.navigate(href)` en una próxima iteración.
+
+import { React, Card, CardContent, CardDescription, CardHeader, CardTitle, Button } from './_runtime';
 
 export function MigratorAdminCard(): React.ReactElement {
   return (
@@ -30,7 +32,7 @@ export function MigratorAdminCard(): React.ReactElement {
         </ul>
         <div className="flex gap-2">
           <Button asChild>
-            <Link href="/admin/integraciones/migrator-learndash">Abrir asistente de migración</Link>
+            <a href="/admin/integraciones/migrator-learndash">Abrir asistente de migración</a>
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">

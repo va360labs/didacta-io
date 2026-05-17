@@ -80,3 +80,59 @@ Planificación viva en Notion: [LMS Ship](https://www.notion.so/LMS-Ship-34cb609
 - Módulos que no respetan `tenant_id` (riesgo de data leak).
 - Lógica de negocio en controllers.
 - Estado global compartido entre módulos.
+
+---
+
+## ⛔ REGLA DE INDEPENDENCIA DE MÓDULOS (zero-tolerance)
+
+**Cualquier código específico de un módulo `mod.<slug>` vive EXCLUSIVAMENTE en `modules/<slug>/`.** Nunca bajo `apps/web/` ni `apps/api/`.
+
+### Por qué
+Los módulos third-party se instalan en runtime desde un ZIP firmado por el marketplace. Si su código vive en `apps/*`, requiere rebuild del Docker image del host → rompe el contrato de marketplace. Ver ADR-009 + ADR-015.
+
+### CHECKLIST OBLIGATORIO antes de escribir/editar cualquier archivo
+
+1. **¿El path empieza con `apps/`?**
+   - SÍ → ¿es código específico de UN módulo (importa `mod.<slug>`, agrega ruta específica de ese módulo, define UI de ese módulo)?
+     - SÍ → **STOP**. Ir a `modules/<slug>/`.
+     - NO (es infra genérica del host: dispatcher, router, surface loader, sidebar genérico) → OK, sigue.
+   - NO → OK, sigue.
+
+2. **¿Es UI de un módulo?** → va en `modules/<slug>/src/ui/<surface>.tsx`, se bundlea a `dist/ui/<surface>.js` con esbuild `--format=iife`, va dentro del ZIP firmado.
+
+3. **¿Es backend de un módulo?** → va en `modules/<slug>/src/`. Expone routes via `module.exports.routes`. NUNCA agrega controllers en `apps/api/`.
+
+### El host SOLO tiene infra genérica relacionada a marketplace
+
+| OK en `apps/api/src/marketplace/` | NO en `apps/api/src/marketplace/` |
+|---|---|
+| `modules-dispatcher.controller.ts` (rutea `/api/v1/modules/*`) | `sandboxed-migrator-learndash.service.ts` ❌ |
+| `module-assets.controller.ts` (sirve `dist/ui/*.js` del ZIP) | `learndash-helpers.ts` ❌ |
+| `sandboxed-db.service.ts` (cliente DB genérico para módulos) | Cualquier cosa que mencione un slug específico ❌ |
+
+| OK en `apps/web/src/` | NO en `apps/web/src/` |
+|---|---|
+| `lib/module-loader.ts` (carga genérica de surfaces) | `modules/migrator-learndash/wizard.tsx` ❌ |
+| `lib/module-runtime.ts` (expone `__didacta__` global) | `app/(app)/admin/integraciones/migrator-learndash/page.tsx` con import del componente ❌ |
+| `app/(app)/admin/integraciones/[module]/page.tsx` que solo hace `loadModuleUI(slug, 'admin')` | Cualquier `.tsx` específico de un módulo ❌ |
+
+### Infraestructura disponible (NO inventes paralela)
+
+- `loadModuleUI(moduleName, surface)` en `apps/web/src/lib/module-loader.ts`
+- `initModuleRuntime()` en `apps/web/src/lib/module-runtime.ts` expone `window.__didacta__` con React + shadcn/ui + api
+- `GET /api/v1/modules/:slug/ui/:surface.js` del `ModuleAssetsController` sirve el bundle del ZIP
+- Manifest field `surfaces: { admin: { entry: 'dist/ui/admin.js', routes, menu, roles } }`
+- Bundle del módulo termina con `window.__didacta_module_exports__ = { default: AdminSurface }`
+
+### Code review trigger automático
+
+Si vas a tocar un archivo cuyo path matches:
+- `apps/web/src/modules/<slug>/`
+- `apps/web/src/app/.../modules/<slug>/` o `.../integraciones/<slug>/` con código específico
+- `apps/api/src/marketplace/sandboxed-<slug>*.ts` (excepto los genéricos: `sandboxed-db|http|jobs|secrets|didacta`)
+
+**PARÁ. Verificá si lo que vas a hacer pertenece a `modules/<slug>/`. Si dudás, preguntá al usuario.**
+
+### Histórico de violaciones (no repetir)
+
+- 2026-05-13/17 — alpha.58/59: monitor del migrator añadido en `apps/web/src/modules/migrator-learndash/jobs-monitor.tsx` cuando debió ir a `modules/migrator-learndash/src/ui/`. Resultado: rebuild del Docker image para cambios del módulo, anti-patrón de marketplace. Corregido en alpha.60 moviendo todo a surface bundle.

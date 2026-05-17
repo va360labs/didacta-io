@@ -1,32 +1,23 @@
-'use client';
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /// Monitor en tiempo real de jobs del migrator-learndash.
 ///
-/// Lista todos los jobs del tenant, auto-refresh cada 3s para los que están
-/// en estado activo (pending/preflight/extracting/transforming/loading/
-/// reconciling). Cada card muestra el cursor actual leído de `progress` JSONB
-/// (entity + page o batch) — la UX que faltaba para que el operador no tenga
-/// que hacer SELECTs a la BD para entender qué pasa.
-///
-/// Al expandir un job, lee el report (validation_reports agregado) + las
-/// primeras 20 filas del DLQ, agrupadas por phase. Permite cancelar jobs
-/// activos con confirmación.
-///
-/// alpha.58: introducido para resolver UX-001..UX-003 del HANDOFF alpha.51.
+/// alpha.60: movido a modules/migrator-learndash/src/ui/ desde apps/web/ —
+/// ahora vive dentro del módulo y se distribuye como parte del ZIP firmado.
+/// Imports SOLO desde `./_runtime` y `./client` — sin dependencias directas
+/// a `react` ni `@/components/ui/*` (ADR-015).
 
-import * as React from 'react';
 import {
-  migratorLearndashApi,
-  type DlqEntry,
-  type DlqPage,
-  type JobReport,
-  type JobStatus,
-} from './client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
+  React,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Button,
+  Badge,
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -35,7 +26,14 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from './_runtime';
+import {
+  migratorLearndashApi,
+  type DlqEntry,
+  type DlqPage,
+  type JobReport,
+  type JobStatus,
+} from './client';
 
 const ACTIVE_STATES: ReadonlySet<JobStatus['status']> = new Set([
   'pending',
@@ -48,7 +46,7 @@ const ACTIVE_STATES: ReadonlySet<JobStatus['status']> = new Set([
 
 const POLL_INTERVAL_MS = 3000;
 
-/// Mapa status → variante de badge (alineado con badge.tsx primitives).
+/// Mapa status → variante de badge (alineado con badge.tsx primitives del host).
 const STATUS_BADGE: Record<JobStatus['status'], { variant: 'primary' | 'info' | 'warning' | 'success' | 'danger' | 'muted' | 'outline'; label: string }> = {
   pending: { variant: 'muted', label: 'Pendiente' },
   preflight: { variant: 'info', label: 'Preflight' },
@@ -122,21 +120,16 @@ function formatCursor(job: JobStatus): string {
 }
 
 export function JobsMonitor(): React.ReactElement {
-  const [jobs, setJobs] = React.useState<JobStatus[] | null>(null);
-  const [loadError, setLoadError] = React.useState<string | null>(null);
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
-  const [detail, setDetail] = React.useState<{ report?: JobReport; dlq?: DlqPage; loading: boolean } | null>(null);
-  const [, forceTick] = React.useState(0);
-  const pollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
-  // Ref con la versión actual de jobs para que el setInterval callback no
-  // capture el closure inicial (null) y deje de re-fetchear para siempre.
-  // BUG alpha.58: el monitor mostraba el primer fetch sin actualizar nunca
-  // los datos del job; solo el reloj de elapsedSince se refrescaba porque
-  // viene de Date.now() en cada render.
-  const jobsRef = React.useRef<JobStatus[] | null>(null);
-  const expandedIdRef = React.useRef<string | null>(null);
+  const [jobs, setJobs] = useState<JobStatus[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<{ report?: JobReport; dlq?: DlqPage; loading: boolean } | null>(null);
+  const [, forceTick] = useState(0);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const jobsRef = useRef<JobStatus[] | null>(null);
+  const expandedIdRef = useRef<string | null>(null);
 
-  const fetchJobs = React.useCallback(async (): Promise<void> => {
+  const fetchJobs = useCallback(async (): Promise<void> => {
     try {
       const result = await migratorLearndashApi.listJobs();
       setJobs(result.items);
@@ -147,7 +140,7 @@ export function JobsMonitor(): React.ReactElement {
     }
   }, []);
 
-  const fetchDetail = React.useCallback(async (jobId: string): Promise<void> => {
+  const fetchDetail = useCallback(async (jobId: string): Promise<void> => {
     setDetail({ loading: true });
     try {
       const [report, dlq] = await Promise.all([
@@ -160,17 +153,12 @@ export function JobsMonitor(): React.ReactElement {
     }
   }, []);
 
-  // Inicial + polling. El callback del setInterval lee `jobsRef.current`
-  // (no del closure) para tomar decisiones siempre con datos actualizados.
-  React.useEffect(() => {
+  useEffect(() => {
     void fetchJobs();
     pollRef.current = setInterval(() => {
-      // Re-render para refrescar elapsedSince() en cada card.
-      forceTick((n) => n + 1);
+      forceTick((n: number) => n + 1);
       const current = jobsRef.current;
       const hasActive = !!current && current.some((j) => ACTIVE_STATES.has(j.status));
-      // Re-fetch lista siempre si hay activos. También re-fetch detail si
-      // hay un job expandido que está activo.
       if (hasActive) {
         void fetchJobs();
         const expanded = expandedIdRef.current;
@@ -188,7 +176,7 @@ export function JobsMonitor(): React.ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     expandedIdRef.current = expandedId;
   }, [expandedId]);
 
@@ -300,7 +288,7 @@ function JobCard({
   onExpand: () => void;
   onCancel: (() => void) | null;
 }): React.ReactElement {
-  const [cancelDialogOpen, setCancelDialogOpen] = React.useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const badge = STATUS_BADGE[job.status];
   const cursorText = formatCursor(job);
   const isActive = ACTIVE_STATES.has(job.status);

@@ -4,39 +4,63 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { authStorage } from '@/lib/auth-storage';
-import { MigratorWizard } from '@/modules/migrator-learndash';
-import { JobsMonitor } from '@/modules/migrator-learndash/jobs-monitor';
+import { loadModuleUI, ModuleUINotFoundError, type LoadedModuleUI } from '@/lib/module-loader';
 
 /**
- * Wizard de migración LearnDash → Didacta.
+ * Página host para el surface admin del módulo migrator-learndash.
  *
  * Ruta: `/admin/integraciones/migrator-learndash`. Vive dentro del route
  * group `(app)` para heredar:
  *   - El auth guard del layout (sin sesión → redirect a `/signin`).
  *   - El shell admin Didacta (sidebar + chrome).
  *
- * Role-gate adicional: solo `super_admin`. La feature es destructiva
- * (importa miles de filas en BD) y el sidebar ya declara
- * `requiresRole: 'super_admin'`. Acá enforce el mismo gate por si un
- * tenant_admin/formador intenta acceder por URL directa. El backend del
- * módulo aplica su propio gate como defensa final.
+ * alpha.60 (ADR-015): esta page NO importa código del módulo. Solo:
+ *   1. Enforce role-gate (`super_admin`).
+ *   2. Llama `loadModuleUI('mod.migrator-learndash', 'admin')` que hace
+ *      fetch del bundle `dist/ui/admin.js` del ZIP firmado.
+ *   3. Renderiza el componente default que el bundle exporta.
+ *
+ * Antes de alpha.60 esta page importaba `MigratorWizard` directamente desde
+ * `apps/web/src/modules/migrator-learndash/`. Eso violaba ADR-015: la UI
+ * del módulo debe vivir DENTRO del módulo, no en el árbol del host.
+ *
+ * TODO Sprint 5: convertir esta page en `[slug]/page.tsx` parametrizada, una
+ * sola ruta genérica que sirva para cualquier módulo con surface 'admin'.
+ * Esto cierra el último hilo de hardcode módulo-en-host.
  */
 export default function MigratorLearndashPage(): React.ReactElement | null {
   const [allowed, setAllowed] = React.useState<boolean | null>(null);
+  const [loaded, setLoaded] = React.useState<LoadedModuleUI | null>(null);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const session = authStorage.getSession();
-    // El layout (app) ya redirige a /signin si no hay sesión; aquí solo
-    // resolvemos el rol. Si por alguna race aún no hay session, dejamos
-    // null (skeleton) y el layout se encargará.
     if (!session) {
       setAllowed(null);
       return;
     }
     setAllowed(session.user.roles.includes('super_admin'));
   }, []);
+
+  React.useEffect(() => {
+    if (allowed !== true) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await loadModuleUI('mod.migrator-learndash', 'admin');
+        if (!cancelled) setLoaded(result);
+      } catch (err) {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        const code = err instanceof ModuleUINotFoundError ? 'MODULE_UI_NOT_FOUND' : 'MODULE_UI_LOAD_ERROR';
+        setLoadError(`${code}: ${msg}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [allowed]);
 
   if (allowed === null) return null;
 
@@ -80,18 +104,32 @@ export default function MigratorLearndashPage(): React.ReactElement | null {
           modifica.
         </p>
       </header>
-      <Tabs defaultValue="wizard" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="wizard">Crear migración</TabsTrigger>
-          <TabsTrigger value="monitor">Monitor de migraciones</TabsTrigger>
-        </TabsList>
-        <TabsContent value="wizard">
-          <MigratorWizard />
-        </TabsContent>
-        <TabsContent value="monitor">
-          <JobsMonitor />
-        </TabsContent>
-      </Tabs>
+      {loadError && (
+        <Card>
+          <CardContent className="p-6 space-y-3">
+            <p className="text-sm text-destructive">
+              No se pudo cargar la UI del módulo: {loadError}
+            </p>
+            <p className="text-xs text-text-muted">
+              Verificá que el módulo <code>mod.migrator-learndash</code> esté instalado
+              en una versión que incluya el surface admin (1.0.15+). Subí el
+              ZIP actualizado desde el marketplace.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+      {!loadError && !loaded && (
+        <Card>
+          <CardContent className="p-6 text-sm text-text-muted">Cargando módulo…</CardContent>
+        </Card>
+      )}
+      {loaded && (
+        <loaded.Component
+          moduleName={loaded.metadata.moduleName}
+          surface={loaded.metadata.surface}
+          config={{}}
+        />
+      )}
     </section>
   );
 }

@@ -2,9 +2,16 @@
 /// Habla con el dispatcher dinámico del marketplace bajo
 /// `/api/v1/modules/migrator-learndash/*`. El módulo está cargado en VM
 /// aislada del host; estas llamadas atraviesan el `ModulesDispatcherController`.
+///
+/// alpha.60: este cliente vive DENTRO del módulo (modules/migrator-learndash/
+/// src/ui/) como parte del surface bundle. Antes vivía en apps/web/src/modules/
+/// migrator-learndash/client.ts — violaba ADR-015 (independencia de módulos).
+///
+/// Las dependencias `apiFetch` + `ApiHttpError` se importan del shim
+/// `_runtime.ts` que lee de `window.__didacta__` del host. Esto evita
+/// bundlear React y shadcn dentro del ZIP del módulo (singletons del host).
 
-import { apiFetch, ApiHttpError } from '@/lib/api-client';
-import { authStorage } from '@/lib/auth-storage';
+import { apiFetchAuth as apiFetch } from './_runtime';
 
 export interface SourceCredentials {
   baseUrl: string;
@@ -56,8 +63,6 @@ export interface PreflightResult {
     groups: number | 'unknown';
     users: number | 'unknown';
   };
-  /// Las 5 entidades más recientes por CPT (alpha.49+). Permite mostrar
-  /// lista al usuario antes de confirmar para que decida qué migrar.
   samples?: {
     courses?: PreflightSample[];
     lessons?: PreflightSample[];
@@ -71,12 +76,6 @@ export interface PreflightResult {
   error?: { code: string; message: string };
 }
 
-/// Notice que el backend devuelve junto al jobId cuando la creación del
-/// job es exitosa pero el procesamiento real NO está disponible (alpha.49:
-/// extract → transform → load → reconcile no implementado). El wizard
-/// debería mostrar este notice como banner antes del estado "pending"
-/// para que el usuario sepa que la importación NO va a ocurrir
-/// automáticamente.
 export interface JobNotice {
   code: string;
   severity: 'info' | 'warning' | 'error';
@@ -104,7 +103,10 @@ export interface JobStatus {
   phase: string | null;
   startedAt: string;
   completedAt: string | null;
-  progress: { current: number; total: number; lastUpdate: string } | null;
+  /// alpha.56+: el cursor de la fase actual lo escribe ET-001..ET-005 con
+  /// shape distinta al placeholder anterior `{current, total, lastUpdate}`.
+  /// Ver `parseProgressCursor` en `jobs-monitor.tsx` para el parsing.
+  progress: Record<string, unknown> | null;
   error: { code: string; message: string } | null;
   createdBy: string;
   options: ImportOptions;
@@ -146,45 +148,33 @@ export interface DlqPage {
 
 const BASE = '/api/v1/modules/migrator-learndash';
 
-function withAuth(): string {
-  const token = authStorage.getAccessToken();
-  if (!token) throw new ApiHttpError({ message: 'Sesión expirada', status: 401 });
-  return token;
-}
-
 export const migratorLearndashApi = {
   async ping(): Promise<{ ok: boolean; name: string; version: string; ts: string }> {
-    return apiFetch(`${BASE}/ping`, { method: 'GET' }, withAuth());
+    return apiFetch(`${BASE}/ping`, { method: 'GET' });
   },
   async preflight(credentials: SourceCredentials): Promise<PreflightResult> {
-    return apiFetch(
-      `${BASE}/preflight`,
-      { method: 'POST', body: JSON.stringify({ credentials }) },
-      withAuth(),
-    );
+    return apiFetch(`${BASE}/preflight`, {
+      method: 'POST',
+      body: JSON.stringify({ credentials }),
+    });
   },
   async startJob(credentials: SourceCredentials, options: ImportOptions): Promise<StartJobResponse> {
-    return apiFetch(
-      `${BASE}/jobs`,
-      { method: 'POST', body: JSON.stringify({ credentials, options }) },
-      withAuth(),
-    );
+    return apiFetch(`${BASE}/jobs`, {
+      method: 'POST',
+      body: JSON.stringify({ credentials, options }),
+    });
   },
   async listJobs(): Promise<{ items: JobStatus[] }> {
-    return apiFetch(`${BASE}/jobs`, { method: 'GET' }, withAuth());
+    return apiFetch(`${BASE}/jobs`, { method: 'GET' });
   },
   async getJob(jobId: string): Promise<JobStatus> {
-    return apiFetch(`${BASE}/jobs/${jobId}`, { method: 'GET' }, withAuth());
+    return apiFetch(`${BASE}/jobs/${jobId}`, { method: 'GET' });
   },
   async cancelJob(jobId: string): Promise<{ ok: true }> {
-    return apiFetch(
-      `${BASE}/jobs/${jobId}/cancel`,
-      { method: 'POST', body: JSON.stringify({}) },
-      withAuth(),
-    );
+    return apiFetch(`${BASE}/jobs/${jobId}/cancel`, { method: 'POST', body: JSON.stringify({}) });
   },
   async getReport(jobId: string): Promise<JobReport> {
-    return apiFetch(`${BASE}/jobs/${jobId}/report`, { method: 'GET' }, withAuth());
+    return apiFetch(`${BASE}/jobs/${jobId}/report`, { method: 'GET' });
   },
   async getDlq(jobId: string, opts: { limit?: number; phase?: string; entity?: string } = {}): Promise<DlqPage> {
     const params = new URLSearchParams();
@@ -192,10 +182,6 @@ export const migratorLearndashApi = {
     if (opts.phase) params.set('phase', opts.phase);
     if (opts.entity) params.set('entity', opts.entity);
     const qs = params.toString();
-    return apiFetch(
-      `${BASE}/jobs/${jobId}/dlq${qs ? '?' + qs : ''}`,
-      { method: 'GET' },
-      withAuth(),
-    );
+    return apiFetch(`${BASE}/jobs/${jobId}/dlq${qs ? '?' + qs : ''}`, { method: 'GET' });
   },
 };

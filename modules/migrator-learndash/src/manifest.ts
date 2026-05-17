@@ -75,6 +75,23 @@ export interface ModuleManifest {
     maxValueBytes?: number;
     allowedKeyPattern?: string;
   };
+  /// UI Surfaces (DISC-001.5 / ADR-015). El módulo declara las "superficies"
+  /// donde aparece su UI. Cada surface se bundlea con esbuild a
+  /// `dist/ui/<surface>.js` y va dentro del ZIP firmado. El host la carga
+  /// runtime con loadModuleUI(moduleName, surface).
+  ///
+  /// `entry` apunta al path RELATIVO al root del ZIP (no a src/). Igual
+  /// para los bundles compilados.
+  /// `roles` enforce role-gate antes de montar el componente. El host lee
+  /// la sesión del JWT y aborta si el user no matchea.
+  /// `menu` declara el sidebar item asociado — el host construye su
+  /// navigation dinámicamente leyendo manifest.surfaces de cada módulo
+  /// instalado, no hay hardcode en apps/web (post ADR-015).
+  surfaces?: Partial<Record<'admin' | 'formador' | 'alumno' | 'auditor' | 'empresa_manager', {
+    entry: string;
+    roles?: string[];
+    menu?: { label: string; icon?: string; order?: number; group?: string };
+  }>>;
 }
 
 export const manifest: ModuleManifest = {
@@ -82,7 +99,7 @@ export const manifest: ModuleManifest = {
   displayName: 'Migrador desde WordPress + LearnDash',
   description:
     'Importa cursos, lecciones, temas, quizzes, preguntas, usuarios, grupos, matrículas, media y progreso desde WordPress + LearnDash hacia Didacta. Wizard didáctico paso a paso, ETL con staging, idempotencia por checksum, reportes auditables.',
-  version: '1.0.14',
+  version: '1.0.15',
   author: 'Didacta',
   license: 'Proprietary',
   category: 'migration',
@@ -193,5 +210,22 @@ export const manifest: ModuleManifest = {
     // tenant-level (ej. webhook secret persistido cross-jobs), cambiamos
     // este pattern explícitamente — pero hoy NO queremos eso.
     allowedKeyPattern: '^job:[a-f0-9-]{36}:learndash:[a-zA-Z0-9_]{1,40}$',
+  },
+  // alpha.60: surface 'admin' bundleada como parte del ZIP firmado del
+  // módulo (ADR-015). El host la descubre, la lista en su sidebar dinámico
+  // (cuando esté implementado el sidebar runtime-driven; mientras tanto la
+  // page /admin/integraciones/migrator-learndash usa loadModuleUI directo)
+  // y la renderiza con role-gate previo.
+  surfaces: {
+    admin: {
+      entry: 'dist/ui/admin.js',
+      roles: ['super_admin'],
+      menu: {
+        label: 'Migrar desde LearnDash',
+        icon: 'download-cloud',
+        group: 'Integraciones',
+        order: 100,
+      },
+    },
   },
 };
