@@ -1082,8 +1082,18 @@ function adaptCanonicalToDidacta(entity: string, canonical: Record<string, unkno
         return { ok: false, skip: false, code: 'ADAPTER_LESSON_NO_PARENT', message: `lesson ${sourceId} sin parentCourseSourceId` };
       }
       const title = String(canonical['title'] ?? '').trim() || `(sin título · ${sourceId})`;
-      const orderIdx = typeof canonical['orderIdx'] === 'number' ? canonical['orderIdx'] : 0;
       const contentHtml = typeof canonical['contentHtml'] === 'string' ? canonical['contentHtml'] : '';
+      // `position` cae bajo `@@unique([moduleId, position])` en mod_courses_lesson.
+      // El mapper actual pasa `orderIdx=0` siempre (applyMapper no propaga el
+      // contador desde stg.order_idx), así que 447/448 lessons rebotaban con
+      // DIDACTA_VALIDATION_ERROR "Unique constraint failed on fields:
+      // (module_id, position)". Usamos el sourceId numérico de LearnDash como
+      // position: son IDs incrementales del CPT en WP, únicos por instalación
+      // y por ende dentro del CourseModule sintético (cada course tiene SU
+      // propio module sintético). Mantiene además un orden natural por
+      // antigüedad de creación de la lección en el origen.
+      const numericId = parseInt(sourceId, 10);
+      const position = Number.isFinite(numericId) && numericId > 0 ? numericId : 0;
       return {
         ok: true,
         ns: 'lessons',
@@ -1092,7 +1102,7 @@ function adaptCanonicalToDidacta(entity: string, canonical: Record<string, unkno
           moduleExternalRef: { externalSource: 'learndash', externalId: parentCourseId },
           type: 'HTML',
           title,
-          position: orderIdx,
+          position,
           content: { html: contentHtml },
         },
       };
