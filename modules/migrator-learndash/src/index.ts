@@ -2266,30 +2266,55 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
               ctx.log('warn', `tick ${tickIndex}: fixup /steps curso ${courseSourceId} HTTP ${resp.status}: ${resp.body.slice(0, 200)}.`);
             } else {
               const parsed: unknown = JSON.parse(resp.body);
-              // LearnDash REST v1 /steps retorna un OBJETO jerárquico:
-              //   { "lesson:5615": { post: {...}, steps: { "topic:5620": ..., "quiz:5621": ... } },
-              //     "lesson:5616": { ... } }
-              // Las keys son "<tipo>:<id>" donde tipo ∈ {lesson, topic, quiz, h}
-              // (h = heading/sección, lo ignoramos — no migra). El field `steps`
-              // anida los hijos del item actual; para topics y quizzes el padre
-              // es la lesson en cuya `steps` están contenidos.
-              // Aplanamos recursivamente.
+              // LearnDash REST v1 /steps retorna un OBJETO jerárquico. La
+              // documentación oficial usa keys con CPT name (`sfwd-lessons:N`,
+              // `sfwd-topic:N`, `sfwd-quiz:N`) pero algunas instalaciones
+              // emiten shortname (`lesson:N`, `topic:N`, `quiz:N`). Aceptamos
+              // ambos, además de:
+              //   - posibles keys numéricas con type en el value
+              //   - posibles arrays de objetos {id, type, parent}
+              // El field anidado puede ser `steps` o el value mismo.
+              // Aplanamos recursivamente. `parentLessonId` se hereda solo si
+              // el item es topic/quiz; cuando el walker entra a una lesson,
+              // su id se pasa a los hijos como nuevo parentLessonId.
               const flat: Array<{ id: number; type: string; parentLessonId: number | null }> = [];
+              const resolveType = (raw: string): string | null => {
+                const s = raw.toLowerCase();
+                if (s === 'lesson' || s === 'sfwd-lessons' || s === 'l') return 'sfwd-lessons';
+                if (s === 'topic' || s === 'sfwd-topic' || s === 't') return 'sfwd-topic';
+                if (s === 'quiz' || s === 'sfwd-quiz' || s === 'r') return 'sfwd-quiz';
+                return null;
+              };
               const walk = (node: unknown, parentLessonId: number | null): void => {
                 if (!node || typeof node !== 'object') return;
                 if (Array.isArray(node)) {
-                  for (const it of node) walk(it, parentLessonId);
+                  for (const it of node) {
+                    if (it && typeof it === 'object') {
+                      const obj = it as { id?: number | string; type?: string };
+                      if (obj.id !== undefined && typeof obj.type === 'string') {
+                        const t = resolveType(obj.type);
+                        if (t) {
+                          flat.push({
+                            id: typeof obj.id === 'number' ? obj.id : parseInt(String(obj.id), 10),
+                            type: t,
+                            parentLessonId: t === 'sfwd-lessons' ? null : parentLessonId,
+                          });
+                        }
+                      }
+                      walk(it, parentLessonId);
+                    }
+                  }
                   return;
                 }
                 for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-                  const m = key.match(/^([a-zA-Z]+):(\d+)$/);
+                  // Regex permisivo: `[a-zA-Z][a-zA-Z0-9_-]*` cubre `sfwd-lessons`,
+                  // `sfwd-topic`, `lesson`, `topic`, `l`, etc. El bug del 1.0.23
+                  // era que el rango `[a-zA-Z]+` NO matcheaba `sfwd-lessons:N`
+                  // porque tiene guión.
+                  const m = key.match(/^([a-zA-Z][a-zA-Z0-9_-]*):(\d+)$/);
                   if (m) {
-                    const typeShort = m[1]!.toLowerCase();
+                    const resolvedType = resolveType(m[1]!);
                     const id = parseInt(m[2]!, 10);
-                    let resolvedType: string | null = null;
-                    if (typeShort === 'lesson' || typeShort === 'sfwd-lessons') resolvedType = 'sfwd-lessons';
-                    else if (typeShort === 'topic' || typeShort === 'sfwd-topic') resolvedType = 'sfwd-topic';
-                    else if (typeShort === 'quiz' || typeShort === 'sfwd-quiz') resolvedType = 'sfwd-quiz';
                     if (resolvedType) {
                       flat.push({
                         id,
@@ -2297,8 +2322,6 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                         parentLessonId: resolvedType === 'sfwd-lessons' ? null : parentLessonId,
                       });
                     }
-                    // Recurse en steps anidados; si el item actual es una lesson,
-                    // su id pasa a ser el parentLessonId de sus hijos (topics/quizzes).
                     const newParent = resolvedType === 'sfwd-lessons' ? id : parentLessonId;
                     if (value && typeof value === 'object') {
                       const innerSteps = (value as { steps?: unknown }).steps;
@@ -2312,12 +2335,35 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
               };
               walk(parsed, null);
 
-              // Log de diagnóstico para los primeros 2 cursos (no spamear logs).
+              // Diagnóstico persistente: para los primeros 2 cursos del fixup,
+              // guardamos el body y el conteo de items aplanados en audit_events.
+              // Así si el parser NO matchea NADA (flat.length === 0) podemos
+              // leer el shape real desde la BD sin volver a pedir logs.
               if (idx < 2) {
-                ctx.log(
-                  'log',
-                  `tick ${tickIndex}: fixup curso ${courseSourceId} body preview: ${resp.body.slice(0, 300)}`,
-                );
+                try {
+                  await db.execute(
+                    `INSERT INTO mod_migrator_learndash_audit_events
+                       (tenant_id, job_id, entity_type, entity_id, action, actor, meta, hash, prev_hash, occurred_at)
+                     VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8, $9, NOW())`,
+                    [
+                      tenantId,
+                      jobId,
+                      'fixup',
+                      courseSourceId,
+                      'fixup.steps.debug',
+                      'system',
+                      JSON.stringify({
+                        course: courseSourceId,
+                        flat_count: flat.length,
+                        body_preview: resp.body.slice(0, 2000),
+                      }),
+                      'debug-' + jobId + '-' + idx,
+                      'debug-' + jobId + '-' + (idx - 1),
+                    ],
+                  );
+                } catch (e) {
+                  ctx.log('warn', `fixup audit insert falló (no crítico): ${e instanceof Error ? e.message : e}`);
+                }
               }
 
               let lessonsHit = 0;
