@@ -5,19 +5,64 @@ export function externalId(sourceId: string | number): string {
 }
 
 export function unwrapTitle(title: { rendered: string } | string | undefined): string {
-  if (typeof title === 'string') return title;
-  if (title && typeof title === 'object' && typeof title.rendered === 'string') return title.rendered;
-  return '';
+  const raw =
+    typeof title === 'string'
+      ? title
+      : title && typeof title === 'object' && typeof title.rendered === 'string'
+        ? title.rendered
+        : '';
+  return decodeHtmlEntities(raw);
 }
 
+/// Named entities frecuentes en respuestas de WordPress REST API. No es
+/// exhaustivo (la spec HTML tiene ~2000 named entities) pero cubre los que
+/// WP emite en `title.rendered` y campos similares. Si aparece uno no
+/// listado, el decoder lo deja crudo en vez de romper.
+const NAMED_HTML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+  hellip: '…',
+  ndash: '–',
+  mdash: '—',
+  lsquo: '‘',
+  rsquo: '’',
+  ldquo: '“',
+  rdquo: '”',
+  laquo: '«',
+  raquo: '»',
+  copy: '©',
+  reg: '®',
+  trade: '™',
+  iexcl: '¡',
+  iquest: '¿',
+};
+
+/// Decodifica HTML entities en un string. Maneja:
+///   - Numeric decimal: `&#8211;` → `–`
+///   - Numeric hex:     `&#x2014;` → `—`
+///   - Named comunes:   `&amp;` → `&`, `&ndash;` → `–`, `&hellip;` → `…`
+/// WordPress REST emite numeric entities en `title.rendered` por defecto,
+/// y `&amp; &#8211;` mezclados en descripciones. Llamar siempre antes de
+/// persistir o mostrar el texto al usuario final.
 export function decodeHtmlEntities(html: string): string {
-  return html
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
-    .replace(/&nbsp;/g, ' ');
+  if (!html) return html;
+  return html.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z][a-zA-Z0-9]+);/g, (match, ent: string) => {
+    if (ent[0] === '#') {
+      const isHex = ent[1] === 'x' || ent[1] === 'X';
+      const cp = isHex ? parseInt(ent.slice(2), 16) : parseInt(ent.slice(1), 10);
+      if (!Number.isFinite(cp) || cp < 0 || cp > 0x10ffff) return match;
+      try {
+        return String.fromCodePoint(cp);
+      } catch {
+        return match;
+      }
+    }
+    return NAMED_HTML_ENTITIES[ent.toLowerCase()] ?? match;
+  });
 }
 
 export function asString(v: unknown): string | undefined {

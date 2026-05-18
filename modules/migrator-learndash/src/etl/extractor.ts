@@ -79,20 +79,72 @@ export async function runExtract(
     logger.info('extract.media.done', { jobId, count });
   }
 
+  // Maps (lesson|topic|quiz → courseId) construidos con `/sfwd-courses/:id/steps`.
+  // LearnDash REST v1 NO incluye el campo `course` en la respuesta plana de
+  // `/sfwd-lessons` ni `/sfwd-topic` — los parents solo se obtienen por el
+  // árbol del curso. Sin este mapping, el transformer marca todas las
+  // lessons/topics como MISSING_DEPENDENCY y la migración queda estructuralmente
+  // vacía (cursos sin contenido). Se poblan en el bloque scope.courses; las
+  // referencias en lessons/topics/quizzes los consumen con el operador `.get()`
+  // que retorna `undefined` si el bloque no corrió (e.g. scope sin courses).
+  const lessonToCourse = new Map<number, number>();
+  const topicToCourse = new Map<number, number>();
+  const topicToLesson = new Map<number, number>();
+  const quizToCourse = new Map<number, number>();
+
   // 3. Cursos
   if (scope.courses) {
     let count = 0;
+    const courseIds: number[] = [];
     for await (const batch of client.iterCourses(signal)) {
       if (await checkCancelled()) return;
       for (const c of batch.items) {
         const checksum = computeChecksum(c);
         await staging.upsertCourse(tenantId, jobId, String(c.id), c, checksum);
+        courseIds.push(c.id);
         count += 1;
       }
       bus.emit(jobId, { type: 'phase.progress', phase: 'extract:courses', current: count, total: batch.total, at: nowIso() });
       if (batch.done) break;
     }
     logger.info('extract.courses.done', { jobId, count });
+
+    // 3b. Populamos los maps llamando `/sfwd-courses/:id/steps` por cada curso.
+    for (const courseId of courseIds) {
+      if (await checkCancelled()) return;
+      try {
+        const steps = await client.getCourseSteps(courseId, signal);
+        for (const step of steps) {
+          if (step.type === 'sfwd-lessons') {
+            lessonToCourse.set(step.id, courseId);
+          } else if (step.type === 'sfwd-topic') {
+            topicToCourse.set(step.id, courseId);
+            // step.parent del topic = lessonId (si cuelga de una lesson).
+            // Si parent == courseId, el topic cuelga directo del curso.
+            if (step.parent && step.parent !== courseId) {
+              topicToLesson.set(step.id, step.parent);
+            }
+          } else if (step.type === 'sfwd-quiz') {
+            quizToCourse.set(step.id, courseId);
+          }
+        }
+      } catch (err) {
+        // Si el endpoint /steps falla para un curso, lo logueamos y
+        // seguimos: las lessons/topics de ese curso quedarán huérfanas
+        // y se rebotarán en transform — preferible a abortar todo el job.
+        logger.info('extract.course.steps.failed', {
+          jobId,
+          courseId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    logger.info('extract.course.steps.done', {
+      jobId,
+      lessonsMapped: lessonToCourse.size,
+      topicsMapped: topicToCourse.size,
+      quizzesMapped: quizToCourse.size,
+    });
 
     // 4. Lessons
     let lessonCount = 0;
@@ -101,7 +153,12 @@ export async function runExtract(
       let idx = 0;
       for (const l of batch.items) {
         const checksum = computeChecksum(l);
-        const parentCourseId = l.course ? String(l.course) : null;
+        const stepCourseId = lessonToCourse.get(l.id);
+        const parentCourseId = l.course
+          ? String(l.course)
+          : stepCourseId !== undefined
+            ? String(stepCourseId)
+            : null;
         await staging.upsertLesson(tenantId, jobId, String(l.id), parentCourseId, idx++, l, checksum);
         lessonCount += 1;
       }
@@ -117,12 +174,24 @@ export async function runExtract(
       let idx = 0;
       for (const t of batch.items) {
         const checksum = computeChecksum(t);
+        const stepCourseId = topicToCourse.get(t.id);
+        const stepLessonId = topicToLesson.get(t.id);
+        const parentCourseId = t.course
+          ? String(t.course)
+          : stepCourseId !== undefined
+            ? String(stepCourseId)
+            : null;
+        const parentLessonId = t.lesson
+          ? String(t.lesson)
+          : stepLessonId !== undefined
+            ? String(stepLessonId)
+            : null;
         await staging.upsertTopic(
           tenantId,
           jobId,
           String(t.id),
-          t.lesson ? String(t.lesson) : null,
-          t.course ? String(t.course) : null,
+          parentLessonId,
+          parentCourseId,
           idx++,
           t,
           checksum,
@@ -143,12 +212,17 @@ export async function runExtract(
       if (await checkCancelled()) return;
       for (const q of batch.items) {
         const checksum = computeChecksum(q);
+        const stepCourseId = quizToCourse.get(q.id);
         await staging.upsertQuiz(
           tenantId,
           jobId,
           String(q.id),
           {
-            courseId: q.course ? String(q.course) : undefined,
+            courseId: q.course
+              ? String(q.course)
+              : stepCourseId !== undefined
+                ? String(stepCourseId)
+                : undefined,
             lessonId: q.lesson ? String(q.lesson) : undefined,
             topicId: q.topic ? String(q.topic) : undefined,
           },
