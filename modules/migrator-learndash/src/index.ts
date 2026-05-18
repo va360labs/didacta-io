@@ -861,8 +861,27 @@ async function listInvalidStg(
   //   - Fila transformada OK: is_valid=TRUE → no se procesa más
   //   - Fila que falló transform: is_valid=FALSE, validation_errors=<errs> → no se reintenta
   //   - Fila re-extraída (UPSERT del extract): is_valid=FALSE, validation_errors=NULL → se re-procesa
+  // Selecciona los parent_* opcionales con NULL si la tabla no los tiene.
+  // PostgreSQL no soporta columnas opcionales dinámicas en SELECT, pero las
+  // tablas que NO tienen estos campos (users, courses, groups) tampoco los
+  // necesitan; el transformer ignora row.parent_* en esos casos. Para
+  // lessons/topics/quizzes esos campos DEBEN venir poblados desde el
+  // extract para que el mapper resuelva el parent — el SELECT plano sin
+  // ellos hacía que `raw.course` quedara undefined aunque la columna BD
+  // estuviera bien.
+  const hasParents =
+    table === 'mod_migrator_learndash_stg_lessons' ||
+    table === 'mod_migrator_learndash_stg_topics' ||
+    table === 'mod_migrator_learndash_stg_quizzes';
+  const parentCols = hasParents
+    ? table === 'mod_migrator_learndash_stg_quizzes'
+      ? ', parent_course_id, parent_lesson_id, parent_topic_id'
+      : table === 'mod_migrator_learndash_stg_topics'
+        ? ', parent_course_id, parent_lesson_id'
+        : ', parent_course_id'
+    : '';
   const result = await db.query<StgRow>(
-    `SELECT id::text AS id, source_id, raw_payload, canonical, is_valid, target_id
+    `SELECT id::text AS id, source_id, raw_payload, canonical, is_valid, target_id${parentCols}
        FROM ${table}
       WHERE tenant_id = $1::uuid AND job_id = $2::uuid
         AND is_valid = FALSE AND validation_errors IS NULL
@@ -2378,7 +2397,23 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
         let okCount = 0;
         let dlqCount = 0;
         for (const row of batch) {
-          const result = applyMapper(cursor.current, row.raw_payload);
+          // Inyectar los parents resueltos por el extract en el raw_payload
+          // antes de mapear. LearnDash REST v1 NO incluye `course`/`lesson`
+          // en el payload de lessons/topics/quizzes; los obtuvimos via el
+          // filtro `?course=N` en el extract y los persistimos en la columna
+          // `parent_*_id` del staging. El mapper espera `raw.course` etc.,
+          // así que enriquecemos el raw aquí sin tocar los mappers.
+          const rawWithParents =
+            row.parent_course_id || row.parent_lesson_id || row.parent_topic_id
+              ? (() => {
+                  const r = { ...(row.raw_payload as Record<string, unknown>) };
+                  if (row.parent_course_id && !r['course']) r['course'] = Number(row.parent_course_id);
+                  if (row.parent_lesson_id && !r['lesson']) r['lesson'] = Number(row.parent_lesson_id);
+                  if (row.parent_topic_id && !r['topic']) r['topic'] = Number(row.parent_topic_id);
+                  return r;
+                })()
+              : row.raw_payload;
+          const result = applyMapper(cursor.current, rawWithParents);
           if (result.ok) {
             await setStgCanonical(db, table, row.id, result.canonical, null);
             okCount += 1;
