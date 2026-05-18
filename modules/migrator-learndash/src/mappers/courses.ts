@@ -34,6 +34,26 @@ export function mapCourse(raw: LdCourse): MapResult<CanonicalCourse> {
     ? raw.prerequisites.map(String)
     : [];
 
+  // El fixup inyecta `__sections` en raw_payload del course tras parsear
+  // /sfwd-courses/:id/steps. Propagamos al canonical para que el load
+  // pueda crear UN module sintético por section.
+  const rawSections = (raw as { __sections?: unknown }).__sections;
+  const sections = Array.isArray(rawSections)
+    ? rawSections
+        .map((s, i) => {
+          if (!s || typeof s !== 'object') return null;
+          const obj = s as { idx?: unknown; title?: unknown; lessonIds?: unknown };
+          const idx = typeof obj.idx === 'number' ? obj.idx : i;
+          const title = typeof obj.title === 'string' ? obj.title.trim() : '';
+          const lessonIds = Array.isArray(obj.lessonIds)
+            ? obj.lessonIds.filter((x) => typeof x === 'number')
+            : [];
+          if (!title || lessonIds.length === 0) return null;
+          return { idx, title, lessonIds: lessonIds as number[] };
+        })
+        .filter((s): s is { idx: number; title: string; lessonIds: number[] } => s !== null)
+    : undefined;
+
   return {
     ok: true,
     warnings,
@@ -52,6 +72,7 @@ export function mapCourse(raw: LdCourse): MapResult<CanonicalCourse> {
       pricing,
       prerequisitesSourceIds: prereqs,
       modifiedAt: raw.modified_gmt,
+      sections: sections && sections.length > 0 ? sections : undefined,
     },
   };
 }

@@ -2318,6 +2318,61 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
               };
               walk(parsed, null);
 
+              // Parsear `sections` del response — el course builder de
+              // LearnDash agrupa lessons en "section-headings" con
+              // `{order, post_title, type: 'section-heading', steps: [id...]}`.
+              // Los persistimos en raw_payload del course (campo `__sections`)
+              // para que mapCourse los propague al canonical y el load cree
+              // UN courseModule sintético por section.
+              type Section = { idx: number; title: string; lessonIds: number[] };
+              const parsedSections: Section[] = [];
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const sectionsField = (parsed as { sections?: unknown }).sections;
+                if (Array.isArray(sectionsField)) {
+                  let secIdx = 0;
+                  for (const s of sectionsField) {
+                    if (!s || typeof s !== 'object') continue;
+                    const obj = s as { post_title?: unknown; steps?: unknown; type?: unknown };
+                    const title = typeof obj.post_title === 'string' ? obj.post_title.trim() : '';
+                    const steps = Array.isArray(obj.steps) ? obj.steps : [];
+                    const lessonIds = steps
+                      .map((x) => (typeof x === 'number' ? x : parseInt(String(x), 10)))
+                      .filter((x) => Number.isFinite(x) && x > 0);
+                    if (title && lessonIds.length > 0) {
+                      parsedSections.push({ idx: secIdx, title, lessonIds });
+                      secIdx += 1;
+                    }
+                  }
+                }
+              }
+
+              // Map de lessonId → sectionIdx para asignar parent_course_id
+              // con encoding por sección.
+              const lessonToSection = new Map<number, number>();
+              for (const sec of parsedSections) {
+                for (const lessonId of sec.lessonIds) {
+                  lessonToSection.set(lessonId, sec.idx);
+                }
+              }
+
+              // Persistir las sections en stg_courses.raw_payload.__sections
+              // para que mapCourse las propague al canonical.
+              if (parsedSections.length > 0) {
+                try {
+                  await db.execute(
+                    `UPDATE mod_migrator_learndash_stg_courses
+                        SET raw_payload = jsonb_set(raw_payload, '{__sections}', $1::jsonb, true),
+                            is_valid = FALSE,
+                            validation_errors = NULL,
+                            canonical = NULL
+                      WHERE tenant_id = $2::uuid AND job_id = $3::uuid AND source_id = $4`,
+                    [JSON.stringify(parsedSections), tenantId, jobId, courseSourceId],
+                  );
+                } catch (e) {
+                  ctx.log('warn', `fixup persist sections curso ${courseSourceId} falló: ${e instanceof Error ? e.message : e}`);
+                }
+              }
+
               let lessonsHit = 0;
               let topicsHit = 0;
               let quizzesHit = 0;
@@ -2326,11 +2381,20 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                 const stepId = String(step.id);
                 if (sampleIdsTried.length < 5) sampleIdsTried.push(stepId);
                 if (step.type === 'sfwd-lessons') {
+                  // Si la lesson pertenece a una section, parent_course_id
+                  // codifica `{course}-s{idx}` para que el load la asocie al
+                  // module sintético de esa section. Sin section, queda el
+                  // courseId pelado → module 'General' de fallback.
+                  const sectionIdx = lessonToSection.get(step.id);
+                  const moduleExtId =
+                    sectionIdx !== undefined
+                      ? `${courseSourceId}-s${sectionIdx}`
+                      : courseSourceId;
                   const r = await db.execute(
                     `UPDATE mod_migrator_learndash_stg_lessons
                         SET parent_course_id = $1
                       WHERE tenant_id = $2::uuid AND job_id = $3::uuid AND source_id = $4`,
-                    [courseSourceId, tenantId, jobId, stepId],
+                    [moduleExtId, tenantId, jobId, stepId],
                   );
                   lessonsHit += r.rowCount ?? 0;
                 } else if (step.type === 'sfwd-topic') {
@@ -2741,20 +2805,21 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
             await setStgLoaded(db, table, row.id, result.id);
             okCount += 1;
 
-            // Tras cargar un course, crear una "sección sintética" (CourseModule)
-            // con el MISMO externalRef que el course. LearnDash no tiene concept
-            // de sección — su jerarquía es Course → Lesson → Topic. Didacta sí:
-            // Course → CourseModule → Lesson. Sin esta sección sintética, el
-            // upsert de cada lesson rebota con DIDACTA_FOREIGN_REFERENCE
-            // ("CourseModule con externalRef learndash/<courseId> no existe").
-            // Reusamos el courseId como externalId del module porque NO hay
-            // colisión: courses y courseModules tienen namespaces propios en
-            // el índice (tenantId, external_source, external_id) del core.
+            // Tras cargar un course, crear los CourseModules sintéticos.
+            // LearnDash agrupa lessons en "section-headings" (course builder);
+            // Didacta tiene jerarquía Course → CourseModule → Lesson. Mapping:
+            //   - Module "General" con externalId = courseId (FALLBACK para
+            //     lessons huérfanas que no estén en ninguna section).
+            //   - Module por section con externalId = `{course}-s{idx}` y
+            //     title = section.title (capturadas en el fixup del extract).
+            // Los syntheticIds coinciden con los parent_course_id que el
+            // fixup grabó en stg_lessons → cada lesson cae en su module real.
             if (cursor.current === 'courses') {
               const modulesApi = didacta['courseModules'];
               if (modulesApi && typeof modulesApi.upsertByExternalRef === 'function') {
                 const courseSourceId = String(canonical['sourceId'] ?? '');
                 if (courseSourceId) {
+                  // 1) Module fallback "General".
                   try {
                     await modulesApi.upsertByExternalRef({
                       externalSource: 'learndash',
@@ -2767,8 +2832,33 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                     const msg = e instanceof Error ? e.message : String(e);
                     ctx.log(
                       'warn',
-                      `tick ${tickIndex}: courseModule sintético para curso ${courseSourceId} falló: ${msg}. Las lessons de este curso no podrán cargarse hasta que se cree la sección.`,
+                      `tick ${tickIndex}: courseModule "General" para curso ${courseSourceId} falló: ${msg}.`,
                     );
+                  }
+                  // 2) Modules por section (course builder de LearnDash).
+                  const sections = canonical['sections'];
+                  if (Array.isArray(sections)) {
+                    for (const sec of sections as Array<{ idx: number; title: string; lessonIds?: number[] }>) {
+                      if (!sec || typeof sec.title !== 'string') continue;
+                      try {
+                        await modulesApi.upsertByExternalRef({
+                          externalSource: 'learndash',
+                          externalId: `${courseSourceId}-s${sec.idx}`,
+                          courseExternalRef: {
+                            externalSource: 'learndash',
+                            externalId: courseSourceId,
+                          },
+                          title: sec.title,
+                          position: sec.idx + 1, // 0 reservado para "General"
+                        });
+                      } catch (e) {
+                        const msg = e instanceof Error ? e.message : String(e);
+                        ctx.log(
+                          'warn',
+                          `tick ${tickIndex}: courseModule section ${courseSourceId}-s${sec.idx} ("${sec.title}") falló: ${msg}.`,
+                        );
+                      }
+                    }
                   }
                 }
               }

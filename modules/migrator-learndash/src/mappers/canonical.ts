@@ -28,6 +28,12 @@ export interface CanonicalCourse {
   pricing?: { amount?: number; currency?: string; priceText?: string };
   prerequisitesSourceIds: string[];
   modifiedAt?: string;
+  /// Secciones (section-headings) detectadas en el course builder de LearnDash.
+  /// El fixup las inyecta en `raw_payload.__sections` durante extract, y el
+  /// mapper las propaga al canonical. El load las usa para crear UN module
+  /// sintético por section (en lugar de un único 'General' por curso). Si el
+  /// curso no tiene sections, este campo queda vacío y se cae al fallback.
+  sections?: Array<{ idx: number; title: string; lessonIds: number[] }>;
 }
 
 export interface CanonicalLearningUnit {
