@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import type { InstalledModule } from '@didacta/database';
 import { ModuleContextFactory } from '../modules/module-context.factory';
@@ -76,7 +76,7 @@ export interface InstallResult {
 /// worker fuera de scope MVP).
 
 @Injectable()
-export class InstallPackageService {
+export class InstallPackageService implements OnApplicationBootstrap {
   private readonly logger = new Logger(InstallPackageService.name);
 
   constructor(
@@ -94,6 +94,83 @@ export class InstallPackageService {
     private readonly tenantContext: TenantContextService,
     private readonly jobLifecycle: ModuleJobLifecycleRegistry,
   ) {}
+
+  /// Re-bootea los módulos previamente instalados al arrancar el server.
+  ///
+  /// `ModuleRouterService` y `ModuleJobLifecycleRegistry` viven solo en
+  /// memoria: las routes y los hooks `onJobTick` se registran durante el
+  /// `install()` y se pierden cuando el container se reinicia. Sin este
+  /// hook, los módulos quedan `INSTALLED` en BD pero inalcanzables hasta
+  /// que el operador haga un re-install manual.
+  ///
+  /// Lo que SÍ se re-ejecuta: descarga del blob de storage, `extractDistSource`,
+  /// `sandbox.loadModule`, `router.registerModule`, `jobLifecycle.register`.
+  /// Lo que NO: `onInstall` (es de lifecycle de instalación, no de boot),
+  /// migraciones SQL (ya están aplicadas en BD), validación de firma (el
+  /// blob ya pasó por validación al instalar — re-validar al boot añadiría
+  /// segundos por módulo sin beneficio operativo).
+  ///
+  /// Si un módulo falla al re-bootear: log de error + skip. NO marcamos
+  /// FAILED en BD porque la instalación SÍ ocurrió; el módulo solo está
+  /// "running=false" en esta instancia. Re-install lo recupera.
+  async onApplicationBootstrap(): Promise<void> {
+    const installed = await this.installedModules.list({ status: 'INSTALLED' });
+    if (installed.length === 0) {
+      this.logger.log('Boot: no hay módulos instalados para re-bootear.');
+      return;
+    }
+    this.logger.log(`Boot: re-booteando ${installed.length} módulo(s) instalado(s)...`);
+
+    const storage = this.contextFactory.getStorage();
+    for (const row of installed) {
+      const manifest = row.manifestJson as unknown as ModuleManifest;
+      try {
+        const packageBuffer = await storage.download(row.packageStorageKey);
+        const distSource = extractDistSource(packageBuffer);
+        const sandboxed = this.sandbox.loadModule(distSource, manifest.name, manifest);
+
+        if (sandboxed.routes && sandboxed.routes.length > 0) {
+          this.router.registerModule(
+            manifest.name,
+            manifest.apiNamespace,
+            sandboxed.routes,
+            {
+              httpConfig: manifest.http ?? null,
+              dbEnabled: manifest.requiresDb === true,
+              tablePrefix: manifest.tablePrefix,
+              didactaConfig: manifest.didacta ?? null,
+              jobLifecycleConfig: manifest.jobLifecycle ?? null,
+              requiresSecrets: manifest.requiresSecrets === true,
+              secretsLifecycleConfig: manifest.secretsLifecycle ?? null,
+            },
+          );
+        }
+
+        if (sandboxed.onJobTick) {
+          this.jobLifecycle.register(manifest.name, sandboxed.onJobTick, {
+            httpConfig: manifest.http ?? null,
+            dbEnabled: manifest.requiresDb === true,
+            tablePrefix: manifest.tablePrefix,
+            didactaConfig: manifest.didacta ?? null,
+            moduleVersion: manifest.version,
+            requiresSecrets: manifest.requiresSecrets === true,
+            secretsLifecycleConfig: manifest.secretsLifecycle ?? null,
+          });
+        }
+
+        this.logger.log(
+          `Boot: "${manifest.name}@${manifest.version}" listo ` +
+            `(${sandboxed.routes?.length ?? 0} routes, jobTick=${!!sandboxed.onJobTick}).`,
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.error(
+          `Boot: fallo al re-cargar "${row.name}@${row.version}": ${msg}. ` +
+            `Queda inalcanzable hasta re-install.`,
+        );
+      }
+    }
+  }
 
   async install(packageBuffer: Buffer, installedById: string): Promise<InstallResult> {
     // 1-8. Validación end-to-end (PR A).
