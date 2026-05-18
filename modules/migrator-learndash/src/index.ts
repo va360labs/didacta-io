@@ -2221,31 +2221,14 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
           const totalCourses = cursor.fixupTotalCourses ?? courseIds.length;
           const idx = cursor.courseIdx ?? 0;
 
-          // Antes del primer curso, RESET de parent_course_id a NULL en
-          // lessons/topics/quizzes — así las rows que NO aparezcan en
-          // ningún /steps quedan huérfanas (MISSING_DEPENDENCY en transform)
-          // en vez de quedarse con el courseId del último iter de paginate.
-          if (idx === 0) {
-            await db.execute(
-              `UPDATE mod_migrator_learndash_stg_lessons
-                  SET parent_course_id = NULL
-                WHERE tenant_id = $1::uuid AND job_id = $2::uuid`,
-              [tenantId, jobId],
-            );
-            await db.execute(
-              `UPDATE mod_migrator_learndash_stg_topics
-                  SET parent_course_id = NULL, parent_lesson_id = NULL
-                WHERE tenant_id = $1::uuid AND job_id = $2::uuid`,
-              [tenantId, jobId],
-            );
-            await db.execute(
-              `UPDATE mod_migrator_learndash_stg_quizzes
-                  SET parent_course_id = NULL, parent_lesson_id = NULL, parent_topic_id = NULL
-                WHERE tenant_id = $1::uuid AND job_id = $2::uuid`,
-              [tenantId, jobId],
-            );
-            ctx.log('log', `tick ${tickIndex}: fixup — reset parent_course_id antes de empezar.`);
-          }
+          // NOTA: en 1.0.22-24 había un RESET masivo a NULL en idx===0.
+          // Ese reset corría idempotente (cada tick re-evaluaba idx===0) y,
+          // combinado con re-encolados del BullMQ, terminaba sobrescribiendo
+          // los UPDATEs que el propio fixup hacía. Lo quitamos: las lessons
+          // que NO aparezcan en ningún /steps quedan con el parent_course_id
+          // del último iter del paginate (curso ASC string último = 9919).
+          // No ideal pero RECUPERABLE: los UPDATEs subsiguientes lo corrigen
+          // para las que SÍ aparecen.
 
           if (idx >= courseIds.length) {
             // Todos los cursos procesados — transicionar a transforming.
@@ -2335,42 +2318,13 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
               };
               walk(parsed, null);
 
-              // Diagnóstico persistente: para los primeros 2 cursos del fixup,
-              // guardamos el body y el conteo de items aplanados en audit_events.
-              // Así si el parser NO matchea NADA (flat.length === 0) podemos
-              // leer el shape real desde la BD sin volver a pedir logs.
-              if (idx < 2) {
-                try {
-                  await db.execute(
-                    `INSERT INTO mod_migrator_learndash_audit_events
-                       (tenant_id, job_id, entity_type, entity_id, action, actor, meta, hash, prev_hash, occurred_at)
-                     VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8, $9, NOW())`,
-                    [
-                      tenantId,
-                      jobId,
-                      'fixup',
-                      courseSourceId,
-                      'fixup.steps.debug',
-                      'system',
-                      JSON.stringify({
-                        course: courseSourceId,
-                        flat_count: flat.length,
-                        body_preview: resp.body.slice(0, 2000),
-                      }),
-                      'debug-' + jobId + '-' + idx,
-                      'debug-' + jobId + '-' + (idx - 1),
-                    ],
-                  );
-                } catch (e) {
-                  ctx.log('warn', `fixup audit insert falló (no crítico): ${e instanceof Error ? e.message : e}`);
-                }
-              }
-
               let lessonsHit = 0;
               let topicsHit = 0;
               let quizzesHit = 0;
+              const sampleIdsTried: string[] = [];
               for (const step of flat) {
                 const stepId = String(step.id);
+                if (sampleIdsTried.length < 5) sampleIdsTried.push(stepId);
                 if (step.type === 'sfwd-lessons') {
                   const r = await db.execute(
                     `UPDATE mod_migrator_learndash_stg_lessons
@@ -2402,6 +2356,40 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                 'log',
                 `tick ${tickIndex}: fixup curso #${idx + 1}/${totalCourses} (${courseSourceId}) — flat=${flat.length} lessons=${lessonsHit} topics=${topicsHit} quizzes=${quizzesHit}.`,
               );
+
+              // Diagnóstico persistente: TODOS los cursos del fixup ahora
+              // (no solo los 2 primeros) registran flat_count + rowCounts +
+              // sample IDs intentados en audit_events. Si los rowCounts son 0
+              // a pesar de tener flat > 0 y los IDs existir en stg → bug del
+              // sandbox/SQL. Si flat=0 → bug del parser. Si todo > 0 → ok.
+              try {
+                await db.execute(
+                  `INSERT INTO mod_migrator_learndash_audit_events
+                     (tenant_id, job_id, entity_type, entity_id, action, actor, meta, hash, prev_hash, occurred_at)
+                   VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8, $9, NOW())`,
+                  [
+                    tenantId,
+                    jobId,
+                    'fixup',
+                    courseSourceId,
+                    'fixup.steps.debug',
+                    'system',
+                    JSON.stringify({
+                      course: courseSourceId,
+                      flat_count: flat.length,
+                      lessons_hit: lessonsHit,
+                      topics_hit: topicsHit,
+                      quizzes_hit: quizzesHit,
+                      sample_ids: sampleIdsTried,
+                      body_preview: idx < 2 ? resp.body.slice(0, 1500) : null,
+                    }),
+                    'debug-' + jobId + '-' + idx + '-' + Date.now(),
+                    'debug-' + jobId + '-' + (idx - 1),
+                  ],
+                );
+              } catch (e) {
+                ctx.log('warn', `fixup audit insert falló (no crítico): ${e instanceof Error ? e.message : e}`);
+              }
             }
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);

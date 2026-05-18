@@ -99,7 +99,7 @@ export const manifest: ModuleManifest = {
   displayName: 'Migrador desde WordPress + LearnDash',
   description:
     'Importa cursos, lecciones, temas, quizzes, preguntas, usuarios, grupos, matrículas, media y progreso desde WordPress + LearnDash hacia Didacta. Wizard didáctico paso a paso, ETL con staging, idempotencia por checksum, reportes auditables.',
-  version: '1.0.24',
+  version: '1.0.25',
   author: 'Didacta',
   license: 'Proprietary',
   category: 'migration',

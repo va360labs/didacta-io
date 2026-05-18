@@ -1,6 +1,6 @@
 {
   "name": "@didacta/mod-migrator-learndash",
-  "version": "1.0.24",
+  "version": "1.0.25",
   "private": true,
   "description": "Módulo migrador WordPress+LearnDash → Didacta. Wizard didáctico, ETL con staging, reportes auditables.",
   "main": "./dist/index.js",
