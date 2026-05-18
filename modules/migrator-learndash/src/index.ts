@@ -536,8 +536,15 @@ async function fetchOneWpPage<T>(
   authHeader: string,
   page: number,
   perPage: number,
+  /// Namespace REST. `wp/v2` es WordPress core (sirve users + media + cualquier
+  /// CPT genérico). `ldlms/v1` es el namespace LearnDash y es OBLIGATORIO para
+  /// `sfwd-courses`, `sfwd-lessons`, `sfwd-topic`, `sfwd-quiz` y `groups`: solo
+  /// ahí WP REST adjunta los fields custom de LearnDash (`course`, `lesson`,
+  /// `topic`). Usar `wp/v2/sfwd-lessons` devuelve el post crudo SIN parents y
+  /// el transformer rebota todo con MISSING_DEPENDENCY.
+  namespace: 'wp/v2' | 'ldlms/v1' = 'wp/v2',
 ): Promise<{ items: T[]; totalPages: number | undefined; status: number }> {
-  const url = `${baseUrl}/wp-json/wp/v2/${cpt}?per_page=${perPage}&page=${page}&context=edit&status=any&orderby=id&order=asc`;
+  const url = `${baseUrl}/wp-json/${namespace}/${cpt}?per_page=${perPage}&page=${page}&context=edit&status=any&orderby=id&order=asc`;
   const resp = await http.get(url, {
     headers: { Authorization: authHeader, Accept: 'application/json' },
     timeoutMs: 30_000,
@@ -726,13 +733,16 @@ async function upsertStgGroup(
 /// `questions` y `enrollments` NO están aquí: son entidades "fan-out" que
 /// requieren leer staging (parent IDs) para iterar — se procesarán como
 /// fase aparte tras agotar las paginables. Documentado como ET-001b.
-const EXTRACT_ENTITIES: Array<{ name: string; cpt: string }> = [
-  { name: 'users', cpt: 'users' },
-  { name: 'courses', cpt: 'sfwd-courses' },
-  { name: 'lessons', cpt: 'sfwd-lessons' },
-  { name: 'topics', cpt: 'sfwd-topic' },
-  { name: 'quizzes', cpt: 'sfwd-quiz' },
-  { name: 'groups', cpt: 'groups' },
+const EXTRACT_ENTITIES: Array<{ name: string; cpt: string; namespace: 'wp/v2' | 'ldlms/v1' }> = [
+  { name: 'users', cpt: 'users', namespace: 'wp/v2' },
+  // CPTs LearnDash: ldlms/v1 obligatorio para que el payload incluya los
+  // campos `course`, `lesson`, `topic` que el transformer necesita. Usar
+  // wp/v2 retorna el post WP crudo sin esos parents → MISSING_DEPENDENCY.
+  { name: 'courses', cpt: 'sfwd-courses', namespace: 'ldlms/v1' },
+  { name: 'lessons', cpt: 'sfwd-lessons', namespace: 'ldlms/v1' },
+  { name: 'topics', cpt: 'sfwd-topic', namespace: 'ldlms/v1' },
+  { name: 'quizzes', cpt: 'sfwd-quiz', namespace: 'ldlms/v1' },
+  { name: 'groups', cpt: 'groups', namespace: 'ldlms/v1' },
 ];
 
 interface ExtractCursor {
@@ -2143,6 +2153,7 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
             authHeader,
             cursor.page,
             100,
+            entity.namespace,
           );
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
