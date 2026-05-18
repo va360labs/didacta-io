@@ -2854,23 +2854,45 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
               if (modulesApi && typeof modulesApi.upsertByExternalRef === 'function') {
                 const courseSourceId = String(canonical['sourceId'] ?? '');
                 if (courseSourceId) {
-                  // 1) Module fallback "General".
+                  // ¿Hay lessons huérfanas (parent_course_id pelado, sin
+                  // encoding `-sN`)? Solo creamos el module "General" si las
+                  // hay — evita modules vacíos en cursos donde todas las
+                  // lessons están agrupadas en sections explícitas.
+                  let hasOrphans = false;
                   try {
-                    await modulesApi.upsertByExternalRef({
-                      externalSource: 'learndash',
-                      externalId: courseSourceId,
-                      courseExternalRef: { externalSource: 'learndash', externalId: courseSourceId },
-                      title: 'General',
-                      position: 0,
-                    });
-                  } catch (e) {
-                    const msg = e instanceof Error ? e.message : String(e);
-                    ctx.log(
-                      'warn',
-                      `tick ${tickIndex}: courseModule "General" para curso ${courseSourceId} falló: ${msg}.`,
+                    const q = await db.query<{ n: string }>(
+                      `SELECT COUNT(*)::text AS n
+                         FROM mod_migrator_learndash_stg_lessons
+                        WHERE tenant_id = $1::uuid AND job_id = $2::uuid
+                          AND parent_course_id = $3`,
+                      [tenantId, jobId, courseSourceId],
                     );
+                    hasOrphans = parseInt(q.rows[0]?.n ?? '0', 10) > 0;
+                  } catch (e) {
+                    // Si la query falla, somos conservadores: creamos General
+                    // de todas formas (mejor un module extra que perder lessons).
+                    hasOrphans = true;
                   }
-                  // 2) Modules por section (course builder de LearnDash).
+
+                  if (hasOrphans) {
+                    try {
+                      await modulesApi.upsertByExternalRef({
+                        externalSource: 'learndash',
+                        externalId: courseSourceId,
+                        courseExternalRef: { externalSource: 'learndash', externalId: courseSourceId },
+                        title: 'General',
+                        position: 0,
+                      });
+                    } catch (e) {
+                      const msg = e instanceof Error ? e.message : String(e);
+                      ctx.log(
+                        'warn',
+                        `tick ${tickIndex}: courseModule "General" para curso ${courseSourceId} falló: ${msg}.`,
+                      );
+                    }
+                  }
+
+                  // Modules por section (course builder de LearnDash).
                   const sections = canonical['sections'];
                   if (Array.isArray(sections)) {
                     for (const sec of sections as Array<{ idx: number; title: string; lessonIds?: number[] }>) {
@@ -2884,7 +2906,8 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                             externalId: courseSourceId,
                           },
                           title: sec.title,
-                          position: sec.idx + 1, // 0 reservado para "General"
+                          // position: si hay General, empieza en 1; si no, en 0.
+                          position: hasOrphans ? sec.idx + 1 : sec.idx,
                         });
                       } catch (e) {
                         const msg = e instanceof Error ? e.message : String(e);
