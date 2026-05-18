@@ -2505,6 +2505,39 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
             const result = await apiObj.upsertByExternalRef(adapted.input);
             await setStgLoaded(db, table, row.id, result.id);
             okCount += 1;
+
+            // Tras cargar un course, crear una "sección sintética" (CourseModule)
+            // con el MISMO externalRef que el course. LearnDash no tiene concept
+            // de sección — su jerarquía es Course → Lesson → Topic. Didacta sí:
+            // Course → CourseModule → Lesson. Sin esta sección sintética, el
+            // upsert de cada lesson rebota con DIDACTA_FOREIGN_REFERENCE
+            // ("CourseModule con externalRef learndash/<courseId> no existe").
+            // Reusamos el courseId como externalId del module porque NO hay
+            // colisión: courses y courseModules tienen namespaces propios en
+            // el índice (tenantId, external_source, external_id) del core.
+            if (cursor.current === 'courses') {
+              const modulesApi = didacta['courseModules'];
+              if (modulesApi && typeof modulesApi.upsertByExternalRef === 'function') {
+                const courseSourceId = String(canonical['sourceId'] ?? '');
+                if (courseSourceId) {
+                  try {
+                    await modulesApi.upsertByExternalRef({
+                      externalSource: 'learndash',
+                      externalId: courseSourceId,
+                      courseExternalRef: { externalSource: 'learndash', externalId: courseSourceId },
+                      title: 'General',
+                      position: 0,
+                    });
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    ctx.log(
+                      'warn',
+                      `tick ${tickIndex}: courseModule sintético para curso ${courseSourceId} falló: ${msg}. Las lessons de este curso no podrán cargarse hasta que se cree la sección.`,
+                    );
+                  }
+                }
+              }
+            }
           } catch (e) {
             const code = (e as { code?: string })?.code ?? 'DIDACTA_UPSERT_FAILED';
             const msg = e instanceof Error ? e.message : String(e);
