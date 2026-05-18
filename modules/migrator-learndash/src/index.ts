@@ -2265,47 +2265,97 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
             if (resp.status >= 400) {
               ctx.log('warn', `tick ${tickIndex}: fixup /steps curso ${courseSourceId} HTTP ${resp.status}: ${resp.body.slice(0, 200)}.`);
             } else {
-              const steps = JSON.parse(resp.body) as Array<{ id: number; type: string; parent?: number }>;
-              if (!Array.isArray(steps)) {
-                ctx.log('warn', `tick ${tickIndex}: fixup /steps curso ${courseSourceId} no es array.`);
-              } else {
-                let lessonsHit = 0;
-                let topicsHit = 0;
-                let quizzesHit = 0;
-                for (const step of steps) {
-                  const stepId = String(step.id);
-                  if (step.type === 'sfwd-lessons') {
-                    const r = await db.execute(
-                      `UPDATE mod_migrator_learndash_stg_lessons
-                          SET parent_course_id = $1
-                        WHERE tenant_id = $2::uuid AND job_id = $3::uuid AND source_id = $4`,
-                      [courseSourceId, tenantId, jobId, stepId],
-                    );
-                    lessonsHit += r.rowCount ?? 0;
-                  } else if (step.type === 'sfwd-topic') {
-                    const parentLessonId = step.parent && String(step.parent) !== courseSourceId ? String(step.parent) : null;
-                    const r = await db.execute(
-                      `UPDATE mod_migrator_learndash_stg_topics
-                          SET parent_course_id = $1, parent_lesson_id = $2
-                        WHERE tenant_id = $3::uuid AND job_id = $4::uuid AND source_id = $5`,
-                      [courseSourceId, parentLessonId, tenantId, jobId, stepId],
-                    );
-                    topicsHit += r.rowCount ?? 0;
-                  } else if (step.type === 'sfwd-quiz') {
-                    const r = await db.execute(
-                      `UPDATE mod_migrator_learndash_stg_quizzes
-                          SET parent_course_id = $1
-                        WHERE tenant_id = $2::uuid AND job_id = $3::uuid AND source_id = $4`,
-                      [courseSourceId, tenantId, jobId, stepId],
-                    );
-                    quizzesHit += r.rowCount ?? 0;
+              const parsed: unknown = JSON.parse(resp.body);
+              // LearnDash REST v1 /steps retorna un OBJETO jerárquico:
+              //   { "lesson:5615": { post: {...}, steps: { "topic:5620": ..., "quiz:5621": ... } },
+              //     "lesson:5616": { ... } }
+              // Las keys son "<tipo>:<id>" donde tipo ∈ {lesson, topic, quiz, h}
+              // (h = heading/sección, lo ignoramos — no migra). El field `steps`
+              // anida los hijos del item actual; para topics y quizzes el padre
+              // es la lesson en cuya `steps` están contenidos.
+              // Aplanamos recursivamente.
+              const flat: Array<{ id: number; type: string; parentLessonId: number | null }> = [];
+              const walk = (node: unknown, parentLessonId: number | null): void => {
+                if (!node || typeof node !== 'object') return;
+                if (Array.isArray(node)) {
+                  for (const it of node) walk(it, parentLessonId);
+                  return;
+                }
+                for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+                  const m = key.match(/^([a-zA-Z]+):(\d+)$/);
+                  if (m) {
+                    const typeShort = m[1]!.toLowerCase();
+                    const id = parseInt(m[2]!, 10);
+                    let resolvedType: string | null = null;
+                    if (typeShort === 'lesson' || typeShort === 'sfwd-lessons') resolvedType = 'sfwd-lessons';
+                    else if (typeShort === 'topic' || typeShort === 'sfwd-topic') resolvedType = 'sfwd-topic';
+                    else if (typeShort === 'quiz' || typeShort === 'sfwd-quiz') resolvedType = 'sfwd-quiz';
+                    if (resolvedType) {
+                      flat.push({
+                        id,
+                        type: resolvedType,
+                        parentLessonId: resolvedType === 'sfwd-lessons' ? null : parentLessonId,
+                      });
+                    }
+                    // Recurse en steps anidados; si el item actual es una lesson,
+                    // su id pasa a ser el parentLessonId de sus hijos (topics/quizzes).
+                    const newParent = resolvedType === 'sfwd-lessons' ? id : parentLessonId;
+                    if (value && typeof value === 'object') {
+                      const innerSteps = (value as { steps?: unknown }).steps;
+                      if (innerSteps !== undefined && innerSteps !== null) walk(innerSteps, newParent);
+                      else walk(value, newParent);
+                    }
+                  } else if (value && typeof value === 'object') {
+                    walk(value, parentLessonId);
                   }
                 }
+              };
+              walk(parsed, null);
+
+              // Log de diagnóstico para los primeros 2 cursos (no spamear logs).
+              if (idx < 2) {
                 ctx.log(
                   'log',
-                  `tick ${tickIndex}: fixup curso #${idx + 1}/${totalCourses} (${courseSourceId}) — steps=${steps.length} lessons=${lessonsHit} topics=${topicsHit} quizzes=${quizzesHit}.`,
+                  `tick ${tickIndex}: fixup curso ${courseSourceId} body preview: ${resp.body.slice(0, 300)}`,
                 );
               }
+
+              let lessonsHit = 0;
+              let topicsHit = 0;
+              let quizzesHit = 0;
+              for (const step of flat) {
+                const stepId = String(step.id);
+                if (step.type === 'sfwd-lessons') {
+                  const r = await db.execute(
+                    `UPDATE mod_migrator_learndash_stg_lessons
+                        SET parent_course_id = $1
+                      WHERE tenant_id = $2::uuid AND job_id = $3::uuid AND source_id = $4`,
+                    [courseSourceId, tenantId, jobId, stepId],
+                  );
+                  lessonsHit += r.rowCount ?? 0;
+                } else if (step.type === 'sfwd-topic') {
+                  const parentLessonId = step.parentLessonId ? String(step.parentLessonId) : null;
+                  const r = await db.execute(
+                    `UPDATE mod_migrator_learndash_stg_topics
+                        SET parent_course_id = $1, parent_lesson_id = $2
+                      WHERE tenant_id = $3::uuid AND job_id = $4::uuid AND source_id = $5`,
+                    [courseSourceId, parentLessonId, tenantId, jobId, stepId],
+                  );
+                  topicsHit += r.rowCount ?? 0;
+                } else if (step.type === 'sfwd-quiz') {
+                  const r = await db.execute(
+                    `UPDATE mod_migrator_learndash_stg_quizzes
+                        SET parent_course_id = $1
+                      WHERE tenant_id = $2::uuid AND job_id = $3::uuid AND source_id = $4`,
+                    [courseSourceId, tenantId, jobId, stepId],
+                  );
+                  quizzesHit += r.rowCount ?? 0;
+                }
+              }
+              ctx.log(
+                'log',
+                `tick ${tickIndex}: fixup curso #${idx + 1}/${totalCourses} (${courseSourceId}) — flat=${flat.length} lessons=${lessonsHit} topics=${topicsHit} quizzes=${quizzesHit}.`,
+              );
             }
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
