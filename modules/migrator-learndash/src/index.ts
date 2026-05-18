@@ -543,8 +543,16 @@ async function fetchOneWpPage<T>(
   /// `topic`). Usar `wp/v2/sfwd-lessons` devuelve el post crudo SIN parents y
   /// el transformer rebota todo con MISSING_DEPENDENCY.
   namespace: 'wp/v2' | 'ldlms/v1' = 'wp/v2',
+  /// Filtros extra de query string. Para `ldlms/v1/sfwd-lessons|sfwd-topic|
+  /// sfwd-quiz` se DEBE pasar `{ course: '<id>' }`: LearnDash REST v1 rebota
+  /// con 404 "Invalid Curso ID" si se omite (excepto admin global, que con
+  /// Application Password NO lo somos).
+  extraQuery?: Record<string, string | number>,
 ): Promise<{ items: T[]; totalPages: number | undefined; status: number }> {
-  const url = `${baseUrl}/wp-json/${namespace}/${cpt}?per_page=${perPage}&page=${page}&context=edit&status=any&orderby=id&order=asc`;
+  const extra = extraQuery
+    ? '&' + Object.entries(extraQuery).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&')
+    : '';
+  const url = `${baseUrl}/wp-json/${namespace}/${cpt}?per_page=${perPage}&page=${page}&context=edit&status=any&orderby=id&order=asc${extra}`;
   const resp = await http.get(url, {
     headers: { Authorization: authHeader, Accept: 'application/json' },
     timeoutMs: 30_000,
@@ -733,15 +741,24 @@ async function upsertStgGroup(
 /// `questions` y `enrollments` NO están aquí: son entidades "fan-out" que
 /// requieren leer staging (parent IDs) para iterar — se procesarán como
 /// fase aparte tras agotar las paginables. Documentado como ET-001b.
-const EXTRACT_ENTITIES: Array<{ name: string; cpt: string; namespace: 'wp/v2' | 'ldlms/v1' }> = [
+/// `perCourse: true` indica que el endpoint requiere `?course=N` (LearnDash
+/// REST v1 rebota con 404 `"Invalid Curso ID"` para Application Passwords
+/// sin permisos avanzados si se omite). El cursor itera courseIds del
+/// staging × pages dentro de cada course.
+const EXTRACT_ENTITIES: Array<{
+  name: string;
+  cpt: string;
+  namespace: 'wp/v2' | 'ldlms/v1';
+  perCourse?: boolean;
+}> = [
   { name: 'users', cpt: 'users', namespace: 'wp/v2' },
   // CPTs LearnDash: ldlms/v1 obligatorio para que el payload incluya los
   // campos `course`, `lesson`, `topic` que el transformer necesita. Usar
   // wp/v2 retorna el post WP crudo sin esos parents → MISSING_DEPENDENCY.
   { name: 'courses', cpt: 'sfwd-courses', namespace: 'ldlms/v1' },
-  { name: 'lessons', cpt: 'sfwd-lessons', namespace: 'ldlms/v1' },
-  { name: 'topics', cpt: 'sfwd-topic', namespace: 'ldlms/v1' },
-  { name: 'quizzes', cpt: 'sfwd-quiz', namespace: 'ldlms/v1' },
+  { name: 'lessons', cpt: 'sfwd-lessons', namespace: 'ldlms/v1', perCourse: true },
+  { name: 'topics', cpt: 'sfwd-topic', namespace: 'ldlms/v1', perCourse: true },
+  { name: 'quizzes', cpt: 'sfwd-quiz', namespace: 'ldlms/v1', perCourse: true },
   { name: 'groups', cpt: 'groups', namespace: 'ldlms/v1' },
 ];
 
@@ -751,6 +768,11 @@ interface ExtractCursor {
   page: number;
   completed: string[];
   totalsPerEntity: Record<string, number>;
+  /// Solo aplica cuando el entity actual tiene `perCourse: true`. Índice del
+  /// curso (en stg_courses ordenado por source_id) que se está procesando.
+  /// Se resetea a 0 al cambiar de entity. `null` si la entity actual no
+  /// requiere iteración course-by-course.
+  courseIdx?: number;
 }
 
 function emptyExtractCursor(): ExtractCursor {
@@ -760,6 +782,7 @@ function emptyExtractCursor(): ExtractCursor {
     page: 1,
     completed: [],
     totalsPerEntity: {},
+    courseIdx: 0,
   };
 }
 
@@ -771,7 +794,8 @@ function parseExtractCursor(progress: unknown): ExtractCursor {
     typeof (progress as { current?: unknown }).current === 'string' &&
     typeof (progress as { page?: unknown }).page === 'number'
   ) {
-    return progress as ExtractCursor;
+    const c = progress as ExtractCursor;
+    return { ...c, courseIdx: typeof c.courseIdx === 'number' ? c.courseIdx : 0 };
   }
   return emptyExtractCursor();
 }
@@ -2144,6 +2168,43 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
           return { status: 'continue', delaySec: 0 };
         }
 
+        // Si la entity itera por curso (lessons/topics/quizzes en ldlms/v1),
+        // resolver el courseId actual del staging. LearnDash REST v1 requiere
+        // `?course=N` en estos endpoints o devuelve 404 "Invalid Curso ID".
+        let perCourseFilter: { courseSourceId: string; courseIdx: number; totalCourses: number } | null = null;
+        if (entity.perCourse) {
+          const coursesQ = await db.query<{ source_id: string }>(
+            `SELECT source_id FROM mod_migrator_learndash_stg_courses
+              WHERE tenant_id = $1::uuid AND job_id = $2::uuid
+              ORDER BY source_id ASC`,
+            [tenantId, jobId],
+          );
+          const courseSourceIds = coursesQ.rows.map((r) => r.source_id);
+          if (courseSourceIds.length === 0) {
+            // No hay cursos extraídos todavía → no podemos pedir lessons.
+            // Marcamos la entity como completada con 0 items y avanzamos.
+            const completed = [...cursor.completed, entity.name];
+            const next = nextEntity({ ...cursor, completed });
+            const newCursor: ExtractCursor = {
+              ...cursor,
+              current: next ?? entity.name,
+              page: 1,
+              courseIdx: 0,
+              completed,
+              totalsPerEntity: cursor.totalsPerEntity,
+            };
+            await setJobProgress(db, tenantId, jobId, newCursor as unknown as Record<string, unknown>);
+            ctx.log('warn', `tick ${tickIndex}: ${entity.name} perCourse pero stg_courses vacío. Skip.`);
+            return { status: 'continue', delaySec: 0 };
+          }
+          const idx = Math.min(cursor.courseIdx ?? 0, courseSourceIds.length - 1);
+          perCourseFilter = {
+            courseSourceId: courseSourceIds[idx]!,
+            courseIdx: idx,
+            totalCourses: courseSourceIds.length,
+          };
+        }
+
         let pageResult;
         try {
           pageResult = await fetchOneWpPage<{ id: number; course?: number; lesson?: number; topic?: number }>(
@@ -2154,17 +2215,25 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
             cursor.page,
             100,
             entity.namespace,
+            perCourseFilter ? { course: perCourseFilter.courseSourceId } : undefined,
           );
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          ctx.log('warn', `tick ${tickIndex}: extract page ${entity.name}#${cursor.page} falló: ${msg}. Re-encolando con backoff.`);
+          ctx.log(
+            'warn',
+            `tick ${tickIndex}: extract page ${entity.name}#${cursor.page}${perCourseFilter ? `(course=${perCourseFilter.courseSourceId})` : ''} falló: ${msg}. Re-encolando con backoff.`,
+          );
           return { status: 'continue', delaySec: 30 };
         }
 
-        // Upsert items a la stg table apropiada.
+        // Upsert items a la stg table apropiada. Si la entity es perCourse
+        // y `item.course` viene vacío del API, usamos el courseId del filtro
+        // (sabemos que esos items pertenecen al curso del query string).
+        const fallbackCourseId = perCourseFilter?.courseSourceId ?? null;
         for (const item of pageResult.items) {
           const sourceId = String(item.id);
           const checksum = computeChecksum(item);
+          const resolvedCourseId = item.course ? String(item.course) : fallbackCourseId;
           try {
             switch (entity.name) {
               case 'users':
@@ -2174,16 +2243,7 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                 await upsertStgCourse(db, tenantId, jobId, sourceId, item, checksum);
                 break;
               case 'lessons':
-                await upsertStgLesson(
-                  db,
-                  tenantId,
-                  jobId,
-                  sourceId,
-                  item.course ? String(item.course) : null,
-                  0,
-                  item,
-                  checksum,
-                );
+                await upsertStgLesson(db, tenantId, jobId, sourceId, resolvedCourseId, 0, item, checksum);
                 break;
               case 'topics':
                 await upsertStgTopic(
@@ -2192,7 +2252,7 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                   jobId,
                   sourceId,
                   item.lesson ? String(item.lesson) : null,
-                  item.course ? String(item.course) : null,
+                  resolvedCourseId,
                   0,
                   item,
                   checksum,
@@ -2204,7 +2264,7 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                   tenantId,
                   jobId,
                   sourceId,
-                  item.course ? String(item.course) : null,
+                  resolvedCourseId,
                   item.lesson ? String(item.lesson) : null,
                   item.topic ? String(item.topic) : null,
                   item,
@@ -2229,6 +2289,30 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
         const isLastPage =
           pageResult.items.length === 0 ||
           (pageResult.totalPages !== undefined && cursor.page >= pageResult.totalPages);
+
+        // En modo perCourse, isLastPage solo termina ESTE curso. Pasamos al
+        // siguiente courseIdx; entity completed solo cuando agotamos todos
+        // los cursos.
+        if (perCourseFilter && isLastPage) {
+          const nextCourseIdx = perCourseFilter.courseIdx + 1;
+          if (nextCourseIdx < perCourseFilter.totalCourses) {
+            newCursor = {
+              ...cursor,
+              page: 1,
+              courseIdx: nextCourseIdx,
+              totalsPerEntity: newTotals,
+            };
+            await setJobProgress(db, tenantId, jobId, newCursor as unknown as Record<string, unknown>);
+            ctx.log(
+              'log',
+              `tick ${tickIndex}: extract ${entity.name} course ${perCourseFilter.courseSourceId} done (page ${cursor.page}, items=${pageResult.items.length}). Próximo: course #${nextCourseIdx + 1}/${perCourseFilter.totalCourses}.`,
+            );
+            return { status: 'continue', delaySec: 0 };
+          }
+          // Agotamos todos los cursos → entity completada. Caer al flujo
+          // estándar de avance entre entities (de aquí abajo).
+        }
+
         if (isLastPage) {
           const completed = [...cursor.completed, entity.name];
           const next = nextEntity({ ...cursor, completed });
@@ -2236,7 +2320,7 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
             // Todas las paginables terminadas. Para ET-001 simplificado,
             // transicionamos a 'transforming' aunque questions/enrollments
             // (fan-out) NO se hayan extraído. ET-001b extenderá esto.
-            newCursor = { ...cursor, current: entity.name, page: cursor.page, completed, totalsPerEntity: newTotals };
+            newCursor = { ...cursor, current: entity.name, page: cursor.page, courseIdx: 0, completed, totalsPerEntity: newTotals };
             await setJobProgress(db, tenantId, jobId, newCursor as unknown as Record<string, unknown>);
             const advanced = await tryTransition(db, tenantId, jobId, 'extracting', 'transforming');
             if (!advanced) return { status: 'continue', delaySec: 0 };
@@ -2246,7 +2330,7 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
             );
             return { status: 'continue', delaySec: 0 };
           }
-          newCursor = { ...cursor, current: next, page: 1, completed, totalsPerEntity: newTotals };
+          newCursor = { ...cursor, current: next, page: 1, courseIdx: 0, completed, totalsPerEntity: newTotals };
         } else {
           newCursor = { ...cursor, page: cursor.page + 1, totalsPerEntity: newTotals };
         }
