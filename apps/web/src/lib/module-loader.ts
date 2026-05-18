@@ -136,17 +136,19 @@ export async function loadModuleUI(
     // Limpiar exports previos
     window.__didacta_module_exports__ = undefined;
 
-    // Evaluar el bundle
-    // El bundle está compilado como IIFE que asigna a __didacta_module_exports__
-    // Formato esperado:
-    //   (function() {
-    //     const { React, ui, hooks, api } = __didacta__;
-    //     // ... código del módulo ...
-    //     window.__didacta_module_exports__ = { default: Component, ... };
-    //   })();
+    // Evaluar el bundle.
+    //
+    // Los bundles producidos por `esbuild --format=iife --global-name=X` emiten
+    // `var X = (() => { ... })();` — eso asigna a `window.X` SOLO si se ejecuta
+    // en script top-level. Dentro de `new Function(bundleCode)` el `var` cae en
+    // el scope local de la función y NUNCA llega a `window`. Como el contrato
+    // del host es "el bundle expone su default vía window.__didacta_module_exports__",
+    // appendemos un sufijo que copia la variable local al global con globalThis.
+    // Si el bundle ya hizo la asignación a globalThis (forma legacy), no rompe.
+    const augmented = `${bundleCode}\n;try{globalThis.__didacta_module_exports__=__didacta_module_exports__;}catch(_){}`;
     try {
       // eslint-disable-next-line no-new-func
-      const evaluator = new Function(bundleCode);
+      const evaluator = new Function(augmented);
       evaluator();
     } catch (err) {
       throw new ModuleUILoadError(
