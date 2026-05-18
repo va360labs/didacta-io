@@ -37,6 +37,7 @@ export interface LdLesson {
   id: number;
   slug: string;
   title?: { rendered: string } | string;
+  content?: { rendered: string; protected?: boolean } | string;
   status?: string;
   course?: number;
   // pasos hijos

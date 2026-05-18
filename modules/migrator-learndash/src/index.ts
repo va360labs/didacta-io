@@ -764,6 +764,14 @@ const EXTRACT_ENTITIES: Array<{
 
 interface ExtractCursor {
   phase: 'extract';
+  /// Sub-fase dentro de `extract`. Default `'paginate'` (recorrido por
+  /// entity × page × course). `'fixup'` corre tras agotar todas las
+  /// entities: para cada course en stg_courses hace GET /sfwd-courses/<id>/steps
+  /// y CORRIGE parent_course_id / parent_lesson_id en stg_lessons|topics|quizzes
+  /// — necesario porque el endpoint plano /sfwd-lessons?course=N ignora el
+  /// filter con Application Passwords de admin y devuelve el catálogo entero,
+  /// dejando todas las rows con el courseId del último curso iterado.
+  subphase?: 'paginate' | 'fixup';
   current: string;
   page: number;
   completed: string[];
@@ -773,11 +781,15 @@ interface ExtractCursor {
   /// Se resetea a 0 al cambiar de entity. `null` si la entity actual no
   /// requiere iteración course-by-course.
   courseIdx?: number;
+  /// Total de courses (lo cacheamos para subphase='fixup'). Lo populamos
+  /// al entrar a fixup.
+  fixupTotalCourses?: number;
 }
 
 function emptyExtractCursor(): ExtractCursor {
   return {
     phase: 'extract',
+    subphase: 'paginate',
     current: EXTRACT_ENTITIES[0]!.name,
     page: 1,
     completed: [],
@@ -795,7 +807,11 @@ function parseExtractCursor(progress: unknown): ExtractCursor {
     typeof (progress as { page?: unknown }).page === 'number'
   ) {
     const c = progress as ExtractCursor;
-    return { ...c, courseIdx: typeof c.courseIdx === 'number' ? c.courseIdx : 0 };
+    return {
+      ...c,
+      subphase: c.subphase === 'fixup' ? 'fixup' : 'paginate',
+      courseIdx: typeof c.courseIdx === 'number' ? c.courseIdx : 0,
+    };
   }
   return emptyExtractCursor();
 }
@@ -2190,6 +2206,122 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
         const authHeader = basicAuthHeader(username, appPassword);
 
         const cursor = parseExtractCursor(job0.progress);
+
+        // SUBPHASE FIXUP: corregir parent_course_id en stg via /steps por curso.
+        // Cada tick procesa UN curso (1 GET + N UPDATEs). Cuando agotamos
+        // todos, transicionamos a 'transforming'.
+        if (cursor.subphase === 'fixup') {
+          const coursesQ = await db.query<{ source_id: string }>(
+            `SELECT source_id FROM mod_migrator_learndash_stg_courses
+              WHERE tenant_id = $1::uuid AND job_id = $2::uuid
+              ORDER BY source_id ASC`,
+            [tenantId, jobId],
+          );
+          const courseIds = coursesQ.rows.map((r) => r.source_id);
+          const totalCourses = cursor.fixupTotalCourses ?? courseIds.length;
+          const idx = cursor.courseIdx ?? 0;
+
+          // Antes del primer curso, RESET de parent_course_id a NULL en
+          // lessons/topics/quizzes — así las rows que NO aparezcan en
+          // ningún /steps quedan huérfanas (MISSING_DEPENDENCY en transform)
+          // en vez de quedarse con el courseId del último iter de paginate.
+          if (idx === 0) {
+            await db.execute(
+              `UPDATE mod_migrator_learndash_stg_lessons
+                  SET parent_course_id = NULL
+                WHERE tenant_id = $1::uuid AND job_id = $2::uuid`,
+              [tenantId, jobId],
+            );
+            await db.execute(
+              `UPDATE mod_migrator_learndash_stg_topics
+                  SET parent_course_id = NULL, parent_lesson_id = NULL
+                WHERE tenant_id = $1::uuid AND job_id = $2::uuid`,
+              [tenantId, jobId],
+            );
+            await db.execute(
+              `UPDATE mod_migrator_learndash_stg_quizzes
+                  SET parent_course_id = NULL, parent_lesson_id = NULL, parent_topic_id = NULL
+                WHERE tenant_id = $1::uuid AND job_id = $2::uuid`,
+              [tenantId, jobId],
+            );
+            ctx.log('log', `tick ${tickIndex}: fixup — reset parent_course_id antes de empezar.`);
+          }
+
+          if (idx >= courseIds.length) {
+            // Todos los cursos procesados — transicionar a transforming.
+            const advanced = await tryTransition(db, tenantId, jobId, 'extracting', 'transforming');
+            if (!advanced) return { status: 'continue', delaySec: 0 };
+            ctx.log('log', `tick ${tickIndex}: fixup completed (${totalCourses} cursos). Transition a transforming.`);
+            return { status: 'continue', delaySec: 0 };
+          }
+
+          const courseSourceId = courseIds[idx]!;
+          try {
+            const stepsUrl = `${baseUrl}/wp-json/ldlms/v1/sfwd-courses/${encodeURIComponent(courseSourceId)}/steps`;
+            const resp = await ctx.http.get(stepsUrl, {
+              headers: { Authorization: authHeader, Accept: 'application/json' },
+              timeoutMs: 30_000,
+            });
+            if (resp.status >= 400) {
+              ctx.log('warn', `tick ${tickIndex}: fixup /steps curso ${courseSourceId} HTTP ${resp.status}: ${resp.body.slice(0, 200)}.`);
+            } else {
+              const steps = JSON.parse(resp.body) as Array<{ id: number; type: string; parent?: number }>;
+              if (!Array.isArray(steps)) {
+                ctx.log('warn', `tick ${tickIndex}: fixup /steps curso ${courseSourceId} no es array.`);
+              } else {
+                let lessonsHit = 0;
+                let topicsHit = 0;
+                let quizzesHit = 0;
+                for (const step of steps) {
+                  const stepId = String(step.id);
+                  if (step.type === 'sfwd-lessons') {
+                    const r = await db.execute(
+                      `UPDATE mod_migrator_learndash_stg_lessons
+                          SET parent_course_id = $1
+                        WHERE tenant_id = $2::uuid AND job_id = $3::uuid AND source_id = $4`,
+                      [courseSourceId, tenantId, jobId, stepId],
+                    );
+                    lessonsHit += r.rowCount ?? 0;
+                  } else if (step.type === 'sfwd-topic') {
+                    const parentLessonId = step.parent && String(step.parent) !== courseSourceId ? String(step.parent) : null;
+                    const r = await db.execute(
+                      `UPDATE mod_migrator_learndash_stg_topics
+                          SET parent_course_id = $1, parent_lesson_id = $2
+                        WHERE tenant_id = $3::uuid AND job_id = $4::uuid AND source_id = $5`,
+                      [courseSourceId, parentLessonId, tenantId, jobId, stepId],
+                    );
+                    topicsHit += r.rowCount ?? 0;
+                  } else if (step.type === 'sfwd-quiz') {
+                    const r = await db.execute(
+                      `UPDATE mod_migrator_learndash_stg_quizzes
+                          SET parent_course_id = $1
+                        WHERE tenant_id = $2::uuid AND job_id = $3::uuid AND source_id = $4`,
+                      [courseSourceId, tenantId, jobId, stepId],
+                    );
+                    quizzesHit += r.rowCount ?? 0;
+                  }
+                }
+                ctx.log(
+                  'log',
+                  `tick ${tickIndex}: fixup curso #${idx + 1}/${totalCourses} (${courseSourceId}) — steps=${steps.length} lessons=${lessonsHit} topics=${topicsHit} quizzes=${quizzesHit}.`,
+                );
+              }
+            }
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            ctx.log('warn', `tick ${tickIndex}: fixup curso ${courseSourceId} excepción: ${msg}. Sigue al siguiente.`);
+          }
+
+          const nextIdx = idx + 1;
+          const fixupCursor: ExtractCursor = {
+            ...cursor,
+            courseIdx: nextIdx,
+            fixupTotalCourses: totalCourses,
+          };
+          await setJobProgress(db, tenantId, jobId, fixupCursor as unknown as Record<string, unknown>);
+          return { status: 'continue', delaySec: 0 };
+        }
+
         const entity = EXTRACT_ENTITIES.find((e) => e.name === cursor.current);
         if (!entity) {
           // Cursor con entity inválida → reset al primero.
@@ -2346,16 +2478,25 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
           const completed = [...cursor.completed, entity.name];
           const next = nextEntity({ ...cursor, completed });
           if (next === null) {
-            // Todas las paginables terminadas. Para ET-001 simplificado,
-            // transicionamos a 'transforming' aunque questions/enrollments
-            // (fan-out) NO se hayan extraído. ET-001b extenderá esto.
-            newCursor = { ...cursor, current: entity.name, page: cursor.page, courseIdx: 0, completed, totalsPerEntity: newTotals };
+            // Todas las paginables agotadas. Pasamos a subphase 'fixup'
+            // para corregir parent_course_id usando /sfwd-courses/<id>/steps
+            // (el filter ?course=N que usamos en paginate es ignorado por
+            // Application Passwords de admin, así que las rows quedan con el
+            // courseId del último curso iterado, no del real). Status del
+            // job sigue 'extracting' hasta que fixup también termine.
+            newCursor = {
+              ...cursor,
+              subphase: 'fixup',
+              current: entity.name,
+              page: cursor.page,
+              courseIdx: 0,
+              completed,
+              totalsPerEntity: newTotals,
+            };
             await setJobProgress(db, tenantId, jobId, newCursor as unknown as Record<string, unknown>);
-            const advanced = await tryTransition(db, tenantId, jobId, 'extracting', 'transforming');
-            if (!advanced) return { status: 'continue', delaySec: 0 };
             ctx.log(
               'log',
-              `tick ${tickIndex}: extract completed (${Object.entries(newTotals).map(([k, v]) => `${k}=${v}`).join(', ')}). Transition a transforming.`,
+              `tick ${tickIndex}: paginate completed (${Object.entries(newTotals).map(([k, v]) => `${k}=${v}`).join(', ')}). Entrando a subphase fixup.`,
             );
             return { status: 'continue', delaySec: 0 };
           }

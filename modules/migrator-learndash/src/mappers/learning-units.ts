@@ -19,6 +19,17 @@ export function mapLesson(raw: LdLesson, orderHint = 0): MapResult<CanonicalLear
   const title = decodeHtmlEntities(unwrapTitle(raw.title));
   if (!title) warnings.push(`lección ${raw.id} sin título`);
 
+  // WP REST emite `content` como `{ rendered: '<html>...', protected: bool }`
+  // (mismo shape que `title`). El mapper anterior NO lo extraía → todas las
+  // lessons llegaban al adapter con `contentHtml=''` y se cargaban vacías.
+  const contentObj = (raw as unknown as { content?: { rendered?: string } | string }).content;
+  const contentHtml =
+    typeof contentObj === 'string'
+      ? contentObj
+      : contentObj && typeof contentObj === 'object' && typeof contentObj.rendered === 'string'
+        ? contentObj.rendered
+        : '';
+
   const visibleAfterDays = asNumber(raw.visible_after);
   return {
     ok: true,
@@ -30,6 +41,7 @@ export function mapLesson(raw: LdLesson, orderHint = 0): MapResult<CanonicalLear
       parentCourseSourceId: String(courseId),
       title: title || `Lección ${raw.id}`,
       orderIdx: orderHint,
+      contentHtml,
       assignmentEnabled: !!raw.assignment_upload_enabled,
       visibleAfterDays,
       visibleAfterDate: raw.visible_after_specific_date,
