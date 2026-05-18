@@ -33,7 +33,11 @@ const CACHE_MAX_AGE = 3600;
  * (lint + firma). No hay riesgo adicional al servirlo públicamente.
  */
 @ApiTags('Modules · Assets')
-@Controller('api/v1/modules')
+// El prefijo `api/v1` lo aplica `app.setGlobalPrefix('api/v1')` en `main.ts`.
+// Si lo repetimos en el decorator, la ruta final queda `/api/v1/api/v1/modules/...`
+// y el `ModulesDispatcherController` (`@All('modules/*')`) atrapa los requests
+// reales — devolviendo "No hay módulo registrado". Ver bug alpha.60.
+@Controller('modules')
 export class ModuleAssetsController {
   constructor(
     private readonly installed: InstalledModuleService,
