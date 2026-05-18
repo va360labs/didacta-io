@@ -2698,21 +2698,56 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
         for (const row of batch) {
           // Inyectar los parents resueltos por el extract en el raw_payload
           // antes de mapear. LearnDash REST v1 NO incluye `course`/`lesson`
-          // en el payload de lessons/topics/quizzes; los obtuvimos via el
-          // filtro `?course=N` en el extract y los persistimos en la columna
-          // `parent_*_id` del staging. El mapper espera `raw.course` etc.,
-          // así que enriquecemos el raw aquí sin tocar los mappers.
+          // en el payload de lessons/topics/quizzes; los obtuvimos via /steps
+          // y los persistimos en la columna `parent_*_id` del staging. El
+          // mapper espera `raw.course` numérico. Para lessons en una section,
+          // parent_course_id tiene encoding `{courseId}-s{idx}` (e.g. '9919-s5');
+          // extraemos solo la parte numérica inicial para que el mapper valide,
+          // y SOBREESCRIBIMOS `canonical.parentCourseSourceId` con el string
+          // completo después del map → así el adapter envía
+          // moduleExternalRef apuntando al module sintético de la section.
+          const extractNumericPrefix = (v: string): number | undefined => {
+            const m = v.match(/^(\d+)/);
+            if (!m) return undefined;
+            const n = parseInt(m[1]!, 10);
+            return Number.isFinite(n) ? n : undefined;
+          };
           const rawWithParents =
             row.parent_course_id || row.parent_lesson_id || row.parent_topic_id
               ? (() => {
                   const r = { ...(row.raw_payload as Record<string, unknown>) };
-                  if (row.parent_course_id && !r['course']) r['course'] = Number(row.parent_course_id);
-                  if (row.parent_lesson_id && !r['lesson']) r['lesson'] = Number(row.parent_lesson_id);
-                  if (row.parent_topic_id && !r['topic']) r['topic'] = Number(row.parent_topic_id);
+                  if (row.parent_course_id && !r['course']) {
+                    const n = extractNumericPrefix(row.parent_course_id);
+                    if (n !== undefined) r['course'] = n;
+                  }
+                  if (row.parent_lesson_id && !r['lesson']) {
+                    const n = extractNumericPrefix(row.parent_lesson_id);
+                    if (n !== undefined) r['lesson'] = n;
+                  }
+                  if (row.parent_topic_id && !r['topic']) {
+                    const n = extractNumericPrefix(row.parent_topic_id);
+                    if (n !== undefined) r['topic'] = n;
+                  }
                   return r;
                 })()
               : row.raw_payload;
           const result = applyMapper(cursor.current, rawWithParents);
+
+          // Override post-map: si stg.parent_course_id tiene encoding compuesto
+          // (e.g. '9919-s5'), reemplazar el parentCourseSourceId numérico del
+          // mapper con ese string. El adapter de lessons lo usa tal cual como
+          // moduleExternalRef.externalId, y el core encuentra el module sintético
+          // de la section que el load creó al cargar el course.
+          if (
+            result.ok &&
+            (cursor.current === 'lessons' || cursor.current === 'topics' || cursor.current === 'quizzes') &&
+            row.parent_course_id &&
+            row.parent_course_id.includes('-')
+          ) {
+            const can = result.canonical as Record<string, unknown>;
+            can['parentCourseSourceId'] = row.parent_course_id;
+          }
+
           if (result.ok) {
             await setStgCanonical(db, table, row.id, result.canonical, null);
             okCount += 1;
