@@ -19,12 +19,15 @@
  * los descifra. La separación BD ↔ clave es lo que protege contra backups
  * filtrados / réplicas mal configuradas / atacantes con acceso de lectura.
  *
- * Con `/app/data/.didacta-secret-key` (volumen Docker dedicado) la separación
- * sigue valiendo: la BD vive en su propio volumen postgres_data, la clave
- * vive en didacta_data — quien tiene un volumen rara vez tiene los dos.
+ * El archivo de la clave vive DENTRO de `STORAGE_ROOT` (mismo volumen Docker
+ * que el local-disk-storage). Esto garantiza que en cualquier setup con un
+ * solo volumen montado (Easypanel, single-host docker-compose, k8s con un
+ * PVC), la clave persiste entre redeploys. El operador puede separar key
+ * y storage en distintos volúmenes vía `TENANT_SETTINGS_ENC_KEY_FILE`
+ * apuntando a otro path absoluto.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync, renameSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
@@ -61,6 +64,32 @@ export function loadCipherKey(): ResolvedCipherKey {
       // produzca errores cripto en cada operación.
     }
 
+    // Backwards-compat: instalaciones pre-fix tenían la clave en el parent
+    // dir de STORAGE_ROOT (ej. /app/data en vez de /app/data/storage). Si
+    // existe ahí Y el path nuevo no, la migramos para preservar los datos
+    // cifrados con la key vieja. Si ambos paths existen, gana el nuevo
+    // (operador ya hizo el move manualmente).
+    const legacyPath = resolveLegacyKeyFilePath();
+    if (legacyPath && legacyPath !== filePath && existsSync(legacyPath)) {
+      const legacyRaw = readFileSync(legacyPath, 'utf8').trim();
+      if (legacyRaw.length === KEY_LENGTH_HEX && /^[0-9a-f]+$/i.test(legacyRaw)) {
+        mkdirSync(dirname(filePath), { recursive: true });
+        try {
+          renameSync(legacyPath, filePath);
+        } catch {
+          // Si rename falla cross-filesystem, hacemos copy+unlink mediante
+          // writeFile (preservamos el contenido al menos).
+          writeFileSync(filePath, legacyRaw, { encoding: 'utf8', mode: 0o600 });
+        }
+        try {
+          chmodSync(filePath, 0o600);
+        } catch {
+          /* chmod best-effort */
+        }
+        return { key: legacyRaw, source: 'file', filePath };
+      }
+    }
+
     const generated = randomBytes(32).toString('hex');
     mkdirSync(dirname(filePath), { recursive: true });
     writeFileSync(filePath, generated, { encoding: 'utf8', mode: 0o600 });
@@ -82,13 +111,26 @@ function resolveKeyFilePath(): string {
   if (explicit && explicit.trim().length > 0) {
     return isAbsolute(explicit) ? explicit : resolve(explicit);
   }
-  // Reusamos STORAGE_ROOT (mismo volumen que el local-disk-storage si el
-  // operador eligió ese driver). Default coincide con el del storage:
-  // ./data dentro del CWD del contenedor (apps/api).
+  // Vivimos DENTRO de STORAGE_ROOT — ese es el path montado en el volumen
+  // persistente (didacta_data en Easypanel/docker-compose, PVC en k8s).
+  // Default sin STORAGE_ROOT: ./data dentro del CWD (dev local).
   const storageRoot = process.env['STORAGE_ROOT'];
   const base =
-    storageRoot && storageRoot.trim().length > 0 ? resolve(storageRoot, '..') : resolve('./data');
+    storageRoot && storageRoot.trim().length > 0 ? resolve(storageRoot) : resolve('./data');
   return resolve(base, '.didacta-secret-key');
+}
+
+/**
+ * Path donde vivía la key en versiones < alpha.67. Usado solo para migración
+ * one-time: si existe un archivo válido ahí, lo movemos al path nuevo. Si
+ * no, devuelve null y no se intenta nada.
+ */
+function resolveLegacyKeyFilePath(): string | null {
+  // No migrar si el operador usa path explícito — su decisión es absoluta.
+  if (process.env['TENANT_SETTINGS_ENC_KEY_FILE']) return null;
+  const storageRoot = process.env['STORAGE_ROOT'];
+  if (!storageRoot || storageRoot.trim().length === 0) return null;
+  return resolve(storageRoot, '..', '.didacta-secret-key');
 }
 
 /**
