@@ -926,9 +926,31 @@ class ScopedDidactaApi implements DidactaApi {
         externalId: input.externalId,
         deletedAt: null,
       },
+      include: { module: { select: { courseId: true } } },
     });
 
     if (existing) {
+      // Si el moduleExternalRef apunta a un module distinto del actual, hay
+      // que mover la lesson. NO podemos hacerlo con un UPDATE crudo de
+      // `moduleId` porque colisionaría con `@@unique([moduleId, position])`.
+      // Delegamos a CoursesService.moveLessonToModule, que ya implementa la
+      // transacción de 2 pasadas (posiciones temporales negativas) y emite
+      // el evento `courses.lesson.moved-to-module` al outbox. Ver CORE-FIX-01.
+      if (existing.moduleId !== section.id) {
+        // Pre-check: mover entre cursos no está soportado por moveLessonToModule.
+        // Validamos acá explícitamente en vez de capturar el error del core,
+        // para no acoplarnos al mensaje interno.
+        if (existing.module.courseId !== section.courseId) {
+          throw new DidactaError(
+            'DIDACTA_VALIDATION_ERROR',
+            'No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.',
+          );
+        }
+        await this.coreServices
+          .getCoursesService()
+          .moveLessonToModule(tenantId, userId, existing.id, section.id, input.position);
+      }
+
       const updated = await this.prisma.modCoursesLesson.update({
         where: { id: existing.id },
         data: {
@@ -936,7 +958,9 @@ class ScopedDidactaApi implements DidactaApi {
           // type NO se actualiza — cambiar el tipo de una lesson rompe
           // el contrato de `content`. Si el módulo necesita cambiar el
           // tipo, debe borrar y recrear.
-          position: input.position,
+          // position: solo se setea acá si NO hubo move (el move ya la
+          // posicionó en el target module).
+          ...(existing.moduleId === section.id ? { position: input.position } : {}),
           content: input.content as never,
           ...(input.durationMinutes !== undefined
             ? { durationMinutes: input.durationMinutes }

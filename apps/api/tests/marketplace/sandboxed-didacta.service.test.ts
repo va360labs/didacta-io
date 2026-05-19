@@ -162,6 +162,7 @@ interface MockServices {
     publishCourse: ReturnType<typeof vi.fn>;
     createModule: ReturnType<typeof vi.fn>;
     createLesson: ReturnType<typeof vi.fn>;
+    moveLessonToModule: ReturnType<typeof vi.fn>;
   };
   learning: {
     enrollByAdmin: ReturnType<typeof vi.fn>;
@@ -189,6 +190,7 @@ function makeServiceMocks(): MockServices {
       publishCourse: vi.fn(),
       createModule: vi.fn(),
       createLesson: vi.fn(),
+      moveLessonToModule: vi.fn().mockResolvedValue(undefined),
     },
     learning: {
       enrollByAdmin: vi.fn(),
@@ -1058,6 +1060,148 @@ describe('lessons.upsertByExternalRef', () => {
       expect.objectContaining({ title: 'Lec', type: 'TEXT' }),
     );
     expect(result.externalId).toBe('1');
+  });
+
+  // ── AC-1: UPDATE sin cambio de module (CORE-FIX-01) ──
+  it('update: lesson existe, mismo module → actualiza campos sin invocar moveLessonToModule', async () => {
+    const { api, prisma, services } = setup();
+    prisma.modCoursesModule.findFirst.mockResolvedValueOnce(
+      fakeCourseModuleRow({ id: 'cm-uuid', courseId: 'course-uuid' }),
+    );
+    prisma.modCoursesLesson.findFirst.mockResolvedValueOnce({
+      ...fakeLessonRow({ id: 'lesson-uuid', moduleId: 'cm-uuid' }),
+      module: { courseId: 'course-uuid' },
+    });
+    prisma.modCoursesLesson.update.mockResolvedValue(
+      fakeLessonRow({ id: 'lesson-uuid', title: 'Updated' }),
+    );
+
+    await api.lessons.upsertByExternalRef({
+      externalSource: 'learndash',
+      externalId: '1',
+      moduleExternalRef: { externalSource: 'learndash', externalId: '10' },
+      type: 'TEXT',
+      title: 'Updated',
+      position: 3,
+      content: { text: 'nuevo' },
+    });
+
+    expect(services.courses.moveLessonToModule).not.toHaveBeenCalled();
+    expect(prisma.modCoursesLesson.update).toHaveBeenCalledWith({
+      where: { id: 'lesson-uuid' },
+      data: expect.objectContaining({
+        title: 'Updated',
+        position: 3,
+        content: { text: 'nuevo' },
+      }),
+    });
+  });
+
+  // ── AC-2: UPDATE con cambio de module dentro del mismo course ──
+  it('update: lesson existe, module distinto mismo course → llama moveLessonToModule y omite position en el update final', async () => {
+    const { api, prisma, services } = setup();
+    prisma.modCoursesModule.findFirst.mockResolvedValueOnce(
+      fakeCourseModuleRow({ id: 'cm-target', courseId: 'course-uuid' }),
+    );
+    prisma.modCoursesLesson.findFirst.mockResolvedValueOnce({
+      ...fakeLessonRow({ id: 'lesson-uuid', moduleId: 'cm-source' }),
+      module: { courseId: 'course-uuid' },
+    });
+    prisma.modCoursesLesson.update.mockResolvedValue(
+      fakeLessonRow({ id: 'lesson-uuid', moduleId: 'cm-target' }),
+    );
+
+    await api.lessons.upsertByExternalRef({
+      externalSource: 'learndash',
+      externalId: '1',
+      moduleExternalRef: { externalSource: 'learndash', externalId: '20' },
+      type: 'TEXT',
+      title: 'Lec',
+      position: 2,
+      content: { text: 'hola' },
+    });
+
+    expect(services.courses.moveLessonToModule).toHaveBeenCalledWith(
+      TENANT_ID,
+      USER_ID,
+      'lesson-uuid',
+      'cm-target',
+      2,
+    );
+    // position NO se incluye en el update final porque ya quedó set por moveLessonToModule.
+    const updateCall = prisma.modCoursesLesson.update.mock.calls.at(-1);
+    expect(updateCall).toBeDefined();
+    expect(updateCall![0].data).not.toHaveProperty('position');
+    expect(updateCall![0].data).toMatchObject({
+      title: 'Lec',
+      content: { text: 'hola' },
+    });
+  });
+
+  // ── AC-3: UPDATE con cambio de module cruzando courses → error tipado ──
+  it('update: lesson existe, module destino en otro course → DIDACTA_VALIDATION_ERROR sin tocar nada', async () => {
+    const { api, prisma, services } = setup();
+    prisma.modCoursesModule.findFirst.mockResolvedValueOnce(
+      fakeCourseModuleRow({ id: 'cm-target', courseId: 'course-OTHER' }),
+    );
+    prisma.modCoursesLesson.findFirst.mockResolvedValueOnce({
+      ...fakeLessonRow({ id: 'lesson-uuid', moduleId: 'cm-source' }),
+      module: { courseId: 'course-uuid' },
+    });
+
+    await expect(
+      api.lessons.upsertByExternalRef({
+        externalSource: 'learndash',
+        externalId: '1',
+        moduleExternalRef: { externalSource: 'learndash', externalId: '30' },
+        type: 'TEXT',
+        title: 'Lec',
+        position: 0,
+        content: { text: 'hola' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'DIDACTA_VALIDATION_ERROR',
+      message: expect.stringContaining('entre cursos'),
+    });
+
+    expect(services.courses.moveLessonToModule).not.toHaveBeenCalled();
+    expect(prisma.modCoursesLesson.update).not.toHaveBeenCalled();
+  });
+
+  // ── AC-4: idempotencia — moveLessonToModule resuelve la colisión de constraint ──
+  it('update: el move se delega antes del UPDATE final (orden de llamadas correcto)', async () => {
+    const { api, prisma, services } = setup();
+    prisma.modCoursesModule.findFirst.mockResolvedValueOnce(
+      fakeCourseModuleRow({ id: 'cm-target', courseId: 'course-uuid' }),
+    );
+    prisma.modCoursesLesson.findFirst.mockResolvedValueOnce({
+      ...fakeLessonRow({ id: 'lesson-uuid', moduleId: 'cm-source' }),
+      module: { courseId: 'course-uuid' },
+    });
+    prisma.modCoursesLesson.update.mockResolvedValue(
+      fakeLessonRow({ id: 'lesson-uuid', moduleId: 'cm-target' }),
+    );
+
+    const callOrder: string[] = [];
+    services.courses.moveLessonToModule.mockImplementation(async () => {
+      callOrder.push('move');
+    });
+    prisma.modCoursesLesson.update.mockImplementation(async () => {
+      callOrder.push('update');
+      return fakeLessonRow({ id: 'lesson-uuid', moduleId: 'cm-target' });
+    });
+
+    await api.lessons.upsertByExternalRef({
+      externalSource: 'learndash',
+      externalId: '1',
+      moduleExternalRef: { externalSource: 'learndash', externalId: '20' },
+      type: 'TEXT',
+      title: 'Lec',
+      position: 0,
+      content: { text: 'hola' },
+    });
+
+    expect(callOrder).toEqual(['move', 'update']);
   });
 });
 
