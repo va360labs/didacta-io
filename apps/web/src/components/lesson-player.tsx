@@ -208,7 +208,7 @@ function LessonContent({
     if (!html) return <Empty hint="Esta lectura está vacía." />;
     return (
       <div
-        className="prose prose-slate max-w-none prose-headings:font-display prose-a:text-brand-700"
+        className="lesson-prose"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );
