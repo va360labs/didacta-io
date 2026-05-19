@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { redactSensitiveFields } from '../src/modules/redact-sensitive-fields';
+import {
+  mergeSecretFields,
+  redactSensitiveFields,
+} from '../src/modules/redact-sensitive-fields';
 
 describe('redactSensitiveFields', () => {
   it('redacta el campo password manteniendo los demás (caso SMTP)', () => {
@@ -97,5 +100,101 @@ describe('redactSensitiveFields', () => {
 
   it('objeto vacío devuelve objeto vacío', () => {
     expect(redactSensitiveFields({})).toEqual({});
+  });
+});
+
+describe('mergeSecretFields', () => {
+  it('conserva password del previo cuando viene vacío en next (caso típico: admin cambia host sin re-tipear password)', () => {
+    const prev = {
+      host: 'old.example.com',
+      port: 587,
+      user: 'user-old',
+      password: 'secret-pw',
+      from: 'old@example.com',
+    };
+    const next = {
+      host: 'new.example.com',
+      port: 587,
+      user: 'user-old',
+      password: '',
+      from: 'old@example.com',
+    };
+    const merged = mergeSecretFields(prev, next);
+    expect(merged).toEqual({
+      host: 'new.example.com',
+      port: 587,
+      user: 'user-old',
+      password: 'secret-pw', // ← preservado del previo
+      from: 'old@example.com',
+    });
+  });
+
+  it('sobrescribe password del previo cuando next trae uno nuevo', () => {
+    const prev = { user: 'u', password: 'old-pw' };
+    const next = { user: 'u', password: 'NEW-PW' };
+    const merged = mergeSecretFields(prev, next);
+    expect(merged['password']).toBe('NEW-PW');
+  });
+
+  it('password null en next preserva el previo', () => {
+    const prev = { user: 'u', password: 'old-pw' };
+    const next = { user: 'u', password: null };
+    expect(mergeSecretFields(prev, next)['password']).toBe('old-pw');
+  });
+
+  it('password con whitespace en next se trata como vacío y preserva el previo', () => {
+    const prev = { password: 'old-pw' };
+    const next = { password: '   ' };
+    expect(mergeSecretFields(prev, next)['password']).toBe('old-pw');
+  });
+
+  it('campos no sensibles siempre usan next (incluso si next los trae vacíos)', () => {
+    const prev = { host: 'old-host', user: 'old-user' };
+    const next = { host: '', user: 'new-user' };
+    const merged = mergeSecretFields(prev, next);
+    expect(merged['host']).toBe(''); // host NO es sensible, se sobrescribe
+    expect(merged['user']).toBe('new-user');
+  });
+
+  it('mergea recursivamente en sub-objetos preservando secrets de sub-objetos del previo', () => {
+    const prev = {
+      smtp: { host: 'old-host', password: 'old-pw' },
+      stripe: { mode: 'live', apiKey: 'sk_live_old' },
+    };
+    const next = {
+      smtp: { host: 'new-host', password: '' },
+      stripe: { mode: 'test', apiKey: '' },
+    };
+    const merged = mergeSecretFields(prev, next);
+    expect(merged).toEqual({
+      smtp: { host: 'new-host', password: 'old-pw' },
+      stripe: { mode: 'test', apiKey: 'sk_live_old' },
+    });
+  });
+
+  it('campos sensibles nuevos (no estaban en prev) quedan tal cual vinieron', () => {
+    const prev = { host: 'h' };
+    const next = { host: 'h', password: 'first-pw' };
+    expect(mergeSecretFields(prev, next)['password']).toBe('first-pw');
+  });
+
+  it('campo sensible vacío y NO presente en prev queda vacío (no inventa nada)', () => {
+    const prev = { host: 'h' };
+    const next = { host: 'h', password: '' };
+    expect(mergeSecretFields(prev, next)['password']).toBe('');
+  });
+
+  it('matching case-insensitive para los campos sensibles', () => {
+    const prev = { Password: 'old' };
+    const next = { Password: '' };
+    expect(mergeSecretFields(prev, next)['Password']).toBe('old');
+  });
+
+  it('arrays en next se preservan tal cual (no se mergean)', () => {
+    const prev = { hosts: ['a', 'b'], password: 'pw' };
+    const next = { hosts: ['c'], password: '' };
+    const merged = mergeSecretFields(prev, next);
+    expect(merged['hosts']).toEqual(['c']);
+    expect(merged['password']).toBe('pw');
   });
 });

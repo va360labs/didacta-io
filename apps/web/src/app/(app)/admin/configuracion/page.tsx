@@ -204,6 +204,7 @@ export default function ConfiguracionPage() {
   const [smtpStatus, setSmtpStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [smtpError, setSmtpError] = useState<string | null>(null);
   const [hasStoredPassword, setHasStoredPassword] = useState(false);
+  const [smtpHydrating, setSmtpHydrating] = useState(true);
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState<string | null>(null);
 
@@ -232,6 +233,7 @@ export default function ConfiguracionPage() {
     const smtpMeta = items.find((i) => i.moduleName === 'notifications' && i.key === 'smtp');
     if (!smtpMeta?.hasValue) {
       setHasStoredPassword(false);
+      setSmtpHydrating(false);
       return;
     }
     let cancelled = false;
@@ -240,7 +242,10 @@ export default function ConfiguracionPage() {
       .then((detail) => {
         if (cancelled) return;
         const v = detail.value;
-        if (!v || typeof v !== 'object') return;
+        if (!v || typeof v !== 'object') {
+          setSmtpHydrating(false);
+          return;
+        }
         const obj = v as Record<string, unknown>;
         setSmtp((s) => ({
           ...s,
@@ -253,13 +258,15 @@ export default function ConfiguracionPage() {
                 : s.port,
           user: typeof obj['user'] === 'string' ? (obj['user'] as string) : s.user,
           from: typeof obj['from'] === 'string' ? (obj['from'] as string) : s.from,
-          // password queda vacío — siempre se re-tipea para confirmar el cambio.
+          // password queda vacío — el backend hace merge y conserva el guardado
+          // si no tipeás uno nuevo (alpha.69).
         }));
         setHasStoredPassword(true);
+        setSmtpHydrating(false);
       })
       .catch(() => {
-        // Silencioso: si falla la hidratación, el form queda con defaults
-        // (no rompe, solo no se pre-llena).
+        // Si falla la hidratación, el form queda con defaults.
+        setSmtpHydrating(false);
       });
     return () => {
       cancelled = true;
@@ -275,10 +282,11 @@ export default function ConfiguracionPage() {
       if (!Number.isInteger(port) || port < 1 || port > 65535) {
         throw new Error('El puerto debe ser un número entre 1 y 65535.');
       }
-      if (!smtp.password) {
-        throw new Error(
-          'Contraseña requerida. Si ya hay una guardada, re-tipeala para confirmar el cambio.',
-        );
+      // Contraseña: solo es required si NO hay una guardada todavía. Si ya
+      // hay password guardada y el campo está vacío, el backend hace merge
+      // y conserva la guardada. Ver alpha.69.
+      if (!smtp.password && !hasStoredPassword) {
+        throw new Error('Contraseña requerida.');
       }
       await tenantSettingsApi.upsert('notifications', 'smtp', {
         isSecret: true,
@@ -286,6 +294,8 @@ export default function ConfiguracionPage() {
           host: smtp.host.trim(),
           port,
           user: smtp.user.trim(),
+          // Mandamos el password siempre. Si está vacío, el backend lo
+          // interpreta como "no cambiar" y mantiene el guardado.
           password: smtp.password,
           from: smtp.from.trim(),
         },
@@ -404,7 +414,20 @@ export default function ConfiguracionPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSaveSmtp} className="grid gap-4 sm:grid-cols-2">
+            {smtpHydrating ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="skeleton h-10 sm:col-span-2" />
+                <div className="skeleton h-10" />
+                <div className="skeleton h-10" />
+                <div className="skeleton h-10" />
+                <div className="skeleton h-10" />
+                <div className="skeleton h-10 sm:col-span-2" />
+              </div>
+            ) : null}
+            <form
+              onSubmit={handleSaveSmtp}
+              className={`grid gap-4 sm:grid-cols-2 ${smtpHydrating ? 'hidden' : ''}`}
+            >
               <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="smtp-provider">Proveedor</Label>
                 <Select
@@ -457,17 +480,17 @@ export default function ConfiguracionPage() {
                 <Label htmlFor="smtp-pass">Contraseña</Label>
                 <Input
                   id="smtp-pass"
-                  required
+                  required={!hasStoredPassword}
                   type="password"
                   autoComplete="new-password"
                   value={smtp.password}
                   onChange={(e) => setSmtp({ ...smtp, password: e.target.value })}
-                  placeholder={hasStoredPassword ? '••••••• (guardada)' : ''}
+                  placeholder={hasStoredPassword ? '••••••• (guardada — dejá vacío para no cambiarla)' : ''}
                 />
                 {hasStoredPassword ? (
                   <p className="text-xs text-text-subtle">
-                    Hay una contraseña guardada. Re-tipeala para confirmar este guardado (incluso si
-                    no la querés cambiar).
+                    Hay una contraseña guardada. Dejala vacía para mantenerla, o tipeá una nueva
+                    para reemplazarla.
                   </p>
                 ) : null}
               </div>

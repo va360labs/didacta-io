@@ -46,3 +46,54 @@ export function redactSensitiveFields(obj: Record<string, unknown>): Record<stri
   }
   return out;
 }
+
+/**
+ * Mergea un nuevo value (que llega del PUT del cliente) con el value previo
+ * guardado en DB, preservando los campos sensibles del previo cuando el nuevo
+ * los trae vacíos/null. Esto permite al admin actualizar host/user/from sin
+ * tener que re-tipear la password en cada save — el cliente envía password
+ * vacío y el server mantiene el guardado. Ver UI-FIX-02 (alpha.69).
+ *
+ * Comportamiento campo a campo:
+ *
+ *   - Campo sensible vacío en `next` y presente en `prev`     → mantiene `prev`
+ *   - Campo sensible con valor real en `next`                 → usa `next` (cambia)
+ *   - Campo sensible vacío en `next` y NO presente en `prev`  → queda vacío (correcto)
+ *   - Campo no sensible                                       → siempre usa `next`
+ *   - Recursivo en sub-objetos
+ *
+ * "Vacío" se entiende como `null`, `undefined`, o string trimmed que es `''`.
+ * Esto es opinionado: si el admin quiere BORRAR explícitamente una password
+ * guardada, tiene que usar el endpoint DELETE del tenant-setting (no este
+ * upsert con string vacío). Trade-off elegido para que la UX de "guardar sin
+ * re-tipear" sea posible.
+ */
+export function mergeSecretFields(
+  prev: Record<string, unknown>,
+  next: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, nextValue] of Object.entries(next)) {
+    const prevValue = prev[k];
+    if (SENSITIVE_FIELD_NAMES.has(k.toLowerCase())) {
+      const isEmpty =
+        nextValue == null || (typeof nextValue === 'string' && nextValue.trim() === '');
+      out[k] = isEmpty && k in prev ? prevValue : nextValue;
+    } else if (
+      nextValue !== null &&
+      typeof nextValue === 'object' &&
+      !Array.isArray(nextValue) &&
+      prevValue !== null &&
+      typeof prevValue === 'object' &&
+      !Array.isArray(prevValue)
+    ) {
+      out[k] = mergeSecretFields(
+        prevValue as Record<string, unknown>,
+        nextValue as Record<string, unknown>,
+      );
+    } else {
+      out[k] = nextValue;
+    }
+  }
+  return out;
+}

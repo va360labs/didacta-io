@@ -20,7 +20,7 @@ import type { SessionClaims } from '../auth/token.service';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { ModuleContextFactory } from './module-context.factory';
 import { PrismaService } from '../prisma/prisma.service';
-import { redactSensitiveFields } from './redact-sensitive-fields';
+import { mergeSecretFields, redactSensitiveFields } from './redact-sensitive-fields';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
@@ -123,7 +123,23 @@ export class TenantSettingsController {
     const validScope = validateParam('scope', scope);
     const validKey = validateParam('key', key);
     const svc = this.modules.getTenantConfig();
-    await svc.set(claims.tenantId, validScope, validKey, body.value, {
+
+    // Para settings cifrados (`isSecret`), aplicamos merge contra el valor
+    // previo: campos sensibles vacíos en el body conservan los del previo.
+    // Esto permite al admin guardar cambios en host/user/from sin tener que
+    // re-tipear la password en cada save. Ver UI-FIX-02 (alpha.69).
+    let finalValue = body.value;
+    if (body.isSecret && body.value && typeof body.value === 'object' && !Array.isArray(body.value)) {
+      const previous = await svc.get(claims.tenantId, validScope, validKey);
+      if (previous && typeof previous === 'object' && !Array.isArray(previous)) {
+        finalValue = mergeSecretFields(
+          previous as Record<string, unknown>,
+          body.value as Record<string, unknown>,
+        );
+      }
+    }
+
+    await svc.set(claims.tenantId, validScope, validKey, finalValue, {
       isSecret: body.isSecret,
       actorId: claims.sub,
     });
