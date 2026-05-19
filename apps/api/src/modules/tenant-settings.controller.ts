@@ -20,6 +20,7 @@ import type { SessionClaims } from '../auth/token.service';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { ModuleContextFactory } from './module-context.factory';
 import { PrismaService } from '../prisma/prisma.service';
+import { redactSensitiveFields } from './redact-sensitive-fields';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
@@ -50,6 +51,7 @@ function validateParam(name: string, value: string) {
   }
   return r.data;
 }
+
 
 @ApiTags('Tenant Settings')
 @ApiBearerAuth()
@@ -82,7 +84,8 @@ export class TenantSettingsController {
 
   @Get(':scope/:key')
   @ApiOperation({
-    summary: 'Leer un setting. Para secretos solo se devuelve metadata (no el valor en claro).',
+    summary:
+      'Leer un setting. Para secretos devuelve los campos no sensibles del JSON (host, user, etc.) con los campos credenciales (password, apiKey, token...) redactados como null.',
   })
   async getOne(
     @CurrentUser() user: SessionClaims | undefined,
@@ -96,10 +99,14 @@ export class TenantSettingsController {
     const list = await svc.list(claims.tenantId, validScope);
     const meta = list.find((m) => m.key === validKey);
     if (!meta) throw new NotFoundException();
-    if (meta.isSecret) {
-      return { ...meta, value: null };
-    }
     const value = await svc.get(claims.tenantId, validScope, validKey);
+    if (meta.isSecret) {
+      // Para secretos: descifrar y devolver con campos sensibles redactados.
+      // Eso permite al frontend hidratar el form mostrando lo que está guardado
+      // (host, user, from...) sin exponer credenciales. Ver UI-FIX-02.
+      if (!value || typeof value !== 'object') return { ...meta, value: null };
+      return { ...meta, value: redactSensitiveFields(value as Record<string, unknown>) };
+    }
     return { ...meta, value: value ?? null };
   }
 

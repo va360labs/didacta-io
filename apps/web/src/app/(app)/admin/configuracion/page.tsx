@@ -203,6 +203,7 @@ export default function ConfiguracionPage() {
   const [smtp, setSmtp] = useState<SmtpDraft>(EMPTY_SMTP);
   const [smtpStatus, setSmtpStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [smtpError, setSmtpError] = useState<string | null>(null);
+  const [hasStoredPassword, setHasStoredPassword] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState<string | null>(null);
 
@@ -222,6 +223,48 @@ export default function ConfiguracionPage() {
   useEffect(() => {
     void reload();
   }, []);
+
+  // Hidratar el form de SMTP con los campos no-secretos guardados (UI-FIX-02).
+  // El backend devuelve host/port/user/from descifrados y el password como null
+  // (redactado). Detectamos `hasStoredPassword` para mostrar placeholder claro.
+  useEffect(() => {
+    if (!items) return;
+    const smtpMeta = items.find((i) => i.moduleName === 'notifications' && i.key === 'smtp');
+    if (!smtpMeta?.hasValue) {
+      setHasStoredPassword(false);
+      return;
+    }
+    let cancelled = false;
+    void tenantSettingsApi
+      .get('notifications', 'smtp')
+      .then((detail) => {
+        if (cancelled) return;
+        const v = detail.value;
+        if (!v || typeof v !== 'object') return;
+        const obj = v as Record<string, unknown>;
+        setSmtp((s) => ({
+          ...s,
+          host: typeof obj['host'] === 'string' ? (obj['host'] as string) : s.host,
+          port:
+            typeof obj['port'] === 'number'
+              ? String(obj['port'])
+              : typeof obj['port'] === 'string'
+                ? (obj['port'] as string)
+                : s.port,
+          user: typeof obj['user'] === 'string' ? (obj['user'] as string) : s.user,
+          from: typeof obj['from'] === 'string' ? (obj['from'] as string) : s.from,
+          // password queda vacío — siempre se re-tipea para confirmar el cambio.
+        }));
+        setHasStoredPassword(true);
+      })
+      .catch(() => {
+        // Silencioso: si falla la hidratación, el form queda con defaults
+        // (no rompe, solo no se pre-llena).
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [items]);
 
   async function handleSaveSmtp(e: FormEvent) {
     e.preventDefault();
@@ -419,7 +462,14 @@ export default function ConfiguracionPage() {
                   autoComplete="new-password"
                   value={smtp.password}
                   onChange={(e) => setSmtp({ ...smtp, password: e.target.value })}
+                  placeholder={hasStoredPassword ? '••••••• (guardada)' : ''}
                 />
+                {hasStoredPassword ? (
+                  <p className="text-xs text-text-subtle">
+                    Hay una contraseña guardada. Re-tipeala para confirmar este guardado (incluso si
+                    no la querés cambiar).
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="smtp-from">Remitente (From)</Label>
