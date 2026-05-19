@@ -166,11 +166,15 @@ export class AdminUsersService {
     });
 
     // Enviar email de "definí tu contraseña" reusando el flujo de reset.
+    // `allowPending: true` porque el user recién creado está en PENDING — sin
+    // este flag, password-reset.request() lo descartaría silenciosamente
+    // por el guard anti user-enumeration. Ver CORE-FIX-03.
     try {
       await this.passwordReset.requestAndSendEmail(
         { email: dto.email, resolvedTenantId: tenantId },
         webBaseUrl,
         ctx,
+        { allowPending: true },
       );
     } catch (err) {
       this.logger.warn(
@@ -317,10 +321,13 @@ export class AdminUsersService {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new NotFoundException('Tenant no encontrado.');
 
+    // `allowPending: true` porque el use case típico de resend es justo para
+    // users PENDING que no recibieron el primer email. Ver CORE-FIX-03.
     await this.passwordReset.requestAndSendEmail(
       { email: user.email, resolvedTenantId: tenantId },
       webBaseUrl,
       ctx,
+      { allowPending: true },
     );
 
     await this.auditLog.record({

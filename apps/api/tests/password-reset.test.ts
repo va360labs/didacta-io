@@ -243,6 +243,77 @@ describe('PasswordResetService.request', () => {
     expect(expiresAt - before).toBeGreaterThanOrEqual(59 * 60_000);
     expect(expiresAt - before).toBeLessThanOrEqual(61 * 60_000);
   });
+
+  // ── CORE-FIX-03: allowPending para flujos admin-triggered ──
+
+  it('PENDING + allowPending=true → genera token (admin invite/resend)', async () => {
+    const { service, prisma } = makeService();
+    prisma.users.push({
+      id: 'user-pending',
+      tenantId: 'tenant-1',
+      email: 'pending@va360.com',
+      name: 'Alumno Migrado',
+      passwordHash: '',
+      status: 'PENDING',
+    });
+    const result = await service.request(
+      { tenantSlug: 'va360', email: 'pending@va360.com' },
+      undefined,
+      { allowPending: true },
+    );
+    expect(result).not.toBeNull();
+    expect(result?.userId).toBe('user-pending');
+    expect(prisma.tokens).toHaveLength(1);
+  });
+
+  it('PENDING + allowPending omitido → null (anti-enum del path público se mantiene)', async () => {
+    const { service, prisma } = makeService();
+    prisma.users.push({
+      id: 'user-pending-2',
+      tenantId: 'tenant-1',
+      email: 'pending2@va360.com',
+      name: null,
+      passwordHash: '',
+      status: 'PENDING',
+    });
+    const result = await service.request({ tenantSlug: 'va360', email: 'pending2@va360.com' });
+    expect(result).toBeNull();
+    expect(prisma.tokens).toHaveLength(0);
+  });
+
+  it('SUSPENDED + allowPending=true → null (allowPending NO desbloquea SUSPENDED)', async () => {
+    const { service, prisma } = makeService();
+    const result = await service.request(
+      { tenantSlug: 'va360', email: 'suspendido@va360.com' },
+      undefined,
+      { allowPending: true },
+    );
+    expect(result).toBeNull();
+    expect(prisma.tokens).toHaveLength(0);
+  });
+
+  it('ACTIVE + allowPending=true → sigue generando token (regresión)', async () => {
+    const { service, prisma } = makeService();
+    const result = await service.request(
+      { tenantSlug: 'va360', email: 'valen@va360.com' },
+      undefined,
+      { allowPending: true },
+    );
+    expect(result).not.toBeNull();
+    expect(result?.userId).toBe('user-1');
+    expect(prisma.tokens).toHaveLength(1);
+  });
+
+  it('user inexistente + allowPending=true → null (anti-enum)', async () => {
+    const { service, prisma } = makeService();
+    const result = await service.request(
+      { tenantSlug: 'va360', email: 'nadie@va360.com' },
+      undefined,
+      { allowPending: true },
+    );
+    expect(result).toBeNull();
+    expect(prisma.tokens).toHaveLength(0);
+  });
 });
 
 describe('PasswordResetService.reset', () => {

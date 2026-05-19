@@ -43,10 +43,17 @@ export class PasswordResetService {
    *
    * Si el usuario no existe o está inactivo, devuelve `null` SIN throw para
    * que el endpoint pueda responder genérico (anti user enumeration).
+   *
+   * Por defecto solo acepta usuarios ACTIVE (path público `/auth/forgot-password`,
+   * defensa anti-enum). Los call sites admin-triggered (invite / resendInvite)
+   * pasan `opts.allowPending = true` para poder enviar el email de "definí
+   * tu contraseña" a usuarios que están justo en status PENDING porque acaban
+   * de ser invitados. Ver CORE-FIX-03.
    */
   async request(
     args: { email: string; tenantSlug?: string; resolvedTenantId?: string },
     ctx: ClientContext = NO_CLIENT_CONTEXT,
+    opts: { allowPending?: boolean } = {},
   ): Promise<{
     rawToken: string;
     userId: string;
@@ -59,7 +66,10 @@ export class PasswordResetService {
     const user = await this.prisma.user.findUnique({
       where: { tenantId_email: { tenantId: tenant.id, email: args.email } },
     });
-    if (!user || user.status !== 'ACTIVE') return null;
+    const allowedStatuses = opts.allowPending
+      ? new Set(['ACTIVE', 'PENDING'])
+      : new Set(['ACTIVE']);
+    if (!user || !allowedStatuses.has(user.status)) return null;
 
     // Invalidar tokens previos no usados — limita el blast radius si un
     // atacante pudiese tomar el primer email.
@@ -155,8 +165,9 @@ export class PasswordResetService {
     args: { email: string; tenantSlug?: string; resolvedTenantId?: string },
     webBaseUrl: string,
     ctx: ClientContext = NO_CLIENT_CONTEXT,
+    opts: { allowPending?: boolean } = {},
   ): Promise<void> {
-    const result = await this.request(args, ctx);
+    const result = await this.request(args, ctx, opts);
     if (!result) return;
 
     let smtpRaw: unknown;
