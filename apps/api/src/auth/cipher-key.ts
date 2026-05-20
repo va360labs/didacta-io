@@ -106,6 +106,16 @@ export function loadCipherKey(): ResolvedCipherKey {
   }
 }
 
+/**
+ * Lista de paths candidatos a ser el directorio del volumen persistente,
+ * en orden de preferencia. El primero que sea writable gana. La idea es:
+ * si el operador olvidó (o no pudo) propagar STORAGE_ROOT al proceso, igual
+ * encontramos el volumen Docker estándar (`/app/data/storage`), que es donde
+ * lo monta `docker-compose.alpha.yml` y donde los operadores lo montan en
+ * Easypanel/k8s. Solo cae al CWD ./data si nada de eso existe (dev local).
+ */
+const DEFAULT_DOCKER_PATHS = ['/app/data/storage', '/app/data'];
+
 function resolveKeyFilePath(): string {
   const explicit = process.env['TENANT_SETTINGS_ENC_KEY_FILE'];
   if (explicit && explicit.trim().length > 0) {
@@ -113,11 +123,20 @@ function resolveKeyFilePath(): string {
   }
   // Vivimos DENTRO de STORAGE_ROOT — ese es el path montado en el volumen
   // persistente (didacta_data en Easypanel/docker-compose, PVC en k8s).
-  // Default sin STORAGE_ROOT: ./data dentro del CWD (dev local).
   const storageRoot = process.env['STORAGE_ROOT'];
-  const base =
-    storageRoot && storageRoot.trim().length > 0 ? resolve(storageRoot) : resolve('./data');
-  return resolve(base, '.didacta-secret-key');
+  if (storageRoot && storageRoot.trim().length > 0) {
+    return resolve(storageRoot, '.didacta-secret-key');
+  }
+  // STORAGE_ROOT no llegó al proceso. Intentamos paths conocidos del Docker
+  // setup antes de caer al CWD relativo (que es efímero en producción).
+  for (const candidate of DEFAULT_DOCKER_PATHS) {
+    if (existsSync(candidate)) {
+      return resolve(candidate, '.didacta-secret-key');
+    }
+  }
+  // Último recurso: ./data relativo al CWD. Correcto en dev local; en prod
+  // significa que NADIE montó un volumen — la key será efímera de facto.
+  return resolve('./data', '.didacta-secret-key');
 }
 
 /**
@@ -140,22 +159,29 @@ function resolveLegacyKeyFilePath(): string | null {
  * usamos console.warn para que el mensaje siempre aparezca).
  */
 export function describeCipherKeySource(resolved: ResolvedCipherKey): string {
+  const env = process.env['TENANT_SETTINGS_ENC_KEY'] ? 'set' : 'unset';
+  const fileEnv = process.env['TENANT_SETTINGS_ENC_KEY_FILE'] ?? '(unset)';
+  const storageRoot = process.env['STORAGE_ROOT'] ?? '(unset)';
+  const cwd = process.cwd();
+  const envFooter = `          env: TENANT_SETTINGS_ENC_KEY=${env}, TENANT_SETTINGS_ENC_KEY_FILE=${fileEnv}, STORAGE_ROOT=${storageRoot}, cwd=${cwd}`;
   switch (resolved.source) {
     case 'env':
-      return '[Didacta] TENANT_SETTINGS_ENC_KEY: leída de env (control explícito).';
+      return `[Didacta] TENANT_SETTINGS_ENC_KEY: leída de env (control explícito).\n${envFooter}`;
     case 'file':
-      return `[Didacta] TENANT_SETTINGS_ENC_KEY: leída de ${resolved.filePath} (persistente entre reinicios).`;
+      return `[Didacta] TENANT_SETTINGS_ENC_KEY: leída de ${resolved.filePath} (persistente entre reinicios).\n${envFooter}`;
     case 'file-new':
       return (
         `[Didacta] TENANT_SETTINGS_ENC_KEY: nueva clave generada y persistida en ${resolved.filePath}.\n` +
         `          Sobrevive reinicios mientras el volumen persista. Hacé backup si configuras\n` +
-        `          features que cifran (Stripe, OIDC, SCIM, SMTP custom, Zoom S2S).`
+        `          features que cifran (Stripe, OIDC, SCIM, SMTP custom, Zoom S2S).\n` +
+        envFooter
       );
     case 'ephemeral':
       return (
         '[Didacta] ⚠ TENANT_SETTINGS_ENC_KEY: NO pude persistir la clave en disco — uso clave\n' +
         '          efímera en memoria. Los secretos cifrados se PERDERÁN al reiniciar.\n' +
-        '          Verificá permisos del volumen o seteá TENANT_SETTINGS_ENC_KEY explícitamente.'
+        '          Verificá permisos del volumen o seteá TENANT_SETTINGS_ENC_KEY explícitamente.\n' +
+        envFooter
       );
   }
 }

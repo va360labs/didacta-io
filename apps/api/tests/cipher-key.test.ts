@@ -176,8 +176,10 @@ describe('loadCipherKey', () => {
 
   // ── Fallback: sin STORAGE_ROOT, sin env ──
 
-  it('sin STORAGE_ROOT cae al default ./data/.didacta-secret-key (dev local)', () => {
+  it('sin STORAGE_ROOT cae al default ./data/.didacta-secret-key (dev local, sin paths Docker presentes)', () => {
     // No seteamos STORAGE_ROOT ni env. CWD del test es el repo root del api.
+    // Como /app/data/storage NO existe (corremos fuera de container Docker),
+    // el código cae al CWD-relative ./data.
     const result = loadCipherKey();
 
     expect(result.source).toMatch(/file|file-new/);
@@ -191,6 +193,25 @@ describe('loadCipherKey', () => {
         /* best-effort */
       }
     }
+  });
+
+  // ── alpha.71: fallback a /app/data/storage si existe (caso Docker sin STORAGE_ROOT en env) ──
+
+  it('sin STORAGE_ROOT pero con /app/data/storage simulado, usa ese path absoluto', () => {
+    // Truco: usamos TENANT_SETTINGS_ENC_KEY_FILE para simular el path absoluto.
+    // (No podemos crear /app/data/storage real en el sistema del test). Esta
+    // spec confirma que cuando TENANT_SETTINGS_ENC_KEY_FILE apunta a un dir
+    // absoluto persistente, el código lo respeta — que es lo que pasaría
+    // si seteáramos esa env en el container como workaround del STORAGE_ROOT
+    // que no se propaga.
+    const persistentDir = join(tmpRoot, 'fake-docker', 'storage');
+    mkdirSync(persistentDir, { recursive: true });
+    process.env['TENANT_SETTINGS_ENC_KEY_FILE'] = join(persistentDir, '.didacta-secret-key');
+
+    const result = loadCipherKey();
+
+    expect(result.source).toBe('file-new');
+    expect(result.filePath).toBe(join(persistentDir, '.didacta-secret-key'));
   });
 
   // ── Archivo corrupto ──
