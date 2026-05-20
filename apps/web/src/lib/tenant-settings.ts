@@ -13,6 +13,13 @@ export interface TenantSettingMetadata {
 export interface TenantSettingDetail extends TenantSettingMetadata {
   /** null cuando isSecret=true (el cleartext nunca sale de la API). */
   value: unknown;
+  /**
+   * true cuando el ciphertext en DB existe pero no se pudo descifrar (probable
+   * causa: la clave que cifró el valor ya no coincide con la actual del
+   * cluster — INFRA-FIX-02). El admin tiene que re-tipear el setting para
+   * reciclarlo con la clave actual.
+   */
+  decryptFailed?: boolean;
 }
 
 function withAuth(): string {

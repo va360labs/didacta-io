@@ -205,6 +205,7 @@ export default function ConfiguracionPage() {
   const [smtpError, setSmtpError] = useState<string | null>(null);
   const [hasStoredPassword, setHasStoredPassword] = useState(false);
   const [smtpHydrating, setSmtpHydrating] = useState(true);
+  const [smtpDecryptFailed, setSmtpDecryptFailed] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState<string | null>(null);
 
@@ -241,6 +242,7 @@ export default function ConfiguracionPage() {
       .get('notifications', 'smtp')
       .then((detail) => {
         if (cancelled) return;
+        setSmtpDecryptFailed(detail.decryptFailed === true);
         const v = detail.value;
         if (!v || typeof v !== 'object') {
           setSmtpHydrating(false);
@@ -422,6 +424,19 @@ export default function ConfiguracionPage() {
                 <div className="skeleton h-10" />
                 <div className="skeleton h-10" />
                 <div className="skeleton h-10 sm:col-span-2" />
+              </div>
+            ) : null}
+            {!smtpHydrating && smtpDecryptFailed ? (
+              <div
+                role="alert"
+                className="mb-4 rounded-lg border border-warning-200 bg-warning-50 p-3 text-sm text-warning-700"
+              >
+                <p className="font-semibold">La configuración guardada no se puede leer</p>
+                <p className="mt-0.5">
+                  La clave de cifrado del cluster cambió desde que se guardó esta configuración.
+                  Re-tipeá todos los campos y apretá &quot;Guardar SMTP&quot; para reciclarla con la
+                  clave actual. Esto suele pasar después de un redeploy que regeneró la clave.
+                </p>
               </div>
             ) : null}
             <form

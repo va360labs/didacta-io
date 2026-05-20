@@ -5,6 +5,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  Logger,
   NotFoundException,
   Param,
   Post,
@@ -58,10 +59,40 @@ function validateParam(name: string, value: string) {
 @Controller('tenant-settings')
 @UseGuards(JwtAuthGuard)
 export class TenantSettingsController {
+  private readonly logger = new Logger(TenantSettingsController.name);
+
   constructor(
     private readonly modules: ModuleContextFactory,
     private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * Llama a `svc.get(...)` con un guard contra fallos de descifrado. Si el
+   * ciphertext en DB fue cifrado con una clave que ya no está disponible
+   * (key rotada, ephemeral perdida, env var cambiada), AES-GCM tira
+   * "Unsupported state or unable to authenticate data". Atrapamos eso y
+   * tratamos como "valor inexistente" para que el endpoint no devuelva 500.
+   * El admin puede recuperarse re-tipeando el setting completo (lo nuevo
+   * se cifra con la clave actual y desbloquea el path). Ver alpha.70.
+   */
+  private async safeGetDecrypted(
+    tenantId: string,
+    scope: string,
+    key: string,
+  ): Promise<{ value: unknown; decryptFailed: boolean }> {
+    const svc = this.modules.getTenantConfig();
+    try {
+      const value = await svc.get(tenantId, scope, key);
+      return { value, decryptFailed: false };
+    } catch (err) {
+      this.logger.warn(
+        `[tenant-settings] decrypt falló para ${scope}/${key} en tenant ${tenantId}: ${(err as Error).message}. ` +
+          'Probable causa: la clave que cifró el valor ya no coincide con la actual (ver INFRA-FIX-02). ' +
+          'Se devuelve null para permitir recuperación re-tipeando el setting.',
+      );
+      return { value: null, decryptFailed: true };
+    }
+  }
 
   @Get()
   @ApiOperation({
@@ -99,13 +130,26 @@ export class TenantSettingsController {
     const list = await svc.list(claims.tenantId, validScope);
     const meta = list.find((m) => m.key === validKey);
     if (!meta) throw new NotFoundException();
-    const value = await svc.get(claims.tenantId, validScope, validKey);
+    const { value, decryptFailed } = await this.safeGetDecrypted(
+      claims.tenantId,
+      validScope,
+      validKey,
+    );
     if (meta.isSecret) {
       // Para secretos: descifrar y devolver con campos sensibles redactados.
       // Eso permite al frontend hidratar el form mostrando lo que está guardado
       // (host, user, from...) sin exponer credenciales. Ver UI-FIX-02.
-      if (!value || typeof value !== 'object') return { ...meta, value: null };
-      return { ...meta, value: redactSensitiveFields(value as Record<string, unknown>) };
+      // Si decryptFailed=true, devolvemos value:null para que el form muestre
+      // estado limpio (el admin puede re-tipear y reciclar el setting con
+      // la clave actual).
+      if (!value || typeof value !== 'object') {
+        return { ...meta, value: null, decryptFailed };
+      }
+      return {
+        ...meta,
+        value: redactSensitiveFields(value as Record<string, unknown>),
+        decryptFailed,
+      };
     }
     return { ...meta, value: value ?? null };
   }
@@ -128,10 +172,29 @@ export class TenantSettingsController {
     // previo: campos sensibles vacíos en el body conservan los del previo.
     // Esto permite al admin guardar cambios en host/user/from sin tener que
     // re-tipear la password en cada save. Ver UI-FIX-02 (alpha.69).
+    //
+    // Si el previo no se puede descifrar (clave rotada), el merge no aplica
+    // — guardamos el body tal cual. Esto desbloquea recuperación: el admin
+    // re-tipea todo, el backend lo guarda cifrado con la clave actual, y
+    // los próximos saves vuelven a funcionar con merge normal. Ver alpha.70.
     let finalValue = body.value;
-    if (body.isSecret && body.value && typeof body.value === 'object' && !Array.isArray(body.value)) {
-      const previous = await svc.get(claims.tenantId, validScope, validKey);
-      if (previous && typeof previous === 'object' && !Array.isArray(previous)) {
+    if (
+      body.isSecret &&
+      body.value &&
+      typeof body.value === 'object' &&
+      !Array.isArray(body.value)
+    ) {
+      const { value: previous, decryptFailed } = await this.safeGetDecrypted(
+        claims.tenantId,
+        validScope,
+        validKey,
+      );
+      if (
+        !decryptFailed &&
+        previous &&
+        typeof previous === 'object' &&
+        !Array.isArray(previous)
+      ) {
         finalValue = mergeSecretFields(
           previous as Record<string, unknown>,
           body.value as Record<string, unknown>,
