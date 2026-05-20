@@ -30,6 +30,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync, renameSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { resolvePersistentDataRoot } from '../modules/persistent-data-root';
 
 const KEY_LENGTH_HEX = 64;
 
@@ -106,37 +107,14 @@ export function loadCipherKey(): ResolvedCipherKey {
   }
 }
 
-/**
- * Lista de paths candidatos a ser el directorio del volumen persistente,
- * en orden de preferencia. El primero que sea writable gana. La idea es:
- * si el operador olvidó (o no pudo) propagar STORAGE_ROOT al proceso, igual
- * encontramos el volumen Docker estándar (`/app/data/storage`), que es donde
- * lo monta `docker-compose.alpha.yml` y donde los operadores lo montan en
- * Easypanel/k8s. Solo cae al CWD ./data si nada de eso existe (dev local).
- */
-const DEFAULT_DOCKER_PATHS = ['/app/data/storage', '/app/data'];
-
 function resolveKeyFilePath(): string {
   const explicit = process.env['TENANT_SETTINGS_ENC_KEY_FILE'];
   if (explicit && explicit.trim().length > 0) {
     return isAbsolute(explicit) ? explicit : resolve(explicit);
   }
-  // Vivimos DENTRO de STORAGE_ROOT — ese es el path montado en el volumen
-  // persistente (didacta_data en Easypanel/docker-compose, PVC en k8s).
-  const storageRoot = process.env['STORAGE_ROOT'];
-  if (storageRoot && storageRoot.trim().length > 0) {
-    return resolve(storageRoot, '.didacta-secret-key');
-  }
-  // STORAGE_ROOT no llegó al proceso. Intentamos paths conocidos del Docker
-  // setup antes de caer al CWD relativo (que es efímero en producción).
-  for (const candidate of DEFAULT_DOCKER_PATHS) {
-    if (existsSync(candidate)) {
-      return resolve(candidate, '.didacta-secret-key');
-    }
-  }
-  // Último recurso: ./data relativo al CWD. Correcto en dev local; en prod
-  // significa que NADIE montó un volumen — la key será efímera de facto.
-  return resolve('./data', '.didacta-secret-key');
+  // Reusamos el resolver compartido para que cipher-key y local-disk-storage
+  // siempre apunten al mismo volumen persistente. Ver persistent-data-root.ts.
+  return resolve(resolvePersistentDataRoot(), '.didacta-secret-key');
 }
 
 /**

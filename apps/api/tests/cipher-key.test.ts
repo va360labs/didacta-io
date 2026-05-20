@@ -176,14 +176,15 @@ describe('loadCipherKey', () => {
 
   // ── Fallback: sin STORAGE_ROOT, sin env ──
 
-  it('sin STORAGE_ROOT cae al default ./data/.didacta-secret-key (dev local, sin paths Docker presentes)', () => {
+  it('sin STORAGE_ROOT cae al default ./data/storage/.didacta-secret-key (dev local, sin paths Docker presentes)', () => {
     // No seteamos STORAGE_ROOT ni env. CWD del test es el repo root del api.
     // Como /app/data/storage NO existe (corremos fuera de container Docker),
-    // el código cae al CWD-relative ./data.
+    // el código cae al CWD-relative ./data/storage (consistente con el
+    // helper compartido resolvePersistentDataRoot — alpha.72).
     const result = loadCipherKey();
 
     expect(result.source).toMatch(/file|file-new/);
-    expect(result.filePath).toBe(resolve('./data', '.didacta-secret-key'));
+    expect(result.filePath).toBe(resolve('./data/storage', '.didacta-secret-key'));
     // Cleanup del archivo dev creado.
     if (result.filePath && existsSync(result.filePath)) {
       try {

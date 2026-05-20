@@ -1,9 +1,16 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { StorageService } from '@didacta/core-kernel';
+import { resolvePersistentDataRoot } from './persistent-data-root';
 
 /**
- * StorageService que persiste en disco bajo `STORAGE_ROOT` (default: ./data/storage).
+ * StorageService que persiste en disco bajo el volumen persistente.
+ *
+ * El root se resuelve via `resolvePersistentDataRoot()` que prueba en este
+ * orden: argumento explícito → `STORAGE_ROOT` env → `/app/data/storage` (si
+ * existe — detección automática del volumen Docker en Easypanel/k8s sin
+ * necesidad de env var) → `/app/data` → `./data/storage` (dev local). Ver
+ * `persistent-data-root.ts` para detalle.
  *
  * Pensado para Fase 1.A: nada de S3 todavía. La key se sanea para evitar
  * traversal: solo se permiten letras/dígitos/`-_./` y nunca se sale del root.
@@ -15,7 +22,7 @@ export class LocalDiskStorageService implements StorageService {
   private readonly root: string;
 
   constructor(rootDir?: string) {
-    this.root = resolve(rootDir ?? process.env.STORAGE_ROOT ?? './data/storage');
+    this.root = resolvePersistentDataRoot(rootDir);
   }
 
   async upload(
