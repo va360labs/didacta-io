@@ -156,6 +156,10 @@ ARG DIDACTA_VERSION
 #   - curl: healthcheck.
 #   - libc6-compat: algunos binarios prebuilt asumen glibc.
 #   - postgresql16-client: psql para aplicar rls.sql.
+#   - su-exec: drop privileges de root -> didacta tras chown del volumen.
+#     Sin esto la primera escritura en /app/data falla con EACCES porque
+#     Docker monta el volumen vacío como root:root y el proceso de la app
+#     corre como UID 1001 (ver entrypoint.sh, bloque init-as-root).
 #   - tini: init proper en PID 1 (manejo correcto de SIGTERM y zombies).
 RUN apk add --no-cache \
     bash \
@@ -164,6 +168,7 @@ RUN apk add --no-cache \
     libc6-compat \
     openssl \
     postgresql16-client \
+    su-exec \
     tini
 # pnpm como binario global (sin corepack: requiere $HOME escribible).
 RUN npm install --global pnpm@10.21.0
@@ -189,7 +194,12 @@ COPY --from=pruner --chown=didacta:didacta /repo /repo
 COPY --chown=didacta:didacta infra/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-USER didacta
+# IMPORTANTE — NO declaramos `USER didacta` aquí. El entrypoint arranca como
+# root SOLO para chownear el volumen persistente `/app/data` (que Docker monta
+# como root:root la primera vez) y luego baja a `didacta:didacta` con su-exec.
+# Sin este patrón, la primera escritura en /app/data/storage falla con EACCES
+# en cualquier deploy nuevo (compose, k8s, Coolify, Easypanel sin fsGroup).
+# Ver entrypoint.sh, bloque `init-as-root`.
 
 ENV HOME=/home/didacta \
     XDG_CACHE_HOME=/home/didacta/.cache \

@@ -16,6 +16,30 @@ log() {
   printf '[entrypoint] %s\n' "$*"
 }
 
+# ----------------------------------------------------------------------------
+# init-as-root — chown del volumen persistente y drop a UID 1001 (didacta)
+# ----------------------------------------------------------------------------
+# Razón: Docker monta un volumen NUEVO sobre `/app/data` con owner root:root,
+# pero la app corre como `didacta` (UID 1001). Sin este bloque, la primera
+# escritura del marketplace (`mkdir /app/data/storage`) falla con EACCES y el
+# install de cualquier módulo devuelve 500.
+#
+# Patrón inspirado en las imágenes oficiales de Postgres/Redis: el container
+# arranca como root SOLO para arreglar perms del volumen y enseguida baja
+# privilegios con `su-exec`. El proceso final (Node) corre como didacta.
+#
+# El bloque es idempotente: si el volumen ya tiene los perms correctos (re-
+# arranques posteriores), el chown es no-op. Si ya corremos como didacta
+# (ej. tests locales sin Docker), saltea el bloque entero.
+if [[ "$(id -u)" == "0" ]]; then
+  log "Arrancando como root: aseguro perms del volumen persistente /app/data…"
+  mkdir -p /app/data/storage
+  chown -R didacta:didacta /app/data
+  log "Drop a didacta:didacta con su-exec."
+  exec su-exec didacta:didacta "$0" "$@"
+fi
+# A partir de aquí siempre corremos como didacta (UID 1001).
+
 # psql nativo no acepta `?schema=public` ni params propios de Prisma.
 # Devuelve la URL sin query string para usarla en psql.
 strip_url_query() {
