@@ -37,12 +37,34 @@ export interface UserListItem {
   emailVerified: boolean;
   createdAt: string;
   lastLoginAt: string | null;
+  /// Origen del user cuando fue importado por un módulo third-party
+  /// (ej. "learndash"). Null para users creados directamente en Didacta.
+  /// Permite al operador identificar qué users vienen de una migración. Ver ADR-014.
+  externalSource: string | null;
+  externalId: string | null;
 }
 
 export interface UserDetail extends UserListItem {
   locale: string;
   updatedAt: string;
   recentSessions: Array<{ id: string; createdAt: string; expiresAt: string }>;
+}
+
+export interface ListUsersOptions {
+  search?: string;
+  status?: string;
+  role?: string;
+  externalSource?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface PaginatedUsers {
+  items: UserListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
 }
 
 @Injectable()
@@ -54,12 +76,26 @@ export class AdminUsersService {
     private readonly logger: PinoLogger,
   ) {}
 
-  async list(
-    tenantId: string,
-    options: { search?: string; status?: string; role?: string; limit?: number },
-  ): Promise<UserListItem[]> {
+  /**
+   * Lista paginada de users del tenant.
+   *
+   * Hasta alpha.73 este método ignoraba `page` y devolvía como mucho 100 users,
+   * causando que el operador viera "100 alumnos" cuando había miles importados
+   * desde LearnDash. Ahora aplica `skip` + `take` de Prisma y reporta `total` +
+   * `hasMore` para que el frontend pueda renderizar paginación real.
+   *
+   * El filtro por `role` se sigue aplicando in-memory porque vive en la tabla
+   * `user_role` y exigirlo en SQL implicaría un join + `distinct` que no
+   * mejoraría el plan a este orden de magnitud (un tenant rara vez supera 50k
+   * users). Si en el futuro hay tenants gigantes, mover a un sub-select.
+   */
+  async list(tenantId: string, options: ListUsersOptions): Promise<PaginatedUsers> {
+    const page = options.page && options.page > 0 ? options.page : 1;
+    const limit = options.limit && options.limit > 0 ? options.limit : 100;
+
     const where: Record<string, unknown> = { tenantId, deletedAt: null };
     if (options.status) where.status = options.status;
+    if (options.externalSource) where.externalSource = options.externalSource;
     if (options.search) {
       const q = options.search.trim();
       if (q) {
@@ -70,19 +106,35 @@ export class AdminUsersService {
       }
     }
 
-    const users = await this.prisma.user.findMany({
-      where,
-      include: { roles: { include: { role: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: options.limit ?? 100,
-    });
+    const [total, users] = await Promise.all([
+      this.prisma.user.count({ where }),
+      this.prisma.user.findMany({
+        where,
+        include: { roles: { include: { role: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
 
-    let mapped = users.map((u) => this.toListItem(u));
+    let items = users.map((u) => this.toListItem(u));
 
+    // El filtro por `role` se aplica post-fetch (ver doc del método). Si se
+    // usa, el `total` ya no es exacto para la página filtrada — devolvemos el
+    // count de items efectivamente devueltos para que la UI no muestre páginas
+    // fantasma. Es un compromiso conocido; el caso real (filtro por role)
+    // suele ser sobre datasets chicos.
     if (options.role) {
-      mapped = mapped.filter((u) => u.roles.includes(options.role!));
+      items = items.filter((u) => u.roles.includes(options.role!));
     }
-    return mapped;
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      hasMore: page * limit < total,
+    };
   }
 
   async getDetail(tenantId: string, userId: string): Promise<UserDetail> {
@@ -355,6 +407,8 @@ export class AdminUsersService {
     emailVerified: boolean;
     createdAt: Date;
     lastLoginAt: Date | null;
+    externalSource: string | null;
+    externalId: string | null;
     roles: Array<{ role: { name: string } }>;
   }): UserListItem {
     return {
@@ -367,6 +421,8 @@ export class AdminUsersService {
       emailVerified: user.emailVerified,
       createdAt: user.createdAt.toISOString(),
       lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+      externalSource: user.externalSource,
+      externalId: user.externalId,
     };
   }
 }

@@ -32,6 +32,19 @@ const inviteSchema = z.object({
 });
 type InviteDto = z.infer<typeof inviteSchema>;
 
+/// Paginación del listado de users (alpha.74).
+/// `limit` cap a 500 — más que eso es DoS-friendly por la query de count.
+/// `page` cap a 10000 — paranoia anti-overflow del offset.
+const listQuerySchema = z.object({
+  search: z.string().trim().min(1).max(200).optional(),
+  status: z.enum(['ACTIVE', 'PENDING', 'SUSPENDED', 'DEACTIVATED']).optional(),
+  role: z.enum(TENANT_ASSIGNABLE_ROLES).optional(),
+  externalSource: z.string().trim().min(1).max(40).optional(),
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+type ListQueryDto = z.infer<typeof listQuerySchema>;
+
 const setStatusSchema = z.object({
   status: z.enum(['ACTIVE', 'SUSPENDED', 'DEACTIVATED']),
 });
@@ -60,17 +73,23 @@ export class AdminUsersController {
   constructor(private readonly service: AdminUsersService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Listar usuarios del tenant (con filtros).' })
+  @ApiOperation({
+    summary:
+      'Listar usuarios del tenant (paginado, con filtros). Devuelve { items, total, page, limit, hasMore }.',
+  })
   async list(
     @CurrentUser() user: SessionClaims | undefined,
-    @Query('search') search?: string,
-    @Query('status') status?: string,
-    @Query('role') role?: string,
-    @Query('limit') limit?: string,
+    @Query(new ZodValidationPipe(listQuerySchema)) query: ListQueryDto,
   ) {
     const u = requireAdmin(user);
-    const limitN = limit ? Math.min(Math.max(Number(limit), 1), 200) : 100;
-    return this.service.list(u.tenantId, { search, status, role, limit: limitN });
+    return this.service.list(u.tenantId, {
+      search: query.search,
+      status: query.status,
+      role: query.role,
+      externalSource: query.externalSource,
+      page: query.page,
+      limit: query.limit,
+    });
   }
 
   @Get(':id')

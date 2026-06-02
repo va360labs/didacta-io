@@ -39,6 +39,10 @@ export interface UserListItem {
   emailVerified: boolean;
   createdAt: string;
   lastLoginAt: string | null;
+  /// Origen del user cuando fue importado por un módulo (ej. "learndash").
+  /// Null para users creados directamente en Didacta. Ver ADR-014.
+  externalSource: string | null;
+  externalId: string | null;
 }
 
 export interface UserDetail extends UserListItem {
@@ -51,7 +55,17 @@ export interface ListUsersQuery {
   search?: string;
   status?: string;
   role?: string;
+  externalSource?: string;
+  page?: number;
   limit?: number;
+}
+
+export interface PaginatedUsers {
+  items: UserListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
 }
 
 function withQuery(path: string, query: ListUsersQuery): string {
@@ -59,14 +73,16 @@ function withQuery(path: string, query: ListUsersQuery): string {
   if (query.search) usp.set('search', query.search);
   if (query.status) usp.set('status', query.status);
   if (query.role) usp.set('role', query.role);
+  if (query.externalSource) usp.set('externalSource', query.externalSource);
+  if (query.page) usp.set('page', String(query.page));
   if (query.limit) usp.set('limit', String(query.limit));
   const qs = usp.toString();
   return qs ? `${path}?${qs}` : path;
 }
 
 export const adminUsersApi = {
-  async list(bearer: string, query: ListUsersQuery = {}): Promise<UserListItem[]> {
-    return apiFetch<UserListItem[]>(
+  async list(bearer: string, query: ListUsersQuery = {}): Promise<PaginatedUsers> {
+    return apiFetch<PaginatedUsers>(
       withQuery('/api/v1/admin/users', query),
       { method: 'GET' },
       bearer,

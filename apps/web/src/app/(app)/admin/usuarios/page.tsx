@@ -19,6 +19,10 @@ import {
 } from '@/lib/admin-users';
 import { authStorage } from '@/lib/auth-storage';
 
+/// Tamaño de página por defecto. Coincide con el `limit` default del API.
+/// Si cambia, ajustar también en backend (admin-users.controller.ts).
+const PAGE_SIZE = 100;
+
 const STATUS_VARIANT: Record<UserStatus, 'success' | 'warning' | 'muted' | 'danger'> = {
   ACTIVE: 'success',
   PENDING: 'warning',
@@ -37,31 +41,51 @@ function userInitials(name: string | null, email: string): string {
 
 export default function UsuariosPage() {
   const [users, setUsers] = useState<UserListItem[] | null>(null);
+  const [total, setTotal] = useState<number>(0);
+  const [hasMore, setHasMore] = useState<boolean>(false);
+  const [page, setPage] = useState<number>(1);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'' | UserStatus>('');
   const [roleFilter, setRoleFilter] = useState<'' | AssignableRole>('');
+  const [sourceFilter, setSourceFilter] = useState<string>('');
 
-  async function reload() {
+  async function reload(targetPage: number = page) {
     const token = authStorage.getAccessToken();
     if (!token) return;
     try {
       setError(null);
-      const list = await adminUsersApi.list(token, {
+      const res = await adminUsersApi.list(token, {
         search: search.trim() || undefined,
         status: statusFilter || undefined,
         role: roleFilter || undefined,
+        externalSource: sourceFilter || undefined,
+        page: targetPage,
+        limit: PAGE_SIZE,
       });
-      setUsers(list);
+      setUsers(res.items);
+      setTotal(res.total);
+      setHasMore(res.hasMore);
+      setPage(res.page);
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los usuarios.');
     }
   }
 
+  /// Aplicar filtros = volver siempre a página 1, si no el operador puede
+  /// quedar "atascado" en una página fuera de rango después de filtrar.
+  function applyFilters() {
+    void reload(1);
+  }
+
   useEffect(() => {
-    void reload();
+    void reload(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const rangeStart = users && users.length > 0 ? (page - 1) * PAGE_SIZE + 1 : 0;
+  const rangeEnd = users ? (page - 1) * PAGE_SIZE + users.length : 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -90,7 +114,7 @@ export default function UsuariosPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') void reload();
+                if (e.key === 'Enter') applyFilters();
               }}
               className="mt-1"
             />
@@ -130,7 +154,21 @@ export default function UsuariosPage() {
               ))}
             </Select>
           </div>
-          <Button variant="secondary" onClick={() => void reload()}>
+          <div>
+            <label className="text-xs font-semibold text-text-muted" htmlFor="source">
+              Origen
+            </label>
+            <Select
+              id="source"
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className="mt-1 min-w-40"
+            >
+              <option value="">Todos</option>
+              <option value="learndash">LearnDash</option>
+            </Select>
+          </div>
+          <Button variant="secondary" onClick={applyFilters}>
             Aplicar
           </Button>
         </CardContent>
@@ -164,7 +202,11 @@ export default function UsuariosPage() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">{users.length} usuarios</CardTitle>
+            <CardTitle className="text-base">
+              {total === 0
+                ? '0 usuarios'
+                : `Mostrando ${rangeStart}–${rangeEnd} de ${total} usuarios`}
+            </CardTitle>
             <CardDescription>
               Click sobre un usuario para ver el detalle y gestionar su acceso.
             </CardDescription>
@@ -176,6 +218,7 @@ export default function UsuariosPage() {
                   <th className="px-6 py-3 font-semibold">Persona</th>
                   <th className="px-3 py-3 font-semibold">Roles</th>
                   <th className="px-3 py-3 font-semibold">Estado</th>
+                  <th className="px-3 py-3 font-semibold">Origen</th>
                   <th className="px-3 py-3 font-semibold">MFA</th>
                   <th className="px-6 py-3 font-semibold text-right">Último login</th>
                 </tr>
@@ -225,6 +268,15 @@ export default function UsuariosPage() {
                       <Badge variant={STATUS_VARIANT[u.status]}>{STATUS_LABELS[u.status]}</Badge>
                     </td>
                     <td className="px-3 py-3">
+                      {u.externalSource ? (
+                        <Badge variant="muted" title={u.externalId ?? undefined}>
+                          {u.externalSource}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-text-subtle">Nativo</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
                       {u.mfaEnabled ? (
                         <Badge variant="success" dot>
                           Activo
@@ -241,6 +293,30 @@ export default function UsuariosPage() {
               </tbody>
             </table>
           </div>
+          {/* === Paginación === */}
+          {totalPages > 1 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface-2 px-6 py-3">
+              <p className="text-xs text-text-muted tabular-nums">
+                Página {page} de {totalPages}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => void reload(page - 1)}
+                  disabled={page <= 1}
+                >
+                  ← Anterior
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => void reload(page + 1)}
+                  disabled={!hasMore}
+                >
+                  Siguiente →
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </Card>
       )}
     </div>
