@@ -1,16 +1,14 @@
 import {
   Controller,
+  Header,
   Post,
   Query,
-  Req,
-  Res,
   Sse,
   UnauthorizedException,
   UseGuards,
   type MessageEvent,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Observable } from 'rxjs';
 import { CurrentUser } from '../../../auth/decorators';
 import { JwtAuthGuard } from '../../../auth/jwt-auth.guard';
@@ -44,16 +42,23 @@ export class NotificationStreamController {
    * Stream SSE. NO usa `JwtAuthGuard` (EventSource no manda Authorization);
    * autentica con el ticket de query verificado a mano.
    */
+  // Headers anti-buffering declarados con @Header (Nest los aplica ANTES de que
+  // `@Sse` haga writeHead → evita ERR_HTTP_HEADERS_SENT). `@Sse` ya setea
+  // Content-Type: text/event-stream, Cache-Control: no-cache y Connection:
+  // keep-alive en su SseStream; aquí solo añadimos X-Accel-Buffering (que Nest
+  // no setea) para que NGINX/proxies no bufferen el stream. Traefik no bufferea
+  // SSE por defecto, pero el header es inocuo y cubre despliegues con NGINX.
+  //
+  // alpha.80: fix del bug introducido en alpha.79, donde estos headers se
+  // seteaban con reply.raw.setHeader() DESPUÉS del flush de @Sse → el stream
+  // abría pero crasheaba con "Cannot set headers after they are sent".
   @Sse('stream')
+  @Header('X-Accel-Buffering', 'no')
   @ApiOperation({
     summary:
       'Stream SSE de notificaciones en tiempo real. Autentica con ?ticket=<jwt sse>. Eventos: type=notification|ping.',
   })
-  async stream(
-    @Query('ticket') ticket: string | undefined,
-    @Req() _req: FastifyRequest,
-    @Res({ passthrough: true }) reply: FastifyReply,
-  ): Promise<Observable<MessageEvent>> {
+  async stream(@Query('ticket') ticket: string | undefined): Promise<Observable<MessageEvent>> {
     if (!ticket) throw new UnauthorizedException('Falta el ticket de stream');
 
     let claims: StreamTicketClaims;
@@ -62,13 +67,6 @@ export class NotificationStreamController {
     } catch {
       throw new UnauthorizedException('Ticket de stream inválido o expirado');
     }
-
-    // Headers anti-buffering: imprescindibles detrás de Traefik/NGINX para que
-    // los eventos se entreguen incrementalmente y no se acumulen en un buffer.
-    // `@Sse` ya setea Content-Type: text/event-stream; estos los complementan.
-    reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
-    reply.raw.setHeader('X-Accel-Buffering', 'no');
-    reply.raw.setHeader('Connection', 'keep-alive');
 
     return this.streamService.register(claims.tenantId, claims.sub);
   }
