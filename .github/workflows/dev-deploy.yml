@@ -1,0 +1,126 @@
+name: dev-deploy
+
+# Pipeline RÁPIDO para dev.didacta.io (NO para releases reales).
+#
+# Construye UNA vez y pushea DIRECTO a Docker Hub con tag móvil `dev-<sha>`
+# (sin GHCR, sin paso de mirror, sin tag semántico, sin merge a main) y dispara
+# el redeploy de Coolify automáticamente. Objetivo: iterar en pruebas en ~1
+# build (~8-9 min) sin pasos manuales.
+#
+# El flujo de release real (imágenes alpha.N → producción) sigue siendo
+# release.yml (tag vX.Y.Z) + mirror-to-dockerhub.yml.
+#
+# Secrets necesarios:
+#   DOCKERHUB_USERNAME / DOCKERHUB_TOKEN  (ya existen)
+#   COOLIFY_BASE_URL   ej. http://135.181.150.202:8000/api/v1
+#   COOLIFY_TOKEN      API token de Coolify (rotar → actualizar secret)
+#   COOLIFY_APP_UUID   uuid del app de dev en Coolify
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Rama o SHA a construir (default: la rama desde la que se lanza)'
+        required: false
+        type: string
+  push:
+    branches: ['dev']
+
+concurrency:
+  group: dev-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: didactaio/community
+
+jobs:
+  build-and-deploy:
+    name: Build → Docker Hub → redeploy Coolify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Compute tags & version
+        id: meta
+        run: |
+          SHA="$(git rev-parse --short=8 HEAD)"
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "tag=dev-${SHA}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Image tag: ${{ env.IMAGE }}:dev-${SHA} (core version ${VERSION})"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & push to Docker Hub
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE }}:dev
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Redeploy Coolify (tag + core version + deploy) & wait
+        env:
+          BASE: ${{ secrets.COOLIFY_BASE_URL }}
+          TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          UUID: ${{ secrets.COOLIFY_APP_UUID }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json")
+
+          echo "→ PATCH image tag = ${TAG}"
+          curl -fsS "${auth[@]}" -X PATCH \
+            -d "{\"docker_registry_image_tag\":\"${TAG}\"}" \
+            "${BASE}/applications/${UUID}" >/dev/null
+
+          echo "→ PATCH DIDACTA_CORE_VERSION = ${VERSION}"
+          curl -fsS "${auth[@]}" -X PATCH \
+            -d "{\"key\":\"DIDACTA_CORE_VERSION\",\"value\":\"${VERSION}\",\"is_preview\":false}" \
+            "${BASE}/applications/${UUID}/envs" >/dev/null
+
+          echo "→ Deploy (force)"
+          DU="$(curl -fsS "${auth[@]}" -X POST "${BASE}/deploy?uuid=${UUID}&force=true" \
+            | python3 -c 'import sys,json;print(json.load(sys.stdin)["deployments"][0]["deployment_uuid"])')"
+          echo "deployment_uuid=${DU}"
+
+          echo "→ Esperando a que termine el deploy…"
+          for i in $(seq 1 60); do
+            ST="$(curl -fsS "${auth[@]}" "${BASE}/deployments/${DU}" \
+              | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("status") if isinstance(d,dict) else d[0].get("status"))')"
+            echo "  [$i] status=${ST}"
+            case "${ST}" in
+              finished) break ;;
+              failed|error|cancelled-by-force) echo "::error::deploy ${ST}"; exit 1 ;;
+            esac
+            sleep 10
+          done
+
+      - name: Smoke test (healthz)
+        run: |
+          set -e
+          for i in $(seq 1 12); do
+            if curl -fsS --max-time 10 https://dev.didacta.io/healthz | grep -q '"status":"ok"'; then
+              echo "healthz OK"; exit 0
+            fi
+            echo "  esperando healthz… ($i)"; sleep 10
+          done
+          echo "::error::healthz no respondió ok"; exit 1
