@@ -3,6 +3,7 @@ import type { NotificationHubService, TenantConfigService } from '@didacta/core-
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
 import { SmtpAdapterService, type SmtpConfig } from './smtp-adapter.service';
+import { TenantSmtpResolverService } from './tenant-smtp-resolver.service';
 
 /**
  * Implementación real del NotificationHub: persiste cada notificación en
@@ -29,6 +30,13 @@ export class PrismaNotificationHubService implements NotificationHubService {
     private readonly logger: PinoLogger,
     private readonly tenantConfig?: TenantConfigService,
     private readonly smtp?: SmtpAdapterService,
+    /**
+     * alpha.75 — si está presente, la resolución de SMTP delega en él, lo
+     * que añade fallback a env globales (SMTP_HOST/PORT/USER/PASS/FROM)
+     * cuando el tenant no tiene config propia. Sin él, comportamiento
+     * legacy: skip si tenant no configuró SMTP.
+     */
+    private readonly smtpResolver?: TenantSmtpResolverService,
   ) {}
 
   async send(notification: {
@@ -102,29 +110,44 @@ export class PrismaNotificationHubService implements NotificationHubService {
       return;
     }
 
-    const rawConfig = await this.tenantConfig.get(args.tenantId, 'notifications', 'smtp');
-    if (!rawConfig) {
-      await this.markFailed(args.notificationId, 'smtp_not_configured');
-      this.logger.log(
-        { notificationId: args.notificationId, tenantId: args.tenantId },
-        'EMAIL skip: el tenant no configuró SMTP en /admin/configuracion',
-      );
-      return;
-    }
-
+    // alpha.75: prioriza el resolver (con fallback a env globales). Si no
+    // está inyectado, cae al path legacy (sólo tenant_setting del tenant).
     let config: SmtpConfig;
-    try {
-      config = this.smtp.parseConfig(rawConfig);
-    } catch (err) {
-      await this.markFailed(
-        args.notificationId,
-        `smtp_config_invalid:${(err as Error).message.slice(0, 200)}`,
-      );
-      this.logger.warn(
-        { notificationId: args.notificationId, tenantId: args.tenantId },
-        'EMAIL skip: la config SMTP del tenant no es válida',
-      );
-      return;
+    if (this.smtpResolver) {
+      const resolved = await this.smtpResolver.resolve(args.tenantId);
+      if (!resolved) {
+        await this.markFailed(args.notificationId, 'smtp_not_configured');
+        this.logger.log(
+          { notificationId: args.notificationId, tenantId: args.tenantId },
+          'EMAIL skip: el tenant no configuró SMTP y no hay fallback global',
+        );
+        return;
+      }
+      config = resolved.config;
+    } else {
+      const rawConfig = await this.tenantConfig.get(args.tenantId, 'notifications', 'smtp');
+      if (!rawConfig) {
+        await this.markFailed(args.notificationId, 'smtp_not_configured');
+        this.logger.log(
+          { notificationId: args.notificationId, tenantId: args.tenantId },
+          'EMAIL skip: el tenant no configuró SMTP en /admin/configuracion',
+        );
+        return;
+      }
+
+      try {
+        config = this.smtp.parseConfig(rawConfig);
+      } catch (err) {
+        await this.markFailed(
+          args.notificationId,
+          `smtp_config_invalid:${(err as Error).message.slice(0, 200)}`,
+        );
+        this.logger.warn(
+          { notificationId: args.notificationId, tenantId: args.tenantId },
+          'EMAIL skip: la config SMTP del tenant no es válida',
+        );
+        return;
+      }
     }
 
     const recipientEmail = await this.resolveUserEmail(args.tenantId, args.userId);

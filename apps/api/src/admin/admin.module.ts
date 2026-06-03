@@ -4,6 +4,7 @@ import { ModulesModule } from '../modules/modules.module';
 import { SsoOidcModule } from '../sso/oidc/oidc.module';
 import { SsoSamlModule } from '../sso/saml/saml.module';
 import { AdminModulesController } from './admin-modules.controller';
+import { AdminSmtpController } from './admin-smtp.controller';
 import { AdminStatsController } from './admin-stats.controller';
 import { AdminStatsService } from './admin-stats.service';
 import { AdminTenantsController } from './admin-tenants.controller';
@@ -35,6 +36,9 @@ import { SuperUsersService } from './super/super-users.service';
     AdminTenantsController,
     AdminModulesController,
     AdminStatsController,
+    // SMTP per-tenant — GET/PUT/POST test. Wrappea el almacenamiento
+    // genérico de tenant_setting con un contrato dedicado (alpha.75).
+    AdminSmtpController,
     // Cuarto piloto License SDK — gate feat:custom_domains end-to-end.
     CustomDomainsController,
     // Séptimo piloto License SDK — gestión del token SCIM por tenant.

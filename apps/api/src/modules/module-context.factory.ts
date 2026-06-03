@@ -20,6 +20,7 @@ import { PrismaNotificationHubService } from './prisma-notification-hub.service'
 import { PrismaTenantConfigService } from './prisma-tenant-config.service';
 import { SecretCipherService } from './secret-cipher.service';
 import { SmtpAdapterService } from './smtp-adapter.service';
+import { TenantSmtpResolverService } from './tenant-smtp-resolver.service';
 import { loadCipherKey } from '../auth/cipher-key';
 
 /**
@@ -94,6 +95,7 @@ export class ModuleContextFactory {
   private readonly cipher = new SecretCipherService(loadCipherKey().key);
   private readonly smtp = new SmtpAdapterService();
   private tenantConfig?: PrismaTenantConfigService;
+  private smtpResolver?: TenantSmtpResolverService;
   private eventBus?: PersistentEventBus;
 
   constructor(
@@ -109,11 +111,13 @@ export class ModuleContextFactory {
     const auditLog = new PrismaAuditLogService(this.prisma);
     const evidenceVault = new PrismaEvidenceVaultService(this.prisma, this.storage);
     this.tenantConfig = new PrismaTenantConfigService(this.prisma, this.cipher, auditLog);
+    this.smtpResolver = new TenantSmtpResolverService(this.tenantConfig, this.smtp);
     const notificationHub = new PrismaNotificationHubService(
       this.prisma,
       this.pino,
       this.tenantConfig,
       this.smtp,
+      this.smtpResolver,
     );
     void stubNotificationHub; // se mantiene exportado para tests; producción usa Prisma.
     return {
@@ -136,11 +140,23 @@ export class ModuleContextFactory {
       this.pino,
       this.getTenantConfig(),
       this.smtp,
+      this.getSmtpResolver(),
     );
   }
 
   getSmtpAdapter(): SmtpAdapterService {
     return this.smtp;
+  }
+
+  /**
+   * Resolver de SMTP per-tenant con fallback a env globales. Compartido
+   * por NotificationHub, AdminSmtpController y password reset.
+   */
+  getSmtpResolver(): TenantSmtpResolverService {
+    if (!this.smtpResolver) {
+      this.smtpResolver = new TenantSmtpResolverService(this.getTenantConfig(), this.smtp);
+    }
+    return this.smtpResolver;
   }
 
   /** Devuelve el storage activo. Si es S3 expone también `ping()` para health. */

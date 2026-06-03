@@ -1,6 +1,6 @@
 {
   "name": "@didacta/api",
-  "version": "0.0.1-alpha.74",
+  "version": "0.0.1-alpha.75",
   "private": true,
   "description": "Backend NestJS de Didacta",
   "type": "commonjs",

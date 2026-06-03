@@ -5,6 +5,7 @@ import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaTenantConfigService } from '../modules/prisma-tenant-config.service';
 import { SecretCipherService } from '../modules/secret-cipher.service';
 import { SmtpAdapterService } from '../modules/smtp-adapter.service';
+import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
 import { ApiKeyController } from './api-key.controller';
 import { MeController } from './me.controller';
 import { JwtOrApiKeyGuard } from './api-key.guard';
@@ -67,6 +68,16 @@ function loadCipherKeyForAuth(): string {
         auditLog: PrismaAuditLogService,
       ) => new PrismaTenantConfigService(prisma, cipher, auditLog),
     },
+    // TenantSmtpResolverService — centraliza la cascada tenant→global→none
+    // para todos los call sites de envío de mail (password reset, hub,
+    // smoke test admin). Inyectamos manual porque depende de la interface
+    // del kernel (TenantConfigService) y NestJS no resuelve interfaces.
+    {
+      provide: TenantSmtpResolverService,
+      inject: [PrismaTenantConfigService, SmtpAdapterService],
+      useFactory: (config: PrismaTenantConfigService, smtp: SmtpAdapterService) =>
+        new TenantSmtpResolverService(config, smtp),
+    },
     // MfaPolicyService — orquesta CRUD de la política tenant-wide y la
     // evaluación del enforcement en el flujo de login. Inyectamos manual
     // para mantener la fuente de verdad de PrismaTenantConfigService dentro
@@ -93,6 +104,10 @@ function loadCipherKeyForAuth(): string {
     // en CustomDomainsService (cuarto piloto License SDK) sin reproveerlo.
     // La instancia queda compartida con AuthModule (donde la usa MfaPolicyService).
     PrismaTenantConfigService,
+    // Exportado para que AdminModule (AdminSmtpController) y cualquier
+    // otro caller que mande mail use el mismo resolver.
+    SmtpAdapterService,
+    TenantSmtpResolverService,
   ],
 })
 export class AuthModule {}

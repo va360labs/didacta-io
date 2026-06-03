@@ -1,9 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Optional, UnauthorizedException } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaTenantConfigService } from '../modules/prisma-tenant-config.service';
 import { SmtpAdapterService } from '../modules/smtp-adapter.service';
+import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { ClientContext } from './client-context';
 import { PasswordService } from './password.service';
@@ -35,6 +36,10 @@ export class PasswordResetService {
     private readonly smtp: SmtpAdapterService,
     private readonly tenantConfig: PrismaTenantConfigService,
     private readonly logger: PinoLogger,
+    // Opcional para compat con tests que aún no inyectan el resolver:
+    // si no está presente, caemos al path histórico de leer SMTP del tenant
+    // directo del TenantConfigService (sin fallback a env globales).
+    @Optional() private readonly smtpResolver?: TenantSmtpResolverService,
   ) {}
 
   /**
@@ -170,34 +175,52 @@ export class PasswordResetService {
     const result = await this.request(args, ctx, opts);
     if (!result) return;
 
-    let smtpRaw: unknown;
-    try {
-      smtpRaw = await this.tenantConfig.get(result.tenantId, 'notifications', 'smtp');
-    } catch (err) {
-      this.logger.warn(
-        { err, tenantId: result.tenantId },
-        'forgot-password: no se pudo leer config SMTP del tenant',
-      );
-      return;
-    }
-
-    if (!smtpRaw) {
-      this.logger.warn(
-        { tenantId: result.tenantId },
-        'forgot-password: tenant sin SMTP configurado, email no enviado',
-      );
-      return;
-    }
-
+    // alpha.75 — pasamos por el TenantSmtpResolverService cuando está
+    // disponible. Eso permite que el reset funcione aunque el tenant aún
+    // no configuró SMTP propio: si el despliegue tiene SMTP_HOST/PORT/FROM
+    // globales, los usamos como fallback. Si no, log+skip (anti-leak: el
+    // endpoint igual devuelve 200 genérico).
     let config;
-    try {
-      config = this.smtp.parseConfig(smtpRaw);
-    } catch (err) {
-      this.logger.warn(
-        { err, tenantId: result.tenantId },
-        'forgot-password: SMTP del tenant inválido',
-      );
-      return;
+    if (this.smtpResolver) {
+      const resolved = await this.smtpResolver.resolve(result.tenantId);
+      if (!resolved) {
+        this.logger.warn(
+          { tenantId: result.tenantId },
+          'forgot-password: ni tenant ni fallback global tienen SMTP — email no enviado',
+        );
+        return;
+      }
+      config = resolved.config;
+    } else {
+      // Path legacy (tests no inyectaron resolver).
+      let smtpRaw: unknown;
+      try {
+        smtpRaw = await this.tenantConfig.get(result.tenantId, 'notifications', 'smtp');
+      } catch (err) {
+        this.logger.warn(
+          { err, tenantId: result.tenantId },
+          'forgot-password: no se pudo leer config SMTP del tenant',
+        );
+        return;
+      }
+
+      if (!smtpRaw) {
+        this.logger.warn(
+          { tenantId: result.tenantId },
+          'forgot-password: tenant sin SMTP configurado, email no enviado',
+        );
+        return;
+      }
+
+      try {
+        config = this.smtp.parseConfig(smtpRaw);
+      } catch (err) {
+        this.logger.warn(
+          { err, tenantId: result.tenantId },
+          'forgot-password: SMTP del tenant inválido',
+        );
+        return;
+      }
     }
 
     const { subject, html, text } = this.buildResetEmail(
