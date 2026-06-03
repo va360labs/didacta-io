@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { SmtpSettingsCard } from '@/components/admin/smtp-settings-card';
+import { TenantIdentityCard } from '@/components/admin/tenant-identity-card';
 import { adminModulesApi, type TenantModuleListItem } from '@/lib/admin-modules';
 import { meApi } from '@/lib/me';
 import { adminTenantsApi, type TenantListItem } from '@/lib/admin-tenants';
@@ -40,6 +41,10 @@ interface ConfigTabSpec {
   Component?: React.ComponentType;
 }
 
+/// Tabs base disponibles para cualquier tenant_admin. `general` se inyecta
+/// dinámicamente al principio sólo cuando la sesión tiene rol super_admin
+/// (la API rechaza el PATCH /admin/tenants/:id con 403 para cualquier otro
+/// rol — ocultar el tab evita un click muerto).
 const CORE_TABS: ConfigTabSpec[] = [
   {
     key: 'notifications',
@@ -64,11 +69,23 @@ const CORE_TABS: ConfigTabSpec[] = [
   },
 ];
 
+/// Tab "general" (identidad del tenant). Va PRIMERO porque renombrar la
+/// organización es el setting más fundamental — antes que SMTP, storage o
+/// cualquier módulo. Sólo aplica a super_admin (gating duro en
+/// `visibleTabs` dentro del componente).
+const GENERAL_TAB: ConfigTabSpec = {
+  key: 'general',
+  label: 'General',
+  description: 'Nombre de la organización (usado en emails y header).',
+};
+
 /// Lista combinada CORE + EXTENSIONS, calculada una vez por mount. El
-/// orden es: tabs del core en su orden declarado, seguido de los tabs
-/// de extensión en el orden del catálogo. Ningún módulo puede pisar el
-/// `key` de un tab del core (validado en runtime).
+/// orden es: tab general (super_admin), tabs del core en su orden
+/// declarado, seguido de los tabs de extensión en el orden del catálogo.
+/// Ningún módulo puede pisar el `key` de un tab del core (validado en
+/// runtime).
 const ALL_TABS: ConfigTabSpec[] = [
+  GENERAL_TAB,
   ...CORE_TABS,
   ...flatAdminConfigTabs().map(({ moduleName, tab }) => ({
     key: tab.key,
@@ -84,8 +101,17 @@ type TabKey = string;
 export default function ConfiguracionPage() {
   const [items, setItems] = useState<TenantSettingMetadata[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabKey>('notifications');
   const [activeModules, setActiveModules] = useState<Set<string> | null>(null);
+
+  // El tab "general" (identidad de la organización) sólo se muestra a
+  // super_admin porque el endpoint backend que renombra el tenant es
+  // super_admin-only. Para el resto de roles el tab inicial sigue siendo
+  // "notifications" (compat con el comportamiento previo).
+  const isSuperAdmin = (() => {
+    const session = authStorage.getSession();
+    return session?.user.roles.includes('super_admin') ?? false;
+  })();
+  const [tab, setTab] = useState<TabKey>(isSuperAdmin ? 'general' : 'notifications');
 
   // Carga la lista de módulos activos del tenant para filtrar tabs cuyo
   // módulo está desactivado (ej. mod.zoom-live → oculta "Aula virtual").
@@ -127,6 +153,7 @@ export default function ConfiguracionPage() {
   /// módulo desactivado. Tabs del core (sin `requiresModule`) siempre
   /// visibles.
   const visibleTabs = ALL_TABS.filter((t) => {
+    if (t.key === 'general') return isSuperAdmin;
     if (!t.requiresModule) return true;
     if (!activeModules) return false;
     return activeModules.has(t.requiresModule);
@@ -224,6 +251,8 @@ export default function ConfiguracionPage() {
           );
         })}
       </div>
+
+      {tab === 'general' ? <TenantIdentityCard /> : null}
 
       {tab === 'notifications' ? <SmtpSettingsCard /> : null}
 

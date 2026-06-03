@@ -63,6 +63,20 @@ export const adminTenantsApi = {
       bearer,
     );
   },
+  /**
+   * Renombra el tenant (`tenant.name`). Backend en alpha.77 expone
+   * `PATCH /admin/tenants/:id` con body `{ name: string }` (1-120 chars).
+   * El nombre aparece en la firma de los emails ("Equipo {name}") y en el
+   * header/sidebar del admin, por lo que cambiarlo suele requerir un
+   * reload para refrescar componentes que tienen el valor cacheado.
+   */
+  async rename(bearer: string, id: string, name: string): Promise<TenantListItem> {
+    return apiFetch<TenantListItem>(
+      `/api/v1/admin/tenants/${id}`,
+      { method: 'PATCH', body: JSON.stringify({ name }) },
+      bearer,
+    );
+  },
   async addDomain(bearer: string, id: string, hostname: string): Promise<TenantListItem> {
     return apiFetch<TenantListItem>(
       `/api/v1/admin/tenants/${id}/domains`,
