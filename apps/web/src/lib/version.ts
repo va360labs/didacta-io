@@ -13,7 +13,7 @@
 /// Cuando se publica un alpha nuevo, ACTUALIZAR esta constante ANTES
 /// del build — sin esto el sidebar muestra una versión obsoleta tras
 /// el deploy.
-export const APP_VERSION = '0.0.1-alpha.75';
+export const APP_VERSION = '0.0.1-alpha.76';
 
 /// Canal de release. `alpha` = inestable, alta cadencia. Cuando hagamos
 /// `beta`/`stable` añadir como literal type para que el banner del

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { SmtpSettingsCard } from '@/components/admin/smtp-settings-card';
 import { adminModulesApi, type TenantModuleListItem } from '@/lib/admin-modules';
 import { meApi } from '@/lib/me';
 import { adminTenantsApi, type TenantListItem } from '@/lib/admin-tenants';
@@ -15,67 +16,6 @@ import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { tenantSettingsApi, type TenantSettingMetadata } from '@/lib/tenant-settings';
 import { flatAdminConfigTabs } from '@/modules';
-
-type SmtpProvider = 'custom' | 'brevo' | 'ses' | 'gmail' | 'mailgun' | 'sendgrid' | 'postmark';
-
-interface SmtpDraft {
-  provider: SmtpProvider;
-  host: string;
-  port: string;
-  user: string;
-  password: string;
-  from: string;
-}
-
-const EMPTY_SMTP: SmtpDraft = {
-  provider: 'custom',
-  host: '',
-  port: '587',
-  user: '',
-  password: '',
-  from: '',
-};
-
-/**
- * Presets de hosts/puertos por provider para que el admin no tenga que
- * memorizar. Al cambiar el selector, los campos host/port se autorrellenan
- * sólo si el admin no los había tocado todavía. Cada preset usa SMTP
- * estándar — todos los providers listados (Brevo, SES, Gmail, Mailgun,
- * Sendgrid, Postmark) tienen interfaz SMTP relay.
- */
-const SMTP_PRESETS: Record<SmtpProvider, { host: string; port: string; hint: string }> = {
-  custom: { host: '', port: '587', hint: 'SMTP genérico de tu hosting o servidor propio.' },
-  brevo: {
-    host: 'smtp-relay.brevo.com',
-    port: '587',
-    hint: 'Brevo (ex Sendinblue). Usuario = email; password = SMTP key (no la del login).',
-  },
-  ses: {
-    host: 'email-smtp.eu-central-1.amazonaws.com',
-    port: '587',
-    hint: 'AWS SES via SMTP. Cambiá el host por la región (eu-west-1, us-east-1, etc.). Usuario y password se generan en IAM > SMTP credentials.',
-  },
-  gmail: {
-    host: 'smtp.gmail.com',
-    port: '587',
-    hint: 'Gmail / Google Workspace. Usuario = email completo; password = App Password (requiere 2FA habilitado).',
-  },
-  mailgun: {
-    host: 'smtp.mailgun.org',
-    port: '587',
-    hint: 'Mailgun. Usuario = postmaster@dominio; password = SMTP password del dominio.',
-  },
-  sendgrid: {
-    host: 'smtp.sendgrid.net',
-    port: '587',
-    hint: 'Sendgrid. Usuario fijo = "apikey"; password = la API key con permiso Mail Send.',
-  },
-  postmark: {
-    host: 'smtp.postmarkapp.com',
-    port: '587',
-    hint: 'Postmark. Usuario y password = el Server API token.',
-  },
-};
 
 // Branding tiene su propia pantalla en /admin/branding con preview live.
 // Se removió la tab acá para no duplicar entry-point y confundir al admin.
@@ -200,14 +140,10 @@ export default function ConfiguracionPage() {
       setTab(visibleTabs[0].key);
     }
   }, [activeModules, tab, visibleTabs]);
-  const [smtp, setSmtp] = useState<SmtpDraft>(EMPTY_SMTP);
-  const [smtpStatus, setSmtpStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [smtpError, setSmtpError] = useState<string | null>(null);
-  const [hasStoredPassword, setHasStoredPassword] = useState(false);
-  const [smtpHydrating, setSmtpHydrating] = useState(true);
-  const [smtpDecryptFailed, setSmtpDecryptFailed] = useState(false);
-  const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const [testMessage, setTestMessage] = useState<string | null>(null);
+
+  // El tab "notifications" delega 100% en `SmtpSettingsCard`, que tiene su
+  // propio estado, cliente HTTP y modales. La page sólo gestiona la lista
+  // genérica de `tenant_setting` para el tab "Avanzado" (raw).
 
   async function reload() {
     try {
@@ -226,105 +162,6 @@ export default function ConfiguracionPage() {
     void reload();
   }, []);
 
-  // Hidratar el form de SMTP con los campos no-secretos guardados (UI-FIX-02).
-  // El backend devuelve host/port/user/from descifrados y el password como null
-  // (redactado). Detectamos `hasStoredPassword` para mostrar placeholder claro.
-  useEffect(() => {
-    if (!items) return;
-    const smtpMeta = items.find((i) => i.moduleName === 'notifications' && i.key === 'smtp');
-    if (!smtpMeta?.hasValue) {
-      setHasStoredPassword(false);
-      setSmtpHydrating(false);
-      return;
-    }
-    let cancelled = false;
-    void tenantSettingsApi
-      .get('notifications', 'smtp')
-      .then((detail) => {
-        if (cancelled) return;
-        setSmtpDecryptFailed(detail.decryptFailed === true);
-        const v = detail.value;
-        if (!v || typeof v !== 'object') {
-          setSmtpHydrating(false);
-          return;
-        }
-        const obj = v as Record<string, unknown>;
-        setSmtp((s) => ({
-          ...s,
-          host: typeof obj['host'] === 'string' ? (obj['host'] as string) : s.host,
-          port:
-            typeof obj['port'] === 'number'
-              ? String(obj['port'])
-              : typeof obj['port'] === 'string'
-                ? (obj['port'] as string)
-                : s.port,
-          user: typeof obj['user'] === 'string' ? (obj['user'] as string) : s.user,
-          from: typeof obj['from'] === 'string' ? (obj['from'] as string) : s.from,
-          // password queda vacío — el backend hace merge y conserva el guardado
-          // si no tipeás uno nuevo (alpha.69).
-        }));
-        setHasStoredPassword(true);
-        setSmtpHydrating(false);
-      })
-      .catch(() => {
-        // Si falla la hidratación, el form queda con defaults.
-        setSmtpHydrating(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [items]);
-
-  async function handleSaveSmtp(e: FormEvent) {
-    e.preventDefault();
-    setSmtpStatus('saving');
-    setSmtpError(null);
-    try {
-      const port = Number(smtp.port);
-      if (!Number.isInteger(port) || port < 1 || port > 65535) {
-        throw new Error('El puerto debe ser un número entre 1 y 65535.');
-      }
-      // Contraseña: solo es required si NO hay una guardada todavía. Si ya
-      // hay password guardada y el campo está vacío, el backend hace merge
-      // y conserva la guardada. Ver alpha.69.
-      if (!smtp.password && !hasStoredPassword) {
-        throw new Error('Contraseña requerida.');
-      }
-      await tenantSettingsApi.upsert('notifications', 'smtp', {
-        isSecret: true,
-        value: {
-          host: smtp.host.trim(),
-          port,
-          user: smtp.user.trim(),
-          // Mandamos el password siempre. Si está vacío, el backend lo
-          // interpreta como "no cambiar" y mantiene el guardado.
-          password: smtp.password,
-          from: smtp.from.trim(),
-        },
-      });
-      setSmtpStatus('saved');
-      setSmtp((s) => ({ ...s, password: '' }));
-      await reload();
-    } catch (e) {
-      setSmtpStatus('error');
-      setSmtpError(e instanceof Error ? e.message : 'No pudimos guardar la configuración SMTP.');
-    }
-  }
-
-  function handleProviderChange(provider: SmtpProvider) {
-    const preset = SMTP_PRESETS[provider];
-    setSmtp((s) => ({
-      ...s,
-      provider,
-      // Sólo sobrescribimos host/port si el admin no los había tocado o
-      // si vienen de un preset previo. Heurística simple: si el host
-      // actual coincide con algún preset (incluido el vacío), lo
-      // reemplazamos.
-      host: Object.values(SMTP_PRESETS).some((p) => p.host === s.host) ? preset.host : s.host,
-      port: Object.values(SMTP_PRESETS).some((p) => p.port === s.port) ? preset.port : s.port,
-    }));
-  }
-
   async function handleDelete(scope: string, key: string) {
     if (
       !confirm(
@@ -337,23 +174,6 @@ export default function ConfiguracionPage() {
       await reload();
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar el setting.');
-    }
-  }
-
-  async function handleTestSmtp() {
-    setTestStatus('sending');
-    setTestMessage(null);
-    try {
-      const result = await tenantSettingsApi.testSmtp();
-      setTestStatus('sent');
-      setTestMessage(`Email enviado a ${result.sentTo}. Revisá tu bandeja.`);
-    } catch (e) {
-      setTestStatus('error');
-      setTestMessage(
-        e instanceof ApiHttpError
-          ? e.message
-          : 'No pudimos enviar el email de prueba. Verificá los datos.',
-      );
     }
   }
 
@@ -405,154 +225,7 @@ export default function ConfiguracionPage() {
         })}
       </div>
 
-      {tab === 'notifications' ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Notificaciones · SMTP</CardTitle>
-            <CardDescription>
-              Servidor saliente para enviar emails. Si no configuras esto, las notificaciones
-              quedarán registradas pero no se enviarán. Soporta SMTP genérico, Brevo, AWS SES (via
-              SMTP), Gmail, Mailgun, Sendgrid y Postmark.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {smtpHydrating ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="skeleton h-10 sm:col-span-2" />
-                <div className="skeleton h-10" />
-                <div className="skeleton h-10" />
-                <div className="skeleton h-10" />
-                <div className="skeleton h-10" />
-                <div className="skeleton h-10 sm:col-span-2" />
-              </div>
-            ) : null}
-            {!smtpHydrating && smtpDecryptFailed ? (
-              <div
-                role="alert"
-                className="mb-4 rounded-lg border border-warning-200 bg-warning-50 p-3 text-sm text-warning-700"
-              >
-                <p className="font-semibold">La configuración guardada no se puede leer</p>
-                <p className="mt-0.5">
-                  La clave de cifrado del cluster cambió desde que se guardó esta configuración.
-                  Re-tipeá todos los campos y apretá &quot;Guardar SMTP&quot; para reciclarla con la
-                  clave actual. Esto suele pasar después de un redeploy que regeneró la clave.
-                </p>
-              </div>
-            ) : null}
-            <form
-              onSubmit={handleSaveSmtp}
-              className={`grid gap-4 sm:grid-cols-2 ${smtpHydrating ? 'hidden' : ''}`}
-            >
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="smtp-provider">Proveedor</Label>
-                <Select
-                  id="smtp-provider"
-                  value={smtp.provider}
-                  onChange={(e) => handleProviderChange(e.target.value as SmtpProvider)}
-                >
-                  <option value="custom">SMTP genérico (hosting / servidor propio)</option>
-                  <option value="brevo">Brevo (ex Sendinblue)</option>
-                  <option value="ses">AWS SES (vía SMTP)</option>
-                  <option value="gmail">Gmail / Google Workspace</option>
-                  <option value="mailgun">Mailgun</option>
-                  <option value="sendgrid">Sendgrid</option>
-                  <option value="postmark">Postmark</option>
-                </Select>
-                <p className="text-xs text-text-subtle">{SMTP_PRESETS[smtp.provider].hint}</p>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="smtp-host">Host</Label>
-                <Input
-                  id="smtp-host"
-                  required
-                  value={smtp.host}
-                  onChange={(e) => setSmtp({ ...smtp, host: e.target.value })}
-                  placeholder="smtp-relay.brevo.com"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="smtp-port">Puerto</Label>
-                <Input
-                  id="smtp-port"
-                  required
-                  inputMode="numeric"
-                  value={smtp.port}
-                  onChange={(e) => setSmtp({ ...smtp, port: e.target.value })}
-                  placeholder="587"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="smtp-user">Usuario</Label>
-                <Input
-                  id="smtp-user"
-                  required
-                  autoComplete="off"
-                  value={smtp.user}
-                  onChange={(e) => setSmtp({ ...smtp, user: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="smtp-pass">Contraseña</Label>
-                <Input
-                  id="smtp-pass"
-                  required={!hasStoredPassword}
-                  type="password"
-                  autoComplete="new-password"
-                  value={smtp.password}
-                  onChange={(e) => setSmtp({ ...smtp, password: e.target.value })}
-                  placeholder={hasStoredPassword ? '••••••• (guardada — dejá vacío para no cambiarla)' : ''}
-                />
-                {hasStoredPassword ? (
-                  <p className="text-xs text-text-subtle">
-                    Hay una contraseña guardada. Dejala vacía para mantenerla, o tipeá una nueva
-                    para reemplazarla.
-                  </p>
-                ) : null}
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="smtp-from">Remitente (From)</Label>
-                <Input
-                  id="smtp-from"
-                  required
-                  type="email"
-                  value={smtp.from}
-                  onChange={(e) => setSmtp({ ...smtp, from: e.target.value })}
-                  placeholder="noreply@tu-dominio.com"
-                />
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
-                <Button type="submit" disabled={smtpStatus === 'saving'}>
-                  {smtpStatus === 'saving' ? 'Guardando…' : 'Guardar SMTP'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleTestSmtp}
-                  disabled={testStatus === 'sending'}
-                >
-                  {testStatus === 'sending' ? 'Enviando…' : 'Probar envío'}
-                </Button>
-                {smtpStatus === 'saved' ? (
-                  <span className="text-sm text-success-700">
-                    ✓ Guardado cifrado · El servidor enviará emails con esta config a partir de la
-                    próxima notificación.
-                  </span>
-                ) : null}
-                {smtpStatus === 'error' && smtpError ? (
-                  <span className="text-sm text-danger-700">{smtpError}</span>
-                ) : null}
-                {testStatus === 'sent' && testMessage ? (
-                  <span className="text-sm text-success-700">{testMessage}</span>
-                ) : null}
-                {testStatus === 'error' && testMessage ? (
-                  <span className="text-sm text-danger-700">{testMessage}</span>
-                ) : null}
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      ) : null}
+      {tab === 'notifications' ? <SmtpSettingsCard /> : null}
 
       {tab === 'modules' ? <ModulesTab /> : null}
 
@@ -654,7 +327,6 @@ export default function ConfiguracionPage() {
     </section>
   );
 }
-
 
 function ModulesTab() {
   const [items, setItems] = useState<TenantModuleListItem[] | null>(null);
@@ -780,48 +452,48 @@ function ModulesTab() {
       {items
         .filter((item) => !item.isCore)
         .map((item) => (
-        <Card key={item.name}>
-          <CardContent className="flex flex-wrap items-start justify-between gap-4 p-4">
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base font-semibold">{item.displayName}</h3>
-                <Badge variant="muted" className="font-mono text-[11px]">
-                  {item.name}@{item.version}
-                </Badge>
-                {item.enabled ? (
-                  <Badge variant="success">Activo</Badge>
-                ) : (
-                  <Badge variant="muted">Desactivado</Badge>
-                )}
+          <Card key={item.name}>
+            <CardContent className="flex flex-wrap items-start justify-between gap-4 p-4">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base font-semibold">{item.displayName}</h3>
+                  <Badge variant="muted" className="font-mono text-[11px]">
+                    {item.name}@{item.version}
+                  </Badge>
+                  {item.enabled ? (
+                    <Badge variant="success">Activo</Badge>
+                  ) : (
+                    <Badge variant="muted">Desactivado</Badge>
+                  )}
+                </div>
+                {item.description ? (
+                  <p className="text-sm text-text-muted">{item.description}</p>
+                ) : null}
+                {item.dependencies.length > 0 ? (
+                  <p className="text-xs text-text-subtle">
+                    Depende de: <span className="font-mono">{item.dependencies.join(', ')}</span>
+                  </p>
+                ) : null}
+                {item.dependents.length > 0 ? (
+                  <p className="text-xs text-text-subtle">
+                    Usado por: <span className="font-mono">{item.dependents.join(', ')}</span>
+                  </p>
+                ) : null}
               </div>
-              {item.description ? (
-                <p className="text-sm text-text-muted">{item.description}</p>
-              ) : null}
-              {item.dependencies.length > 0 ? (
-                <p className="text-xs text-text-subtle">
-                  Depende de: <span className="font-mono">{item.dependencies.join(', ')}</span>
-                </p>
-              ) : null}
-              {item.dependents.length > 0 ? (
-                <p className="text-xs text-text-subtle">
-                  Usado por: <span className="font-mono">{item.dependents.join(', ')}</span>
-                </p>
-              ) : null}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-text-subtle tabular-nums">
-                {busy === item.name ? 'Guardando…' : item.enabled ? 'Activo' : 'Desactivado'}
-              </span>
-              <Switch
-                checked={item.enabled}
-                onCheckedChange={() => toggle(item)}
-                disabled={busy !== null}
-                label={`${item.enabled ? 'Desactivar' : 'Activar'} ${item.displayName}`}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-text-subtle tabular-nums">
+                  {busy === item.name ? 'Guardando…' : item.enabled ? 'Activo' : 'Desactivado'}
+                </span>
+                <Switch
+                  checked={item.enabled}
+                  onCheckedChange={() => toggle(item)}
+                  disabled={busy !== null}
+                  label={`${item.enabled ? 'Desactivar' : 'Activar'} ${item.displayName}`}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
 
       {confirmCascade ? (
         <div
