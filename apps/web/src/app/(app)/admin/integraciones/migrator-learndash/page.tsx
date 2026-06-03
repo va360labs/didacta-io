@@ -53,7 +53,8 @@ export default function MigratorLearndashPage(): React.ReactElement | null {
       } catch (err) {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : String(err);
-        const code = err instanceof ModuleUINotFoundError ? 'MODULE_UI_NOT_FOUND' : 'MODULE_UI_LOAD_ERROR';
+        const code =
+          err instanceof ModuleUINotFoundError ? 'MODULE_UI_NOT_FOUND' : 'MODULE_UI_LOAD_ERROR';
         setLoadError(`${code}: ${msg}`);
       }
     })();
@@ -79,8 +80,8 @@ export default function MigratorLearndashPage(): React.ReactElement | null {
               <strong>super_admin</strong>.
             </p>
             <p className="text-sm text-text-muted">
-              Si necesitas migrar tu academia LearnDash, contacta con el
-              administrador de la instancia.
+              Si necesitas migrar tu academia LearnDash, contacta con el administrador de la
+              instancia.
             </p>
             <div>
               <Button asChild variant="secondary">
@@ -100,8 +101,7 @@ export default function MigratorLearndashPage(): React.ReactElement | null {
           Migrar desde WordPress + LearnDash
         </h1>
         <p className="mt-1 text-text-muted">
-          Asistente paso a paso para administradores. Tu sitio actual no se
-          modifica.
+          Asistente paso a paso para administradores. Tu sitio actual no se modifica.
         </p>
       </header>
       {loadError && (
@@ -111,9 +111,9 @@ export default function MigratorLearndashPage(): React.ReactElement | null {
               No se pudo cargar la UI del módulo: {loadError}
             </p>
             <p className="text-xs text-text-muted">
-              Verificá que el módulo <code>mod.migrator-learndash</code> esté instalado
-              en una versión que incluya el surface admin (1.0.15+). Subí el
-              ZIP actualizado desde el marketplace.
+              Verifica que el módulo <code>mod.migrator-learndash</code> esté instalado en una
+              versión que incluya el surface admin (1.0.15+). Sube el ZIP actualizado desde el
+              marketplace.
             </p>
           </CardContent>
         </Card>

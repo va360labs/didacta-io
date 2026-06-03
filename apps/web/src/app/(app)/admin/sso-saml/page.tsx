@@ -97,7 +97,7 @@ function SamlPanel() {
     if (session?.user.tenantSlug) setTenantSlug(session.user.tenantSlug);
     const token = authStorage.getAccessToken();
     if (!token) {
-      setLoadError('Sesión sin token. Volvé a iniciar sesión.');
+      setLoadError('Sesión sin token. Vuelve a iniciar sesión.');
       setLoading(false);
       return;
     }
@@ -146,7 +146,7 @@ function SamlPanel() {
     setActionSuccess(null);
     setProbe(null);
     if (!form.idpSsoUrl.trim() || !form.idpCertificate.trim()) {
-      setActionError('Completá la URL SSO y el certificado del IdP antes de probar.');
+      setActionError('Completa la URL SSO y el certificado del IdP antes de probar.');
       return;
     }
     const token = authStorage.getAccessToken();
@@ -287,7 +287,7 @@ function SamlPanel() {
               ? 'El botón de SSO SAML aparecerá en /signin y los usuarios podrán entrar con su IdP corporativo.'
               : serverConfig
                 ? 'Hay configuración guardada pero está deshabilitada — el flow no se ofrece.'
-                : 'Aún no has configurado un IdP. Empezá pegando los datos abajo.'}
+                : 'Aún no has configurado un IdP. Empieza pegando los datos abajo.'}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -298,7 +298,7 @@ function SamlPanel() {
           <CardHeader>
             <CardTitle>Datos del SP (Didacta) para configurar en el IdP</CardTitle>
             <CardDescription>
-              Pegá estos valores en el panel del IdP cuando crees la aplicación SAML.
+              Pega estos valores en el panel del IdP cuando crees la aplicación SAML.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -329,8 +329,8 @@ function SamlPanel() {
         <CardHeader>
           <CardTitle>Configuración del IdP</CardTitle>
           <CardDescription>
-            Pegá el Entity ID, la URL del SSO endpoint y el certificado X.509 (PEM) del IdP. Si tu
-            IdP soporta &ldquo;descargar metadata&rdquo;, abrí ese XML y copia los valores de{' '}
+            Pega el Entity ID, la URL del SSO endpoint y el certificado X.509 (PEM) del IdP. Si tu
+            IdP soporta &ldquo;descargar metadata&rdquo;, abre ese XML y copia los valores de{' '}
             <code className="font-mono">entityID</code>,{' '}
             <code className="font-mono">SingleSignOnService Location</code> y{' '}
             <code className="font-mono">X509Certificate</code>.
@@ -362,7 +362,7 @@ function SamlPanel() {
               onChange={(e) => setForm((prev) => ({ ...prev, idpEntityId: e.target.value }))}
             />
             <p className="text-xs text-text-subtle">
-              Identificador único del IdP. Lo encontrás como{' '}
+              Identificador único del IdP. Lo encuentras como{' '}
               <code className="font-mono">entityID</code> en el metadata.
             </p>
           </div>
@@ -460,7 +460,7 @@ function SamlPanel() {
               }
             />
             <p className="text-xs text-text-subtle">
-              Vacío = cualquier email del IdP es aceptado. Si listás, el ACS rechaza emails fuera de
+              Vacío = cualquier email del IdP es aceptado. Si listas, el ACS rechaza emails fuera de
               esos dominios incluso si el IdP los autenticó.
             </p>
           </div>

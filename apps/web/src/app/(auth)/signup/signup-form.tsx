@@ -48,7 +48,7 @@ export function SignUpForm() {
       router.push(response.mfaRequired ? '/mfa/setup' : '/');
     } catch (e) {
       if (e instanceof ApiHttpError) setError(e.message);
-      else setError('No pudimos crear tu cuenta. Probá de nuevo en unos segundos.');
+      else setError('No pudimos crear tu cuenta. Prueba de nuevo en unos segundos.');
     } finally {
       setPending(false);
     }
@@ -115,7 +115,7 @@ export function SignUpForm() {
           required
         />
         <p className="text-xs text-text-subtle">
-          Mínimo 12 caracteres. Mezclá mayúsculas, minúsculas, números y un símbolo.
+          Mínimo 12 caracteres. Mezcla mayúsculas, minúsculas, números y un símbolo.
         </p>
       </div>
 

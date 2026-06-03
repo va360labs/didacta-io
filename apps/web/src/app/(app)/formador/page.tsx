@@ -20,7 +20,7 @@ export default function FormadorDashboardPage() {
         setError(
           e instanceof ApiHttpError
             ? e.message
-            : 'No pudimos cargar las stats. Probá refrescar la página.',
+            : 'No pudimos cargar las stats. Prueba refrescar la página.',
         );
       }
     })();
@@ -115,7 +115,7 @@ export default function FormadorDashboardPage() {
             <ShortcutLink
               href="/formador/cursos/nuevo"
               label="Crear curso nuevo"
-              hint="Empezá un curso desde cero."
+              hint="Empieza un curso desde cero."
             />
             <ShortcutLink
               href="/cursos"

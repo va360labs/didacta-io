@@ -37,7 +37,7 @@ export default function MisSuscripcionesPage() {
   useEffect(() => {
     const token = authStorage.getAccessToken();
     if (!token) {
-      setError('Sesión sin token. Volvé a iniciar sesión.');
+      setError('Sesión sin token. Vuelve a iniciar sesión.');
       setLoading(false);
       return;
     }
@@ -115,7 +115,7 @@ export default function MisSuscripcionesPage() {
         <h1 className="font-display text-3xl font-bold tracking-tight">Mis suscripciones</h1>
         <p className="text-text-muted">
           Gestiona tus suscripciones recurrentes a cursos. Puedes cancelar al final del periodo
-          (mantenés acceso hasta esa fecha) o de inmediato.
+          (mantienes acceso hasta esa fecha) o de inmediato.
         </p>
       </header>
 

@@ -127,7 +127,7 @@ export default function SeguridadPage() {
         <div>
           <h1 className="font-display text-3xl font-bold tracking-tight">Seguridad</h1>
           <p className="mt-1 text-text-muted">
-            Cambiá tu contraseña, gestioná tus sesiones activas y configurá MFA.
+            Cambia tu contraseña, gestiona tus sesiones activas y configura MFA.
           </p>
         </div>
         <Button variant="ghost" asChild>
@@ -171,7 +171,7 @@ export default function SeguridadPage() {
                 <p className="text-xs text-text-subtle">Mínimo 12 caracteres.</p>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="confirmPassword">Confirmá la nueva</Label>
+                <Label htmlFor="confirmPassword">Confirma la nueva</Label>
                 <Input
                   id="confirmPassword"
                   type="password"
@@ -208,7 +208,7 @@ export default function SeguridadPage() {
               <CardTitle>Sesiones activas</CardTitle>
               <CardDescription>
                 Estas son las sesiones abiertas en tus distintos dispositivos. Si ves alguna que no
-                reconocés, cerrala.
+                reconoces, cerrala.
               </CardDescription>
             </div>
             <Button variant="destructive" onClick={handleRevokeAll} disabled={busy === 'all'}>

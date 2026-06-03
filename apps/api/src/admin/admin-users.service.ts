@@ -228,7 +228,7 @@ export class AdminUsersService {
       userAgent: ctx.userAgent ?? undefined,
     });
 
-    // Enviar email de "definí tu contraseña" reusando el flujo de reset.
+    // Enviar email de "define tu contraseña" reusando el flujo de reset.
     // `allowPending: true` porque el user recién creado está en PENDING — sin
     // este flag, password-reset.request() lo descartaría silenciosamente
     // por el guard anti user-enumeration. Ver CORE-FIX-03.
@@ -372,7 +372,7 @@ export class AdminUsersService {
   }
 
   /**
-   * Reenvía el email de "definí tu contraseña" para usuarios PENDING o
+   * Reenvía el email de "define tu contraseña" para usuarios PENDING o
    * cualquier usuario que perdió acceso. Usa el flujo de password-reset.
    */
   async resendInvite(

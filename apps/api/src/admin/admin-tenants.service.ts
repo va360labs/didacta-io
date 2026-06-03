@@ -57,7 +57,7 @@ const COMMUNITY_TENANT_LIMIT = 1;
  * Reglas:
  *  - Slug único, regex `^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$` (DNS-safe).
  *  - Al crear tenant también se crea el primer tenant_admin via email +
- *    se le envía el link de "definí tu contraseña" reusando PasswordResetService.
+ *    se le envía el link de "define tu contraseña" reusando PasswordResetService.
  *  - Suspender un tenant invalida sessions de TODOS sus usuarios y bloquea
  *    futuros logins (ver AuthService.signin).
  */
@@ -385,7 +385,7 @@ export class AdminTenantsService {
     }
     if (domain.isPrimary) {
       throw new BadRequestException(
-        'No puedes eliminar el dominio primario. Asigná otro como primario antes.',
+        'No puedes eliminar el dominio primario. Asigna otro como primario antes.',
       );
     }
     await this.prisma.tenantDomain.delete({ where: { id: domain.id } });

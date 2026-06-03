@@ -93,7 +93,7 @@ export default function UsuariosPage() {
         <div>
           <h1 className="font-display text-3xl font-bold tracking-tight">Usuarios</h1>
           <p className="mt-1 text-text-muted">
-            Gestioná las personas que tienen acceso a tu organización.
+            Gestiona las personas que tienen acceso a tu organización.
           </p>
         </div>
         <Button asChild>
@@ -192,7 +192,7 @@ export default function UsuariosPage() {
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
             <h3 className="font-display text-xl font-semibold">No hay usuarios todavía</h3>
             <p className="max-w-md text-text-muted">
-              Invitá a tu primer usuario o ajustá los filtros si esperabas ver a alguien acá.
+              Invita a tu primer usuario o ajusta los filtros si esperabas ver a alguien acá.
             </p>
             <Button asChild>
               <Link href="/admin/usuarios/invitar">Invitar persona</Link>

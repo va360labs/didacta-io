@@ -22,7 +22,7 @@ export function loadAuthConfig(): AuthConfig {
   const jwtSecret = process.env['AUTH_SECRET'];
   if (!jwtSecret || jwtSecret.length < 32) {
     throw new Error(
-      'AUTH_SECRET no definido o demasiado corto (mínimo 32 caracteres). Generá uno con `openssl rand -hex 32`.',
+      'AUTH_SECRET no definido o demasiado corto (mínimo 32 caracteres). Genera uno con `openssl rand -hex 32`.',
     );
   }
 

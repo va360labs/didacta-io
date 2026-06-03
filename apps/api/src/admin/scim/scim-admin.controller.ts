@@ -120,7 +120,7 @@ export class ScimAdminTokenController {
   @ApiOperation({
     summary:
       'Genera un token nuevo. SI ya existía uno → lo reemplaza (el anterior ' +
-      'queda revocado). El token plano se devuelve UNA SOLA VEZ; copialo en ' +
+      'queda revocado). El token plano se devuelve UNA SOLA VEZ; cópialo en ' +
       'el panel del IdP. Después sólo verás el prefix.',
   })
   @ApiResponse({
@@ -171,8 +171,8 @@ export class ScimAdminTokenController {
       prefix,
       createdAt,
       warning:
-        'Este token solo se muestra UNA VEZ. Copialo y pegalo en el panel del IdP ahora; ' +
-        'no podrás recuperarlo más adelante. Si lo perdés, generá uno nuevo (revoca el anterior).',
+        'Este token solo se muestra UNA VEZ. Cópialo y pegalo en el panel del IdP ahora; ' +
+        'no podrás recuperarlo más adelante. Si lo pierdes, genera uno nuevo (revoca el anterior).',
     };
   }
 
@@ -182,7 +182,7 @@ export class ScimAdminTokenController {
   @ApiOperation({
     summary:
       'Revoca el token SCIM del tenant. El IdP empezará a recibir 401 ' +
-      'inmediatamente. Si quieres volver a habilitarlo, llamá POST.',
+      'inmediatamente. Si quieres volver a habilitarlo, llama POST.',
   })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 402 })

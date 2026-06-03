@@ -97,7 +97,7 @@ export function TenantIdentityCard({
       const token = authStorage.getAccessToken();
       if (!session || !token) {
         if (!cancelled) {
-          setLoadError('Sesión expirada. Iniciá sesión otra vez para configurar la organización.');
+          setLoadError('Sesión expirada. Inicia sesión otra vez para configurar la organización.');
         }
         return;
       }
@@ -111,7 +111,7 @@ export function TenantIdentityCard({
         setLoadError(
           err instanceof ApiHttpError
             ? err.message
-            : 'No pudimos cargar la organización. Refrescá la página.',
+            : 'No pudimos cargar la organización. Refresca la página.',
         );
       }
     })();
@@ -133,7 +133,7 @@ export function TenantIdentityCard({
     if (!tenant || !canSave) return;
     const token = authStorage.getAccessToken();
     if (!token) {
-      setToast({ variant: 'error', message: 'Sesión expirada. Iniciá sesión otra vez.' });
+      setToast({ variant: 'error', message: 'Sesión expirada. Inicia sesión otra vez.' });
       return;
     }
     setSaving(true);

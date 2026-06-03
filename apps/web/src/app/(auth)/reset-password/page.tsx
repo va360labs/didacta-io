@@ -18,9 +18,9 @@ export default function ResetPasswordPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Definí tu nueva contraseña</CardTitle>
+        <CardTitle>Define tu nueva contraseña</CardTitle>
         <CardDescription>
-          Elegí una contraseña fuerte: mínimo 12 caracteres, mezclá mayúsculas, minúsculas, números
+          Elige una contraseña fuerte: mínimo 12 caracteres, mezcla mayúsculas, minúsculas, números
           y símbolos.
         </CardDescription>
       </CardHeader>
@@ -40,7 +40,7 @@ export default function ResetPasswordPage() {
       <CardFooter className="text-sm text-text-muted">
         ¿No tienes un enlace válido?{' '}
         <Link href="/forgot-password" className="ml-1 font-semibold text-brand-700 hover:underline">
-          Pedí uno nuevo
+          Pide uno nuevo
         </Link>
       </CardFooter>
     </Card>

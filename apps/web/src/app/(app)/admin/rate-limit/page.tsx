@@ -55,7 +55,7 @@ export default function AdminRateLimitPage() {
       <header className="flex flex-col gap-1">
         <h1 className="font-display text-3xl font-bold tracking-tight">Límites API</h1>
         <p className="text-text-muted">
-          Cuotas por minuto que la API aplica a tu organización. Si superás el límite recibís
+          Cuotas por minuto que la API aplica a tu organización. Si superas el límite recibes
           respuesta <code>429 Too Many Requests</code> con cabeceras{' '}
           <code className="font-mono">Retry-After</code> y{' '}
           <code className="font-mono">X-RateLimit-*</code>.
@@ -199,7 +199,7 @@ function UpgradeCta() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="lock" size={18} />
-          ¿Necesitás más capacidad?
+          ¿Necesitas más capacidad?
         </CardTitle>
         <CardDescription>
           El plan Enterprise multiplica los límites por ~10x. Recomendado si tu integración hace

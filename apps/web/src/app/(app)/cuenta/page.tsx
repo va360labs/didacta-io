@@ -352,7 +352,7 @@ export default function CuentaPage() {
               <CardHeader>
                 <CardTitle>Notificaciones</CardTitle>
                 <CardDescription>
-                  Controlá qué emails y avisos recibís de la plataforma. Los avisos críticos
+                  Controla qué emails y avisos recibes de la plataforma. Los avisos críticos
                   (seguridad, cuenta) se envían siempre.
                 </CardDescription>
               </CardHeader>
@@ -401,7 +401,7 @@ export default function CuentaPage() {
             <CardHeader>
               <CardTitle>Seguridad</CardTitle>
               <CardDescription>
-                Cambiá tu contraseña, configurá MFA y gestioná las sesiones activas.
+                Cambia tu contraseña, configura MFA y gestiona las sesiones activas.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap items-center justify-between gap-4">

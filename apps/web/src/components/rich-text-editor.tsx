@@ -54,7 +54,7 @@ export function RichTextEditor({
         HTMLAttributes: { class: 'rounded-md border border-border-soft' },
       }),
       Placeholder.configure({
-        placeholder: placeholder ?? 'Escribí algo…',
+        placeholder: placeholder ?? 'Escribe algo…',
         emptyEditorClass:
           'before:content-[attr(data-placeholder)] before:float-left before:text-text-subtle before:pointer-events-none',
       }),
@@ -122,7 +122,7 @@ function Toolbar({ editor }: ToolbarProps) {
       window.alert(
         err instanceof ApiHttpError
           ? `No pudimos subir la imagen: ${err.message}`
-          : 'No pudimos subir la imagen. Probá de nuevo.',
+          : 'No pudimos subir la imagen. Prueba de nuevo.',
       );
     } finally {
       setUploading(false);

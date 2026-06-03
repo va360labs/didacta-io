@@ -271,7 +271,7 @@ export function CourseEditor({
             <div>
               <CardTitle>Contenido del curso</CardTitle>
               <CardDescription>
-                Organizá tu curso en secciones (módulos) y dentro de cada sección, lecciones.
+                Organiza tu curso en secciones (módulos) y dentro de cada sección, lecciones.
               </CardDescription>
             </div>
           </div>
@@ -290,7 +290,7 @@ export function CourseEditor({
                 <Icon name="book" size={28} />
               </div>
               <h3 className="font-display text-lg font-semibold text-text">
-                Empezá creando tu primera sección
+                Empieza creando tu primera sección
               </h3>
               <p className="mx-auto mt-1 max-w-md text-sm text-text-muted">
                 Las secciones agrupan lecciones relacionadas. Por ejemplo:{' '}
@@ -666,7 +666,7 @@ function PublishChecklist({
             <p className="mt-0.5 text-xs text-text-muted">
               {allDone
                 ? 'Todos los requisitos están cumplidos. Puedes publicar cuando quieras.'
-                : 'Completá estos elementos para que tu curso esté listo:'}
+                : 'Completa estos elementos para que tu curso esté listo:'}
             </p>
             <ul className="mt-3 space-y-1.5">
               {checks.map((c, i) => (
@@ -1016,7 +1016,7 @@ function ModuleBlock({
         />
       ) : (
         <p className="border-b border-border-soft bg-surface-2 px-4 py-6 text-center text-xs italic text-text-subtle">
-          Sin lecciones todavía. Añadí la primera abajo.
+          Sin lecciones todavía. Añade la primera abajo.
         </p>
       )}
 

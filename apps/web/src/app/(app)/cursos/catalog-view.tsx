@@ -202,7 +202,7 @@ export function CatalogView() {
             </h3>
             <p className="max-w-md text-text-muted">
               {hasActiveFilters
-                ? 'Probá con otra búsqueda o limpiá los filtros para ver todo el catálogo.'
+                ? 'Prueba con otra búsqueda o limpia los filtros para ver todo el catálogo.'
                 : 'Cuando un formador publique el primer curso, aparecerá acá. Si eres formador, puedes empezar a crear uno.'}
             </p>
             {hasActiveFilters ? (

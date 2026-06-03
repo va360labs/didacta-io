@@ -393,7 +393,7 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
                 rows={3}
                 value={commentBody}
                 onChange={(e) => setCommentBody(e.target.value)}
-                placeholder="Aportá tu respuesta… puedes mencionar con @usuario"
+                placeholder="Aporta tu respuesta… puedes mencionar con @usuario"
                 required
               />
               <div className="flex justify-end">

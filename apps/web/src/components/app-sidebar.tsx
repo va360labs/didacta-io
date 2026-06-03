@@ -97,7 +97,7 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
         className="sticky top-0 grid h-dvh w-60 shrink-0 place-items-center self-start p-6 text-center text-sm text-white/60"
         style={{ backgroundColor: 'var(--sidebar-bg)' }}
       >
-        Activá módulos en{' '}
+        Activa módulos en{' '}
         <Link href="/admin/configuracion" className="ml-1 underline">
           configuración
         </Link>{' '}

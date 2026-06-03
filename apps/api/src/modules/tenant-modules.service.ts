@@ -169,7 +169,7 @@ export class TenantModulesService {
     if (activeDependents.length > 0 && options.force !== true) {
       throw new TenantModulesError(
         'MODULE_HAS_ACTIVE_DEPENDENTS',
-        `El módulo "${moduleName}" no se puede desactivar porque ${activeDependents.length} módulo(s) activo(s) dependen de él. Confirmá para desactivar también esos módulos.`,
+        `El módulo "${moduleName}" no se puede desactivar porque ${activeDependents.length} módulo(s) activo(s) dependen de él. Confirma para desactivar también esos módulos.`,
         { dependents: activeDependents },
       );
     }

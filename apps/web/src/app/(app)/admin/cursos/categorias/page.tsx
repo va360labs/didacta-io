@@ -138,7 +138,7 @@ export default function CourseCategoriesAdminPage() {
       <header>
         <h1 className="font-display text-3xl font-bold tracking-tight">Categorías de cursos</h1>
         <p className="mt-1 max-w-2xl text-text-muted">
-          Curá las categorías oficiales del catálogo con color e icono. El builder ofrece este
+          Cura las categorías oficiales del catálogo con color e icono. El builder ofrece este
           listado al formador como select; el catálogo y la card del curso pintan el chip con el
           estilo configurado.
         </p>
@@ -161,7 +161,7 @@ export default function CourseCategoriesAdminPage() {
               {items === null
                 ? 'Cargando…'
                 : items.length === 0
-                  ? 'Aún no hay categorías. Creá la primera en el formulario de la derecha.'
+                  ? 'Aún no hay categorías. Crea la primera en el formulario de la derecha.'
                   : `${items.length} categoría${items.length === 1 ? '' : 's'} curada${items.length === 1 ? '' : 's'}.`}
             </CardDescription>
           </CardHeader>
@@ -211,8 +211,8 @@ export default function CourseCategoriesAdminPage() {
             <CardTitle>{editing ? `Editar "${editing.name}"` : 'Nueva categoría'}</CardTitle>
             <CardDescription>
               {editing
-                ? 'Modificá el nombre, color o icono. Los cursos que ya usan esta categoría se actualizan al instante.'
-                : 'Creá una categoría oficial. El nombre es exact-match con la categoría del curso, así que mantenelo consistente.'}
+                ? 'Modifica el nombre, color o icono. Los cursos que ya usan esta categoría se actualizan al instante.'
+                : 'Crea una categoría oficial. El nombre es exact-match con la categoría del curso, así que mantenlo consistente.'}
             </CardDescription>
           </CardHeader>
           <CardContent>

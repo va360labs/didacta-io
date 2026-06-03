@@ -67,7 +67,7 @@ export default function AdminSeguridadPage() {
       setError(
         e instanceof ApiHttpError
           ? e.message
-          : 'No se pudo actualizar la política. Probá nuevamente.',
+          : 'No se pudo actualizar la política. Prueba nuevamente.',
       );
     }
   }

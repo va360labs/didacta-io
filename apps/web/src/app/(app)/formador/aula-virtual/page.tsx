@@ -127,7 +127,7 @@ export default function AulaVirtualPage() {
             </div>
             <h3 className="font-display text-2xl font-semibold">Sin sesiones todavía</h3>
             <p className="max-w-md text-text-muted">
-              Programá tu primera sesión Zoom desde el botón de arriba. Puedes vincularla a un curso
+              Programa tu primera sesión Zoom desde el botón de arriba. Puedes vincularla a un curso
               o dejarla como sesión libre del tenant.
             </p>
           </CardContent>
@@ -310,7 +310,7 @@ function CreateSessionForm({
           <div className="min-w-0">
             <CardTitle>Nueva sesión Zoom</CardTitle>
             <CardDescription>
-              Programá una sesión síncrona. Si la vinculás a un curso, los alumnos matriculados
+              Programa una sesión síncrona. Si la vinculas a un curso, los alumnos matriculados
               verán el botón "Unirse" en su detalle.
             </CardDescription>
           </div>
@@ -405,7 +405,7 @@ function CreateSessionForm({
                 ))}
               </Select>
               <p className="text-xs text-text-subtle">
-                Si seleccionás una lección, la sesión aparece en su detalle para los alumnos
+                Si seleccionas una lección, la sesión aparece en su detalle para los alumnos
                 matriculados.
               </p>
             </div>

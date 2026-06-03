@@ -163,12 +163,12 @@ export default function AdminDashboardPage() {
             <ShortcutLink
               href="/admin/comunidad/tags"
               label="Tags de comunidad"
-              hint="Curá los tags oficiales con color e icono."
+              hint="Cura los tags oficiales con color e icono."
             />
             <ShortcutLink
               href="/admin/cursos/categorias"
               label="Categorías de cursos"
-              hint="Curá las categorías del catálogo con color e icono."
+              hint="Cura las categorías del catálogo con color e icono."
             />
           </div>
         </CardContent>

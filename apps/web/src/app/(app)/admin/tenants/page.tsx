@@ -63,7 +63,10 @@ export default function TenantsPage() {
             <Link href="/admin/tenants/nuevo">Crear tenant</Link>
           </Button>
         ) : capacity ? (
-          <Button disabled title="Tu plan community ya tiene un tenant. Activa Enterprise para añadir más.">
+          <Button
+            disabled
+            title="Tu plan community ya tiene un tenant. Activa Enterprise para añadir más."
+          >
             <Icon name="lock" size={16} />
             Crear tenant
           </Button>
@@ -89,7 +92,7 @@ export default function TenantsPage() {
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
             <h3 className="font-display text-xl font-semibold">No hay tenants</h3>
             <p className="max-w-md text-text-muted">
-              Creá el primero para empezar a darle acceso a una organización.
+              Crea el primero para empezar a darle acceso a una organización.
             </p>
           </CardContent>
         </Card>
@@ -179,7 +182,7 @@ function CapacityBanner({ capacity }: { capacity: TenantCapacityInfo }) {
       <Card>
         <CardContent className="p-4 text-sm text-text-muted">
           Plan community · usas <strong className="tabular-nums">{capacity.tenantCount}</strong> de{' '}
-          <strong>{capacity.limit}</strong> tenants. Activá Enterprise para crear varias
+          <strong>{capacity.limit}</strong> tenants. Activa Enterprise para crear varias
           organizaciones aisladas en esta misma instancia.
         </CardContent>
       </Card>
@@ -197,11 +200,7 @@ function CapacityBanner({ capacity }: { capacity: TenantCapacityInfo }) {
  */
 export function MultiTenantUpsellCard({ capacity }: { capacity: TenantCapacityInfo }) {
   return (
-    <Card
-      role="region"
-      aria-label="Multi-tenant real (Enterprise)"
-      className="border-dashed"
-    >
+    <Card role="region" aria-label="Multi-tenant real (Enterprise)" className="border-dashed">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="lock" size={18} />
@@ -210,7 +209,7 @@ export function MultiTenantUpsellCard({ capacity }: { capacity: TenantCapacityIn
         <CardDescription>
           Tu plan community tiene <strong>{capacity.tenantCount}</strong> de{' '}
           <strong>{capacity.limit}</strong> tenants. Para alojar varias organizaciones aisladas en
-          la misma instancia (datos, usuarios, cursos y dominios separados), activá Enterprise.
+          la misma instancia (datos, usuarios, cursos y dominios separados), activa Enterprise.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

@@ -76,7 +76,7 @@ export class JwtAuthGuard implements CanActivate {
     if (!mfaExempt && this.requiresAdminMfa(request.user) && !request.user.mfaVerified) {
       throw new ForbiddenException({
         message:
-          'Tu rol exige MFA verificado para esta acción. Configurá o verificá tu segundo factor.',
+          'Tu rol exige MFA verificado para esta acción. Configura o verifica tu segundo factor.',
         code: 'mfa_required',
       });
     }

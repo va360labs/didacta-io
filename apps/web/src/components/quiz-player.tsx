@@ -33,7 +33,7 @@ const QUESTION_TYPE_HINT: Record<string, string> = {
   SINGLE_CHOICE: 'Una respuesta correcta',
   MULTIPLE_CHOICE: 'Una o más respuestas correctas',
   TRUE_FALSE: 'Verdadero o falso',
-  FILL_IN_BLANK: 'Rellená el hueco',
+  FILL_IN_BLANK: 'Rellena el hueco',
   SHORT_ANSWER: 'Respuesta corta · revisión manual',
   LONG_ANSWER: 'Respuesta extensa · revisión manual',
 };
@@ -262,14 +262,14 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
                   type="text"
                   value={textAnswers[q.id] ?? ''}
                   onChange={(e) => setTextAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                  placeholder="Escribí tu respuesta…"
+                  placeholder="Escribe tu respuesta…"
                 />
               ) : q.type === 'SHORT_ANSWER' || q.type === 'LONG_ANSWER' ? (
                 <Textarea
                   rows={q.type === 'LONG_ANSWER' ? 8 : 3}
                   value={textAnswers[q.id] ?? ''}
                   onChange={(e) => setTextAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                  placeholder="Escribí tu respuesta — el formador la corregirá manualmente."
+                  placeholder="Escribe tu respuesta — el formador la corregirá manualmente."
                 />
               ) : (
                 <div className="space-y-1">
@@ -353,7 +353,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
             ? 'Tu intento contiene respuestas abiertas. Cuando el formador termine de corregir, vas a poder ver el resultado y, si aprobaste, la lección queda completada automáticamente.'
             : a.passed
               ? 'La lección queda marcada como completada. Si era la última que te faltaba, tu certificado se está emitiendo en este momento.'
-              : 'Si el quiz lo permite, puedes reintentar. Repasá las lecciones anteriores y volvé cuando estés listo.'}
+              : 'Si el quiz lo permite, puedes reintentar. Repasa las lecciones anteriores y vuelve cuando estés listo.'}
         </p>
 
         <div className="mt-6 flex flex-wrap justify-center gap-2">

@@ -164,7 +164,7 @@ export default function AlumnosPage() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <CardTitle className="text-base">{total} matriculaciones</CardTitle>
-              <CardDescription>Hacé clic sobre las cabeceras para ordenar.</CardDescription>
+              <CardDescription>Haz clic sobre las cabeceras para ordenar.</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <label className="text-xs font-semibold text-text-muted" htmlFor="statusFilter">
@@ -195,8 +195,8 @@ export default function AlumnosPage() {
             <div className="flex flex-col items-center gap-3 p-12 text-center">
               <h3 className="font-display text-xl font-semibold">No hay matriculaciones</h3>
               <p className="max-w-md text-text-muted">
-                Cuando alguien se matricule en este curso, aparecerá acá. Puedes generar invitaciones
-                desde la pestaña Invitaciones.
+                Cuando alguien se matricule en este curso, aparecerá acá. Puedes generar
+                invitaciones desde la pestaña Invitaciones.
               </p>
             </div>
           ) : (

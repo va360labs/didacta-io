@@ -20,7 +20,7 @@ export function ResetPasswordForm() {
       <div role="alert" className="rounded-lg border border-danger-100 bg-danger-50 p-4">
         <h4 className="font-semibold text-danger-700">Falta el token</h4>
         <p className="mt-1 text-sm text-text">
-          Este enlace no es válido. Pedí uno nuevo desde la pantalla de recuperación.
+          Este enlace no es válido. Pide uno nuevo desde la pantalla de recuperación.
         </p>
       </div>
     );
@@ -56,7 +56,7 @@ export function ResetPasswordForm() {
       setError(
         e instanceof ApiHttpError
           ? e.message
-          : 'No pudimos actualizar tu contraseña. Probá de nuevo o pedí un nuevo enlace.',
+          : 'No pudimos actualizar tu contraseña. Prueba de nuevo o pide un nuevo enlace.',
       );
     } finally {
       setPending(false);
@@ -89,7 +89,7 @@ export function ResetPasswordForm() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="confirm">Confirmá la contraseña</Label>
+        <Label htmlFor="confirm">Confirma la contraseña</Label>
         <Input
           id="confirm"
           name="confirm"

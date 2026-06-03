@@ -17,9 +17,9 @@ const HELP_BY_TYPE: Record<LessonType, string> = {
   HTML: 'HTML inline que se renderiza en el player. Útil para slides o microcopy.',
   PDF: 'URL del PDF. Se muestra en iframe a 70dvh.',
   TEXT: 'Texto plano largo. Se preservan saltos de línea.',
-  QUIZ: 'Crea un nuevo quiz o vinculá uno existente por ID. El editor del quiz vive en /formador/quizzes/<id>.',
+  QUIZ: 'Crea un nuevo quiz o vincula uno existente por ID. El editor del quiz vive en /formador/quizzes/<id>.',
   SCORM:
-    'Subí el ZIP del paquete SCORM 1.2 / 2004. El sistema lo descomprime, parsea imsmanifest.xml y lo sirve por iframe.',
+    'Sube el ZIP del paquete SCORM 1.2 / 2004. El sistema lo descomprime, parsea imsmanifest.xml y lo sirve por iframe.',
 };
 
 const TYPE_ICON: Record<LessonType, IconName> = {
@@ -199,7 +199,7 @@ export function LessonContentEditor({
             rows={8}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Escribí el contenido de la lección…"
+            placeholder="Escribe el contenido de la lección…"
           />
         </div>
       )}
@@ -316,7 +316,7 @@ function QuizLink({
               id={`quizId-${lessonId}`}
               value={quizId}
               onChange={(e) => setQuizId(e.target.value)}
-              placeholder="…o pegá el UUID de un quiz existente"
+              placeholder="…o pega el UUID de un quiz existente"
               className="flex-1 min-w-[240px]"
             />
           </div>
@@ -417,7 +417,7 @@ function ScormUploader({ lessonId }: { lessonId: string }) {
           {busy ? 'Subiendo paquete…' : metadata ? 'Reemplazar paquete' : 'Subir paquete SCORM'}
         </p>
         <p className="mt-1 text-xs text-text-muted">
-          Arrastra o hacé clic para seleccionar un archivo .zip con `imsmanifest.xml` en la raíz.
+          Arrastra o haz clic para seleccionar un archivo .zip con `imsmanifest.xml` en la raíz.
         </p>
         <input
           id={`scorm-${lessonId}`}

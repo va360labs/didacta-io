@@ -37,7 +37,7 @@ export function OidcCallbackHandler() {
     const mfaEnabledRaw = params.get('mfaEnabled');
 
     if (!accessToken || !refreshToken || !userId || !email || !tenantId || !tenantSlug) {
-      setErrorMessage('Faltan datos en el callback. Reintentá iniciar sesión.');
+      setErrorMessage('Faltan datos en el callback. Reintenta iniciar sesión.');
       router.replace('/auth/error?reason=missing_tokens');
       return;
     }

@@ -31,7 +31,7 @@ export function ForgotPasswordForm() {
       setSuccess(response.message);
     } catch (e) {
       setError(
-        e instanceof ApiHttpError ? e.message : 'No pudimos procesar tu pedido. Probá de nuevo.',
+        e instanceof ApiHttpError ? e.message : 'No pudimos procesar tu pedido. Prueba de nuevo.',
       );
     } finally {
       setPending(false);
@@ -42,11 +42,11 @@ export function ForgotPasswordForm() {
     return (
       <div role="status" className="space-y-3">
         <div className="rounded-lg border border-success-200 bg-success-50 p-4">
-          <h4 className="font-semibold text-success-700">Revisá tu email</h4>
+          <h4 className="font-semibold text-success-700">Revisa tu email</h4>
           <p className="mt-1 text-sm text-text">{success}</p>
         </div>
         <p className="text-sm text-text-subtle">
-          Si no aparece en pocos minutos, revisá la carpeta de spam o pedí un nuevo enlace.
+          Si no aparece en pocos minutos, revisa la carpeta de spam o pide un nuevo enlace.
         </p>
       </div>
     );
@@ -65,7 +65,7 @@ export function ForgotPasswordForm() {
     <form action={onSubmit} className="space-y-4">
       {tenant ? (
         <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
-          <span className="text-text-muted">Recuperás contraseña para</span>{' '}
+          <span className="text-text-muted">Recuperas contraseña para</span>{' '}
           <strong className="text-brand-700">{tenant.name}</strong>
         </div>
       ) : (

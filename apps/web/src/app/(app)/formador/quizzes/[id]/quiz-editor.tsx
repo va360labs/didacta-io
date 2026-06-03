@@ -314,7 +314,7 @@ export function QuizEditor({
                 {initial.questions.length === 1 ? 'pregunta' : 'preguntas'} · {totalPoints}{' '}
                 {totalPoints === 1 ? 'punto' : 'puntos'}.
                 {initial.questions.length === 0
-                  ? ' Para publicar el quiz necesitás al menos una pregunta.'
+                  ? ' Para publicar el quiz necesitas al menos una pregunta.'
                   : ''}
               </CardDescription>
             </div>
@@ -334,7 +334,7 @@ export function QuizEditor({
                 <Icon name="help" size={28} />
               </div>
               <h3 className="font-display text-lg font-semibold text-text">
-                Empezá añadiendo tu primera pregunta
+                Empieza añadiendo tu primera pregunta
               </h3>
               <p className="mx-auto mt-1 max-w-md text-sm text-text-muted">
                 Tipo de pregunta, enunciado y opciones. Puedes mezclar tipos en un mismo quiz.
@@ -688,7 +688,7 @@ function NewQuestionForm({
       ) : (
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-            Opciones (marcá las correctas)
+            Opciones (marca las correctas)
           </p>
           {options.map((opt, idx) => (
             <div

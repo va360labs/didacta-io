@@ -84,7 +84,7 @@ export function AiTutorPanel({ courseId }: Props) {
           <div>
             <h3 className="font-display text-lg font-semibold text-text">Tutor IA</h3>
             <p className="text-xs text-text-subtle">
-              Preguntá lo que quieras sobre el curso. Las respuestas se basan en el contenido
+              Pregunta lo que quieras sobre el curso. Las respuestas se basan en el contenido
               publicado e incluyen citas a las lecciones.
             </p>
           </div>
@@ -171,24 +171,24 @@ export function AiTutorPanel({ courseId }: Props) {
 }
 
 function humanizeError(e: unknown): string {
-  if (!(e instanceof ApiHttpError)) return 'No pudimos contactar al tutor. Probá de nuevo.';
+  if (!(e instanceof ApiHttpError)) return 'No pudimos contactar al tutor. Prueba de nuevo.';
   switch (e.code) {
     case 'AI_TUTOR_COURSE_NOT_INDEXED':
-      return 'Este curso aún no está indexado para el tutor IA. Avisá al administrador para que lo re-indexe.';
+      return 'Este curso aún no está indexado para el tutor IA. Avisa al administrador para que lo re-indexe.';
     case 'AI_TUTOR_COURSE_NOT_PUBLISHED':
       return 'El tutor IA solo opera sobre cursos publicados.';
     case 'AI_TUTOR_TOKEN_QUOTA_EXCEEDED':
-      return 'Se alcanzó el límite de tokens para el tutor. Probá más tarde.';
+      return 'Se alcanzó el límite de tokens para el tutor. Prueba más tarde.';
     case 'AI_PROVIDER_NOT_CONFIGURED':
       return 'No hay proveedor de IA configurado en el tenant. Pídele al admin que configure uno.';
     case 'AI_PROVIDER_RATE_LIMIT':
-      return 'El proveedor de IA está saturado ahora mismo. Probá en unos segundos.';
+      return 'El proveedor de IA está saturado ahora mismo. Prueba en unos segundos.';
     case 'AI_PROVIDER_AUTH':
-      return 'Las credenciales del proveedor de IA no son válidas. Avisá al admin.';
+      return 'Las credenciales del proveedor de IA no son válidas. Avisa al admin.';
     case 'AI_PROVIDER_UNAVAILABLE':
     case 'AI_TUTOR_CHAT_PROVIDER_ERROR':
     case 'AI_TUTOR_EMBEDDINGS_PROVIDER_ERROR':
-      return 'El proveedor de IA no respondió. Probá de nuevo en un momento.';
+      return 'El proveedor de IA no respondió. Prueba de nuevo en un momento.';
     default:
       return e.message;
   }

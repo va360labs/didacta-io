@@ -136,7 +136,7 @@ export default function CommunityTagsAdminPage() {
       <header>
         <h1 className="font-display text-3xl font-bold tracking-tight">Tags de comunidad</h1>
         <p className="mt-1 max-w-2xl text-text-muted">
-          Curá los tags oficiales del tenant con color e icono. Los autores siguen pudiendo escribir
+          Cura los tags oficiales del tenant con color e icono. Los autores siguen pudiendo escribir
           tags libres en sus posts; los curados acá se pintan con el estilo configurado en el feed y
           la sidebar.
         </p>
@@ -159,7 +159,7 @@ export default function CommunityTagsAdminPage() {
               {tags === null
                 ? 'Cargando…'
                 : tags.length === 0
-                  ? 'Aún no hay tags. Creá el primero en el formulario de la derecha.'
+                  ? 'Aún no hay tags. Crea el primero en el formulario de la derecha.'
                   : `${tags.length} tag${tags.length === 1 ? '' : 's'} curado${tags.length === 1 ? '' : 's'}.`}
             </CardDescription>
           </CardHeader>
@@ -209,8 +209,8 @@ export default function CommunityTagsAdminPage() {
             <CardTitle>{editing ? `Editar "${editing.name}"` : 'Nuevo tag'}</CardTitle>
             <CardDescription>
               {editing
-                ? 'Modificá el nombre, color o icono. El cambio impacta a todos los posts que usen este tag.'
-                : 'Creá un tag oficial. El nombre se normaliza a minúsculas para evitar duplicados.'}
+                ? 'Modifica el nombre, color o icono. El cambio impacta a todos los posts que usen este tag.'
+                : 'Crea un tag oficial. El nombre se normaliza a minúsculas para evitar duplicados.'}
             </CardDescription>
           </CardHeader>
           <CardContent>

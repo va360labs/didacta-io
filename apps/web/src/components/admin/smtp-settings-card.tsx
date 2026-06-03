@@ -117,7 +117,7 @@ export function SmtpSettingsCard({
         setLoadError(
           err instanceof ApiHttpError
             ? err.message
-            : 'No pudimos cargar la configuración SMTP. Reintentá.',
+            : 'No pudimos cargar la configuración SMTP. Reintenta.',
         );
       }
     })();
@@ -142,7 +142,7 @@ export function SmtpSettingsCard({
       const firstIssue = parsed.error.issues[0];
       setToast({
         variant: 'error',
-        message: firstIssue?.message ?? 'Revisá los campos del formulario.',
+        message: firstIssue?.message ?? 'Revisa los campos del formulario.',
       });
       return;
     }
@@ -168,7 +168,7 @@ export function SmtpSettingsCard({
       setForm((f) => ({ ...f, password: '' }));
       setToast({
         variant: 'success',
-        message: 'Configuración guardada. Mandá un email de prueba para verificar que llega bien.',
+        message: 'Configuración guardada. Manda un email de prueba para verificar que llega bien.',
       });
     } catch (err) {
       setToast({
@@ -187,7 +187,7 @@ export function SmtpSettingsCard({
       setDto((prev) => (prev ? { ...prev, verifiedAt: result.verifiedAt } : prev));
       setToast({
         variant: 'success',
-        message: `Email de prueba enviado a ${result.sentTo}. Revisá tu bandeja.`,
+        message: `Email de prueba enviado a ${result.sentTo}. Revisa tu bandeja.`,
       });
       setTestDialogOpen(false);
     } catch (err) {
@@ -223,7 +223,7 @@ export function SmtpSettingsCard({
         variant: 'success',
         message: refreshed.hasGlobalFallback
           ? 'Configuración eliminada. El tenant ahora usa el SMTP global del host.'
-          : 'Configuración eliminada. Sin SMTP no se envían emails — guardá una nueva.',
+          : 'Configuración eliminada. Sin SMTP no se envían emails — guarda una nueva.',
       });
       setDeleteDialogOpen(false);
     } catch (err) {
@@ -289,7 +289,7 @@ export function SmtpSettingsCard({
                 Conexión segura (TLS)
               </Label>
               <p className="text-xs text-text-subtle">
-                Activá si tu provider usa STARTTLS/SSL. Por defecto ON; los puertos 25 y 587 sin
+                Activa si tu provider usa STARTTLS/SSL. Por defecto ON; los puertos 25 y 587 sin
                 cifrado quedan deshabilitados.
               </p>
             </div>
@@ -509,7 +509,7 @@ export function StatusBanner({ dto }: { dto: AdminSmtpDto }): React.JSX.Element 
       >
         <span aria-hidden="true">●</span>
         <span>
-          Configurado pero sin verificar — usá el botón <em>Enviar email de prueba</em> para
+          Configurado pero sin verificar — usa el botón <em>Enviar email de prueba</em> para
           confirmar que llega.
         </span>
       </div>
@@ -525,7 +525,7 @@ export function StatusBanner({ dto }: { dto: AdminSmtpDto }): React.JSX.Element 
       >
         <span aria-hidden="true">●</span>
         <span>
-          Usando SMTP global del host (fallback). Si querés un remitente propio, guardá una
+          Usando SMTP global del host (fallback). Si quieres un remitente propio, guarda una
           configuración de tenant.
         </span>
       </div>

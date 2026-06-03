@@ -144,7 +144,7 @@ export class AdminSmtpController {
       body.password && body.password.length > 0 ? body.password : existingPassword;
     if (!finalPassword) {
       throw new BadRequestException(
-        'Falta password: no hay password previo guardado o no se pudo descifrar. Enviá uno nuevo en el body.',
+        'Falta password: no hay password previo guardado o no se pudo descifrar. Envía uno nuevo en el body.',
       );
     }
 

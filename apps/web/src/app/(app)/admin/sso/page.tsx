@@ -19,7 +19,7 @@
  *   4. Comparte la URL `https://{tenant}/api/v1/auth/oidc/{slug}/start` con sus
  *      usuarios o el botón aparece directamente en /signin (cuando enabled=true).
  *   5. Para rotar el secret: pega el nuevo en el campo y guarda. Para no rotar:
- *      dejá el campo vacío y se preserva el ya guardado.
+ *      deja el campo vacío y se preserva el ya guardado.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -108,7 +108,7 @@ function SsoPanel() {
     if (session?.user.tenantSlug) setTenantSlug(session.user.tenantSlug);
     const token = authStorage.getAccessToken();
     if (!token) {
-      setLoadError('Sesión sin token. Volvé a iniciar sesión.');
+      setLoadError('Sesión sin token. Vuelve a iniciar sesión.');
       setLoading(false);
       return;
     }
@@ -151,7 +151,7 @@ function SsoPanel() {
     setActionSuccess(null);
     setDiscovery(null);
     if (!form.issuer.trim()) {
-      setActionError('Pegá el issuer URL antes de probar.');
+      setActionError('Pega el issuer URL antes de probar.');
       return;
     }
     const token = authStorage.getAccessToken();
@@ -279,7 +279,7 @@ function SsoPanel() {
               ? 'El botón de SSO aparecerá en /signin y los usuarios podrán entrar con su IdP corporativo.'
               : serverConfig
                 ? 'Hay configuración guardada pero está deshabilitada — el flow no se ofrece.'
-                : 'Aún no has configurado un IdP. Empezá pegando el issuer URL abajo.'}
+                : 'Aún no has configurado un IdP. Empieza pegando el issuer URL abajo.'}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -289,8 +289,8 @@ function SsoPanel() {
         <CardHeader>
           <CardTitle>Configuración del IdP</CardTitle>
           <CardDescription>
-            Necesitás haber dado de alta una aplicación &ldquo;OpenID Connect / Web&rdquo; en tu
-            IdP. Pegá la URL de callback de abajo en su configuración como URI de redirección
+            Necesitas haber dado de alta una aplicación &ldquo;OpenID Connect / Web&rdquo; en tu
+            IdP. Pega la URL de callback de abajo en su configuración como URI de redirección
             autorizada.
           </CardDescription>
         </CardHeader>
@@ -355,7 +355,7 @@ function SsoPanel() {
               Client Secret{' '}
               {serverConfig?.hasSecret ? (
                 <span className="text-text-subtle text-xs">
-                  (dejá vacío para mantener el actual)
+                  (deja vacío para mantener el actual)
                 </span>
               ) : (
                 <span className="text-danger-700">*</span>
@@ -366,7 +366,7 @@ function SsoPanel() {
               type="password"
               autoComplete="off"
               placeholder={
-                serverConfig?.hasSecret ? '••••••••• (sin cambios)' : 'pegá el secret del IdP'
+                serverConfig?.hasSecret ? '••••••••• (sin cambios)' : 'pega el secret del IdP'
               }
               value={form.clientSecret}
               onChange={(e) => setForm((prev) => ({ ...prev, clientSecret: e.target.value }))}
@@ -412,7 +412,7 @@ function SsoPanel() {
               }
             />
             <p className="text-xs text-text-subtle">
-              Vacío = cualquier email del IdP es aceptado. Si listás, el callback rechaza emails
+              Vacío = cualquier email del IdP es aceptado. Si listas, el callback rechaza emails
               fuera de esos dominios incluso si el IdP los autenticó.
             </p>
           </div>
@@ -510,7 +510,7 @@ function SsoPanel() {
           <div>
             <p className="font-semibold">2. Configurar el redirect URI</p>
             <p className="text-text-muted">
-              Pegá la URL de callback (la de arriba) en el campo{' '}
+              Pega la URL de callback (la de arriba) en el campo{' '}
               <code className="font-mono">Sign-in redirect URIs</code> /{' '}
               <code className="font-mono">Authorized redirect URIs</code>.
             </p>
@@ -518,7 +518,7 @@ function SsoPanel() {
           <div>
             <p className="font-semibold">3. Copiar issuer + clientId + clientSecret</p>
             <p className="text-text-muted">
-              Pegá el issuer URL del IdP arriba (sin <code className="font-mono">/.well-known</code>
+              Pega el issuer URL del IdP arriba (sin <code className="font-mono">/.well-known</code>
               ), y el clientId / clientSecret que el IdP genere. Para Okta el issuer es{' '}
               <code className="font-mono">https://&#123;tu-org&#125;.okta.com/oauth2/default</code>.
               Para Azure AD:{' '}
@@ -532,7 +532,7 @@ function SsoPanel() {
             <p className="font-semibold">4. Probar discovery</p>
             <p className="text-text-muted">
               Click &ldquo;Probar discovery&rdquo; — debería responder con los endpoints. Si falla,
-              revisá que el issuer sea HTTPS y accesible desde el server.
+              revisa que el issuer sea HTTPS y accesible desde el server.
             </p>
           </div>
           <div>

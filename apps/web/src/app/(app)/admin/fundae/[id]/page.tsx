@@ -172,7 +172,7 @@ export default function FundaeActionDetailPage() {
 
           {blocks.length === 0 ? (
             <p className="text-sm text-text-muted">
-              Todavía no hay bloques. Creá el primero abajo.
+              Todavía no hay bloques. Crea el primero abajo.
             </p>
           ) : (
             <ul className="divide-y divide-border rounded-lg border border-border">

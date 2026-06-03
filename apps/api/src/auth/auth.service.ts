@@ -12,7 +12,7 @@ import type { SigninDto, SignupDto } from './dto';
 export class AmbiguousTenantError extends UnauthorizedException {
   constructor(public readonly candidateSlugs: string[]) {
     super({
-      message: 'Tu email pertenece a más de una organización. Indicá cuál quieres usar.',
+      message: 'Tu email pertenece a más de una organización. Indica cuál quieres usar.',
       candidateSlugs,
       code: 'AMBIGUOUS_TENANT',
     });
@@ -26,7 +26,7 @@ const NO_CLIENT_CONTEXT: ClientContext = { ip: null, userAgent: null };
 /**
  * Aviso opcional emitido al cliente cuando la política MFA tenant-wide está
  * activa y el usuario aún está dentro del grace period. Permite al frontend
- * mostrar un banner "Configurá MFA antes de DD/MM/YYYY" sin bloquear.
+ * mostrar un banner "Configura MFA antes de DD/MM/YYYY" sin bloquear.
  */
 export interface MfaRequiredSoon {
   /** Días totales de gracia que dio el admin. */
@@ -79,7 +79,7 @@ export class AuthService {
     });
     if (!tenant) {
       throw new UnauthorizedException(
-        'No pudimos identificar tu organización. Probá desde el enlace que te dio el admin o pedí ayuda.',
+        'No pudimos identificar tu organización. Prueba desde el enlace que te dio el admin o pide ayuda.',
       );
     }
 
@@ -111,7 +111,7 @@ export class AuthService {
     // En signup el usuario se acaba de crear sin MFA. Si la política
     // tenant-wide está activa, NUNCA bloqueamos en signup (el grace acaba
     // de empezar para él), pero pasamos el aviso al cliente para que pueda
-    // mostrar el banner de "configurá MFA en N días". `evaluateLoginPolicy`
+    // mostrar el banner de "configura MFA en N días". `evaluateLoginPolicy`
     // ya devuelve allow/warn (nunca block) si el usuario está dentro del
     // grace, así que aprovechamos la misma lógica.
     const policyOutcome = await this.mfaPolicy.evaluateLoginPolicy(tenant.id, {

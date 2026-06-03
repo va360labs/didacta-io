@@ -98,7 +98,7 @@ export class AuthController {
     return {
       ok: true,
       message:
-        'Si el email existe en esta organización, te enviamos un enlace para restablecer tu contraseña. Revisá tu bandeja de entrada y la carpeta de spam.',
+        'Si el email existe en esta organización, te enviamos un enlace para restablecer tu contraseña. Revisa tu bandeja de entrada y la carpeta de spam.',
     };
   }
 

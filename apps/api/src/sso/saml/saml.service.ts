@@ -357,7 +357,7 @@ export class SamlService {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`SAML AuthnRequest build falló para ${config.idpEntityId}: ${msg}`);
       throw new ServiceUnavailableException(
-        'No pudimos generar la solicitud SAML. Verificá la configuración del IdP.',
+        'No pudimos generar la solicitud SAML. Verifica la configuración del IdP.',
       );
     }
 
@@ -444,7 +444,7 @@ export class SamlService {
     const email = this.resolveEmail(parsed, config.attributeMapping.email);
     if (!isValidEmail(email)) {
       throw new UnauthorizedException(
-        'El IdP no devolvió un email válido en el Assertion. Verificá el attribute mapping.',
+        'El IdP no devolvió un email válido en el Assertion. Verifica el attribute mapping.',
       );
     }
 
@@ -500,7 +500,7 @@ export class SamlService {
       });
     } else {
       if (user.status !== 'ACTIVE') {
-        throw new UnauthorizedException('Tu cuenta no está activa. Contactá al admin del tenant.');
+        throw new UnauthorizedException('Tu cuenta no está activa. Contacta al admin del tenant.');
       }
       await this.prisma.user.update({
         where: { id: user.id },

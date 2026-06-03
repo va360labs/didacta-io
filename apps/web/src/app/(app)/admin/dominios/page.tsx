@@ -106,7 +106,7 @@ function CustomDomainsPanel() {
       setHostname('');
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError ? e.message : 'No se pudo añadir el dominio. Probá nuevamente.',
+        e instanceof ApiHttpError ? e.message : 'No se pudo añadir el dominio. Prueba nuevamente.',
       );
     } finally {
       setAdding(false);
@@ -338,8 +338,8 @@ export function CustomDomainsUpsellCard() {
         <CardDescription>
           Los dominios personalizados son parte del paquete Didacta Enterprise. Tu plan actual
           (community) usa el subdominio compartido{' '}
-          <code className="font-mono">&lt;slug&gt;.didacta.io</code>; con Enterprise puedes servir tu
-          LMS desde tu propio hostname (ej. <code className="font-mono">learn.acme.com</code>).
+          <code className="font-mono">&lt;slug&gt;.didacta.io</code>; con Enterprise puedes servir
+          tu LMS desde tu propio hostname (ej. <code className="font-mono">learn.acme.com</code>).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

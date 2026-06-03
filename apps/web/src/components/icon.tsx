@@ -7,7 +7,7 @@ import type { SVGProps } from 'react';
  * Por qué inline en lugar de `lucide-react`: el bundle queda controlado, los
  * iconos siguen exactamente el set documentado, y no añadimos otra dependencia.
  *
- * Si el ícono que necesitás no está acá, agregalo siguiendo el mismo formato.
+ * Si el ícono que necesitas no está acá, agregalo siguiendo el mismo formato.
  */
 
 export type IconName =

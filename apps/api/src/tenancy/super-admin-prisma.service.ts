@@ -62,7 +62,7 @@ export class SuperAdminPrismaService {
   async asAdmin<T>(tenantId: string, callback: (prisma: PrismaService) => Promise<T>): Promise<T> {
     this.logger.warn(
       `SuperAdmin bypass: ejecutando query como tenant ${tenantId}. ` +
-        `Asegurate de que el caller tiene autorización.`,
+        `Asegúrate de que el caller tiene autorización.`,
     );
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(`SET LOCAL app.current_tenant_id = '${tenantId}'`);

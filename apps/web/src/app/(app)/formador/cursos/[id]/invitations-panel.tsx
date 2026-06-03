@@ -90,7 +90,7 @@ export function InvitationsPanel({ courseId }: { courseId: string }) {
           <div className="min-w-0">
             <CardTitle className="text-base">Invitaciones</CardTitle>
             <CardDescription>
-              Generá códigos para que alumnos se matriculen sin abrir auto-matriculación pública.
+              Genera códigos para que alumnos se matriculen sin abrir auto-matriculación pública.
             </CardDescription>
           </div>
         </div>

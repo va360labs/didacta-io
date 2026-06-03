@@ -101,7 +101,7 @@ function ScimPanel() {
       await refresh();
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError ? e.message : 'No se pudo generar el token. Reintentá.',
+        e instanceof ApiHttpError ? e.message : 'No se pudo generar el token. Reintenta.',
       );
     } finally {
       setCreating(false);
@@ -125,7 +125,7 @@ function ScimPanel() {
       await refresh();
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError ? e.message : 'No se pudo revocar el token. Reintentá.',
+        e instanceof ApiHttpError ? e.message : 'No se pudo revocar el token. Reintenta.',
       );
     } finally {
       setRevoking(false);
@@ -181,7 +181,7 @@ function ScimPanel() {
             </div>
           ) : (
             <p className="text-sm text-text-muted">
-              Aún no has generado un token SCIM. Generá uno para que el IdP empiece a provisionar.
+              Aún no has generado un token SCIM. Genera uno para que el IdP empiece a provisionar.
             </p>
           )}
 
@@ -211,7 +211,7 @@ function ScimPanel() {
             Endpoint SCIM
           </CardTitle>
           <CardDescription>
-            Configurá esta URL en el panel SCIM del IdP. Per-tenant — el token resuelve la
+            Configura esta URL en el panel SCIM del IdP. Per-tenant — el token resuelve la
             organización.
           </CardDescription>
         </CardHeader>
@@ -238,14 +238,14 @@ function ScimPanel() {
           <div>
             <p className="font-semibold">1. Crear app SCIM en el IdP</p>
             <p className="text-text-muted">
-              En el catálogo de aplicaciones del IdP, buscá &ldquo;SCIM 2.0&rdquo; o creá una app
+              En el catálogo de aplicaciones del IdP, busca &ldquo;SCIM 2.0&rdquo; o crea una app
               custom con &ldquo;SCIM Provisioning&rdquo; activado.
             </p>
           </div>
           <div>
             <p className="font-semibold">2. Configurar la URL del endpoint</p>
             <p className="text-text-muted">
-              Pegá la URL de la sección anterior en el campo{' '}
+              Pega la URL de la sección anterior en el campo{' '}
               <code className="font-mono">SCIM Connector base URL</code> (Okta) /{' '}
               <code className="font-mono">Tenant URL</code> (Azure AD) / similar.
             </p>
@@ -253,16 +253,16 @@ function ScimPanel() {
           <div>
             <p className="font-semibold">3. Configurar el token</p>
             <p className="text-text-muted">
-              Pegá el token generado más arriba en el campo{' '}
+              Pega el token generado más arriba en el campo{' '}
               <code className="font-mono">OAuth Bearer Token</code> /{' '}
-              <code className="font-mono">Secret Token</code>. Marcá el método de auth como{' '}
+              <code className="font-mono">Secret Token</code>. Marca el método de auth como{' '}
               <strong>Bearer</strong>.
             </p>
           </div>
           <div>
             <p className="font-semibold">4. Mapear atributos</p>
             <p className="text-text-muted">
-              Mapeá <code className="font-mono">userName</code> al email del usuario,{' '}
+              Mapea <code className="font-mono">userName</code> al email del usuario,{' '}
               <code className="font-mono">name.givenName</code> y{' '}
               <code className="font-mono">name.familyName</code> a los campos de nombre, y{' '}
               <code className="font-mono">active</code> al campo de estado del usuario en el IdP.
@@ -324,7 +324,7 @@ function RevealedTokenCard({ reveal, onClose }: { reveal: ScimTokenCreated; onCl
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-warning-900">
           <Icon name="lock" size={18} />
-          Token generado — copialo AHORA
+          Token generado — cópialo AHORA
         </CardTitle>
         <CardDescription className="text-warning-800">{reveal.warning}</CardDescription>
       </CardHeader>

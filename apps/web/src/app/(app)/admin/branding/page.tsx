@@ -177,7 +177,7 @@ export default function BrandingPage() {
         <div>
           <h1 className="font-display text-3xl font-bold tracking-tight">Branding</h1>
           <p className="mt-1 text-text-muted">
-            Personalizá la identidad visual de tu organización. Los cambios se guardan al hacer clic
+            Personaliza la identidad visual de tu organización. Los cambios se guardan al hacer clic
             en <span className="font-semibold">Guardar</span>; puedes ver una vista previa mientras
             editas.
           </p>
@@ -193,7 +193,7 @@ export default function BrandingPage() {
             <CardHeader>
               <CardTitle>Color de marca</CardTitle>
               <CardDescription>
-                Movés el matiz y la saturación; los 10 escalones de la paleta se derivan
+                Mueves el matiz y la saturación; los 10 escalones de la paleta se derivan
                 automáticamente sobre HSL.
               </CardDescription>
             </CardHeader>
@@ -321,7 +321,7 @@ export default function BrandingPage() {
             <CardHeader>
               <CardTitle>Logo y favicon</CardTitle>
               <CardDescription>
-                Subí el logo del tenant directamente al storage o pegá una URL externa (https).
+                Sube el logo del tenant directamente al storage o pega una URL externa (https).
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -336,7 +336,14 @@ export default function BrandingPage() {
                 <Label htmlFor="logoUrl">URL del logo (alternativa)</Label>
                 <Input
                   id="logoUrl"
-                  type="url"
+                  /* type="text" (NO "url"): el logo subido se sirve desde un
+                     endpoint RELATIVO (/api/v1/modules/theming/...). Con
+                     type="url" el navegador lo rechaza ("Introduce una url") y
+                     —como es UN solo <form>— bloquea el submit ENTERO, así que
+                     tampoco se guardaban los colores. El backend (safeImageUrl)
+                     ya valida https:// | /api/v1/... */
+                  type="text"
+                  inputMode="url"
                   placeholder="https://cdn.tudominio.com/logo.svg"
                   value={form.logoUrl}
                   onChange={(e) => setForm((f) => f && { ...f, logoUrl: e.target.value })}
@@ -575,7 +582,7 @@ function LogoUploader({
   async function handleUpload(file: File) {
     setError(null);
     if (!ALLOWED_TYPES.includes(file.type)) {
-      setError('Formato no soportado. Subí PNG, JPG, SVG o WebP.');
+      setError('Formato no soportado. Sube PNG, JPG, SVG o WebP.');
       return;
     }
     if (file.size > MAX_BYTES) {
@@ -634,7 +641,7 @@ function LogoUploader({
           />
           <div className="flex flex-1 items-center justify-between gap-2">
             <p className="text-xs text-text-muted">
-              El logo está subido en el storage del tenant. Para cambiarlo, subí otro archivo.
+              El logo está subido en el storage del tenant. Para cambiarlo, sube otro archivo.
             </p>
             <Button
               type="button"
@@ -664,7 +671,7 @@ function LogoUploader({
               : 'Subir logo al storage'}
         </p>
         <p className="mt-1 text-xs text-text-muted">
-          PNG, JPG, SVG o WebP. Máximo 2 MB. Arrastrá o hacé clic para seleccionar.
+          PNG, JPG, SVG o WebP. Máximo 2 MB. Arrastra o haz clic para seleccionar.
         </p>
         <input
           type="file"

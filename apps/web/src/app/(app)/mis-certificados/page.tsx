@@ -38,7 +38,7 @@ export default function MisCertificadosPage() {
           setError(
             e instanceof ApiHttpError
               ? e.message
-              : 'No pudimos cargar tus certificados. Probá refrescar la página.',
+              : 'No pudimos cargar tus certificados. Prueba refrescar la página.',
           );
       });
     return () => {

@@ -108,8 +108,8 @@ export function MfaSetupFlow() {
       </div>
 
       <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
-        <p className="font-semibold">Guardá estos recovery codes en un lugar seguro.</p>
-        <p className="mt-1">Cada uno funciona una sola vez si perdés el acceso a tu app TOTP.</p>
+        <p className="font-semibold">Guarda estos recovery codes en un lugar seguro.</p>
+        <p className="mt-1">Cada uno funciona una sola vez si pierdes el acceso a tu app TOTP.</p>
         <ul className="mt-2 grid grid-cols-2 gap-1 font-mono">
           {setup.recoveryCodes.map((c) => (
             <li key={c}>{c}</li>

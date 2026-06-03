@@ -29,7 +29,7 @@ export class TenantContextService {
     const ctx = this.als.getStore();
     if (!ctx) {
       throw new Error(
-        'TenantContext no disponible. Verificá que el request pasa por TenantMiddleware.',
+        'TenantContext no disponible. Verifica que el request pasa por TenantMiddleware.',
       );
     }
     return ctx;

@@ -731,7 +731,7 @@ describe('OidcService.handleCallback', () => {
       },
     });
     await expect(svc.handleCallback({ state: flow.state, code: 'abc' })).rejects.toThrow(
-      /No tenés cuenta/,
+      /No tienes cuenta/,
     );
   });
 

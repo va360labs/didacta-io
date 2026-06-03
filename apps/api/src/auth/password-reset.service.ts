@@ -51,7 +51,7 @@ export class PasswordResetService {
    *
    * Por defecto solo acepta usuarios ACTIVE (path público `/auth/forgot-password`,
    * defensa anti-enum). Los call sites admin-triggered (invite / resendInvite)
-   * pasan `opts.allowPending = true` para poder enviar el email de "definí
+   * pasan `opts.allowPending = true` para poder enviar el email de "define
    * tu contraseña" a usuarios que están justo en status PENDING porque acaban
    * de ser invitados. Ver CORE-FIX-03.
    */
@@ -139,10 +139,10 @@ export class PasswordResetService {
       throw new UnauthorizedException('Token inválido o ya utilizado.');
     }
     if (record.usedAt) {
-      throw new UnauthorizedException('Este enlace ya fue usado. Pedí uno nuevo.');
+      throw new UnauthorizedException('Este enlace ya fue usado. Pide uno nuevo.');
     }
     if (record.expiresAt.getTime() < Date.now()) {
-      throw new UnauthorizedException('Este enlace expiró. Pedí uno nuevo.');
+      throw new UnauthorizedException('Este enlace expiró. Pide uno nuevo.');
     }
 
     const passwordHash = await this.passwords.hash(newPassword);
@@ -383,7 +383,7 @@ export class PasswordResetService {
 
 Recibimos una solicitud para restablecer la contraseña de tu cuenta en ${tenantName}.
 
-Para definir una contraseña nueva, abrí este enlace (válido por ${TOKEN_TTL_MINUTES} minutos):
+Para definir una contraseña nueva, abre este enlace (válido por ${TOKEN_TTL_MINUTES} minutos):
 
 ${link}
 
@@ -397,14 +397,14 @@ Powered by Didacta.io`;
 <html lang="es"><body style="font-family: 'Inter', system-ui, sans-serif; color: #0D1B2A; line-height: 1.6;">
 ${logoHeader}  <p>${greeting}</p>
   <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en ${tenantName}.</p>
-  <p>Para definir una contraseña nueva, hacé clic en el botón (válido por ${TOKEN_TTL_MINUTES} minutos):</p>
+  <p>Para definir una contraseña nueva, haz clic en el botón (válido por ${TOKEN_TTL_MINUTES} minutos):</p>
   <p style="margin: 32px 0;">
     <a href="${link}" style="display: inline-block; background: #1E5AA8; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
       Restablecer contraseña
     </a>
   </p>
   <p style="font-size: 14px; color: #5b6b7c;">
-    O copiá este enlace en tu navegador: <br>
+    O copia este enlace en tu navegador: <br>
     <span style="word-break: break-all;">${link}</span>
   </p>
   <p style="font-size: 14px; color: #5b6b7c;">

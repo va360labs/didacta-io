@@ -302,12 +302,12 @@ const TEMPLATES: Record<string, TemplateDef> = {
   },
   'community.mention': {
     subject: 'Te mencionaron en la comunidad',
-    body: '@{{handle}} te mencionó en un {{#commentId}}comentario{{/commentId}}{{#postId}}post{{/postId}}. Entrá a la app para ver el hilo completo.',
+    body: '@{{handle}} te mencionó en un {{#commentId}}comentario{{/commentId}}{{#postId}}post{{/postId}}. Entra a la app para ver el hilo completo.',
   },
   'community.digest.weekly': {
     subject:
       'Tu resumen semanal de la comunidad ({{mentionsCount}} menciones · {{repliesCount}} respuestas)',
-    body: 'Esta semana en la comunidad:\n\n· {{mentionsCount}} mención(es) nueva(s)\n· {{repliesCount}} respuesta(s) en hilos donde participaste\n\nEntrá a Didacta y revisá /comunidad/menciones para verlas todas. Desde el resumen anterior: {{sinceIso}}.',
+    body: 'Esta semana en la comunidad:\n\n· {{mentionsCount}} mención(es) nueva(s)\n· {{repliesCount}} respuesta(s) en hilos donde participaste\n\nEntra a Didacta y revisa /comunidad/menciones para verlas todas. Desde el resumen anterior: {{sinceIso}}.',
   },
 };
 

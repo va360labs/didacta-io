@@ -170,7 +170,7 @@ export default function AiProvidersAdminPage() {
       <header>
         <h1 className="font-display text-3xl font-bold tracking-tight">Proveedores de IA</h1>
         <p className="mt-1 text-text-muted">
-          Configurá qué proveedor de IA usar para el tutor (chat) y para la indexación de cursos
+          Configura qué proveedor de IA usar para el tutor (chat) y para la indexación de cursos
           (embeddings). La API key se cifra antes de guardarse y nunca se vuelve a mostrar.
         </p>
       </header>
@@ -224,7 +224,7 @@ export default function AiProvidersAdminPage() {
                     value={draft.provider}
                     onChange={(e) => updateDraft(purpose, { provider: e.target.value })}
                   >
-                    <option value="">— Elegí proveedor —</option>
+                    <option value="">— Elige proveedor —</option>
                     {opts.map((o) => (
                       <option key={o.id} value={o.id}>
                         {PROVIDER_NAME[o.id] ?? o.id}

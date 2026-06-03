@@ -151,7 +151,7 @@ export default function CertificateTemplatesPage() {
             Plantillas de certificado
           </h1>
           <p className="mt-1 max-w-3xl text-text-muted">
-            Personalizá el certificado que reciben tus alumnos. La plantilla marcada como{' '}
+            Personaliza el certificado que reciben tus alumnos. La plantilla marcada como{' '}
             <strong>default</strong> se usa para cualquier curso que no tenga una asignada.
           </p>
         </div>

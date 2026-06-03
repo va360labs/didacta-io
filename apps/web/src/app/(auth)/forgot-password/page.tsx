@@ -17,9 +17,9 @@ export default function ForgotPasswordPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recuperá tu contraseña</CardTitle>
+        <CardTitle>Recupera tu contraseña</CardTitle>
         <CardDescription>
-          Ingresá el nombre de tu organización y tu email. Te enviaremos un enlace para definir una
+          Ingresa el nombre de tu organización y tu email. Te enviaremos un enlace para definir una
           nueva contraseña.
         </CardDescription>
       </CardHeader>

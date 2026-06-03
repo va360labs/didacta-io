@@ -87,8 +87,8 @@ export function PendingCommentsQueue({ courseId }: Props) {
           </Badge>
         </div>
         <CardDescription>
-          Comentarios de alumnos esperando tu revisión. Aprobá los útiles para que el resto los vea,
-          rechazá los que no aporten (con un motivo opcional que se muestra al autor).
+          Comentarios de alumnos esperando tu revisión. Aprueba los útiles para que el resto los
+          vea, rechaza los que no aporten (con un motivo opcional que se muestra al autor).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

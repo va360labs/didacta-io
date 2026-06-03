@@ -494,7 +494,7 @@ export class OidcService {
     const email = (claims.email ?? claims.preferred_username ?? '').toString().trim().toLowerCase();
     if (!isValidEmail(email)) {
       throw new UnauthorizedException(
-        'El IdP no devolvió un email válido en el id_token. Asegurate de incluir el scope "email" y configurarlo en el IdP.',
+        'El IdP no devolvió un email válido en el id_token. Asegúrate de incluir el scope "email" y configurarlo en el IdP.',
       );
     }
 
@@ -551,7 +551,7 @@ export class OidcService {
       });
     } else {
       if (user.status !== 'ACTIVE') {
-        throw new UnauthorizedException('Tu cuenta no está activa. Contactá al admin del tenant.');
+        throw new UnauthorizedException('Tu cuenta no está activa. Contacta al admin del tenant.');
       }
       // Refrescamos lastLogin + name si vino en el id_token.
       await this.prisma.user.update({
@@ -664,7 +664,7 @@ export class OidcService {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Discovery falló para ${config.issuer}: ${msg}`);
       throw new ServiceUnavailableException(
-        'No pudimos contactar al proveedor de identidad. Verificá que el issuer esté online y reintentá.',
+        'No pudimos contactar al proveedor de identidad. Verifica que el issuer esté online y reintenta.',
       );
     }
   }

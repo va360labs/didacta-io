@@ -26,7 +26,7 @@ export class MfaRequiredByTenantPolicyError extends UnauthorizedException {
     super({
       message:
         'Tu organización requiere MFA. El periodo de gracia ya expiró. ' +
-        'Configurá tu segundo factor para continuar.',
+        'Configura tu segundo factor para continuar.',
       code: 'mfa_required_by_tenant_policy',
       gracePeriodDays: details.gracePeriodDays,
       gracePeriodExpiredAt: details.gracePeriodExpiredAt,

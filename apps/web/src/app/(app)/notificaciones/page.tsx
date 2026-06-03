@@ -69,7 +69,7 @@ export default function NotificacionesPage() {
       setError(
         e instanceof ApiHttpError
           ? e.message
-          : 'No pudimos cargar tus notificaciones. Probá refrescar la página.',
+          : 'No pudimos cargar tus notificaciones. Prueba refrescar la página.',
       );
     }
   }
@@ -152,7 +152,7 @@ export default function NotificacionesPage() {
             </div>
             <h3 className="font-display text-xl font-semibold">No hay notificaciones</h3>
             <p className="max-w-md text-text-muted">
-              Cuando te matricules en un curso, completes lecciones o recibás un certificado, vas a
+              Cuando te matricules en un curso, completes lecciones o recibas un certificado, vas a
               ver el resumen acá.
             </p>
           </CardContent>

@@ -83,12 +83,12 @@ export function SignInForm() {
         const issuesAny = (e as { issues?: unknown }).issues as AmbiguousTenantError | undefined;
         if (issuesAny && (issuesAny as { candidateSlugs?: string[] }).candidateSlugs) {
           setTenantCandidates((issuesAny as { candidateSlugs: string[] }).candidateSlugs);
-          setError('Tu email pertenece a más de una organización. Elegí cuál quieres usar:');
+          setError('Tu email pertenece a más de una organización. Elige cuál quieres usar:');
         } else {
           setError(e.message);
         }
       } else {
-        setError('No pudimos completar el ingreso. Probá de nuevo en unos segundos.');
+        setError('No pudimos completar el ingreso. Prueba de nuevo en unos segundos.');
       }
     } finally {
       setPending(false);
@@ -151,14 +151,14 @@ export function SignInForm() {
               placeholder="Si tu admin te dio un nombre corto, escribilo aquí"
             />
             <p className="text-xs text-text-subtle">
-              Si no lo sabes, dejá vacío — intentamos identificar tu organización por tu email.
+              Si no lo sabes, deja vacío — intentamos identificar tu organización por tu email.
             </p>
           </div>
         )}
 
         {tenantCandidates && tenantCandidates.length > 0 ? (
           <div className="space-y-1.5">
-            <Label htmlFor="tenantSlugSelect">Elegí tu organización</Label>
+            <Label htmlFor="tenantSlugSelect">Elige tu organización</Label>
             <select
               id="tenantSlugSelect"
               name="tenantSlug"

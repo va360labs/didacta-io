@@ -62,7 +62,7 @@ export function LessonComments({ lessonId, courseId }: Props) {
       setError(
         e instanceof ApiHttpError
           ? e.message
-          : 'No pudimos publicar tu comentario. Probá de nuevo.',
+          : 'No pudimos publicar tu comentario. Prueba de nuevo.',
       );
     } finally {
       setPending(false);

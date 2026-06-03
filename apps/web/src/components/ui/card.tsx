@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   /**
    * Si la tarjeta es interactiva (link/click), aplicamos hover lift sutil.
-   * Setealo desde fuera con data-interactive="true" o pasando el flag.
+   * Configúralo desde fuera con data-interactive="true" o pasando el flag.
    */
   interactive?: boolean;
 }

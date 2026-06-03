@@ -9,7 +9,7 @@ export default function MfaVerifyPage() {
       <CardHeader>
         <CardTitle>Segundo factor</CardTitle>
         <CardDescription>
-          Introducí el código de 6 dígitos de tu app TOTP, o un recovery code si perdiste acceso.
+          Introduce el código de 6 dígitos de tu app TOTP, o un recovery code si perdiste acceso.
         </CardDescription>
       </CardHeader>
       <CardContent>

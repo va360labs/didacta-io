@@ -12,12 +12,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
-import {
-  fundaeApi,
-  type ActionStatus,
-  type FundaeAction,
-  type Modalidad,
-} from '@/modules/fundae';
+import { fundaeApi, type ActionStatus, type FundaeAction, type Modalidad } from '@/modules/fundae';
 
 const STATUS_VARIANT: Record<ActionStatus, 'success' | 'warning' | 'muted' | 'danger'> = {
   ACTIVE: 'success',
@@ -172,7 +167,7 @@ export default function FundaePage() {
             </div>
             <h3 className="font-display text-2xl font-semibold">Sin acciones formativas</h3>
             <p className="max-w-md text-text-muted">
-              Empezá creando tu primera acción Fundae. Una vez creada, podrás generar el XML para
+              Empieza creando tu primera acción Fundae. Una vez creada, podrás generar el XML para
               presentar a la fundación.
             </p>
           </CardContent>

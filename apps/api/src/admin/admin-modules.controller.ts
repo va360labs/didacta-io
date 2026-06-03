@@ -40,7 +40,7 @@ function resolveTargetTenant(user: SessionClaims, queryTenantId?: string): strin
   if (queryTenantId === user.tenantId) return queryTenantId;
   if (!user.roles.includes('super_admin')) {
     throw new ForbiddenException(
-      'Solo super_admin puede operar módulos en otro tenant. Omití ?tenantId para usar el tuyo.',
+      'Solo super_admin puede operar módulos en otro tenant. Omite ?tenantId para usar el tuyo.',
     );
   }
   return queryTenantId;

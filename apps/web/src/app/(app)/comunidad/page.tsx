@@ -355,7 +355,7 @@ export default function ComunidadPage() {
                   })}
                 {allTags.length <= 1 ? (
                   <p className="text-xs text-text-subtle">
-                    Aún no hay tags. Etiquetá tu próxima publicación para organizar la comunidad.
+                    Aún no hay tags. Etiqueta tu próxima publicación para organizar la comunidad.
                   </p>
                 ) : null}
               </div>

@@ -150,7 +150,7 @@ export function describeCipherKeySource(resolved: ResolvedCipherKey): string {
     case 'file-new':
       return (
         `[Didacta] TENANT_SETTINGS_ENC_KEY: nueva clave generada y persistida en ${resolved.filePath}.\n` +
-        `          Sobrevive reinicios mientras el volumen persista. Hacé backup si configuras\n` +
+        `          Sobrevive reinicios mientras el volumen persista. Haz backup si configuras\n` +
         `          features que cifran (Stripe, OIDC, SCIM, SMTP custom, Zoom S2S).\n` +
         envFooter
       );
@@ -158,7 +158,7 @@ export function describeCipherKeySource(resolved: ResolvedCipherKey): string {
       return (
         '[Didacta] ⚠ TENANT_SETTINGS_ENC_KEY: NO pude persistir la clave en disco — uso clave\n' +
         '          efímera en memoria. Los secretos cifrados se PERDERÁN al reiniciar.\n' +
-        '          Verificá permisos del volumen o seteá TENANT_SETTINGS_ENC_KEY explícitamente.\n' +
+        '          Verifica permisos del volumen o configura TENANT_SETTINGS_ENC_KEY explícitamente.\n' +
         envFooter
       );
   }

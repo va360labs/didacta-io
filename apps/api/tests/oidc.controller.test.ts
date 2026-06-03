@@ -245,10 +245,10 @@ describe('OidcController.callback', () => {
     expect(reply._redirectUrl).toContain('reason=state_invalid');
   });
 
-  it('UnauthorizedException con "No tenés cuenta" → reason=user_not_provisioned', async () => {
+  it('UnauthorizedException con "No tienes cuenta" → reason=user_not_provisioned', async () => {
     const svc = makeFakeService();
     svc.handleCallback.mockRejectedValue(
-      new UnauthorizedException('No tenés cuenta en este tenant.'),
+      new UnauthorizedException('No tienes cuenta en este tenant.'),
     );
     const ctrl = new OidcController(
       svc as unknown as ConstructorParameters<typeof OidcController>[0],

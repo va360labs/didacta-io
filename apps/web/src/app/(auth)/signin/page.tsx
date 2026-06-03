@@ -19,7 +19,7 @@ export default function SignInPage() {
       <CardHeader>
         <CardTitle className="text-2xl">Bienvenido de nuevo</CardTitle>
         <CardDescription>
-          Ingresá los datos de tu organización para entrar a tu panel.
+          Ingresa los datos de tu organización para entrar a tu panel.
         </CardDescription>
       </CardHeader>
       <CardContent>

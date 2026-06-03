@@ -692,7 +692,7 @@ function StorageTab() {
                 className="font-mono"
               />
               <p className="text-xs text-text-subtle">
-                Asegurate de montar un volumen Docker apuntando a esta ruta para que los archivos
+                Asegúrate de montar un volumen Docker apuntando a esta ruta para que los archivos
                 sobrevivan a redespliegues.
               </p>
             </div>

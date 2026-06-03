@@ -26,7 +26,7 @@ export default function FormadorCoursesPage() {
       setError(
         e instanceof ApiHttpError
           ? e.message
-          : 'No pudimos cargar tus cursos. Probá refrescar la página.',
+          : 'No pudimos cargar tus cursos. Prueba refrescar la página.',
       );
     }
   }
@@ -95,7 +95,7 @@ export default function FormadorCoursesPage() {
             </div>
             <h3 className="font-display text-2xl font-semibold">Aún no tienes cursos</h3>
             <p className="max-w-md text-text-muted">
-              Empezá creando tu primer curso. Vas a poder añadir secciones, lecciones, quizzes y
+              Empieza creando tu primer curso. Vas a poder añadir secciones, lecciones, quizzes y
               certificados después.
             </p>
             <Button type="button" onClick={() => setShowCreate(true)} className="mt-2">

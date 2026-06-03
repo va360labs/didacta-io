@@ -156,7 +156,7 @@ export default function AuditoriaPage() {
                     ). Las entradas previas a ese punto siguen siendo confiables.
                   </p>
                   <p className="mt-2 text-xs text-text-subtle">
-                    Esto NO debería pasar en operación normal — investigá quién tuvo acceso directo
+                    Esto NO debería pasar en operación normal — investiga quién tuvo acceso directo
                     a la base de datos.
                   </p>
                 </div>
@@ -249,7 +249,7 @@ export default function AuditoriaPage() {
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
             <h3 className="font-display text-xl font-semibold">Sin registros</h3>
             <p className="max-w-md text-text-muted">
-              No hay entradas que coincidan con los filtros. Probá ampliando el rango o quitando
+              No hay entradas que coincidan con los filtros. Prueba ampliando el rango o quitando
               filtros.
             </p>
           </CardContent>

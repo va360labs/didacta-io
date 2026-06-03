@@ -40,7 +40,7 @@ export default function CorreccionesPage() {
       setError(
         e instanceof ApiHttpError
           ? e.message
-          : 'No pudimos cargar la lista. Probá refrescar la página.',
+          : 'No pudimos cargar la lista. Prueba refrescar la página.',
       );
     }
   }

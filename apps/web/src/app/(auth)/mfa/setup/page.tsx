@@ -9,8 +9,8 @@ export default function MfaSetupPage() {
       <CardHeader>
         <CardTitle>Configurar segundo factor</CardTitle>
         <CardDescription>
-          Tu rol exige autenticación en dos pasos. Escaneá el QR con tu app TOTP (Google
-          Authenticator, 1Password, Authy) y confirmá el código.
+          Tu rol exige autenticación en dos pasos. Escanea el QR con tu app TOTP (Google
+          Authenticator, 1Password, Authy) y confirma el código.
         </CardDescription>
       </CardHeader>
       <CardContent>
