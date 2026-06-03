@@ -27,6 +27,7 @@ interface TokenRow {
 interface TenantRow {
   id: string;
   slug: string;
+  name: string;
   status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
 }
 
@@ -36,8 +37,8 @@ function hash(s: string): string {
 
 function makeFakePrisma() {
   const tenants: TenantRow[] = [
-    { id: 'tenant-1', slug: 'va360', status: 'ACTIVE' },
-    { id: 'tenant-2', slug: 'suspendida', status: 'SUSPENDED' },
+    { id: 'tenant-1', slug: 'va360', name: 'VA360 Academy', status: 'ACTIVE' },
+    { id: 'tenant-2', slug: 'suspendida', name: 'Suspendida', status: 'SUSPENDED' },
   ];
   const users: UserRow[] = [
     {
@@ -354,13 +355,17 @@ describe('PasswordResetService.reset', () => {
 });
 
 describe('PasswordResetService.buildResetEmail', () => {
-  it('construye un email con greeting nominal cuando hay name', () => {
+  it('construye un email con greeting nominal cuando hay name (default Didacta sin tenantName)', () => {
     const { service } = makeService();
     const out = service.buildResetEmail('abc123', 'Valentín', 'https://didacta.local');
     expect(out.subject).toBe('Restablecer tu contraseña en Didacta');
     expect(out.text).toContain('Hola Valentín');
     expect(out.html).toContain('Hola Valentín');
     expect(out.text).toContain('https://didacta.local/reset-password?token=abc123');
+    // Default sin tenantName → la firma genérica + footer.
+    expect(out.text).toContain('— Equipo Didacta');
+    expect(out.text).toContain('Powered by Didacta.io');
+    expect(out.html).toContain('Powered by Didacta.io');
   });
 
   it('cae a un greeting genérico cuando no hay name', () => {
@@ -374,5 +379,30 @@ describe('PasswordResetService.buildResetEmail', () => {
     const { service } = makeService();
     const out = service.buildResetEmail('a/b+c=', null, 'https://x.test');
     expect(out.text).toContain('token=a%2Fb%2Bc%3D');
+  });
+
+  // alpha.77 — branding por tenant
+  it('firma como "Equipo {tenantName}" + footer Powered by Didacta.io cuando se pasa tenantName', () => {
+    const { service } = makeService();
+    const out = service.buildResetEmail(
+      'abc',
+      'Valentín',
+      'https://dev.didacta.io',
+      'VA360 Academy',
+    );
+    expect(out.subject).toBe('Restablecer tu contraseña en VA360 Academy');
+    expect(out.text).toContain('— Equipo VA360 Academy');
+    expect(out.html).toContain('— Equipo VA360 Academy');
+    expect(out.text).toContain('cuenta en VA360 Academy');
+    // Footer discreto con marca plataforma.
+    expect(out.text).toContain('Powered by Didacta.io');
+    expect(out.html).toContain('Powered by Didacta.io');
+    expect(out.html).toContain('color: #999');
+  });
+
+  it('request() expone tenantName desde el tenant resuelto', async () => {
+    const { service } = makeService();
+    const result = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
+    expect(result?.tenantName).toBe('VA360 Academy');
   });
 });

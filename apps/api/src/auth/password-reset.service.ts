@@ -64,6 +64,7 @@ export class PasswordResetService {
     userId: string;
     userName: string | null;
     tenantId: string;
+    tenantName: string;
   } | null> {
     const tenant = await this.resolveTenant(args);
     if (!tenant) return null;
@@ -109,7 +110,15 @@ export class PasswordResetService {
       userAgent: ctx.userAgent ?? undefined,
     });
 
-    return { rawToken, userId: user.id, userName: user.name, tenantId: tenant.id };
+    return {
+      rawToken,
+      userId: user.id,
+      userName: user.name,
+      tenantId: tenant.id,
+      // alpha.77 — branding por tenant en emails. Si el tenant no tiene
+      // name (caso bordeline en tests fake o data legacy), caemos a 'Didacta'.
+      tenantName: (tenant as { name?: string | null }).name ?? 'Didacta',
+    };
   }
 
   /**
@@ -227,6 +236,7 @@ export class PasswordResetService {
       result.rawToken,
       result.userName,
       webBaseUrl,
+      result.tenantName,
     );
     const sendResult = await this.smtp.send(config, {
       to: args.email,
@@ -284,20 +294,32 @@ export class PasswordResetService {
     return null;
   }
 
-  /** Genera el subject + cuerpos del email de reset. */
+  /**
+   * Genera el subject + cuerpos del email de reset.
+   *
+   * alpha.77 — branding por tenant:
+   *   - El email se firma con el nombre del tenant ("Equipo {tenantName}")
+   *     en lugar del genérico "Equipo Didacta". Esto evita que un usuario
+   *     de "VA360 Academy" reciba un mail "de Didacta" y dude si es phishing.
+   *   - Se añade un footer discreto "Powered by Didacta.io" para mantener
+   *     atribución legal de la plataforma sin pisar el branding del tenant.
+   *   - `tenantName` cae a "Didacta" si no se pasa (compat con call sites
+   *     legacy / tests).
+   */
   buildResetEmail(
     rawToken: string,
     userName: string | null,
     webBaseUrl: string,
+    tenantName: string = 'Didacta',
   ): { subject: string; html: string; text: string } {
     const link = `${webBaseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(
       rawToken,
     )}`;
     const greeting = userName ? `Hola ${userName},` : 'Hola,';
-    const subject = 'Restablecer tu contraseña en Didacta';
+    const subject = `Restablecer tu contraseña en ${tenantName}`;
     const text = `${greeting}
 
-Recibimos una solicitud para restablecer la contraseña de tu cuenta en Didacta.
+Recibimos una solicitud para restablecer la contraseña de tu cuenta en ${tenantName}.
 
 Para definir una contraseña nueva, abrí este enlace (válido por ${TOKEN_TTL_MINUTES} minutos):
 
@@ -305,11 +327,14 @@ ${link}
 
 Si no fuiste tú, puedes ignorar este mensaje — tu contraseña actual sigue intacta.
 
-— Equipo Didacta`;
+— Equipo ${tenantName}
+
+—
+Powered by Didacta.io`;
     const html = `<!DOCTYPE html>
 <html lang="es"><body style="font-family: 'Inter', system-ui, sans-serif; color: #0D1B2A; line-height: 1.6;">
   <p>${greeting}</p>
-  <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en Didacta.</p>
+  <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en ${tenantName}.</p>
   <p>Para definir una contraseña nueva, hacé clic en el botón (válido por ${TOKEN_TTL_MINUTES} minutos):</p>
   <p style="margin: 32px 0;">
     <a href="${link}" style="display: inline-block; background: #1E5AA8; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
@@ -323,7 +348,11 @@ Si no fuiste tú, puedes ignorar este mensaje — tu contraseña actual sigue in
   <p style="font-size: 14px; color: #5b6b7c;">
     Si no fuiste tú, puedes ignorar este mensaje — tu contraseña actual sigue intacta.
   </p>
-  <p style="margin-top: 32px; font-size: 12px; color: #94a3b8;">— Equipo Didacta</p>
+  <p style="margin-top: 32px; font-size: 12px; color: #94a3b8;">— Equipo ${tenantName}</p>
+  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0 12px;" />
+  <p style="font-size: 12px; color: #999; text-align: center; margin: 0;">
+    Powered by Didacta.io
+  </p>
 </body></html>`;
     return { subject, html, text };
   }

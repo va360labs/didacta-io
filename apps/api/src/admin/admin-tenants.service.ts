@@ -267,6 +267,42 @@ export class AdminTenantsService {
     return this.getDetail(created.tenant.id);
   }
 
+  /**
+   * Rename del tenant (`tenant.name`). Solo super_admin. No invalida sessions.
+   *
+   * Pensado para corregir el nombre del tenant después de creado — p. ej. al
+   * migrar el tenant que sirve la plataforma desde "Didacta" genérico a
+   * "VA360 Academy" (alpha.77).
+   */
+  async rename(
+    actorId: string,
+    id: string,
+    newName: string,
+    ctx: ClientContext = NO_CTX,
+  ): Promise<TenantListItem> {
+    const trimmed = newName.trim();
+    if (trimmed.length === 0) {
+      throw new BadRequestException('El nombre del tenant no puede estar vacío.');
+    }
+    const t = await this.prisma.tenant.findFirst({ where: { id, deletedAt: null } });
+    if (!t) throw new NotFoundException('Tenant no encontrado.');
+
+    await this.prisma.tenant.update({ where: { id }, data: { name: trimmed } });
+
+    await this.auditLog.record({
+      tenantId: id,
+      actorId,
+      action: 'admin.tenant.renamed',
+      resourceType: 'tenant',
+      resourceId: id,
+      metadata: { previousName: t.name, newName: trimmed },
+      ip: ctx.ip ?? undefined,
+      userAgent: ctx.userAgent ?? undefined,
+    });
+
+    return this.getDetail(id);
+  }
+
   async setStatus(
     actorId: string,
     id: string,

@@ -35,6 +35,11 @@ const setStatusSchema = z.object({
 });
 type SetStatusDto = z.infer<typeof setStatusSchema>;
 
+const renameSchema = z.object({
+  name: z.string().min(1).max(120),
+});
+type RenameDto = z.infer<typeof renameSchema>;
+
 const domainSchema = z.object({
   hostname: z.string().min(1).max(253),
 });
@@ -106,6 +111,21 @@ export class AdminTenantsController {
   ) {
     const u = requireSuperAdmin(user);
     return this.service.setStatus(u.sub, id, dto.status, extractClientContext(req));
+  }
+
+  @Patch(':id')
+  @ApiOperation({
+    summary:
+      'Renombrar tenant (`tenant.name`). Afecta firma de emails ("Equipo {name}") y sidebar. Solo super_admin.',
+  })
+  async rename(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(renameSchema)) dto: RenameDto,
+  ) {
+    const u = requireSuperAdmin(user);
+    return this.service.rename(u.sub, id, dto.name, extractClientContext(req));
   }
 
   @Post(':id/domains')
