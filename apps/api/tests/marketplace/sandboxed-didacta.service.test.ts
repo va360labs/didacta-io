@@ -567,9 +567,9 @@ describe('validación Zod', () => {
 
   it('rechaza slug inválido en courses.create', async () => {
     const { api } = setup();
-    await expect(
-      api.courses.create({ slug: 'NO-SLUG-VALIDO!', title: 'X' }),
-    ).rejects.toMatchObject({ code: 'DIDACTA_VALIDATION_ERROR' });
+    await expect(api.courses.create({ slug: 'NO-SLUG-VALIDO!', title: 'X' })).rejects.toMatchObject(
+      { code: 'DIDACTA_VALIDATION_ERROR' },
+    );
   });
 
   it('rechaza externalId fuera de regex', async () => {
@@ -657,6 +657,8 @@ describe('users.upsertByExternalRef', () => {
       USER_ID,
       { email: 'a@b.com', name: 'Ana', role: 'alumno' },
       'http://test.local',
+      undefined,
+      { sendInvite: true },
     );
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -671,6 +673,107 @@ describe('users.upsertByExternalRef', () => {
     expect(result.externalSource).toBe('learndash');
     expect(result.externalId).toBe('99');
     expect(result).not.toHaveProperty('passwordHash'); // subset estable
+  });
+
+  // ── alpha.81: suppressInvite ──
+  it('suppressInvite=true → invita con sendInvite:false (NO envía email)', async () => {
+    const { api, prisma, services } = setup();
+    prisma.user.findFirst.mockResolvedValueOnce(null); // lookup inicial: no existe
+    services.adminUsers.invite.mockResolvedValue({
+      id: 'user-uuid',
+      email: 'a@b.com',
+      name: 'Ana',
+      status: 'PENDING',
+      roles: ['alumno'],
+      mfaEnabled: false,
+      emailVerified: false,
+      createdAt: '2026-05-06T10:00:00Z',
+      lastLoginAt: null,
+    });
+    prisma.user.findUniqueOrThrow.mockResolvedValue(
+      fakeUserRow({
+        id: 'user-uuid',
+        status: 'PENDING',
+        externalSource: 'learndash',
+        externalId: '99',
+      }),
+    );
+
+    const result = await api.users.upsertByExternalRef({
+      externalSource: 'learndash',
+      externalId: '99',
+      email: 'a@b.com',
+      name: 'Ana',
+      role: 'alumno',
+      suppressInvite: true,
+    });
+
+    // El migrador delega en invite() pero con sendInvite:false — el service
+    // crea el user en PENDING sin disparar passwordReset.requestAndSendEmail.
+    expect(services.adminUsers.invite).toHaveBeenCalledWith(
+      TENANT_ID,
+      USER_ID,
+      { email: 'a@b.com', name: 'Ana', role: 'alumno' },
+      'http://test.local',
+      undefined,
+      { sendInvite: false },
+    );
+    // El user igualmente queda creado (PENDING) y con el externalRef parcheado.
+    expect(result.status).toBe('PENDING');
+    expect(result.externalId).toBe('99');
+  });
+
+  it('suppressInvite=false explícito → invita con sendInvite:true (envía email)', async () => {
+    const { api, prisma, services } = setup();
+    prisma.user.findFirst.mockResolvedValueOnce(null);
+    services.adminUsers.invite.mockResolvedValue({
+      id: 'user-uuid',
+      email: 'a@b.com',
+      name: 'Ana',
+      status: 'PENDING',
+      roles: ['alumno'],
+      mfaEnabled: false,
+      emailVerified: false,
+      createdAt: '2026-05-06T10:00:00Z',
+      lastLoginAt: null,
+    });
+    prisma.user.findUniqueOrThrow.mockResolvedValue(
+      fakeUserRow({ id: 'user-uuid', externalSource: 'learndash', externalId: '99' }),
+    );
+
+    await api.users.upsertByExternalRef({
+      externalSource: 'learndash',
+      externalId: '99',
+      email: 'a@b.com',
+      name: 'Ana',
+      suppressInvite: false,
+    });
+
+    expect(services.adminUsers.invite).toHaveBeenCalledWith(
+      TENANT_ID,
+      USER_ID,
+      expect.objectContaining({ email: 'a@b.com' }),
+      'http://test.local',
+      undefined,
+      { sendInvite: true },
+    );
+  });
+
+  it('idempotente con suppressInvite: si ya existe por externalRef → NO re-invita ni reenvía', async () => {
+    const { api, prisma, services } = setup();
+    prisma.user.findFirst.mockResolvedValueOnce(
+      fakeUserRow({ externalSource: 'learndash', externalId: '99', email: 'old@b.com' }),
+    );
+
+    const result = await api.users.upsertByExternalRef({
+      externalSource: 'learndash',
+      externalId: '99',
+      email: 'new@b.com',
+      suppressInvite: true,
+    });
+
+    expect(services.adminUsers.invite).not.toHaveBeenCalled();
+    expect(result.email).toBe('old@b.com');
   });
 
   it('idempotente: si ya existe por externalRef → no se invita, devuelve mapeado', async () => {
@@ -900,9 +1003,9 @@ describe('courses.publish', () => {
   it('CourseNotFoundError → DIDACTA_NOT_FOUND', async () => {
     const { api, services } = setup();
     services.courses.publishCourse.mockRejectedValue(new CourseNotFoundError('any'));
-    await expect(
-      api.courses.publish('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'),
-    ).rejects.toMatchObject({ code: 'DIDACTA_NOT_FOUND' });
+    await expect(api.courses.publish('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')).rejects.toMatchObject(
+      { code: 'DIDACTA_NOT_FOUND' },
+    );
   });
 });
 
@@ -1454,11 +1557,7 @@ describe('media.uploadFromBytes', () => {
     expect(result.contentType).toBe('image/png');
     expect(result.sizeBytes).toBe(5);
     expect(result.storageKey).toContain(expectedChecksum);
-    expect(services.storage.upload).toHaveBeenCalledWith(
-      result.storageKey,
-      bytes,
-      'image/png',
-    );
+    expect(services.storage.upload).toHaveBeenCalledWith(result.storageKey, bytes, 'image/png');
   });
 
   it('rechaza bytes vacío con DIDACTA_VALIDATION_ERROR', async () => {

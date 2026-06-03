@@ -10,6 +10,26 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.81]
+
+#### Added
+
+- **`suppressInvite` en `ctx.didacta.users.upsertByExternalRef`**: nuevo flag
+  opcional en el contrato de la API pública del core para módulos del
+  marketplace. Cuando es `true`, el user se crea igualmente en estado `PENDING`
+  (con rol y registro de auditoría) pero NO se dispara el email de
+  invitación/activación. El migrador lo usa siempre para importar miles de users
+  de un LMS de origen sin bombardearlos con emails; el operador los notifica
+  después de forma explícita (p. ej. con resend-invite). `AdminUsersService.invite`
+  acepta ahora `options.sendInvite` (default `true`) para soportar este path.
+
+#### Notes
+
+- El comportamiento por defecto NO cambia: el invite manual de un admin (y
+  cualquier llamada sin `suppressInvite`) sigue enviando el email de bienvenida.
+  La idempotencia se mantiene: si el user ya existe por `externalRef`, nunca se
+  reenvía email, independientemente del flag.
+
 ### [0.0.1-alpha.79]
 
 #### Added

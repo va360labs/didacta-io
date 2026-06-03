@@ -143,11 +143,12 @@ const upsertUserSchema = z
     ...externalRefShape,
     email: z.string().email().max(254),
     name: z.string().min(1).max(160).optional(),
-    role: z
-      .enum(['tenant_admin', 'formador', 'alumno', 'auditor', 'empresa_manager'])
-      .optional(),
+    role: z.enum(['tenant_admin', 'formador', 'alumno', 'auditor', 'empresa_manager']).optional(),
     locale: z.string().min(2).max(10).optional(),
     documentId: z.string().min(1).max(20).optional(),
+    // alpha.81: si true, el user se crea SIN enviar email de invitación. El
+    // migrador lo usa siempre; el operador notifica después de forma explícita.
+    suppressInvite: z.boolean().optional(),
   })
   .strict();
 
@@ -298,12 +299,20 @@ export function mapCoreError(err: unknown): DidactaError {
   }
 
   // Familia genérica del módulo — error con `code` pero no clase específica.
-  if (err instanceof CoursesError || err instanceof LearningError || err instanceof AssessmentsError) {
+  if (
+    err instanceof CoursesError ||
+    err instanceof LearningError ||
+    err instanceof AssessmentsError
+  ) {
     const code = (err as { code?: string }).code ?? '';
     if (code.endsWith('_NOT_FOUND')) {
       return new DidactaError('DIDACTA_NOT_FOUND', err.message, err);
     }
-    if (code.endsWith('_EXISTS') || code.endsWith('_ALREADY_PUBLISHED') || code === 'ALREADY_ENROLLED') {
+    if (
+      code.endsWith('_EXISTS') ||
+      code.endsWith('_ALREADY_PUBLISHED') ||
+      code === 'ALREADY_ENROLLED'
+    ) {
       return new DidactaError('DIDACTA_CONFLICT', err.message, err);
     }
     return new DidactaError('DIDACTA_VALIDATION_ERROR', err.message, err);
@@ -311,7 +320,12 @@ export function mapCoreError(err: unknown): DidactaError {
 
   // Excepciones de Nest (BadRequestException, ConflictException, NotFoundException)
   // del AdminUsersService.invite. Aprovechamos `status` o `name` para clasificar.
-  const e = err as { status?: number; response?: { statusCode?: number }; message?: string; name?: string };
+  const e = err as {
+    status?: number;
+    response?: { statusCode?: number };
+    message?: string;
+    name?: string;
+  };
   const status = e?.status ?? e?.response?.statusCode;
   const message = e?.message ?? String(err);
   if (status === 409 || /conflict|ya existe/i.test(message)) {
@@ -331,11 +345,7 @@ export function mapCoreError(err: unknown): DidactaError {
 
   // Fallback: bug del core o panic inesperado. El módulo debe fallar el job
   // y reintentar tras cooldown. `cause` preserva el original para diagnóstico.
-  return new DidactaError(
-    'DIDACTA_INTERNAL_ERROR',
-    `Error inesperado del core: ${message}`,
-    err,
-  );
+  return new DidactaError('DIDACTA_INTERNAL_ERROR', `Error inesperado del core: ${message}`, err);
 }
 
 /// Convierte ZodError en DidactaError con mensaje legible que mencione el
@@ -456,8 +466,7 @@ class ScopedDidactaApi implements DidactaApi {
     this.users = {
       upsertByExternalRef: (input) =>
         this.gate('users.upsertByExternalRef', () => this.usersUpsert(input)),
-      findByExternalRef: (ref) =>
-        this.gate('users.findByExternalRef', () => this.usersFind(ref)),
+      findByExternalRef: (ref) => this.gate('users.findByExternalRef', () => this.usersFind(ref)),
       deleteByExternalRef: (ref) =>
         this.gate('users.deleteByExternalRef', () => this.usersDelete(ref)),
     };
@@ -506,7 +515,8 @@ class ScopedDidactaApi implements DidactaApi {
         this.gate('enrollments.deleteByExternalRef', () => this.enrollmentsDelete(ref)),
     };
     this.media = {
-      uploadFromUrl: (input) => this.gate('media.uploadFromUrl', () => this.mediaUploadFromUrl(input)),
+      uploadFromUrl: (input) =>
+        this.gate('media.uploadFromUrl', () => this.mediaUploadFromUrl(input)),
       uploadFromBytes: (input) =>
         this.gate('media.uploadFromBytes', () => this.mediaUploadFromBytes(input)),
     };
@@ -599,6 +609,12 @@ class ScopedDidactaApi implements DidactaApi {
     // asigna rol + envía email de welcome (idempotente: si el email ya
     // existe en el tenant lanza ConflictException). Mapeamos esa error a
     // DIDACTA_CONFLICT así el módulo discrimina vs. otro tipo de error.
+    //
+    // alpha.81: si el módulo pasó `suppressInvite: true` (caso del migrador),
+    // creamos el user igual en PENDING pero SIN disparar el email de
+    // invitación/activación — pasamos `sendInvite: false` al service del
+    // admin. El default (flag ausente/false) mantiene el envío del email,
+    // idéntico al invite manual de un admin.
     const role = input.role ?? 'alumno';
     const webBaseUrl = this.coreServices.getWebBaseUrl();
     const actorId = userId ?? '00000000-0000-0000-0000-000000000000'; // system actor
@@ -607,6 +623,8 @@ class ScopedDidactaApi implements DidactaApi {
       actorId,
       { email: input.email, name: input.name, role },
       webBaseUrl,
+      undefined,
+      { sendInvite: input.suppressInvite !== true },
     );
 
     // Patch externalRef en la fila recién creada. AdminUsersService NO
@@ -670,16 +688,14 @@ class ScopedDidactaApi implements DidactaApi {
     const input = parsed.data;
     const { tenantId, userId } = this.requireTenant();
 
-    const created = await this.coreServices
-      .getCoursesService()
-      .createCourse(tenantId, userId, {
-        slug: input.slug,
-        title: input.title,
-        description: input.description,
-        language: input.language ?? 'es-ES',
-        estimatedMinutes: input.estimatedMinutes,
-        category: input.category,
-      });
+    const created = await this.coreServices.getCoursesService().createCourse(tenantId, userId, {
+      slug: input.slug,
+      title: input.title,
+      description: input.description,
+      language: input.language ?? 'es-ES',
+      estimatedMinutes: input.estimatedMinutes,
+      category: input.category,
+    });
 
     return toDidactaCourse(created);
   }
@@ -719,16 +735,14 @@ class ScopedDidactaApi implements DidactaApi {
     }
 
     // Create path: createCourse + patch externalRef.
-    const created = await this.coreServices
-      .getCoursesService()
-      .createCourse(tenantId, userId, {
-        slug: input.slug,
-        title: input.title,
-        description: input.description,
-        language: input.language ?? 'es-ES',
-        estimatedMinutes: input.estimatedMinutes,
-        category: input.category,
-      });
+    const created = await this.coreServices.getCoursesService().createCourse(tenantId, userId, {
+      slug: input.slug,
+      title: input.title,
+      description: input.description,
+      language: input.language ?? 'es-ES',
+      estimatedMinutes: input.estimatedMinutes,
+      category: input.category,
+    });
     const patched = await this.prisma.modCoursesCourse.update({
       where: { id: created.id },
       data: {
@@ -864,9 +878,7 @@ class ScopedDidactaApi implements DidactaApi {
     return toDidactaCourseModule(patched);
   }
 
-  private async courseModulesFind(
-    rawRef: DidactaExternalRef,
-  ): Promise<DidactaCourseModule | null> {
+  private async courseModulesFind(rawRef: DidactaExternalRef): Promise<DidactaCourseModule | null> {
     const parsed = externalRefSchema.safeParse(rawRef);
     if (!parsed.success) failValidation(parsed.error);
     this.assertExternalSourceMatches(parsed.data.externalSource);
@@ -1073,16 +1085,14 @@ class ScopedDidactaApi implements DidactaApi {
       return toDidactaQuiz(updated);
     }
 
-    const created = await this.coreServices
-      .getAssessmentsService()
-      .createQuiz(tenantId, userId, {
-        ...(lessonId !== null ? { lessonId } : {}),
-        title: input.title,
-        description: input.description,
-        passThreshold: input.passThreshold,
-        maxAttempts: input.maxAttempts,
-        timeLimitMinutes: input.timeLimitMinutes,
-      });
+    const created = await this.coreServices.getAssessmentsService().createQuiz(tenantId, userId, {
+      ...(lessonId !== null ? { lessonId } : {}),
+      title: input.title,
+      description: input.description,
+      passThreshold: input.passThreshold,
+      maxAttempts: input.maxAttempts,
+      timeLimitMinutes: input.timeLimitMinutes,
+    });
 
     // NOTA: el bulk create de questions del input.questions queda diferido
     // a Sprint 4 (DD-006). El shape detallado lo valida AssessmentsService
@@ -1257,12 +1267,10 @@ class ScopedDidactaApi implements DidactaApi {
 
     let enrollment;
     try {
-      enrollment = await this.coreServices
-        .getLearningService()
-        .enrollByAdmin(tenantId, userId, {
-          userId: user.id,
-          courseId: course.id,
-        });
+      enrollment = await this.coreServices.getLearningService().enrollByAdmin(tenantId, userId, {
+        userId: user.id,
+        courseId: course.id,
+      });
     } catch (err) {
       // Si ya estaba enrolled (otro path lo creó sin externalRef), buscar
       // el enrollment existente y patchearlo con el externalRef provisto.

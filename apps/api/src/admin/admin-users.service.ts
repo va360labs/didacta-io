@@ -166,6 +166,15 @@ export class AdminUsersService {
    * Invita a un usuario nuevo: crea el User con status=PENDING (sin password),
    * le asigna el rol seleccionado y envía email con link de reset para que
    * el usuario defina su contraseña. Al primer signin queda ACTIVE.
+   *
+   * `options.sendInvite` (default `true`): cuando es `false`, el user se crea
+   * IGUAL en estado PENDING + se le asigna el rol + queda registrado en audit,
+   * pero NO se dispara `passwordReset.requestAndSendEmail` — es decir, no se
+   * envía el email de bienvenida/activación. El operador puede notificarlo
+   * después con `resendInvite()`. Lo usa el path del migrador (ctx.didacta
+   * con `suppressInvite: true`) para importar miles de users sin bombardearlos
+   * con emails. El endpoint admin manual NO pasa este flag, así que mantiene
+   * el comportamiento por defecto: invitar a mano SÍ envía el email.
    */
   async invite(
     tenantId: string,
@@ -173,7 +182,9 @@ export class AdminUsersService {
     dto: { email: string; name?: string; role: AssignableRole },
     webBaseUrl: string,
     ctx: ClientContext = NO_CTX,
+    options: { sendInvite?: boolean } = {},
   ): Promise<UserListItem> {
+    const sendInvite = options.sendInvite ?? true;
     if (!TENANT_ASSIGNABLE_ROLES.includes(dto.role)) {
       throw new BadRequestException(`Rol "${dto.role}" no asignable.`);
     }
@@ -221,18 +232,24 @@ export class AdminUsersService {
     // `allowPending: true` porque el user recién creado está en PENDING — sin
     // este flag, password-reset.request() lo descartaría silenciosamente
     // por el guard anti user-enumeration. Ver CORE-FIX-03.
-    try {
-      await this.passwordReset.requestAndSendEmail(
-        { email: dto.email, resolvedTenantId: tenantId },
-        webBaseUrl,
-        ctx,
-        { allowPending: true },
-      );
-    } catch (err) {
-      this.logger.warn(
-        { err, userId: user.id },
-        'admin.invite: fallo al enviar email de bienvenida; el admin puede reenviar',
-      );
+    //
+    // Si `sendInvite === false` (path del migrador con suppressInvite) NO se
+    // envía nada: el user queda creado en PENDING y el operador lo notifica
+    // después con resendInvite(). Ver alpha.81.
+    if (sendInvite) {
+      try {
+        await this.passwordReset.requestAndSendEmail(
+          { email: dto.email, resolvedTenantId: tenantId },
+          webBaseUrl,
+          ctx,
+          { allowPending: true },
+        );
+      } catch (err) {
+        this.logger.warn(
+          { err, userId: user.id },
+          'admin.invite: fallo al enviar email de bienvenida; el admin puede reenviar',
+        );
+      }
     }
 
     const detail = await this.getDetail(tenantId, user.id);

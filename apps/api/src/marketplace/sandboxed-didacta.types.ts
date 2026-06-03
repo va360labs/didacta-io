@@ -57,14 +57,14 @@
 /// para que el módulo no dependa de strings de Postgres ni de excepciones
 /// internas del core.
 export type DidactaErrorCode =
-  | 'DIDACTA_PERMISSION_DENIED'  // El método invocado no está en `manifest.didacta.permissions`.
-  | 'DIDACTA_NOT_FOUND'          // El recurso buscado (por externalRef o id) no existe en el tenant.
-  | 'DIDACTA_VALIDATION_ERROR'   // Input rechazado por el schema Zod (campos faltantes, formato).
-  | 'DIDACTA_CONFLICT'           // Violación de constraint del core (slug ya existe, enrollment duplicado).
-  | 'DIDACTA_QUOTA_EXCEEDED'     // Tope alcanzado (max courses por tenant, max users por plan).
-  | 'DIDACTA_NO_TENANT_CONTEXT'  // No hay tenantId en el ALS — invocación fuera de request HTTP.
-  | 'DIDACTA_FOREIGN_REFERENCE'  // Una referencia (courseId, userId) no existe o cruza tenants.
-  | 'DIDACTA_INTERNAL_ERROR';    // Error inesperado del core. El módulo debería fallar el job y reintentar.
+  | 'DIDACTA_PERMISSION_DENIED' // El método invocado no está en `manifest.didacta.permissions`.
+  | 'DIDACTA_NOT_FOUND' // El recurso buscado (por externalRef o id) no existe en el tenant.
+  | 'DIDACTA_VALIDATION_ERROR' // Input rechazado por el schema Zod (campos faltantes, formato).
+  | 'DIDACTA_CONFLICT' // Violación de constraint del core (slug ya existe, enrollment duplicado).
+  | 'DIDACTA_QUOTA_EXCEEDED' // Tope alcanzado (max courses por tenant, max users por plan).
+  | 'DIDACTA_NO_TENANT_CONTEXT' // No hay tenantId en el ALS — invocación fuera de request HTTP.
+  | 'DIDACTA_FOREIGN_REFERENCE' // Una referencia (courseId, userId) no existe o cruza tenants.
+  | 'DIDACTA_INTERNAL_ERROR'; // Error inesperado del core. El módulo debería fallar el job y reintentar.
 
 /// Error tipado que lanza `ctx.didacta` ante condiciones controladas. El
 /// módulo puede `catch (e)` y discriminar por `e.code`. Para errores no
@@ -278,6 +278,15 @@ export interface DidactaUpsertUserInput extends DidactaExternalRef {
   locale?: string;
   /// DNI/NIE en mayúsculas y sin separadores (Fundae). Validado por el core.
   documentId?: string;
+  /// Si true, crea el user SIN enviar email de invitación/activación. El user
+  /// queda igualmente en estado PENDING (puede activarse luego con resend-invite
+  /// desde el admin). El migrador lo usa SIEMPRE: importa miles de users de un
+  /// LMS de origen y NO queremos bombardearlos con emails durante la migración;
+  /// el operador notifica después de forma explícita. Default (ausente/false):
+  /// se envía el email de bienvenida — mismo comportamiento que el invite manual
+  /// de un admin. Idempotente: si el user ya existe por externalRef, NUNCA se
+  /// reenvía email (independiente de este flag).
+  suppressInvite?: boolean;
 }
 
 export interface DidactaCreateCourseInput {
