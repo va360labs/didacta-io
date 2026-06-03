@@ -72,9 +72,15 @@ export class ThemingController {
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
       throw new UnauthorizedException('Solo administradores pueden modificar el theme.');
     }
-    // Si el dto incluye CUALQUIER campo white-label (customCss / footerHtml),
-    // requerimos la capability EE. Lanza CapabilityRequiredError → 402.
-    const touchesWhiteLabel = WHITE_LABEL_FIELDS.some((f) => dto[f] !== undefined);
+    // El gate white-label solo debe saltar cuando se INTENTA ESTABLECER
+    // contenido white-label (string no vacío), no cuando el campo llega como
+    // `null` o `''`. El front siempre envía `customCss`/`footerHtml` (con `null`
+    // si no hay nada), así que comprobar `!== undefined` rebotaba el guardado de
+    // logo/colores en Community con un 402 espurio. Enviar `null` = "no uso
+    // white-label" (o lo limpio) → permitido sin licencia.
+    const touchesWhiteLabel = WHITE_LABEL_FIELDS.some(
+      (f) => typeof dto[f] === 'string' && (dto[f] as string).trim().length > 0,
+    );
     if (touchesWhiteLabel) {
       this.license.requireCapability(LICENSE_CAPABILITIES.WHITE_LABEL);
     }
