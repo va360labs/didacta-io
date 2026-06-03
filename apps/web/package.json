@@ -1,6 +1,6 @@
 {
   "name": "@didacta/web",
-  "version": "0.0.1-alpha.81",
+  "version": "0.0.1-alpha.82",
   "private": true,
   "description": "Frontend Next.js 15 de Didacta (alumno + admin de tenant)",
   "scripts": {

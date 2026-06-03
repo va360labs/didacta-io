@@ -6,7 +6,6 @@ import { AppSidebar, type SidebarGroup } from '@/components/app-sidebar';
 import { Icon } from '@/components/icon';
 import { LicenseProvider } from '@/components/license-provider';
 import { NotificationsBell } from '@/components/notifications-bell';
-import { TenantThemeProvider } from '@/components/tenant-theme-provider';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
 import { meApi } from '@/lib/me';
 import { mergeExtensionSidebarItems } from '@/lib/sidebar-extensions-merge';
@@ -42,11 +41,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <LicenseProvider>
-      <TenantThemeProvider>
-        <Shell session={session} onLogout={logout}>
-          {children}
-        </Shell>
-      </TenantThemeProvider>
+      {/*
+       * TenantThemeProvider vive ahora en el ROOT layout (apps/web/src/app/
+       * layout.tsx) para cubrir también las pantallas de auth. Acá solo
+       * envolvemos el shell autenticado en LicenseProvider.
+       */}
+      <Shell session={session} onLogout={logout}>
+        {children}
+      </Shell>
     </LicenseProvider>
   );
 }
@@ -259,10 +261,8 @@ function buildGroups({
   const facturacion: SidebarGroup = {
     label: 'Facturación',
     icon: 'package',
-    items: [
-    ],
+    items: [],
   };
 
   return [learning, formadorAdmin, tenant, seguridad, integraciones, facturacion];
 }
-

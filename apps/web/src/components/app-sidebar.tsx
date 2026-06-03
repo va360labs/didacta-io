@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Icon, type IconName } from '@/components/icon';
+import { useTenantTheme } from '@/components/tenant-theme-provider';
 import { VersionUpdateBanner } from '@/components/version-update-banner';
 import type { StoredSession } from '@/lib/auth-storage';
 import { APP_CHANNEL, APP_VERSION } from '@/lib/version';
@@ -63,6 +64,13 @@ interface Props {
  * llegan acá. Si un grupo entero queda sin items, también se elimina.
  */
 export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
+  const theme = useTenantTheme();
+  // Logo del tenant: si hay logoUrl configurado (subido al storage o URL
+  // externa) lo usamos; si no, el anagrama Didacta por defecto. El bg del
+  // sidebar usa las CSS vars que inyecta el TenantThemeProvider
+  // (--sidebar-bg / --sidebar-rail-bg), con fallback al night Didacta en
+  // globals.css cuando no hay theme del tenant.
+  const logoUrl = theme?.logoUrl ?? null;
   const initials = (session.user.name ?? session.user.email)
     .split(/[\s.@]+/)
     .filter(Boolean)
@@ -71,10 +79,7 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
     .join('');
   const role = session.user.roles[0] ?? 'alumno';
 
-  const detectedAreaIdx = useMemo(
-    () => detectArea(groups, pathname),
-    [groups, pathname],
-  );
+  const detectedAreaIdx = useMemo(() => detectArea(groups, pathname), [groups, pathname]);
   const [areaIdx, setAreaIdx] = useState<number>(detectedAreaIdx);
 
   // Si el pathname cambia y el detectado difiere, sincronizamos. El usuario
@@ -88,7 +93,10 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
 
   if (groups.length === 0) {
     return (
-      <aside className="sticky top-0 grid h-dvh w-60 shrink-0 place-items-center self-start bg-[#0D1B2A] p-6 text-center text-sm text-white/60">
+      <aside
+        className="sticky top-0 grid h-dvh w-60 shrink-0 place-items-center self-start p-6 text-center text-sm text-white/60"
+        style={{ backgroundColor: 'var(--sidebar-bg)' }}
+      >
         Activá módulos en{' '}
         <Link href="/admin/configuracion" className="ml-1 underline">
           configuración
@@ -102,22 +110,43 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
   const area = groups[safeIdx];
 
   return (
-    <aside className="sticky top-0 flex h-dvh w-[300px] shrink-0 self-start bg-[#0D1B2A] text-white">
+    <aside
+      className="sticky top-0 flex h-dvh w-[300px] shrink-0 self-start text-white"
+      style={{ backgroundColor: 'var(--sidebar-bg)' }}
+    >
       {/* RAIL */}
-      <div className="relative flex w-[72px] flex-col border-r border-white/[0.06] bg-[#0a1421]">
+      <div
+        className="relative flex w-[72px] flex-col border-r border-white/[0.06]"
+        style={{ backgroundColor: 'var(--sidebar-rail-bg)' }}
+      >
         <Link
           href="/"
           className="grid place-items-center border-b border-white/[0.06] py-4"
-          aria-label="Inicio Didacta"
+          aria-label="Inicio"
         >
-          <Image
-            src="/brand/anagrama.png"
-            alt=""
-            width={34}
-            height={34}
-            className="rounded-md"
-            priority
-          />
+          {logoUrl ? (
+            // Logo del tenant. Usamos <img> (no next/image) porque la URL
+            // puede ser un endpoint dinámico del backend (/api/v1/.../logo?v=)
+            // o una URL externa arbitraria del tenant — next/image exigiría
+            // configurar remotePatterns para cada dominio posible.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoUrl}
+              alt="Logo"
+              width={34}
+              height={34}
+              className="h-8.5 w-8.5 rounded-md object-contain"
+            />
+          ) : (
+            <Image
+              src="/brand/anagrama.png"
+              alt=""
+              width={34}
+              height={34}
+              className="rounded-md"
+              priority
+            />
+          )}
         </Link>
 
         <div className="scrollbar-thin-dark flex flex-1 flex-col gap-1 overflow-y-auto px-2 py-2">
@@ -222,9 +251,7 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
           <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/40">
             Área
           </div>
-          <div className="mt-1 font-display text-[18px] font-bold leading-tight">
-            {area.label}
-          </div>
+          <div className="mt-1 font-display text-[18px] font-bold leading-tight">{area.label}</div>
         </div>
 
         <nav className="scrollbar-thin-dark flex-1 space-y-0.5 overflow-y-auto p-2.5">

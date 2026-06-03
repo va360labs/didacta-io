@@ -104,6 +104,13 @@ export function buildThemeStyleBlock(theme: TenantTheme): string {
   const lines: string[] = [':root {'];
   lines.push(`  --brand-h: ${theme.brandHue};`);
   lines.push(`  --brand-s: ${theme.brandSaturation}%;`);
+  // Sidebar (rail + panel): el azul noche Didacta por default (#0D1B2A /
+  // #0a1421) pero tintado al hue del tenant para que el branding alcance a
+  // la navegación. Luminancias muy bajas (12% / 9%) mantienen el contraste
+  // del texto blanco con cualquier hue. Si el tenant deja el hue default
+  // (213) el resultado es prácticamente idéntico al night Didacta original.
+  lines.push(`  --sidebar-bg: hsl(${theme.brandHue}, ${theme.brandSaturation}%, 12%);`);
+  lines.push(`  --sidebar-rail-bg: hsl(${theme.brandHue}, ${theme.brandSaturation}%, 9%);`);
   // Las font-family se pueden override con CSS variable. next/font genera
   // --font-inter / --font-sora pero estas son las consumidas por globals.css.
   // Para que un tenant pueda usar Manrope sin re-build, sobrescribimos

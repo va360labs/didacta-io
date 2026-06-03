@@ -10,6 +10,40 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.82]
+
+#### Fixed
+
+- **Upload del logo de tenant (mod.theming)**: el parser global de
+  `application/json` en `apps/api/src/main.ts` heredaba el `bodyLimit` por
+  defecto de Fastify (1 MB). El uploader acepta imágenes de hasta 2 MB que
+  viajan en base64 dentro de un JSON (~+33% → ~2.7 MB), así que Fastify
+  rechazaba el request con `413 FST_ERR_CTP_BODY_TOO_LARGE` ANTES del handler
+  y el logo nunca se subía. Se eleva el `bodyLimit` del parser JSON a 4 MB
+  (headroom para el peor caso). El upload valida tipo (PNG/JPG/SVG/WebP) y
+  tamaño (≤2 MB), guarda en storage persistente con key estable
+  (`tenants/{id}/branding/logo`), es idempotente (re-subir reemplaza el blob)
+  y devuelve `logoUrl` + `logoUploaded`.
+
+#### Added
+
+- **Branding por tenant aplicado a TODO el entorno**:
+  - `TenantThemeProvider` movido al ROOT layout (`apps/web/src/app/layout.tsx`)
+    para cubrir tanto la app autenticada como las pantallas de auth
+    (signin/reset). Expone el theme vivo vía contexto React (`useTenantTheme`).
+  - **Sidebar dinámico** (`app-sidebar.tsx`): el logo consume `theme.logoUrl`
+    (fallback al anagrama Didacta) y los colores del rail/panel usan las CSS
+    vars `--sidebar-bg` / `--sidebar-rail-bg` (antes hex hardcodeados
+    `#0D1B2A`/`#0a1421`), tintadas al hue/saturation del tenant por el provider.
+  - **Emails con logo**: el email de reset de contraseña (`buildResetEmail`)
+    embebe el logo del tenant en el header HTML cuando está configurado (URL
+    absoluta, resuelta vía `PUBLIC_API_URL`/`resolveWebBaseUrl`). Best-effort:
+    si no hay logo o falla la lectura, el email se envía igual (no rompe el reset).
+  - **Favicon dinámico**: sigue funcionando tras mover el provider al root.
+- **Errores específicos de logo en `mod.theming`**: `UnsupportedLogoTypeError`
+  y `EmptyLogoError` (antes un tipo inválido lanzaba `UnsupportedFontError`,
+  semánticamente incorrecto). Mapeados a `422` en `ThemingErrorFilter`.
+
 ### [0.0.1-alpha.81]
 
 #### Added

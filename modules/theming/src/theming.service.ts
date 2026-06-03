@@ -14,12 +14,14 @@ import {
 import {
   CustomCssTooLargeError,
   CustomCssUnsafeError,
+  EmptyLogoError,
   FooterHtmlTooLargeError,
   InvalidHueError,
   InvalidSaturationError,
   LogoNotFoundError,
   LogoTooLargeError,
   UnsupportedFontError,
+  UnsupportedLogoTypeError,
 } from './errors.js';
 
 /**
@@ -141,10 +143,16 @@ export class ThemingService {
     input: { data: string; filename: string; contentType: string },
   ): Promise<ThemeSnapshot> {
     if (!ALLOWED_LOGO_MIME_TYPES.includes(input.contentType as never)) {
-      throw new UnsupportedFontError(input.contentType, ALLOWED_LOGO_MIME_TYPES);
+      throw new UnsupportedLogoTypeError(input.contentType, ALLOWED_LOGO_MIME_TYPES);
     }
 
     const buffer = Buffer.from(input.data, 'base64');
+    // Un base64 inválido decodifica a un buffer vacío (o casi): rechazamos
+    // explícitamente para no persistir un blob corrupto y devolver un error
+    // claro al admin en vez de un 200 con un logo roto.
+    if (buffer.length === 0) {
+      throw new EmptyLogoError();
+    }
     if (buffer.length > MAX_LOGO_BYTES) {
       throw new LogoTooLargeError(MAX_LOGO_BYTES);
     }

@@ -24,6 +24,15 @@
   --brand-s: 70%;
 
   /* -------------------------------------------------------------------
+   * Sidebar (rail + panel) — azul noche Didacta por default. mod.theming
+   * los sobreescribe per-tenant en TenantThemeProvider (buildThemeStyleBlock)
+   * tintándolos al hue del tenant. El sidebar consume var(--sidebar-bg) y
+   * var(--sidebar-rail-bg) en vez de hex hardcodeados.
+   * ------------------------------------------------------------------- */
+  --sidebar-bg: #0d1b2a;
+  --sidebar-rail-bg: #0a1421;
+
+  /* -------------------------------------------------------------------
    * Brand scale — derivada de hue/saturation, alineada a paleta Didacta:
    *   #0D1B2A azul noche  → brand-900
    *   #1E5AA8 azul confianza → brand-500

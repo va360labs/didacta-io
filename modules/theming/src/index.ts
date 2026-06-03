@@ -22,6 +22,7 @@ export {
 export {
   CustomCssTooLargeError,
   CustomCssUnsafeError,
+  EmptyLogoError,
   FooterHtmlTooLargeError,
   InvalidHueError,
   InvalidSaturationError,
@@ -30,6 +31,7 @@ export {
   LogoTooLargeError,
   ThemingError,
   UnsupportedFontError,
+  UnsupportedLogoTypeError,
 } from './errors.js';
 
 export const themingModule: DidactaModule = {

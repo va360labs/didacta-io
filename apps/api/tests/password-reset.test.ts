@@ -405,4 +405,52 @@ describe('PasswordResetService.buildResetEmail', () => {
     const result = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
     expect(result?.tenantName).toBe('VA360 Academy');
   });
+
+  // alpha.82 — logo por tenant en el header del email
+  it('embebe el logo del tenant en el header HTML cuando se pasa logoUrl absoluto', () => {
+    const { service } = makeService();
+    const out = service.buildResetEmail(
+      'abc',
+      'Valentín',
+      'https://dev.didacta.io',
+      'VA360 Academy',
+      'https://cdn.didacta.io/logo.png',
+    );
+    expect(out.html).toContain('<img src="https://cdn.didacta.io/logo.png"');
+    expect(out.html).toContain('alt="VA360 Academy"');
+    // El texto plano no se ve afectado por el logo.
+    expect(out.text).not.toContain('<img');
+  });
+
+  it('NO renderiza img cuando logoUrl es null (fallback sin romper)', () => {
+    const { service } = makeService();
+    const out = service.buildResetEmail('abc', 'Valentín', 'https://x.test', 'VA360 Academy', null);
+    expect(out.html).not.toContain('<img');
+    expect(out.html).toContain('— Equipo VA360 Academy');
+  });
+
+  it('NO renderiza img cuando logoUrl no es http(s) (defensa anti-inyección)', () => {
+    const { service } = makeService();
+    const out = service.buildResetEmail(
+      'abc',
+      null,
+      'https://x.test',
+      'VA360 Academy',
+      'javascript:alert(1)',
+    );
+    expect(out.html).not.toContain('<img');
+    expect(out.html).not.toContain('javascript:');
+  });
+
+  it('escapa el tenantName en el alt del logo (XSS en atributo)', () => {
+    const { service } = makeService();
+    const out = service.buildResetEmail(
+      'abc',
+      null,
+      'https://x.test',
+      'Acme "Corp" <b>',
+      'https://cdn.test/l.png',
+    );
+    expect(out.html).toContain('alt="Acme &quot;Corp&quot; &lt;b&gt;"');
+  });
 });

@@ -79,3 +79,18 @@ export class LogoNotFoundError extends ThemingError {
     super('THEMING_LOGO_NOT_FOUND', 'Este tenant no tiene un logo subido.');
   }
 }
+
+export class UnsupportedLogoTypeError extends ThemingError {
+  constructor(contentType: string, allowed: readonly string[]) {
+    super(
+      'THEMING_UNSUPPORTED_LOGO_TYPE',
+      `El tipo "${contentType}" no está permitido para el logo. Permitidos: ${allowed.join(', ')}.`,
+    );
+  }
+}
+
+export class EmptyLogoError extends ThemingError {
+  constructor() {
+    super('THEMING_EMPTY_LOGO', 'El archivo del logo está vacío o el base64 es inválido.');
+  }
+}

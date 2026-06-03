@@ -1,19 +1,35 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { authStorage } from '@/lib/auth-storage';
 import { buildThemeStyleBlock, themeCache, themingApi, type TenantTheme } from '@/lib/theming';
 
 /**
- * TenantThemeProvider — montado en (app)/layout.tsx para inyectar tokens
- * del theme del tenant en el head. Diseñado para producir CERO FOUC:
+ * Contexto del theme del tenant. Expone el theme vivo (o null mientras no hay
+ * sesión / cache) para que componentes como el sidebar consuman `logoUrl` y
+ * derivados sin re-fetchear. El `<style>` + favicon se inyectan en el DOM por
+ * el provider; este contexto es para los datos (logo, etc.).
+ */
+const TenantThemeContext = createContext<TenantTheme | null>(null);
+
+/** Hook para leer el theme del tenant desde cualquier client component. */
+export function useTenantTheme(): TenantTheme | null {
+  return useContext(TenantThemeContext);
+}
+
+/**
+ * TenantThemeProvider — montado en el ROOT layout (apps/web/src/app/layout.tsx)
+ * para que el branding cubra TANTO la app autenticada (app) como las pantallas
+ * de auth ((auth)/signin, reset-password, etc.). Diseñado para producir CERO
+ * FOUC:
  *
- *  1. Render inicial: si hay cache → CSS aplicado de inmediato.
+ *  1. Render inicial: si hay cache (localStorage) → CSS aplicado de inmediato.
  *  2. Sin cache: aplica defaults Didacta (los que ya están en globals.css).
- *  3. En paralelo, refresca contra API y persiste si cambió.
+ *  3. En paralelo, si hay sesión + token, refresca contra API y persiste.
  *
- * El componente devuelve los children sin envolverlos en wrappers extra
- * para no agregar nodos al DOM.
+ * En las pantallas de auth no hay sesión, así que el theme queda en null y se
+ * usan los defaults de globals.css — comportamiento correcto: el login todavía
+ * no sabe a qué tenant pertenece el visitante.
  */
 export function TenantThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<TenantTheme | null>(() => {
@@ -47,7 +63,7 @@ export function TenantThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <>
+    <TenantThemeContext.Provider value={theme}>
       {theme ? (
         <style
           // dangerouslySetInnerHTML es seguro acá porque el contenido proviene
@@ -62,6 +78,6 @@ export function TenantThemeProvider({ children }: { children: ReactNode }) {
         <link rel="icon" href={theme.faviconUrl} />
       ) : null}
       {children}
-    </>
+    </TenantThemeContext.Provider>
   );
 }

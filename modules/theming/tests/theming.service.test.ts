@@ -1,18 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_THEME, MAX_CUSTOM_CSS_BYTES, MAX_FOOTER_HTML_BYTES } from '../src/dto.js';
+import {
+  DEFAULT_THEME,
+  MAX_CUSTOM_CSS_BYTES,
+  MAX_FOOTER_HTML_BYTES,
+  MAX_LOGO_BYTES,
+} from '../src/dto.js';
 import {
   CustomCssTooLargeError,
   CustomCssUnsafeError,
+  EmptyLogoError,
   FooterHtmlTooLargeError,
   InvalidHueError,
   InvalidSaturationError,
+  LogoTooLargeError,
   UnsupportedFontError,
+  UnsupportedLogoTypeError,
 } from '../src/errors.js';
 import { ThemingService } from '../src/theming.service.js';
 
 interface ThemeRow {
   tenantId: string;
   logoUrl: string | null;
+  logoStorageKey: string | null;
+  logoMimeType: string | null;
   faviconUrl: string | null;
   brandHue: number;
   brandSaturation: number;
@@ -36,6 +46,8 @@ function makeFakePrisma() {
         row = {
           tenantId: args.data.tenantId,
           logoUrl: null,
+          logoStorageKey: null,
+          logoMimeType: null,
           faviconUrl: null,
           brandHue: args.data.brandHue ?? DEFAULT_THEME.brandHue,
           brandSaturation: args.data.brandSaturation ?? DEFAULT_THEME.brandSaturation,
@@ -65,9 +77,47 @@ function makeFakePrisma() {
   };
 }
 
-const fakeCtx = {
-  logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
-} as never;
+/**
+ * Storage fake en memoria: registra uploads/deletes para aserciones del test
+ * del uploader de logo. `upload` devuelve `{ key }` igual que LocalDiskStorage
+ * y S3Storage del host.
+ */
+function makeFakeStorage() {
+  const blobs = new Map<string, { buffer: Buffer; contentType?: string }>();
+  const calls = { upload: 0, delete: 0, download: 0 };
+  return {
+    blobs,
+    calls,
+    async upload(key: string, data: Buffer, contentType?: string) {
+      calls.upload++;
+      blobs.set(key, { buffer: Buffer.from(data), contentType });
+      return { key };
+    },
+    async download(key: string) {
+      calls.download++;
+      const b = blobs.get(key);
+      if (!b) throw new Error('not found');
+      return b.buffer;
+    },
+    async delete(key: string) {
+      calls.delete++;
+      blobs.delete(key);
+    },
+    async getSignedUrl(key: string) {
+      return `/storage/${key}`;
+    },
+  };
+}
+
+function makeFakeCtx(storage?: ReturnType<typeof makeFakeStorage>) {
+  return {
+    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+    storage: storage ?? makeFakeStorage(),
+    eventBus: { publish: async () => {} },
+  } as never;
+}
+
+const fakeCtx = makeFakeCtx();
 
 const tenant = '11111111-1111-1111-1111-111111111111';
 
@@ -206,6 +256,126 @@ describe('ThemingService.update', () => {
     });
     expect(updated.displayFontFamily).toBe('Manrope');
     expect(updated.bodyFontFamily).toBe('DM Sans');
+  });
+});
+
+describe('ThemingService.uploadLogo', () => {
+  // PNG 1x1 transparente válido en base64 (mismo asset que el e2e).
+  const tinyPngBase64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+  it('sube el blob al storage y setea logoUrl al endpoint público + storageKey estable', async () => {
+    const prisma = makeFakePrisma();
+    const storage = makeFakeStorage();
+    const service = new ThemingService(prisma as never, makeFakeCtx(storage));
+
+    const snap = await service.uploadLogo(tenant, {
+      data: tinyPngBase64,
+      filename: 'logo.png',
+      contentType: 'image/png',
+    });
+
+    expect(snap.logoUploaded).toBe(true);
+    expect(snap.logoUrl).toMatch(/^\/api\/v1\/modules\/theming\/tenants\/[\w-]+\/logo\?v=\d+$/);
+    expect(storage.calls.upload).toBe(1);
+    expect(storage.blobs.has(`tenants/${tenant}/branding/logo`)).toBe(true);
+  });
+
+  it('rechaza un contentType no permitido con UnsupportedLogoTypeError', async () => {
+    const prisma = makeFakePrisma();
+    const service = new ThemingService(prisma as never, makeFakeCtx());
+    await expect(
+      service.uploadLogo(tenant, {
+        data: tinyPngBase64,
+        filename: 'logo.gif',
+        contentType: 'image/gif',
+      }),
+    ).rejects.toBeInstanceOf(UnsupportedLogoTypeError);
+  });
+
+  it('rechaza un logo que excede MAX_LOGO_BYTES con LogoTooLargeError', async () => {
+    const prisma = makeFakePrisma();
+    const storage = makeFakeStorage();
+    const service = new ThemingService(prisma as never, makeFakeCtx(storage));
+    // Buffer de MAX_LOGO_BYTES + 1 byte → base64.
+    const oversized = Buffer.alloc(MAX_LOGO_BYTES + 1, 0).toString('base64');
+    await expect(
+      service.uploadLogo(tenant, {
+        data: oversized,
+        filename: 'huge.png',
+        contentType: 'image/png',
+      }),
+    ).rejects.toBeInstanceOf(LogoTooLargeError);
+    // No debe haber tocado el storage.
+    expect(storage.calls.upload).toBe(0);
+  });
+
+  it('rechaza data vacía con EmptyLogoError', async () => {
+    const prisma = makeFakePrisma();
+    const service = new ThemingService(prisma as never, makeFakeCtx());
+    await expect(
+      service.uploadLogo(tenant, {
+        // base64 que decodifica a 0 bytes.
+        data: '====',
+        filename: 'empty.png',
+        contentType: 'image/png',
+      }),
+    ).rejects.toBeInstanceOf(EmptyLogoError);
+  });
+
+  it('es idempotente — re-subir reemplaza el blob anterior (delete + upload)', async () => {
+    const prisma = makeFakePrisma();
+    const storage = makeFakeStorage();
+    const service = new ThemingService(prisma as never, makeFakeCtx(storage));
+
+    await service.uploadLogo(tenant, {
+      data: tinyPngBase64,
+      filename: 'logo.png',
+      contentType: 'image/png',
+    });
+    const second = await service.uploadLogo(tenant, {
+      data: tinyPngBase64,
+      filename: 'logo2.webp',
+      contentType: 'image/webp',
+    });
+
+    expect(second.logoUploaded).toBe(true);
+    // Misma key estable → un solo blob, sin huérfanos.
+    expect(storage.blobs.size).toBe(1);
+    // El segundo upload borró el anterior antes de escribir.
+    expect(storage.calls.delete).toBe(1);
+    expect(storage.calls.upload).toBe(2);
+  });
+
+  it('getLogoBlob devuelve el blob con el mimeType persistido', async () => {
+    const prisma = makeFakePrisma();
+    const storage = makeFakeStorage();
+    const service = new ThemingService(prisma as never, makeFakeCtx(storage));
+
+    await service.uploadLogo(tenant, {
+      data: tinyPngBase64,
+      filename: 'logo.png',
+      contentType: 'image/png',
+    });
+    const { buffer, mimeType } = await service.getLogoBlob(tenant);
+    expect(mimeType).toBe('image/png');
+    expect(buffer.length).toBeGreaterThan(50);
+  });
+
+  it('removeLogo limpia blob + columnas y deja logoUploaded en false', async () => {
+    const prisma = makeFakePrisma();
+    const storage = makeFakeStorage();
+    const service = new ThemingService(prisma as never, makeFakeCtx(storage));
+
+    await service.uploadLogo(tenant, {
+      data: tinyPngBase64,
+      filename: 'logo.png',
+      contentType: 'image/png',
+    });
+    const cleared = await service.removeLogo(tenant);
+    expect(cleared.logoUploaded).toBe(false);
+    expect(cleared.logoUrl).toBeNull();
+    expect(storage.blobs.size).toBe(0);
   });
 });
 
