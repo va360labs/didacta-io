@@ -41,4 +41,17 @@ export const notificationsApi = {
       withAuth(),
     );
   },
+  /**
+   * Pide al backend un ticket JWT de corta duración (~60s) para abrir el
+   * stream SSE. `EventSource` no admite cabeceras custom (Authorization), así
+   * que el flujo es: POST con Bearer → {ticket} → GET stream?ticket=<jwt>.
+   * El ticket caduca rápido; se pide uno nuevo en cada (re)conexión.
+   */
+  async getStreamTicket(): Promise<{ ticket: string }> {
+    return apiFetch<{ ticket: string }>(
+      '/api/v1/me/notifications/stream-ticket',
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
 };

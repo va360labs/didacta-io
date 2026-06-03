@@ -4,16 +4,17 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { notificationsApi } from '@/lib/notifications';
-
-const POLL_MS = 60_000;
+import { useNotificationsStream } from '@/lib/use-notifications-stream';
 
 /**
- * Bell con badge de no leídas. Polling cada 60s mientras la pestaña está
- * visible. Refresca automáticamente al volver a la pestaña (visibilitychange).
+ * Bell con badge de no leídas. Recibe notificaciones en tiempo real vía SSE
+ * (`useNotificationsStream`): un catch-up inicial con `listMine()` siembra el
+ * count y, a partir de ahí, cada evento del stream dispara un refresco.
  *
- * Implementación deliberadamente simple: sin websockets, sin SSE. Suficiente
- * para v0.1; un usuario que recibe una notificación la verá en máximo ~60s o
- * al cambiar de tab.
+ * El hook degrada solo a polling (POLL_MS) cuando el stream no está disponible,
+ * así que el componente no necesita su propio `setInterval`. Mantenemos el
+ * `visibilitychange` para re-hacer el catch-up al volver a la pestaña (cubre el
+ * hueco entre que el navegador suspende el stream en background y lo retoma).
  */
 export function NotificationsBell() {
   const [count, setCount] = useState(0);
@@ -29,19 +30,24 @@ export function NotificationsBell() {
     }
   }, []);
 
+  // Catch-up inicial: sembramos el count antes de que llegue el primer evento.
   useEffect(() => {
     void refresh();
-    const interval = setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        void refresh();
-      }
-    }, POLL_MS);
+  }, [refresh]);
+
+  // Stream SSE: cada evento (o tick de fallback con null) refresca el count.
+  useNotificationsStream(() => {
+    void refresh();
+  });
+
+  // Re-catch-up al volver a la pestaña: el stream puede haber perdido eventos
+  // mientras el navegador lo tuvo suspendido en background.
+  useEffect(() => {
     function onVisibility() {
       if (document.visibilityState === 'visible') void refresh();
     }
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [refresh]);

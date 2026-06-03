@@ -14,6 +14,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { resolveWebBaseUrl } from '../common/resolve-web-base-url';
 import { extractClientContext } from '../auth/client-context';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -95,7 +96,7 @@ export class AdminTenantsController {
     @Body(new ZodValidationPipe(createTenantSchema)) dto: CreateTenantDto,
   ) {
     const u = requireSuperAdmin(user);
-    const webBaseUrl = process.env.WEB_PUBLIC_URL ?? 'http://localhost:3000';
+    const webBaseUrl = resolveWebBaseUrl(req);
     return this.service.create(u.sub, dto, webBaseUrl, extractClientContext(req));
   }
 

@@ -14,6 +14,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { resolveWebBaseUrl } from '../common/resolve-web-base-url';
 import { CurrentUser } from '../auth/decorators';
 import { extractClientContext } from '../auth/client-context';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -110,7 +111,7 @@ export class AdminUsersController {
     @Body(new ZodValidationPipe(inviteSchema)) dto: InviteDto,
   ) {
     const u = requireAdmin(user);
-    const webBaseUrl = process.env.WEB_PUBLIC_URL ?? 'http://localhost:3000';
+    const webBaseUrl = resolveWebBaseUrl(req);
     return this.service.invite(
       u.tenantId,
       u.sub,
@@ -182,7 +183,7 @@ export class AdminUsersController {
     @Param('id') id: string,
   ) {
     const u = requireAdmin(user);
-    const webBaseUrl = process.env.WEB_PUBLIC_URL ?? 'http://localhost:3000';
+    const webBaseUrl = resolveWebBaseUrl(req);
     return this.service.resendInvite(u.tenantId, u.sub, id, webBaseUrl, extractClientContext(req));
   }
 }

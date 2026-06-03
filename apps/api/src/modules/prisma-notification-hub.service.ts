@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { NotificationHubService, TenantConfigService } from '@didacta/core-kernel';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationRealtimePublisher } from './notifications/realtime/notification-realtime.publisher';
 import { SmtpAdapterService, type SmtpConfig } from './smtp-adapter.service';
 import { TenantSmtpResolverService } from './tenant-smtp-resolver.service';
 
@@ -37,6 +38,13 @@ export class PrismaNotificationHubService implements NotificationHubService {
      * legacy: skip si tenant no configuró SMTP.
      */
     private readonly smtpResolver?: TenantSmtpResolverService,
+    /**
+     * alpha.79 — si está presente, las notificaciones IN_APP se publican
+     * además en Redis pub/sub para entregarlas en tiempo real (SSE). Opcional
+     * y best-effort: si no está inyectado o el publish falla, la notificación
+     * ya quedó persistida y el flujo no se rompe.
+     */
+    private readonly realtime?: NotificationRealtimePublisher,
   ) {}
 
   async send(notification: {
@@ -70,6 +78,15 @@ export class PrismaNotificationHubService implements NotificationHubService {
     });
 
     if (channel === 'IN_APP') {
+      // Realtime best-effort: publica el evento en Redis pub/sub para que los
+      // clientes con un stream SSE abierto lo reciban al instante. NUNCA rompe
+      // el flujo (el publisher tiene failsafe interno).
+      await this.realtime?.publishInApp(notification.tenantId, notification.to, {
+        id: created.id,
+        templateKey: notification.templateKey,
+        subject: rendered.subject ?? null,
+        createdAt: created.createdAt,
+      });
       return;
     }
 

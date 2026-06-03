@@ -24,7 +24,12 @@ describe('mergeExtensionSidebarItems', () => {
     const ext: ModuleWebExtension = {
       name: 'mod.zoom-live',
       sidebarItems: [
-        { group: 'Formador', href: '/formador/aula-virtual', label: 'Aula virtual', icon: 'calendar' },
+        {
+          group: 'Formador',
+          href: '/formador/aula-virtual',
+          label: 'Aula virtual',
+          icon: 'calendar',
+        },
       ],
     };
     const result = mergeExtensionSidebarItems(makeGroups(), [ext], new Set(['formador']));
@@ -54,7 +59,12 @@ describe('mergeExtensionSidebarItems', () => {
     const ext: ModuleWebExtension = {
       name: 'mod.zoom-live',
       sidebarItems: [
-        { group: 'Formador', href: '/formador/aula-virtual', label: 'Aula virtual', icon: 'calendar' },
+        {
+          group: 'Formador',
+          href: '/formador/aula-virtual',
+          label: 'Aula virtual',
+          icon: 'calendar',
+        },
       ],
     };
     const result = mergeExtensionSidebarItems(groups, [ext], new Set(['formador']));
@@ -147,17 +157,39 @@ describe('mergeExtensionSidebarItems', () => {
       sidebarItems: [{ group: 'Integraciones', href: '/x', label: 'X', icon: 'package' }],
     };
     const result = mergeExtensionSidebarItems(makeGroups(), [ext], new Set());
-    expect(result.find((g) => g.label === 'Integraciones')!.items.find((i) => i.href === '/x'))
-      .toBeDefined();
+    expect(
+      result.find((g) => g.label === 'Integraciones')!.items.find((i) => i.href === '/x'),
+    ).toBeDefined();
+  });
+
+  it('propaga exactMatch al item mergeado solo cuando viene en true', () => {
+    const ext: ModuleWebExtension = {
+      name: 'mod.community',
+      sidebarItems: [
+        {
+          group: 'Formador',
+          href: '/comunidad',
+          label: 'Comunidad',
+          icon: 'users',
+          exactMatch: true,
+        },
+        { group: 'Formador', href: '/comunidad/menciones', label: 'Menciones', icon: 'message' },
+      ],
+    };
+    const result = mergeExtensionSidebarItems(makeGroups(), [ext], new Set());
+    const formador = result.find((g) => g.label === 'Formador')!;
+    expect(formador.items.find((i) => i.href === '/comunidad')?.exactMatch).toBe(true);
+    // El item hijo no lo lleva → undefined (no se inyecta false).
+    expect(
+      formador.items.find((i) => i.href === '/comunidad/menciones')?.exactMatch,
+    ).toBeUndefined();
   });
 
   it('ignora items cuyo grupo no existe', () => {
     const ext: ModuleWebExtension = {
       name: 'mod.x',
       // 'Inexistente' no es un grupo válido
-      sidebarItems: [
-        { group: 'Inexistente' as never, href: '/x', label: 'X', icon: 'package' },
-      ],
+      sidebarItems: [{ group: 'Inexistente' as never, href: '/x', label: 'X', icon: 'package' }],
     };
     const before = makeGroups();
     const result = mergeExtensionSidebarItems(before, [ext], new Set());

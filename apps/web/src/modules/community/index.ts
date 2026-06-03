@@ -15,6 +15,7 @@ export const communityExtension: ModuleWebExtension = {
       href: '/comunidad',
       label: 'Comunidad',
       icon: 'users',
+      exactMatch: true,
     },
     {
       group: 'Aprendizaje',

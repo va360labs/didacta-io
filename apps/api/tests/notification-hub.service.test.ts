@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { TenantConfigService } from '@didacta/core-kernel';
 import { PrismaNotificationHubService } from '../src/modules/prisma-notification-hub.service';
+import { NotificationRealtimePublisher } from '../src/modules/notifications/realtime/notification-realtime.publisher';
 import { SmtpAdapterService, type SmtpConfig } from '../src/modules/smtp-adapter.service';
 
 interface NotificationRow {
@@ -15,6 +16,7 @@ interface NotificationRow {
   sentAt: Date | null;
   failedAt: Date | null;
   failureReason: string | null;
+  createdAt: Date;
 }
 
 interface UserRow {
@@ -41,6 +43,7 @@ function makeFakePrisma(users: UserRow[] = []) {
           sentAt: null,
           failedAt: null,
           failureReason: null,
+          createdAt: new Date('2026-06-03T10:00:00.000Z'),
           ...(args.data as NotificationRow),
         };
         rows.push(row);
@@ -299,6 +302,89 @@ describe('PrismaNotificationHubService', () => {
       expect(n.sentAt).toBeNull();
       expect(n.failureReason).toContain('smtp_send_failed');
       expect(n.failureReason).toContain('connection refused');
+    });
+  });
+
+  describe('realtime publisher (alpha.79)', () => {
+    it('IN_APP llama publishInApp 1x con id=created.id', async () => {
+      const prisma = makeFakePrisma();
+      const realtime = {
+        publishInApp: vi.fn(async () => {}),
+      } as unknown as NotificationRealtimePublisher;
+      const svc = new PrismaNotificationHubService(
+        prisma as never,
+        noopLogger,
+        undefined,
+        undefined,
+        undefined,
+        realtime,
+      );
+
+      await svc.send({
+        tenantId: 't1',
+        channel: 'in-app',
+        templateKey: 'enrollment.created',
+        locale: 'es-ES',
+        to: 'u1',
+        variables: { course: 'NodeJS' },
+      });
+
+      const [n] = prisma._rows;
+      expect(realtime.publishInApp).toHaveBeenCalledTimes(1);
+      expect(realtime.publishInApp).toHaveBeenCalledWith(
+        't1',
+        'u1',
+        expect.objectContaining({
+          id: n.id,
+          templateKey: 'enrollment.created',
+          subject: 'Te matriculaste en NodeJS',
+          createdAt: n.createdAt,
+        }),
+      );
+    });
+
+    it('EMAIL NO llama publishInApp', async () => {
+      const prisma = makeFakePrisma([{ id: 'u1', tenantId: 't1', email: 'a@b.com' }]);
+      const tenantConfig = makeFakeTenantConfig({}); // sin smtp → falla pero no realtime
+      const realtime = {
+        publishInApp: vi.fn(async () => {}),
+      } as unknown as NotificationRealtimePublisher;
+      const svc = new PrismaNotificationHubService(
+        prisma as never,
+        noopLogger,
+        tenantConfig,
+        new SmtpAdapterService(),
+        undefined,
+        realtime,
+      );
+
+      await svc.send({
+        tenantId: 't1',
+        channel: 'email',
+        templateKey: 'certificate.issued',
+        locale: 'es-ES',
+        to: 'u1',
+        variables: { course: 'TS', number: 'LS-1' },
+      });
+
+      expect(realtime.publishInApp).not.toHaveBeenCalled();
+    });
+
+    it('IN_APP sin publisher inyectado no rompe (best-effort)', async () => {
+      const prisma = makeFakePrisma();
+      const svc = new PrismaNotificationHubService(prisma as never, noopLogger);
+
+      await expect(
+        svc.send({
+          tenantId: 't1',
+          channel: 'in-app',
+          templateKey: 'enrollment.created',
+          locale: 'es-ES',
+          to: 'u1',
+          variables: { course: 'X' },
+        }),
+      ).resolves.toBeUndefined();
+      expect(prisma._rows).toHaveLength(1);
     });
   });
 });

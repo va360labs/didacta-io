@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
+import { resolveWebBaseUrl } from '../common/resolve-web-base-url';
 import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 import { AuthService } from './auth.service';
 import { extractClientContext } from './client-context';
@@ -87,7 +88,7 @@ export class AuthController {
     @Req() req: FastifyRequest,
     @Body(new ZodValidationPipe(forgotPasswordSchema)) dto: ForgotPasswordDto,
   ) {
-    const webBaseUrl = process.env.WEB_PUBLIC_URL ?? 'http://localhost:3000';
+    const webBaseUrl = resolveWebBaseUrl(req);
     const resolvedTenantId = await this.resolveTenantIdFromHost(req);
     await this.passwordReset.requestAndSendEmail(
       { email: dto.email, tenantSlug: dto.tenantSlug, resolvedTenantId },

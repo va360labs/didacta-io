@@ -53,6 +53,7 @@ export function mergeExtensionSidebarItems(
         label: item.label,
         icon: item.icon as IconName,
         requiresModule: ext.name,
+        ...(item.exactMatch ? { exactMatch: true } : {}),
       };
       group.items.push(sidebarItem);
     }

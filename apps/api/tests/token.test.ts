@@ -60,4 +60,38 @@ describe('TokenService', () => {
     expect(refreshClaims.tenantId).toBe('tenant-2');
     await expect(service.verifyRefresh(tokens.accessToken)).rejects.toThrow();
   });
+
+  describe('stream ticket SSE (alpha.79)', () => {
+    it('round-trip: firma y verifica un stream ticket', async () => {
+      const service = new TokenService();
+      const ticket = await service.signStreamTicket({ sub: 'user-3', tenantId: 'tenant-3' });
+      expect(ticket).toBeTruthy();
+      const claims = await service.verifyStreamTicket(ticket);
+      expect(claims.sub).toBe('user-3');
+      expect(claims.tenantId).toBe('tenant-3');
+    });
+
+    it('verifyStreamTicket rechaza un access token (audience/kind cruzados)', async () => {
+      const service = new TokenService();
+      const { accessToken } = await service.sign({
+        sub: 'user-3',
+        tenantId: 'tenant-3',
+        roles: ['alumno'],
+        mfaVerified: false,
+      });
+      await expect(service.verifyStreamTicket(accessToken)).rejects.toThrow();
+    });
+
+    it('verifyAccess rechaza un stream ticket (audience/kind cruzados)', async () => {
+      const service = new TokenService();
+      const ticket = await service.signStreamTicket({ sub: 'user-3', tenantId: 'tenant-3' });
+      await expect(service.verifyAccess(ticket)).rejects.toThrow();
+    });
+
+    it('verifyRefresh rechaza un stream ticket', async () => {
+      const service = new TokenService();
+      const ticket = await service.signStreamTicket({ sub: 'user-3', tenantId: 'tenant-3' });
+      await expect(service.verifyRefresh(ticket)).rejects.toThrow();
+    });
+  });
 });

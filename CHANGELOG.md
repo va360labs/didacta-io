@@ -10,6 +10,23 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.79]
+
+#### Added
+
+- **Notificaciones en tiempo real (SSE)**: la campana del header ahora recibe
+  notificaciones por Server-Sent Events en lugar de polling. Flujo
+  ticket-JWT (`POST /me/notifications/stream-ticket`) +
+  `EventSource` (`GET /me/notifications/stream?ticket=…`), con de-dup por `id`,
+  reconexión con backoff exponencial + jitter (cap 30s) y degradación
+  automática a polling (60s) tras 4 fallos o sin soporte de `EventSource`.
+
+#### Fixed
+
+- **Sidebar**: el item "Comunidad" (`/comunidad`) ya no se marca activo en
+  rutas hijas como `/comunidad/menciones`. Nuevo flag `exactMatch` en los items
+  de sidebar aportados por módulos.
+
 ---
 
 ## [0.0.1-alpha.0] — pendiente

@@ -34,6 +34,11 @@ export interface ModuleSidebarItem {
   /// Solo visible si el rol coincide. Si se omite, visible para todos los
   /// que ven el grupo.
   requiresRole?: 'super_admin' | 'tenant_admin' | 'formador';
+  /// Si es `true`, el item se marca activo solo cuando el pathname coincide
+  /// EXACTAMENTE con `href` (no por prefijo). Necesario para items "padre"
+  /// como `/comunidad` que de otro modo se marcarían activos en rutas hijas
+  /// como `/comunidad/menciones`.
+  exactMatch?: boolean;
 }
 
 export interface ModuleWebExtension {

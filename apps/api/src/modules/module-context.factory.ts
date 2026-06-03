@@ -1,5 +1,6 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import IORedis, { type Redis } from 'ioredis';
 import type {
   HookContext,
   HookRegistry,
@@ -16,6 +17,7 @@ import { OutboxQueueService } from './outbox-queue.service';
 import { PersistentEventBus } from './persistent-event-bus';
 import { PrismaAuditLogService } from './prisma-audit-log.service';
 import { PrismaEvidenceVaultService } from './prisma-evidence-vault.service';
+import { NotificationRealtimePublisher } from './notifications/realtime/notification-realtime.publisher';
 import { PrismaNotificationHubService } from './prisma-notification-hub.service';
 import { PrismaTenantConfigService } from './prisma-tenant-config.service';
 import { SecretCipherService } from './secret-cipher.service';
@@ -89,7 +91,7 @@ const stubI18n: I18nService = {
 };
 
 @Injectable()
-export class ModuleContextFactory {
+export class ModuleContextFactory implements OnApplicationShutdown {
   private readonly hookRegistry = new InMemoryHookRegistry();
   private readonly storage = buildStorage();
   private readonly cipher = new SecretCipherService(loadCipherKey().key);
@@ -97,6 +99,9 @@ export class ModuleContextFactory {
   private tenantConfig?: PrismaTenantConfigService;
   private smtpResolver?: TenantSmtpResolverService;
   private eventBus?: PersistentEventBus;
+  private realtimePublisher?: NotificationRealtimePublisher;
+  /** Cliente Redis dedicado al publish realtime; null si no hay REDIS_URL. */
+  private realtimeRedis: Redis | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -118,6 +123,7 @@ export class ModuleContextFactory {
       this.tenantConfig,
       this.smtp,
       this.smtpResolver,
+      this.getRealtimePublisher(),
     );
     void stubNotificationHub; // se mantiene exportado para tests; producción usa Prisma.
     return {
@@ -141,7 +147,33 @@ export class ModuleContextFactory {
       this.getTenantConfig(),
       this.smtp,
       this.getSmtpResolver(),
+      this.getRealtimePublisher(),
     );
+  }
+
+  /**
+   * Publisher realtime de notificaciones (Redis pub/sub). Lazy + singleton:
+   * construye un cliente Redis dedicado al `PUBLISH` si hay `REDIS_URL` (y no
+   * estamos en test) — mismo patrón que RateLimitModule. Sin REDIS_URL el
+   * publisher entra en modo no-op (failsafe interno).
+   */
+  getRealtimePublisher(): NotificationRealtimePublisher {
+    if (this.realtimePublisher) return this.realtimePublisher;
+
+    const url = process.env['REDIS_URL'];
+    if (url && process.env['NODE_ENV'] !== 'test') {
+      const client = new IORedis(url, {
+        maxRetriesPerRequest: 1,
+        enableReadyCheck: true,
+        lazyConnect: false,
+      });
+      client.on('error', () => {
+        /* swallow — el publisher captura los errores del PUBLISH en el call site */
+      });
+      this.realtimeRedis = client;
+    }
+    this.realtimePublisher = new NotificationRealtimePublisher(this.realtimeRedis, this.pino);
+    return this.realtimePublisher;
   }
 
   getSmtpAdapter(): SmtpAdapterService {
@@ -256,6 +288,18 @@ export class ModuleContextFactory {
   getEventBus(): PersistentEventBus {
     if (!this.eventBus) throw new Error('EventBus aún no construido (build() no fue llamado)');
     return this.eventBus;
+  }
+
+  /** Cierra limpio el cliente Redis del publisher realtime al apagar la app. */
+  async onApplicationShutdown(): Promise<void> {
+    if (this.realtimeRedis) {
+      try {
+        await this.realtimeRedis.quit();
+      } catch {
+        // ignore — el proceso ya está bajando.
+      }
+      this.realtimeRedis = null;
+    }
   }
 
   private adaptLogger(pino: PinoLogger): Logger {
