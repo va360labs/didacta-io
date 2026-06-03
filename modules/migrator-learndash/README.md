@@ -4,18 +4,18 @@
 > Wizard didáctico paso a paso, ETL con staging, idempotencia por
 > checksum, reportes auditables firmados.
 
-| Campo | Valor |
-|-------|-------|
-| Nombre | `mod.migrator-learndash` |
-| Edición | **Enterprise** |
-| Versión | 1.0.0 |
-| Capability requerida | `feat:migrators.learndash` |
-| Categoría | migration |
-| Estado | Beta |
-| Core requerido | `^1.0.0` |
-| Prefijo de tablas | `mod_migrator_learndash_*` |
-| API namespace | `/modules/migrator-learndash` |
-| Entrega | ZIP firmado (`mod.migrator-learndash-1.0.0.zip`) |
+| Campo                | Valor                                            |
+| -------------------- | ------------------------------------------------ |
+| Nombre               | `mod.migrator-learndash`                         |
+| Edición              | **Enterprise**                                   |
+| Versión              | 1.0.0                                            |
+| Capability requerida | `feat:migrators.learndash`                       |
+| Categoría            | migration                                        |
+| Estado               | Beta                                             |
+| Core requerido       | `^1.0.0`                                         |
+| Prefijo de tablas    | `mod_migrator_learndash_*`                       |
+| API namespace        | `/modules/migrator-learndash`                    |
+| Entrega              | ZIP firmado (`mod.migrator-learndash-1.0.0.zip`) |
 
 ---
 
@@ -29,8 +29,9 @@ con `402 CapabilityRequiredError` si la licencia no la incluye.
 
 **Beta** — preparado para clientes piloto. Cubre el MVP del informe
 analítico (`docs/migration_learndash.md`): contenido + usuarios + grupos
-+ inscripciones + media + progreso actual. Histórico fino de intentos
-y certificados emitidos quedan para Fase 2.
+
+- inscripciones + media + progreso actual. Histórico fino de intentos
+  y certificados emitidos quedan para Fase 2.
 
 ## Resumen funcional
 
@@ -70,16 +71,16 @@ Ver detalle en `prisma/schema.prisma`.
 
 ## API pública
 
-| Método | Path | Permiso | Función |
-|--------|------|---------|---------|
-| `POST` | `/preflight` | `migrator-learndash.import.create` | Valida credenciales y devuelve conteos. |
-| `POST` | `/jobs` | `migrator-learndash.import.create` | Crea un job y lo lanza en background. |
-| `GET` | `/jobs/:id` | `migrator-learndash.import.read` | Estado del job. |
-| `GET` | `/jobs/:id/progress` (SSE) | `migrator-learndash.import.read` | Stream de eventos de progreso. |
-| `POST` | `/jobs/:id/cancel` | `migrator-learndash.import.cancel` | Cancela el job en curso. |
-| `POST` | `/jobs/:id/rollback` | `migrator-learndash.import.rollback` | Revierte un job completado. |
-| `GET` | `/jobs/:id/report` | `migrator-learndash.report.read` | Reporte (JSON / `?format=csv`). |
-| `GET` | `/jobs/:id/report.pdf` | `migrator-learndash.report.export` | Reporte firmado para auditor. |
+| Método | Path                       | Permiso                              | Función                                                                           |
+| ------ | -------------------------- | ------------------------------------ | --------------------------------------------------------------------------------- |
+| `POST` | `/preflight`               | `migrator-learndash.import.create`   | Valida credenciales y devuelve conteos.                                           |
+| `POST` | `/jobs`                    | `migrator-learndash.import.create`   | Crea un job y lo lanza en background.                                             |
+| `GET`  | `/jobs/:id`                | `migrator-learndash.import.read`     | Estado del job.                                                                   |
+| `GET`  | `/jobs/:id/progress` (SSE) | `migrator-learndash.import.read`     | Stream de eventos de progreso.                                                    |
+| `POST` | `/jobs/:id/cancel`         | `migrator-learndash.import.cancel`   | Cancela el job en curso.                                                          |
+| `POST` | `/jobs/:id/rollback`       | `migrator-learndash.import.rollback` | **Beta** — revierte un job completado. No usar en prod sin validar (ver runbook). |
+| `GET`  | `/jobs/:id/report`         | `migrator-learndash.report.read`     | Reporte (JSON / `?format=csv`).                                                   |
+| `GET`  | `/jobs/:id/report.pdf`     | `migrator-learndash.report.export`   | Reporte firmado para auditor.                                                     |
 
 Todos los endpoints respetan el namespace global del host
 (`/api/v1/modules/migrator-learndash/...`).
@@ -204,10 +205,18 @@ Para producción se usa `aws kms sign` sobre `alias/didacta-issuer-2026`
 
 - **Cancelación**: pulsar "Cancelar" en el wizard. Lo cargado hasta
   ese punto se queda; el resto no se carga. El origen no se ha tocado.
-- **Rollback**: tras un job completed/failed, lanzar `POST /jobs/:id/rollback`.
-  Borra todo lo cargado por ese job en destino (verificado por
-  `externalId`). El origen no se toca. Las entidades modificadas por
-  un usuario tras el load se respetan (`status='rollback_skipped'`).
+- **Recovery / rollback**: el módulo **NO** tiene rollback automático
+  validado para producción. El único path soportado es restore desde
+  un `pg_dump` pre-migración. Ver el runbook operativo para el
+  procedimiento exacto, incluyendo la opción de borrado quirúrgico
+  (`DELETE ... WHERE external_source='learndash'`) cuando no se puede
+  tirar progreso post-backup:
+
+  → [docs/operations/migration-runbook.md](../../docs/operations/migration-runbook.md)
+
+  > El endpoint `POST /jobs/:id/rollback` existe pero está marcado
+  > como **Beta** y no se ha validado contra volúmenes reales
+  > (>1k users). NO usarlo en producción sin pruebas previas.
 
 ### Tras la migración
 
@@ -256,15 +265,16 @@ emisión se conserva como metadata.
 **¿Cuánto tarda?**
 Depende del tamaño:
 
-| Volumen | Tiempo aprox. |
-|---------|---------------|
-| 100 alumnos, 10 cursos | < 5 min |
-| 1.000 alumnos, 50 cursos | 15-30 min |
-| 10.000 alumnos, 200 cursos | 1-2 h |
+| Volumen                    | Tiempo aprox. |
+| -------------------------- | ------------- |
+| 100 alumnos, 10 cursos     | < 5 min       |
+| 1.000 alumnos, 50 cursos   | 15-30 min     |
+| 10.000 alumnos, 200 cursos | 1-2 h         |
 
 ## Soporte
 
 Para incidencias:
+
 1. Descarga el reporte JSON del job (incluye errorCodes tipados).
 2. Descarga el log de auditoría (`GET /jobs/:id/audit/export.json`).
 3. Abre ticket en `https://didacta.io/support` adjuntando ambos.
