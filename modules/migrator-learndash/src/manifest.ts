@@ -6,7 +6,18 @@
  * core-kernel solo para validación es overhead innecesario. El manifest
  * que importa para el host es el del `manifest.jwt` del ZIP — éste es
  * solo data de presentación dentro del bundle.
+ *
+ * Single source de version: `package.json`. Antes de v1.0.31 la version vivía
+ * hardcoded aquí y se desincronizaba con package.json/module.json/git tag en
+ * cada release — el endpoint `/ping` devolvía la version stale, lo que
+ * confunde al operador y a los logs. Ahora se lee del package.json en build
+ * time vía import JSON (esbuild bundlea el value literal en el output).
  */
+// `pkg.version` es la única fuente de verdad de la versión del módulo. El
+// CI release valida que `package.json.version` == `module.json.version` == git tag.
+// El import sin `with { type: 'json' }` funciona porque tsconfig tiene
+// resolveJsonModule + esModuleInterop. Esbuild bundlea el value literal.
+import pkg from '../package.json';
 export interface ModuleManifest {
   name: string;
   displayName: string;
@@ -87,11 +98,16 @@ export interface ModuleManifest {
   /// `menu` declara el sidebar item asociado — el host construye su
   /// navigation dinámicamente leyendo manifest.surfaces de cada módulo
   /// instalado, no hay hardcode en apps/web (post ADR-015).
-  surfaces?: Partial<Record<'admin' | 'formador' | 'alumno' | 'auditor' | 'empresa_manager', {
-    entry: string;
-    roles?: string[];
-    menu?: { label: string; icon?: string; order?: number; group?: string };
-  }>>;
+  surfaces?: Partial<
+    Record<
+      'admin' | 'formador' | 'alumno' | 'auditor' | 'empresa_manager',
+      {
+        entry: string;
+        roles?: string[];
+        menu?: { label: string; icon?: string; order?: number; group?: string };
+      }
+    >
+  >;
 }
 
 export const manifest: ModuleManifest = {
@@ -99,7 +115,7 @@ export const manifest: ModuleManifest = {
   displayName: 'Migrador desde WordPress + LearnDash',
   description:
     'Importa cursos, lecciones, temas, quizzes, preguntas, usuarios, grupos, matrículas, media y progreso desde WordPress + LearnDash hacia Didacta. Wizard didáctico paso a paso, ETL con staging, idempotencia por checksum, reportes auditables.',
-  version: '1.0.28',
+  version: pkg.version,
   author: 'Didacta',
   license: 'Proprietary',
   category: 'migration',

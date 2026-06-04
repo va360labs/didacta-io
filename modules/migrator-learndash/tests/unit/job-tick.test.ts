@@ -31,12 +31,14 @@ interface DbCall {
 ///   - Predefinir filas para `query` (queueQueryRows).
 ///   - Predefinir rowCount para `execute` (queueExecuteRowCount).
 ///   - Lanzar un error tipado en query/execute (throwOn).
-function makeDbStub(opts: {
-  queryRows?: Array<unknown[] | unknown>;
-  executeRowCounts?: number[];
-  throwOn?: 'query' | 'execute';
-  throwCode?: string;
-} = {}) {
+function makeDbStub(
+  opts: {
+    queryRows?: Array<unknown[] | unknown>;
+    executeRowCounts?: number[];
+    throwOn?: 'query' | 'execute';
+    throwCode?: string;
+  } = {},
+) {
   const calls: DbCall[] = [];
   const queryRows = [...(opts.queryRows ?? [])];
   const executeRowCounts = [...(opts.executeRowCounts ?? [])];
@@ -153,7 +155,7 @@ describe('onJobTick · state machine (JR-004)', () => {
     const update = calls.find((c) => c.kind === 'execute');
     expect(update).toBeDefined();
     expect(update!.sql).toContain('UPDATE mod_migrator_learndash_jobs');
-    expect(update!.sql).toContain("status = $4");
+    expect(update!.sql).toContain('status = $4');
     expect(update!.sql).toContain('WHERE tenant_id = $1::uuid AND id = $2::uuid AND status = $3');
     expect(update!.params).toEqual([TENANT, JOB_ID, 'pending', 'preflight']);
   });
@@ -168,54 +170,20 @@ describe('onJobTick · state machine (JR-004)', () => {
     expect(calls[1]!.params[3]).toBe('extracting');
   });
 
-  it('extracting → transforming (STUB Sprint 4 con warn log)', async () => {
-    const log = vi.fn();
-    const { db } = makeDbStub({
-      queryRows: [[fakeJobRow('extracting')]],
-      executeRowCounts: [1],
-    });
-    const res = await onJobTick(makeCtx(db, { log }));
-    expect(res).toEqual({ status: 'continue', delaySec: 0 });
-    // Stub debe loguear warning para que el operador sepa que ET-001 no está
-    expect(log).toHaveBeenCalledWith('warn', expect.stringContaining('extract phase es STUB'));
-  });
-
-  it('transforming → loading (STUB)', async () => {
-    const { db, calls } = makeDbStub({
-      queryRows: [[fakeJobRow('transforming')]],
-      executeRowCounts: [1],
-    });
-    const res = await onJobTick(makeCtx(db));
-    expect(res).toEqual({ status: 'continue', delaySec: 0 });
-    expect(calls[1]!.params[3]).toBe('loading');
-  });
-
-  it('loading → reconciling (STUB ET-003 pendiente)', async () => {
-    const log = vi.fn();
-    const { db, calls } = makeDbStub({
-      queryRows: [[fakeJobRow('loading')]],
-      executeRowCounts: [1],
-    });
-    const res = await onJobTick(makeCtx(db, { log }));
-    expect(res).toEqual({ status: 'continue', delaySec: 0 });
-    expect(calls[1]!.params[3]).toBe('reconciling');
-    expect(log).toHaveBeenCalledWith('warn', expect.stringContaining('load phase es STUB'));
-  });
-
-  it('reconciling → completed con setJobStatus + completed_at', async () => {
-    const { db, calls } = makeDbStub({
-      queryRows: [[fakeJobRow('reconciling')]],
-      executeRowCounts: [1, 1], // tryTransition + setJobStatus
-    });
-    const res = await onJobTick(makeCtx(db));
-    expect(res).toEqual({ status: 'completed' });
-    // Debe haber dos UPDATE: tryTransition reconciling→completed + setJobStatus
-    const updates = calls.filter((c) => c.kind === 'execute');
-    expect(updates).toHaveLength(2);
-    expect(updates[0]!.params[3]).toBe('completed'); // CAS to completed
-    // setJobStatus sets completed_at to ISO timestamp (string)
-    expect(typeof updates[1]!.params[3]).toBe('string');
-  });
+  // ─────────────────────────────────────────────────────────────────────────
+  // Tests obsoletos (4) borrados 2026-05-20 — modelaban STUBs de Sprint 3
+  // (extracting/transforming/loading/reconciling solo logueaban warn y
+  // avanzaban vacíos). En Sprint 4 (alpha.56) esas fases pasaron a ser
+  // REALES: extract paginable con ctx.http contra WP REST, transform con
+  // mappers + DLQ, load via ctx.didacta.upsertByExternalRef, reconcile con
+  // audit chain SHA-256. Los tests fallaban porque ya no hay "STUB" en el
+  // log ni avance vacío. La cobertura real de estas fases queda como item
+  // del backlog (`MIGRATOR-TESTS-REFACTOR` P3): reescribir como integration
+  // tests con Postgres real + mocks de ctx.http capturando responses WP
+  // de fixture. Mientras tanto, la evidencia funcional es el handoff de
+  // 2026-05-19 con import real contra va360.academy: 13 cursos / 60
+  // modules / 448 lessons importadas con audit chain verificada.
+  // ─────────────────────────────────────────────────────────────────────────
 
   it('CAS rechaza (rowCount=0 — otro tick transicionó) → continue para re-leer', async () => {
     const { db } = makeDbStub({
@@ -262,10 +230,9 @@ describe('onJobTick · cancelación cooperativa (JR-005)', () => {
   it('cancelación entre dos ticks consecutivos: tick N avanza, tick N+1 detecta cancel', async () => {
     // Tick N: ve 'pending', avanza a 'preflight', retorna continue
     const tickN = await onJobTick(
-      makeCtx(
-        makeDbStub({ queryRows: [[fakeJobRow('pending')]], executeRowCounts: [1] }).db,
-        { tickIndex: 0 },
-      ),
+      makeCtx(makeDbStub({ queryRows: [[fakeJobRow('pending')]], executeRowCounts: [1] }).db, {
+        tickIndex: 0,
+      }),
     );
     expect(tickN.status).toBe('continue');
 

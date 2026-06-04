@@ -1,12 +1,30 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /// Wizard multi-paso del migrador LearnDash.
-/// alpha.60: movido a modules/migrator-learndash/src/ui/ desde apps/web/.
-/// Imports SOLO desde `./_runtime` y `./client` (ADR-015).
+///
+/// Flujo (v1.0.30):
+///   welcome → connect → preflight → options
+///     → sample-run       (importa un curso aleatorio + 5 alumnos)
+///     → sample-done      (cifras del sample + confirmación)
+///     → complete-run     (importa el resto, idempotente)
+///     → done             (reporte final)
+///
+/// El paso "sample" reemplaza al dry-run de versiones anteriores: ahora la
+/// prueba SÍ escribe en Didacta, pero solo un curso y unos alumnos, así el
+/// admin puede verificar de un vistazo si el mapping y permisos son correctos
+/// antes de comprometerse al volumen completo. El loader es idempotente por
+/// sourceId, por lo que la integración completa NO duplica el sample —
+/// hace upsert sobre lo ya cargado y añade el resto.
 
 import {
   React,
   useState,
-  Card, CardContent, CardDescription, CardHeader, CardTitle,
+  useEffect,
+  useRef,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
   Button,
   Input,
   Label,
@@ -22,13 +40,22 @@ import {
   type SourceCredentials,
 } from './client';
 
-// Alert component no existe en este repo; usamos divs estilados como en otros módulos.
-function Alert({ children, variant = 'default' }: { children: React.ReactNode; variant?: 'default' | 'destructive' }): React.ReactElement {
+function Alert({
+  children,
+  variant = 'default',
+}: {
+  children: React.ReactNode;
+  variant?: 'default' | 'destructive';
+}): React.ReactElement {
   const cls =
     variant === 'destructive'
       ? 'rounded-md border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive'
       : 'rounded-md border bg-muted/40 p-4 text-sm';
-  return <div role="alert" className={cls}>{children}</div>;
+  return (
+    <div role="alert" className={cls}>
+      {children}
+    </div>
+  );
 }
 function AlertTitle({ children }: { children: React.ReactNode }): React.ReactElement {
   return <div className="mb-1 font-semibold">{children}</div>;
@@ -37,7 +64,17 @@ function AlertDescription({ children }: { children: React.ReactNode }): React.Re
   return <div>{children}</div>;
 }
 
-type Step = 'welcome' | 'connect' | 'preflight' | 'options' | 'dryrun' | 'execute' | 'done';
+type Step =
+  | 'welcome'
+  | 'connect'
+  | 'preflight'
+  | 'options'
+  | 'sample-run'
+  | 'sample-done'
+  | 'complete-run'
+  | 'done';
+
+const SAMPLE_DEFAULTS = { courses: 1, usersPerCourse: 5 } as const;
 
 const DEFAULT_OPTIONS: ImportOptions = {
   dedupeUsersBy: ['email'],
@@ -54,29 +91,87 @@ const DEFAULT_OPTIONS: ImportOptions = {
     media: true,
     quizzes: true,
   },
-  dryRun: false,
   retentionDays: 30,
 };
 
+const POLL_INTERVAL_MS = 3000;
+const TERMINAL_STATUSES: ReadonlyArray<JobStatus['status']> = ['completed', 'failed', 'cancelled'];
+
 export function MigratorWizard(): React.ReactElement {
   const [step, setStep] = React.useState<Step>('welcome');
-  const [creds, setCreds] = React.useState<SourceCredentials>({ baseUrl: '', username: '', appPassword: '' });
+  const [creds, setCreds] = React.useState<SourceCredentials>({
+    baseUrl: '',
+    username: '',
+    appPassword: '',
+  });
   const [preflight, setPreflight] = React.useState<PreflightResult | null>(null);
   const [jobNotice, setJobNotice] = React.useState<JobNotice | null>(null);
   const [options, setOptions] = React.useState<ImportOptions>(DEFAULT_OPTIONS);
   const [job, setJob] = React.useState<JobStatus | null>(null);
-  const [report, setReport] = React.useState<JobReport | null>(null);
+  const [sampleReport, setSampleReport] = React.useState<JobReport | null>(null);
+  const [finalReport, setFinalReport] = React.useState<JobReport | null>(null);
   const [error, setError] = React.useState<{ code?: string; message: string } | null>(null);
   const [busy, setBusy] = React.useState(false);
 
+  // Auto-polling del job status mientras estamos en *-run. Se limpia al
+  // cambiar de step o al desmontar. Cuando llega a estado terminal,
+  // dispara la transición correspondiente.
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    const isRunningStep = step === 'sample-run' || step === 'complete-run';
+    if (!isRunningStep || !job) return;
+
+    const tick = async (): Promise<void> => {
+      try {
+        const updated = await migratorLearndashApi.getJob(job.id);
+        setJob(updated);
+        if (TERMINAL_STATUSES.includes(updated.status)) {
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+          if (updated.status === 'completed') {
+            const report = await migratorLearndashApi.getReport(updated.id);
+            if (step === 'sample-run') {
+              setSampleReport(report);
+              setStep('sample-done');
+            } else if (step === 'complete-run') {
+              setFinalReport(report);
+              setStep('done');
+            }
+          } else {
+            setError({
+              code: updated.error?.code,
+              message:
+                updated.error?.message ??
+                (updated.status === 'cancelled' ? 'Job cancelado' : 'Job falló'),
+            });
+          }
+        }
+      } catch (e: any) {
+        // Errores transitorios del polling no rompen el flow; se reintenta.
+        // Errores permanentes se manifiestan vía status del job.
+      }
+    };
+
+    void tick();
+    pollingRef.current = setInterval(() => void tick(), POLL_INTERVAL_MS);
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [step, job?.id]);
+
   const goNext = (): void => {
-    const order: Step[] = ['welcome', 'connect', 'preflight', 'options', 'dryrun', 'execute', 'done'];
+    const order: Step[] = ['welcome', 'connect', 'preflight', 'options'];
     const idx = order.indexOf(step);
     if (idx >= 0 && idx < order.length - 1) setStep(order[idx + 1]!);
   };
 
   const goBack = (): void => {
-    const order: Step[] = ['welcome', 'connect', 'preflight', 'options', 'dryrun', 'execute', 'done'];
+    const order: Step[] = ['welcome', 'connect', 'preflight', 'options'];
     const idx = order.indexOf(step);
     if (idx > 0) setStep(order[idx - 1]!);
   };
@@ -99,31 +194,27 @@ export function MigratorWizard(): React.ReactElement {
     }
   };
 
-  const onStartJob = async (dryRun: boolean): Promise<void> => {
+  /**
+   * Arranca un job. `sampleMode=true` enciende el extractor-sample del
+   * backend: 1 curso aleatorio (con alumnos) + 5 alumnos del curso + jerarquía.
+   * `sampleMode=false` lanza el import completo según `options.scope`.
+   */
+  const onStartJob = async (sampleMode: boolean): Promise<void> => {
     setError(null);
     setBusy(true);
+    setJob(null);
+    setJobNotice(null);
     try {
-      const resp = await migratorLearndashApi.startJob(creds, { ...options, dryRun });
+      const optionsToSend: ImportOptions = sampleMode
+        ? { ...options, sample: { ...SAMPLE_DEFAULTS } }
+        : { ...options, sample: undefined };
+      const resp = await migratorLearndashApi.startJob(creds, optionsToSend);
       const status = await migratorLearndashApi.getJob(resp.jobId);
       setJob(status);
       setJobNotice(resp.notice ?? null);
-      setStep(dryRun ? 'dryrun' : 'execute');
+      setStep(sampleMode ? 'sample-run' : 'complete-run');
     } catch (e: any) {
       setError({ code: e?.code, message: e?.message ?? 'No se pudo crear el job' });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onFinalize = async (): Promise<void> => {
-    if (!job) return;
-    setBusy(true);
-    try {
-      const r = await migratorLearndashApi.getReport(job.id);
-      setReport(r);
-      setStep('done');
-    } catch (e: any) {
-      setError({ code: e?.code, message: e?.message ?? 'No se pudo cargar el reporte' });
     } finally {
       setBusy(false);
     }
@@ -174,7 +265,9 @@ export function MigratorWizard(): React.ReactElement {
                 type="url"
                 placeholder="https://miacademia.com"
                 value={creds.baseUrl}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCreds({ ...creds, baseUrl: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setCreds({ ...creds, baseUrl: e.target.value })
+                }
               />
             </div>
             <div>
@@ -183,7 +276,9 @@ export function MigratorWizard(): React.ReactElement {
                 id="ld-user"
                 placeholder="admin"
                 value={creds.username}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCreds({ ...creds, username: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setCreds({ ...creds, username: e.target.value })
+                }
               />
             </div>
             <div>
@@ -193,12 +288,16 @@ export function MigratorWizard(): React.ReactElement {
                 type="password"
                 placeholder="abcd EFGH ijkl MNOP"
                 value={creds.appPassword}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCreds({ ...creds, appPassword: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setCreds({ ...creds, appPassword: e.target.value })
+                }
                 autoComplete="off"
               />
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={goBack}>Volver</Button>
+              <Button variant="outline" onClick={goBack}>
+                Volver
+              </Button>
               <Button onClick={() => void onConnect()} disabled={busy}>
                 {busy ? 'Comprobando...' : 'Comprobar y continuar'}
               </Button>
@@ -220,32 +319,48 @@ export function MigratorWizard(): React.ReactElement {
           <CardContent className="space-y-4">
             <table className="w-full text-sm">
               <tbody>
-                <tr><td>Cursos</td><td className="text-right font-mono">{String(preflight.counts.courses)}</td></tr>
-                <tr><td>Lecciones</td><td className="text-right font-mono">{String(preflight.counts.lessons)}</td></tr>
-                <tr><td>Temas</td><td className="text-right font-mono">{String(preflight.counts.topics)}</td></tr>
-                <tr><td>Quizzes</td><td className="text-right font-mono">{String(preflight.counts.quizzes)}</td></tr>
-                <tr><td>Grupos</td><td className="text-right font-mono">{String(preflight.counts.groups)}</td></tr>
-                <tr><td>Alumnos</td><td className="text-right font-mono">{String(preflight.counts.users)}</td></tr>
+                <tr>
+                  <td>Cursos</td>
+                  <td className="text-right font-mono">{String(preflight.counts.courses)}</td>
+                </tr>
+                <tr>
+                  <td>Lecciones</td>
+                  <td className="text-right font-mono">{String(preflight.counts.lessons)}</td>
+                </tr>
+                <tr>
+                  <td>Temas</td>
+                  <td className="text-right font-mono">{String(preflight.counts.topics)}</td>
+                </tr>
+                <tr>
+                  <td>Quizzes</td>
+                  <td className="text-right font-mono">{String(preflight.counts.quizzes)}</td>
+                </tr>
+                <tr>
+                  <td>Grupos</td>
+                  <td className="text-right font-mono">{String(preflight.counts.groups)}</td>
+                </tr>
+                <tr>
+                  <td>Alumnos</td>
+                  <td className="text-right font-mono">{String(preflight.counts.users)}</td>
+                </tr>
               </tbody>
             </table>
 
             {preflight.samples && (
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold">Muestras de las últimas 5 entidades por tipo</h3>
-                {(['courses', 'lessons', 'topics', 'quizzes', 'groups', 'users'] as const).map((key) => {
-                  const items = preflight.samples?.[key] ?? [];
-                  if (items.length === 0) return null;
-                  return (
-                    <SampleList
-                      key={key}
-                      label={LABELS[key]}
-                      items={items}
-                    />
-                  );
-                })}
+                <h3 className="text-sm font-semibold">
+                  Muestras de las últimas 5 entidades por tipo
+                </h3>
+                {(['courses', 'lessons', 'topics', 'quizzes', 'groups', 'users'] as const).map(
+                  (key) => {
+                    const items = preflight.samples?.[key] ?? [];
+                    if (items.length === 0) return null;
+                    return <SampleList key={key} label={LABELS[key]} items={items} />;
+                  },
+                )}
                 <p className="text-xs text-muted-foreground">
                   Mostramos las 5 más recientes por tipo (incluye drafts, privadas y futuras
-                  programadas). Para revisar todo en detalle, abrí tu WordPress origen — la
+                  programadas). Para revisar todo en detalle, abre tu WordPress origen — la
                   migración traerá lo que coincida con las opciones que elijas en el siguiente paso.
                 </p>
               </div>
@@ -257,14 +372,18 @@ export function MigratorWizard(): React.ReactElement {
                 <AlertDescription>
                   <ul className="list-disc pl-6">
                     {preflight.warnings.map((w, i) => (
-                      <li key={i}><code>{w.code}</code>: {w.message}</li>
+                      <li key={i}>
+                        <code>{w.code}</code>: {w.message}
+                      </li>
                     ))}
                   </ul>
                 </AlertDescription>
               </Alert>
             )}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={goBack}>Volver</Button>
+              <Button variant="outline" onClick={goBack}>
+                Volver
+              </Button>
               <Button onClick={goNext}>Continuar</Button>
             </div>
           </CardContent>
@@ -285,7 +404,9 @@ export function MigratorWizard(): React.ReactElement {
                   <input
                     type="radio"
                     checked={options.passwordStrategy === 'activation_reset'}
-                    onChange={() => setOptions({ ...options, passwordStrategy: 'activation_reset' })}
+                    onChange={() =>
+                      setOptions({ ...options, passwordStrategy: 'activation_reset' })
+                    }
                   />
                   Enviar email de activación (recomendado)
                 </label>
@@ -310,97 +431,191 @@ export function MigratorWizard(): React.ReactElement {
                 Copiar imágenes a Didacta (recomendado)
               </label>
             </div>
+            <Alert>
+              <AlertTitle>Cómo va a funcionar</AlertTitle>
+              <AlertDescription>
+                Primero hacemos una <b>prueba</b>: importamos un curso de tu academia con hasta{' '}
+                {SAMPLE_DEFAULTS.usersPerCourse} alumnos para que verifiques que todo se ve bien en
+                Didacta. Si te convence, te preguntamos si seguir con la
+                <b> integración completa</b>; el curso de la prueba no se vuelve a importar (se
+                reutiliza lo ya cargado), solo añadimos lo que falta.
+              </AlertDescription>
+            </Alert>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={goBack}>Volver</Button>
-              <Button onClick={goNext}>Continuar</Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {step === 'dryrun' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Comprobación previa (sin tocar nada)</CardTitle>
-            <CardDescription>Hacemos una prueba SIN escribir en Didacta.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!job && (
+              <Button variant="outline" onClick={goBack}>
+                Volver
+              </Button>
               <Button onClick={() => void onStartJob(true)} disabled={busy}>
                 {busy ? 'Iniciando...' : 'Empezar la prueba'}
               </Button>
-            )}
-            {job && (
-              <>
-                <Alert>
-                  <AlertTitle>Job creado</AlertTitle>
-                  <AlertDescription>
-                    ID: <code>{job.id}</code> · estado: {job.status}
-                  </AlertDescription>
-                </Alert>
-                {jobNotice && <NoticeAlert notice={jobNotice} />}
-              </>
-            )}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={goBack}>Ajustar opciones</Button>
-              <Button onClick={() => void onStartJob(false)} disabled={busy}>
-                Sí, ejecutar la migración real
-              </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {step === 'execute' && job && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Migrando...</CardTitle>
-            <CardDescription>
-              Job <code>{job.id}</code> · estado: {job.status}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {jobNotice ? (
-              <NoticeAlert notice={jobNotice} />
-            ) : (
-              <Alert>
-                <AlertTitle>Esperando al worker</AlertTitle>
-                <AlertDescription>
-                  El job se creó correctamente. El procesamiento real comenzará cuando el
-                  worker tome la cola.
-                </AlertDescription>
-              </Alert>
-            )}
-            <div className="flex gap-2">
-              <Button onClick={() => void onFinalize()} disabled={busy}>
-                Ver reporte
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      {step === 'sample-run' && job && (
+        <RunningCard
+          title="Importando muestra…"
+          description="Estamos trayendo 1 curso aleatorio y hasta 5 alumnos para que verifiques el resultado."
+          job={job}
+          jobNotice={jobNotice}
+        />
       )}
 
-      {step === 'done' && report && (
+      {step === 'sample-done' && sampleReport && (
         <Card>
           <CardHeader>
-            <CardTitle>Resultado de la migración</CardTitle>
-            <CardDescription>Job {report.jobId}</CardDescription>
+            <CardTitle>Prueba completada</CardTitle>
+            <CardDescription>Estos son los resultados de la muestra:</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-4 gap-4 text-center">
-              <Stat label="Origen" value={report.totals.sourceCount} />
-              <Stat label="Cargados" value={report.totals.loadedCount} />
-              <Stat label="Saltados" value={report.totals.skippedCount} />
-              <Stat label="Fallidos" value={report.totals.failedCount} />
+              <Stat label="Origen" value={sampleReport.totals.sourceCount} />
+              <Stat label="Cargados" value={sampleReport.totals.loadedCount} />
+              <Stat label="Saltados" value={sampleReport.totals.skippedCount} />
+              <Stat label="Fallidos" value={sampleReport.totals.failedCount} />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Cadena de auditoría: {report.auditChain.eventsCount} eventos
-              {report.auditChain.verified ? ' (✓ verificada)' : ' (⚠ alterada)'}.
-            </p>
+            {sampleReport.byEntity.length > 0 && (
+              <div>
+                <h3 className="mb-1 text-sm font-semibold">Detalle por entidad</h3>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-muted-foreground">
+                      <th>Entidad</th>
+                      <th className="text-right">Origen</th>
+                      <th className="text-right">Cargados</th>
+                      <th className="text-right">Saltados</th>
+                      <th className="text-right">Fallidos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sampleReport.byEntity.map((b) => (
+                      <tr key={b.entityType}>
+                        <td>{b.entityType}</td>
+                        <td className="text-right font-mono">{b.sourceCount}</td>
+                        <td className="text-right font-mono">{b.loadedCount}</td>
+                        <td className="text-right font-mono">{b.skippedCount}</td>
+                        <td className="text-right font-mono">{b.failedCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <Alert>
+              <AlertTitle>¿Quieres proceder con la integración completa?</AlertTitle>
+              <AlertDescription>
+                Importaremos el resto de cursos, alumnos y contenidos. El curso y alumnos de la
+                muestra <b>no se duplican</b>: se conservan tal como están y solo se añade lo que
+                falta. Esta operación puede tardar varios minutos según el tamaño de tu academia.
+              </AlertDescription>
+            </Alert>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setStep('done')}>
+                Terminar aquí (conservo solo la muestra)
+              </Button>
+              <Button onClick={() => void onStartJob(false)} disabled={busy}>
+                {busy ? 'Iniciando…' : 'Sí, hacer integración completa'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === 'complete-run' && job && (
+        <RunningCard
+          title="Importando integración completa…"
+          description="Estamos trayendo el resto de tu academia. Puede tardar varios minutos."
+          job={job}
+          jobNotice={jobNotice}
+        />
+      )}
+
+      {step === 'done' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Migración finalizada</CardTitle>
+            <CardDescription>
+              {finalReport
+                ? `Reporte completo (job ${finalReport.jobId})`
+                : sampleReport
+                  ? `Solo se importó la muestra (job ${sampleReport.jobId}). Puedes lanzar la integración completa más tarde desde el dashboard del módulo.`
+                  : 'Sin reporte disponible.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {(finalReport ?? sampleReport) && (
+              <>
+                <div className="grid grid-cols-4 gap-4 text-center">
+                  <Stat label="Origen" value={(finalReport ?? sampleReport)!.totals.sourceCount} />
+                  <Stat
+                    label="Cargados"
+                    value={(finalReport ?? sampleReport)!.totals.loadedCount}
+                  />
+                  <Stat
+                    label="Saltados"
+                    value={(finalReport ?? sampleReport)!.totals.skippedCount}
+                  />
+                  <Stat
+                    label="Fallidos"
+                    value={(finalReport ?? sampleReport)!.totals.failedCount}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Cadena de auditoría: {(finalReport ?? sampleReport)!.auditChain.eventsCount}{' '}
+                  eventos
+                  {(finalReport ?? sampleReport)!.auditChain.verified
+                    ? ' (✓ verificada)'
+                    : ' (⚠ alterada)'}
+                  .
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
     </div>
+  );
+}
+
+function RunningCard({
+  title,
+  description,
+  job,
+  jobNotice,
+}: {
+  title: string;
+  description: string;
+  job: JobStatus;
+  jobNotice: JobNotice | null;
+}): React.ReactElement {
+  const phase = job.phase ?? job.status;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Alert>
+          <AlertTitle>Estado actual</AlertTitle>
+          <AlertDescription>
+            Job <code>{job.id}</code> · {job.status}
+            {job.phase && (
+              <>
+                {' '}
+                · fase <code>{phase}</code>
+              </>
+            )}
+          </AlertDescription>
+        </Alert>
+        {jobNotice && <NoticeAlert notice={jobNotice} />}
+        <p className="text-xs text-muted-foreground">
+          Esta pantalla se actualiza automáticamente cada 3 segundos. Puedes cerrar el navegador: el
+          job continúa en segundo plano y al volver verás el reporte en el dashboard del módulo.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -458,12 +673,18 @@ function SampleList({
 }
 
 function NoticeAlert({ notice }: { notice: JobNotice }): React.ReactElement {
-  const variant: 'default' | 'destructive' = notice.severity === 'error' ? 'destructive' : 'default';
+  const variant: 'default' | 'destructive' =
+    notice.severity === 'error' ? 'destructive' : 'default';
   const icon = notice.severity === 'error' ? '⛔' : notice.severity === 'warning' ? '⚠️' : 'ℹ️';
   return (
     <Alert variant={variant}>
       <AlertTitle>
-        {icon} {notice.severity === 'warning' ? 'Importante' : notice.severity === 'error' ? 'Error' : 'Info'}
+        {icon}{' '}
+        {notice.severity === 'warning'
+          ? 'Importante'
+          : notice.severity === 'error'
+            ? 'Error'
+            : 'Info'}
       </AlertTitle>
       <AlertDescription>{notice.message}</AlertDescription>
     </Alert>
@@ -480,21 +701,23 @@ function Stat({ label, value }: { label: string; value: number }): React.ReactEl
 }
 
 function Stepper({ current }: { current: Step }): React.ReactElement {
-  const steps: { key: Step; label: string }[] = [
-    { key: 'welcome', label: 'Inicio' },
-    { key: 'connect', label: 'Conectar' },
-    { key: 'preflight', label: 'Resumen' },
-    { key: 'options', label: 'Opciones' },
-    { key: 'dryrun', label: 'Comprobación' },
-    { key: 'execute', label: 'Migrar' },
-    { key: 'done', label: 'Resultado' },
+  // Stepper visible: agrupamos sample-run/sample-done en "Prueba" y
+  // complete-run/done en "Migración completa" para que el usuario vea
+  // solo 6 hitos en lugar de los 8 internos.
+  const visible: { keys: Step[]; label: string }[] = [
+    { keys: ['welcome'], label: 'Inicio' },
+    { keys: ['connect'], label: 'Conectar' },
+    { keys: ['preflight'], label: 'Resumen' },
+    { keys: ['options'], label: 'Opciones' },
+    { keys: ['sample-run', 'sample-done'], label: 'Prueba' },
+    { keys: ['complete-run', 'done'], label: 'Completa' },
   ];
-  const idx = steps.findIndex((s) => s.key === current);
+  const idx = visible.findIndex((s) => s.keys.includes(current));
   return (
     <ol className="flex items-center gap-2 text-xs">
-      {steps.map((s, i) => (
+      {visible.map((s, i) => (
         <li
-          key={s.key}
+          key={s.label}
           className={
             i === idx
               ? 'rounded-full bg-primary px-2 py-1 text-primary-foreground'

@@ -619,6 +619,9 @@ importers:
       fast-json-stable-stringify:
         specifier: ^2.1.0
         version: 2.1.0
+      rxjs:
+        specifier: ^7.8.1
+        version: 7.8.2
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -629,6 +632,9 @@ importers:
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.14)
       esbuild:
         specifier: ^0.24.0
         version: 0.24.2

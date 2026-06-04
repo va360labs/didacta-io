@@ -13,15 +13,15 @@
  *     → cero "Invalid hook call" por dos copias de React.
  *   - El módulo respeta ADR-015 (independencia total respecto al host).
  *
- * Si necesitás un componente que NO está en `__didacta__`:
+ * Si necesitas un componente que NO está en `__didacta__`:
  *   1. Agregalo a `apps/web/src/lib/module-runtime.ts`.
- *   2. Bumpá `runtime.version` en ese archivo.
- *   3. Re-bumpá `coreVersionRequired` en el manifest del módulo si querés
+ *   2. Bumpea `runtime.version` en ese archivo.
+ *   3. Re-bumpea `coreVersionRequired` en el manifest del módulo si quieres
  *      forzar que solo hosts con el componente puedan instalar este módulo.
  *
  * NO importes nada de `react`, `@/components/ui/*`, `@/lib/auth-storage` ni
  * `@/lib/api-client` directamente desde otros archivos del módulo. Si lo
- * hacés, esbuild lo intentará bundlear y el resultado va a ser un bundle de
+ * haces, esbuild lo intentará bundlear y el resultado va a ser un bundle de
  * 500+ KB con dos copias de React.
  */
 

@@ -21,7 +21,9 @@ interface DbCall {
   params: unknown[];
 }
 
-function makeDbStub(opts: { queryReturn?: unknown[]; throwOn?: 'query' | 'execute'; throwCode?: string } = {}) {
+function makeDbStub(
+  opts: { queryReturn?: unknown[]; throwOn?: 'query' | 'execute'; throwCode?: string } = {},
+) {
   const calls: DbCall[] = [];
   const db = {
     query: vi.fn(async (sql: string, params?: unknown[]) => {
@@ -48,6 +50,30 @@ function makeDbStub(opts: { queryReturn?: unknown[]; throwOn?: 'query' | 'execut
     transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(db)),
   };
   return { db, calls };
+}
+
+/// Stub de ctx.secrets requerido por POST /jobs desde alpha.56. Sin esto, el
+/// handler responde 503 SECRETS_NOT_AVAILABLE antes de tocar la BD y todos
+/// los tests del segundo describe block (POST /jobs con ctx.db stub) fallan.
+function makeSecretsStub() {
+  const calls: Array<{ kind: 'get' | 'set' | 'delete' | 'list'; key?: string }> = [];
+  const secrets = {
+    get: vi.fn(async (key: string) => {
+      calls.push({ kind: 'get', key });
+      return null;
+    }),
+    set: vi.fn(async (key: string, _value: string) => {
+      calls.push({ kind: 'set', key });
+    }),
+    delete: vi.fn(async (key: string) => {
+      calls.push({ kind: 'delete', key });
+    }),
+    list: vi.fn(async () => {
+      calls.push({ kind: 'list' });
+      return [];
+    }),
+  };
+  return { secrets, calls };
 }
 
 function findRoute(method: string, path: string) {
@@ -84,7 +110,9 @@ describe('migrator-learndash · /jobs sin ctx.db (host < alpha.51)', () => {
 
   it('GET /jobs/:id → 503 DB_NOT_AVAILABLE', async () => {
     const route = findRoute('GET', '/jobs/:id');
-    const res = await route.handler(makeReq({ method: 'GET', path: '/jobs/abc', params: { id: 'abc' } }));
+    const res = await route.handler(
+      makeReq({ method: 'GET', path: '/jobs/abc', params: { id: 'abc' } }),
+    );
     expect(res.status).toBe(503);
   });
 
@@ -98,10 +126,12 @@ describe('migrator-learndash · /jobs sin ctx.db (host < alpha.51)', () => {
 describe('migrator-learndash · POST /jobs con ctx.db stub', () => {
   it('inserta job con tablePrefix correcto y NO persiste appPassword', async () => {
     const { db, calls } = makeDbStub({ queryReturn: [{ id: 'job-uuid-1' }] });
+    const { secrets } = makeSecretsStub();
     const route = findRoute('POST', '/jobs');
     const res = await route.handler(
       makeReq({
         db,
+        secrets,
         body: {
           credentials: {
             baseUrl: 'https://wp.cliente.com',
@@ -118,27 +148,33 @@ describe('migrator-learndash · POST /jobs con ctx.db stub', () => {
     // Verifica que el INSERT toca SOLO la tabla del módulo (prefix scope).
     const insert = calls.find((c) => c.sql.includes('INSERT INTO mod_migrator_learndash_jobs'));
     expect(insert).toBeDefined();
-    // Y que el appPassword NO está en los params persistidos.
+    // Y que el appPassword NO está en los params persistidos del INSERT a la BD.
+    // El appPassword va por ctx.secrets (separado), no por params del SQL.
     const allParams = JSON.stringify(insert!.params);
     expect(allParams).not.toContain('super-secret-do-not-leak');
     // Pero sí los identificadores no-secretos.
     expect(allParams).toContain('https://wp.cliente.com');
     expect(allParams).toContain('admin');
+    // Y secrets.set debe haberse llamado con el appPassword cifrado.
+    expect(secrets.set).toHaveBeenCalled();
   });
 
   it('400 VALIDATION_ERROR si faltan credentials/options', async () => {
     const { db } = makeDbStub();
+    const { secrets } = makeSecretsStub();
     const route = findRoute('POST', '/jobs');
-    const res = await route.handler(makeReq({ db, body: {} }));
+    const res = await route.handler(makeReq({ db, secrets, body: {} }));
     expect(res.status).toBe(400);
   });
 
   it('mapea DB_UNIQUE_VIOLATION → 409', async () => {
     const { db } = makeDbStub({ throwOn: 'query', throwCode: 'DB_UNIQUE_VIOLATION' });
+    const { secrets } = makeSecretsStub();
     const route = findRoute('POST', '/jobs');
     const res = await route.handler(
       makeReq({
         db,
+        secrets,
         body: {
           credentials: { baseUrl: 'x', username: 'y', appPassword: 'z' },
           options: {},
@@ -150,10 +186,12 @@ describe('migrator-learndash · POST /jobs con ctx.db stub', () => {
 
   it('mapea DB_TIMEOUT → 504', async () => {
     const { db } = makeDbStub({ throwOn: 'query', throwCode: 'DB_TIMEOUT' });
+    const { secrets } = makeSecretsStub();
     const route = findRoute('POST', '/jobs');
     const res = await route.handler(
       makeReq({
         db,
+        secrets,
         body: {
           credentials: { baseUrl: 'x', username: 'y', appPassword: 'z' },
           options: {},
@@ -217,14 +255,14 @@ describe('migrator-learndash · POST /jobs/:id/cancel con ctx.db stub', () => {
       ],
     });
     const route = findRoute('POST', '/jobs/:id/cancel');
-    const res = await route.handler(
-      makeReq({ path: '/jobs/j1/cancel', params: { id: 'j1' }, db }),
-    );
+    const res = await route.handler(makeReq({ path: '/jobs/j1/cancel', params: { id: 'j1' }, db }));
     expect(res.status).toBe(200);
 
-    const update = calls.find((c) => c.kind === 'execute' && c.sql.includes('UPDATE mod_migrator_learndash_jobs'));
+    const update = calls.find(
+      (c) => c.kind === 'execute' && c.sql.includes('UPDATE mod_migrator_learndash_jobs'),
+    );
     expect(update).toBeDefined();
-    expect(update!.sql).toContain("SET status = $3");
+    expect(update!.sql).toContain('SET status = $3');
     expect(update!.sql).toContain('WHERE tenant_id = $1::uuid AND id = $2::uuid');
   });
 
@@ -247,9 +285,7 @@ describe('migrator-learndash · POST /jobs/:id/cancel con ctx.db stub', () => {
       ],
     });
     const route = findRoute('POST', '/jobs/:id/cancel');
-    const res = await route.handler(
-      makeReq({ path: '/jobs/j1/cancel', params: { id: 'j1' }, db }),
-    );
+    const res = await route.handler(makeReq({ path: '/jobs/j1/cancel', params: { id: 'j1' }, db }));
     expect(res.status).toBe(409);
     expect((res.body as { code: string }).code).toBe('JOB_NOT_CANCELLABLE');
   });

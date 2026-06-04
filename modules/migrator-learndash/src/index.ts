@@ -254,7 +254,9 @@ function err(status: number, code: string, message: string, detail?: unknown): M
   return { status, body: { code, message, detail } };
 }
 
-function requireUser(req: ModuleRouteRequestContext): { sub: string; tenantId: string; roles: string[] } | ModuleRouteResponse {
+function requireUser(
+  req: ModuleRouteRequestContext,
+): { sub: string; tenantId: string; roles: string[] } | ModuleRouteResponse {
   if (!req.user) return err(401, 'UNAUTHENTICATED', 'Esta operación requiere autenticación.');
   return req.user;
 }
@@ -265,16 +267,14 @@ function requireUser(req: ModuleRouteRequestContext): { sub: string; tenantId: s
 /// del tenant o de la instancia. El frontend ya gatea el render del
 /// wizard por `super_admin`, pero los handlers también deben gatear como
 /// última línea de defensa (nunca confíes solo en el cliente).
-function requireAdmin(req: ModuleRouteRequestContext): { sub: string; tenantId: string; roles: string[] } | ModuleRouteResponse {
+function requireAdmin(
+  req: ModuleRouteRequestContext,
+): { sub: string; tenantId: string; roles: string[] } | ModuleRouteResponse {
   const auth = requireUser(req);
   if (isResponse(auth)) return auth;
   const allowed = auth.roles.some((r) => r === 'super_admin' || r === 'tenant_admin');
   if (!allowed) {
-    return err(
-      403,
-      'FORBIDDEN',
-      'El migrador requiere rol super_admin o tenant_admin.',
-    );
+    return err(403, 'FORBIDDEN', 'El migrador requiere rol super_admin o tenant_admin.');
   }
   return auth;
 }
@@ -321,7 +321,16 @@ interface JobRow {
 interface JobRecord {
   id: string;
   tenantId: string;
-  status: 'pending' | 'preflight' | 'extracting' | 'transforming' | 'loading' | 'reconciling' | 'completed' | 'failed' | 'cancelled';
+  status:
+    | 'pending'
+    | 'preflight'
+    | 'extracting'
+    | 'transforming'
+    | 'loading'
+    | 'reconciling'
+    | 'completed'
+    | 'failed'
+    | 'cancelled';
   phase: string | null;
   startedAt: string;
   completedAt: string | null;
@@ -373,7 +382,11 @@ async function listTenantJobs(db: SandboxedDb, tenantId: string): Promise<JobRec
   return result.rows.map(rowToJob);
 }
 
-async function getJob(db: SandboxedDb, tenantId: string, jobId: string): Promise<JobRecord | undefined> {
+async function getJob(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+): Promise<JobRecord | undefined> {
   const result = await db.query<JobRow>(
     `SELECT id, tenant_id, status, phase, source_profile, options, started_at,
             completed_at, progress, error, created_by
@@ -550,7 +563,10 @@ async function fetchOneWpPage<T>(
   extraQuery?: Record<string, string | number>,
 ): Promise<{ items: T[]; totalPages: number | undefined; status: number }> {
   const extra = extraQuery
-    ? '&' + Object.entries(extraQuery).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&')
+    ? '&' +
+      Object.entries(extraQuery)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+        .join('&')
     : '';
   const url = `${baseUrl}/wp-json/${namespace}/${cpt}?per_page=${perPage}&page=${page}&context=edit&status=any&orderby=id&order=asc${extra}`;
   const resp = await http.get(url, {
@@ -680,7 +696,16 @@ async function upsertStgTopic(
            checksum = EXCLUDED.checksum,
            is_valid = FALSE,
            validation_errors = NULL`,
-    [tenantId, jobId, sourceId, parentLessonId, parentCourseId, orderIdx, JSON.stringify(raw), checksum],
+    [
+      tenantId,
+      jobId,
+      sourceId,
+      parentLessonId,
+      parentCourseId,
+      orderIdx,
+      JSON.stringify(raw),
+      checksum,
+    ],
   );
 }
 
@@ -707,7 +732,16 @@ async function upsertStgQuiz(
            checksum = EXCLUDED.checksum,
            is_valid = FALSE,
            validation_errors = NULL`,
-    [tenantId, jobId, sourceId, parentCourseId, parentLessonId, parentTopicId, JSON.stringify(raw), checksum],
+    [
+      tenantId,
+      jobId,
+      sourceId,
+      parentCourseId,
+      parentLessonId,
+      parentTopicId,
+      JSON.stringify(raw),
+      checksum,
+    ],
   );
 }
 
@@ -771,7 +805,16 @@ interface ExtractCursor {
   /// — necesario porque el endpoint plano /sfwd-lessons?course=N ignora el
   /// filter con Application Passwords de admin y devuelve el catálogo entero,
   /// dejando todas las rows con el courseId del último curso iterado.
-  subphase?: 'paginate' | 'fixup';
+  ///
+  /// `'sample-pick'` (v1.0.32+): solo se usa si el job se creó con
+  /// `options.sample` set. Una única ejecución al inicio del extract que
+  /// elige UN curso aleatorio con alumnos enrolados, inyecta a stg solo
+  /// ese curso + N alumnos, y marca `users`/`courses`/`groups` como
+  /// completed para que el paginate normal solo recorra lessons/topics/
+  /// quizzes (que son perCourse y solo verán el único curso del staging).
+  /// Sin esta subphase, paginate iteraría globalmente todos los users del
+  /// origen aunque el job sea de prueba.
+  subphase?: 'sample-pick' | 'paginate' | 'fixup';
   current: string;
   page: number;
   completed: string[];
@@ -784,6 +827,9 @@ interface ExtractCursor {
   /// Total de courses (lo cacheamos para subphase='fixup'). Lo populamos
   /// al entrar a fixup.
   fixupTotalCourses?: number;
+  /// Source ID del curso elegido por sample-pick (solo en sample mode).
+  /// Útil para logging y verificación.
+  sampleCourseId?: string;
 }
 
 function emptyExtractCursor(): ExtractCursor {
@@ -807,13 +853,31 @@ function parseExtractCursor(progress: unknown): ExtractCursor {
     typeof (progress as { page?: unknown }).page === 'number'
   ) {
     const c = progress as ExtractCursor;
+    const sp = c.subphase === 'fixup' || c.subphase === 'sample-pick' ? c.subphase : 'paginate';
     return {
       ...c,
-      subphase: c.subphase === 'fixup' ? 'fixup' : 'paginate',
+      subphase: sp,
       courseIdx: typeof c.courseIdx === 'number' ? c.courseIdx : 0,
     };
   }
   return emptyExtractCursor();
+}
+
+/// Lee `options.sample` del job de forma defensiva. Devuelve `null` si:
+///   - el job no se creó con sample mode (el wizard no envió el campo)
+///   - el shape no matchea (legacy job con options stale, garantía de no crash)
+/// Caps en línea con el DTO público: courses 1..5, usersPerCourse 1..50.
+function readSampleConfig(options: unknown): { courses: number; usersPerCourse: number } | null {
+  if (!options || typeof options !== 'object') return null;
+  const s = (options as { sample?: unknown }).sample;
+  if (!s || typeof s !== 'object') return null;
+  const raw = s as { courses?: unknown; usersPerCourse?: unknown };
+  const courses = typeof raw.courses === 'number' ? raw.courses : 1;
+  const usersPerCourse = typeof raw.usersPerCourse === 'number' ? raw.usersPerCourse : 5;
+  return {
+    courses: Math.min(5, Math.max(1, Math.floor(courses))),
+    usersPerCourse: Math.min(50, Math.max(1, Math.floor(usersPerCourse))),
+  };
 }
 
 function nextEntity(cursor: ExtractCursor): string | null {
@@ -914,10 +978,21 @@ async function listValidUnloadedStg(
   jobId: string,
   limit: number,
 ): Promise<StgRow[]> {
+  // v1.0.33: ahora también incluimos rows con target_id 'sentinel' (`!SKIP:%`)
+  // del legacy. Antes esos rows quedaban silenciosamente fuera del re-procesado
+  // — los 20 topics + 8 groups del primer reporte del operador eran víctimas
+  // de eso. Ahora el loader los re-evalúa contra el adapter actual y, si
+  // estuviera implementado un nuevo target, los carga. Si siguen sin tener
+  // target (groups en este release), se escribirá un DLQ entry visible.
+  //
+  // IMPORTANTE: NO incluimos rows con target_id real (UUID) ni con `!FAIL:%`
+  // porque esos ya tuvieron su tratamiento (cargados u rechazados con DLQ
+  // existente). Re-procesarlos crearía duplicados en el DLQ.
   const result = await db.query<StgRow>(
     `SELECT id::text AS id, source_id, raw_payload, canonical, is_valid, target_id
        FROM ${table}
-      WHERE tenant_id = $1::uuid AND job_id = $2::uuid AND is_valid = TRUE AND target_id IS NULL
+      WHERE tenant_id = $1::uuid AND job_id = $2::uuid AND is_valid = TRUE
+        AND (target_id IS NULL OR target_id LIKE '!SKIP:%')
       LIMIT ${Math.max(1, Math.min(1000, limit))}`,
     [tenantId, jobId],
   );
@@ -937,7 +1012,12 @@ async function setStgCanonical(
             is_valid = $3,
             validation_errors = $4::jsonb
       WHERE id = $1::uuid`,
-    [rowId, JSON.stringify(canonical), canonical !== null, validationErrors ? JSON.stringify(validationErrors) : null],
+    [
+      rowId,
+      JSON.stringify(canonical),
+      canonical !== null,
+      validationErrors ? JSON.stringify(validationErrors) : null,
+    ],
   );
 }
 
@@ -993,7 +1073,11 @@ interface TransformCursor {
 }
 
 function parseTransformCursor(progress: unknown): TransformCursor {
-  if (progress && typeof progress === 'object' && (progress as { phase?: string }).phase === 'transform') {
+  if (
+    progress &&
+    typeof progress === 'object' &&
+    (progress as { phase?: string }).phase === 'transform'
+  ) {
     return progress as TransformCursor;
   }
   return { phase: 'transform', current: EXTRACT_ENTITIES[0]!.name, completed: [] };
@@ -1006,7 +1090,11 @@ interface LoadCursor {
 }
 
 function parseLoadCursor(progress: unknown): LoadCursor {
-  if (progress && typeof progress === 'object' && (progress as { phase?: string }).phase === 'load') {
+  if (
+    progress &&
+    typeof progress === 'object' &&
+    (progress as { phase?: string }).phase === 'load'
+  ) {
     return progress as LoadCursor;
   }
   // Orden load: users → courses → lessons → topics → quizzes → groups.
@@ -1055,12 +1143,20 @@ function mapWpToDidactaRole(roles: unknown): DidactaRole {
 
 type AdapterResult =
   | { ok: true; ns: string; input: Record<string, unknown> }
-  | { ok: false; skip: boolean; code: string; message: string };
+  | { ok: false; skip?: boolean; fail?: boolean; code: string; message: string };
 
-function adaptCanonicalToDidacta(entity: string, canonical: Record<string, unknown>): AdapterResult {
+function adaptCanonicalToDidacta(
+  entity: string,
+  canonical: Record<string, unknown>,
+): AdapterResult {
   const sourceId = String(canonical['sourceId'] ?? '');
   if (!sourceId) {
-    return { ok: false, skip: false, code: 'ADAPTER_NO_SOURCE_ID', message: 'canonical sin sourceId' };
+    return {
+      ok: false,
+      skip: false,
+      code: 'ADAPTER_NO_SOURCE_ID',
+      message: 'canonical sin sourceId',
+    };
   }
   const externalRef = { externalSource: 'learndash', externalId: sourceId };
 
@@ -1068,12 +1164,23 @@ function adaptCanonicalToDidacta(entity: string, canonical: Record<string, unkno
     case 'users': {
       const email = String(canonical['email'] ?? '').trim();
       if (!email || !email.includes('@')) {
-        return { ok: false, skip: false, code: 'ADAPTER_USER_NO_EMAIL', message: `user ${sourceId} sin email válido` };
+        return {
+          ok: false,
+          skip: false,
+          code: 'ADAPTER_USER_NO_EMAIL',
+          message: `user ${sourceId} sin email válido`,
+        };
       }
       const input: Record<string, unknown> = {
         ...externalRef,
         email,
         role: mapWpToDidactaRole(canonical['roles']),
+        // El migrador NUNCA envía emails al crear usuarios (incidente:
+        // migración envió ~2900 emails). El operador notifica después de
+        // forma explícita y controlada. Ver host alpha.81 que respeta este
+        // flag. Defensa: el campo es ADITIVO — si el host viejo (< alpha.81)
+        // lo ignora, no rompe (es un campo extra del input).
+        suppressInvite: true,
       };
       const dn = canonical['displayName'];
       if (typeof dn === 'string' && dn.trim()) input['name'] = dn.trim();
@@ -1084,7 +1191,12 @@ function adaptCanonicalToDidacta(entity: string, canonical: Record<string, unkno
       const slug = String(canonical['slug'] ?? '').trim();
       const title = String(canonical['title'] ?? '').trim();
       if (!slug || !title) {
-        return { ok: false, skip: false, code: 'ADAPTER_COURSE_MISSING_FIELDS', message: `course ${sourceId} sin slug/title` };
+        return {
+          ok: false,
+          skip: false,
+          code: 'ADAPTER_COURSE_MISSING_FIELDS',
+          message: `course ${sourceId} sin slug/title`,
+        };
       }
       const input: Record<string, unknown> = { ...externalRef, slug, title };
       const desc = canonical['description'];
@@ -1095,10 +1207,16 @@ function adaptCanonicalToDidacta(entity: string, canonical: Record<string, unkno
     case 'lessons': {
       const parentCourseId = String(canonical['parentCourseSourceId'] ?? '').trim();
       if (!parentCourseId) {
-        return { ok: false, skip: false, code: 'ADAPTER_LESSON_NO_PARENT', message: `lesson ${sourceId} sin parentCourseSourceId` };
+        return {
+          ok: false,
+          skip: false,
+          code: 'ADAPTER_LESSON_NO_PARENT',
+          message: `lesson ${sourceId} sin parentCourseSourceId`,
+        };
       }
       const title = String(canonical['title'] ?? '').trim() || `(sin título · ${sourceId})`;
-      const contentHtml = typeof canonical['contentHtml'] === 'string' ? canonical['contentHtml'] : '';
+      const contentHtml =
+        typeof canonical['contentHtml'] === 'string' ? canonical['contentHtml'] : '';
       // `position` cae bajo `@@unique([moduleId, position])` en mod_courses_lesson.
       // El mapper actual pasa `orderIdx=0` siempre (applyMapper no propaga el
       // contador desde stg.order_idx), así que 447/448 lessons rebotaban con
@@ -1124,10 +1242,51 @@ function adaptCanonicalToDidacta(entity: string, canonical: Record<string, unkno
       };
     }
 
-    case 'topics':
-      // LD topic = sub-unidad de lesson. Didacta es lesson-flat — sin
-      // course modules sintéticos no hay donde colgarlos limpio. Skip.
-      return { ok: false, skip: true, code: 'ADAPTER_TOPIC_SKIPPED', message: 'topics no se cargan en MVP (no hay course modules sintéticos)' };
+    case 'topics': {
+      // v1.0.33: topics ahora se mapean como lessons planas en Didacta,
+      // preservando parent_lesson para conservar la jerarquía didáctica.
+      // LearnDash modela `Course → Lesson → Topic`. Didacta es lesson-flat
+      // (`Course → Module → Lesson`) → el Topic se "promueve" a Lesson
+      // dentro del module del course padre. No tenemos endpoint para crear
+      // module sintético por-lesson, así que el topic se cuelga del module
+      // "General" del course (mismo externalId que el course) — los
+      // operadores los reconocen porque su título conserva el de LearnDash
+      // y su position usa el sourceId numérico (mismo criterio que lessons).
+      const parentCourseId = String(canonical['parentCourseSourceId'] ?? '').trim();
+      if (!parentCourseId) {
+        return {
+          ok: false,
+          skip: false,
+          code: 'TOPIC_NO_PARENT_COURSE',
+          message: `topic ${sourceId} sin parentCourseSourceId; no se puede mapear como lesson sin curso padre`,
+        };
+      }
+      const parentLessonId = canonical['parentLessonSourceId'];
+      const title = String(canonical['title'] ?? '').trim() || `(topic sin título · ${sourceId})`;
+      const contentObj = canonical['contentHtml'];
+      const contentHtml = typeof contentObj === 'string' ? contentObj : '';
+      const numericId = parseInt(sourceId, 10);
+      const position = Number.isFinite(numericId) && numericId > 0 ? numericId : 0;
+      const input: Record<string, unknown> = {
+        ...externalRef,
+        moduleExternalRef: { externalSource: 'learndash', externalId: parentCourseId },
+        type: 'HTML',
+        title,
+        position,
+        content: { html: contentHtml },
+      };
+      // parentLessonExternalRef se incluye como hint para futuros consumers
+      // del canonical (auditoría, exportadores). El host actual no lo
+      // consume todavía, pero conservar la referencia preserva la
+      // jerarquía didáctica original sin coste.
+      if (typeof parentLessonId === 'string' && parentLessonId.trim()) {
+        input['parentLessonExternalRef'] = {
+          externalSource: 'learndash',
+          externalId: parentLessonId,
+        };
+      }
+      return { ok: true, ns: 'lessons', input };
+    }
 
     case 'quizzes': {
       const title = String(canonical['title'] ?? '').trim() || `(quiz sin título · ${sourceId})`;
@@ -1147,11 +1306,28 @@ function adaptCanonicalToDidacta(entity: string, canonical: Record<string, unkno
     }
 
     case 'groups':
-      // Sin target directo. Se materializan vía enrollments en ET-001b.
-      return { ok: false, skip: true, code: 'ADAPTER_GROUPS_NO_TARGET', message: 'groups se materializan vía enrollments (ET-001b)' };
+      // v1.0.33: cambio de skip silencioso a fail explícito al DLQ.
+      // Antes el skip se contaba como "loaded" y el operador no veía que
+      // los groups se perdían. Ahora cada group queda como entry en
+      // /jobs/:id/dlq con un mensaje accionable que explica por qué.
+      // Groups requieren ET-001b (enrollments fan-out group→users) que
+      // todavía no está cableado; mientras tanto los enrollments se
+      // importan curso-a-curso, no group-a-group.
+      return {
+        ok: false,
+        fail: true,
+        code: 'ADAPTER_GROUPS_NOT_SUPPORTED',
+        message:
+          'Groups requieren ET-001b (enrollments fan-out). Por ahora ese flow no está implementado; los enrollments se importan curso-a-curso, no group-a-group. Groups quedan sin migrar — esto se ve en DLQ entries con este código.',
+      };
 
     default:
-      return { ok: false, skip: false, code: 'ADAPTER_UNKNOWN_ENTITY', message: `entidad ${entity} sin adapter` };
+      return {
+        ok: false,
+        skip: false,
+        code: 'ADAPTER_UNKNOWN_ENTITY',
+        message: `entidad ${entity} sin adapter`,
+      };
   }
 }
 
@@ -1252,7 +1428,7 @@ function requireDb(req: ModuleRouteRequestContext): SandboxedDb | ModuleRouteRes
     return err(
       503,
       'DB_NOT_AVAILABLE',
-      'Este módulo requiere persistencia (alpha.51+) y el host actual no la expone. Actualizá Didacta a alpha.51 o superior y reinstalá el módulo.',
+      'Este módulo requiere persistencia (alpha.51+) y el host actual no la expone. Actualiza Didacta a alpha.51 o superior y reinstala el módulo.',
     );
   }
   return req.db;
@@ -1269,8 +1445,13 @@ function dbErrToResponse(e: unknown): ModuleRouteResponse {
   const dbe = e as Partial<DbError> & { code?: string; message?: string };
   const code = dbe?.code ?? 'DB_NETWORK';
   const message = dbe?.message ?? 'Error en BD del módulo.';
-  if (code === 'DB_TIMEOUT') return err(504, code, 'La consulta tardó demasiado, intentá de nuevo.');
-  if (code === 'DB_UNIQUE_VIOLATION' || code === 'DB_FK_VIOLATION' || code === 'DB_CHECK_VIOLATION') {
+  if (code === 'DB_TIMEOUT')
+    return err(504, code, 'La consulta tardó demasiado, intenta de nuevo.');
+  if (
+    code === 'DB_UNIQUE_VIOLATION' ||
+    code === 'DB_FK_VIOLATION' ||
+    code === 'DB_CHECK_VIOLATION'
+  ) {
     return err(409, code, 'Conflicto al guardar el registro.', { detail: message });
   }
   return err(500, code, 'Error en BD del módulo.', { detail: message });
@@ -1287,7 +1468,9 @@ function b64encode(s: string): string {
   let out = '';
   let i = 0;
   for (; i + 2 < bytes.length; i += 3) {
-    const b0 = bytes[i]!, b1 = bytes[i + 1]!, b2 = bytes[i + 2]!;
+    const b0 = bytes[i]!,
+      b1 = bytes[i + 1]!,
+      b2 = bytes[i + 2]!;
     out += B64[b0 >> 2]!;
     out += B64[((b0 & 0x03) << 4) | (b1 >> 4)]!;
     out += B64[((b1 & 0x0f) << 2) | (b2 >> 6)]!;
@@ -1300,7 +1483,8 @@ function b64encode(s: string): string {
     out += B64[(b0 & 0x03) << 4]!;
     out += '==';
   } else if (rem === 2) {
-    const b0 = bytes[i]!, b1 = bytes[i + 1]!;
+    const b0 = bytes[i]!,
+      b1 = bytes[i + 1]!;
     out += B64[b0 >> 2]!;
     out += B64[((b0 & 0x03) << 4) | (b1 >> 4)]!;
     out += B64[(b1 & 0x0f) << 2]!;
@@ -1467,7 +1651,9 @@ export async function* paginateWp<T>(
       throw new Error(`paginateWp: respuesta no JSON en ${pagedUrl}: ${(e as Error).message}`);
     }
     if (!Array.isArray(items)) {
-      throw new Error(`paginateWp: respuesta esperada array en ${pagedUrl}, recibido ${typeof items}`);
+      throw new Error(
+        `paginateWp: respuesta esperada array en ${pagedUrl}, recibido ${typeof items}`,
+      );
     }
 
     if (items.length > 0) yield items;
@@ -1496,7 +1682,14 @@ async function probeAll(
   // (5rps + burst 10) los pace si hace falta. Cada probe trae count
   // (X-WP-Total) Y los 5 items más recientes con metadata legible para
   // que el usuario decida qué migrar antes de confirmar.
-  const entities = ['sfwd-courses', 'sfwd-lessons', 'sfwd-topic', 'sfwd-quiz', 'groups', 'users'] as const;
+  const entities = [
+    'sfwd-courses',
+    'sfwd-lessons',
+    'sfwd-topic',
+    'sfwd-quiz',
+    'groups',
+    'users',
+  ] as const;
   const labels = ['courses', 'lessons', 'topics', 'quizzes', 'groups', 'users'] as const;
   const results = await Promise.all(
     entities.map((cpt) => probeEntity(http, baseUrl, cpt, authHeader, warnings)),
@@ -1551,7 +1744,11 @@ const routes: ModuleRoute[] = [
       };
       const creds = body.credentials;
       if (!creds?.baseUrl || !creds?.username || !creds?.appPassword) {
-        return err(400, 'VALIDATION_ERROR', 'credentials.baseUrl + username + appPassword requeridos.');
+        return err(
+          400,
+          'VALIDATION_ERROR',
+          'credentials.baseUrl + username + appPassword requeridos.',
+        );
       }
       if (!req.http) {
         // Host alpha.48 o anterior — no hay ctx.http inyectado. El módulo
@@ -1559,7 +1756,7 @@ const routes: ModuleRoute[] = [
         return err(
           503,
           'HTTP_NOT_AVAILABLE',
-          'El host de Didacta no expone HTTP saliente a este módulo (requiere alpha.49+). Actualizá la imagen y reinstalá el módulo.',
+          'El host de Didacta no expone HTTP saliente a este módulo (requiere alpha.49+). Actualiza la imagen y reinstala el módulo.',
         );
       }
 
@@ -1577,14 +1774,22 @@ const routes: ModuleRoute[] = [
           timeoutMs: 10_000,
         });
         if (root.status === 401 || root.status === 403) {
-          return err(401, 'WP_AUTH_FAILED', `Las credenciales no son válidas en ${baseUrl} (HTTP ${root.status}).`);
+          return err(
+            401,
+            'WP_AUTH_FAILED',
+            `Las credenciales no son válidas en ${baseUrl} (HTTP ${root.status}).`,
+          );
         }
         if (root.status >= 400) {
           // 422 (no 502): es un error del USUARIO (URL mal, WP caído desde su
           // perspectiva). 5xx haría que el reverse proxy de Easypanel/Traefik
           // reemplace el body JSON con su propia página HTML "Bad Gateway"
           // y el frontend pete con "Unexpected token '<'" al hacer JSON.parse.
-          return err(422, 'WP_UNREACHABLE', `${baseUrl} respondió ${root.status} a /wp-json/. ¿Es un WordPress?`);
+          return err(
+            422,
+            'WP_UNREACHABLE',
+            `${baseUrl} respondió ${root.status} a /wp-json/. ¿Es un WordPress?`,
+          );
         }
         wpVersion = root.headers['x-wp-version'];
         try {
@@ -1610,10 +1815,10 @@ const routes: ModuleRoute[] = [
       // 2) Capability detection: ¿el plugin LearnDash REST está presente?
       let learndashRestAvailable = true;
       try {
-        const ld = await req.http.get(
-          `${baseUrl}/wp-json/ldlms/v1/sfwd-courses?per_page=1`,
-          { headers: { Authorization: authHeader }, timeoutMs: 10_000 },
-        );
+        const ld = await req.http.get(`${baseUrl}/wp-json/ldlms/v1/sfwd-courses?per_page=1`, {
+          headers: { Authorization: authHeader },
+          timeoutMs: 10_000,
+        });
         if (ld.status === 404) learndashRestAvailable = false;
       } catch {
         learndashRestAvailable = false;
@@ -1684,7 +1889,11 @@ const routes: ModuleRoute[] = [
         return err(400, 'VALIDATION_ERROR', 'credentials + options requeridos.');
       }
       if (!body.credentials.appPassword) {
-        return err(400, 'VALIDATION_ERROR', 'credentials.appPassword es obligatorio (Application Password de WP).');
+        return err(
+          400,
+          'VALIDATION_ERROR',
+          'credentials.appPassword es obligatorio (Application Password de WP).',
+        );
       }
       // ctx.secrets es REQUERIDO desde alpha.56 — sin él no podemos
       // guardar el appPassword cifrado y el worker BullMQ del primer
@@ -1697,7 +1906,7 @@ const routes: ModuleRoute[] = [
           503,
           'SECRETS_NOT_AVAILABLE',
           'Este módulo requiere ctx.secrets (alpha.56+) y el host actual no lo expone. ' +
-            'Actualizá Didacta a alpha.56 o superior y reinstalá el módulo.',
+            'Actualiza Didacta a alpha.56 o superior y reinstala el módulo.',
         );
       }
       const sourceProfile = {
@@ -1716,9 +1925,10 @@ const routes: ModuleRoute[] = [
       // logueamos pero respondemos al cliente con el error de secrets —
       // el admin verá un job en `pending` que ya nunca avanza y deberá
       // cancelarlo manualmente.
-      const retentionDays = typeof body.options?.['retentionDays'] === 'number'
-        ? (body.options['retentionDays'] as number)
-        : 30;
+      const retentionDays =
+        typeof body.options?.['retentionDays'] === 'number'
+          ? (body.options['retentionDays'] as number)
+          : 30;
       try {
         await persistJobAppPassword(secrets, jobId, body.credentials.appPassword, retentionDays);
       } catch (e) {
@@ -1741,7 +1951,8 @@ const routes: ModuleRoute[] = [
       // intentamos rollback del row — el operador puede setear Redis,
       // reiniciar el API y re-encolar manualmente con
       // POST /jobs/:id/retry (Sprint 4) sin perder el row.
-      const ctxJobs = (req as { jobs?: { scheduleTick: (a: { jobId: string }) => Promise<void> } }).jobs;
+      const ctxJobs = (req as { jobs?: { scheduleTick: (a: { jobId: string }) => Promise<void> } })
+        .jobs;
       if (!ctxJobs || typeof ctxJobs.scheduleTick !== 'function') {
         return ok(
           {
@@ -1750,7 +1961,7 @@ const routes: ModuleRoute[] = [
               code: 'JOBS_HOST_TOO_OLD',
               severity: 'warning',
               message:
-                'Job registrado pero el host es < alpha.55 — ctx.jobs.scheduleTick no está disponible. Actualizá el container para que el worker recoja el job.',
+                'Job registrado pero el host es < alpha.55 — ctx.jobs.scheduleTick no está disponible. Actualiza el container para que el worker recoja el job.',
             },
           },
           201,
@@ -1770,7 +1981,7 @@ const routes: ModuleRoute[] = [
             notice: {
               code,
               severity: 'warning',
-              message: `Job persistido pero NO se pudo encolar: ${msg}. Verificá REDIS_URL en el host.`,
+              message: `Job persistido pero NO se pudo encolar: ${msg}. Verifica REDIS_URL en el host.`,
             },
           },
           201,
@@ -1857,15 +2068,19 @@ const routes: ModuleRoute[] = [
         const affected = await setJobStatus(db, auth.tenantId, id, 'cancelled', nowIso());
         if (affected === 0) {
           // Race: alguien lo cambió justo ahora. Reportar 409.
-          return err(409, 'JOB_RACE', 'el estado del job cambió durante la cancelación, recargá y reintentá.');
+          return err(
+            409,
+            'JOB_RACE',
+            'el estado del job cambió durante la cancelación, recarga y reintenta.',
+          );
         }
         // alpha.56: limpiar el appPassword cifrado para liberar slot de
         // quota antes del expiry natural. Best-effort: si falla, el log
         // queda y el expiry natural eventualmente lo limpia.
-        await cleanupJobAppPassword(
-          req.secrets,
-          id,
-          (level, message) => console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](`[mod.migrator-learndash] ${message}`),
+        await cleanupJobAppPassword(req.secrets, id, (level, message) =>
+          console[level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log'](
+            `[mod.migrator-learndash] ${message}`,
+          ),
         );
         return ok({ ok: true });
       } catch (e) {
@@ -1927,7 +2142,11 @@ const routes: ModuleRoute[] = [
           { sourceCount: 0, loadedCount: 0, skippedCount: 0, failedCount: 0 },
         );
 
-        const auditR = await db.query<{ count: string; first_hash: string | null; last_hash: string | null }>(
+        const auditR = await db.query<{
+          count: string;
+          first_hash: string | null;
+          last_hash: string | null;
+        }>(
           `SELECT COUNT(*)::text AS count,
                   MIN(hash) FILTER (WHERE prev_hash IS NULL) AS first_hash,
                   (SELECT hash FROM mod_migrator_learndash_audit_events
@@ -1978,9 +2197,12 @@ const routes: ModuleRoute[] = [
       const id = req.params['id'];
       if (!id) return err(400, 'VALIDATION_ERROR', 'falta :id.');
       const rawLimit = Number(req.query['limit']);
-      const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(200, Math.floor(rawLimit)) : 20;
-      const phaseFilter = typeof req.query['phase'] === 'string' ? (req.query['phase'] as string) : null;
-      const entityFilter = typeof req.query['entity'] === 'string' ? (req.query['entity'] as string) : null;
+      const limit =
+        Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(200, Math.floor(rawLimit)) : 20;
+      const phaseFilter =
+        typeof req.query['phase'] === 'string' ? (req.query['phase'] as string) : null;
+      const entityFilter =
+        typeof req.query['entity'] === 'string' ? (req.query['entity'] as string) : null;
       try {
         const conditions = ['tenant_id = $1::uuid', 'job_id = $2::uuid'];
         const params: unknown[] = [auth.tenantId, id];
@@ -2047,7 +2269,7 @@ async function onInstall(ctx: ModuleInstallContext): Promise<void> {
     // lo vea en logs.
     ctx.log(
       'warn',
-      'mod.migrator-learndash: ctx.db NO inyectado — los handlers /jobs devolverán 503 hasta que actualicés el host a alpha.51+.',
+      'mod.migrator-learndash: ctx.db NO inyectado — los handlers /jobs devolverán 503 hasta que actualices el host a alpha.51+.',
     );
   }
 }
@@ -2106,7 +2328,10 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
     return { status: 'failed', reason: `db_error_reading_job: ${msg}` };
   }
   if (!job) {
-    ctx.log('warn', `tick ${tickIndex}: job ${jobId} no encontrado — fue borrado o el ID es inválido.`);
+    ctx.log(
+      'warn',
+      `tick ${tickIndex}: job ${jobId} no encontrado — fue borrado o el ID es inválido.`,
+    );
     return { status: 'failed', reason: 'JOB_NOT_FOUND' };
   }
 
@@ -2178,7 +2403,8 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
         // ejecutarán al final del extract antes de transicionar.
 
         const job0 = job;
-        const sourceProfile = (job0 as unknown as { sourceProfile?: Record<string, unknown> }).sourceProfile;
+        const sourceProfile = (job0 as unknown as { sourceProfile?: Record<string, unknown> })
+          .sourceProfile;
         // sourceProfile no viene en JobRecord — leemos de BD si falta.
         let baseUrl: string | null = (sourceProfile?.['baseUrl'] as string) ?? null;
         let username: string | null = (sourceProfile?.['username'] as string) ?? null;
@@ -2199,13 +2425,197 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
 
         const appPassword = await readJobAppPassword(ctx.secrets, jobId);
         if (!appPassword) {
-          ctx.log('error', `tick ${tickIndex}: appPassword no encontrado para job ${jobId}. Marcando failed.`);
+          ctx.log(
+            'error',
+            `tick ${tickIndex}: appPassword no encontrado para job ${jobId}. Marcando failed.`,
+          );
           await setJobStatus(db, tenantId, jobId, 'failed', nowIso());
           return { status: 'failed', reason: 'CREDENTIALS_NOT_FOUND' };
         }
         const authHeader = basicAuthHeader(username, appPassword);
 
-        const cursor = parseExtractCursor(job0.progress);
+        let cursor = parseExtractCursor(job0.progress);
+
+        // Sample mode (v1.0.32+): si el job se creó con options.sample y este
+        // es el primer tick del extract (cursor fresh — completed vacío),
+        // forzar subphase 'sample-pick' antes del paginate global. Sin esto,
+        // un job sample arrancaría paginate normal y traería los miles de
+        // usuarios del origen igual que un import full — exactamente el bug
+        // que el flag está para evitar.
+        const sampleCfg = readSampleConfig((job0 as { options?: unknown }).options);
+        const isFreshExtract =
+          cursor.completed.length === 0 &&
+          (cursor.totalsPerEntity == null || Object.keys(cursor.totalsPerEntity).length === 0);
+        if (
+          sampleCfg &&
+          isFreshExtract &&
+          cursor.subphase !== 'sample-pick' &&
+          cursor.subphase !== 'fixup'
+        ) {
+          cursor = { ...cursor, subphase: 'sample-pick' };
+        }
+
+        // SUBPHASE SAMPLE-PICK: ejecuta UNA VEZ por job en sample mode.
+        // Elige UN curso aleatorio del origen que tenga ≥1 alumno enrolado,
+        // inyecta a stg_courses ese único curso + a stg_users hasta N alumnos
+        // del curso, y avanza a subphase 'paginate' con users/courses/groups
+        // marcados como completed. El paginate normal continuará desde
+        // 'lessons' (perCourse), procesando solo el único curso del staging.
+        //
+        // Coste: 1 paginación completa de /sfwd-courses (1-N requests) + un
+        // /sfwd-courses/{id}/users por candidato hasta encontrar uno con
+        // alumnos. Para academias típicas (<500 cursos, mayoría con alumnos)
+        // termina en 2-5 requests.
+        //
+        // Fallback: si NINGÚN curso del origen tiene alumnos, procesamos el
+        // primer shuffled sin enrollments (sample sigue siendo útil para
+        // validar el flow estructural extract→transform→load) + warning.
+        if (cursor.subphase === 'sample-pick') {
+          if (!sampleCfg) {
+            // Defensa: cursor dice sample-pick pero options no tiene sample.
+            // Reset a paginate normal para no quedar atascado.
+            cursor = emptyExtractCursor();
+            await setJobProgress(db, tenantId, jobId, cursor as unknown as Record<string, unknown>);
+            ctx.log(
+              'warn',
+              `tick ${tickIndex}: cursor en sample-pick sin options.sample. Reset a paginate.`,
+            );
+            return { status: 'continue', delaySec: 0 };
+          }
+
+          // 1) Listar todos los cursos del origen (paginado).
+          const allCourses: Array<{
+            id: number;
+            title?: { rendered?: string } | string;
+            slug?: string;
+          }> = [];
+          let coursePage = 1;
+          // Hard cap por defensa contra fuente que pretenda paginar infinitamente.
+          const MAX_COURSE_PAGES = 50;
+          while (coursePage <= MAX_COURSE_PAGES) {
+            let pr;
+            try {
+              pr = await fetchOneWpPage<{
+                id: number;
+                title?: { rendered?: string } | string;
+                slug?: string;
+              }>(ctx.http, baseUrl, 'sfwd-courses', authHeader, coursePage, 100, 'ldlms/v1');
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e);
+              ctx.log(
+                'warn',
+                `sample-pick: paginar courses page=${coursePage} falló: ${msg}. Re-encolando.`,
+              );
+              return { status: 'continue', delaySec: 30 };
+            }
+            allCourses.push(...pr.items);
+            if (
+              pr.items.length === 0 ||
+              (pr.totalPages !== undefined && coursePage >= pr.totalPages)
+            ) {
+              break;
+            }
+            coursePage += 1;
+          }
+
+          if (allCourses.length === 0) {
+            await setJobStatus(db, tenantId, jobId, 'failed', nowIso());
+            await cleanupJobAppPassword(ctx.secrets, jobId, ctx.log);
+            ctx.log(
+              'error',
+              `sample-pick: el origen no devolvió ningún curso. Job marcado failed.`,
+            );
+            return { status: 'failed', reason: 'SAMPLE_NO_COURSES_IN_SOURCE' };
+          }
+
+          // 2) Shuffle Fisher-Yates con Math.random — no necesitamos determinismo
+          // en producción (cada job de prueba debe elegir distinto si se reintenta).
+          for (let i = allCourses.length - 1; i > 0; i -= 1) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [allCourses[i], allCourses[j]] = [allCourses[j]!, allCourses[i]!];
+          }
+
+          // 3) Buscar primer curso con ≥1 alumno enrolado.
+          let selectedCourse: (typeof allCourses)[number] | null = null;
+          let selectedUsers: Array<Record<string, unknown> & { id: number }> = [];
+          const targetUsers = sampleCfg.usersPerCourse;
+          for (const candidate of allCourses) {
+            try {
+              // GET /sfwd-courses/{id}/users devuelve WpUser[] con detalles
+              // completos (no solo IDs). Limitamos via per_page = targetUsers
+              // (la API respeta el cap; si el curso tiene menos, devuelve todos).
+              const url = `${baseUrl}/wp-json/ldlms/v1/sfwd-courses/${candidate.id}/users?per_page=${targetUsers}&page=1`;
+              const r = await ctx.http.get(url, {
+                headers: { Authorization: authHeader, Accept: 'application/json' },
+                timeoutMs: 30_000,
+              });
+              if (r.status >= 400) continue;
+              const parsed: unknown = JSON.parse(r.body);
+              if (Array.isArray(parsed) && parsed.length >= 1) {
+                selectedCourse = candidate;
+                selectedUsers = parsed.slice(0, targetUsers) as typeof selectedUsers;
+                break;
+              }
+            } catch {
+              // Curso candidato dio error en /users — pasamos al siguiente.
+            }
+          }
+
+          let fallbackNote: string | null = null;
+          if (!selectedCourse) {
+            // Ningún curso con alumnos. Tomamos el primer shuffled.
+            selectedCourse = allCourses[0]!;
+            selectedUsers = [];
+            fallbackNote =
+              'Ningún curso del origen tiene alumnos enrolados. Sample procesará solo la estructura del curso (sin alumnos).';
+            ctx.log('warn', `sample-pick: ${fallbackNote} courseId=${selectedCourse.id}.`);
+          }
+
+          // 4) Upsert curso elegido a stg_courses.
+          await upsertStgCourse(
+            db,
+            tenantId,
+            jobId,
+            String(selectedCourse.id),
+            selectedCourse,
+            computeChecksum(selectedCourse),
+          );
+
+          // 5) Upsert alumnos del sample a stg_users.
+          for (const u of selectedUsers) {
+            await upsertStgUser(db, tenantId, jobId, String(u.id), u, computeChecksum(u));
+          }
+
+          // 6) Avanzar cursor a paginate desde lessons.
+          // courses/users/groups quedan completed → no se iteran globalmente.
+          // lessons/topics/quizzes son perCourse y solo verán el único curso
+          // que acabamos de inyectar.
+          const newCursor: ExtractCursor = {
+            phase: 'extract',
+            subphase: 'paginate',
+            current: 'lessons',
+            page: 1,
+            courseIdx: 0,
+            completed: ['users', 'courses', 'groups'],
+            totalsPerEntity: {
+              users: selectedUsers.length,
+              courses: 1,
+              groups: 0,
+            },
+            sampleCourseId: String(selectedCourse.id),
+          };
+          await setJobProgress(
+            db,
+            tenantId,
+            jobId,
+            newCursor as unknown as Record<string, unknown>,
+          );
+          ctx.log(
+            'log',
+            `sample-pick OK: curso ${selectedCourse.id} (de ${allCourses.length} disponibles) con ${selectedUsers.length} alumnos. Avanza a paginate desde lessons.${fallbackNote ? ` ${fallbackNote}` : ''}`,
+          );
+          return { status: 'continue', delaySec: 0 };
+        }
 
         // SUBPHASE FIXUP: corregir parent_course_id en stg via /steps por curso.
         // Cada tick procesa UN curso (1 GET + N UPDATEs). Cuando agotamos
@@ -2234,7 +2644,10 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
             // Todos los cursos procesados — transicionar a transforming.
             const advanced = await tryTransition(db, tenantId, jobId, 'extracting', 'transforming');
             if (!advanced) return { status: 'continue', delaySec: 0 };
-            ctx.log('log', `tick ${tickIndex}: fixup completed (${totalCourses} cursos). Transition a transforming.`);
+            ctx.log(
+              'log',
+              `tick ${tickIndex}: fixup completed (${totalCourses} cursos). Transition a transforming.`,
+            );
             return { status: 'continue', delaySec: 0 };
           }
 
@@ -2246,7 +2659,10 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
               timeoutMs: 30_000,
             });
             if (resp.status >= 400) {
-              ctx.log('warn', `tick ${tickIndex}: fixup /steps curso ${courseSourceId} HTTP ${resp.status}: ${resp.body.slice(0, 200)}.`);
+              ctx.log(
+                'warn',
+                `tick ${tickIndex}: fixup /steps curso ${courseSourceId} HTTP ${resp.status}: ${resp.body.slice(0, 200)}.`,
+              );
             } else {
               const parsed: unknown = JSON.parse(resp.body);
               // LearnDash REST v1 /steps retorna un OBJETO jerárquico. La
@@ -2308,7 +2724,8 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                     const newParent = resolvedType === 'sfwd-lessons' ? id : parentLessonId;
                     if (value && typeof value === 'object') {
                       const innerSteps = (value as { steps?: unknown }).steps;
-                      if (innerSteps !== undefined && innerSteps !== null) walk(innerSteps, newParent);
+                      if (innerSteps !== undefined && innerSteps !== null)
+                        walk(innerSteps, newParent);
                       else walk(value, newParent);
                     }
                   } else if (value && typeof value === 'object') {
@@ -2369,7 +2786,10 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                     [JSON.stringify(parsedSections), tenantId, jobId, courseSourceId],
                   );
                 } catch (e) {
-                  ctx.log('warn', `fixup persist sections curso ${courseSourceId} falló: ${e instanceof Error ? e.message : e}`);
+                  ctx.log(
+                    'warn',
+                    `fixup persist sections curso ${courseSourceId} falló: ${e instanceof Error ? e.message : e}`,
+                  );
                 }
               }
 
@@ -2387,9 +2807,7 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                   // courseId pelado → module 'General' de fallback.
                   const sectionIdx = lessonToSection.get(step.id);
                   const moduleExtId =
-                    sectionIdx !== undefined
-                      ? `${courseSourceId}-s${sectionIdx}`
-                      : courseSourceId;
+                    sectionIdx !== undefined ? `${courseSourceId}-s${sectionIdx}` : courseSourceId;
                   const r = await db.execute(
                     `UPDATE mod_migrator_learndash_stg_lessons
                         SET parent_course_id = $1
@@ -2452,12 +2870,18 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                   ],
                 );
               } catch (e) {
-                ctx.log('warn', `fixup audit insert falló (no crítico): ${e instanceof Error ? e.message : e}`);
+                ctx.log(
+                  'warn',
+                  `fixup audit insert falló (no crítico): ${e instanceof Error ? e.message : e}`,
+                );
               }
             }
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            ctx.log('warn', `tick ${tickIndex}: fixup curso ${courseSourceId} excepción: ${msg}. Sigue al siguiente.`);
+            ctx.log(
+              'warn',
+              `tick ${tickIndex}: fixup curso ${courseSourceId} excepción: ${msg}. Sigue al siguiente.`,
+            );
           }
 
           const nextIdx = idx + 1;
@@ -2466,21 +2890,35 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
             courseIdx: nextIdx,
             fixupTotalCourses: totalCourses,
           };
-          await setJobProgress(db, tenantId, jobId, fixupCursor as unknown as Record<string, unknown>);
+          await setJobProgress(
+            db,
+            tenantId,
+            jobId,
+            fixupCursor as unknown as Record<string, unknown>,
+          );
           return { status: 'continue', delaySec: 0 };
         }
 
         const entity = EXTRACT_ENTITIES.find((e) => e.name === cursor.current);
         if (!entity) {
           // Cursor con entity inválida → reset al primero.
-          await setJobProgress(db, tenantId, jobId, emptyExtractCursor() as unknown as Record<string, unknown>);
+          await setJobProgress(
+            db,
+            tenantId,
+            jobId,
+            emptyExtractCursor() as unknown as Record<string, unknown>,
+          );
           return { status: 'continue', delaySec: 0 };
         }
 
         // Si la entity itera por curso (lessons/topics/quizzes en ldlms/v1),
         // resolver el courseId actual del staging. LearnDash REST v1 requiere
         // `?course=N` en estos endpoints o devuelve 404 "Invalid Curso ID".
-        let perCourseFilter: { courseSourceId: string; courseIdx: number; totalCourses: number } | null = null;
+        let perCourseFilter: {
+          courseSourceId: string;
+          courseIdx: number;
+          totalCourses: number;
+        } | null = null;
         if (entity.perCourse) {
           const coursesQ = await db.query<{ source_id: string }>(
             `SELECT source_id FROM mod_migrator_learndash_stg_courses
@@ -2502,8 +2940,16 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
               completed,
               totalsPerEntity: cursor.totalsPerEntity,
             };
-            await setJobProgress(db, tenantId, jobId, newCursor as unknown as Record<string, unknown>);
-            ctx.log('warn', `tick ${tickIndex}: ${entity.name} perCourse pero stg_courses vacío. Skip.`);
+            await setJobProgress(
+              db,
+              tenantId,
+              jobId,
+              newCursor as unknown as Record<string, unknown>,
+            );
+            ctx.log(
+              'warn',
+              `tick ${tickIndex}: ${entity.name} perCourse pero stg_courses vacío. Skip.`,
+            );
             return { status: 'continue', delaySec: 0 };
           }
           const idx = Math.min(cursor.courseIdx ?? 0, courseSourceIds.length - 1);
@@ -2516,7 +2962,12 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
 
         let pageResult;
         try {
-          pageResult = await fetchOneWpPage<{ id: number; course?: number; lesson?: number; topic?: number }>(
+          pageResult = await fetchOneWpPage<{
+            id: number;
+            course?: number;
+            lesson?: number;
+            topic?: number;
+          }>(
             ctx.http,
             baseUrl,
             entity.cpt,
@@ -2552,7 +3003,16 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                 await upsertStgCourse(db, tenantId, jobId, sourceId, item, checksum);
                 break;
               case 'lessons':
-                await upsertStgLesson(db, tenantId, jobId, sourceId, resolvedCourseId, 0, item, checksum);
+                await upsertStgLesson(
+                  db,
+                  tenantId,
+                  jobId,
+                  sourceId,
+                  resolvedCourseId,
+                  0,
+                  item,
+                  checksum,
+                );
                 break;
               case 'topics':
                 await upsertStgTopic(
@@ -2586,7 +3046,10 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
             }
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            ctx.log('warn', `extract upsert falló para ${entity.name}#${sourceId}: ${msg}. Saltando item.`);
+            ctx.log(
+              'warn',
+              `extract upsert falló para ${entity.name}#${sourceId}: ${msg}. Saltando item.`,
+            );
           }
         }
 
@@ -2611,7 +3074,12 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
               courseIdx: nextCourseIdx,
               totalsPerEntity: newTotals,
             };
-            await setJobProgress(db, tenantId, jobId, newCursor as unknown as Record<string, unknown>);
+            await setJobProgress(
+              db,
+              tenantId,
+              jobId,
+              newCursor as unknown as Record<string, unknown>,
+            );
             ctx.log(
               'log',
               `tick ${tickIndex}: extract ${entity.name} course ${perCourseFilter.courseSourceId} done (page ${cursor.page}, items=${pageResult.items.length}). Próximo: course #${nextCourseIdx + 1}/${perCourseFilter.totalCourses}.`,
@@ -2641,14 +3109,28 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
               completed,
               totalsPerEntity: newTotals,
             };
-            await setJobProgress(db, tenantId, jobId, newCursor as unknown as Record<string, unknown>);
+            await setJobProgress(
+              db,
+              tenantId,
+              jobId,
+              newCursor as unknown as Record<string, unknown>,
+            );
             ctx.log(
               'log',
-              `tick ${tickIndex}: paginate completed (${Object.entries(newTotals).map(([k, v]) => `${k}=${v}`).join(', ')}). Entrando a subphase fixup.`,
+              `tick ${tickIndex}: paginate completed (${Object.entries(newTotals)
+                .map(([k, v]) => `${k}=${v}`)
+                .join(', ')}). Entrando a subphase fixup.`,
             );
             return { status: 'continue', delaySec: 0 };
           }
-          newCursor = { ...cursor, current: next, page: 1, courseIdx: 0, completed, totalsPerEntity: newTotals };
+          newCursor = {
+            ...cursor,
+            current: next,
+            page: 1,
+            courseIdx: 0,
+            completed,
+            totalsPerEntity: newTotals,
+          };
         } else {
           newCursor = { ...cursor, page: cursor.page + 1, totalsPerEntity: newTotals };
         }
@@ -2676,7 +3158,11 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
         const table = STG_TABLES[cursor.current];
         if (!table) {
           // Cursor con entity desconocida — reset.
-          await setJobProgress(db, tenantId, jobId, { phase: 'transform', current: EXTRACT_ENTITIES[0]!.name, completed: [] } as unknown as Record<string, unknown>);
+          await setJobProgress(db, tenantId, jobId, {
+            phase: 'transform',
+            current: EXTRACT_ENTITIES[0]!.name,
+            completed: [],
+          } as unknown as Record<string, unknown>);
           return { status: 'continue', delaySec: 0 };
         }
         const batch = await listInvalidStg(db, table, tenantId, jobId, TRANSFORM_BATCH_SIZE);
@@ -2684,13 +3170,20 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
           const completed = [...cursor.completed, cursor.current];
           const next = nextTransformEntity({ ...cursor, completed });
           if (next === null) {
-            await setJobProgress(db, tenantId, jobId, { ...cursor, completed } as unknown as Record<string, unknown>);
+            await setJobProgress(db, tenantId, jobId, { ...cursor, completed } as unknown as Record<
+              string,
+              unknown
+            >);
             const advanced = await tryTransition(db, tenantId, jobId, 'transforming', 'loading');
             if (!advanced) return { status: 'continue', delaySec: 0 };
             ctx.log('log', `tick ${tickIndex}: transform completed. Transition a loading.`);
             return { status: 'continue', delaySec: 0 };
           }
-          await setJobProgress(db, tenantId, jobId, { ...cursor, current: next, completed } as unknown as Record<string, unknown>);
+          await setJobProgress(db, tenantId, jobId, {
+            ...cursor,
+            current: next,
+            completed,
+          } as unknown as Record<string, unknown>);
           return { status: 'continue', delaySec: 0 };
         }
         let okCount = 0;
@@ -2740,7 +3233,9 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
           // de la section que el load creó al cargar el course.
           if (
             result.ok &&
-            (cursor.current === 'lessons' || cursor.current === 'topics' || cursor.current === 'quizzes') &&
+            (cursor.current === 'lessons' ||
+              cursor.current === 'topics' ||
+              cursor.current === 'quizzes') &&
             row.parent_course_id &&
             row.parent_course_id.includes('-')
           ) {
@@ -2752,13 +3247,30 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
             await setStgCanonical(db, table, row.id, result.canonical, null);
             okCount += 1;
           } else {
-            const errs = { errorCode: result.errorCode, errorMessage: result.errorMessage, warnings: result.warnings };
+            const errs = {
+              errorCode: result.errorCode,
+              errorMessage: result.errorMessage,
+              warnings: result.warnings,
+            };
             await setStgCanonical(db, table, row.id, null, errs);
-            await appendDlq(db, tenantId, jobId, cursor.current, row.source_id, 'transform', result.errorCode, result.errorMessage, row.raw_payload);
+            await appendDlq(
+              db,
+              tenantId,
+              jobId,
+              cursor.current,
+              row.source_id,
+              'transform',
+              result.errorCode,
+              result.errorMessage,
+              row.raw_payload,
+            );
             dlqCount += 1;
           }
         }
-        ctx.log('log', `tick ${tickIndex}: transform ${cursor.current} batch ok=${okCount} dlq=${dlqCount}.`);
+        ctx.log(
+          'log',
+          `tick ${tickIndex}: transform ${cursor.current} batch ok=${okCount} dlq=${dlqCount}.`,
+        );
         return { status: 'continue', delaySec: 0 };
       }
 
@@ -2782,9 +3294,16 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
 
         const cursor = parseLoadCursor(job.progress);
         const table = STG_TABLES[cursor.current];
-        const didacta = ctx.didacta as Record<string, { upsertByExternalRef: (input: Record<string, unknown>) => Promise<{ id: string }> }>;
+        const didacta = ctx.didacta as Record<
+          string,
+          { upsertByExternalRef: (input: Record<string, unknown>) => Promise<{ id: string }> }
+        >;
         if (!table) {
-          await setJobProgress(db, tenantId, jobId, { phase: 'load', current: 'users', completed: [] } as unknown as Record<string, unknown>);
+          await setJobProgress(db, tenantId, jobId, {
+            phase: 'load',
+            current: 'users',
+            completed: [],
+          } as unknown as Record<string, unknown>);
           return { status: 'continue', delaySec: 0 };
         }
         const batch = await listValidUnloadedStg(db, table, tenantId, jobId, LOAD_BATCH_SIZE);
@@ -2794,13 +3313,20 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
           const idx = loadOrder.indexOf(cursor.current);
           const next = idx >= 0 && idx + 1 < loadOrder.length ? loadOrder[idx + 1]! : null;
           if (next === null) {
-            await setJobProgress(db, tenantId, jobId, { ...cursor, completed } as unknown as Record<string, unknown>);
+            await setJobProgress(db, tenantId, jobId, { ...cursor, completed } as unknown as Record<
+              string,
+              unknown
+            >);
             const advanced = await tryTransition(db, tenantId, jobId, 'loading', 'reconciling');
             if (!advanced) return { status: 'continue', delaySec: 0 };
             ctx.log('log', `tick ${tickIndex}: load completed. Transition a reconciling.`);
             return { status: 'continue', delaySec: 0 };
           }
-          await setJobProgress(db, tenantId, jobId, { ...cursor, current: next, completed } as unknown as Record<string, unknown>);
+          await setJobProgress(db, tenantId, jobId, {
+            ...cursor,
+            current: next,
+            completed,
+          } as unknown as Record<string, unknown>);
           return { status: 'continue', delaySec: 0 };
         }
         // Adapter canonical → DidactaUpsertXInput por entity. Maneja los
@@ -2813,6 +3339,33 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
         let skipCount = 0;
         for (const row of batch) {
           const canonical = (row.canonical ?? {}) as Record<string, unknown>;
+          // v1.0.33: si el row ya estaba marcado con un sentinel `!SKIP:%`
+          // de un release anterior (ej. ADAPTER_TOPIC_SKIPPED, ADAPTER_GROUPS_NO_TARGET),
+          // dejamos una entry en el DLQ ANTES de re-procesarlo. Esto cubre
+          // el reporte del operador que no veía por qué se "perdían" 20
+          // topics y 8 groups: el código anterior los saltaba silencioso.
+          // El re-procesado posterior puede cargarlos (topics → lesson) o
+          // re-failearlos (groups → ADAPTER_GROUPS_NOT_SUPPORTED). En cualquier
+          // caso queda traza explícita.
+          const priorTarget = row.target_id;
+          if (typeof priorTarget === 'string' && priorTarget.startsWith('!SKIP:')) {
+            const priorCode = priorTarget.slice('!SKIP:'.length);
+            await appendDlq(
+              db,
+              tenantId,
+              jobId,
+              cursor.current,
+              row.source_id,
+              'load',
+              'SKIP_ALREADY_LOADED_IN_PREVIOUS_RUN',
+              `Esta fila estaba marcada con sentinel skip (${priorCode}) por una versión previa del adapter. Antes de v1.0.33 esos rows quedaban silenciosamente fuera del re-procesado y el operador no podía diagnosticarlo. v1.0.33 los re-evalúa contra el adapter actual: si el adapter ahora sabe cargarlos, se cargarán; si no, quedarán como entries DLQ con su código real.`,
+              row.raw_payload,
+              canonical,
+            );
+            // No incrementamos dlqCount aquí — la visibility entry no cuenta
+            // como "failure", es una nota informativa. Si el re-procesado
+            // falla, el código de abajo agregará la entry de failure real.
+          }
           const adapted = adaptCanonicalToDidacta(cursor.current, canonical);
           if (!adapted.ok) {
             if (adapted.skip) {
@@ -2821,7 +3374,18 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
               await setStgLoaded(db, table, row.id, `!SKIP:${adapted.code}`);
               skipCount += 1;
             } else {
-              await appendDlq(db, tenantId, jobId, cursor.current, row.source_id, 'load', adapted.code, adapted.message, row.raw_payload, canonical);
+              await appendDlq(
+                db,
+                tenantId,
+                jobId,
+                cursor.current,
+                row.source_id,
+                'load',
+                adapted.code,
+                adapted.message,
+                row.raw_payload,
+                canonical,
+              );
               // Marcamos también con sentinel para no reprocesar en bucle.
               await setStgLoaded(db, table, row.id, `!FAIL:${adapted.code}`);
               dlqCount += 1;
@@ -2830,7 +3394,18 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
           }
           const apiObj = didacta[adapted.ns];
           if (!apiObj || typeof apiObj.upsertByExternalRef !== 'function') {
-            await appendDlq(db, tenantId, jobId, cursor.current, row.source_id, 'load', 'DIDACTA_NS_MISSING', `ctx.didacta.${adapted.ns} no disponible`, row.raw_payload, canonical);
+            await appendDlq(
+              db,
+              tenantId,
+              jobId,
+              cursor.current,
+              row.source_id,
+              'load',
+              'DIDACTA_NS_MISSING',
+              `ctx.didacta.${adapted.ns} no disponible`,
+              row.raw_payload,
+              canonical,
+            );
             await setStgLoaded(db, table, row.id, '!FAIL:NS');
             dlqCount += 1;
             continue;
@@ -2879,7 +3454,10 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                       await modulesApi.upsertByExternalRef({
                         externalSource: 'learndash',
                         externalId: courseSourceId,
-                        courseExternalRef: { externalSource: 'learndash', externalId: courseSourceId },
+                        courseExternalRef: {
+                          externalSource: 'learndash',
+                          externalId: courseSourceId,
+                        },
                         title: 'General',
                         position: 0,
                       });
@@ -2895,7 +3473,11 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                   // Modules por section (course builder de LearnDash).
                   const sections = canonical['sections'];
                   if (Array.isArray(sections)) {
-                    for (const sec of sections as Array<{ idx: number; title: string; lessonIds?: number[] }>) {
+                    for (const sec of sections as Array<{
+                      idx: number;
+                      title: string;
+                      lessonIds?: number[];
+                    }>) {
                       if (!sec || typeof sec.title !== 'string') continue;
                       try {
                         await modulesApi.upsertByExternalRef({
@@ -2924,12 +3506,26 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
           } catch (e) {
             const code = (e as { code?: string })?.code ?? 'DIDACTA_UPSERT_FAILED';
             const msg = e instanceof Error ? e.message : String(e);
-            await appendDlq(db, tenantId, jobId, cursor.current, row.source_id, 'load', code, msg, row.raw_payload, canonical);
+            await appendDlq(
+              db,
+              tenantId,
+              jobId,
+              cursor.current,
+              row.source_id,
+              'load',
+              code,
+              msg,
+              row.raw_payload,
+              canonical,
+            );
             await setStgLoaded(db, table, row.id, '!FAIL:DIDACTA');
             dlqCount += 1;
           }
         }
-        ctx.log('log', `tick ${tickIndex}: load ${cursor.current} batch ok=${okCount} dlq=${dlqCount} skip=${skipCount}.`);
+        ctx.log(
+          'log',
+          `tick ${tickIndex}: load ${cursor.current} batch ok=${okCount} dlq=${dlqCount} skip=${skipCount}.`,
+        );
         return { status: 'continue', delaySec: 0 };
       }
 
@@ -2970,7 +3566,13 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
               WHERE tenant_id = $1::uuid AND job_id = $2::uuid`,
             [tenantId, jobId],
           );
-          const c = counts.rows[0] ?? { staged_count: '0', valid_count: '0', loaded_count: '0', skipped_count: '0', failed_target_count: '0' };
+          const c = counts.rows[0] ?? {
+            staged_count: '0',
+            valid_count: '0',
+            loaded_count: '0',
+            skipped_count: '0',
+            failed_target_count: '0',
+          };
           const staged = Number(c.staged_count);
           const valid = Number(c.valid_count);
           const loaded = Number(c.loaded_count);
@@ -3021,14 +3623,27 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
           `INSERT INTO mod_migrator_learndash_audit_events
              (tenant_id, job_id, actor, action, entity_type, entity_id, meta, prev_hash, hash)
            VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8, $9)`,
-          [tenantId, jobId, 'system', 'phase.completed', null, null, JSON.stringify(body), prevHash, hash],
+          [
+            tenantId,
+            jobId,
+            'system',
+            'phase.completed',
+            null,
+            null,
+            JSON.stringify(body),
+            prevHash,
+            hash,
+          ],
         );
 
         const advanced = await tryTransition(db, tenantId, jobId, 'reconciling', 'completed');
         if (!advanced) return { status: 'continue', delaySec: 0 };
         await setJobStatus(db, tenantId, jobId, 'completed', nowIso());
         await cleanupJobAppPassword(ctx.secrets, jobId, ctx.log);
-        ctx.log('log', `tick ${tickIndex}: job ${jobId} completed (ET-004 reports + ET-005 audit chain emitidos).`);
+        ctx.log(
+          'log',
+          `tick ${tickIndex}: job ${jobId} completed (ET-004 reports + ET-005 audit chain emitidos).`,
+        );
         return { status: 'completed' };
       }
 
@@ -3056,6 +3671,16 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
 // BullMQ si el manifest declara `jobLifecycle.onTickFn = 'onJobTick'`.
 
 export { manifest, routes, onInstall, onUninstall, onJobTick };
+// Helpers exportados solo para testing del state machine (sample mode).
+// El sandbox del host NO los consume — lee únicamente las exports listadas
+// arriba via `module.exports[fn]`. Re-exportar para vitest es seguro.
+export { readSampleConfig, parseExtractCursor, emptyExtractCursor };
+export type { ExtractCursor };
+// v1.0.33: exportamos `adaptCanonicalToDidacta` para que los unit tests de
+// topics/groups puedan invocarlo sin levantar todo el state machine del job.
+// El sandbox NO lo consume — sigue siendo uso interno del módulo (lo invoca
+// `onJobTick` en el case `'loading'`).
+export { adaptCanonicalToDidacta };
 // `paginateWp` se exporta para tests + para el extract phase del job
 // cuando se cablee. NO se incluye en module.exports porque el host
 // solo consume `{ onInstall, onUninstall, routes }` — el helper es

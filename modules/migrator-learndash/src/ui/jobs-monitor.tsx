@@ -47,7 +47,13 @@ const ACTIVE_STATES: ReadonlySet<JobStatus['status']> = new Set([
 const POLL_INTERVAL_MS = 3000;
 
 /// Mapa status → variante de badge (alineado con badge.tsx primitives del host).
-const STATUS_BADGE: Record<JobStatus['status'], { variant: 'primary' | 'info' | 'warning' | 'success' | 'danger' | 'muted' | 'outline'; label: string }> = {
+const STATUS_BADGE: Record<
+  JobStatus['status'],
+  {
+    variant: 'primary' | 'info' | 'warning' | 'success' | 'danger' | 'muted' | 'outline';
+    label: string;
+  }
+> = {
   pending: { variant: 'muted', label: 'Pendiente' },
   preflight: { variant: 'info', label: 'Preflight' },
   extracting: { variant: 'info', label: 'Extrayendo' },
@@ -93,7 +99,8 @@ function parseProgressCursor(progress: unknown): ExtractCursorView | null {
       current: p.current,
       page: typeof p.page === 'number' ? p.page : 0,
       completed: Array.isArray(p.completed) ? p.completed : undefined,
-      totalsPerEntity: p.totalsPerEntity && typeof p.totalsPerEntity === 'object' ? p.totalsPerEntity : undefined,
+      totalsPerEntity:
+        p.totalsPerEntity && typeof p.totalsPerEntity === 'object' ? p.totalsPerEntity : undefined,
     };
   }
   return null;
@@ -104,7 +111,9 @@ function formatCursor(job: JobStatus): string {
   if (!c) return job.status;
   if (c.phase === 'extract') {
     const totals = c.totalsPerEntity
-      ? Object.entries(c.totalsPerEntity).map(([k, v]) => `${k}=${v}`).join(', ')
+      ? Object.entries(c.totalsPerEntity)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(', ')
       : '';
     return `Extract: ${c.current} página ${c.page}${totals ? ` (totales: ${totals})` : ''}`;
   }
@@ -123,7 +132,11 @@ export function JobsMonitor(): React.ReactElement {
   const [jobs, setJobs] = useState<JobStatus[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<{ report?: JobReport; dlq?: DlqPage; loading: boolean } | null>(null);
+  const [detail, setDetail] = useState<{
+    report?: JobReport;
+    dlq?: DlqPage;
+    loading: boolean;
+  } | null>(null);
   const [, forceTick] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const jobsRef = useRef<JobStatus[] | null>(null);
@@ -201,7 +214,11 @@ export function JobsMonitor(): React.ReactElement {
   };
 
   if (jobs === null) {
-    return <Card><CardContent className="p-6 text-sm text-text-muted">Cargando jobs…</CardContent></Card>;
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm text-text-muted">Cargando jobs…</CardContent>
+      </Card>
+    );
   }
 
   if (loadError) {
@@ -209,7 +226,9 @@ export function JobsMonitor(): React.ReactElement {
       <Card>
         <CardContent className="p-6 space-y-3">
           <p className="text-sm text-destructive">Error cargando jobs: {loadError}</p>
-          <Button size="sm" onClick={() => void fetchJobs()}>Reintentar</Button>
+          <Button size="sm" onClick={() => void fetchJobs()}>
+            Reintentar
+          </Button>
         </CardContent>
       </Card>
     );
@@ -220,7 +239,9 @@ export function JobsMonitor(): React.ReactElement {
       <Card>
         <CardContent className="p-6 space-y-2 text-sm text-text-muted">
           <p>Aún no hay migraciones para este tenant.</p>
-          <p>Creá una desde la pestaña <strong>Crear migración</strong>.</p>
+          <p>
+            Crea una desde la pestaña <strong>Crear migración</strong>.
+          </p>
         </CardContent>
       </Card>
     );
@@ -237,12 +258,16 @@ export function JobsMonitor(): React.ReactElement {
             ? `${active.length} migración(es) en curso · auto-refresh cada ${POLL_INTERVAL_MS / 1000}s`
             : 'Sin migraciones activas en este momento'}
         </p>
-        <Button size="sm" variant="ghost" onClick={() => void fetchJobs()}>↻ Refrescar</Button>
+        <Button size="sm" variant="ghost" onClick={() => void fetchJobs()}>
+          ↻ Refrescar
+        </Button>
       </div>
 
       {active.length > 0 && (
         <section className="space-y-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-text-muted">En curso</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-text-muted">
+            En curso
+          </h3>
           {active.map((job) => (
             <JobCard
               key={job.id}
@@ -258,7 +283,9 @@ export function JobsMonitor(): React.ReactElement {
 
       {terminal.length > 0 && (
         <section className="space-y-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-text-muted">Historial</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-text-muted">
+            Historial
+          </h3>
           {terminal.map((job) => (
             <JobCard
               key={job.id}
@@ -312,14 +339,13 @@ function JobCard({
             <div className="flex items-center gap-2 flex-wrap">
               <Badge variant={badge.variant}>{badge.label}</Badge>
               <span className="text-xs text-text-muted">
-                {elapsedSince(job.startedAt)} {isActive ? 'en ejecución' : `· terminó ${job.completedAt ? new Date(job.completedAt).toLocaleString() : ''}`}
+                {elapsedSince(job.startedAt)}{' '}
+                {isActive
+                  ? 'en ejecución'
+                  : `· terminó ${job.completedAt ? new Date(job.completedAt).toLocaleString() : ''}`}
               </span>
             </div>
-            {isActive && (
-              <p className="text-xs text-text-muted font-mono pt-1">
-                {cursorText}
-              </p>
-            )}
+            {isActive && <p className="text-xs text-text-muted font-mono pt-1">{cursorText}</p>}
             {job.error && (
               <p className="text-xs text-destructive pt-1">
                 <strong>{job.error.code}:</strong> {job.error.message}
@@ -332,20 +358,30 @@ function JobCard({
             </Button>
             {onCancel && (
               <>
-                <Button size="sm" variant="destructive" onClick={() => setCancelDialogOpen(true)}>Cancelar</Button>
+                <Button size="sm" variant="destructive" onClick={() => setCancelDialogOpen(true)}>
+                  Cancelar
+                </Button>
                 <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>¿Cancelar esta migración?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        El job dejará de progresar después del tick actual. Lo que ya se cargó al core
-                        se mantiene (idempotencia por externalRef permite re-correr una migración nueva
-                        sin duplicar). Los rows en staging quedan para auditoría según retentionDays.
+                        El job dejará de progresar después del tick actual. Lo que ya se cargó al
+                        core se mantiene (idempotencia por externalRef permite re-correr una
+                        migración nueva sin duplicar). Los rows en staging quedan para auditoría
+                        según retentionDays.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel onClick={() => setCancelDialogOpen(false)}>Volver</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => { setCancelDialogOpen(false); onCancel(); }}>
+                      <AlertDialogCancel onClick={() => setCancelDialogOpen(false)}>
+                        Volver
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => {
+                          setCancelDialogOpen(false);
+                          onCancel();
+                        }}
+                      >
                         Sí, cancelar
                       </AlertDialogAction>
                     </AlertDialogFooter>
@@ -365,7 +401,11 @@ function JobCard({
   );
 }
 
-function JobDetail({ detail }: { detail: { report?: JobReport; dlq?: DlqPage; loading: boolean } | null }): React.ReactElement {
+function JobDetail({
+  detail,
+}: {
+  detail: { report?: JobReport; dlq?: DlqPage; loading: boolean } | null;
+}): React.ReactElement {
   if (!detail || detail.loading) {
     return <p className="text-sm text-text-muted">Cargando detalle…</p>;
   }
@@ -393,7 +433,9 @@ function JobDetail({ detail }: { detail: { report?: JobReport; dlq?: DlqPage; lo
                     <td className="py-1.5 pr-3 font-mono">{e.entityType}</td>
                     <td className="py-1.5 pr-3 text-right">{e.stagedCount}</td>
                     <td className="py-1.5 pr-3 text-right">{e.validCount}</td>
-                    <td className="py-1.5 pr-3 text-right font-semibold text-success-700">{e.loadedCount}</td>
+                    <td className="py-1.5 pr-3 text-right font-semibold text-success-700">
+                      {e.loadedCount}
+                    </td>
                     <td className="py-1.5 pr-3 text-right text-text-muted">{e.skippedCount}</td>
                     <td className="py-1.5 pr-3 text-right text-destructive">{e.failedCount}</td>
                   </tr>
@@ -404,30 +446,48 @@ function JobDetail({ detail }: { detail: { report?: JobReport; dlq?: DlqPage; lo
                   <td className="py-2 pr-3">Total</td>
                   <td className="py-2 pr-3 text-right">—</td>
                   <td className="py-2 pr-3 text-right">—</td>
-                  <td className="py-2 pr-3 text-right text-success-700">{report.totals.loadedCount}</td>
-                  <td className="py-2 pr-3 text-right text-text-muted">{report.totals.skippedCount}</td>
-                  <td className="py-2 pr-3 text-right text-destructive">{report.totals.failedCount}</td>
+                  <td className="py-2 pr-3 text-right text-success-700">
+                    {report.totals.loadedCount}
+                  </td>
+                  <td className="py-2 pr-3 text-right text-text-muted">
+                    {report.totals.skippedCount}
+                  </td>
+                  <td className="py-2 pr-3 text-right text-destructive">
+                    {report.totals.failedCount}
+                  </td>
                 </tr>
               </tfoot>
             </table>
           </div>
           {report.auditChain.eventsCount > 0 && (
             <p className="text-xs text-text-muted">
-              Cadena de auditoría: {report.auditChain.eventsCount} evento(s) · {report.auditChain.verified ? '✓ integridad verificada' : '✗ integridad no verificable'}
+              Cadena de auditoría: {report.auditChain.eventsCount} evento(s) ·{' '}
+              {report.auditChain.verified
+                ? '✓ integridad verificada'
+                : '✗ integridad no verificable'}
             </p>
           )}
         </div>
       ) : (
-        <p className="text-sm text-text-muted">Aún no hay datos de reconciliación. El reporte se genera en la fase final del job.</p>
+        <p className="text-sm text-text-muted">
+          Aún no hay datos de reconciliación. El reporte se genera en la fase final del job.
+        </p>
       )}
 
       {dlq && (
         <div className="space-y-2">
           <h4 className="text-sm font-semibold">
-            Dead Letter Queue {dlq.total > 0 && <span className="text-text-muted font-normal">({dlq.total} fila(s), mostrando {dlq.items.length})</span>}
+            Dead Letter Queue{' '}
+            {dlq.total > 0 && (
+              <span className="text-text-muted font-normal">
+                ({dlq.total} fila(s), mostrando {dlq.items.length})
+              </span>
+            )}
           </h4>
           {dlq.items.length === 0 ? (
-            <p className="text-xs text-text-muted">Sin errores registrados — todas las filas procesadas OK.</p>
+            <p className="text-xs text-text-muted">
+              Sin errores registrados — todas las filas procesadas OK.
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -445,7 +505,9 @@ function JobDetail({ detail }: { detail: { report?: JobReport; dlq?: DlqPage; lo
                     <tr key={`${e.entityType}-${e.sourceId}-${idx}`} className="border-b align-top">
                       <td className="py-1.5 pr-3 font-mono">{e.entityType}</td>
                       <td className="py-1.5 pr-3 font-mono">{e.sourceId ?? '—'}</td>
-                      <td className="py-1.5 pr-3"><Badge variant="outline">{e.phase}</Badge></td>
+                      <td className="py-1.5 pr-3">
+                        <Badge variant="outline">{e.phase}</Badge>
+                      </td>
                       <td className="py-1.5 pr-3 font-mono">{e.errorCode}</td>
                       <td className="py-1.5 pr-3 text-text-muted">{e.errorMessage}</td>
                     </tr>

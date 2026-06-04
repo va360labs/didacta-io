@@ -1,6 +1,6 @@
 {
   "name": "@didacta/mod-migrator-learndash",
-  "version": "1.0.28",
+  "version": "1.0.38",
   "private": true,
   "description": "Módulo migrador WordPress+LearnDash → Didacta. Wizard didáctico, ETL con staging, reportes auditables.",
   "main": "./dist/index.js",
@@ -30,11 +30,13 @@
   "dependencies": {
     "@didacta/core-kernel": "workspace:*",
     "fast-json-stable-stringify": "^2.1.0",
+    "rxjs": "^7.8.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "esbuild": "^0.24.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

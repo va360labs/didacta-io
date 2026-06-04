@@ -19,6 +19,20 @@ export interface SourceCredentials {
   appPassword: string;
 }
 
+/**
+ * Modo "muestra" del importador. Cuando este campo está presente, el job
+ * importa un solo curso aleatorio (de los que tienen alumnos) + N alumnos
+ * + la jerarquía del curso, en lugar del scope completo. La integración
+ * completa posterior se ejecuta sin este campo y NO duplica las entidades
+ * del sample (loader idempotente por sourceId).
+ */
+export interface SampleConfig {
+  /** Nº de cursos a incluir. v1: siempre 1. */
+  courses: number;
+  /** Máximo de alumnos a importar del curso elegido. */
+  usersPerCourse: number;
+}
+
 export interface ImportOptions {
   dedupeUsersBy: ('email' | 'username')[];
   passwordStrategy: 'activation_reset' | 'preserve_hash';
@@ -34,7 +48,8 @@ export interface ImportOptions {
     media: boolean;
     quizzes: boolean;
   };
-  dryRun: boolean;
+  /** Si está set, el job corre en modo muestra (ver SampleConfig). */
+  sample?: SampleConfig;
   retentionDays: number;
 }
 
@@ -126,7 +141,12 @@ export interface JobReport {
     skippedCount: number;
     failedCount: number;
   }[];
-  auditChain: { eventsCount: number; firstHash?: string | null; lastHash?: string | null; verified: boolean };
+  auditChain: {
+    eventsCount: number;
+    firstHash?: string | null;
+    lastHash?: string | null;
+    verified: boolean;
+  };
 }
 
 export interface DlqEntry {
@@ -158,7 +178,10 @@ export const migratorLearndashApi = {
       body: JSON.stringify({ credentials }),
     });
   },
-  async startJob(credentials: SourceCredentials, options: ImportOptions): Promise<StartJobResponse> {
+  async startJob(
+    credentials: SourceCredentials,
+    options: ImportOptions,
+  ): Promise<StartJobResponse> {
     return apiFetch(`${BASE}/jobs`, {
       method: 'POST',
       body: JSON.stringify({ credentials, options }),
@@ -176,7 +199,10 @@ export const migratorLearndashApi = {
   async getReport(jobId: string): Promise<JobReport> {
     return apiFetch(`${BASE}/jobs/${jobId}/report`, { method: 'GET' });
   },
-  async getDlq(jobId: string, opts: { limit?: number; phase?: string; entity?: string } = {}): Promise<DlqPage> {
+  async getDlq(
+    jobId: string,
+    opts: { limit?: number; phase?: string; entity?: string } = {},
+  ): Promise<DlqPage> {
     const params = new URLSearchParams();
     if (opts.limit) params.set('limit', String(opts.limit));
     if (opts.phase) params.set('phase', opts.phase);
