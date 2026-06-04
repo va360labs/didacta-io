@@ -1,0 +1,167 @@
+name: module-migrator-release
+
+# Release del módulo marketplace `mod.migrator-learndash` por TAG (cierra la
+# deuda de firmar el ZIP a mano en local). Construye el bundle, firma el
+# manifest con AWS KMS (`alias/didacta-issuer-2026`) y publica el ZIP firmado
+# como GitHub Release.
+#
+# Trigger: push de un tag `mod.migrator-learndash-v<semver>` (ej.
+# `mod.migrator-learndash-v1.0.39`) — namespaced para no chocar con los tags
+# `v*.*.*` del host (release.yml).
+#
+# ─── ENABLEMENT (one-time, lo provisiona el operador) ───────────────────────
+# Este workflow NO corre hasta que existan estos secrets en el repo:
+#   - AWS_KMS_ROLE_ARN     IAM role ARN que el runner asume vía OIDC; su policy
+#                          permite kms:Sign sobre alias/didacta-issuer-2026 y su
+#                          trust policy confía en el OIDC provider de GitHub para
+#                          este repo (token.actions.githubusercontent.com).
+#   - SIGNING_REPO_TOKEN   PAT / GitHub App token con read en el repo privado
+#                          va360labs/didacta-marketplace-signing (donde vive
+#                          sign-package.ts). GITHUB_TOKEN no alcanza otro repo.
+# Modo alternativo 'remote' (cuando el license-issuer esté deployado): definir
+#   SIGNING_MODE=remote + LICENSE_ISSUER_URL + LICENSE_ISSUER_BEARER_TOKEN, y el
+#   runner NO toca AWS (firma vía HTTPS). Ver didacta-marketplace-signing.
+# ────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    tags:
+      - 'mod.migrator-learndash-v*.*.*'
+      - 'mod.migrator-learndash-v*.*.*-*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versión a publicar (semver sin prefijo, ej. 1.0.39). Debe coincidir con package.json y module.json.'
+        required: true
+        type: string
+
+concurrency:
+  group: module-migrator-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # OIDC con AWS
+  contents: write # crear el GitHub Release
+
+env:
+  MODULE_DIR: modules/migrator-learndash
+  MODULE_NAME: mod.migrator-learndash
+  AWS_REGION: eu-west-1
+  KMS_KEY_ALIAS: alias/didacta-issuer-2026
+  KID: didacta-issuer-2026
+
+jobs:
+  release:
+    name: Build & sign mod.migrator-learndash
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve & validate version
+        id: ver
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            REF="${GITHUB_REF#refs/tags/}"            # mod.migrator-learndash-v1.0.39
+            VERSION="${REF#${MODULE_NAME}-v}"          # 1.0.39
+          fi
+          PKG_V="$(node -p "require('./${MODULE_DIR}/package.json').version")"
+          MAN_V="$(node -p "require('./${MODULE_DIR}/module.json').version")"
+          echo "tag/input version: ${VERSION} | package.json: ${PKG_V} | module.json: ${MAN_V}"
+          if [[ "${VERSION}" != "${PKG_V}" || "${VERSION}" != "${MAN_V}" ]]; then
+            echo "::error::Version mismatch — tag=${VERSION} package.json=${PKG_V} module.json=${MAN_V}. Deben coincidir."
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.21.0
+          run_install: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build module (esbuild server + ui)
+        run: pnpm --filter @didacta/mod-migrator-learndash run build
+
+      - name: Prepare manifest (module.json → build/manifest.json)
+        run: |
+          mkdir -p "${MODULE_DIR}/build"
+          cp "${MODULE_DIR}/module.json" "${MODULE_DIR}/build/manifest.json"
+
+      - name: Checkout signing tools (private repo)
+        uses: actions/checkout@v4
+        with:
+          repository: va360labs/didacta-marketplace-signing
+          ref: main
+          path: signing-tools
+          token: ${{ secrets.SIGNING_REPO_TOKEN }}
+
+      - name: Install signing tools deps
+        working-directory: signing-tools
+        run: npm install --no-audit --no-fund
+
+      - name: Configure AWS credentials via OIDC
+        if: ${{ vars.SIGNING_MODE != 'remote' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_KMS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sign module ZIP
+        id: sign
+        env:
+          SIGNING_MODE: ${{ vars.SIGNING_MODE }}
+          LICENSE_ISSUER_URL: ${{ secrets.LICENSE_ISSUER_URL }}
+          LICENSE_ISSUER_BEARER_TOKEN: ${{ secrets.LICENSE_ISSUER_BEARER_TOKEN }}
+        run: |
+          set -euo pipefail
+          ZIP_NAME="${MODULE_NAME}-${{ steps.ver.outputs.version }}.zip"
+          OUT_PATH="${GITHUB_WORKSPACE}/${ZIP_NAME}"
+          ARGS=(
+            "--manifest" "${MODULE_DIR}/build/manifest.json"
+            "--dist" "${MODULE_DIR}/dist"
+            "--migrations" "${MODULE_DIR}/prisma/migrations"
+            "--package-json" "${MODULE_DIR}/package.json"
+            "--out" "${OUT_PATH}"
+            "--kid" "${KID}"
+            "--region" "${AWS_REGION}"
+            "--key" "${KMS_KEY_ALIAS}"
+          )
+          if [ "${SIGNING_MODE:-oidc-aws}" = "remote" ]; then
+            [ -n "${LICENSE_ISSUER_URL}" ] || { echo "::error::SIGNING_MODE=remote requiere LICENSE_ISSUER_URL"; exit 1; }
+            ARGS+=("--remote-issuer" "${LICENSE_ISSUER_URL}")
+          fi
+          node --import tsx signing-tools/scripts/sign-package.ts "${ARGS[@]}"
+          SHA256="$(sha256sum "${OUT_PATH}" | awk '{print $1}')"
+          echo "zip-name=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
+          echo "zip-sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "Firmado ${ZIP_NAME} (sha256 ${SHA256})"
+
+      - name: Verify signature (independent check)
+        run: node signing-tools/verify/verify-signature.mjs "${GITHUB_WORKSPACE}/${{ steps.sign.outputs.zip-name }}"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ env.MODULE_NAME }} ${{ steps.ver.outputs.version }}
+          prerelease: ${{ contains(steps.ver.outputs.version, '-') }}
+          files: ${{ github.workspace }}/${{ steps.sign.outputs.zip-name }}
+          body: |
+            Módulo marketplace **${{ env.MODULE_NAME }}** v${{ steps.ver.outputs.version }} (ZIP firmado).
+
+            - sha256: `${{ steps.sign.outputs.zip-sha256 }}`
+            - Instalación: subir el ZIP en `/admin/integraciones` (drag & drop).
