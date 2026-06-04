@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
-import { themeCache, themingApi, type TenantTheme } from '@/lib/theming';
+import { publishThemeUpdate, themingApi, type TenantTheme } from '@/lib/theming';
 
 const DISPLAY_FONTS = [
   'Sora',
@@ -116,7 +116,7 @@ export default function BrandingPage() {
       });
       setTheme(updated);
       setForm(themeToForm(updated));
-      themeCache.save(updated);
+      publishThemeUpdate(updated);
       setStatus('saved');
       setTimeout(() => setStatus('idle'), 2000);
     } catch (e) {
@@ -134,7 +134,7 @@ export default function BrandingPage() {
       const fresh = await themingApi.reset(token);
       setTheme(fresh);
       setForm(themeToForm(fresh));
-      themeCache.save(fresh);
+      publishThemeUpdate(fresh);
       setStatus('saved');
       setTimeout(() => setStatus('idle'), 2000);
     } catch (e) {
@@ -600,7 +600,7 @@ function LogoUploader({
         filename: file.name,
         contentType: file.type,
       });
-      themeCache.save(updated);
+      publishThemeUpdate(updated);
       if (updated.logoUrl) onUploaded(updated.logoUrl);
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos subir el logo.');
@@ -617,7 +617,7 @@ function LogoUploader({
     setError(null);
     try {
       const updated = await themingApi.removeLogo(token);
-      themeCache.save(updated);
+      publishThemeUpdate(updated);
       onRemoved();
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar el logo.');

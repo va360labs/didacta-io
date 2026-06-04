@@ -2,7 +2,13 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { authStorage } from '@/lib/auth-storage';
-import { buildThemeStyleBlock, themeCache, themingApi, type TenantTheme } from '@/lib/theming';
+import {
+  buildThemeStyleBlock,
+  THEME_UPDATED_EVENT,
+  themeCache,
+  themingApi,
+  type TenantTheme,
+} from '@/lib/theming';
 
 /**
  * Contexto del theme del tenant. Expone el theme vivo (o null mientras no hay
@@ -60,6 +66,19 @@ export function TenantThemeProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Aplicación EN VIVO: cuando /admin/branding guarda (o resetea / cambia el
+  // logo) publica el theme nuevo por window. El provider lo recoge y reaplica
+  // el `<style>` global sin recargar — antes el cambio solo se veía tras un
+  // reload duro porque este provider solo fetchea en el mount.
+  useEffect(() => {
+    function onThemeUpdated(e: Event) {
+      const detail = (e as CustomEvent<TenantTheme>).detail;
+      if (detail) setTheme(detail);
+    }
+    window.addEventListener(THEME_UPDATED_EVENT, onThemeUpdated);
+    return () => window.removeEventListener(THEME_UPDATED_EVENT, onThemeUpdated);
   }, []);
 
   return (

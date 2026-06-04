@@ -70,6 +70,26 @@ export const themingApi = {
   },
 };
 
+/**
+ * Evento global que propaga un theme nuevo al TenantThemeProvider (root layout)
+ * para que reaplique el branding EN VIVO, sin esperar a un reload duro. Sin
+ * esto, cambiar el color en /admin/branding solo actualizaba la preview local
+ * y el cache, pero el `<style>` global del provider seguía con el theme viejo
+ * hasta recargar (el provider solo hace fetch en su mount).
+ */
+export const THEME_UPDATED_EVENT = 'didacta:theme-updated';
+
+/**
+ * Persiste el theme en cache y notifica al TenantThemeProvider para que
+ * reaplique el branding de inmediato. Úsalo tras guardar / resetear / cambiar
+ * el logo en la pantalla de branding.
+ */
+export function publishThemeUpdate(theme: TenantTheme): void {
+  if (typeof window === 'undefined') return;
+  themeCache.save(theme);
+  window.dispatchEvent(new CustomEvent<TenantTheme>(THEME_UPDATED_EVENT, { detail: theme }));
+}
+
 export const themeCache = {
   load(tenantId: string): TenantTheme | null {
     if (typeof window === 'undefined') return null;

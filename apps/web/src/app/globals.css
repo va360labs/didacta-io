@@ -38,16 +38,20 @@
    *   #1E5AA8 azul confianza → brand-500
    *   #2E7DCE azul equilibrio → brand-400
    * ------------------------------------------------------------------- */
-  --color-brand-50: hsl(var(--brand-h), 90%, 96%);
-  --color-brand-100: hsl(var(--brand-h), 85%, 92%);
-  --color-brand-200: hsl(var(--brand-h), 80%, 84%);
-  --color-brand-300: hsl(var(--brand-h), 75%, 72%);
-  --color-brand-400: hsl(var(--brand-h), 70%, 58%);
-  --color-brand-500: hsl(var(--brand-h), 70%, 45%);
-  --color-brand-600: hsl(var(--brand-h), 72%, 38%);
-  --color-brand-700: hsl(var(--brand-h), 75%, 30%);
-  --color-brand-800: hsl(var(--brand-h), 78%, 22%);
-  --color-brand-900: hsl(var(--brand-h), 80%, 14%);
+  /* Saturación derivada de --brand-s (override per-tenant) MANTENIENDO la curva
+   * de la paleta Didacta: más saturación en los extremos de luminancia. Los
+   * offsets reproducen exactamente los defaults cuando --brand-s = 70%, y el
+   * slider de saturación del branding ahora sí afecta a los colores de marca. */
+  --color-brand-50: hsl(var(--brand-h), calc(var(--brand-s) + 20%), 96%);
+  --color-brand-100: hsl(var(--brand-h), calc(var(--brand-s) + 15%), 92%);
+  --color-brand-200: hsl(var(--brand-h), calc(var(--brand-s) + 10%), 84%);
+  --color-brand-300: hsl(var(--brand-h), calc(var(--brand-s) + 5%), 72%);
+  --color-brand-400: hsl(var(--brand-h), var(--brand-s), 58%);
+  --color-brand-500: hsl(var(--brand-h), var(--brand-s), 45%);
+  --color-brand-600: hsl(var(--brand-h), calc(var(--brand-s) + 2%), 38%);
+  --color-brand-700: hsl(var(--brand-h), calc(var(--brand-s) + 5%), 30%);
+  --color-brand-800: hsl(var(--brand-h), calc(var(--brand-s) + 8%), 22%);
+  --color-brand-900: hsl(var(--brand-h), calc(var(--brand-s) + 10%), 14%);
 
   /* -------------------------------------------------------------------
    * Success (verde crecimiento Didacta) — #18B5A8.
