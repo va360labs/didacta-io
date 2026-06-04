@@ -86,7 +86,11 @@ export class HealthController {
     return {
       status: 'ok',
       service: 'api',
-      version: process.env['npm_package_version'] ?? '0.0.0',
+      // El runtime arranca `node dist/main.js` (no vía npm), así que
+      // `npm_package_version` no existe y daba siempre '0.0.0'. DIDACTA_CORE_VERSION
+      // lo fija el deploy (release.yml / dev-deploy.yml) a la versión del build,
+      // así healthz reporta la versión real desplegada.
+      version: process.env['DIDACTA_CORE_VERSION'] ?? process.env['npm_package_version'] ?? '0.0.0',
       uptime: Math.floor((Date.now() - this.startedAt) / 1000),
       timestamp: new Date().toISOString(),
     };
