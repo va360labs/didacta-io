@@ -28,6 +28,7 @@ import { buildCertificatesModule, CertificatesService } from '@didacta/mod-certi
 import { communityModule, CommunityService } from '@didacta/mod-community';
 import { coursesModule, CoursesService } from '@didacta/mod-courses';
 import { helloWorldModule } from '@didacta/mod-hello-world';
+import { wpSsoModule } from '@didacta/mod-wp-sso';
 import {
   fundaeModule,
   FundaeCompanyService,
@@ -360,6 +361,7 @@ export class ModuleRegistryService implements OnModuleInit {
       aiTutorModule,
       aiGraderModule,
       aiContentModule,
+      wpSsoModule,
       ...(billingModuleOrNull ? [billingModuleOrNull] : []),
       ...(subscriptionsModuleOrNull ? [subscriptionsModuleOrNull] : []),
     ]);

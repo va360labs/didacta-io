@@ -104,6 +104,9 @@ importers:
       '@didacta/mod-theming':
         specifier: workspace:*
         version: link:../../modules/theming
+      '@didacta/mod-wp-sso':
+        specifier: workspace:*
+        version: link:../../modules/wp-sso
       '@didacta/mod-zoom-live':
         specifier: workspace:*
         version: link:../../modules/zoom-live
@@ -682,6 +685,31 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.17
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
+
+  modules/wp-sso:
+    dependencies:
+      '@didacta/core-kernel':
+        specifier: workspace:*
+        version: link:../../packages/core-kernel
+      jose:
+        specifier: ^5.9.6
+        version: 5.10.0
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@didacta/core-registry':
+        specifier: workspace:*
+        version: link:../../packages/core-registry
       '@types/node':
         specifier: ^22.10.2
         version: 22.19.17

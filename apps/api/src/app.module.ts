@@ -20,6 +20,7 @@ import { SetupModule } from './setup/setup.module';
 import { SystemModule } from './system/system.module';
 import { SsoOidcModule } from './sso/oidc/oidc.module';
 import { SsoSamlModule } from './sso/saml/saml.module';
+import { SsoWpModule } from './sso/wp/wp-sso.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
@@ -97,6 +98,9 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     // parser está registrado en main.ts) y admin bajo /api/v1/admin/sso/saml/*
     // (en AdminModule). El cert IdP es público; no se cifra.
     SsoSamlModule,
+    // SSO desde WordPress (mod.wp-sso) — Community, sin gate EE. Token HMAC
+    // corto firmado por WP → sesión Didacta. Callback en /api/v1/modules/wp-sso/*.
+    SsoWpModule,
     // 10º piloto License SDK — gate feat:api.webhooks.high_throughput.
     // CRUD endpoints CE + envío naive síncrono. Path EE (BullMQ + HMAC +
     // dead-letter) gateado por capability en runtime.

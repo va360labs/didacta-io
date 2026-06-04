@@ -1,6 +1,6 @@
 {
   "name": "@didacta/api",
-  "version": "0.0.1-alpha.87",
+  "version": "0.0.1-alpha.88",
   "private": true,
   "description": "Backend NestJS de Didacta",
   "type": "commonjs",
@@ -40,6 +40,7 @@
     "@didacta/mod-learning": "workspace:*",
     "@didacta/mod-subscriptions": "workspace:*",
     "@didacta/mod-theming": "workspace:*",
+    "@didacta/mod-wp-sso": "workspace:*",
     "@didacta/mod-zoom-live": "workspace:*",
     "@fastify/static": "^7.0.4",
     "@nestjs/common": "^10.4.15",

@@ -1,0 +1,140 @@
+import { SignJWT } from 'jose';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { WpSsoTokenError } from '@didacta/mod-wp-sso';
+import { WpSsoService } from '../src/sso/wp/wp-sso.service';
+import type { PrismaService } from '../src/prisma/prisma.service';
+import type { TokenService } from '../src/auth/token.service';
+import type { PrismaAuditLogService } from '../src/modules/prisma-audit-log.service';
+
+const SECRET = 'wp-sso-secreto-compartido-de-prueba-1234567890';
+const TENANT_SLUG = 'va360';
+
+function makeToken(opts: { email?: string; name?: string; jti?: string; ttl?: number } = {}) {
+  const now = Math.floor(Date.now() / 1000);
+  return new SignJWT({
+    email: opts.email ?? 'nuevo@va360.academy',
+    ...(opts.name ? { name: opts.name } : {}),
+    jti: opts.jti ?? `jti-${Math.floor(now)}-${opts.email ?? 'x'}`,
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt(now)
+    .setExpirationTime(now + (opts.ttl ?? 120))
+    .setAudience('didacta-wp-sso')
+    .sign(new TextEncoder().encode(SECRET));
+}
+
+interface Mocks {
+  prisma: {
+    tenant: { findUnique: ReturnType<typeof vi.fn> };
+    user: {
+      findUnique: ReturnType<typeof vi.fn>;
+      create: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
+    role: { findFirst: ReturnType<typeof vi.fn> };
+  };
+  tokens: { sign: ReturnType<typeof vi.fn> };
+  auditLog: { record: ReturnType<typeof vi.fn> };
+}
+
+function build(): { svc: WpSsoService; m: Mocks } {
+  const m: Mocks = {
+    prisma: {
+      tenant: { findUnique: vi.fn().mockResolvedValue({ id: 'tenant-1', slug: TENANT_SLUG }) },
+      user: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({
+          id: 'user-new',
+          email: 'nuevo@va360.academy',
+          name: 'Nuevo',
+          status: 'ACTIVE',
+          roles: [{ role: { name: 'alumno' } }],
+        }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      role: { findFirst: vi.fn().mockResolvedValue({ id: 'role-alumno' }) },
+    },
+    tokens: { sign: vi.fn().mockResolvedValue({ accessToken: 'AT', refreshToken: 'RT' }) },
+    auditLog: { record: vi.fn().mockResolvedValue(undefined) },
+  };
+  const svc = new WpSsoService(
+    m.prisma as unknown as PrismaService,
+    m.tokens as unknown as TokenService,
+    m.auditLog as unknown as PrismaAuditLogService,
+  );
+  return { svc, m };
+}
+
+describe('WpSsoService.exchange', () => {
+  beforeEach(() => {
+    process.env['WP_SSO_SHARED_SECRET'] = SECRET;
+    process.env['WP_SSO_TENANT_SLUG'] = TENANT_SLUG;
+    delete process.env['WP_SSO_ISSUER'];
+    delete process.env['REDIS_URL']; // fuerza el anti-replay in-memory
+  });
+  afterEach(() => {
+    delete process.env['WP_SSO_SHARED_SECRET'];
+    delete process.env['WP_SSO_TENANT_SLUG'];
+  });
+
+  it('not_configured si faltan env', async () => {
+    delete process.env['WP_SSO_SHARED_SECRET'];
+    const { svc } = build();
+    await expect(svc.exchange(await makeToken())).rejects.toMatchObject({ code: 'not_configured' });
+  });
+
+  it('auto-crea el usuario (rol alumno) y emite sesión', async () => {
+    const { svc, m } = build();
+    const out = await svc.exchange(
+      await makeToken({ email: 'nuevo@va360.academy', name: 'Nuevo' }),
+    );
+    expect(m.prisma.user.create).toHaveBeenCalledTimes(1);
+    const createArg = m.prisma.user.create.mock.calls[0][0];
+    expect(createArg.data.roles.create.roleId).toBe('role-alumno');
+    expect(out.tokens).toEqual({ accessToken: 'AT', refreshToken: 'RT' });
+    expect(out.user.roles).toContain('alumno');
+    expect(m.auditLog.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'sso.wp.user.provisioned' }),
+    );
+  });
+
+  it('usuario existente activo → update lastLogin + sesión (no create)', async () => {
+    const { svc, m } = build();
+    m.prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'existe@va360.academy',
+      name: 'Existe',
+      status: 'ACTIVE',
+      roles: [{ role: { name: 'alumno' } }],
+    });
+    const out = await svc.exchange(await makeToken({ email: 'existe@va360.academy' }));
+    expect(m.prisma.user.create).not.toHaveBeenCalled();
+    expect(m.prisma.user.update).toHaveBeenCalledTimes(1);
+    expect(out.user.id).toBe('user-1');
+  });
+
+  it('rechaza WP_SSO_AUTOCREATE=false si el usuario no existe', async () => {
+    process.env['WP_SSO_AUTOCREATE'] = 'false';
+    const { svc } = build();
+    await expect(svc.exchange(await makeToken())).rejects.toThrow(/No tienes cuenta/);
+    delete process.env['WP_SSO_AUTOCREATE'];
+  });
+
+  it('anti-replay: el mismo token (jti) no se puede usar dos veces', async () => {
+    const { svc } = build();
+    const token = await makeToken({ jti: 'jti-fijo-replay' });
+    await svc.exchange(token); // 1ª vez OK
+    await expect(svc.exchange(token)).rejects.toMatchObject({ code: 'replayed' });
+  });
+
+  it('rechaza firma inválida (WpSsoTokenError)', async () => {
+    const { svc } = build();
+    const bad = await new SignJWT({ email: 'x@va360.academy', jti: 'j1' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime(Math.floor(Date.now() / 1000) + 120)
+      .setAudience('didacta-wp-sso')
+      .sign(new TextEncoder().encode('secreto-equivocado-aaaaaaaaaaaaaaaaaaaa'));
+    await expect(svc.exchange(bad)).rejects.toBeInstanceOf(WpSsoTokenError);
+  });
+});
