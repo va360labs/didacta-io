@@ -151,6 +151,48 @@ describe('mergeExtensionSidebarItems', () => {
     ).toBeDefined();
   });
 
+  it('REGRESIÓN: super_admin VE items gateados a tenant_admin y formador (jerarquía)', () => {
+    // Bug reportado: módulos activos (Fundae=tenant_admin) no salían en el menú
+    // para un super_admin "puro". super_admin es el rol máximo → ve todo.
+    const exts: ModuleWebExtension[] = [
+      {
+        name: 'mod.fundae',
+        sidebarItems: [
+          {
+            group: 'Integraciones',
+            href: '/admin/fundae',
+            label: 'Fundae',
+            icon: 'file',
+            requiresRole: 'tenant_admin',
+          },
+        ],
+      },
+      {
+        name: 'mod.zoom-live',
+        sidebarItems: [
+          {
+            group: 'Formador',
+            href: '/formador/aula-virtual',
+            label: 'Aula virtual',
+            icon: 'calendar',
+            requiresRole: 'formador',
+          },
+        ],
+      },
+    ];
+    const asSuper = mergeExtensionSidebarItems(makeGroups(), exts, new Set(['super_admin']));
+    expect(
+      asSuper
+        .find((g) => g.label === 'Integraciones')!
+        .items.find((i) => i.href === '/admin/fundae'),
+    ).toBeDefined();
+    expect(
+      asSuper
+        .find((g) => g.label === 'Formador')!
+        .items.find((i) => i.href === '/formador/aula-virtual'),
+    ).toBeDefined();
+  });
+
   it('items SIN requiresRole pasan para todos los roles', () => {
     const ext: ModuleWebExtension = {
       name: 'mod.x',

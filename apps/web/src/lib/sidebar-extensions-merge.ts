@@ -15,6 +15,12 @@ import type { ModuleWebExtension } from '@/lib/module-registry';
  * Garantías:
  *  - Respeta `requiresRole` para CUALQUIER rol (`super_admin`,
  *    `tenant_admin`, `formador`), no solo super_admin.
+ *  - Jerarquía de roles: `super_admin` es el rol máximo y VE TODOS los items
+ *    (misma convención que el core con `isAdminOrFormador`/`isSuperAdmin`).
+ *    Sin esto, un super_admin "puro" (sin tenant_admin en sus roles) no veía
+ *    items de extensión gateados a tenant_admin/formador — p.ej. Fundae,
+ *    Billing, AI Grader, Aula virtual. El resto de roles sigue siendo match
+ *    exacto (un tenant_admin NO ve items de formador, y viceversa).
  *  - Dedupe defensiva por `(group, href)`: si el grupo ya tiene un item con
  *    el mismo href (hardcoded del core, otra extension), la extension nueva
  *    se ignora silenciosamente. Garantiza "un href, un origen" — evita la
@@ -23,6 +29,16 @@ import type { ModuleWebExtension } from '@/lib/module-registry';
  * Mutación: este merger MUTA `groups` en sitio. El caller debe pasar copias
  * frescas si necesita inmutabilidad.
  */
+/**
+ * ¿Puede un usuario con `userRoles` ver un item gateado a `required`?
+ * `super_admin` ve todo (rol máximo). El resto, match exacto — preserva la
+ * separación tenant_admin / formador.
+ */
+function roleCanSee(userRoles: Set<string>, required: string): boolean {
+  if (userRoles.has('super_admin')) return true;
+  return userRoles.has(required);
+}
+
 export function mergeExtensionSidebarItems(
   groups: SidebarGroup[],
   extensions: readonly ModuleWebExtension[],
@@ -39,7 +55,7 @@ export function mergeExtensionSidebarItems(
 
   for (const ext of extensions) {
     for (const item of ext.sidebarItems ?? []) {
-      if (item.requiresRole && !userRoles.has(item.requiresRole)) continue;
+      if (item.requiresRole && !roleCanSee(userRoles, item.requiresRole)) continue;
 
       const group = groupByLabel.get(item.group);
       if (!group) continue;
