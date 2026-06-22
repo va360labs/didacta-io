@@ -2,6 +2,7 @@
   "name": "learning",
   "version": "1.0.0",
   "edition": "community",
+  "coreVersionRequired": "^0.0.1",
   "displayName": "Player + matrícula + progreso",
   "category": "core",
   "tablePrefix": "mod_learning_",
@@ -11,6 +12,6 @@
     { "name": "learning.lesson.completed" },
     { "name": "learning.course.completed" }
   ],
-  "apiNamespace": "modules/learning",
+  "apiNamespace": "/modules/learning",
   "surfaces": ["alumno", "formador"]
 }

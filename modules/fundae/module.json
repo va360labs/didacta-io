@@ -2,6 +2,7 @@
   "name": "mod.fundae",
   "version": "0.3.0",
   "edition": "community",
+  "coreVersionRequired": "^0.0.1",
   "displayName": "Fundae — cumplimiento regulatorio España",
   "category": "compliance",
   "tablePrefix": "mod_fundae_",
@@ -17,6 +18,6 @@
     { "name": "fundae.xml.exported" },
     { "name": "fundae.audit.zip-exported" }
   ],
-  "apiNamespace": "modules/fundae",
+  "apiNamespace": "/modules/fundae",
   "surfaces": ["admin", "auditor", "empresa_manager"]
 }

@@ -16,9 +16,11 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "pnpm run build:server && pnpm run build:ui",
+    "build:server": "tsc -p tsconfig.json",
+    "build:ui": "esbuild src/ui/admin.tsx --bundle --platform=browser --target=es2020 --format=iife --global-name=__didacta_module_exports__ --jsx=transform --jsx-factory=React.createElement --jsx-fragment=React.Fragment --outfile=dist/ui/admin.js",
     "dev": "tsc -p tsconfig.json --watch",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.ui.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist .turbo"
@@ -30,6 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "esbuild": "^0.25.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }

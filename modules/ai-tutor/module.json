@@ -2,6 +2,7 @@
   "name": "ai-tutor",
   "version": "0.1.0",
   "edition": "community",
+  "coreVersionRequired": "^0.0.1",
   "displayName": "Tutor conversacional con RAG",
   "category": "ai",
   "tablePrefix": "mod_ai_tutor_",
@@ -12,6 +13,6 @@
     { "name": "ai-tutor.indexing.completed" }
   ],
   "hooks": [{ "event": "courses.course.published" }],
-  "apiNamespace": "modules/ai-tutor",
+  "apiNamespace": "/modules/ai-tutor",
   "surfaces": ["alumno", "formador", "admin"]
 }

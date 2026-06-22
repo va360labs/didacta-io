@@ -7,7 +7,7 @@
 /// declara aquí — sin tocar el core.
 
 import type { ModuleWebExtension } from '@/lib/module-registry';
-import { ZoomCredentialsCard } from './admin-config-card';
+import { ZoomAdminSurface } from './admin-surface';
 
 export const zoomLiveExtension: ModuleWebExtension = {
   name: 'mod.zoom-live',
@@ -16,7 +16,7 @@ export const zoomLiveExtension: ModuleWebExtension = {
       key: 'aula-virtual',
       label: 'Aula virtual',
       description: 'Credenciales Zoom Server-to-Server para sesiones síncronas.',
-      Component: ZoomCredentialsCard,
+      Component: ZoomAdminSurface,
     },
   ],
   sidebarItems: [
@@ -34,7 +34,6 @@ export const zoomLiveExtension: ModuleWebExtension = {
 /// core que actúan como wrapper) importan el cliente HTTP y los tipos
 /// desde `@/modules/zoom-live` — nunca desde `./client` o paths internos.
 export { zoomLiveApi } from './client';
-export { ZoomCredentialsCard } from './admin-config-card';
 export type {
   SessionStatus,
   ZoomSession,

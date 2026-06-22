@@ -2,6 +2,7 @@
   "name": "community",
   "version": "0.1.0",
   "edition": "community",
+  "coreVersionRequired": "^0.0.1",
   "displayName": "Comunidad — posts, hilos, reacciones, menciones",
   "category": "engagement",
   "tablePrefix": "mod_community_",
@@ -12,6 +13,6 @@
     { "name": "community.reaction.added" },
     { "name": "community.mention.created" }
   ],
-  "apiNamespace": "modules/community",
+  "apiNamespace": "/modules/community",
   "surfaces": ["alumno", "formador", "admin"]
 }

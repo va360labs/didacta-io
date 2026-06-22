@@ -1,20 +1,18 @@
-'use client';
-
-/// Card de configuración del módulo `mod.zoom-live` para `/admin/configuracion`.
-///
-/// Es el extension point que el módulo expone hacia el panel admin del core.
-/// El core no sabe de Zoom — solo sabe que `mod.zoom-live` (declarado en
-/// `apps/web/src/modules/zoom-live/index.ts`) aporta un tab con este
-/// componente. Convención del refactor "todo el módulo en su carpeta".
-
-import { useState, type FormEvent } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { ApiHttpError } from '@/lib/api-client';
-import { tenantSettingsApi } from '@/lib/tenant-settings';
-import { zoomLiveApi } from './client';
+import type { FormEvent } from 'react';
+import {
+  React,
+  useState,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+  ApiHttpError,
+} from './_runtime';
+import { zoomLiveUiApi } from './client';
 
 export function ZoomCredentialsCard() {
   const [draft, setDraft] = useState({ accountId: '', clientId: '', clientSecret: '' });
@@ -24,18 +22,15 @@ export function ZoomCredentialsCard() {
     'idle' | 'testing' | { kind: 'real' | 'stub'; accountId: string } | { error: string }
   >('idle');
 
-  async function handleSave(e: FormEvent) {
+  async function handleSave(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setStatus('saving');
     setErrMsg(null);
     try {
-      await tenantSettingsApi.upsert('zoom-live', 'credentials', {
-        isSecret: true,
-        value: {
-          accountId: draft.accountId.trim(),
-          clientId: draft.clientId.trim(),
-          clientSecret: draft.clientSecret,
-        },
+      await zoomLiveUiApi.upsertCredentials({
+        accountId: draft.accountId.trim(),
+        clientId: draft.clientId.trim(),
+        clientSecret: draft.clientSecret,
       });
       setStatus('saved');
       setDraft((s) => ({ ...s, clientSecret: '' }));
@@ -50,7 +45,7 @@ export function ZoomCredentialsCard() {
     setStatus('saving');
     setErrMsg(null);
     try {
-      await tenantSettingsApi.remove('zoom-live', 'credentials');
+      await zoomLiveUiApi.removeCredentials();
       setStatus('saved');
       setDraft({ accountId: '', clientId: '', clientSecret: '' });
     } catch (e) {
@@ -62,7 +57,7 @@ export function ZoomCredentialsCard() {
   async function handleTest() {
     setTestStatus('testing');
     try {
-      const res = await zoomLiveApi.testCredentials();
+      const res = await zoomLiveUiApi.testCredentials();
       setTestStatus(res);
     } catch (e) {
       setTestStatus({
@@ -89,7 +84,9 @@ export function ZoomCredentialsCard() {
               id="zoom-account"
               required
               value={draft.accountId}
-              onChange={(e) => setDraft({ ...draft, accountId: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setDraft({ ...draft, accountId: e.target.value })
+              }
               className="font-mono"
               autoComplete="off"
             />
@@ -100,7 +97,9 @@ export function ZoomCredentialsCard() {
               id="zoom-client"
               required
               value={draft.clientId}
-              onChange={(e) => setDraft({ ...draft, clientId: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setDraft({ ...draft, clientId: e.target.value })
+              }
               className="font-mono"
               autoComplete="off"
             />
@@ -112,7 +111,9 @@ export function ZoomCredentialsCard() {
               required
               type="password"
               value={draft.clientSecret}
-              onChange={(e) => setDraft({ ...draft, clientSecret: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setDraft({ ...draft, clientSecret: e.target.value })
+              }
               autoComplete="new-password"
             />
           </div>

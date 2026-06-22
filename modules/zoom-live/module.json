@@ -2,6 +2,7 @@
   "name": "zoom-live",
   "version": "0.1.0",
   "edition": "community",
+  "coreVersionRequired": "^0.0.1",
   "displayName": "Aula virtual síncrona Zoom",
   "category": "live",
   "tablePrefix": "mod_zoom_",
@@ -12,6 +13,11 @@
     { "name": "zoom.session.cancelled" },
     { "name": "zoom.session.recording_ready" }
   ],
-  "apiNamespace": "modules/zoom-live",
-  "surfaces": ["formador", "alumno", "admin"]
+  "apiNamespace": "/modules/zoom-live",
+  "surfaces": {
+    "admin": {
+      "entry": "dist/ui/admin.js",
+      "roles": ["super_admin", "tenant_admin"]
+    }
+  }
 }

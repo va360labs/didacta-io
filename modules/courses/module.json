@@ -2,6 +2,7 @@
   "name": "courses",
   "version": "1.0.0",
   "edition": "community",
+  "coreVersionRequired": "^0.0.1",
   "displayName": "Cursos y catálogo",
   "category": "core",
   "tablePrefix": "mod_courses_",
@@ -16,6 +17,6 @@
     { "name": "courses.lesson.updated" },
     { "name": "courses.lesson.deleted" }
   ],
-  "apiNamespace": "modules/courses",
+  "apiNamespace": "/modules/courses",
   "surfaces": ["admin", "formador", "alumno"]
 }
