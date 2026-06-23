@@ -65,6 +65,26 @@ services:
       - didacta_dev
       - coolify
 
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.middlewares.gzip.compress=true'
+      - 'traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https'
+      # HTTP → redirige a HTTPS
+      - 'traefik.http.routers.http-0-didacta-dev.entryPoints=http'
+      - 'traefik.http.routers.http-0-didacta-dev.middlewares=redirect-to-https'
+      - 'traefik.http.routers.http-0-didacta-dev.rule=Host(`dev.didacta.io`) && PathPrefix(`/`)'
+      - 'traefik.http.routers.http-0-didacta-dev.service=http-0-didacta-dev'
+      # HTTPS con TLS
+      - 'traefik.http.routers.https-0-didacta-dev.entryPoints=https'
+      - 'traefik.http.routers.https-0-didacta-dev.middlewares=gzip'
+      - 'traefik.http.routers.https-0-didacta-dev.rule=Host(`dev.didacta.io`) && PathPrefix(`/`)'
+      - 'traefik.http.routers.https-0-didacta-dev.service=https-0-didacta-dev'
+      - 'traefik.http.routers.https-0-didacta-dev.tls=true'
+      - 'traefik.http.routers.https-0-didacta-dev.tls.certresolver=letsencrypt'
+      # Puertos: web en 3010, api en 4000
+      - 'traefik.http.services.http-0-didacta-dev.loadbalancer.server.port=3010'
+      - 'traefik.http.services.https-0-didacta-dev.loadbalancer.server.port=3010'
+
 volumes:
   didacta_dev_data:
 
