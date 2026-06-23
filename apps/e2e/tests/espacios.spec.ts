@@ -225,7 +225,7 @@ test.describe('Página /espacios/[space]', () => {
     page,
   }) => {
     await withAdminSession(page, '/espacios/general');
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000); // networkidle nunca resuelve con SSE activo
     // La caja del icono en la cabecera contiene un SVG, no texto
     const iconBox = page.locator('header div.grid').first();
     const iconText = (await iconBox.innerText().catch(() => '')).trim();
@@ -264,7 +264,7 @@ test.describe('Página /espacios/[space]', () => {
 
   test('los iconos en "Otros espacios" no muestran texto crudo', async ({ page }) => {
     await withAdminSession(page, '/espacios/general');
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000); // networkidle nunca resuelve con SSE activo
     const otherSection = page.getByText('Otros espacios').locator('..');
     if (await otherSection.isVisible().catch(() => false)) {
       const text = await otherSection.innerText();
@@ -280,7 +280,7 @@ test.describe('Página /espacios/[space]', () => {
 
   test('el feed carga (skeleton → posts o empty state)', async ({ page }) => {
     await withAdminSession(page, '/espacios/general');
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000); // networkidle nunca resuelve con SSE activo
     // Debe mostrar posts o empty state, nunca un error
     const hasError = await page
       .getByText('No se pudieron cargar')
@@ -308,7 +308,6 @@ test.describe('Panel admin — /admin/comunidad/espacios', () => {
 
   test('lista al menos un espacio (datos reales de BD)', async ({ page }) => {
     await withAdminSession(page, '/admin/comunidad/espacios');
-    await page.waitForLoadState('networkidle');
     // El admin usa una lista ul/li (no tabla). Cada item tiene un botón "Editar".
     const items = page.locator('li').filter({ has: page.locator('button', { hasText: 'Editar' }) });
     await expect(items.first()).toBeVisible({ timeout: 8000 });
@@ -318,14 +317,12 @@ test.describe('Panel admin — /admin/comunidad/espacios', () => {
 
   test('muestra el slug "general" en la lista', async ({ page }) => {
     await withAdminSession(page, '/admin/comunidad/espacios');
-    await page.waitForLoadState('networkidle');
     // El slug se renderiza como "/general · orden N" — el slash lo hace inequívoco
     await expect(page.getByText('/general').first()).toBeVisible({ timeout: 8000 });
   });
 
   test('espacios de sistema muestran el icono de candado 🔒', async ({ page }) => {
     await withAdminSession(page, '/admin/comunidad/espacios');
-    await page.waitForLoadState('networkidle');
     await expect(page.getByText('🔒').first()).toBeVisible({ timeout: 8000 });
   });
 
@@ -345,7 +342,6 @@ test.describe('Panel admin — /admin/comunidad/espacios', () => {
 
   test('el sortOrder es visible en la lista', async ({ page }) => {
     await withAdminSession(page, '/admin/comunidad/espacios');
-    await page.waitForLoadState('networkidle');
     // El orden se muestra inline como "orden N" en la descripción de cada espacio
     await expect(page.getByText(/orden \d+/).first()).toBeVisible({ timeout: 8000 });
   });
