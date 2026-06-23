@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "entityType": "users",
+      "sourceId": "undefined",
+      "phase": "transform",
+      "errorCode": "MALFORMED_PAYLOAD",
+      "errorMessage": "usuario sin id numérico",
+      "createdAt": "2026-06-02T17:33:28.101Z"
+    }
+  ],
+  "total": 1,
+  "limit": 200,
+  "phase": "transform",
+  "entity": null
+}

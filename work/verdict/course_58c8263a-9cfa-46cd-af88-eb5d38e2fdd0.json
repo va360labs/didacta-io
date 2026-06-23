@@ -1,0 +1,1241 @@
+{
+  "id": "58c8263a-9cfa-46cd-af88-eb5d38e2fdd0",
+  "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+  "slug": "n8n-de-cero-a-experto",
+  "title": "Curso de N8N – De cero a experto",
+  "description": null,
+  "thumbnailUrl": null,
+  "language": "es-ES",
+  "estimatedMinutes": null,
+  "status": "DRAFT",
+  "category": null,
+  "createdById": null,
+  "certificateTemplateId": null,
+  "externalSource": "learndash",
+  "externalId": "5903",
+  "createdAt": "2026-06-02T19:32:04.131Z",
+  "updatedAt": "2026-06-02T19:32:04.151Z",
+  "publishedAt": null,
+  "deletedAt": null,
+  "modules": [
+    {
+      "id": "cf399609-15bb-40d2-abb2-26e292fe1312",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "58c8263a-9cfa-46cd-af88-eb5d38e2fdd0",
+      "title": "Introducción a N8N y Configuración Inicial",
+      "description": null,
+      "position": 0,
+      "externalSource": "learndash",
+      "externalId": "5903-s0",
+      "createdAt": "2026-06-02T19:32:04.181Z",
+      "updatedAt": "2026-06-02T19:32:04.202Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "41943c71-bd85-46f2-be6a-aff34db3c4c7",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "cf399609-15bb-40d2-abb2-26e292fe1312",
+          "type": "HTML",
+          "title": "Primeros pasos",
+          "position": 6041,
+          "content": {
+            "html": "\n<p class=\"wp-block-paragraph\">Lo primero de todo: GRACIAS por confiar en mi para acompañarte en el apasionante mundo de la automatización de procesos.</p>\n\n\n\n<p class=\"wp-block-paragraph\">Una vez dentro, continúa con el curso y no olvides preguntar cualquier duda o de hacer cualquier sugerencia. Este curso es un curso interactivo y VIVO que puede actualizarse según lo que vayas necesitando y aportando.</p>\n\n\n\n<div class=\"wp-block-buttons is-layout-flex wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://t.me/+4Jz5b4MyJW83ZDE0\" target=\"_blank\" rel=\"noreferrer noopener\">ACCEDE AL GRUPO PRIVADO DE TELEGRAM</a></div>\n</div>\n\n\n\n<p class=\"wp-block-paragraph\">¡SEGUIMOS!</p>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "6041",
+          "createdAt": "2026-06-02T19:32:14.515Z",
+          "updatedAt": "2026-06-02T19:32:14.531Z",
+          "deletedAt": null
+        },
+        {
+          "id": "a3541f4f-3639-4e51-a9a7-34a41306fa24",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "cf399609-15bb-40d2-abb2-26e292fe1312",
+          "type": "HTML",
+          "title": "🔴 Clase en Directo – 20/01/2026",
+          "position": 13421,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/1cc47993-dcfa-4f30-a314-80deeab28513?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "13421",
+          "createdAt": "2026-06-02T19:32:10.899Z",
+          "updatedAt": "2026-06-02T19:32:10.920Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "be6b5a2f-b631-45fe-b781-08493da8e75e",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "58c8263a-9cfa-46cd-af88-eb5d38e2fdd0",
+      "title": "Interfaz de Usuario y Navegación",
+      "description": null,
+      "position": 1,
+      "externalSource": "learndash",
+      "externalId": "5903-s1",
+      "createdAt": "2026-06-02T19:32:04.218Z",
+      "updatedAt": "2026-06-02T19:32:04.241Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "da36da5f-6c42-4030-924e-babdba01829f",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "be6b5a2f-b631-45fe-b781-08493da8e75e",
+          "type": "HTML",
+          "title": "Introducción a la automatización de flujos de trabajo",
+          "position": 5911,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/48e109d5-cd11-4a00-8b03-da919e5ddb93?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<hr class=\"wp-block-separator has-alpha-channel-opacity\"/>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--0116078ab37c2db978af\" data-vnd=\"0116078ab37c2db978af\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=0116078ab37c2db978af\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5911",
+          "createdAt": "2026-06-02T19:32:13.621Z",
+          "updatedAt": "2026-06-02T19:32:13.641Z",
+          "deletedAt": null
+        },
+        {
+          "id": "bb7db833-0548-47a3-aded-45897410379f",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "be6b5a2f-b631-45fe-b781-08493da8e75e",
+          "type": "HTML",
+          "title": "¿Qué es N8N? Conceptos básicos y características principales",
+          "position": 5913,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/b55ea196-727c-408c-963c-859b45f0a047?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<hr class=\"wp-block-separator has-alpha-channel-opacity\"/>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--a5f8fbe512d933610d2b\" data-vnd=\"a5f8fbe512d933610d2b\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=a5f8fbe512d933610d2b\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5913",
+          "createdAt": "2026-06-02T19:32:13.660Z",
+          "updatedAt": "2026-06-02T19:32:13.675Z",
+          "deletedAt": null
+        },
+        {
+          "id": "79507311-bacb-4919-b8dc-3480422a6c6c",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "be6b5a2f-b631-45fe-b781-08493da8e75e",
+          "type": "HTML",
+          "title": "Instalación y configuración inicial en un entorno local",
+          "position": 5915,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/84e0fdb6-4bdc-4b13-93c8-6cd0a6d25981?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--942d83bb417de1168f1f\" data-vnd=\"942d83bb417de1168f1f\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=942d83bb417de1168f1f\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">Enlaces de interés:</h2>\n\n\n\n<ul class=\"wp-block-list\">\n<li><a href=\"https://docs.n8n.io/hosting/installation/npm/\">https://docs.n8n.io/hosting/installation/npm/</a></li>\n\n\n\n<li><a href=\"https://nodejs.org/es\">https://nodejs.org/es</a></li>\n</ul>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5915",
+          "createdAt": "2026-06-02T19:32:22.282Z",
+          "updatedAt": "2026-06-02T19:32:22.302Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "3a2f5910-0184-4ecc-9c68-bd40ffa5e6f8",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "58c8263a-9cfa-46cd-af88-eb5d38e2fdd0",
+      "title": "Creación de Flujos Simples",
+      "description": null,
+      "position": 2,
+      "externalSource": "learndash",
+      "externalId": "5903-s2",
+      "createdAt": "2026-06-02T19:32:04.259Z",
+      "updatedAt": "2026-06-02T19:32:04.277Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "c6ab3d8f-6a7b-4986-85af-8ef62b1755e8",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "3a2f5910-0184-4ecc-9c68-bd40ffa5e6f8",
+          "type": "HTML",
+          "title": "Instalación y configuración de un entorno online",
+          "position": 5917,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/0191b687-07da-4754-8f45-a80623bf4668?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--b15243b36fbc3df9cd4a\" data-vnd=\"b15243b36fbc3df9cd4a\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=b15243b36fbc3df9cd4a\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">Videos alternativos en Youtube</h2>\n\n\n\n<ul class=\"wp-block-list\">\n<li><a href=\"https://youtu.be/H6lNXeeQRHk\" target=\"_blank\" rel=\"noreferrer noopener\">Como instalar N8N usando Docker en Azure App Service</a></li>\n\n\n\n<li><a href=\"https://youtu.be/EN3X-6Ss59s\" data-type=\"link\" data-id=\"https://youtu.be/EN3X-6Ss59s\" target=\"_blank\" rel=\"noreferrer noopener\">Como instalar N8N usando EasyPanel en un VPS de OVH</a></li>\n</ul>\n\n\n\n<h2 class=\"wp-block-heading\">Variables de entorno y firewall</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Es importante configurar correctamente las variables de entorno, las principales son las siguientes:</p>\n\n\n\n<figure class=\"wp-block-image size-full\"><img loading=\"lazy\" decoding=\"async\" width=\"668\" height=\"189\" src=\"https://va360.academy/wp-content/uploads/2024/08/image-1.png\" alt=\"\" class=\"wp-image-7776\" srcset=\"https://va360.academy/wp-content/uploads/2024/08/image-1.png 668w, https://va360.academy/wp-content/uploads/2024/08/image-1-300x85.png 300w, https://va360.academy/wp-content/uploads/2024/08/image-1-624x177.png 624w, https://va360.academy/wp-content/uploads/2024/08/image-1-50x14.png 50w, https://va360.academy/wp-content/uploads/2024/08/image-1-100x28.png 100w, https://va360.academy/wp-content/uploads/2024/08/image-1-600x170.png 600w\" sizes=\"(max-width: 668px) 100vw, 668px\" /></figure>\n\n\n\n<p class=\"wp-block-paragraph\">Donde pone n8nva360.azurewebsites.net debería ir tu dominio completo.</p>\n\n\n\n<p class=\"wp-block-paragraph\">En cuanto al firewall, asegúrate de que el puerto 5678 esté accesible desde el esterior.</p>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5917",
+          "createdAt": "2026-06-02T19:32:05.895Z",
+          "updatedAt": "2026-06-02T19:32:05.906Z",
+          "deletedAt": null
+        },
+        {
+          "id": "28421389-2d96-4d4a-bb3a-6fc616c6f2f8",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "3a2f5910-0184-4ecc-9c68-bd40ffa5e6f8",
+          "type": "HTML",
+          "title": "Explicación de la interfaz de N8N",
+          "position": 5919,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición: </h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/2c3bcb98-aae1-4229-997d-6064d3241d27?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición: </h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--6f89e422ec1b828b3036\" data-vnd=\"6f89e422ec1b828b3036\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=6f89e422ec1b828b3036\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5919",
+          "createdAt": "2026-06-02T19:32:13.697Z",
+          "updatedAt": "2026-06-02T19:32:13.716Z",
+          "deletedAt": null
+        },
+        {
+          "id": "e708b8c3-679b-4378-a268-2deec7ab7503",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "3a2f5910-0184-4ecc-9c68-bd40ffa5e6f8",
+          "type": "HTML",
+          "title": "Cómo crear un nuevo flujo de trabajo",
+          "position": 5921,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/be5ec639-ca1a-4d7e-a47e-b92e5a0b859e?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--a55f24647e5927dd4e4e\" data-vnd=\"a55f24647e5927dd4e4e\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=a55f24647e5927dd4e4e\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5921",
+          "createdAt": "2026-06-02T19:32:13.745Z",
+          "updatedAt": "2026-06-02T19:32:13.759Z",
+          "deletedAt": null
+        },
+        {
+          "id": "14f330b7-d7e7-41a2-a361-c8dd7e37d94f",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "3a2f5910-0184-4ecc-9c68-bd40ffa5e6f8",
+          "type": "HTML",
+          "title": "Descripción de los triggers y conexiones",
+          "position": 5923,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/0c6554ab-4418-43a1-bb9c-791ac63ee25b?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--883af4615fe3b59d7314\" data-vnd=\"883af4615fe3b59d7314\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=883af4615fe3b59d7314\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file has-cyan-bluish-gray-background-color has-background has-link-color wp-elements-986e93863449455338a3e0058582e675\"><a id=\"wp-block-file--media-36dc3653-270f-4dee-ad5a-26960d8277b2\" href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__Triggers.zip\">_VA360__Triggers</a><a href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__Triggers.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-36dc3653-270f-4dee-ad5a-26960d8277b2\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5923",
+          "createdAt": "2026-06-02T19:32:13.855Z",
+          "updatedAt": "2026-06-02T19:32:13.867Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "450ab9e2-b610-40c3-bc53-64b8166be112",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "58c8263a-9cfa-46cd-af88-eb5d38e2fdd0",
+      "title": "Uso de Datos y Transformaciones",
+      "description": null,
+      "position": 3,
+      "externalSource": "learndash",
+      "externalId": "5903-s3",
+      "createdAt": "2026-06-02T19:32:04.295Z",
+      "updatedAt": "2026-06-02T19:32:04.313Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "c84c6797-dabc-4dd8-b368-68b5e58a1d18",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "450ab9e2-b610-40c3-bc53-64b8166be112",
+          "type": "HTML",
+          "title": "Ejemplo de flujo simple: desde una acción manual hasta una integración básica con Google Sheet",
+          "position": 5927,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/79899076-5fe0-41b5-aca3-9ebe79a43be8?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--bd1226d1a0f580f32539\" data-vnd=\"bd1226d1a0f580f32539\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=bd1226d1a0f580f32539\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-cf570967-acaf-47a9-a7aa-ef4438c3c39e\" href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__Mi_primer_workflow.zip\">_VA360__Mi_primer_workflow</a><a href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__Mi_primer_workflow.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-cf570967-acaf-47a9-a7aa-ef4438c3c39e\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">URLS Importantes:</h2>\n\n\n\n<ul class=\"wp-block-list\">\n<li>Generar tu credencial para Google Sheet (O cualquier API de Google): <a href=\"https://cloud.google.com\">cloud.google.com</a></li>\n\n\n\n<li>Foros de ayuda: <a href=\"https://va360.academy/groups/n8n/forums/\">https://va360.academy/groups/n8n/forums/</a></li>\n</ul>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5927",
+          "createdAt": "2026-06-02T19:32:13.889Z",
+          "updatedAt": "2026-06-02T19:32:13.907Z",
+          "deletedAt": null
+        },
+        {
+          "id": "1ee84a89-a7cf-46cd-9cc1-f31a673950df",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "450ab9e2-b610-40c3-bc53-64b8166be112",
+          "type": "HTML",
+          "title": "Uso de nodos básicos como HTTP Request y Set",
+          "position": 5929,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/d4c5a019-26d5-4390-999d-cbf358c9b0cb?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--701041174724228234c9\" data-vnd=\"701041174724228234c9\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=701041174724228234c9\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-9b1935e6-84f3-4bc4-a8e5-ef9e5d08f5a3\" href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__HTTP_Request.zip\">_VA360__HTTP_Request</a><a href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__HTTP_Request.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-9b1935e6-84f3-4bc4-a8e5-ef9e5d08f5a3\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">Urls importantes</h2>\n\n\n\n<ul class=\"wp-block-list\">\n<li>RapidAPI &#8211; ExerciseDB: <a href=\"https://rapidapi.com/justin-WFnsXH_t6/api/exercisedb/playground/apiendpoint_c719d9dc-fbe7-40ba-bdca-f4fb1056f608\">https://rapidapi.com/justin-WFnsXH_t6/api/exercisedb/playground/apiendpoint_c719d9dc-fbe7-40ba-bdca-f4fb1056f608</a></li>\n\n\n\n<li>Foros de ayuda: <a href=\"https://va360.academy/groups/n8n/forums/\">https://va360.academy/groups/n8n/forums/</a></li>\n</ul>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5929",
+          "createdAt": "2026-06-02T19:32:12.042Z",
+          "updatedAt": "2026-06-02T19:32:12.053Z",
+          "deletedAt": null
+        },
+        {
+          "id": "52e1bfe1-195d-4995-81c1-da3db2dd8278",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "450ab9e2-b610-40c3-bc53-64b8166be112",
+          "type": "HTML",
+          "title": "Uso de los nodos “IF” y “Switch” para crear condiciones en los flujos",
+          "position": 5951,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/a11bebc5-ce84-4749-b142-45f263c16ba7?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--6439131c2ea6ba458f8a\" data-vnd=\"6439131c2ea6ba458f8a\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=6439131c2ea6ba458f8a\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5951",
+          "createdAt": "2026-06-02T19:32:14.549Z",
+          "updatedAt": "2026-06-02T19:32:14.566Z",
+          "deletedAt": null
+        },
+        {
+          "id": "29a7cb9e-079a-4bb0-b38f-16915bc8ae07",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "450ab9e2-b610-40c3-bc53-64b8166be112",
+          "type": "HTML",
+          "title": "**BONUS**: Crear bot de telegram para notificar errores",
+          "position": 6283,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/435cac7c-06e9-4051-9146-66f001b6edec?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--62f75d32e6005293a72b\" data-vnd=\"62f75d32e6005293a72b\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=62f75d32e6005293a72b\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-33fb17a0-685d-4db1-a7a0-8eb03e4218f0\" href=\"https://va360.academy/wp-content/uploads/2024/09/VA360__Bonus___Bot_Telegram.zip\">_VA360__Bonus___Bot_Telegram</a><a href=\"https://va360.academy/wp-content/uploads/2024/09/VA360__Bonus___Bot_Telegram.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-33fb17a0-685d-4db1-a7a0-8eb03e4218f0\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "6283",
+          "createdAt": "2026-06-02T19:32:22.322Z",
+          "updatedAt": "2026-06-02T19:32:22.342Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "41c6968c-55e4-4428-94b6-254578d9f942",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "58c8263a-9cfa-46cd-af88-eb5d38e2fdd0",
+      "title": "Integración con Aplicaciones Externas",
+      "description": null,
+      "position": 4,
+      "externalSource": "learndash",
+      "externalId": "5903-s4",
+      "createdAt": "2026-06-02T19:32:04.326Z",
+      "updatedAt": "2026-06-02T19:32:04.345Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "2e978bda-b0ed-4a9f-9733-8986aa0945a0",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "41c6968c-55e4-4428-94b6-254578d9f942",
+          "type": "HTML",
+          "title": "Autenticación y gestión de credenciales.",
+          "position": 5937,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/c266741a-95bd-45b8-8184-0f0661cd42be?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--f55aab24efc5ecc0f65d\" data-vnd=\"f55aab24efc5ecc0f65d\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=f55aab24efc5ecc0f65d\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5937",
+          "createdAt": "2026-06-02T19:32:14.584Z",
+          "updatedAt": "2026-06-02T19:32:14.597Z",
+          "deletedAt": null
+        },
+        {
+          "id": "2ddb9cf3-a453-4af3-8d06-b129d0ba2870",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "41c6968c-55e4-4428-94b6-254578d9f942",
+          "type": "HTML",
+          "title": "Manipulación de datos entre nodos.",
+          "position": 5939,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/cdc1a93d-01fd-4096-a515-f9824f855547?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--5342e6c45945b3e80499\" data-vnd=\"5342e6c45945b3e80499\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=5342e6c45945b3e80499\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-2c39a633-737d-4263-9ef1-56331b45f5bc\" href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__Transformaci_n_de_datos.zip\">_VA360__Transformaci_n_de_datos</a><a href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__Transformaci_n_de_datos.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-2c39a633-737d-4263-9ef1-56331b45f5bc\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5939",
+          "createdAt": "2026-06-02T19:32:14.653Z",
+          "updatedAt": "2026-06-02T19:32:14.664Z",
+          "deletedAt": null
+        },
+        {
+          "id": "67c2dad8-ed33-4430-b581-4cf7dce0d687",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "41c6968c-55e4-4428-94b6-254578d9f942",
+          "type": "HTML",
+          "title": "Uso del nodo “Function” para transformar datos.",
+          "position": 5941,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/df2f6414-bbe0-4094-9795-eba4934b505f?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--f9fbcd4b91fb409ed646\" data-vnd=\"f9fbcd4b91fb409ed646\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=f9fbcd4b91fb409ed646\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-e94a21fd-547b-4622-9775-9626655923fe\" href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__Nodo_funciones.zip\">_VA360__Nodo_funciones</a><a href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__Nodo_funciones.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-e94a21fd-547b-4622-9775-9626655923fe\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5941",
+          "createdAt": "2026-06-02T19:32:14.682Z",
+          "updatedAt": "2026-06-02T19:32:14.698Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "a99afc40-b842-4f6a-90be-3f5b749146dd",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "58c8263a-9cfa-46cd-af88-eb5d38e2fdd0",
+      "title": "AGENTES DE IA",
+      "description": null,
+      "position": 5,
+      "externalSource": "learndash",
+      "externalId": "5903-s5",
+      "createdAt": "2026-06-02T19:32:04.367Z",
+      "updatedAt": "2026-06-02T19:32:04.388Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "8c65e7d1-2e42-4bc5-af36-75e91d3141c6",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "a99afc40-b842-4f6a-90be-3f5b749146dd",
+          "type": "HTML",
+          "title": "Ejecución y debug de flujos",
+          "position": 5931,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/703a8689-9477-41a3-9954-a5adb137cc17?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--82037d629dffd7636914\" data-vnd=\"82037d629dffd7636914\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=82037d629dffd7636914\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-efbc24ae-1449-43a5-9497-6dc61e5b7cb3\" href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__Error_WF.zip\">_VA360__Error_WF</a><a href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__Error_WF.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-efbc24ae-1449-43a5-9497-6dc61e5b7cb3\">Descarga</a></div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-752650b7-6aac-43a5-8df6-7a422c38bd28\" href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__Flujos_de_errores.zip\">_VA360__Flujos_de_errores</a><a href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__Flujos_de_errores.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-752650b7-6aac-43a5-8df6-7a422c38bd28\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5931",
+          "createdAt": "2026-06-02T19:32:14.714Z",
+          "updatedAt": "2026-06-02T19:32:14.728Z",
+          "deletedAt": null
+        },
+        {
+          "id": "9da5f65e-028a-43a9-8fa1-e12fe7179501",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "a99afc40-b842-4f6a-90be-3f5b749146dd",
+          "type": "HTML",
+          "title": "Introducción a las integraciones y APIs.",
+          "position": 5933,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/d41c6b15-6175-4510-a018-9fffad0ecae9?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--4984a82ef570c64c344f\" data-vnd=\"4984a82ef570c64c344f\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=4984a82ef570c64c344f\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5933",
+          "createdAt": "2026-06-02T19:32:06.248Z",
+          "updatedAt": "2026-06-02T19:32:06.271Z",
+          "deletedAt": null
+        },
+        {
+          "id": "99e723b7-a623-48ec-ad3f-98a11c077926",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "a99afc40-b842-4f6a-90be-3f5b749146dd",
+          "type": "HTML",
+          "title": "**BONUS**: Securización de Webhooks",
+          "position": 6419,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/d03733fe-e793-47e7-a797-d8ecf230ce7b?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--a02749c2178ec73952e6\" data-vnd=\"a02749c2178ec73952e6\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=a02749c2178ec73952e6\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "6419",
+          "createdAt": "2026-06-02T19:32:14.747Z",
+          "updatedAt": "2026-06-02T19:32:14.766Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "5a5ffbc8-4ea9-4857-8b09-7fec5aa4fc4b",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "58c8263a-9cfa-46cd-af88-eb5d38e2fdd0",
+      "title": "HABLA CON TUS DATOS",
+      "description": null,
+      "position": 6,
+      "externalSource": "learndash",
+      "externalId": "5903-s6",
+      "createdAt": "2026-06-02T19:32:04.407Z",
+      "updatedAt": "2026-06-02T19:32:04.426Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "e789caef-109b-4bc2-937e-43baba9471da",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "5a5ffbc8-4ea9-4857-8b09-7fec5aa4fc4b",
+          "type": "HTML",
+          "title": "Introducción a los agentes de IA en N8N",
+          "position": 6391,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/88765ca2-3db0-463d-a294-7a0188acbbfc?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-e726fd19-05d8-4502-b156-aef9f0d96c40\" href=\"https://va360.academy/wp-content/uploads/2024/09/VA360__Ejemplo_agentes_IA_new-1.zip\">_VA360__Ejemplo_agentes_IA_new</a><a href=\"https://va360.academy/wp-content/uploads/2024/09/VA360__Ejemplo_agentes_IA_new-1.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-e726fd19-05d8-4502-b156-aef9f0d96c40\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--603d7c75d933e1fa9860\" data-vnd=\"603d7c75d933e1fa9860\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=603d7c75d933e1fa9860\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-5a115420-1cab-4f24-971e-1434c8cd9026\" href=\"https://va360.academy/wp-content/uploads/2024/09/VA360__Ejemplo_agentes_IA.zip\">_VA360__Ejemplo_agentes_IA</a><a href=\"https://va360.academy/wp-content/uploads/2024/09/VA360__Ejemplo_agentes_IA.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-5a115420-1cab-4f24-971e-1434c8cd9026\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "6391",
+          "createdAt": "2026-06-02T19:32:14.868Z",
+          "updatedAt": "2026-06-02T19:32:14.883Z",
+          "deletedAt": null
+        },
+        {
+          "id": "ce71aa60-91cd-4363-8f2c-137029dfdca8",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "5a5ffbc8-4ea9-4857-8b09-7fec5aa4fc4b",
+          "type": "HTML",
+          "title": "Agentes de IA con memoria y herramientas",
+          "position": 6393,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/68a2b725-7f24-4829-a711-129c8ce9aaab?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Disculpa por el audio, resulta que han empezado una obra al lado de donde tengo el estudio.🙏</p>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--ca51bcbb3024c1b15ac3\" data-vnd=\"ca51bcbb3024c1b15ac3\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=ca51bcbb3024c1b15ac3\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-d1832ed4-d0be-4ab7-b1e0-5489328f1270\" href=\"https://va360.academy/wp-content/uploads/2024/09/VA360__Agentes_de_IA_con_memoria_y_herramientas.zip\">_VA360__Agentes_de_IA_con_memoria_y_herramientas</a><a href=\"https://va360.academy/wp-content/uploads/2024/09/VA360__Agentes_de_IA_con_memoria_y_herramientas.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-d1832ed4-d0be-4ab7-b1e0-5489328f1270\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "6393",
+          "createdAt": "2026-06-02T19:32:22.359Z",
+          "updatedAt": "2026-06-02T19:32:22.373Z",
+          "deletedAt": null
+        },
+        {
+          "id": "8d5eb6c3-7a29-40a2-a650-002c2ba23190",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "5a5ffbc8-4ea9-4857-8b09-7fec5aa4fc4b",
+          "type": "HTML",
+          "title": "Entrenamiento de un Asistente de OpenAI",
+          "position": 6395,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Nueva edición:</h2>\n\n\n\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/04d022fd-27dd-43af-99cb-75493064c65a?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Primera edición:</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--e4d7848dc071537856f4\" data-vnd=\"e4d7848dc071537856f4\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=e4d7848dc071537856f4\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-e8fcb48b-6992-4ce9-be51-1567d975a0d1\" href=\"https://va360.academy/wp-content/uploads/2024/09/VA360__Entrenar_asistente.zip\">_VA360__Entrenar_asistente</a><a href=\"https://va360.academy/wp-content/uploads/2024/09/VA360__Entrenar_asistente.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-e8fcb48b-6992-4ce9-be51-1567d975a0d1\">Descarga</a></div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-fce09ccc-e487-43be-9743-fd384cc5ed73\" href=\"https://va360.academy/wp-content/uploads/2024/09/libros.zip\">Libros SQL</a><a href=\"https://va360.academy/wp-content/uploads/2024/09/libros.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-fce09ccc-e487-43be-9743-fd384cc5ed73\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "6395",
+          "createdAt": "2026-06-02T19:32:14.909Z",
+          "updatedAt": "2026-06-02T19:32:14.923Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "9a2baee7-3020-4dc9-9ddd-ee1958edb665",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "58c8263a-9cfa-46cd-af88-eb5d38e2fdd0",
+      "title": "PÍLDORAS",
+      "description": null,
+      "position": 7,
+      "externalSource": "learndash",
+      "externalId": "5903-s7",
+      "createdAt": "2026-06-02T19:32:04.445Z",
+      "updatedAt": "2026-06-02T19:32:04.463Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "4a6bff1f-6ce3-4e4b-baca-5d6dfe8f12b7",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "9a2baee7-3020-4dc9-9ddd-ee1958edb665",
+          "type": "HTML",
+          "title": "Habla con tus datos, RAG: Chatbot",
+          "position": 5957,
+          "content": {
+            "html": "\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--bf726baf9fcca13d57b3\" data-vnd=\"bf726baf9fcca13d57b3\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=bf726baf9fcca13d57b3\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-a3cadc9d-6329-4855-a63f-53ce731ff581\" href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__Asistente_de_librer_a___RAG.zip\">_VA360__Asistente_de_librer_a___RAG</a><a href=\"https://va360.academy/wp-content/uploads/2024/08/VA360__Asistente_de_librer_a___RAG.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-a3cadc9d-6329-4855-a63f-53ce731ff581\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5957",
+          "createdAt": "2026-06-02T19:32:14.982Z",
+          "updatedAt": "2026-06-02T19:32:14.996Z",
+          "deletedAt": null
+        },
+        {
+          "id": "e59944e1-9102-43ce-8289-21f22fa22dfd",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "9a2baee7-3020-4dc9-9ddd-ee1958edb665",
+          "type": "HTML",
+          "title": "Habla con tus datos, RAG: Integración en web",
+          "position": 5959,
+          "content": {
+            "html": "\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--b3dd274bbd51d3762d2e\" data-vnd=\"b3dd274bbd51d3762d2e\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=b3dd274bbd51d3762d2e\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">Enlaces de interes:</h2>\n\n\n\n<ul class=\"wp-block-list\">\n<li>V0 de Vercel: <a href=\"https://v0.dev/chat\">https://v0.dev/chat</a></li>\n\n\n\n<li>Documentación chat N8N: <a href=\"https://www.npmjs.com/package/@n8n/chat\">https://www.npmjs.com/package/@n8n/chat</a></li>\n</ul>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5959",
+          "createdAt": "2026-06-02T19:32:15.060Z",
+          "updatedAt": "2026-06-02T19:32:15.077Z",
+          "deletedAt": null
+        },
+        {
+          "id": "7031b4ec-9355-4216-b075-c5622796bc64",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "9a2baee7-3020-4dc9-9ddd-ee1958edb665",
+          "type": "HTML",
+          "title": "Habla con tus datos, RAG: Creación",
+          "position": 6397,
+          "content": {
+            "html": "\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--55a598c84a181ee1708a\" data-vnd=\"55a598c84a181ee1708a\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=55a598c84a181ee1708a\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-8589b7ae-6451-4b2a-8514-a7073c9e387d\" href=\"https://va360.academy/wp-content/uploads/2024/09/VA360__RAG___Pinecone.zip\">_VA360__RAG___Pinecone</a><a href=\"https://va360.academy/wp-content/uploads/2024/09/VA360__RAG___Pinecone.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-8589b7ae-6451-4b2a-8514-a7073c9e387d\">Descarga</a></div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-4a634aa1-8881-4f27-b332-263f22fa5001\" href=\"https://va360.academy/wp-content/uploads/2024/09/RAG.zip\">Datos RAG</a><a href=\"https://va360.academy/wp-content/uploads/2024/09/RAG.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-4a634aa1-8881-4f27-b332-263f22fa5001\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "6397",
+          "createdAt": "2026-06-02T19:32:14.946Z",
+          "updatedAt": "2026-06-02T19:32:14.965Z",
+          "deletedAt": null
+        },
+        {
+          "id": "44fc745d-598d-469e-b341-3a52f32a0838",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "9a2baee7-3020-4dc9-9ddd-ee1958edb665",
+          "type": "HTML",
+          "title": "Crear un post en WordPress y añadir una imagen destacada",
+          "position": 6762,
+          "content": {
+            "html": "\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--ee336ecdd91062a906ff\" data-vnd=\"ee336ecdd91062a906ff\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=ee336ecdd91062a906ff\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-bffff92c-5980-44fc-883c-430db88e0696\" href=\"https://va360.academy/wp-content/uploads/2024/10/VA360__Pill___Imagen_destacada_en_post_de_wordpress.zip\">_VA360__Pill___Imagen_destacada_en_post_de_wordpress</a><a href=\"https://va360.academy/wp-content/uploads/2024/10/VA360__Pill___Imagen_destacada_en_post_de_wordpress.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-bffff92c-5980-44fc-883c-430db88e0696\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "6762",
+          "createdAt": "2026-06-02T19:32:12.071Z",
+          "updatedAt": "2026-06-02T19:32:12.086Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "c63c4989-90cb-4d7c-8512-3a20174fb6e0",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "58c8263a-9cfa-46cd-af88-eb5d38e2fdd0",
+      "title": "Integraciones Avanzadas y Webhooks",
+      "description": null,
+      "position": 8,
+      "externalSource": "learndash",
+      "externalId": "5903-s8",
+      "createdAt": "2026-06-02T19:32:04.479Z",
+      "updatedAt": "2026-06-02T19:32:04.495Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "e2dcab2a-7b71-45f9-ae06-806c99c1a6f4",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "c63c4989-90cb-4d7c-8512-3a20174fb6e0",
+          "type": "HTML",
+          "title": "Backup programado de Workflows",
+          "position": 6847,
+          "content": {
+            "html": "\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--b1af7f6a5723926858bd\" data-vnd=\"b1af7f6a5723926858bd\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=b1af7f6a5723926858bd\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-35c85855-2580-4057-8e5d-899d6e686a1e\" href=\"https://va360.academy/wp-content/uploads/2024/10/VA360__Backup_Workflows.zip\">_VA360__Backup_Workflows</a><a href=\"https://va360.academy/wp-content/uploads/2024/10/VA360__Backup_Workflows.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-35c85855-2580-4057-8e5d-899d6e686a1e\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "6847",
+          "createdAt": "2026-06-02T19:32:15.365Z",
+          "updatedAt": "2026-06-02T19:32:15.384Z",
+          "deletedAt": null
+        },
+        {
+          "id": "998b957b-0572-45cc-8288-5e5f1e6030e0",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "c63c4989-90cb-4d7c-8512-3a20174fb6e0",
+          "type": "HTML",
+          "title": "Todo sobre el nodo Loop",
+          "position": 6868,
+          "content": {
+            "html": "\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--ef1713f8f375425addc1\" data-vnd=\"ef1713f8f375425addc1\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=ef1713f8f375425addc1\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-ba21fb1f-cd3b-49de-8d3e-35ea99c501d3\" href=\"https://va360.academy/wp-content/uploads/2024/10/VA360__Pill_Loops.zip\">_VA360__Pill_Loops</a><a href=\"https://va360.academy/wp-content/uploads/2024/10/VA360__Pill_Loops.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-ba21fb1f-cd3b-49de-8d3e-35ea99c501d3\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "6868",
+          "createdAt": "2026-06-02T19:32:15.409Z",
+          "updatedAt": "2026-06-02T19:32:15.429Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "58c8263a-9cfa-46cd-af88-eb5d38e2fdd0",
+      "title": "CLASES EXTRA",
+      "description": null,
+      "position": 9,
+      "externalSource": "learndash",
+      "externalId": "5903-s9",
+      "createdAt": "2026-06-02T19:32:04.510Z",
+      "updatedAt": "2026-06-02T19:32:04.525Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "7db32ddc-38ae-44b8-80cc-214d603d1f4e",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Buenas prácticas para la gestión de flujos programados.",
+          "position": 5961,
+          "content": {
+            "html": "\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--2e750ed09a01b48d78d7\" data-vnd=\"2e750ed09a01b48d78d7\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=2e750ed09a01b48d78d7\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5961",
+          "createdAt": "2026-06-02T19:32:15.100Z",
+          "updatedAt": "2026-06-02T19:32:15.119Z",
+          "deletedAt": null
+        },
+        {
+          "id": "74e3da55-ca67-4846-bd77-985c6487e995",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Todo sobre los webhooks",
+          "position": 5963,
+          "content": {
+            "html": "\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--28be05a3345ff262e1ea\" data-vnd=\"28be05a3345ff262e1ea\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=28be05a3345ff262e1ea\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "5963",
+          "createdAt": "2026-06-02T19:32:06.293Z",
+          "updatedAt": "2026-06-02T19:32:06.309Z",
+          "deletedAt": null
+        },
+        {
+          "id": "4914f6ed-431f-4857-a3d8-9d1d38bfa400",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Mantén N8N siempre actualizado",
+          "position": 6925,
+          "content": {
+            "html": "\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--590cb3c361736c4680e3\" data-vnd=\"590cb3c361736c4680e3\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=590cb3c361736c4680e3\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "6925",
+          "createdAt": "2026-06-02T19:32:15.450Z",
+          "updatedAt": "2026-06-02T19:32:15.470Z",
+          "deletedAt": null
+        },
+        {
+          "id": "62a06188-5529-4694-b9ea-7a73f4329810",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Instalando N8N con Portainer",
+          "position": 7097,
+          "content": {
+            "html": "\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--516319a8945c3688e634\" data-vnd=\"516319a8945c3688e634\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=516319a8945c3688e634\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"container\">\n        <h2>Instrucciones para instalar Portainer en Ubuntu</h2>\n        <p>Sigue estos sencillos pasos para instalar y configurar Portainer, una herramienta fácil de usar para gestionar tus contenedores Docker.</p>\n        <ol>\n            <li>\n                <h3>Actualizar los paquetes del sistema</h3>\n                <p>Ejecuta el siguiente comando para actualizar la lista de paquetes:</p>\n                <pre>sudo apt update</pre>\n            </li>\n            <li>\n                <h3>Instalar Docker</h3>\n                <p>Instala Docker utilizando el siguiente comando:</p>\n                <pre>sudo apt install docker.io -y</pre>\n                <p>Verifica que Docker esté en ejecución:</p>\n                <pre>sudo systemctl status docker</pre>\n                <p>Si no está activo, inicia el servicio:</p>\n                <pre>sudo systemctl start docker</pre>\n                <p>Finalmente, agrega tu usuario al grupo <code>docker</code>:</p>\n                <pre>sudo usermod -aG docker $USER</pre>\n                <p>Reinicia la terminal para aplicar los cambios.</p>\n            </li>\n            <li>\n                <h3>Instalar Portainer</h3>\n                <p>Descarga la imagen oficial de Portainer:</p>\n                <pre>docker pull portainer/portainer-ce:latest</pre>\n                <p>Verifica la imagen descargada:</p>\n                <pre>docker images</pre>\n                <p>Inicia el contenedor de Portainer:</p>\n                <pre>docker run -d -p 9000:9000 --restart always -v /var/run/docker.sock:/var/run/docker.sock portainer/portainer-ce:latest</pre>\n                <p>Confirma que el contenedor esté en ejecución:</p>\n                <pre>docker ps</pre>\n            </li>\n            <li>\n                <h3>Acceder a la interfaz web de Portainer</h3>\n                <p>Abre tu navegador y visita la siguiente URL:</p>\n                <pre>http://<i>IP-del-servidor</i>:9000</pre>\n                <p>Crea un usuario administrador proporcionando un nombre de usuario y contraseña fuertes.</p>\n            </li>\n        </ol>\n        <p>¡Listo! Ahora puedes comenzar a gestionar tus contenedores de forma fácil y eficiente con Portainer.</p>\n    </div>\n\n\n\n<h2 class=\"wp-block-heading\">Datos instalación N8N:</h2>\n\n\n\n<p class=\"wp-block-paragraph\"><code>Name</code>&nbsp;&#8211; n8n<br><code>Image</code>&nbsp;&#8211; n8nio/n8n:latest<br><code>Always pull the image</code>&nbsp;&#8211; Enabled<br><code>Manual network port publishing</code>&nbsp;&#8211; Host: 5678 / Container: 5678</p>\n\n\n\n<h2 class=\"wp-block-heading\">Variables de entorno usadas para N8N:</h2>\n\n\n\n<pre class=\"wp-block-code\"><code>TZ=Europe/London\nGENERIC_TIMEZONE=Europe/London\nWEBHOOK_URL=http://your-droplet-ip:5678\nEXECUTIONS_DATA_SAVE_ON_SUCCESS=none\nEXECUTIONS_DATA_PRUNE=true\nEXECUTIONS_DATA_MAX_AGE=24\nDB_SQLITE_VACUUM_ON_STARTUP=true</code></pre>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "7097",
+          "createdAt": "2026-06-02T19:32:06.768Z",
+          "updatedAt": "2026-06-02T19:32:06.789Z",
+          "deletedAt": null
+        },
+        {
+          "id": "876fa4cf-4ee5-4725-a087-b9b8b4db8c96",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Instalando N8N en Railway",
+          "position": 7319,
+          "content": {
+            "html": "\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--d04545f79ee661b1d5b6\" data-vnd=\"d04545f79ee661b1d5b6\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=d04545f79ee661b1d5b6\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "7319",
+          "createdAt": "2026-06-02T19:32:16.549Z",
+          "updatedAt": "2026-06-02T19:32:16.565Z",
+          "deletedAt": null
+        },
+        {
+          "id": "53a03b65-602f-4b4a-9427-029a684e1db5",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Asistente con Whatsapp con IA y RAG",
+          "position": 7510,
+          "content": {
+            "html": "\n<h2 class=\"wp-block-heading\">Primera parte</h2>\n\n\n\n<figure class=\"wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube wp-embed-aspect-16-9 wp-has-aspect-ratio\"><div class=\"wp-block-embed__wrapper\">\n<iframe title=\"Crea tu Chatbot de WhatsApp en Minutos con N8N e INTELIGENCIA ARTIFICIAL\" width=\"640\" height=\"360\" src=\"https://www.youtube.com/embed/P0v--2EC9Z8?feature=oembed\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" referrerpolicy=\"strict-origin-when-cross-origin\" allowfullscreen></iframe>\n</div></figure>\n\n\n\n<h2 class=\"wp-block-heading\">Segunda parte</h2>\n\n\n\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--543facc27db6184dd35a\" data-vnd=\"543facc27db6184dd35a\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=543facc27db6184dd35a\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-aa2d7eff-f3a1-4050-8653-ea900cae4059\" href=\"https://va360.academy/wp-content/uploads/2024/12/VA360__Chatbot_Whatsapp_RAG.zip\">_VA360__Chatbot_Whatsapp_RAG</a><a href=\"https://va360.academy/wp-content/uploads/2024/12/VA360__Chatbot_Whatsapp_RAG.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-aa2d7eff-f3a1-4050-8653-ea900cae4059\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "7510",
+          "createdAt": "2026-06-02T19:32:16.585Z",
+          "updatedAt": "2026-06-02T19:32:16.603Z",
+          "deletedAt": null
+        },
+        {
+          "id": "13078b45-653b-415e-b426-bf3d42dc1d2a",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Backup de contenedores Docker",
+          "position": 7722,
+          "content": {
+            "html": "\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 56.20608899297424%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--29fe72731141083dcc5e\" data-vnd=\"29fe72731141083dcc5e\" data-profile=\"6665\" data-aspectRatio=\"0.5620608899297423\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=29fe72731141083dcc5e\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<h2 class=\"wp-block-heading\">Comandos utilizados</h2>\n\n\n\n<h3 class=\"wp-block-heading\">1. Primero haz login en Docker Hub</h3>\n\n\n\n<p class=\"wp-block-paragraph\">docker login</p>\n\n\n\n<h3 class=\"wp-block-heading\">2. Examina los dockers que tienes en el servidor</h3>\n\n\n\n<p class=\"wp-block-paragraph\">docker images</p>\n\n\n\n<h3 class=\"wp-block-heading\">3. Etiqueta la imagen</h3>\n\n\n\n<p class=\"wp-block-paragraph\">docker tag atendai/evolution-api:homolog va360/va360api:academy</p>\n\n\n\n<h3 class=\"wp-block-heading\">4. Sube la imagen a Docker Hub</h3>\n\n\n\n<p class=\"wp-block-paragraph\">docker push va360/va360api:academy</p>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "7722",
+          "createdAt": "2026-06-02T19:32:15.489Z",
+          "updatedAt": "2026-06-02T19:32:15.507Z",
+          "deletedAt": null
+        },
+        {
+          "id": "6fb47a9f-4183-47cc-9895-309c9d061bdc",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Integración de Manychat (Facebook) con N8N",
+          "position": 7741,
+          "content": {
+            "html": "\n<figure class=\"wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube wp-embed-aspect-16-9 wp-has-aspect-ratio\"><div class=\"wp-block-embed__wrapper\">\n<iframe title=\"Cómo INTEGRAR Facebook e Instagram Messenger con N8N: Automatizaciones Increíbles en 2024\" width=\"640\" height=\"360\" src=\"https://www.youtube.com/embed/gKYD2LNVd0k?feature=oembed\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" referrerpolicy=\"strict-origin-when-cross-origin\" allowfullscreen></iframe>\n</div></figure>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-45e61879-a265-4fd8-9eee-1718fbdb0ec5\" href=\"https://va360.academy/wp-content/uploads/2024/12/VA360__Manychat.zip\">_VA360__Manychat</a><a href=\"https://va360.academy/wp-content/uploads/2024/12/VA360__Manychat.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-45e61879-a265-4fd8-9eee-1718fbdb0ec5\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "7741",
+          "createdAt": "2026-06-02T19:32:15.529Z",
+          "updatedAt": "2026-06-02T19:32:15.551Z",
+          "deletedAt": null
+        },
+        {
+          "id": "1c908552-7961-46b1-bd24-6a3d35e7ee31",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Deja de pagar Manychat. Integramos la API de Meta Facebook en N8N",
+          "position": 8007,
+          "content": {
+            "html": "\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 52.74725274725275%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--8f06b99104b93a63d5fa\" data-vnd=\"8f06b99104b93a63d5fa\" data-profile=\"6665\" data-aspectRatio=\"0.5274725274725275\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=8f06b99104b93a63d5fa\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-2f769139-8e18-49b3-996e-4482c3cfd206\" href=\"https://va360.academy/wp-content/uploads/2025/01/VA360__Manychat-1.zip\">_VA360__Manychat (1)</a><a href=\"https://va360.academy/wp-content/uploads/2025/01/VA360__Manychat-1.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-2f769139-8e18-49b3-996e-4482c3cfd206\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">Pasos a seguir para configurar la API correctamente</h2>\n\n\n\n<p class=\"wp-block-paragraph\">1.- Crear página de Facebook<br>2.- Vincular cuenta de instagram con la página de Facebook (<a href=\"https://www.facebook.com/settings/?tab=linked_profiles\">https://www.facebook.com/settings/?tab=linked_profiles</a>)<br>3.- Ir al explorador de API Graph y generar y añadir permisos (<a href=\"https://developers.facebook.com/tools/explorer/1014224036774710/?method=GET&amp;path=17943327035944070%2Fcomments&amp;version=v21.0\">https://developers.facebook.com/tools/explorer/1014224036774710/?method=GET&amp;path=17943327035944070%2Fcomments&amp;version=v21.0</a>)</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li>pages_show_list</li>\n\n\n\n<li>business_management</li>\n\n\n\n<li>instagram_basic</li>\n\n\n\n<li>instagram_manage_comments</li>\n\n\n\n<li>instagram_manage_insights</li>\n\n\n\n<li>instagram_content_publish</li>\n\n\n\n<li>instagram_manage_messages</li>\n\n\n\n<li>instagram_manage_events</li>\n</ul>\n\n\n\n<p class=\"wp-block-paragraph\">4.- Pulsar en Generate Access Token y Vincular cuentas<br>5.- Ir al depurador de identificador de acceso y pegar el token (<a href=\"https://developers.facebook.com/tools/debug/accesstoken/?access_token=EAAOabm9vQzYBOzLNOzVO2NeC7sxdlxgSxZCjSg8gR3KZCzi9HcbyBp4gwpKpiC4TwFbnGzsacyAuJVedLVIHjdvGh5cEKkRXW28VU5Be7o9EgF2HqtafG63umiL5ObA0DN7J7x105cdKaJCO5wY9AEgWIB6C5ZA75cdWzjQcWJEpBRzsey6GmHZA7wihV8M8Sq8GEDxVEgZDZD&amp;version=v21.0\">https://developers.facebook.com/tools/debug/accesstoken/?access_token=EAAOabm9vQzYBOzLNOzVO2NeC7sxdlxgSxZCjSg8gR3KZCzi9HcbyBp4gwpKpiC4TwFbnGzsacyAuJVedLVIHjdvGh5cEKkRXW28VU5Be7o9EgF2HqtafG63umiL5ObA0DN7J7x105cdKaJCO5wY9AEgWIB6C5ZA75cdWzjQcWJEpBRzsey6GmHZA7wihV8M8Sq8GEDxVEgZDZD&amp;version=v21.0</a>)<br>6.- Pulsar en depurar y abajo del todo pulsar en extender.<br>7.- Endpoints necesarios:</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li>me/accounts -&gt; Páginas de mi cuenta</li>\n\n\n\n<li>{page_id}?fields=instagram_business_account -&gt; Cuenta de instagram vinculada<br>ej: 328365280369767?fields=instagram_business_account</li>\n\n\n\n<li>{instagram_business_account_id}/media -&gt; Publicaciones de la cuenta de IG vinculada<br>ej: 17841401465710018/media</li>\n\n\n\n<li>{media_id}?fields=caption,media_type,media_url,permalink,thumbnail_url,timestamp,username -&gt; Información de la publicación<br>ej: 17943327035944070?fields=caption,media_type,media_url,permalink,thumbnail_url,timestamp,username</li>\n</ul>\n\n\n\n<div class=\"wp-block-buttons is-layout-flex wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link has-vivid-red-background-color has-background wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\">Si tienes alguna duda, recuerda dejarla en el foro ¡gracias!</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "8007",
+          "createdAt": "2026-06-02T19:32:07.111Z",
+          "updatedAt": "2026-06-02T19:32:07.124Z",
+          "deletedAt": null
+        },
+        {
+          "id": "5b21bd3e-ef90-4065-877e-9333f34dfa0c",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Resumen transcripción reuniones con Fathom en N8N",
+          "position": 8036,
+          "content": {
+            "html": "\n<script async src=\"https://cdn.vidiq.me/js/vq_starter.js\"></script>\n  <div style=\"width:100%;height:0;position:relative;padding-bottom: 52.74725274725275%;\" class=\"viqeo-embed viqeo-horizontal viqeo-embed--6627d30cca6d2d1b6a93\" data-vnd=\"6627d30cca6d2d1b6a93\" data-profile=\"6665\" data-aspectRatio=\"0.5274725274725275\"   >\n    <iframe src=\"https://cdn.vidiq.me/embed/?vid=6627d30cca6d2d1b6a93\" width=\"100%\" height=\"100%\" style=\"position:absolute;\" frameBorder=\"0\" allowFullScreen></iframe>\n  </div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-10ac023c-6fb4-428a-aed4-e92a8304f25c\" href=\"https://va360.academy/wp-content/uploads/2025/01/VA360__Fathom.zip\">_VA360__Fathom</a><a href=\"https://va360.academy/wp-content/uploads/2025/01/VA360__Fathom.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-10ac023c-6fb4-428a-aed4-e92a8304f25c\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "8036",
+          "createdAt": "2026-06-02T19:32:16.624Z",
+          "updatedAt": "2026-06-02T19:32:16.646Z",
+          "deletedAt": null
+        },
+        {
+          "id": "bdca940f-094e-48c2-acee-8a0caa45d93b",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Scraping web y monitorización",
+          "position": 8687,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/19d2a04f-c38c-4238-98de-77ce8ddc3130?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-7a33d2ed-ea53-4464-ab42-f3120a46310d\" href=\"https://va360.academy/wp-content/uploads/2025/02/Scraping-web-y-monitorizacion.zip\">Scraping web y monitorizacion</a><a href=\"https://va360.academy/wp-content/uploads/2025/02/Scraping-web-y-monitorizacion.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-7a33d2ed-ea53-4464-ab42-f3120a46310d\">Descarga</a></div>\n\n\n\n<h2 class=\"wp-block-heading\">¿Te ha quedado alguna duda?</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Si tienes cualquier pregunta referente a esta clase, no dudes en buscar en nuestro foro de soporte antes de preguntar en la comunidad. Estaremos pendientes para responder lo antes posible. ¡Gracias!</p>\n\n\n\n<div class=\"wp-block-buttons is-content-justification-center is-layout-flex wp-container-core-buttons-is-layout-fe48e5de wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button\"><a class=\"wp-block-button__link wp-element-button\" href=\"https://va360.academy/groups/n8n/forums/\" target=\"_blank\" rel=\"noreferrer noopener\">Accede al foro de soporte</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "8687",
+          "createdAt": "2026-06-02T19:32:16.716Z",
+          "updatedAt": "2026-06-02T19:32:16.735Z",
+          "deletedAt": null
+        },
+        {
+          "id": "06499c9c-d043-4b5f-b785-2fc0ce9f8e2d",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Nuevas AI Tools disponibles en N8N",
+          "position": 9215,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/fa25db26-75b5-4808-8fea-51a1fcb8ac77?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "9215",
+          "createdAt": "2026-06-02T19:32:07.145Z",
+          "updatedAt": "2026-06-02T19:32:07.163Z",
+          "deletedAt": null
+        },
+        {
+          "id": "c1761b0c-4e23-4906-9306-bb61eb582411",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Nuevos Agentes de IA y Human in the Loop",
+          "position": 9220,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/ceeda5bc-9a5d-4b8b-814a-57dfcd569752?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "9220",
+          "createdAt": "2026-06-02T19:32:16.759Z",
+          "updatedAt": "2026-06-02T19:32:16.778Z",
+          "deletedAt": null
+        },
+        {
+          "id": "f1b2f9a6-3fd0-441d-a73c-62a85400f8e6",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Agente con Whatsapp (API OFICIAL), RAG y Tools de Calendar",
+          "position": 9622,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/98c7f9e3-0ab3-4ede-bb9c-67ed3c16ff17?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-2c25fe4f-bd1e-4e7d-9d62-2af688b15392\" href=\"https://va360.academy/wp-content/uploads/2025/03/VA360__Mi_Barberia_con_Clase.zip\">_VA360__Mi_Barberia_con_Clase</a><a href=\"https://va360.academy/wp-content/uploads/2025/03/VA360__Mi_Barberia_con_Clase.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-2c25fe4f-bd1e-4e7d-9d62-2af688b15392\">Descarga</a></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "9622",
+          "createdAt": "2026-06-02T19:32:15.578Z",
+          "updatedAt": "2026-06-02T19:32:15.597Z",
+          "deletedAt": null
+        },
+        {
+          "id": "55ba66ae-82f1-4a51-8471-50e70aa57fa5",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Dashboard para clientes con N8N",
+          "position": 9808,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/56dd76f3-4044-4739-9696-fbe224eb2f01?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-293b9ce1-1783-464b-b140-6f00bbb85b33\" href=\"https://va360.academy/wp-content/uploads/2025/03/va360-n8n-workflow-launcher.zip\">va360-n8n-workflow-launcher</a><a href=\"https://va360.academy/wp-content/uploads/2025/03/va360-n8n-workflow-launcher.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-293b9ce1-1783-464b-b140-6f00bbb85b33\">Descarga</a></div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-2fea5924-0a64-43ae-98cf-90c834de3fe2\" href=\"https://va360.academy/wp-content/uploads/2025/03/VA360__Test_launcher.zip\">_VA360__Test_launcher</a><a href=\"https://va360.academy/wp-content/uploads/2025/03/VA360__Test_launcher.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-2fea5924-0a64-43ae-98cf-90c834de3fe2\">Descarga</a></div>\n\n\n\n<p class=\"wp-block-paragraph\"></p>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "9808",
+          "createdAt": "2026-06-02T19:32:15.615Z",
+          "updatedAt": "2026-06-02T19:32:15.629Z",
+          "deletedAt": null
+        },
+        {
+          "id": "2a51b8b0-ff42-4999-a66c-c64b8c0d5a3f",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Instalando MCP en N8N",
+          "position": 9870,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/9d5cbed0-b0da-433c-8375-1a86c142f39e?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-e6928204-197d-4dfc-9fb3-45fd9d3f824e\" href=\"https://va360.academy/wp-content/uploads/2025/03/VA360__MCP-1.zip\">_VA360__MCP</a><a href=\"https://va360.academy/wp-content/uploads/2025/03/VA360__MCP-1.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-e6928204-197d-4dfc-9fb3-45fd9d3f824e\">Descarga</a></div>\n\n\n\n<p class=\"wp-block-paragraph\">👉🏽 Repositorio e instrucciones: https://github.com/nerding-io/n8n-nodes-mcp<br>👉🏽 Api de Brave search: https://brave.com/es/search/api/<br>👉🏽 Variables de entorno:</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li>MCP_BRAVE_API_KEY= aquí la tuya</li>\n\n\n\n<li>N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE=true</li>\n</ul>\n\n\n\n<p class=\"wp-block-paragraph\"><br>👉🏽 Comandos:</p>\n\n\n\n<h3 class=\"wp-block-heading\">Ver qué hay en el directorio nodes</h3>\n\n\n\n<p class=\"wp-block-paragraph\">cd /home/node/.n8n/nodes<br>ls -la</p>\n\n\n\n<h3 class=\"wp-block-heading\">Instalar MCP</h3>\n\n\n\n<p class=\"wp-block-paragraph\">npm install n8n-nodes-mcp</p>\n\n\n\n<p class=\"wp-block-paragraph\">BRAVE Search MCP<br>npx<br>-y @modelcontextprotocol/server-brave-search</p>\n\n\n\n<h2 class=\"wp-block-heading\">Credencial</h2>\n\n\n\n<figure class=\"wp-block-image size-large\"><img fetchpriority=\"high\" decoding=\"async\" width=\"1024\" height=\"638\" src=\"https://va360.academy/wp-content/uploads/2025/03/image-1024x638.png\" alt=\"\" class=\"wp-image-9876\" srcset=\"https://va360.academy/wp-content/uploads/2025/03/image-1024x638.png 1024w, https://va360.academy/wp-content/uploads/2025/03/image-300x187.png 300w, https://va360.academy/wp-content/uploads/2025/03/image-768x478.png 768w, https://va360.academy/wp-content/uploads/2025/03/image-624x389.png 624w, https://va360.academy/wp-content/uploads/2025/03/image-50x31.png 50w, https://va360.academy/wp-content/uploads/2025/03/image-100x62.png 100w, https://va360.academy/wp-content/uploads/2025/03/image-600x374.png 600w, https://va360.academy/wp-content/uploads/2025/03/image.png 1188w\" sizes=\"(max-width: 1024px) 100vw, 1024px\" /></figure>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "9870",
+          "createdAt": "2026-06-02T19:32:15.648Z",
+          "updatedAt": "2026-06-02T19:32:15.661Z",
+          "deletedAt": null
+        },
+        {
+          "id": "9c5fe350-6581-4d98-8fb8-599fbd8a1eb7",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Usando Python en N8N (2 Opciones)",
+          "position": 10631,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/e4780877-c86d-4c52-a4a4-6dd34c39fdeb?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h1 class=\"wp-block-heading\">Ejecutando Python en n8n: Guía Completa</h1>\n\n\n\n<h2 class=\"wp-block-heading\">Introducción</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Hay dos métodos principales para ejecutar código Python en n8n:</p>\n\n\n\n<ol class=\"wp-block-list\">\n<li><strong>Método del Sistema Operativo</strong>: Usando el nodo &#8220;Execute Command&#8221; para ejecutar Python instalado en el sistema.</li>\n\n\n\n<li><strong>Método Pyodide</strong>: Usando el nodo &#8220;Python&#8221; integrado en n8n (basado en WebAssembly).</li>\n</ol>\n\n\n\n<p class=\"wp-block-paragraph\">Cada método tiene sus propias ventajas, limitaciones y casos de uso.</p>\n\n\n\n<h2 class=\"wp-block-heading\">Método 1: Python del Sistema Operativo (nodo &#8220;Execute Command&#8221;)</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Este método ejecuta Python directamente en el sistema operativo donde está instalado n8n, permitiéndote acceder a todas las bibliotecas instaladas en el sistema.</p>\n\n\n\n<h3 class=\"wp-block-heading\">Requisitos previos</h3>\n\n\n\n<ol class=\"wp-block-list\">\n<li>Python debe estar instalado en el sistema.</li>\n\n\n\n<li>Las bibliotecas necesarias deben estar instaladas a nivel del sistema.</li>\n</ol>\n\n\n\n<h3 class=\"wp-block-heading\">Instalación de Python y bibliotecas en el contenedor Docker</h3>\n\n\n\n<p class=\"wp-block-paragraph\">Modifica tu Dockerfile para instalar Python y las bibliotecas necesarias:</p>\n\n\n\n<pre class=\"wp-block-preformatted\"><code>FROM n8nio/n8n<br>USER root<br>RUN apk add --update python3 py3-pip &amp;&amp; \\<br>    python3 -m venv /opt/venv &amp;&amp; \\<br>    /opt/venv/bin/pip install requests pandas numpy<br>USER node<br>ENV PATH=\"/opt/venv/bin:$PATH\"</code></pre>\n\n\n\n<h3 class=\"wp-block-heading\">Pruebas</h3>\n\n\n\n<h4 class=\"wp-block-heading\">Ejemplo 1: Petición HTTP simple con requests</h4>\n\n\n\n<p class=\"wp-block-paragraph\">En n8n, crea un flujo de trabajo con un nodo &#8220;Execute Command&#8221; y configúralo así:</p>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>Comando:</strong></p>\n\n\n\n<pre class=\"wp-block-preformatted\"><code>python3 -c \"<br>import requests<br>import json<br><br>def get_joke():<br>    url = 'https://official-joke-api.appspot.com/random_joke'<br>    response = requests.get(url)<br>    return json.dumps(response.json(), indent=2)<br><br>result = get_joke()<br>print(result)<br>\"</code></pre>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>Resultado esperado:</strong></p>\n\n\n\n<pre class=\"wp-block-preformatted\">json<code>{\n  \"id\": 42,\n  \"type\": \"general\",\n  \"setup\": \"What do you call a fake noodle?\",\n  \"punchline\": \"An impasta!\"\n}</code></pre>\n\n\n\n<h4 class=\"wp-block-heading\">Ejemplo 2: Utilizando un archivo Python</h4>\n\n\n\n<ol class=\"wp-block-list\">\n<li>Crea un archivo Python en el sistema:</li>\n</ol>\n\n\n\n<pre class=\"wp-block-preformatted\"><code>cat > /home/node/weather.py &lt;&lt; 'EOF'<br>import requests<br>import json<br>import sys<br><br>def get_weather(city):<br>    api_key = \"demo_key\"<br>    url = f\"https://api.openweathermap.org/data/2.5/weather?q={city}&amp;appid={api_key}&amp;units=metric\"<br>    response = requests.get(url)<br>    return json.dumps(response.json(), indent=2)<br><br>if __name__ == \"__main__\":<br>    city = sys.argv[1] if len(sys.argv) > 1 else \"Madrid\"<br>    result = get_weather(city)<br>    print(result)<br>EOF</code></pre>\n\n\n\n<ol start=\"2\" class=\"wp-block-list\">\n<li>Ejecuta el archivo desde n8n con un nodo &#8220;Execute Command&#8221;:</li>\n</ol>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>Comando:</strong></p>\n\n\n\n<pre class=\"wp-block-preformatted\"><code>python3 /home/node/weather.py Barcelona</code></pre>\n\n\n\n<h3 class=\"wp-block-heading\">Ventajas y Limitaciones</h3>\n\n\n\n<h4 class=\"wp-block-heading\">Ventajas</h4>\n\n\n\n<ul class=\"wp-block-list\">\n<li>Acceso completo a todas las bibliotecas de Python instaladas en el sistema</li>\n\n\n\n<li>Sin restricciones de red o de acceso al sistema de archivos</li>\n\n\n\n<li>Soporte completo para todas las funcionalidades de Python</li>\n</ul>\n\n\n\n<h4 class=\"wp-block-heading\">Limitaciones</h4>\n\n\n\n<ul class=\"wp-block-list\">\n<li>Requiere instalar Python y bibliotecas en el sistema/contenedor</li>\n\n\n\n<li>Mayor complejidad de mantenimiento cuando se actualizan las versiones de n8n</li>\n</ul>\n\n\n\n<h2 class=\"wp-block-heading\">Método 2: Pyodide (nodo &#8220;Python&#8221; integrado)</h2>\n\n\n\n<p class=\"wp-block-paragraph\">Este método utiliza Pyodide, una versión de Python compilada a WebAssembly, integrada directamente en n8n.</p>\n\n\n\n<h3 class=\"wp-block-heading\">Requisitos previos</h3>\n\n\n\n<p class=\"wp-block-paragraph\">No se requiere instalación adicional, ya que Pyodide viene integrado en el nodo &#8220;Python&#8221; de n8n.</p>\n\n\n\n<h3 class=\"wp-block-heading\">Pruebas</h3>\n\n\n\n<h4 class=\"wp-block-heading\">Ejemplo 1: Operaciones básicas en Python</h4>\n\n\n\n<p class=\"wp-block-paragraph\">Crea un flujo de trabajo con un nodo &#8220;Python&#8221; y configúralo así:</p>\n\n\n\n<pre class=\"wp-block-preformatted\"><code><em># Procesamiento de datos simple</em><br>data = [{\"nombre\": \"Juan\", \"edad\": 30}, {\"nombre\": \"Ana\", \"edad\": 25}]<br><br><em># Procesamiento</em><br>for item in data:<br>    item[\"categoria\"] = \"adulto\" if item[\"edad\"] >= 18 else \"menor\"<br><br>return data</code></pre>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>Resultado esperado:</strong></p>\n\n\n\n<pre class=\"wp-block-preformatted\">json<code>[\n  {\n    \"nombre\": \"Juan\",\n    \"edad\": 30,\n    \"categoria\": \"adulto\"\n  },\n  {\n    \"nombre\": \"Ana\",\n    \"edad\": 25,\n    \"categoria\": \"adulto\"\n  }\n]</code></pre>\n\n\n\n<h4 class=\"wp-block-heading\">Ejemplo 2: Haciendo peticiones HTTP con fetch (JavaScript)</h4>\n\n\n\n<pre class=\"wp-block-preformatted\"><code>from js import fetch<br>import json<br><br>async def get_joke():<br>    response = await fetch(\"https://official-joke-api.appspot.com/random_joke\")<br>    data = await response.json()<br>    return data<br><br>joke = await get_joke()<br>return [joke]</code></pre>\n\n\n\n<h4 class=\"wp-block-heading\">Ejemplo 3: Procesando datos de nodos anteriores</h4>\n\n\n\n<pre class=\"wp-block-preformatted\"><code><em># Acceder a los datos del nodo anterior</em><br>items = $input.all()<br><br><em># Procesar los datos</em><br>results = []<br>for item in items:<br>    data = item.json.data<br>    processed = {<br>        \"id\": data.id,<br>        \"value\": data.value * 2,<br>        \"processed\": True<br>    }<br>    results.append(processed)<br><br>return results</code></pre>\n\n\n\n<h3 class=\"wp-block-heading\">Ventajas y Limitaciones</h3>\n\n\n\n<h4 class=\"wp-block-heading\">Ventajas</h4>\n\n\n\n<ul class=\"wp-block-list\">\n<li>Integración nativa con n8n</li>\n\n\n\n<li>No requiere instalación adicional</li>\n\n\n\n<li>Mejor interoperabilidad con los datos de otros nodos de n8n</li>\n</ul>\n\n\n\n<h4 class=\"wp-block-heading\">Limitaciones</h4>\n\n\n\n<ul class=\"wp-block-list\">\n<li>No todas las bibliotecas de Python son compatibles con Pyodide</li>\n\n\n\n<li>Limitaciones para hacer peticiones HTTP (no puede usar requests directamente)</li>\n\n\n\n<li>Restricciones de acceso al sistema de archivos</li>\n\n\n\n<li>Entorno de ejecución más limitado</li>\n</ul>\n\n\n\n<h2 class=\"wp-block-heading\">Conclusión y recomendaciones</h2>\n\n\n\n<h3 class=\"wp-block-heading\">¿Cuándo usar el Método 1 (Execute Command)?</h3>\n\n\n\n<ul class=\"wp-block-list\">\n<li>Cuando necesites bibliotecas específicas de Python que no están disponibles en Pyodide</li>\n\n\n\n<li>Para tareas que requieren acceso al sistema de archivos o red sin restricciones</li>\n\n\n\n<li>Para scripts Python existentes que quieras ejecutar sin modificaciones</li>\n</ul>\n\n\n\n<h3 class=\"wp-block-heading\">¿Cuándo usar el Método 2 (nodo Python)?</h3>\n\n\n\n<ul class=\"wp-block-list\">\n<li>Para transformaciones de datos simples</li>\n\n\n\n<li>Cuando necesites una mejor integración con el flujo de datos de n8n</li>\n\n\n\n<li>Para procesos que no requieren bibliotecas externas complejas</li>\n</ul>\n\n\n\n<p class=\"wp-block-paragraph\">Para la mayoría de los casos de uso profesionales que requieren bibliotecas como requests, pandas, numpy, etc., el Método 1 (Execute Command) será más versátil y potente.</p>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "10631",
+          "createdAt": "2026-06-02T19:32:07.625Z",
+          "updatedAt": "2026-06-02T19:32:07.649Z",
+          "deletedAt": null
+        },
+        {
+          "id": "a1da6237-b83c-4ff4-b909-bd7c0e411038",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Servidor MCP Nativo",
+          "position": 10994,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/6371a0fd-1c43-47ba-9764-ce47e41c359f?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "10994",
+          "createdAt": "2026-06-02T19:32:16.228Z",
+          "updatedAt": "2026-06-02T19:32:16.249Z",
+          "deletedAt": null
+        },
+        {
+          "id": "21be920d-c917-4ee9-9ece-77e313c8af37",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Gestión de Gastos con Notion y Telegram",
+          "position": 11412,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/946c86be-941e-4b69-9692-1dae75d7c728?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-7f764cba-f40a-4e0a-895f-0fb0fae08f22\" href=\"https://va360.academy/wp-content/uploads/2025/07/VA360-GestionDeGastos-1.zip\">[VA360] GestionDeGastos</a><a href=\"https://va360.academy/wp-content/uploads/2025/07/VA360-GestionDeGastos-1.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-7f764cba-f40a-4e0a-895f-0fb0fae08f22\">Descarga</a></div>\n\n\n\n<p class=\"wp-block-paragraph\">Plantilla Notion:  <a href=\"https://email.mailmkt.va360.pro/c/eJxsk8tyozoQhp8Gdrh0Q4KFFnEckkwy8WVycbJxCamxGQPCQuDgpz9FZurUnDqzbfXfLX31Se9KIw_nl3Ejhmx7Hfux_WE3K7cPjUSGEcRDY2tVNrJWZVUf_WxQlKNZ6-zvg509N-C6Q9nu_NiCrKxWvrS_6iYEiUWM05QSHocwDdnV0HVqD9PmLFldfywWT2r78O3izH5e3Sa_u76Gna07FpU9_1GbYlQgikDzSHCuIkZzE-VJnkRCG03SAnEtij8jnYd2yqWsMEJzEhma4IgVnEXKpHkkBMZQ5IwwUCE0Q-lsU0PjZeus6fX0nPAglUhYqrgyeRqnScEQYaTQKWbcCA6YhaUkiMRIoARzJlg8EwlOIGYKIU4FIhAw9H-MlTx433YBvQpIFpBMV7Y3Ude6XkPEMZ01drrArCs9BCQjhOM8xqkpeJwgQROhU4O54cBFHuc8oNkQ0MV_2xjkmiiEkC4gRRSIDiu9-0WobDy4RlXyhWSduX09bnHqH_H3e7R93eZ3dPm8Z-_MLM_ZU0J6m13EtxvNwNPT5-OwecD4p3D5vPoYyo_5x3hzYafN8fZ59fwSkPnb_aUPSLY6jG2_xvvl0x6937xvdXdN8dVLsThdnTlfIk5-nt_2r-t5uu72VU2OXbn119lldbcdx6KvNuvV5Q7G8-dx4endG36tStffLD433am5fwzIvHmggh3tetP4sLJfUrNm_Q51_nZi4sf3-vZ4XyzzsAZ_sEaqtgxbZ4fSgJMVKKNt04D21oVODqqCZqZG6FTA0H5iNNO2DjvbOw3yC1pUdkM0yQku9JPyu7-u81LbevfX7-Ul-N2_eg-S_BMAAP__BDosFA\" target=\"_blank\" rel=\"noreferrer noopener\">https://cloud-spruce-613.notion.site/2261b519df65807387c9d16d6e67b5b6?v=2261b519df65804ebc2a000cfe903e2c</a></p>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "11412",
+          "createdAt": "2026-06-02T19:32:07.674Z",
+          "updatedAt": "2026-06-02T19:32:07.696Z",
+          "deletedAt": null
+        },
+        {
+          "id": "fe711220-e011-4c5a-a060-a848d8924bd8",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Agente Telegram Generador de Imagenes y Videos",
+          "position": 11833,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/884ce9fa-76b3-4b9e-8ed2-4f696370ce85?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-c893bbc2-7f8c-4263-ae24-775651ea8e99\" href=\"https://va360.academy/wp-content/uploads/2025/08/VA360-Agente-variantes-imagenes.zip\">VA360 &#8211; Agente variantes imagenes</a><a href=\"https://va360.academy/wp-content/uploads/2025/08/VA360-Agente-variantes-imagenes.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-c893bbc2-7f8c-4263-ae24-775651ea8e99\">Descarga</a></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "11833",
+          "createdAt": "2026-06-02T19:32:22.388Z",
+          "updatedAt": "2026-06-02T19:32:22.401Z",
+          "deletedAt": null
+        },
+        {
+          "id": "c7e8ee3f-1863-4601-ad6d-70bbca7dc116",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Datatables internas en N8N. Almacena datos directamente en tu n8n",
+          "position": 12294,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/0babf7c5-e848-4deb-b729-820d68ccd9ff?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12294",
+          "createdAt": "2026-06-02T19:32:22.418Z",
+          "updatedAt": "2026-06-02T19:32:22.433Z",
+          "deletedAt": null
+        },
+        {
+          "id": "9a486a21-d0b8-4df0-adf7-bf3e114e2c79",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Cuenta de Servicio en Google (Credencial Alternativa)",
+          "position": 12700,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/705551ba-2a8e-4711-8cda-a8b182bedc4f?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12700",
+          "createdAt": "2026-06-02T19:32:19.530Z",
+          "updatedAt": "2026-06-02T19:32:19.549Z",
+          "deletedAt": null
+        },
+        {
+          "id": "58ef384a-af47-4919-a0d6-ccd7d3863f2c",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "35b9a383-c80f-48a3-bc2e-6f0ee429a9c5",
+          "type": "HTML",
+          "title": "Gestiona tu bot de Telegram",
+          "position": 12754,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/8bfa215a-9e61-4e8c-a32a-768ef2d94a73?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<div class=\"wp-block-file\"><a id=\"wp-block-file--media-1b01c8c5-f629-45a4-afdd-9be2aa9f179f\" href=\"https://va360.academy/wp-content/uploads/2025/11/VA360-Bot-Telegram-Admin.zip\">[VA360] Bot Telegram Admin</a><a href=\"https://va360.academy/wp-content/uploads/2025/11/VA360-Bot-Telegram-Admin.zip\" class=\"wp-block-file__button wp-element-button\" download aria-describedby=\"wp-block-file--media-1b01c8c5-f629-45a4-afdd-9be2aa9f179f\">Descarga</a></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12754",
+          "createdAt": "2026-06-02T19:32:09.189Z",
+          "updatedAt": "2026-06-02T19:32:09.205Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "70dd79b5-587c-485f-91f9-44d07946ad74",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "58c8263a-9cfa-46cd-af88-eb5d38e2fdd0",
+      "title": "Clases en directo",
+      "description": null,
+      "position": 10,
+      "externalSource": "learndash",
+      "externalId": "5903-s10",
+      "createdAt": "2026-06-02T19:32:04.536Z",
+      "updatedAt": "2026-06-02T19:32:04.550Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "86fa19f8-ed1e-45e1-85eb-b259c2edffe9",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "70dd79b5-587c-485f-91f9-44d07946ad74",
+          "type": "HTML",
+          "title": "🔴 Clase en Directo – 26/05/2025",
+          "position": 11002,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/b91b8085-19be-48f1-baf7-731b302e134a?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "11002",
+          "createdAt": "2026-06-02T19:32:16.478Z",
+          "updatedAt": "2026-06-02T19:32:16.496Z",
+          "deletedAt": null
+        },
+        {
+          "id": "c809b532-9ba2-418c-8bc9-319ab92f0ba7",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "70dd79b5-587c-485f-91f9-44d07946ad74",
+          "type": "HTML",
+          "title": "🔴 Clase en Directo – 4/06/2025",
+          "position": 11110,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/5f98bce8-b3c9-4901-ab79-2998726475bb?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "11110",
+          "createdAt": "2026-06-02T19:32:14.617Z",
+          "updatedAt": "2026-06-02T19:32:14.631Z",
+          "deletedAt": null
+        },
+        {
+          "id": "882b3909-f29e-42c4-82b5-e19c3de2becb",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "70dd79b5-587c-485f-91f9-44d07946ad74",
+          "type": "HTML",
+          "title": "🔴 Clase en Directo – 11/09/2025",
+          "position": 12338,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/e4a56eec-0f8e-42f3-b91e-c1c059afa397?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<h2 class=\"wp-block-heading\">Highlights</h2>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>07:32 &#8211; Anuncio de evento sobre N8N en Valencia</strong><br>Valentin Ayesa menciona que se organizará un evento gratuito sobre N8N en Valencia el 24 de septiembre. Javier Hernández Padilla, uno de los organizadores, comparte el enlace de registro y detalla que se celebrará en un antiguo monasterio en el cauce del río. El objetivo principal es crear una comunidad de automatización e IA en la Comunidad Valenciana.</p>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>10:32 &#8211; Debate sobre el futuro de N8N y el riesgo de dejar de ser Open Source</strong><br>Valentin Ayesa abre un debate sobre la conveniencia de no centrar la comunidad exclusivamente en N8N, sino en automatización e IA en general. Expone su preocupación de que N8N, tras recibir una financiación de 100 millones, pueda seguir el camino de otras empresas y abandonar el modelo de código abierto. Los participantes discuten las implicaciones que esto tendría para las empresas que basan su operativa en esta herramienta.</p>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>25:46 &#8211; La importancia del conocimiento más allá de la herramienta</strong><br>Javier Hernández Padilla resalta que lo más valioso de aprender a usar N8N no es solo el manejo de la herramienta en sí, sino la comprensión de conceptos fundamentales como APIs, formatos de datos y la lógica de las automatizaciones. Este conocimiento es transferible a otras plataformas como DeepFlow o FlowWise, ya que N8N actúa como un &#8220;hub de datos&#8221; y el conocimiento adquirido es sobre la arquitectura de sistemas.</p>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>30:25 &#8211; Automatización de propuestas comerciales con Fireflies y N8N</strong><br>Valentin Ayesa comparte un método para automatizar la creación de propuestas comerciales. Utiliza la herramienta Fireflies, que transcribe reuniones, y la conecta a N8N mediante un webhook. Durante la reunión, menciona deliberadamente los puntos clave de la propuesta para que queden registrados en la transcripción. Posteriormente, un agente de IA en N8N procesa esta información y rellena automáticamente una plantilla de oferta.</p>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>38:32 &#8211; Truco para exportar credenciales desencriptadas en N8N</strong><br>Se revela un método avanzado para exportar todas las credenciales guardadas en una instancia de N8N en formato desencriptado. Utilizando un nodo específico que ejecuta un comando&nbsp;cli&nbsp;de N8N, es posible generar un archivo con las API keys originales, lo que facilita la realización de copias de seguridad completas de workflows y credenciales.</p>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>48:55 &#8211; Estrategias para la captación de clientes en el sector de la automatización</strong><br>Se inicia una conversación sobre cómo conseguir clientes. Maximiliano Tello explica que él lo hace a través de su agencia de marketing, ofreciendo automatizaciones como un servicio complementario a la publicidad. Se destaca la importancia de crear contenido para demostrar experiencia y generar confianza, ya que muchos clientes llegan a través de plataformas como YouTube o TikTok.</p>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>52:00 &#8211; La confusión del mercado entre IA y automatización como oportunidad de negocio</strong><br>Un participante expone que actualmente existe una gran oportunidad debido a la confusión general del mercado entre la Inteligencia Artificial y la automatización. Muchas empresas solicitan soluciones de &#8220;IA&#8221; cuando en realidad necesitan automatizaciones de procesos. Esto permite posicionarse como un experto que ofrece soluciones reales a problemas concretos, más allá de la terminología de moda.</p>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>59:00 &#8211; Propuesta para crear un Marketplace de profesionales de la comunidad: N8N Expert</strong><br>Valentin Ayesa habla de un proyecto abandonado llamado &#8220;N8N Expert&#8221;, concebido como un marketplace para que los profesionales de la comunidad puedan promocionarse y encontrar clientes. Propone relanzar la iniciativa con un enfoque más amplio en automatización e IA, no solo N8N, e invita a los miembros de la comunidad a liderar el proyecto.</p>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>1:05:27 &#8211; Vender soluciones de valor real frente a servicios estandarizados</strong><br>Se debate la importancia de ofrecer soluciones que aporten un valor tangible y resuelvan problemas de negocio reales, en lugar de vender servicios genéricos como chatbots de WhatsApp. Un participante cuenta cómo ahorró un día de trabajo a una asesoría automatizando la generación de un archivo de domiciliaciones bancarias (norma 19), una solución que fue mucho más valorada que un chatbot.</p>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>1:15:42 &#8211; El rol del consultor: identificar necesidades antes de vender la solución</strong><br>Lolo Peluzo subraya que el verdadero valor no reside en la ejecución técnica de un workflow, sino en la capacidad de realizar una auditoría previa para entender los flujos de trabajo del cliente, identificar sus puntos de dolor y proponer una hoja de ruta estratégica. El objetivo es posicionarse como un asesor que dice al cliente &#8220;lo que necesita&#8221;, en lugar de ser un simple ejecutor.</p>\n\n\n\n<p class=\"wp-block-paragraph\"><strong>1:33:43 &#8211; La importancia de la auditoría inicial para evitar cuellos de botella</strong><br>Giuseppe Scamarcia comparte una experiencia en la que un agente de atención al cliente para un e-commerce funcionó perfectamente tomando pedidos, pero generó un cuello de botella en la validación manual de los pagos. Concluye que una auditoría inicial detallada habría permitido identificar este punto y diseñar una solución integral, evitando que la automatización genere nuevos problemas en otra parte del proceso.</p>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12338",
+          "createdAt": "2026-06-02T19:32:08.411Z",
+          "updatedAt": "2026-06-02T19:32:08.426Z",
+          "deletedAt": null
+        },
+        {
+          "id": "990c2bfb-c66f-4d76-88d0-cf90d2667477",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "70dd79b5-587c-485f-91f9-44d07946ad74",
+          "type": "HTML",
+          "title": "🔴 Clase en Directo – 18/09/2025",
+          "position": 12424,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/bd0e1161-a54d-4064-be0d-380fb0775af7?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12424",
+          "createdAt": "2026-06-02T19:32:19.594Z",
+          "updatedAt": "2026-06-02T19:32:19.607Z",
+          "deletedAt": null
+        },
+        {
+          "id": "9e534a49-3152-4495-8e2a-ac04e7049f1c",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "70dd79b5-587c-485f-91f9-44d07946ad74",
+          "type": "HTML",
+          "title": "🔴 Clase en Directo – 07/11/2025",
+          "position": 12910,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/3f971a90-4d0c-443f-aa45-f975a6b32c62?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12910",
+          "createdAt": "2026-06-02T19:32:19.666Z",
+          "updatedAt": "2026-06-02T19:32:19.681Z",
+          "deletedAt": null
+        },
+        {
+          "id": "500d3742-2272-4870-8b09-a963695da5e9",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "70dd79b5-587c-485f-91f9-44d07946ad74",
+          "type": "HTML",
+          "title": "🔴 Clase en Directo – 24/11/2025",
+          "position": 12912,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/370303fe-6723-493b-8536-1d629f3ff96a?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12912",
+          "createdAt": "2026-06-02T19:32:19.703Z",
+          "updatedAt": "2026-06-02T19:32:19.721Z",
+          "deletedAt": null
+        },
+        {
+          "id": "6b4fb762-8e6c-4e52-8f98-3fe21363c9bc",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "70dd79b5-587c-485f-91f9-44d07946ad74",
+          "type": "HTML",
+          "title": "RAG VS BD convencional",
+          "position": 12948,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/56b8b9f5-373e-4c88-8c62-741bf22cf402?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\"><a href=\"https://docs.google.com/presentation/d/1-E4DZsTVxDWP8HK7c8m9D9X0Y22dao5TVDMRonclPQc/edit?usp=sharing\" target=\"_blank\" rel=\"noreferrer noopener\">Descarga la presentación aquí</a></p>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12948",
+          "createdAt": "2026-06-02T19:32:19.566Z",
+          "updatedAt": "2026-06-02T19:32:19.582Z",
+          "deletedAt": null
+        },
+        {
+          "id": "9394e35e-a297-4deb-85bb-29ad05af0f87",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "70dd79b5-587c-485f-91f9-44d07946ad74",
+          "type": "HTML",
+          "title": "🔴 Clase en Directo – 01/12/2025",
+          "position": 12989,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/bd8ad61d-0d9c-48e8-9b6b-625799d97deb?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12989",
+          "createdAt": "2026-06-02T19:32:09.226Z",
+          "updatedAt": "2026-06-02T19:32:09.246Z",
+          "deletedAt": null
+        },
+        {
+          "id": "1e781c33-45e7-4fa3-b36a-d9fada89e39d",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "70dd79b5-587c-485f-91f9-44d07946ad74",
+          "type": "HTML",
+          "title": "🔴 Clase en Directo – 30/12/2025 – Creando un nodo de comunidad",
+          "position": 13259,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/f73e306d-a829-4f67-b73c-f7ddc53ff339?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "13259",
+          "createdAt": "2026-06-02T19:32:20.254Z",
+          "updatedAt": "2026-06-02T19:32:20.271Z",
+          "deletedAt": null
+        },
+        {
+          "id": "f5a624fd-8741-42e8-a7dd-0f97671ea18e",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "70dd79b5-587c-485f-91f9-44d07946ad74",
+          "type": "HTML",
+          "title": "🔴 Clase en Directo – 12/01/2026",
+          "position": 13277,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/466521ae-e43b-49ee-b2ed-0774770c1082?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "13277",
+          "createdAt": "2026-06-02T19:32:20.842Z",
+          "updatedAt": "2026-06-02T19:32:20.855Z",
+          "deletedAt": null
+        },
+        {
+          "id": "24eafa8f-496a-4aac-b12e-29e95a1ee9aa",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "70dd79b5-587c-485f-91f9-44d07946ad74",
+          "type": "HTML",
+          "title": "🔴 Clase en Directo – 27/01/2026",
+          "position": 13540,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/e6294851-b054-461c-bac1-cc16107f2d47?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "13540",
+          "createdAt": "2026-06-02T19:32:20.864Z",
+          "updatedAt": "2026-06-02T19:32:20.881Z",
+          "deletedAt": null
+        }
+      ]
+    }
+  ]
+}

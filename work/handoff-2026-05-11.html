@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Didacta — Handoff Sprint 2 + Sprint 3 (alpha.53)</title>
+<style>
+:root {
+  --bg: #0b1020;
+  --panel: #11172c;
+  --panel-2: #161e3a;
+  --border: #232d54;
+  --text: #e7ecff;
+  --muted: #98a3c7;
+  --green: #29c46e;
+  --amber: #f0b341;
+  --red:   #ef5b6b;
+  --blue:  #6aa6ff;
+  --purple:#a987ff;
+  --grad-a:#4f46e5;
+  --grad-b:#06b6d4;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 24px 80px; }
+
+/* HEADER */
+.hero {
+  border-radius: 18px;
+  padding: 28px 32px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(106,166,255,.18), transparent 50%),
+    radial-gradient(circle at 90% 100%, rgba(169,135,255,.18), transparent 50%),
+    linear-gradient(135deg, #131a35, #0e1430);
+  border: 1px solid var(--border);
+  margin-bottom: 26px;
+}
+.eyebrow { color: var(--muted); font-size: 12px; letter-spacing: 1.4px; text-transform: uppercase; }
+.title { margin: 6px 0 14px; font-size: 30px; font-weight: 700; }
+.subtitle { color: var(--muted); font-size: 15px; max-width: 820px; }
+.badges { margin-top: 18px; display: flex; gap: 8px; flex-wrap: wrap; }
+.badge {
+  background: var(--panel-2); border: 1px solid var(--border);
+  padding: 6px 12px; border-radius: 999px; font-size: 12px;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.badge.green { color: var(--green); border-color: rgba(41,196,110,.4); }
+.badge.amber { color: var(--amber); border-color: rgba(240,179,65,.4); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+/* GRID */
+.grid { display: grid; gap: 20px; }
+.grid-2 { grid-template-columns: 1fr 1fr; }
+@media (max-width: 860px) { .grid-2 { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 14px; padding: 22px 24px;
+}
+.card h2 { margin: 0 0 14px; font-size: 19px; }
+.card h3 { margin: 18px 0 8px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+
+/* TIMELINE Sprints */
+.timeline { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.tl-step {
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px;
+  position: relative;
+}
+.tl-step .num { font-size: 11px; color: var(--muted); letter-spacing: 1px; }
+.tl-step .lbl { margin-top: 4px; font-weight: 600; font-size: 14px; }
+.tl-step .desc { color: var(--muted); font-size: 12px; margin-top: 4px; min-height: 30px; }
+.tl-bar { height: 6px; border-radius: 3px; background: #1c2547; margin-top: 10px; overflow: hidden; }
+.tl-bar > i { display:block; height: 100%; background: linear-gradient(90deg, var(--grad-a), var(--grad-b)); }
+.tl-step.done { border-color: rgba(41,196,110,.5); }
+.tl-step.done .lbl::after { content: " ✓"; color: var(--green); }
+.tl-step.next { border-color: rgba(106,166,255,.5); }
+@media (max-width: 720px) { .timeline { grid-template-columns: 1fr 1fr; } }
+
+/* TESTS */
+.tests {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+}
+@media (max-width: 720px) { .tests { grid-template-columns: 1fr; } }
+.test-card {
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px;
+}
+.test-card .h { display:flex; justify-content: space-between; align-items: baseline; }
+.test-card .name { font-weight: 600; }
+.test-card .ratio { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+.donut { width: 100%; aspect-ratio: 1.6; max-height: 90px; margin-top: 8px; }
+.legend { display: flex; gap: 12px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.legend i { display:inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+/* WHO-DOES-WHAT */
+.who { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+@media (max-width: 860px) { .who { grid-template-columns: 1fr; } }
+.who-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 16px; padding: 24px;
+  position: relative; overflow: hidden;
+}
+.who-card .icon-bg {
+  position: absolute; right: -30px; top: -20px;
+  font-size: 160px; line-height: 1; opacity: .04;
+}
+.who-card .who-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+.who-card .who-sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+.who-card.agent { border-left: 4px solid var(--blue); }
+.who-card.you   { border-left: 4px solid var(--amber); }
+.step {
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px; margin-bottom: 10px;
+  display: flex; gap: 12px; align-items: flex-start;
+}
+.step .step-n {
+  flex: 0 0 28px; height: 28px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--grad-a), var(--grad-b));
+  color: white; font-weight: 700; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+}
+.step .step-body { flex: 1; }
+.step .step-title { font-weight: 600; font-size: 14px; }
+.step .step-desc { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.step .step-cmd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #0a0f22; border: 1px solid var(--border);
+  padding: 6px 10px; border-radius: 6px; font-size: 12px;
+  margin-top: 6px; display: block; overflow-x: auto; white-space: pre;
+  color: #d4dffe;
+}
+
+/* DELIVERY tables */
+.delivery { width: 100%; border-collapse: collapse; font-size: 14px; }
+.delivery th, .delivery td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+.delivery th { font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: 1px; }
+.delivery td.code { font-family: ui-monospace, monospace; font-size: 12px; color: var(--blue); white-space: nowrap; }
+.delivery td.status-ok { color: var(--green); font-weight: 600; }
+.delivery td.status-pending { color: var(--amber); font-weight: 600; }
+
+/* LINKS */
+.links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.link {
+  background: var(--panel-2); border: 1px solid var(--border);
+  padding: 10px 14px; border-radius: 10px; font-size: 13px;
+  display: inline-flex; align-items: center; gap: 8px;
+  text-decoration: none; color: var(--text);
+}
+.link:hover { border-color: var(--blue); }
+.link svg { width: 14px; height: 14px; opacity: .8; }
+
+.kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 0 0 22px; }
+@media (max-width: 720px) { .kpi-row { grid-template-columns: 1fr 1fr; } }
+.kpi {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px;
+}
+.kpi .k-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+.kpi .k-value { font-size: 26px; font-weight: 700; margin-top: 4px; }
+.kpi .k-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+.foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 30px; }
+
+/* PROGRESS BAR */
+.megabar { display: flex; height: 38px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+.megabar > div { display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+.mb-done   { background: linear-gradient(135deg, #168a4b, #29c46e); color: white; }
+.mb-doing  { background: linear-gradient(135deg, #b88a2e, #f0b341); color: #1c1505; }
+.mb-todo   { background: #1c2547; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="eyebrow">Didacta · LMS Modular · VA360 Labs</div>
+    <h1 class="title">Handoff post Sprint 2 + Sprint 3</h1>
+    <p class="subtitle">
+      <strong>ctx.didacta</strong> (API pública del core) + <strong>job runner BullMQ</strong> con onJobTick lifecycle.
+      El backbone para que módulos third-party como <code>mod.migrator-learndash</code> creen entidades del core
+      automáticamente y procesen migraciones largas. Todo cableado, todo testeado, todo en GitHub y Docker Hub.
+    </p>
+    <div class="badges">
+      <span class="badge green"><span class="dot"></span> v0.0.1-alpha.53 publicada</span>
+      <span class="badge green"><span class="dot"></span> Docker Hub: didactaio/community:0.0.1-alpha.53</span>
+      <span class="badge green"><span class="dot"></span> 460/484 tests verde marketplace · 103/103 migrator</span>
+      <span class="badge amber"><span class="dot"></span> Deploy pendiente: Easypanel + Redis</span>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi"><div class="k-label">Sprint actual</div><div class="k-value" style="color:var(--green)">3/5</div><div class="k-sub">Sprints 2 y 3 cerrados</div></div>
+    <div class="kpi"><div class="k-label">Tests nuevos verde</div><div class="k-value" style="color:var(--blue)">+222</div><div class="k-sub">+106 marketplace +16 migrator (Sprint 3) · +123 Sprint 2</div></div>
+    <div class="kpi"><div class="k-label">LOC añadidas</div><div class="k-value" style="color:var(--purple)">~5.4k</div><div class="k-sub">10 commits encadenados</div></div>
+    <div class="kpi"><div class="k-label">Regresiones nuevas</div><div class="k-value" style="color:var(--green)">0</div><div class="k-sub">24 fails heredados sin cambio</div></div>
+  </div>
+
+  <!-- TIMELINE SPRINTS -->
+  <div class="card" style="margin-bottom: 20px;">
+    <h2>Roadmap de Sprints</h2>
+    <div class="megabar" style="margin-bottom: 18px;">
+      <div class="mb-done" style="flex: 1;">Sprint 1 (ctx.db) · 100 %</div>
+      <div class="mb-done" style="flex: 1;">Sprint 2 (ctx.didacta) · 100 %</div>
+      <div class="mb-done" style="flex: 1;">Sprint 3 (job runner) · 100 %</div>
+      <div class="mb-todo" style="flex: 1;">Sprint 4 (ETL real) · 0 %</div>
+      <div class="mb-todo" style="flex: 1;">Sprint 5 (UI) · 0 %</div>
+    </div>
+    <div class="timeline">
+      <div class="tl-step done">
+        <div class="num">SPRINT 1 — alpha.51</div>
+        <div class="lbl">ctx.db scoped</div>
+        <div class="desc">SQL guard, RLS por tenant, persistencia de jobs.</div>
+        <div class="tl-bar"><i style="width:100%"></i></div>
+      </div>
+      <div class="tl-step done">
+        <div class="num">SPRINT 2 — alpha.52</div>
+        <div class="lbl">ctx.didacta API</div>
+        <div class="desc">DD-000…DD-004. Permission matrix + externalId idempotency.</div>
+        <div class="tl-bar"><i style="width:100%"></i></div>
+      </div>
+      <div class="tl-step done">
+        <div class="num">SPRINT 3 — alpha.53</div>
+        <div class="lbl">Job runner BullMQ</div>
+        <div class="desc">JR-001…JR-005. Worker + state machine + cancel cooperativo.</div>
+        <div class="tl-bar"><i style="width:100%"></i></div>
+      </div>
+      <div class="tl-step next">
+        <div class="num">SPRINT 4 — alpha.54 (próximo)</div>
+        <div class="lbl">ETL real</div>
+        <div class="desc">ET-001…ET-005. Reemplazar STUBs con extract/transform/load reales.</div>
+        <div class="tl-bar"><i style="width:0%"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TESTS GRAFICO -->
+  <div class="card" style="margin-bottom: 20px;">
+    <h2>Estado de tests al cierre de Sprint 3</h2>
+    <div class="tests">
+      <div class="test-card">
+        <div class="h"><span class="name">apps/api · marketplace</span><span class="ratio">460 / 484 (95.0 %)</span></div>
+        <svg viewBox="0 0 200 30" class="donut" preserveAspectRatio="none">
+          <rect x="0" y="0" width="190" height="30" fill="#29c46e" rx="4" ry="4"/>
+          <rect x="190" y="0" width="10" height="30" fill="#ef5b6b" rx="0" ry="0"/>
+        </svg>
+        <div class="legend">
+          <span><i style="background:#29c46e"></i>460 pass</span>
+          <span><i style="background:#ef5b6b"></i>24 fails preexistentes (alpha.45+)</span>
+        </div>
+      </div>
+      <div class="test-card">
+        <div class="h"><span class="name">modules/migrator-learndash</span><span class="ratio">103 / 103 (100 %)</span></div>
+        <svg viewBox="0 0 200 30" class="donut" preserveAspectRatio="none">
+          <rect x="0" y="0" width="200" height="30" fill="#29c46e" rx="4" ry="4"/>
+        </svg>
+        <div class="legend">
+          <span><i style="background:#29c46e"></i>103 pass · cero fails</span>
+        </div>
+      </div>
+    </div>
+    <p style="color: var(--muted); font-size: 13px; margin-top: 14px;">
+      Los 24 fails restantes del marketplace son <strong>heredados desde alpha.45</strong> (sql-lint 7, module-lint 9,
+      sandbox 3, module-package 3, installed-module 1, install-package 1). Cero regresiones nuevas introducidas
+      en Sprint 2 ni Sprint 3 — se limpiarán en sesión dedicada.
+    </p>
+  </div>
+
+  <!-- DELIVERIES SPRINT 2 -->
+  <div class="grid grid-2" style="margin-bottom: 20px;">
+    <div class="card">
+      <h2>Sprint 2 — ctx.didacta (alpha.52)</h2>
+      <table class="delivery">
+        <thead><tr><th>Code</th><th>Entregable</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="code">DD-000</td><td>ADR-014 + migración Prisma core (externalId / externalSource)</td><td class="status-ok">Hecho</td></tr>
+          <tr><td class="code">DD-001</td><td>Contrato sandboxed-didacta.types.ts + bloque manifest</td><td class="status-ok">Hecho</td></tr>
+          <tr><td class="code">DD-002</td><td>ScopedDidactaApi service con 5 capas defensivas</td><td class="status-ok">Hecho</td></tr>
+          <tr><td class="code">DD-003</td><td>Wiring router + sandbox + dispatcher + onInstall</td><td class="status-ok">Hecho</td></tr>
+          <tr><td class="code">DD-004</td><td>mod.migrator-learndash 1.0.7 con bloque didacta</td><td class="status-ok">Hecho</td></tr>
+          <tr><td class="code">DD-005</td><td>Rollback (deleteByExternalRef)</td><td class="status-pending">Diferido</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h2>Sprint 3 — Job runner (alpha.53)</h2>
+      <table class="delivery">
+        <thead><tr><th>Code</th><th>Entregable</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="code">JR-001</td><td>Queue mod-jobs BullMQ + dedupe</td><td class="status-ok">Hecho</td></tr>
+          <tr><td class="code">JR-002</td><td>Worker BullMQ con tenantContext propagation</td><td class="status-ok">Hecho</td></tr>
+          <tr><td class="code">JR-003</td><td>Sandbox lee onJobTick + manifest jobLifecycle</td><td class="status-ok">Hecho</td></tr>
+          <tr><td class="code">JR-004</td><td>State machine CAS atómica en migrator</td><td class="status-ok">Hecho</td></tr>
+          <tr><td class="code">JR-005</td><td>Cancelación cooperativa read-then-decide</td><td class="status-ok">Hecho</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- WHO DOES WHAT -->
+  <div class="who" style="margin-bottom: 20px;">
+
+    <!-- AGENTE -->
+    <div class="who-card agent">
+      <div class="icon-bg">
+        <svg viewBox="0 0 24 24" width="160" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 2a3 3 0 0 1 3 3v2h3a3 3 0 0 1 3 3v3h-2a2 2 0 0 0 0 4h2v3a3 3 0 0 1-3 3h-3v-2a2 2 0 0 0-4 0v2H8a3 3 0 0 1-3-3v-3H3v-4h2V10a3 3 0 0 1 3-3h3V5a3 3 0 0 1 3-3Z"/>
+        </svg>
+      </div>
+      <div class="who-title">Lo que yo (Claude) puedo hacer</div>
+      <div class="who-sub">Acciones que requieren cambios al código, tests, o llamadas a APIs públicas</div>
+
+      <div class="step">
+        <div class="step-n">1</div>
+        <div class="step-body">
+          <div class="step-title">Sprint 4 — ETL real (ET-001..ET-005)</div>
+          <div class="step-desc">Reemplazar los STUBs del state machine del migrator con extract real (paginateWp + cursor), transform (mappers + zod + checksum), load (ctx.didacta.upsertByExternalRef), reconcile + audit chain SHA-256. Es la última pieza para migración LearnDash → Didacta funcionando end-to-end.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">2</div>
+        <div class="step-body">
+          <div class="step-title">DD-005 — Rollback diferido</div>
+          <div class="step-desc">Implementar deleteByExternalRef para todos los recursos con soft-delete + audit. Requiere antes una ADR sobre el cascade (progress, attempts, evidencias Fundae). Bloquea UI-003.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">3</div>
+        <div class="step-body">
+          <div class="step-title">Cleanup de los 24 fails heredados</div>
+          <div class="step-desc">sql-lint, module-lint, sandbox y package tienen assertions desactualizadas desde alpha.45+. Sesión dedicada: actualizar tests al SQL/error messages actuales.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">4</div>
+        <div class="step-body">
+          <div class="step-title">Sprint 5 — UI del wizard (UI-001..UI-003)</div>
+          <div class="step-desc">Progreso real con polling (UI-001), vista de reporte con diffs (UI-002), cancel + rollback funcional (UI-003). Depende de Sprint 4 entregar datos reales.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OPERADOR -->
+    <div class="who-card you">
+      <div class="icon-bg">
+        <svg viewBox="0 0 24 24" width="160" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="8" r="4"/>
+          <path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/>
+        </svg>
+      </div>
+      <div class="who-title">Lo que tú (Valen) tienes que hacer</div>
+      <div class="who-sub">Acciones que requieren credenciales, KMS, o deploys a infraestructura</div>
+
+      <div class="step">
+        <div class="step-n">1</div>
+        <div class="step-body">
+          <div class="step-title">Setear <code>REDIS_URL</code> en el environment del API</div>
+          <div class="step-desc">Sin Redis, el worker BullMQ no arranca y los jobs siguen en <code>pending</code> para siempre. Redis ya está en el stack (outbox dispatcher). Probablemente solo añadir/confirmar la env var en Easypanel.</div>
+          <code class="step-cmd">REDIS_URL=redis://redis:6379</code>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">2</div>
+        <div class="step-body">
+          <div class="step-title">Aplicar migration externalId (alpha.52)</div>
+          <div class="step-desc">Añade columnas <code>external_source</code> y <code>external_id</code> + índices a 6 modelos del core. Migration non-blocking y backwards-compatible (campos NULLable, sin backfill).</div>
+          <code class="step-cmd">pnpm prisma migrate deploy</code>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">3</div>
+        <div class="step-body">
+          <div class="step-title">Re-firmar mod.migrator-learndash 1.0.8</div>
+          <div class="step-desc">El bundle está listo en <code>modules/migrator-learndash/dist/index.js</code> (27.5 KB). Yo no tengo acceso al KMS Didacta — tú firmás con el packager local.</div>
+          <code class="step-cmd">pnpm sign-module modules/migrator-learndash</code>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">4</div>
+        <div class="step-body">
+          <div class="step-title">Deploy alpha.53 a Easypanel</div>
+          <div class="step-desc">La imagen <code>didactaio/community:0.0.1-alpha.53</code> ya está en Docker Hub (digest sha256:a1b73d89…). El Stack de Easypanel solo necesita re-pull + restart.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">5</div>
+        <div class="step-body">
+          <div class="step-title">Smoke real end-to-end</div>
+          <div class="step-desc">Encolar un job (POST /jobs) y verificar en logs <code>tick N: job &lt;id&gt; pending → preflight → ... → completed</code>. Los STUBs del Sprint 4 mostrarán warns pero el job llegará a completed en ≤5 ticks. Probar también <code>POST /jobs/:id/cancel</code> mid-flight.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- LINKS -->
+  <div class="card">
+    <h2>Enlaces clave</h2>
+    <div class="links">
+      <a class="link" href="https://github.com/va360labs/didacta-community" target="_blank">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.36-3.88-1.36-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.76 2.71 1.25 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.76 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.81 1.19 1.84 1.19 3.1 0 4.43-2.7 5.4-5.27 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56C20.21 21.39 23.5 17.07 23.5 12 23.5 5.65 18.35.5 12 .5Z"/></svg>
+        Repo · va360labs/didacta-community
+      </a>
+      <a class="link" href="https://hub.docker.com/r/didactaio/community/tags" target="_blank">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M22.5 11.5c-.4-.3-1.5-.7-2.7-.7-.4 0-.8 0-1.2.1-.3-2.2-2-3.2-2-3.2l-.5-.3-.3.4c-.4.6-.7 1.4-.8 2.2-.2 1 0 1.9.3 2.6-.5.3-1.4.4-2.1.4H1.5l-.1.3c-.2 1.5 0 6.3 3.4 8.2 2.5 1.4 5.6 1.7 8.4 1 3.8-1 6.7-3.7 8.1-7.5 1 .1 3 .1 4-1.8l.1-.2-.4-.2c-.6-.4-1.5-.6-2.5-.6Z"/><path d="M2 11h2v2H2zM4.5 11h2v2h-2zM7 11h2v2H7zM9.5 11h2v2h-2zM4.5 8.5h2v2h-2zM7 8.5h2v2H7zM9.5 8.5h2v2h-2zM9.5 6h2v2h-2z"/></svg>
+        Docker Hub · didactaio/community
+      </a>
+      <a class="link" href="https://www.notion.so/34cb609a124c80aa996bfec23268cad4" target="_blank">
+        Notion · LMS Ship (página padre)
+      </a>
+      <a class="link" href="https://www.notion.so/359b609a124c816696c2e47921af3c70" target="_blank">
+        HANDOFF alpha.53 · Sprint 3 cerrado
+      </a>
+      <a class="link" href="https://www.notion.so/358b609a124c81428b24d3d7cdf047bd" target="_blank">
+        HANDOFF alpha.52 · Sprint 2 cerrado
+      </a>
+      <a class="link" href="https://www.notion.so/358b609a124c817abcc9f1650f7505ac" target="_blank">
+        ADR-014 · external ID en core
+      </a>
+    </div>
+  </div>
+
+  <!-- COMMITS -->
+  <div class="card" style="margin-top: 20px;">
+    <h2>Commits del Sprint 2 + Sprint 3 (todos pusheados)</h2>
+    <table class="delivery">
+      <thead><tr><th>Hash</th><th>Mensaje</th><th>Sprint</th></tr></thead>
+      <tbody>
+        <tr><td class="code">b855b2e</td><td>feat(database): externalId/externalSource en recursos del core (ADR-014, DD-000)</td><td>2</td></tr>
+        <tr><td class="code">3d8e6f6</td><td>feat(marketplace): contrato ctx.didacta + bloque didacta en manifest (DD-001)</td><td>2</td></tr>
+        <tr><td class="code">e062b20</td><td>feat(marketplace): ScopedDidactaApi service + permission matrix (DD-002)</td><td>2</td></tr>
+        <tr><td class="code">d9c0c03</td><td>feat(marketplace): cablear ctx.didacta en sandbox + dispatcher + onInstall (DD-003)</td><td>2</td></tr>
+        <tr><td class="code">71315ed</td><td>feat(migrator-learndash): bloque didacta en manifest + bump 1.0.7 + esbuild build (DD-004)</td><td>2</td></tr>
+        <tr><td class="code">a9e1abe</td><td>chore(release): bump 0.0.1-alpha.52 (Sprint 2 — ctx.didacta + ADR-014)</td><td>2</td></tr>
+        <tr><td class="code">4d8af6e</td><td>feat(marketplace): job runner BullMQ + onJobTick lifecycle (JR-001+002+003)</td><td>3</td></tr>
+        <tr><td class="code">7404947</td><td>feat(migrator-learndash): onJobTick state machine + cancel cooperativo (JR-004+005)</td><td>3</td></tr>
+        <tr><td class="code">dfd24a2</td><td>test(marketplace): actualizar tests al constructor expandido del install + jobLifecycle</td><td>3</td></tr>
+        <tr><td class="code">ef69f5f</td><td>chore(release): bump 0.0.1-alpha.53 (Sprint 3 — job runner BullMQ)</td><td>3</td></tr>
+        <tr><td class="code">520cf5c</td><td>chore(lockfile): añadir esbuild devdep de mod.migrator-learndash</td><td>3</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="foot">Generado automáticamente · alpha.53 · 10 commits · 460+103 tests verde</p>
+</div>
+</body>
+</html>

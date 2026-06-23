@@ -1,0 +1,16 @@
+s/\bMovés\b/Mueves/g
+s/\bmovés\b/mueves/g
+s/\bEncontrás\b/Encuentras/g
+s/\bencontrás\b/encuentras/g
+s/\bNecesitás\b/Necesitas/g
+s/\bRecuperás\b/Recuperas/g
+s/\brecuperás\b/recuperas/g
+s/\blistás\b/listas/g
+s/\brecibás\b/recibas/g
+s/\brecibís\b/recibes/g
+s/\bReconocés\b/Reconoces/g
+s/\breconocés\b/reconoces/g
+s/\bseleccionás\b/seleccionas/g
+s/\bSeleccionás\b/Seleccionas/g
+s/\bsuperás\b/superas/g
+s/\bvinculás\b/vinculas/g

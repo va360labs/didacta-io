@@ -1,0 +1,220 @@
+{
+  "id": "d00af967-45c0-40d1-a4e4-cab4821bae08",
+  "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+  "slug": "primeros-pasos-en-va360",
+  "title": "Primeros Pasos en VA360",
+  "description": null,
+  "thumbnailUrl": null,
+  "language": "es-ES",
+  "estimatedMinutes": null,
+  "status": "DRAFT",
+  "category": null,
+  "createdById": null,
+  "certificateTemplateId": null,
+  "externalSource": "learndash",
+  "externalId": "12346",
+  "createdAt": "2026-06-02T19:32:02.931Z",
+  "updatedAt": "2026-06-02T19:32:02.952Z",
+  "publishedAt": null,
+  "deletedAt": null,
+  "modules": [
+    {
+      "id": "3709846f-74c0-4036-882e-3816a3dd2057",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "d00af967-45c0-40d1-a4e4-cab4821bae08",
+      "title": "Introducción",
+      "description": null,
+      "position": 0,
+      "externalSource": "learndash",
+      "externalId": "12346-s0",
+      "createdAt": "2026-06-02T19:32:02.984Z",
+      "updatedAt": "2026-06-02T19:32:03.005Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "220f432a-355f-41d7-8d53-26dccf508d22",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "3709846f-74c0-4036-882e-3816a3dd2057",
+          "type": "HTML",
+          "title": "Bienvenid@ al campus y Cómo preguntar dudas correctamente",
+          "position": 12349,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/eadc1a16-2f31-474c-a0e4-1a8464dbf73d?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<div class=\"wp-block-buttons is-layout-flex wp-block-buttons-is-layout-flex\">\n<div class=\"wp-block-button has-custom-width wp-block-button__width-100\"><a class=\"wp-block-button__link has-vivid-red-background-color has-background has-medium-font-size has-custom-font-size wp-element-button\" href=\"https://foros.va360.academy\" target=\"_blank\" rel=\"noreferrer noopener\">ACCESO AL FORO</a></div>\n</div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12349",
+          "createdAt": "2026-06-02T19:32:18.926Z",
+          "updatedAt": "2026-06-02T19:32:18.946Z",
+          "deletedAt": null
+        },
+        {
+          "id": "0d93b705-947a-4bd5-be91-04c0f8041a08",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "3709846f-74c0-4036-882e-3816a3dd2057",
+          "type": "HTML",
+          "title": "Actualizaciones y clases en directo",
+          "position": 12353,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/5c77c89c-e7e1-450d-b792-e3049271467f?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12353",
+          "createdAt": "2026-06-02T19:32:18.969Z",
+          "updatedAt": "2026-06-02T19:32:18.986Z",
+          "deletedAt": null
+        },
+        {
+          "id": "8deb0ead-d97d-4b7a-b0e0-06b0f7dd2e58",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "3709846f-74c0-4036-882e-3816a3dd2057",
+          "type": "HTML",
+          "title": "Recursos y recomendaciones",
+          "position": 12355,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/8d384441-3155-467d-8521-5dab5087358b?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12355",
+          "createdAt": "2026-06-02T19:32:19.009Z",
+          "updatedAt": "2026-06-02T19:32:19.027Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "c2959224-57d9-42f6-9a28-312666aa4fb1",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "d00af967-45c0-40d1-a4e4-cab4821bae08",
+      "title": "Servidores VPS",
+      "description": null,
+      "position": 1,
+      "externalSource": "learndash",
+      "externalId": "12346-s1",
+      "createdAt": "2026-06-02T19:32:03.021Z",
+      "updatedAt": "2026-06-02T19:32:03.037Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "9498013d-21ab-41c0-908c-5f0f810d11c1",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "c2959224-57d9-42f6-9a28-312666aa4fb1",
+          "type": "HTML",
+          "title": "Configurando un nuevo servidor desde su compra",
+          "position": 12357,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/52b2a18f-381a-438f-b4c4-8f004ce0c230?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<ul class=\"wp-block-list\">\n<li>Enlace de Raiola: <a href=\"https://raiola.link/vpscloud-va360-n8n\" target=\"_blank\" rel=\"noreferrer noopener\">https://raiola.link/vpscloud-va360-n8n</a></li>\n\n\n\n<li>Enlace de Termius: <a href=\"https://termius.com/\">https://termius.com/</a></li>\n</ul>\n\n\n\n<h2 class=\"wp-block-heading\">Comandos usados:</h2>\n\n\n\n<blockquote class=\"wp-block-quote is-layout-flow wp-block-quote-is-layout-flow\">\n<ul class=\"wp-block-list\">\n<li><strong>apt-get update</strong>: actualiza la lista de paquetes disponibles y sus versiones, pero no instala o actualiza ningún paquete. Esta lista la coge de los servidores con repositorios que tenemos definidos en el <em>sources.list</em>.</li>\n\n\n\n<li><strong>apt-get upgrade</strong>: una vez el comando anterior ha descargado la lista de software disponible y la versión en la que se encuentra, podemos actualizar dichos paquetes usando este comando: apt-get upgrade. Instalará las nuevas versiones respetando la configuración del software cuando sea posible (esta es la maravilla de este tipo de sistemas).</li>\n\n\n\n<li><code class=\"\"><strong>sudo apt-get autoremove</strong></code>: Este comando eliminará los paquetes que ya no son necesarios, liberando espacio en tu sistema y contribuyendo a un rendimiento óptimo.</li>\n</ul>\n</blockquote>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12357",
+          "createdAt": "2026-06-02T19:32:19.089Z",
+          "updatedAt": "2026-06-02T19:32:19.107Z",
+          "deletedAt": null
+        },
+        {
+          "id": "d91173d1-4ba1-4117-af0a-e3311cee2801",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "c2959224-57d9-42f6-9a28-312666aa4fb1",
+          "type": "HTML",
+          "title": "Configurando un dominio con nuestro servidor",
+          "position": 12359,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/d365ee0c-9a1e-44e7-b435-e36dec06f131?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12359",
+          "createdAt": "2026-06-02T19:32:20.345Z",
+          "updatedAt": "2026-06-02T19:32:20.364Z",
+          "deletedAt": null
+        },
+        {
+          "id": "756cc15f-e308-4d84-ad56-dc16e8863f36",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "c2959224-57d9-42f6-9a28-312666aa4fb1",
+          "type": "HTML",
+          "title": "Instalando Easypanel y recorrido por las funcionalidades",
+          "position": 12361,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/eff977c6-10f9-4251-8383-db487e89af95?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Enlace a Easypanel: <a href=\"https://easypanel.io/\" target=\"_blank\" rel=\"noreferrer noopener\">https://easypanel.io/</a></p>\n\n\n\n<p class=\"wp-block-paragraph\"></p>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12361",
+          "createdAt": "2026-06-02T19:32:19.346Z",
+          "updatedAt": "2026-06-02T19:32:19.361Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "b1bb809a-19d2-4769-95cd-1787afd4d164",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "d00af967-45c0-40d1-a4e4-cab4821bae08",
+      "title": "Instalando las aplicaciones",
+      "description": null,
+      "position": 2,
+      "externalSource": "learndash",
+      "externalId": "12346-s2",
+      "createdAt": "2026-06-02T19:32:03.053Z",
+      "updatedAt": "2026-06-02T19:32:03.073Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "930492c4-c91f-488e-a03b-7cf9903ed4e8",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "b1bb809a-19d2-4769-95cd-1787afd4d164",
+          "type": "HTML",
+          "title": "Instalación de N8N en un VPS con Easypanel",
+          "position": 12365,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/724a9449-8fe6-495d-9dc1-16019140a293?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Enlace a docker hub: <a href=\"https://hub.docker.com/r/n8nio/n8n/tags\" target=\"_blank\" rel=\"noreferrer noopener\">https://hub.docker.com/r/n8nio/n8n/tags</a></p>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12365",
+          "createdAt": "2026-06-02T19:32:19.378Z",
+          "updatedAt": "2026-06-02T19:32:19.395Z",
+          "deletedAt": null
+        },
+        {
+          "id": "526c7d45-e556-41a6-b2f0-00c1ebc1c754",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "b1bb809a-19d2-4769-95cd-1787afd4d164",
+          "type": "HTML",
+          "title": "Instalando EvolutionAPI en un VPS con Easypanel",
+          "position": 12368,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/0ab549db-6071-432c-8f6f-e9609b9d9d46?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Enlace a docker hub: <a href=\"https://hub.docker.com/r/evoapicloud/evolution-api/tags\" target=\"_blank\" rel=\"noreferrer noopener\">https://hub.docker.com/r/evoapicloud/evolution-api/tags</a></p>\n\n\n\n<p class=\"wp-block-paragraph\"></p>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12368",
+          "createdAt": "2026-06-02T19:32:19.418Z",
+          "updatedAt": "2026-06-02T19:32:19.438Z",
+          "deletedAt": null
+        },
+        {
+          "id": "25d4d7ea-7645-4c1c-a814-5c61884d73b2",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "b1bb809a-19d2-4769-95cd-1787afd4d164",
+          "type": "HTML",
+          "title": "Instalando Chatwoot en un VPS con Easypanel",
+          "position": 12370,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/c78e3a86-e8c8-4727-8b85-ea3544c91834?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Enlace a docker hub: <a href=\"https://hub.docker.com/r/chatwoot/chatwoot/tags\" target=\"_blank\" rel=\"noreferrer noopener\">https://hub.docker.com/r/chatwoot/chatwoot/tags</a></p>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "12370",
+          "createdAt": "2026-06-02T19:32:19.457Z",
+          "updatedAt": "2026-06-02T19:32:19.471Z",
+          "deletedAt": null
+        }
+      ]
+    }
+  ]
+}

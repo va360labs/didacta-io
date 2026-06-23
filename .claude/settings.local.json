@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/Test/didacta-modules-skill/**)",
+      "Bash(rm -f dist/mod.migrator-learndash-1.0.4-dev.zip dist/mod.migrator-learndash-1.0.4-dev.zip.public-key.pem)",
+      "Bash(node scripts/package-module.mjs --module migrator-learndash --version 1.0.4 --dev-key)",
+      "Read(//tmp/**)",
+      "Bash(rm -rf *)",
+      "Bash(unzip -o /d/Test/didacta-modules-skill/dist/mod.migrator-learndash-1.0.4-dev.zip)",
+      "Bash(python -c \"import sys,json; m=json.load\\(sys.stdin\\); print\\(json.dumps\\(m.get\\('http'\\), indent=2\\)\\)\")",
+      "Bash(cp /d/Test/didacta-community/modules/migrator-learndash/src/index.ts /d/Test/didacta-modules-skill/work/migrator-learndash/src/index.ts)",
+      "Bash(cp /d/Test/didacta-community/modules/migrator-learndash/src/manifest.ts /d/Test/didacta-modules-skill/work/migrator-learndash/src/manifest.ts)",
+      "Bash(/d/Test/didacta-community/node_modules/.bin/esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/index.js --external:@didacta/*)",
+      "Bash(node scripts/package-module.mjs --module migrator-learndash --version 1.0.5 --dev-key)",
+      "Bash(unzip -o /d/Test/didacta-modules-skill/dist/mod.migrator-learndash-1.0.5-dev.zip)",
+      "Bash(python -c \"import sys,json; m=json.load\\(sys.stdin\\); print\\('http:', json.dumps\\(m.get\\('http'\\)\\)\\)\")"
+    ]
+  }
+}

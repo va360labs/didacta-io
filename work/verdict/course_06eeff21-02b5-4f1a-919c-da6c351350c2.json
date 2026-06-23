@@ -1,0 +1,320 @@
+{
+  "id": "06eeff21-02b5-4f1a-919c-da6c351350c2",
+  "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+  "slug": "freepik-spaces-desde-cero-crea-organiza-y-automatiza-contenido",
+  "title": "Freepik Spaces desde cero: crea, organiza y automatiza contenido",
+  "description": null,
+  "thumbnailUrl": null,
+  "language": "es-ES",
+  "estimatedMinutes": null,
+  "status": "DRAFT",
+  "category": null,
+  "createdById": null,
+  "certificateTemplateId": null,
+  "externalSource": "learndash",
+  "externalId": "15029",
+  "createdAt": "2026-06-02T19:32:03.613Z",
+  "updatedAt": "2026-06-02T19:32:03.633Z",
+  "publishedAt": null,
+  "deletedAt": null,
+  "modules": [
+    {
+      "id": "4737ceff-99d9-47d8-83e1-49590d927b64",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "06eeff21-02b5-4f1a-919c-da6c351350c2",
+      "title": "BLOQUE 1 — Fundamentos y Primeros Pasos en Freepik Spaces",
+      "description": null,
+      "position": 0,
+      "externalSource": "learndash",
+      "externalId": "15029-s0",
+      "createdAt": "2026-06-02T19:32:03.664Z",
+      "updatedAt": "2026-06-02T19:32:03.682Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "37b38558-6b1a-4c10-8ce1-9ef54d64aa94",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "4737ceff-99d9-47d8-83e1-49590d927b64",
+          "type": "HTML",
+          "title": "Introducción: La Arquitectura de Freepik Spaces",
+          "position": 15031,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/a652bb7a-a358-43f5-8a12-474a35c84e92?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\"></p>\n\n\n\n<p class=\"wp-block-paragraph\">Crea tu cuenta en Freepik con el descuento de Ramon Teleco aquí -> <a href=\"https://bit.ly/3ZjpgoX\">https://bit.ly/3ZjpgoX</a></p>\n\n\n\n<p class=\"wp-block-paragraph\">Ramón nos introduce a un cambio de paradigma: dejar de pensar en generaciones lineales y empezar a pensar en&nbsp;<strong>flujos nodales</strong>. Spaces no es solo una herramienta, es un &#8220;lienzo infinito&#8221; para estructurar procesos creativos complejos.</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li><strong>Estructura Nodal:</strong>&nbsp;Aprenderás a diferenciar entre los&nbsp;<strong>Nodos de Contenido</strong>&nbsp;(tus inputs: textos, imágenes, vídeos) y los&nbsp;<strong>Nodos de Herramienta</strong>&nbsp;(los motores: generadores, upscalers, modificadores).</li>\n\n\n\n<li><strong>Lógica de Conexión:</strong>&nbsp;Los conectores no son solo líneas; representan el flujo de datos. Entenderás cómo la salida (<em>output</em>) de un nodo se convierte en la entrada (<em>input</em>) obligatoria del siguiente.</li>\n\n\n\n<li><strong>Gestión del Espacio:</strong>&nbsp;Introducción a las herramientas de alineación y agrupación para evitar el caos visual cuando tus proyectos crecen.</li>\n</ul>\n\n\n\n<hr class=\"wp-block-separator has-alpha-channel-opacity\"/>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "15031",
+          "createdAt": "2026-06-02T19:32:11.517Z",
+          "updatedAt": "2026-06-02T19:32:11.535Z",
+          "deletedAt": null
+        },
+        {
+          "id": "13498cdc-f543-4b1d-8b35-9af837b6cf35",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "4737ceff-99d9-47d8-83e1-49590d927b64",
+          "type": "HTML",
+          "title": "Configuración Estratégica y Planificación de Costes",
+          "position": 15032,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/83809f6f-3fa6-4964-bf86-27376d8de70a?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\"></p>\n\n\n\n<p class=\"wp-block-paragraph\">Crea tu cuenta en Freepik con el descuento de Ramon Teleco aquí -> <a href=\"https://bit.ly/3ZjpgoX\">https://bit.ly/3ZjpgoX</a></p>\n\n\n\n<p class=\"wp-block-paragraph\">Antes de empezar, optimizamos el entorno. Ramón explica por qué la elección del plan es una decisión económica crucial al usar Spaces.</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li><strong>El &#8220;Hack&#8221; del Premium Plus:</strong>&nbsp;Se recomienda encarecidamente este plan porque ofrece&nbsp;<strong>generaciones ilimitadas</strong>&nbsp;en modelos clave como&nbsp;<strong>NanoBanana, Flux y Mystic</strong>. En flujos complejos con decenas de nodos, esto evita quemar tu saldo de créditos en pruebas.</li>\n\n\n\n<li><strong>Configuración de Interfaz:</strong>&nbsp;Pasos para cambiar el idioma a español y, crucialmente, cómo usar el&nbsp;<strong>&#8220;Pin&#8221;</strong>&nbsp;para fijar Spaces en la barra lateral y ahorrar clics diarios.</li>\n\n\n\n<li><strong>Templates vs. Espacio en Blanco:</strong>&nbsp;Análisis de la biblioteca de plantillas (como las colaboraciones con RPN) frente a la libertad de crear desde cero. Ramón recomienda empezar de cero para entender la lógica &#8220;ladrillo a ladrillo&#8221;.</li>\n</ul>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "15032",
+          "createdAt": "2026-06-02T19:32:11.559Z",
+          "updatedAt": "2026-06-02T19:32:11.577Z",
+          "deletedAt": null
+        },
+        {
+          "id": "35190cba-43ae-4e1a-8e0c-fb6bb29f4c97",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "4737ceff-99d9-47d8-83e1-49590d927b64",
+          "type": "HTML",
+          "title": "Tu Primer Nodo: Inputs y Referencias",
+          "position": 15033,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/7fdc3744-c406-4f7d-8798-70dbcfad6477?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Iniciamos la construcción técnica. Aprendemos a &#8220;alimentar&#8221; al sistema correctamente, una fase crítica para obtener buenos resultados.</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li><strong>Texto vs. Asistente:</strong> Distinción técnica importante:\n<ul class=\"wp-block-list\">\n<li><strong>Nodo Texto:</strong> Inyecta un prompt literal y estático.</li>\n\n\n\n<li><strong>Nodo Asistente:</strong> Actúa como un LLM intermedio que enriquece, traduce o adapta tu idea simple a un prompt técnico optimizado para el modelo de imagen.</li>\n</ul>\n</li>\n\n\n\n<li><strong>Nomenclatura de Nodos:</strong> <strong>Tip Pro:</strong> Ramón enseña a renombrar los nodos (ej: cambiar &#8220;Imagen subida&#8221; por &#8220;Personaje Principal&#8221;). Esto es vital para que, al usar la <strong>@</strong> en nodos posteriores, sepas exactamente qué fuente estás citando.</li>\n\n\n\n<li><strong>Fuentes de Datos:</strong> Cómo importar activos desde tu historial de descargas, subidas propias o incluso desde la galería de la comunidad de Freepik.</li>\n</ul>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "15033",
+          "createdAt": "2026-06-02T19:32:21.608Z",
+          "updatedAt": "2026-06-02T19:32:21.617Z",
+          "deletedAt": null
+        },
+        {
+          "id": "e8ed4407-f796-41ed-8a70-f5f618f28f57",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "4737ceff-99d9-47d8-83e1-49590d927b64",
+          "type": "HTML",
+          "title": "Lógica de Modelos y Gestión de Variaciones",
+          "position": 15034,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/854324fb-942e-43ab-ac3c-6f880822d0e2?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Profundizamos en la lógica restrictiva de la herramienta: no todos los modelos sirven para todo.</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li><strong>Filtrado Automático de Modelos:</strong> Descubrirás que si conectas una imagen de referencia, la lista de modelos se reduce drásticamente. Solo aparecerán aquellos que soportan <strong>Img2Img</strong> (como NanoBanana Pro o Mystic), ocultando los que son solo Text2Img.</li>\n\n\n\n<li><strong>Aspect Ratio y Settings:</strong> Configuración técnica de la relación de aspecto (3:4, 16:9, 1:1) antes de ejecutar el nodo.</li>\n\n\n\n<li><strong>Gestión de Seeds/Variaciones:</strong> Cómo navegar entre las versiones generadas (ej. &#8220;Imagen 1 de 2&#8221;) y dejar seleccionada la correcta. <strong>Ojo:</strong> Si no fijas la imagen, el siguiente nodo podría tomar una variación que no te gusta como referencia.</li>\n\n\n\n<li><strong>Modos de Ejecución:</strong> Diferencia entre el botón &#8220;Play&#8221; general (ejecuta todo el flujo) y &#8220;Iniciar Limitado&#8221; (ejecuta solo el nodo seleccionado para ahorrar tiempo).</li>\n</ul>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "15034",
+          "createdAt": "2026-06-02T19:32:11.600Z",
+          "updatedAt": "2026-06-02T19:32:11.621Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "d3381420-a6ae-4eb6-9ccd-2d516ba83d6e",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "06eeff21-02b5-4f1a-919c-da6c351350c2",
+      "title": "BLOQUE 2 — Primer Workflow y Organización Profesional",
+      "description": null,
+      "position": 1,
+      "externalSource": "learndash",
+      "externalId": "15029-s1",
+      "createdAt": "2026-06-02T19:32:03.700Z",
+      "updatedAt": "2026-06-02T19:32:03.715Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "38c4c8e6-76e1-413f-a85f-17fdb89a168a",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "d3381420-a6ae-4eb6-9ccd-2d516ba83d6e",
+          "type": "HTML",
+          "title": "Flujos Variables y Atajos de Velocidad",
+          "position": 15035,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/0c634ce1-a78f-4f72-b397-6563aafac2d2?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Esta clase marca la diferencia entre un usuario lento y uno avanzado. Aprendemos a inyectar variables en el flujo.</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li><strong>Atajos de Teclado (Workflow):</strong> Memoriza esto:\n<ul class=\"wp-block-list\">\n<li><strong>Tecla &#8216;D&#8217;:</strong> &#8220;Dashboard&#8221; (Ajustar al tablero). Te aleja para ver el mapa completo.</li>\n\n\n\n<li><strong>Tecla &#8216;F&#8217;:</strong> &#8220;Focus&#8221; (Ajustar a la selección). Hace zoom inmediato al nodo en el que trabajas.</li>\n</ul>\n</li>\n\n\n\n<li><strong>Inyección de Contexto (Variables):</strong> Ramón muestra cómo crear un nodo de texto maestro (ej: &#8220;Nombre de Usuario: VA360&#8221;) y conectarlo a múltiples generadores. Al cambiar ese único texto, todas las imágenes generadas se actualizan automáticamente con el nuevo branding.</li>\n\n\n\n<li><strong>Herramienta Tijeras:</strong> Cómo cortar conexiones rápidamente para desactivar ramas del flujo sin borrar los nodos, ideal para pruebas A/B.</li>\n\n\n\n<li><strong>Solución de Bugs:</strong> Si una imagen da error de carga (&#8220;No se pudo conectar&#8221;), la solución suele ser simplemente refrescar la página del navegador.</li>\n</ul>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "15035",
+          "createdAt": "2026-06-02T19:32:11.638Z",
+          "updatedAt": "2026-06-02T19:32:11.646Z",
+          "deletedAt": null
+        },
+        {
+          "id": "ecf4d324-179f-4348-847b-ae1242ea8374",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "d3381420-a6ae-4eb6-9ccd-2d516ba83d6e",
+          "type": "HTML",
+          "title": "Ramificación, Aleatoriedad y Vídeo",
+          "position": 15036,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/f66d12e4-e4e4-40d1-b576-eaccc1b2e6ab?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Escalamos el proyecto. Aprendemos a crear variaciones masivas y a introducir vídeo en la ecuación.</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li><strong>Técnica de Ramificación (Branching):</strong> Cómo duplicar nodos para crear líneas paralelas de trabajo (ej: una rama para &#8220;Labios Rojos&#8221;, otra para &#8220;Azules&#8221;, otra para &#8220;Verdes&#8221;) compartiendo el mismo input inicial.</li>\n\n\n\n<li><strong>El Truco del Asistente Aleatorio:</strong> Usar el nodo Asistente con un prompt como <em>&#8220;Dame un color aleatorio que no sea rojo&#8221;</em> para forzar a la IA a generar variaciones creativas sin intervención manual.</li>\n\n\n\n<li><strong>Introducción al Vídeo:</strong> Uso de modelos como <strong>Kling</strong> o <strong>Luma</strong> dentro de Spaces. Aprendemos a conectar la imagen generada como &#8220;Input&#8221; del vídeo.</li>\n\n\n\n<li><strong>Organización Visual (Clean Up):</strong> Uso de la función <strong>&#8220;Agrupar&#8221;</strong>, nombrar grupos y asignarles colores (ej: Grupo Rojo para Video, Grupo Azul para Imagen) para mantener la legibilidad.</li>\n</ul>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "15036",
+          "createdAt": "2026-06-02T19:32:11.659Z",
+          "updatedAt": "2026-06-02T19:32:11.672Z",
+          "deletedAt": null
+        },
+        {
+          "id": "e728a8f0-4f0e-4d3d-9b14-ed8ff6c39301",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "d3381420-a6ae-4eb6-9ccd-2d516ba83d6e",
+          "type": "HTML",
+          "title": "Colaboración y Documentación Profesional",
+          "position": 15037,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/e147a9ac-919f-4594-bbce-3bf63a625bf2?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Cómo profesionalizar tus Spaces para entregas a clientes o trabajo en equipo asíncrono.</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li><strong>Markdown en Nodos de Texto:</strong> Ramón enseña a usar formato enriquecido (H1, H2, Negritas, Listas, Colores de fondo) dentro de las notas para dejar instrucciones claras o diferenciar visualmente los prompts de las notas de equipo.</li>\n\n\n\n<li><strong>Protocolo de Compartir:</strong> Diferencia crítica entre permisos de &#8220;Ver&#8221; y &#8220;Editar&#8221;.</li>\n\n\n\n<li><strong>Advertencia de Caducidad:</strong> ¡Importante! Los enlaces de invitación que generas tienen una vida útil de <strong>30 días</strong>.</li>\n\n\n\n<li><strong>Clonado Seguro:</strong> Cómo usar la función &#8220;Duplicar espacio&#8221; al abrir un template de la comunidad para trabajar en tu propia copia privada sin afectar al original.</li>\n</ul>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "15037",
+          "createdAt": "2026-06-02T19:32:21.632Z",
+          "updatedAt": "2026-06-02T19:32:21.650Z",
+          "deletedAt": null
+        },
+        {
+          "id": "25834202-a67e-4416-ac33-304ed4a769f3",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "d3381420-a6ae-4eb6-9ccd-2d516ba83d6e",
+          "type": "HTML",
+          "title": "Técnica Avanzada: Control de Cámara (Relight & Reframe)",
+          "position": 15038,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/12eba54f-949d-4f10-bab9-7d8559ef2be6?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Solucionamos uno de los problemas más comunes en IA de producto: la deformación geométrica al rotar objetos.</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li><strong>El Problema:</strong> Si intentas rotar con IA una foto de producto que ya está en perspectiva (ej. 45º), el modelo &#8220;alucina&#8221; y deforma el objeto.</li>\n\n\n\n<li><strong>El Workflow Correctivo:</strong>\n<ol class=\"wp-block-list\">\n<li>Usar <strong>NanoBanana Pro</strong> primero con un prompt como <em>&#8220;Enséñame el producto totalmente de frente&#8221;</em> para normalizar la imagen.</li>\n\n\n\n<li>Conectar esa imagen &#8220;limpia&#8221; al nodo <strong>Change Camera</strong>.</li>\n</ol>\n</li>\n\n\n\n<li><strong>Parámetros del Nodo:</strong> Control fino de la rotación horizontal (Eje X), vertical (Eje Y) y el Zoom para conseguir vistas cenitales o traseras coherentes.</li>\n</ul>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "15038",
+          "createdAt": "2026-06-02T19:32:21.674Z",
+          "updatedAt": "2026-06-02T19:32:21.690Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "5ff5e1b3-35e9-4eaf-8aa7-a435c04ce3ae",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "06eeff21-02b5-4f1a-919c-da6c351350c2",
+      "title": "BLOQUE 3 — Vídeo en Spaces y Reutilización de Flujos (modo escalable)",
+      "description": null,
+      "position": 2,
+      "externalSource": "learndash",
+      "externalId": "15029-s2",
+      "createdAt": "2026-06-02T19:32:03.733Z",
+      "updatedAt": "2026-06-02T19:32:03.755Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "77ec6793-d097-42c3-ac12-467842db242d",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "5ff5e1b3-35e9-4eaf-8aa7-a435c04ce3ae",
+          "type": "HTML",
+          "title": "Video Loops Infinitos y Economía de Créditos",
+          "position": 15039,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/6fd967a9-e16c-481d-82f5-9911c0510828?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Creación de secuencias de vídeo continuas (Loops) y una advertencia seria sobre los costes.</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li><strong>La Técnica del Loop:</strong> Consiste en conectar el <em>Output Frame</em> (último fotograma) del Vídeo A como <em>Input Image</em> (imagen inicial) del Vídeo B, creando una narrativa visual continua.</li>\n\n\n\n<li><strong>Preparación de Assets:</strong> Ramón organiza zapatos, pantalón y personaje en nodos separados antes de fusionarlos, facilitando cambios futuros.</li>\n\n\n\n<li><strong>Gestión de Créditos (Warning):</strong> Ramón advierte que modelos de alta gama como <strong>Google Veo 3</strong> pueden costar hasta <strong>7.000 créditos por generación</strong>, mientras que otros (como Kling 2.5 en baja resolución o One 2.2) pueden ser &#8220;Unlimited&#8221; o mucho más baratos. Revisa tu saldo antes de ejecutar cadenas largas.</li>\n</ul>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "15039",
+          "createdAt": "2026-06-02T19:32:22.196Z",
+          "updatedAt": "2026-06-02T19:32:22.216Z",
+          "deletedAt": null
+        },
+        {
+          "id": "d7916d02-eb8a-4b11-b977-2145a278aa99",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "5ff5e1b3-35e9-4eaf-8aa7-a435c04ce3ae",
+          "type": "HTML",
+          "title": "La “Fábrica de Contenido”: Reutilización Masiva",
+          "position": 15040,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/52003e6b-9d57-4374-bdfe-c58b8c709b79?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Aquí reside la verdadera potencia de Spaces: la automatización.</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li><strong>Swap de Assets (Intercambio):</strong> Ramón demuestra cómo, al cambiar solo la foto de los &#8220;Zapatos&#8221; al inicio del flujo, los 10 vídeos y 5 imágenes dependientes se regeneran automáticamente con el nuevo producto.</li>\n\n\n\n<li><strong>Análisis de Templates:</strong> Desglose del template <em>&#8220;Face Expression&#8221;</em> de la comunidad. Vemos cómo usarlo para generar 6 emociones distintas de una misma cara con un solo clic.</li>\n\n\n\n<li><strong>Estrategia &#8220;Human in the Loop&#8221;:</strong> Es vital pausar la ejecución para revisar las imágenes intermedias. Si la IA genera un error (ej. pone un escudo que no existe), debes corregirlo antes de lanzar la generación de vídeo, o desperdiciarás miles de créditos.</li>\n</ul>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "15040",
+          "createdAt": "2026-06-02T19:32:21.711Z",
+          "updatedAt": "2026-06-02T19:32:21.732Z",
+          "deletedAt": null
+        },
+        {
+          "id": "c7996583-7bff-4d1c-80d6-17b07b086283",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "5ff5e1b3-35e9-4eaf-8aa7-a435c04ce3ae",
+          "type": "HTML",
+          "title": "Flujo UGC (User Generated Content) Automatizado",
+          "position": 15041,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/7edc34dd-757e-4e13-a17f-3a458d59d308?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Creamos un sistema para generar avatares (influencers IA) que hablan de productos específicos.</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li><strong>Técnica del Cubo Blanco:</strong> Generar la imagen base de la modelo sosteniendo un cubo u objeto blanco genérico. Esto ayuda a la IA a entender la física del agarre para luego hacer un <em>inpainting</em> perfecto del producto real.</li>\n\n\n\n<li><strong>Prompting Avanzado (System Prompt):</strong> Configuración del nodo Asistente para forzar variables estrictas: <em>&#8220;Idioma: Español de España&#8221;</em>, <em>&#8220;Tono: Entusiasta&#8221;</em>, <em>&#8220;Estructura: Diálogo entre comillas&#8221;</em>.</li>\n\n\n\n<li><strong>Doble Referencia en Veo 3.1:</strong> El truco definitivo. Al generar el vídeo, Ramón alimenta a Google Veo con <strong>DOS imágenes a la vez</strong>: 1) La imagen compuesta de la chica + 2) La foto del producto en alta calidad. Esto evita que la IA deforme los logotipos o textos del producto al animarlo.</li>\n</ul>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "15041",
+          "createdAt": "2026-06-02T19:32:21.759Z",
+          "updatedAt": "2026-06-02T19:32:21.775Z",
+          "deletedAt": null
+        },
+        {
+          "id": "18878dcc-711a-4c62-9126-153da027327a",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "5ff5e1b3-35e9-4eaf-8aa7-a435c04ce3ae",
+          "type": "HTML",
+          "title": "Kling O1 Motion Control (Caso de Uso Real)",
+          "position": 15042,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/a58b57e4-5b13-46b3-b217-c6f4183ca063?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">El flujo más complejo del curso: Reemplazar personas reales en vídeo manteniendo su movimiento exacto (Vid2Vid).</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li><strong>Workflow Híbrido:</strong> Grabación real con móvil -> Edición de cortes en CapCut -> Procesado en Spaces -> Montaje final.</li>\n\n\n\n<li><strong>Configuración Kling O1:</strong> Uso del nodo específico &#8220;Motion Control&#8221;. Se alimenta con un <em>Video de Referencia</em> (tú moviéndote) + <em>Imagen de Personaje</em> (ej. Shrek/Fiona).</li>\n\n\n\n<li><strong>Procesado por Lotes (Batch):</strong> Ramón duplica el grupo de nodos 8 veces para procesar todos los clips de la escena simultáneamente.</li>\n\n\n\n<li><strong>Solución de Bug de Conexión:</strong> A veces el nodo de vídeo se &#8220;desconecta&#8221; al limpiar la creación anterior. Solución: Usar la opción &#8220;Limpiar creación&#8221; o refrescar la página para que el nodo reconozca el nuevo input.</li>\n\n\n\n<li><strong>Limitación de Upload:</strong> Spaces solo permite subir 4 vídeos a la vez. Ramón explica cómo gestionar esto por tandas.</li>\n</ul>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "15042",
+          "createdAt": "2026-06-02T19:32:11.695Z",
+          "updatedAt": "2026-06-02T19:32:11.709Z",
+          "deletedAt": null
+        }
+      ]
+    },
+    {
+      "id": "76dd3316-f8a4-42ec-83a2-bef20c04b4f1",
+      "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+      "courseId": "06eeff21-02b5-4f1a-919c-da6c351350c2",
+      "title": "BLOQUE 4 — Moodboard y Cierre (ideas, orden y visión global)",
+      "description": null,
+      "position": 3,
+      "externalSource": "learndash",
+      "externalId": "15029-s3",
+      "createdAt": "2026-06-02T19:32:03.773Z",
+      "updatedAt": "2026-06-02T19:32:03.791Z",
+      "deletedAt": null,
+      "lessons": [
+        {
+          "id": "86b64381-ff75-48a6-b6c4-15835305ec4e",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "76dd3316-f8a4-42ec-83a2-bef20c04b4f1",
+          "type": "HTML",
+          "title": "Spaces como Moodboard y Herramientas de Exportación",
+          "position": 15043,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/779648e3-6675-4ac9-9efe-3808bd46eb9c?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Usos alternativos de la herramienta más allá de la automatización lineal.</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li><strong>Herramienta Variaciones:</strong> Cómo usar el nodo de &#8220;Variations&#8221; para crear Storyboards instantáneos (grids de 9 imágenes) que sirven para explorar narrativas visuales rápidamente.</li>\n\n\n\n<li><strong>Gestión Visual:</strong> Ramón propone usar el lienzo como un tablero tipo Figma/Miro, donde tienes todas las generaciones a la vista, en lugar de ocultas en carpetas.</li>\n\n\n\n<li><strong>Exportación Masiva:</strong> El truco de seleccionar múltiples vídeos o imágenes en el tablero y usar el botón <strong>&#8220;Export&#8221;</strong> para descargar un archivo .zip con todo el contenido de golpe, ahorrando clics individuales.</li>\n</ul>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "15043",
+          "createdAt": "2026-06-02T19:32:21.801Z",
+          "updatedAt": "2026-06-02T19:32:21.822Z",
+          "deletedAt": null
+        },
+        {
+          "id": "e3b25d06-62a5-4c4f-84c9-d708d33d178c",
+          "tenantId": "cd06aee4-88cd-49be-be16-3b02c14cac1e",
+          "moduleId": "76dd3316-f8a4-42ec-83a2-bef20c04b4f1",
+          "type": "HTML",
+          "title": "Conclusiones y Hoja de Ruta",
+          "position": 15044,
+          "content": {
+            "html": "\n<div style=\"position:relative;padding-top:56.25%;\"><iframe src=\"https://iframe.mediadelivery.net/embed/376431/b58dbe6f-9afc-406b-ac97-2c336c48891f?autoplay=false&#038;loop=false&#038;muted=false&#038;preload=true&#038;responsive=true\" loading=\"lazy\" style=\"border:0;position:absolute;top:0;height:100%;width:100%;\" allow=\"accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;\" allowfullscreen=\"true\"></iframe></div>\n\n\n\n<p class=\"wp-block-paragraph\">Resumen estratégico para consolidar el aprendizaje y mejores prácticas.</p>\n\n\n\n<ul class=\"wp-block-list\">\n<li><strong>Los 3 Pilares:</strong> Recordatorio de la tríada: Lienzo (Espacio de trabajo), Nodos (Contenedores de info) y Conectores (Lógica de flujo).</li>\n\n\n\n<li><strong>Estrategia de Construcción:</strong> La regla de oro de Ramón: Empezar simple (1 nodo) -> Validar que funciona -> Escalar a complejo (duplicar/ramificar).</li>\n\n\n\n<li><strong>Recap de Técnicas:</strong> Repaso de las &#8220;Golden Rules&#8221;: Reutilización de contexto (Text Nodes maestros), Organización visual por colores para no perderse, y el uso constante de atajos (F/D) para velocidad.</li>\n</ul>\n"
+          },
+          "durationMinutes": null,
+          "externalSource": "learndash",
+          "externalId": "15044",
+          "createdAt": "2026-06-02T19:32:21.843Z",
+          "updatedAt": "2026-06-02T19:32:21.858Z",
+          "deletedAt": null
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1608 @@
+{
+  "items": [
+    {
+      "entityType": "lessons",
+      "sourceId": "15220",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:47.068Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "15118",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:47.040Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "15044",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:47.013Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "15043",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.962Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "15041",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.940Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "15040",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.921Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "15039",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.907Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "15038",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.889Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "15037",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.875Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "15033",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.855Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14155",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.837Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14153",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.825Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14151",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.806Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "15124",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.785Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14148",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.751Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14146",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.726Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14144",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.703Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14142",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.684Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "15122",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.658Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14141",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.632Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14140",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.606Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14138",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.583Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14137",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.557Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14136",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.528Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14135",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.507Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14134",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.487Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14133",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.458Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "14132",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.430Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13955",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.400Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13949",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.368Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13948",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.339Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13945",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.321Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13944",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.297Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13937",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.273Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13848",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.248Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13611",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.226Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13609",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.202Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13540",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.187Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13539",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.164Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13537",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.137Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13423",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.111Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13421",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.082Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13419",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.054Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13277",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.033Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13276",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:46.004Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13261",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.986Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13259",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.967Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13245",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.953Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13243",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.940Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13241",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.913Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13237",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.886Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13236",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.848Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13232",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.827Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13230",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.730Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13223",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.703Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13222",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.679Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13221",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.650Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13118",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.621Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13114",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.594Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12992",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.571Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12989",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.547Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12948",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.516Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12912",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.489Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12905",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.464Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12903",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.441Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12754",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.418Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12700",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.399Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12439",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.373Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12437",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.350Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12434",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.329Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "13203",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.305Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12430",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.281Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12426",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.256Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12424",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.235Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12370",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.213Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12368",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.191Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12365",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.165Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12361",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.140Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12432",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.116Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12359",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.091Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12357",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.062Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12355",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.041Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12353",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:45.015Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12351",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.992Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12349",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.970Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12294",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.946Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12285",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.923Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12283",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.908Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12280",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.895Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12278",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.865Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "12235",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.853Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11833",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.836Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11780",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.816Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11778",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.790Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11695",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.757Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11693",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.729Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11691",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.702Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11687",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.680Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11683",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.655Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11679",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.630Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11677",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.603Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11675",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.579Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11673",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.556Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11671",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.466Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11669",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.446Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11658",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.419Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11449",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.400Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11437",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.380Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11435",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.358Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11432",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.330Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11430",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.306Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11428",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.280Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "10176",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.258Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "10174",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.233Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "10007",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.212Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "10003",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.195Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "10001",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.179Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9999",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.162Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9997",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.141Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9995",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.119Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9993",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.095Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9977",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.066Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9974",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.040Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9973",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:44.013Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9972",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.994Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9971",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.976Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9970",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.951Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9969",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.934Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9968",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.918Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9966",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.903Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9965",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.888Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9964",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.875Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9963",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.861Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9961",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.845Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9960",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.826Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9959",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.806Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9958",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.788Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9957",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.763Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9956",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.745Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9955",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.728Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9954",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.705Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9953",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.686Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9952",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.659Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9951",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.631Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9950",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.613Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9949",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.600Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9935",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.583Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9934",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.554Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9933",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.523Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9932",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.500Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9931",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.477Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11426",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.451Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9926",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.429Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9925",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.339Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9924",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.324Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11424",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.308Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11420",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.284Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9923",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.261Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9922",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.242Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9921",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.222Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "10585",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.195Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "10583",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.171Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "10581",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.143Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9920",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.120Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9870",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.094Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9808",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.069Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9930",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.043Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9929",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.022Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9622",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:43.001Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9220",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.987Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9215",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.970Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "8687",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.947Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "10579",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.929Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "8302",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.909Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "8036",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.885Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "7769",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.858Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "7768",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.831Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "7761",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.807Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "10577",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.791Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "7741",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.769Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9991",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.745Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9989",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.722Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "7740",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.700Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "7722",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.679Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "7510",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.649Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11707",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.624Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "7509",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.602Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "7319",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.576Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9981",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.550Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "7016",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.526Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "6925",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.507Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "6924",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.493Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "6868",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.475Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "11705",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.453Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "6847",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.428Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "6846",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.406Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "6762",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.385Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "9979",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.357Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "6592",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.329Z"
+    },
+    {
+      "entityType": "lessons",
+      "sourceId": "6589",
+      "phase": "load",
+      "errorCode": "DIDACTA_VALIDATION_ERROR",
+      "errorMessage": "No se puede mover una lesson entre cursos. Borrá la versión anterior con lessons.deleteByExternalRef antes de re-importarla en otro curso.",
+      "createdAt": "2026-06-02T17:37:42.305Z"
+    }
+  ],
+  "total": 454,
+  "limit": 200,
+  "phase": null,
+  "entity": null
+}

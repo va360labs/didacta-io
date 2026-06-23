@@ -1,0 +1,68 @@
+{
+  "jobId": "a911e003-52ba-48db-a9c9-1cc0c060407d",
+  "status": "completed",
+  "generatedAt": "2026-06-02T18:00:14.288Z",
+  "totals": { "sourceCount": 478, "loadedCount": 4, "skippedCount": 20, "failedCount": 454 },
+  "byEntity": [
+    {
+      "entityType": "courses",
+      "sourceCount": 1,
+      "stagedCount": 1,
+      "validCount": 1,
+      "loadedCount": 1,
+      "skippedCount": 0,
+      "failedCount": 0
+    },
+    {
+      "entityType": "groups",
+      "sourceCount": 0,
+      "stagedCount": 0,
+      "validCount": 0,
+      "loadedCount": 0,
+      "skippedCount": 0,
+      "failedCount": 0
+    },
+    {
+      "entityType": "lessons",
+      "sourceCount": 453,
+      "stagedCount": 453,
+      "validCount": 453,
+      "loadedCount": 0,
+      "skippedCount": 0,
+      "failedCount": 453
+    },
+    {
+      "entityType": "quizzes",
+      "sourceCount": 3,
+      "stagedCount": 3,
+      "validCount": 3,
+      "loadedCount": 3,
+      "skippedCount": 0,
+      "failedCount": 0
+    },
+    {
+      "entityType": "topics",
+      "sourceCount": 20,
+      "stagedCount": 20,
+      "validCount": 20,
+      "loadedCount": 0,
+      "skippedCount": 20,
+      "failedCount": 0
+    },
+    {
+      "entityType": "users",
+      "sourceCount": 1,
+      "stagedCount": 1,
+      "validCount": 0,
+      "loadedCount": 0,
+      "skippedCount": 0,
+      "failedCount": 1
+    }
+  ],
+  "auditChain": {
+    "eventsCount": 2,
+    "firstHash": null,
+    "lastHash": "e14cff33935892542a03c4a6cb1f35cf3f3447168205b9bfa9a8fcd4965ed414",
+    "verified": true
+  }
+}

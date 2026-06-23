@@ -1,0 +1,5 @@
+{
+  "name": "mod.migrator-learndash",
+  "version": "1.0.37",
+  "main": "dist/index.js"
+}
