@@ -25,8 +25,12 @@ export default function NuevaRutaPage() {
         sequenceType,
       });
       router.push(`/formador/rutas/${path.id}`);
-    } catch {
-      setError('No se pudo crear la ruta. Comprueba que el título no esté ya en uso.');
+    } catch (err) {
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : 'No se pudo crear la ruta. Inténtalo de nuevo.';
+      setError(message);
       setSubmitting(false);
     }
   }
