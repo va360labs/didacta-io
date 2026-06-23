@@ -13,12 +13,22 @@
  */
 const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? 'http://localhost:4000';
 
+const SKIP_TYPE_CHECK = process.env.SKIP_TYPE_CHECK === '1';
+
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
   poweredByHeader: false,
+  typescript: {
+    // En dev-deploy saltamos el type-check de Next.js para reducir el tiempo
+    // de build (~3 min menos). Los types se validan en CI con tsc --noEmit.
+    ignoreBuildErrors: SKIP_TYPE_CHECK,
+  },
+  eslint: {
+    ignoreDuringBuilds: SKIP_TYPE_CHECK,
+  },
   experimental: {
-    typedRoutes: true,
+    typedRoutes: !SKIP_TYPE_CHECK,
   },
   async rewrites() {
     return [

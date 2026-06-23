@@ -65,3 +65,10 @@ apps/api/data/
 apps/e2e/test-results/
 apps/e2e/branding-shots/
 test-results/
+
+# Trabajo local / scripts temporales
+work/
+
+# Claude Code settings locales
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

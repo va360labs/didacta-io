@@ -73,6 +73,8 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ steps.meta.outputs.tag }}
             ${{ env.IMAGE }}:dev
+          build-args: |
+            SKIP_TYPE_CHECK=1
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

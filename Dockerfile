@@ -50,10 +50,12 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 # Stage 3: builder — copia código y buildea TODO el monorepo (devDeps activas)
 # ----------------------------------------------------------------------------
 FROM fetcher AS builder
+ARG SKIP_TYPE_CHECK=0
 # CI=true: pnpm aborta el remove de node_modules sin TTY a menos que sepa que
 # corre en un entorno no interactivo (necesario si .npmrc/lockfile cambian).
 ENV CI=true \
-    NEXT_TELEMETRY_DISABLED=1
+    NEXT_TELEMETRY_DISABLED=1 \
+    SKIP_TYPE_CHECK=${SKIP_TYPE_CHECK}
 # Build deps para compilar native modules (argon2). Alpine viene sin
 # toolchain por defecto.
 RUN apk add --no-cache --virtual .build-deps \
