@@ -52,7 +52,7 @@ export default function TenantsPage() {
     <div className="flex flex-col gap-6">
       <header className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Tenants</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Tenants</h1>
           <p className="mt-1 text-text-muted">
             Organizaciones que usan Didacta. Solo super_admin puede crear nuevos tenants y asignar
             dominios custom.

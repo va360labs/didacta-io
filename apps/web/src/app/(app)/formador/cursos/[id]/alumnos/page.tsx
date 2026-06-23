@@ -131,7 +131,7 @@ export default function AlumnosPage() {
 
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Alumnos del curso</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Alumnos del curso</h1>
           <p className="mt-1 text-text-muted">
             Quiénes están matriculados, cómo va su progreso y cuándo entraron por última vez.
           </p>

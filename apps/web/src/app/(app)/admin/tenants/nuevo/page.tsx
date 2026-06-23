@@ -56,7 +56,7 @@ export default function NuevoTenantPage() {
       </Button>
 
       <header>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Crear tenant</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Crear tenant</h1>
         <p className="mt-1 text-text-muted">
           Configura una nueva organización con su primer admin y un dominio primario.
         </p>

@@ -131,7 +131,7 @@ export default function FundaeActionDetailPage() {
             </Link>{' '}
             / {action.codigoAccion}
           </p>
-          <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">{action.nombre}</h1>
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight">{action.nombre}</h1>
           <div className="mt-2 flex flex-wrap gap-1.5 text-sm text-text-muted">
             <Badge>{action.modalidad}</Badge>
             <span>· {action.horasFormacion}h totales</span>

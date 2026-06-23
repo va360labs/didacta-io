@@ -147,7 +147,7 @@ export default function BrandingPage() {
   if (error && !form) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="font-display text-3xl font-bold">Branding</h1>
+        <h1 className="font-display text-2xl font-bold">Branding</h1>
         <Card>
           <CardContent className="p-6">
             <p className="text-danger-700">{error}</p>
@@ -160,7 +160,7 @@ export default function BrandingPage() {
   if (!form) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="font-display text-3xl font-bold">Branding</h1>
+        <h1 className="font-display text-2xl font-bold">Branding</h1>
         <div className="space-y-3">
           <div className="skeleton h-32 w-full" />
           <div className="skeleton h-48 w-full" />
@@ -175,7 +175,7 @@ export default function BrandingPage() {
 
       <header className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Branding</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Branding</h1>
           <p className="mt-1 text-text-muted">
             Personaliza la identidad visual de tu organización. Los cambios se guardan al hacer clic
             en <span className="font-semibold">Guardar</span>; puedes ver una vista previa mientras

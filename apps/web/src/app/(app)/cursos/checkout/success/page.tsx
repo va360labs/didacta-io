@@ -45,7 +45,7 @@ function SuccessContent() {
             <Icon name="check" size={32} />
           </span>
           <div className="space-y-2">
-            <h1 className="font-display text-3xl font-extrabold tracking-tight text-text">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-text">
               ¡Gracias por tu compra!
             </h1>
             <p className="text-text-muted">

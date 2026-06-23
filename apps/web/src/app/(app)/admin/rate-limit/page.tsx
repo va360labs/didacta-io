@@ -53,7 +53,7 @@ export default function AdminRateLimitPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-3xl font-bold tracking-tight">Límites API</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Límites API</h1>
         <p className="text-text-muted">
           Cuotas por minuto que la API aplica a tu organización. Si superas el límite recibes
           respuesta <code>429 Too Many Requests</code> con cabeceras{' '}

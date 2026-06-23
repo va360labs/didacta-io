@@ -134,7 +134,7 @@ export default function CommunityTagsAdminPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Tags de comunidad</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Tags de comunidad</h1>
         <p className="mt-1 max-w-2xl text-text-muted">
           Cura los tags oficiales del tenant con color e icono. Los autores siguen pudiendo escribir
           tags libres en sus posts; los curados acá se pintan con el estilo configurado en el feed y

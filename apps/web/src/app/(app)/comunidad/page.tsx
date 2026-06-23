@@ -94,7 +94,7 @@ export default function ComunidadPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1
-            className="font-display text-4xl font-extrabold tracking-tight text-text"
+            className="font-display text-2xl font-bold tracking-tight text-text"
             style={{ letterSpacing: '-0.02em' }}
           >
             Comunidad

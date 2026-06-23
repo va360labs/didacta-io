@@ -48,7 +48,7 @@ export default function AdminDashboardPage() {
     <section className="space-y-8">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Panel del tenant</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Panel del tenant</h1>
           <p className="mt-1 text-text-muted">
             Métricas clave de actividad de tu organización. Las <strong>matriculaciones</strong> y{' '}
             <strong>certificados</strong> respetan el rango; usuarios activos y cursos publicados

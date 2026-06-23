@@ -75,7 +75,7 @@ export default function AdminSeguridadPage() {
   if (!state && !error) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="font-display text-3xl font-bold">Seguridad</h1>
+        <h1 className="font-display text-2xl font-bold">Seguridad</h1>
         <div className="space-y-3">
           <div className="skeleton h-32 w-full" />
           <div className="skeleton h-48 w-full" />
@@ -87,7 +87,7 @@ export default function AdminSeguridadPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-3xl font-bold tracking-tight">Seguridad</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Seguridad</h1>
         <p className="text-text-muted">
           Política de autenticación de tu organización. Estos ajustes afectan a todos los usuarios
           del tenant.

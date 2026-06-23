@@ -168,7 +168,7 @@ export default function AiProvidersAdminPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Proveedores de IA</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Proveedores de IA</h1>
         <p className="mt-1 text-text-muted">
           Configura qué proveedor de IA usar para el tutor (chat) y para la indexación de cursos
           (embeddings). La API key se cifra antes de guardarse y nunca se vuelve a mostrar.

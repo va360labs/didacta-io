@@ -87,7 +87,7 @@ export default function AuditoriaPage() {
     <div className="flex flex-col gap-6">
       <header className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Auditoría</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Auditoría</h1>
           <p className="mt-1 text-text-muted">
             Registro inmutable de todas las acciones críticas del tenant. La cadena de hashes
             permite detectar cualquier modificación posterior.

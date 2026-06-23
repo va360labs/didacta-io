@@ -176,7 +176,7 @@ export default function UserDetailPage() {
             {userInitials(user.name, user.email) || '·'}
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="font-display text-3xl font-bold tracking-tight">
+            <h1 className="font-display text-2xl font-bold tracking-tight">
               {user.name ?? user.email}
             </h1>
             <p className="mt-0.5 text-sm text-text-muted">{user.email}</p>

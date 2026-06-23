@@ -146,7 +146,7 @@ export default function TenantDetailPage() {
             <Icon name="building" size={28} />
           </span>
           <div className="min-w-0 flex-1">
-            <h1 className="font-display text-3xl font-bold tracking-tight">{tenant.name}</h1>
+            <h1 className="font-display text-2xl font-bold tracking-tight">{tenant.name}</h1>
             <p className="mt-0.5 font-mono text-sm text-text-muted">/{tenant.slug}</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Badge variant={VARIANT[tenant.status]} dot>

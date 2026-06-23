@@ -62,7 +62,7 @@ export default function MisCertificadosPage() {
     <section className="space-y-8">
       <header>
         <h1
-          className="font-display text-4xl font-extrabold tracking-tight text-text"
+          className="font-display text-2xl font-bold tracking-tight text-text"
           style={{ letterSpacing: '-0.02em' }}
         >
           Mis certificados

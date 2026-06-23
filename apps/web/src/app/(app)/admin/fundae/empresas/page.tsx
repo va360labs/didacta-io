@@ -73,7 +73,7 @@ export default function FundaeEmpresasPage() {
     <section className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Empresas bonificadas</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Empresas bonificadas</h1>
           <p className="mt-1 max-w-3xl text-text-muted">
             Empresas que financian formación con crédito Fundae. Cada grupo bonificable se vincula a
             una de estas (los costes y comunicaciones oficiales heredan los datos fiscales).

@@ -47,7 +47,7 @@ export default function AdminSsoPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-3xl font-bold tracking-tight">SSO con OpenID Connect</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">SSO con OpenID Connect</h1>
         <p className="text-text-muted">
           Permite a tus usuarios iniciar sesión con su identidad corporativa (Okta, Azure AD, Auth0,
           Google Workspace, Keycloak…). Una vez configurado, aparece un botón &ldquo;Iniciar sesión

@@ -53,7 +53,7 @@ export default function FormadorDashboardPage() {
   return (
     <section className="space-y-8">
       <header>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Panel del formador</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Panel del formador</h1>
         <p className="mt-1 text-text-muted">
           Vista general de cursos, alumnos y correcciones pendientes en tu organización.
         </p>

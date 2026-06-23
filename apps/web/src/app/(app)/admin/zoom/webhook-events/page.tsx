@@ -55,7 +55,7 @@ export default function ZoomWebhookEventsPage() {
     <div className="flex flex-col gap-6">
       <header className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Eventos webhook · Zoom</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Eventos webhook · Zoom</h1>
           <p className="mt-1 text-text-muted">
             Trazabilidad de los eventos recibidos del webhook de Zoom. Útil para diagnosticar
             sesiones que no transicionan o grabaciones que no aparecen.

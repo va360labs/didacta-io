@@ -156,7 +156,7 @@ export default function EspaciosAdminPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Espacios de comunidad</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Espacios de comunidad</h1>
         <p className="mt-1 max-w-2xl text-text-muted">
           Crea, edita y reordena los espacios que aparecen en el sidebar. Los espacios de sistema
           (marcados con 🔒) no se pueden eliminar.

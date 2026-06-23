@@ -69,7 +69,7 @@ export default function MigratorLearndashPage(): React.ReactElement | null {
     return (
       <section className="space-y-6">
         <header>
-          <h1 className="font-display text-3xl font-bold tracking-tight">
+          <h1 className="font-display text-2xl font-bold tracking-tight">
             Migrar desde WordPress + LearnDash
           </h1>
         </header>
@@ -97,7 +97,7 @@ export default function MigratorLearndashPage(): React.ReactElement | null {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-3xl font-bold tracking-tight">
+        <h1 className="font-display text-2xl font-bold tracking-tight">
           Migrar desde WordPress + LearnDash
         </h1>
         <p className="mt-1 text-text-muted">

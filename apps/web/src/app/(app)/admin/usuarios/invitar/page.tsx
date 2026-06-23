@@ -52,7 +52,7 @@ export default function InvitarPage() {
       </Button>
 
       <header>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Invitar persona</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Invitar persona</h1>
         <p className="mt-1 text-text-muted">
           Le enviaremos un email con un enlace para que defina su contraseña y entre.
         </p>

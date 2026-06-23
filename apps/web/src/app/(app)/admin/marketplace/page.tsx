@@ -50,11 +50,15 @@ export default function AdminMarketplacePage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-3xl font-bold tracking-tight">Marketplace de módulos</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Marketplace de módulos</h1>
         <p className="text-text-muted">
           Sube un paquete <code>.zip</code> firmado por Didacta para añadir un módulo a esta
           instancia sin reiniciar el API. Los módulos quedan disponibles para ser activados por
-          tenant en <a href="/admin/configuracion" className="underline">Configuración</a>.
+          tenant en{' '}
+          <a href="/admin/configuracion" className="underline">
+            Configuración
+          </a>
+          .
         </p>
       </header>
 
@@ -70,7 +74,13 @@ function UploadCard() {
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<
-    | { kind: 'success'; name: string; version: string; signatureVerified: boolean; signatureError?: string }
+    | {
+        kind: 'success';
+        name: string;
+        version: string;
+        signatureVerified: boolean;
+        signatureError?: string;
+      }
     | { kind: 'error'; message: string; code?: string }
     | null
   >(null);
@@ -115,8 +125,8 @@ function UploadCard() {
       <CardHeader>
         <CardTitle>Subir paquete</CardTitle>
         <CardDescription>
-          Arrastra el <code>.zip</code> aquí o selecciónalo del disco. La instancia valida
-          firma + lint del bundle + migrations SQL antes de aceptar.
+          Arrastra el <code>.zip</code> aquí o selecciónalo del disco. La instancia valida firma +
+          lint del bundle + migrations SQL antes de aceptar.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -143,11 +153,7 @@ function UploadCard() {
             {busy ? 'Procesando paquete…' : 'Arrastra el .zip aquí'}
           </p>
           <p className="mb-4 text-sm text-text-muted">o</p>
-          <Button
-            variant="secondary"
-            disabled={busy}
-            onClick={() => fileRef.current?.click()}
-          >
+          <Button variant="secondary" disabled={busy} onClick={() => fileRef.current?.click()}>
             Seleccionar archivo
           </Button>
           <input
@@ -161,21 +167,26 @@ function UploadCard() {
               e.target.value = ''; // permite re-seleccionar el mismo archivo
             }}
           />
-          <p className="mt-4 text-xs text-text-muted">Máximo 50 MiB · solo paquetes firmados por Didacta</p>
+          <p className="mt-4 text-xs text-text-muted">
+            Máximo 50 MiB · solo paquetes firmados por Didacta
+          </p>
         </div>
 
         {feedback?.kind === 'success' && (
-          <div className={[
-            'mt-4 rounded border p-3 text-sm',
-            feedback.signatureVerified
-              ? 'border-green-300 bg-green-50 text-green-900'
-              : 'border-amber-300 bg-amber-50 text-amber-900',
-          ].join(' ')}>
-            <strong>{feedback.name}@{feedback.version}</strong> instalado correctamente.
+          <div
+            className={[
+              'mt-4 rounded border p-3 text-sm',
+              feedback.signatureVerified
+                ? 'border-green-300 bg-green-50 text-green-900'
+                : 'border-amber-300 bg-amber-50 text-amber-900',
+            ].join(' ')}
+          >
+            <strong>
+              {feedback.name}@{feedback.version}
+            </strong>{' '}
+            instalado correctamente.
             {!feedback.signatureVerified && (
-              <span className="ml-2 font-normal">
-                (sin verificar — ver advertencia)
-              </span>
+              <span className="ml-2 font-normal">(sin verificar — ver advertencia)</span>
             )}
           </div>
         )}
@@ -196,8 +207,12 @@ function UploadCard() {
               </AlertDialogTitle>
               <AlertDialogDescription className="space-y-3">
                 <p>
-                  El módulo <strong>{feedback?.kind === 'success' ? `${feedback.name}@${feedback.version}` : ''}</strong>{' '}
-                  se instaló correctamente pero <strong>no tiene firma verificada</strong> de Didacta.
+                  El módulo{' '}
+                  <strong>
+                    {feedback?.kind === 'success' ? `${feedback.name}@${feedback.version}` : ''}
+                  </strong>{' '}
+                  se instaló correctamente pero <strong>no tiene firma verificada</strong> de
+                  Didacta.
                 </p>
                 <p>
                   Esto significa que el paquete fue subido directamente y no pasó por el proceso de
@@ -215,9 +230,7 @@ function UploadCard() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogAction onClick={() => setWarningOpen(false)}>
-                Entendido
-              </AlertDialogAction>
+              <AlertDialogAction onClick={() => setWarningOpen(false)}>Entendido</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -253,7 +266,10 @@ function InstalledList() {
         <CardTitle>Módulos instalados</CardTitle>
         <CardDescription>
           Lista a nivel de instancia. La activación por tenant sigue viviendo en{' '}
-          <a href="/admin/configuracion" className="underline">Configuración</a>.
+          <a href="/admin/configuracion" className="underline">
+            Configuración
+          </a>
+          .
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -265,8 +281,8 @@ function InstalledList() {
         {rows === null && !error && <p className="text-sm text-text-muted">Cargando…</p>}
         {rows && rows.length === 0 && (
           <p className="text-sm text-text-muted">
-            Aún no hay módulos instalados via marketplace. Los módulos compilados en la imagen Docker
-            (mod.courses, mod.community, etc.) se gestionan desde Configuración.
+            Aún no hay módulos instalados via marketplace. Los módulos compilados en la imagen
+            Docker (mod.courses, mod.community, etc.) se gestionan desde Configuración.
           </p>
         )}
         {rows && rows.length > 0 && (
@@ -281,18 +297,13 @@ function InstalledList() {
   );
 }
 
-function InstalledRow({
-  row,
-  onChange,
-}: {
-  row: InstalledModuleSummary;
-  onChange: () => void;
-}) {
+function InstalledRow({ row, onChange }: { row: InstalledModuleSummary; onChange: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const onUninstall = async () => {
-    if (!confirm(`¿Desinstalar "${row.name}@${row.version}"? Esta acción no se puede deshacer.`)) return;
+    if (!confirm(`¿Desinstalar "${row.name}@${row.version}"? Esta acción no se puede deshacer.`))
+      return;
     setBusy(true);
     setError(null);
     try {
@@ -311,7 +322,9 @@ function InstalledRow({
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <strong className="font-medium">{row.displayName}</strong>
-            <code className="text-xs text-text-muted">{row.name}@{row.version}</code>
+            <code className="text-xs text-text-muted">
+              {row.name}@{row.version}
+            </code>
             <StatusBadge status={row.status} />
             <SourceBadge source={row.source} />
           </div>
@@ -384,9 +397,10 @@ function FromWebMarketplaceTeaser() {
       <CardHeader>
         <CardTitle>Desde el marketplace web (próximamente)</CardTitle>
         <CardDescription>
-          Pronto vas a poder navegar el catálogo público de módulos en didacta.io y dispararlos a esta
-          instancia con un click. El flujo está descrito en <code>docs/MARKETPLACE-WEB-SPEC.md</code>.
-          Mientras, el upload offline de arriba es la forma soportada.
+          Pronto vas a poder navegar el catálogo público de módulos en didacta.io y dispararlos a
+          esta instancia con un click. El flujo está descrito en{' '}
+          <code>docs/MARKETPLACE-WEB-SPEC.md</code>. Mientras, el upload offline de arriba es la
+          forma soportada.
         </CardDescription>
       </CardHeader>
     </Card>

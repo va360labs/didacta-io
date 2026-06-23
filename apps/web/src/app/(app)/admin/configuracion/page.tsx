@@ -207,7 +207,7 @@ export default function ConfiguracionPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Configuración del tenant</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Configuración del tenant</h1>
         <p className="mt-1 max-w-3xl text-text-muted">
           Credenciales y preferencias de los módulos para tu organización. Los secretos se almacenan
           cifrados (AES-256-GCM) y nunca se devuelven en claro desde la API.

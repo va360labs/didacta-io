@@ -46,7 +46,7 @@ export default function AdminWebhooksPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-3xl font-bold tracking-tight">Webhooks salientes</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Webhooks salientes</h1>
         <p className="text-text-muted">
           Configura URLs externas que reciban una notificación cada vez que sucede un evento en la
           plataforma (alumno completa curso, nuevo post en comunidad, etc.). Útil para integrar con

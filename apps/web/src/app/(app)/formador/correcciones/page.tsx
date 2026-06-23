@@ -52,7 +52,7 @@ export default function CorreccionesPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Correcciones pendientes</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Correcciones pendientes</h1>
         <p className="mt-1 max-w-3xl text-text-muted">
           Intentos esperando tu corrección. Tras calificar, se emite el resultado y la lección queda
           completada si el alumno aprobó.

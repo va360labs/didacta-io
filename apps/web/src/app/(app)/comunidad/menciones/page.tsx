@@ -49,7 +49,7 @@ export default function MisMencionesPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Mis menciones</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Mis menciones</h1>
         <p className="mt-1 text-text-muted">
           Cada vez que alguien te menciona con <code className="font-mono">@usuario</code> en un
           post o comentario, aparece acá.

@@ -174,7 +174,7 @@ export default function CuentaPage() {
         </div>
         <div className="min-w-0 flex-1">
           <h1
-            className="font-display text-3xl font-bold tracking-tight"
+            className="font-display text-2xl font-bold tracking-tight"
             style={{ letterSpacing: '-0.02em' }}
           >
             {profile.name ?? profile.email}

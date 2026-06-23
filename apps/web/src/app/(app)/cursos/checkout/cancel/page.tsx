@@ -32,7 +32,7 @@ export default function CheckoutCancelPage() {
             <Icon name="alert" size={32} />
           </span>
           <div className="space-y-2">
-            <h1 className="font-display text-3xl font-extrabold tracking-tight text-text">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-text">
               Pago cancelado
             </h1>
             <p className="text-text-muted">

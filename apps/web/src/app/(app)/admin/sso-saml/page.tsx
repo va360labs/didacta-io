@@ -39,7 +39,7 @@ export default function AdminSamlSsoPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-3xl font-bold tracking-tight">SSO con SAML 2.0</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">SSO con SAML 2.0</h1>
         <p className="text-text-muted">
           Permite a tus usuarios iniciar sesión con su identidad corporativa usando SAML 2.0 (Okta,
           Azure AD, Auth0, OneLogin, ADFS, Keycloak…). Una vez configurado, aparece un botón

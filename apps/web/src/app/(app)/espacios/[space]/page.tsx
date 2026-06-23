@@ -91,7 +91,7 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
           </div>
           <div>
             <h1
-              className="font-display text-4xl font-extrabold tracking-tight text-text"
+              className="font-display text-2xl font-bold tracking-tight text-text"
               style={{ letterSpacing: '-0.02em' }}
             >
               {meta?.title ?? space}

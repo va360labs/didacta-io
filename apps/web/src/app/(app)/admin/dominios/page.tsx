@@ -39,7 +39,7 @@ export default function AdminDominiosPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-3xl font-bold tracking-tight">Dominios propios</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Dominios propios</h1>
         <p className="text-text-muted">
           Permite a tu organización acceder a Didacta a través de un dominio personalizado (ej.{' '}
           <code>learn.acme.com</code>) en lugar del subdominio compartido.

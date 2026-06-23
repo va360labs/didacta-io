@@ -118,7 +118,7 @@ export default function FundaeEmpresaDetailPage() {
                 <Badge variant="muted">{company.plantilla} empleados</Badge>
               ) : null}
             </div>
-            <h1 className="font-display text-3xl font-bold tracking-tight">
+            <h1 className="font-display text-2xl font-bold tracking-tight">
               {company.razonSocial}
             </h1>
             <p className="text-sm tabular-nums text-text-muted">

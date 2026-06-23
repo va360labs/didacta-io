@@ -112,7 +112,7 @@ export default function FundaeGruposPage() {
     <section className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Grupos bonificables</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Grupos bonificables</h1>
           <p className="mt-1 max-w-3xl text-text-muted">
             Agrupación de participantes de una acción formativa vinculados a una empresa Fundae. El
             crédito consumido se debita del crédito de la empresa al cerrar.

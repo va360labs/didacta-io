@@ -34,7 +34,7 @@ export default function AdminBillingProductsPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-3xl font-bold tracking-tight">Pagos · Productos Stripe</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Pagos · Productos Stripe</h1>
         <p className="text-text-muted">
           Vincula cursos del tenant a un <code className="font-mono">Stripe Price ID</code>. El
           botón &laquo;Comprar curso&raquo; del catálogo abrirá Checkout y, tras pago, el alumno
@@ -97,7 +97,9 @@ function BillingProductsPanel() {
     if (!token) return;
     if (!courseId || !stripePriceId) return;
     if (!PRICE_ID_PATTERN.test(stripePriceId.trim())) {
-      setActionError('El Stripe Price ID debe empezar por "price_" y solo contener letras y números.');
+      setActionError(
+        'El Stripe Price ID debe empezar por "price_" y solo contener letras y números.',
+      );
       return;
     }
     setCreating(true);
@@ -127,7 +129,9 @@ function BillingProductsPanel() {
     setActionInfo(null);
     try {
       const { product } = await billingApi.updateProduct(token, p.id, { active: !p.active });
-      setProducts((prev) => (prev ? prev.map((it) => (it.id === product.id ? product : it)) : prev));
+      setProducts((prev) =>
+        prev ? prev.map((it) => (it.id === product.id ? product : it)) : prev,
+      );
     } catch (e) {
       setActionError(e instanceof ApiHttpError ? e.message : 'No se pudo cambiar el estado.');
     }
@@ -151,7 +155,9 @@ function BillingProductsPanel() {
       const { product } = await billingApi.updateProduct(token, p.id, {
         stripePriceId: next.trim(),
       });
-      setProducts((prev) => (prev ? prev.map((it) => (it.id === product.id ? product : it)) : prev));
+      setProducts((prev) =>
+        prev ? prev.map((it) => (it.id === product.id ? product : it)) : prev,
+      );
       setActionInfo(`Price actualizado: ${formatPrice(product.unitAmount, product.currency)}.`);
     } catch (e) {
       setActionError(
@@ -265,10 +271,7 @@ function BillingProductsPanel() {
                 disabled={creating}
               />
             </div>
-            <Button
-              type="submit"
-              disabled={creating || !courseId || !stripePriceId.trim()}
-            >
+            <Button type="submit" disabled={creating || !courseId || !stripePriceId.trim()}>
               {creating ? 'Creando…' : 'Vincular'}
             </Button>
           </form>

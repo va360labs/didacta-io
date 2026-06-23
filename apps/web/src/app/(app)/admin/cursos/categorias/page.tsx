@@ -136,7 +136,7 @@ export default function CourseCategoriesAdminPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Categorías de cursos</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Categorías de cursos</h1>
         <p className="mt-1 max-w-2xl text-text-muted">
           Cura las categorías oficiales del catálogo con color e icono. El builder ofrece este
           listado al formador como select; el catálogo y la card del curso pintan el chip con el

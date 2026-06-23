@@ -79,16 +79,16 @@ export default function ModuleDetailPage() {
             <Button variant="ghost" size="icon" onClick={() => router.back()}>
               <Icon name="arrow-left" className="h-4 w-4" />
             </Button>
-            <h1 className="font-display text-3xl font-bold tracking-tight">{module.displayName}</h1>
+            <h1 className="font-display text-2xl font-bold tracking-tight">{module.displayName}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2 pl-12">
-            <code className="text-sm text-text-muted">{module.name}@{module.version}</code>
+            <code className="text-sm text-text-muted">
+              {module.name}@{module.version}
+            </code>
             <StatusBadge status={module.status} />
             <VendorBadge vendor={module.vendor} />
           </div>
-          {module.description && (
-            <p className="pl-12 text-text-muted">{module.description}</p>
-          )}
+          {module.description && <p className="pl-12 text-text-muted">{module.description}</p>}
         </div>
       </header>
 
@@ -169,9 +169,12 @@ function GeneralTab({ module }: { module: InstalledModuleSummary }) {
         <CardHeader>
           <CardTitle>Activación por tenant</CardTitle>
           <CardDescription>
-            Controla si este módulo está activo para el tenant actual.
-            La activación/desactivación se gestiona desde{' '}
-            <a href="/admin/configuracion" className="underline">Configuración → Módulos</a>.
+            Controla si este módulo está activo para el tenant actual. La activación/desactivación
+            se gestiona desde{' '}
+            <a href="/admin/configuracion" className="underline">
+              Configuración → Módulos
+            </a>
+            .
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -198,8 +201,8 @@ function ConfigTab({ module }: { module: InstalledModuleSummary }) {
       <CardHeader>
         <CardTitle>Configuración del módulo</CardTitle>
         <CardDescription>
-          Valores configurables definidos por el módulo. El form se genera automáticamente
-          desde el schema declarado en <code>module.json</code>.
+          Valores configurables definidos por el módulo. El form se genera automáticamente desde el
+          schema declarado en <code>module.json</code>.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -260,9 +263,7 @@ function UITab({ module }: { module: InstalledModuleSummary }) {
     <Card>
       <CardHeader>
         <CardTitle>Interfaz del módulo</CardTitle>
-        <CardDescription>
-          UI cargada dinámicamente desde el bundle del módulo.
-        </CardDescription>
+        <CardDescription>UI cargada dinámicamente desde el bundle del módulo.</CardDescription>
       </CardHeader>
       <CardContent>
         <ModuleRenderer
