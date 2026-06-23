@@ -1,0 +1,56 @@
+# Infraestructura local de desarrollo (postgres + redis + mailpit).
+# Las apps corren nativamente: pnpm dev
+#
+# Uso:
+#   pnpm infra:up      → levanta todo en background
+#   pnpm infra:down    → para y elimina contenedores (datos persisten en volumes)
+#   pnpm infra:logs    → tail de logs
+#
+# Para el primer arranque ver .env.local.example → "First-time setup".
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: didacta-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-didacta}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-didacta_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-didacta}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-didacta} -d ${POSTGRES_DB:-didacta}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: didacta-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: didacta-mailpit
+    restart: unless-stopped
+    ports:
+      - '${MAILPIT_SMTP_PORT:-1025}:1025'
+      - '${MAILPIT_UI_PORT:-8025}:8025'
+
+volumes:
+  postgres_data:
+  redis_data:

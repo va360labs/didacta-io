@@ -5,8 +5,8 @@
   "description": "Frontend Next.js 15 de Didacta (alumno + admin de tenant)",
   "scripts": {
     "build": "next build",
-    "dev": "next dev -p ${WEB_PORT:-3000}",
-    "start": "next start -p ${WEB_PORT:-3000}",
+    "dev": "next dev -p 3010",
+    "start": "next start -p 3010",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "clean": "rm -rf .next .turbo"

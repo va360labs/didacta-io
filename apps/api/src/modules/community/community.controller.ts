@@ -1,10 +1,13 @@
 import {
   Body,
+  ConflictException,
   Controller,
   Delete,
   Get,
   HttpCode,
+  NotFoundException,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -39,6 +42,21 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { SessionClaims } from '../../auth/token.service';
 import { CommunityDigestWorker } from './community-digest.worker';
 import { ModuleRegistryService } from '../module-registry.service';
+
+const createSpaceSchema = z.object({
+  slug: z
+    .string()
+    .min(1)
+    .max(80)
+    .regex(/^[a-z0-9-]+$/, 'Solo minúsculas, números y guiones'),
+  title: z.string().min(1).max(120),
+  description: z.string().max(500).optional(),
+  icon: z.string().max(10).optional(),
+  color: z.string().max(100).optional(),
+  sortOrder: z.number().int().min(0).optional(),
+});
+
+const updateSpaceSchema = createSpaceSchema.omit({ slug: true }).partial();
 
 @ApiTags('Modules · Community')
 @ApiBearerAuth()
@@ -292,6 +310,179 @@ export class CommunityController {
     if (!user) throw new UnauthorizedException();
     if (!canModerate(user)) throw new NotModeratorError();
     return this.registry.getCommunityService().unpinPost(user.tenantId, user.sub, id);
+  }
+
+  // ── UC-009 ─────────────────────────────────────────────────────────────────
+
+  @Get('stats')
+  @ApiOperation({ summary: 'Estadísticas públicas del tenant (miembros, cursos activos)' })
+  async getStats(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    const [members, activeCourses] = await Promise.all([
+      this.prisma.user.count({
+        where: { tenantId: user.tenantId, deletedAt: null, status: 'ACTIVE' },
+      }),
+      this.prisma.modCoursesCourse.count({
+        where: { tenantId: user.tenantId, status: 'PUBLISHED', deletedAt: null },
+      }),
+    ]);
+    return { members, activeCourses, activeGroups: 0 };
+  }
+
+  // ── Espacios ───────────────────────────────────────────────────────────────
+
+  @Get('spaces')
+  @ApiOperation({ summary: 'Listar espacios de comunidad del tenant' })
+  async listSpaces(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    return this.prisma.modCommunitySpace.findMany({
+      where: { tenantId: user.tenantId },
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        description: true,
+        icon: true,
+        color: true,
+        sortOrder: true,
+        isSystem: true,
+      },
+    });
+  }
+
+  @Post('spaces')
+  @ApiOperation({ summary: 'Crear espacio. Solo super_admin / tenant_admin.' })
+  async createSpace(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(createSpaceSchema)) dto: z.infer<typeof createSpaceSchema>,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!canModerate(user)) throw new NotModeratorError();
+    const existing = await this.prisma.modCommunitySpace.findUnique({
+      where: { tenantId_slug: { tenantId: user.tenantId, slug: dto.slug } },
+    });
+    if (existing) throw new ConflictException(`Ya existe un espacio con slug '${dto.slug}'.`);
+    return this.prisma.modCommunitySpace.create({
+      data: {
+        tenantId: user.tenantId,
+        slug: dto.slug,
+        title: dto.title,
+        description: dto.description ?? null,
+        icon: dto.icon ?? '#',
+        color: dto.color ?? 'var(--didacta-trust)',
+        sortOrder: dto.sortOrder ?? 0,
+        createdById: user.sub,
+      },
+    });
+  }
+
+  @Patch('spaces/:slug')
+  @ApiOperation({ summary: 'Editar espacio. Solo super_admin / tenant_admin.' })
+  async updateSpace(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('slug') slug: string,
+    @Body(new ZodValidationPipe(updateSpaceSchema)) dto: z.infer<typeof updateSpaceSchema>,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!canModerate(user)) throw new NotModeratorError();
+    const space = await this.prisma.modCommunitySpace.findUnique({
+      where: { tenantId_slug: { tenantId: user.tenantId, slug } },
+    });
+    if (!space) throw new NotFoundException(`Espacio '${slug}' no encontrado.`);
+    return this.prisma.modCommunitySpace.update({
+      where: { tenantId_slug: { tenantId: user.tenantId, slug } },
+      data: {
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.icon !== undefined && { icon: dto.icon }),
+        ...(dto.color !== undefined && { color: dto.color }),
+        ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
+      },
+    });
+  }
+
+  @Delete('spaces/:slug')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Eliminar espacio. Solo admins. Bloqueado si es sistema o tiene posts.',
+  })
+  async deleteSpace(@CurrentUser() user: SessionClaims | undefined, @Param('slug') slug: string) {
+    if (!user) throw new UnauthorizedException();
+    if (!canModerate(user)) throw new NotModeratorError();
+    const space = await this.prisma.modCommunitySpace.findUnique({
+      where: { tenantId_slug: { tenantId: user.tenantId, slug } },
+    });
+    if (!space) throw new NotFoundException(`Espacio '${slug}' no encontrado.`);
+    if (space.isSystem)
+      throw new ConflictException(`El espacio '${slug}' es de sistema y no se puede eliminar.`);
+    const postCount = await this.prisma.modCommunityPost.count({
+      where: { tenantId: user.tenantId, tags: { has: slug }, deletedAt: null },
+    });
+    if (postCount > 0)
+      throw new ConflictException(
+        `El espacio '${slug}' tiene ${postCount} publicaciones y no se puede eliminar.`,
+      );
+    await this.prisma.modCommunitySpace.delete({
+      where: { tenantId_slug: { tenantId: user.tenantId, slug } },
+    });
+    return { deleted: true };
+  }
+
+  // ── UC-010 ─────────────────────────────────────────────────────────────────
+
+  @Get('members')
+  @ApiOperation({ summary: 'Directorio público de miembros del tenant (paginado)' })
+  async listCommunityMembers(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Query('page') pageStr?: string,
+    @Query('limit') limitStr?: string,
+    @Query('search') search?: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(limitStr ?? '20', 10) || 20));
+    const skip = (page - 1) * limit;
+
+    const where = {
+      tenantId: user.tenantId,
+      deletedAt: null,
+      status: 'ACTIVE' as const,
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' as const } },
+              { email: { contains: search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const [members, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          avatarUrl: true,
+          roles: { select: { role: { select: { name: true } } } },
+        },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return {
+      members: members.map((m) => ({
+        id: m.id,
+        displayName: m.name,
+        avatarUrl: m.avatarUrl,
+        roles: m.roles.map((r) => r.role.name),
+      })),
+      total,
+    };
   }
 }
 

@@ -23,7 +23,15 @@
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "infra:up": "docker compose -f docker-compose.infra.yml up -d",
+    "infra:down": "docker compose -f docker-compose.infra.yml down",
+    "infra:logs": "docker compose -f docker-compose.infra.yml logs -f",
+    "db:migrate": "pnpm --filter @didacta/database db:migrate:dev",
+    "db:generate": "pnpm --filter @didacta/database db:generate",
+    "db:rls": "pnpm --filter @didacta/database db:rls:apply",
+    "db:studio": "pnpm --filter @didacta/database db:studio",
+    "db:seed": "pnpm --filter @didacta/database db:seed"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",

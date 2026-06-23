@@ -271,6 +271,54 @@ export const communityApi = {
       withAuth(),
     );
   },
+
+  async listSpaces(): Promise<CommunitySpace[]> {
+    return apiFetch<CommunitySpace[]>(
+      '/api/v1/modules/community/spaces',
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
+  async createSpace(input: {
+    slug: string;
+    title: string;
+    description?: string | null;
+    icon?: string;
+    color?: string;
+    sortOrder?: number;
+  }): Promise<CommunitySpace> {
+    return apiFetch<CommunitySpace>(
+      '/api/v1/modules/community/spaces',
+      { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async updateSpace(
+    slug: string,
+    patch: {
+      title?: string;
+      description?: string | null;
+      icon?: string;
+      color?: string;
+      sortOrder?: number;
+    },
+  ): Promise<CommunitySpace> {
+    return apiFetch<CommunitySpace>(
+      `/api/v1/modules/community/spaces/${slug}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+      withAuth(),
+    );
+  },
+
+  async deleteSpace(slug: string): Promise<void> {
+    await apiFetch<{ deleted: true }>(
+      `/api/v1/modules/community/spaces/${slug}`,
+      { method: 'DELETE' },
+      withAuth(),
+    );
+  },
 };
 
 export interface CommunityTag {
@@ -282,6 +330,38 @@ export interface CommunityTag {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface CommunitySpace {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  icon: string;
+  color: string;
+  sortOrder: number;
+  isSystem: boolean;
+}
+
+/**
+ * Set de iconos válidos para espacios — subconjunto de IconName que tiene
+ * sentido semánticamente para canales de comunidad.
+ */
+export const COMMUNITY_SPACE_ICONS = [
+  'hash',
+  'megaphone',
+  'help',
+  'file',
+  'globe',
+  'message',
+  'book',
+  'shield',
+  'sparkles',
+  'award',
+  'users',
+  'video',
+  'calendar',
+] as const;
+export type CommunitySpaceIcon = (typeof COMMUNITY_SPACE_ICONS)[number];
 
 /**
  * Set de iconos válidos para tags. Debe coincidir con `COMMUNITY_TAG_ICONS`

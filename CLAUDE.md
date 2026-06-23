@@ -5,19 +5,53 @@
 ## ⚠️ REGLAS CRÍTICAS (NO NEGOCIABLES)
 
 ### 1. Documentación SOLO en Notion
+
 **TODA la documentación vive en Notion, NUNCA en el repositorio.**
+
 - Fuente de verdad: [LMS Ship](https://www.notion.so/LMS-Ship-34cb609a124c80aa996bfec23268cad4)
 - PRD, ADRs, HANDOFFs, Estado, Arquitectura → TODO en Notion
 - Si necesitas documentar algo, hazlo en Notion
 - Si encuentras documentación en el repo, migrala a Notion y elimínala
 
 ### 2. No avanzar sin documentación y tests
+
 **PROHIBIDO avanzar a nuevas tareas si:**
+
 - La tarea actual no está correctamente documentada en Notion
 - Los tests no pasan o no existen para la funcionalidad
 - Hay decisiones arquitectónicas sin ADR
 
 Aunque el usuario lo pida, NO avanzar. Primero documentar y probar.
+
+### 3. PROHIBIDO usar datos falsos o de cartón
+
+**NUNCA inventar datos, mocks, fixtures ni constantes hardcodeadas para mostrar en UI.**
+
+- Todos los datos que aparecen en pantalla vienen de la BD real a través de la API.
+- Si una pantalla necesita datos que aún no existen en la BD: comunicar exactamente qué seed/migración hace falta y esperar aprobación antes de escribir código.
+- Están prohibidos: arrays `const POSTS = [...]`, `const FAKE_SESSION = {...}`, objetos con nombres de persona inventados ("Marta Ruiz", "Carlos N."), contadores fijos (1240 miembros, 38 cursos…).
+- Excepción única: fixtures en tests (`*.spec.ts`, `*.test.ts`). En el código de producción, cero datos inventados.
+
+### 4. Validar entrega con Playwright antes de declarar "listo"
+
+**Antes de decir que algo está listo, ejecutar los tests E2E:**
+
+```
+pnpm exec playwright test --config apps/e2e/playwright.config.ts apps/e2e/tests/<spec>.spec.ts --reporter=line
+```
+
+- Si algún test falla: corregir primero, informar después.
+- No declarar éxito hasta ver `N passed` en la salida.
+- Si no existe spec para la funcionalidad entregada, crearla.
+
+### 5. Prohibido duplicar secciones o rutas
+
+**Antes de crear una página o sección nueva, verificar que no exista ya:**
+
+- Buscar en `apps/web/src/app/(app)/` si hay una ruta con el mismo propósito.
+- Buscar en `buildGroups()` del layout si ya hay un item del sidebar que apunte a contenido equivalente.
+- Si existe: reutilizar o consolidar, nunca crear un segundo camino al mismo destino.
+- Histórico: `/inicio` (feed hardcodeado del rediseño) duplicaba `/comunidad` (feed real). Resultado: confusión + datos de cartón visibles en producción.
 
 ---
 
@@ -32,6 +66,7 @@ Arquitectura: NestJS 11 + Next.js 15 + PostgreSQL 16 (con Row-Level Security) + 
 ## Documentación (Notion)
 
 Toda la documentación vive en Notion → [LMS Ship](https://www.notion.so/LMS-Ship-34cb609a124c80aa996bfec23268cad4):
+
 - **PRD — Didacta**: Product Requirements Document
 - **ADRs**: Architecture Decision Records (12 ADRs)
 - **HANDOFFs**: Notas de sesión
@@ -88,6 +123,7 @@ Planificación viva en Notion: [LMS Ship](https://www.notion.so/LMS-Ship-34cb609
 **Cualquier código específico de un módulo `mod.<slug>` vive EXCLUSIVAMENTE en `modules/<slug>/`.** Nunca bajo `apps/web/` ni `apps/api/`.
 
 ### Por qué
+
 Los módulos third-party se instalan en runtime desde un ZIP firmado por el marketplace. Si su código vive en `apps/*`, requiere rebuild del Docker image del host → rompe el contrato de marketplace. Ver ADR-009 + ADR-015.
 
 ### CHECKLIST OBLIGATORIO antes de escribir/editar cualquier archivo
@@ -104,17 +140,17 @@ Los módulos third-party se instalan en runtime desde un ZIP firmado por el mark
 
 ### El host SOLO tiene infra genérica relacionada a marketplace
 
-| OK en `apps/api/src/marketplace/` | NO en `apps/api/src/marketplace/` |
-|---|---|
-| `modules-dispatcher.controller.ts` (rutea `/api/v1/modules/*`) | `sandboxed-migrator-learndash.service.ts` ❌ |
-| `module-assets.controller.ts` (sirve `dist/ui/*.js` del ZIP) | `learndash-helpers.ts` ❌ |
-| `sandboxed-db.service.ts` (cliente DB genérico para módulos) | Cualquier cosa que mencione un slug específico ❌ |
+| OK en `apps/api/src/marketplace/`                              | NO en `apps/api/src/marketplace/`                 |
+| -------------------------------------------------------------- | ------------------------------------------------- |
+| `modules-dispatcher.controller.ts` (rutea `/api/v1/modules/*`) | `sandboxed-migrator-learndash.service.ts` ❌      |
+| `module-assets.controller.ts` (sirve `dist/ui/*.js` del ZIP)   | `learndash-helpers.ts` ❌                         |
+| `sandboxed-db.service.ts` (cliente DB genérico para módulos)   | Cualquier cosa que mencione un slug específico ❌ |
 
-| OK en `apps/web/src/` | NO en `apps/web/src/` |
-|---|---|
-| `lib/module-loader.ts` (carga genérica de surfaces) | `modules/migrator-learndash/wizard.tsx` ❌ |
-| `lib/module-runtime.ts` (expone `__didacta__` global) | `app/(app)/admin/integraciones/migrator-learndash/page.tsx` con import del componente ❌ |
-| `app/(app)/admin/integraciones/[module]/page.tsx` que solo hace `loadModuleUI(slug, 'admin')` | Cualquier `.tsx` específico de un módulo ❌ |
+| OK en `apps/web/src/`                                                                         | NO en `apps/web/src/`                                                                    |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `lib/module-loader.ts` (carga genérica de surfaces)                                           | `modules/migrator-learndash/wizard.tsx` ❌                                               |
+| `lib/module-runtime.ts` (expone `__didacta__` global)                                         | `app/(app)/admin/integraciones/migrator-learndash/page.tsx` con import del componente ❌ |
+| `app/(app)/admin/integraciones/[module]/page.tsx` que solo hace `loadModuleUI(slug, 'admin')` | Cualquier `.tsx` específico de un módulo ❌                                              |
 
 ### Infraestructura disponible (NO inventes paralela)
 
@@ -127,6 +163,7 @@ Los módulos third-party se instalan en runtime desde un ZIP firmado por el mark
 ### Code review trigger automático
 
 Si vas a tocar un archivo cuyo path matches:
+
 - `apps/web/src/modules/<slug>/`
 - `apps/web/src/app/.../modules/<slug>/` o `.../integraciones/<slug>/` con código específico
 - `apps/api/src/marketplace/sandboxed-<slug>*.ts` (excepto los genéricos: `sandboxed-db|http|jobs|secrets|didacta`)

@@ -1,17 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CommunityTagChip } from '@/components/community-tag-chip';
+import { ThreadCard, TAG_COLORS } from '@/components/community-thread-card';
 import { Icon } from '@/components/icon';
-import { Badge } from '@/components/ui/badge';
+import { PostComposerModal } from '@/components/post-composer-modal';
+import { PostDetailView } from '@/components/post-detail-view';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { MentionTextarea } from '@/components/mention-textarea';
-import { PostDetailView } from '@/components/post-detail-view';
-import { PostReactions } from '@/components/post-reactions';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { cn } from '@/lib/utils';
@@ -32,13 +29,9 @@ const SORT_LABELS: Record<PostSort, string> = {
 export default function ComunidadPage() {
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-  const [showCompose, setShowCompose] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
   const [activeTag, setActiveTag] = useState<string>('Todo');
   const [sort, setSort] = useState<PostSort>('recent');
-  // Si hay un post seleccionado, su detalle se renderiza en un modal
-  // sobre el listado en lugar de navegar a /comunidad/[id]. La ruta
-  // independiente sigue funcionando para enlaces compartibles.
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
 
   async function reload(opts: { sort?: PostSort; tag?: string } = {}) {
@@ -61,10 +54,6 @@ export default function ComunidadPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort, activeTag]);
 
-  // Lista de tags disponibles para los chips. Tomamos los del tenant
-  // que vienen en el snapshot actual + el "Todo" inicial. Si hay un
-  // activeTag distinto de "Todo" lo aseguramos en la lista (ya que
-  // al filtrar puede ser que sólo aparezca ese tag).
   const allTags = useMemo(() => {
     const set = new Set<string>(['Todo']);
     if (posts) for (const p of posts) for (const t of p.tags) set.add(t);
@@ -72,19 +61,9 @@ export default function ComunidadPage() {
     return Array.from(set).slice(0, 8);
   }, [posts, activeTag]);
 
-  // El filtrado ahora ocurre en backend (`?tag=`); la UI muestra todos
-  // los posts devueltos.
   const filtered = posts ?? [];
 
-  // userId del viewer para resaltar reacciones propias en el listado.
-  // Lo leemos de la sesión persistida; si no hay (no debería pasar en
-  // /comunidad porque hay JwtAuthGuard), la prop queda null y el feed
-  // muestra reacciones sin highlight.
   const viewerUserId = useMemo(() => authStorage.getSession()?.user.id ?? null, []);
-
-  // Tags curados del tenant (color/icono). Si el tag de un post no está en
-  // este map, el chip cae al estilo info por defecto. La carga es lazy y
-  // cacheada por sesión (ver useCommunityTags).
   const tagsByName = useCommunityTags();
 
   async function handleReactPost(postId: string, emoji: string) {
@@ -103,34 +82,15 @@ export default function ComunidadPage() {
     }
   }
 
-  async function handleCreate(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setPending(true);
-    setError(null);
-    const form = new FormData(e.currentTarget);
-    try {
-      const tagsRaw = String(form.get('tags') ?? '').trim();
-      await communityApi.createPost({
-        title: String(form.get('title')),
-        body: String(form.get('body')),
-        tags: tagsRaw
-          ? tagsRaw
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean)
-          : undefined,
-      });
-      setShowCompose(false);
-      await reload({ sort, tag: activeTag });
-    } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos publicar.');
-    } finally {
-      setPending(false);
-    }
-  }
-
   return (
     <section className="space-y-6">
+      <PostComposerModal
+        open={composerOpen}
+        onClose={() => setComposerOpen(false)}
+        spaceSlug="general"
+        onSuccess={() => void reload({ sort, tag: activeTag })}
+      />
+
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1
@@ -143,65 +103,20 @@ export default function ComunidadPage() {
             Conversaciones útiles entre formadores, alumnos y administradores.
           </p>
         </div>
-        <Button onClick={() => setShowCompose(true)}>
+        <Button onClick={() => setComposerOpen(true)}>
           <Icon name="plus" size={16} />
           Nueva conversación
         </Button>
       </header>
 
-      <Dialog
-        open={showCompose}
-        onOpenChange={setShowCompose}
-        title="Nueva conversación"
-        description="Compártelo con la comunidad. Puedes mencionar a alguien con @."
-      >
-        <form onSubmit={handleCreate} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="title">Título</Label>
-            <Input id="title" name="title" required minLength={3} maxLength={200} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="body">Contenido</Label>
-            <MentionTextarea id="body" name="body" rows={5} required />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="tags">Tags (separados por coma)</Label>
-            <Input id="tags" name="tags" placeholder="general, ayuda, anuncios" />
-          </div>
-          {error ? (
-            <p role="alert" className="text-sm text-danger-700">
-              {error}
-            </p>
-          ) : null}
-          <div className="flex justify-end gap-2 border-t border-border-soft pt-3">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setShowCompose(false)}
-              disabled={pending}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? 'Publicando…' : 'Publicar'}
-            </Button>
-          </div>
-        </form>
-      </Dialog>
-
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
         {/* Feed */}
         <div className="flex flex-col gap-4">
-          {/* Filtros tipo chip */}
           <Card>
             <CardContent className="flex flex-wrap items-center gap-2 p-3">
               {allTags.map((t) => {
                 const isActive = activeTag === t;
                 const curated = t === 'Todo' ? undefined : tagsByName.get(t);
-                // El "Todo" y tags sin curar mantienen el estilo plano del
-                // filtro (oscuro al activarse). Tags curados muestran el
-                // color del tenant; al activarse, lo intensificamos con
-                // ring para dejar claro cuál es el activo.
                 if (curated) {
                   return (
                     <button
@@ -341,10 +256,7 @@ export default function ComunidadPage() {
                         <span
                           aria-hidden="true"
                           className="block h-7 w-7 rounded-lg"
-                          style={{
-                            background: swatchColor,
-                            opacity: 0.18,
-                          }}
+                          style={{ background: swatchColor, opacity: 0.18 }}
                         />
                         <span className="flex-1 text-sm font-medium text-text">{t}</span>
                         <span className="text-xs text-text-subtle tabular-nums">
@@ -384,8 +296,6 @@ export default function ComunidadPage() {
   );
 }
 
-const TAG_COLORS = ['#1E5AA8', '#18B5A8', '#FF6F61', '#2E7DCE', '#0D1B2A'];
-
 function ActivityRow({
   label,
   value,
@@ -407,127 +317,4 @@ function ActivityRow({
       <strong className={cn('tabular-nums font-semibold', color)}>{value}</strong>
     </div>
   );
-}
-
-function ThreadCard({
-  post,
-  viewerUserId,
-  tagsByName,
-  onOpen,
-  onTagClick,
-  onReactionToggle,
-}: {
-  post: Post;
-  viewerUserId: string | null;
-  tagsByName: ReadonlyMap<string, CommunityTag>;
-  onOpen: () => void;
-  onTagClick: (tag: string) => void;
-  onReactionToggle: (emoji: string) => void;
-}) {
-  const initials = (post.authorDisplayName ?? 'A')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase() ?? '')
-    .join('');
-
-  // Card clickable que abre el detalle en modal. Para mantener
-  // accesibilidad (Enter/Espacio + focus visible) usamos role="button"
-  // sobre el wrapper en lugar de un <button> para que los chips de
-  // tag y reacciones internos sigan siendo elementos interactivos
-  // anidados sin generar HTML inválido (button-in-button).
-  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onOpen();
-    }
-  }
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={handleKeyDown}
-      className="block cursor-pointer rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-    >
-      <Card interactive className="transition-shadow">
-        <CardContent className="p-5">
-          <div className="flex gap-3.5">
-            <div
-              aria-hidden="true"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-full font-display text-sm font-bold text-white"
-              style={{
-                background: 'linear-gradient(135deg, #1E5AA8 0%, #18B5A8 100%)',
-              }}
-            >
-              {initials || 'A'}
-            </div>
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                {post.pinnedAt ? (
-                  <Badge variant="warning" dot>
-                    Fijado
-                  </Badge>
-                ) : null}
-                <span className="text-sm font-semibold text-text">
-                  {post.authorDisplayName ?? 'Anónimo'}
-                </span>
-                {post.tags.slice(0, 2).map((t) => (
-                  <CommunityTagChip
-                    key={t}
-                    name={t}
-                    tag={tagsByName.get(t)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onTagClick(t);
-                    }}
-                  />
-                ))}
-                <span className="text-xs text-text-subtle">{relTime(post.createdAt)}</span>
-              </div>
-              <h3
-                className="font-display text-lg font-semibold text-text"
-                style={{ letterSpacing: '-0.01em' }}
-              >
-                {post.title}
-              </h3>
-              <p className="line-clamp-4 text-sm leading-relaxed text-text-muted">{post.body}</p>
-              {/* Heurística: si el body tiene > 240 caracteres line-clamp-4
-                  está casi seguro recortando contenido. Mostramos "Leer
-                  más" para invitar a abrir el modal con el detalle. */}
-              {post.body.length > 240 ? (
-                <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand-700">
-                  Leer más →
-                </span>
-              ) : null}
-              <div className="mt-2 flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 text-xs text-text-muted">
-                  <Icon name="message" size={14} />
-                  {post._count && post._count.comments > 0
-                    ? `${post._count.comments} ${post._count.comments === 1 ? 'comentario' : 'comentarios'}`
-                    : 'Ver conversación'}
-                </span>
-                <PostReactions
-                  reactions={post.reactions}
-                  viewerUserId={viewerUserId}
-                  onToggle={onReactionToggle}
-                  variant="compact"
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function relTime(iso: string): string {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return 'ahora';
-  if (diff < 3600) return `hace ${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `hace ${Math.floor(diff / 3600)}h`;
-  if (diff < 86400 * 7) return `hace ${Math.floor(diff / 86400)}d`;
-  return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
 }

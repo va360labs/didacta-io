@@ -28,6 +28,12 @@ export async function fetchTenantContext(): Promise<TenantContextResponse> {
       cached = res;
       return res;
     })
+    .catch(() => {
+      // API unavailable — treat as "no tenant resolved" so the form still renders.
+      const fallback: TenantContextResponse = { tenant: null, host: null };
+      cached = fallback;
+      return fallback;
+    })
     .finally(() => {
       inflight = null;
     });
@@ -55,12 +61,16 @@ export function useTenantContext(): {
       return;
     }
     let aborted = false;
-    void fetchTenantContext().then((res) => {
-      if (!aborted) {
-        setTenant(res.tenant);
-        setLoading(false);
-      }
-    });
+    void fetchTenantContext()
+      .then((res) => {
+        if (!aborted) {
+          setTenant(res.tenant);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!aborted) setLoading(false);
+      });
     return () => {
       aborted = true;
     };

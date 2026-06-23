@@ -59,3 +59,9 @@ Thumbs.db
 didacta-keys-*/
 .env.local.license
 kms-sign-input-*.b64
+apps/api/data/
+
+# Test artifacts
+apps/e2e/test-results/
+apps/e2e/branding-shots/
+test-results/

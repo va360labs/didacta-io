@@ -11,6 +11,10 @@ import { meApi } from '@/lib/me';
 import { mergeExtensionSidebarItems } from '@/lib/sidebar-extensions-merge';
 import { filterByActiveModules } from '@/lib/sidebar-modules-filter';
 import { moduleExtensions } from '@/modules';
+import { useCommunitySpaces } from '@/modules/community';
+import { isIconName } from '@/components/space-icon';
+import type { IconName } from '@/components/icon';
+import { CreateSpaceModal } from '@/components/create-space-modal';
 
 /**
  * Shell de la app autenticada — sidebar persistente Didacta + main canvas.
@@ -76,6 +80,7 @@ function Shell({
   const isAdminOrFormador = session.user.roles.some((r) =>
     ['super_admin', 'tenant_admin', 'formador'].includes(r),
   );
+  const isAdmin = session.user.roles.some((r) => ['super_admin', 'tenant_admin'].includes(r));
   const isSuperAdmin = session.user.roles.includes('super_admin');
 
   // Módulos activos para el tenant del usuario. Mientras está null (primer
@@ -126,9 +131,27 @@ function Shell({
     return () => window.removeEventListener('didacta:modules-changed', refresh);
   }, []);
 
+  const [createSpaceOpen, setCreateSpaceOpen] = useState(false);
+
+  const rawSpaces = useCommunitySpaces();
+  const espaciosGroup: SidebarGroup = {
+    label: 'Espacios',
+    icon: 'hash',
+    canAdd: isAdmin,
+    onAdd: isAdmin ? () => setCreateSpaceOpen(true) : undefined,
+    items: rawSpaces.map((s) => ({
+      href: `/espacios/${s.slug}`,
+      label: s.title,
+      icon: (isIconName(s.icon) ? s.icon : 'hash') as IconName,
+      emoji: isIconName(s.icon) ? undefined : s.icon,
+    })),
+  };
+
   const baseGroups = buildGroups({
     isAdminOrFormador,
+    isAdmin,
     isSuperAdmin,
+    espacios: espaciosGroup,
   });
   const userRoles = new Set(session.user.roles);
   const mergedGroups = mergeExtensionSidebarItems(baseGroups, moduleExtensions, userRoles);
@@ -136,6 +159,7 @@ function Shell({
 
   return (
     <div className="flex min-h-dvh bg-bg-subtle">
+      <CreateSpaceModal open={createSpaceOpen} onClose={() => setCreateSpaceOpen(false)} />
       <AppSidebar
         groups={groups}
         pathname={pathname ?? null}
@@ -145,13 +169,13 @@ function Shell({
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="sticky top-0 z-sticky flex h-14 items-center justify-end gap-2 border-b border-border-soft bg-surface/95 px-6 backdrop-blur">
-          <button
-            type="button"
+          <a
+            href="/mensajes"
             className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text"
             aria-label="Mensajes"
           >
-            <Icon name="message" size={18} />
-          </button>
+            <Icon name="messages" size={18} />
+          </a>
           <NotificationsBell />
         </div>
 
@@ -166,103 +190,126 @@ function Shell({
 function buildGroups({
   isAdminOrFormador,
   isSuperAdmin,
+  isAdmin,
+  espacios,
 }: {
   isAdminOrFormador: boolean;
   isSuperAdmin: boolean;
+  isAdmin: boolean;
+  espacios: SidebarGroup;
 }): SidebarGroup[] {
-  const learning: SidebarGroup = {
+  // ── Inicio ─────────────────────────────────────────────────────────────────
+  const inicio: SidebarGroup = {
+    label: 'Inicio',
+    icon: 'home',
+    items: [
+      { href: '/comunidad', label: 'Feed de la comunidad', icon: 'globe', exactMatch: true },
+      { href: '/inicio/mi-panel', label: 'Mi panel', icon: 'chart', exactMatch: true },
+    ],
+  };
+
+  // ── Aprendizaje ────────────────────────────────────────────────────────────
+  const aprendizaje: SidebarGroup = {
     label: 'Aprendizaje',
     icon: 'book',
     items: [
-      { href: '/cursos', label: 'Catálogo', icon: 'book' },
-      { href: '/notificaciones', label: 'Notificaciones', icon: 'bell' },
+      { href: '/cursos', label: 'Cursos', icon: 'book' },
+      { href: '/rutas', label: 'Rutas de aprendizaje', icon: 'route' },
+      { href: '/mis-certificados', label: 'Certificados', icon: 'award' },
+    ],
+  };
+
+  // ── Grupos ─────────────────────────────────────────────────────────────────
+  const grupos: SidebarGroup = {
+    label: 'Grupos',
+    icon: 'users',
+    items: [{ href: '/grupos', label: 'Grupos', icon: 'users' }],
+  };
+
+  // ── Agenda ─────────────────────────────────────────────────────────────────
+  const agenda: SidebarGroup = {
+    label: 'Agenda',
+    icon: 'calendar',
+    items: [
+      { href: '/calendario', label: 'Calendario', icon: 'calendar' },
+      { href: '/eventos', label: 'Eventos en directo', icon: 'video' },
+    ],
+  };
+
+  // ── Personas ───────────────────────────────────────────────────────────────
+  const personas: SidebarGroup = {
+    label: 'Personas',
+    icon: 'users',
+    items: [
+      { href: '/miembros', label: 'Miembros', icon: 'users' },
+      { href: '/leaderboard', label: 'Leaderboard', icon: 'trophy' },
+      { href: '/mensajes', label: 'Mensajes', icon: 'messages' },
     ],
   };
 
   if (!isAdminOrFormador) {
-    return [learning];
+    return [inicio, espacios, aprendizaje, grupos, agenda, personas];
   }
 
+  // ── Profesor ───────────────────────────────────────────────────────────────
   // El item "Aula virtual" del módulo `mod.zoom-live` y "Correcciones" de
   // `mod.ai-grader` NO se hardcodean acá — los aporta cada extensión vía
   // `moduleExtensions[].sidebarItems`. El core no debe conocer features de
   // un módulo (rompe el contrato de módulo).
-  const formadorAdmin: SidebarGroup = {
-    label: 'Formador',
-    icon: 'chart',
+  const profesor: SidebarGroup = {
+    label: 'Profesor',
+    icon: 'edit',
     items: [
-      { href: '/formador', label: 'Panel', icon: 'home', exactMatch: true },
+      { href: '/formador', label: 'Panel', icon: 'chart', exactMatch: true },
       { href: '/formador/cursos', label: 'Mis cursos', icon: 'book' },
+      { href: '/formador/correcciones', label: 'Correcciones', icon: 'check' },
     ],
   };
 
-  // ─── Áreas Admin (rediseño D: una casilla por área en el rail) ────────────
-  // Agrupación semántica: items relacionados van juntos. Antes existía un
-  // único grupo "Administración" con 12+ items en una lista plana — ahora
-  // el rail sub-divide por contexto operativo del admin.
-
-  const tenant: SidebarGroup = {
-    label: 'Tenant',
-    icon: 'building',
-    items: [
-      { href: '/admin', label: 'Panel del tenant', icon: 'chart', exactMatch: true },
-      { href: '/admin/usuarios', label: 'Usuarios', icon: 'users' },
-      { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
-      { href: '/admin/branding', label: 'Branding', icon: 'palette' },
-    ],
-  };
-  if (isSuperAdmin) {
-    tenant.items.push({ href: '/admin/tenants', label: 'Tenants', icon: 'building' });
-    tenant.items.push({ href: '/super/users', label: 'Usuarios cross-tenant', icon: 'users' });
+  if (!isAdmin) {
+    return [inicio, espacios, aprendizaje, grupos, agenda, personas, profesor];
   }
 
-  // Features Enterprise con UI: SIEMPRE visibles para community (patrón n8n,
-  // documentado en docs/UI-EE-GATING.md). Cada página aplica <EeGate> por
-  // dentro y muestra upsell card cuando la capability no está activa. El
-  // backend mantiene @RequiresCapability en cada endpoint admin → 402 sin
-  // licencia. La discoverability de la feature es parte del valor para
-  // community → enterprise (cada página es una superficie de pricing).
-  const seguridad: SidebarGroup = {
-    label: 'Seguridad',
-    icon: 'shield',
+  // ── Administración ─────────────────────────────────────────────────────────
+  // Consolida lo que antes eran 4 grupos separados (Tenant, Seguridad,
+  // Integraciones, Facturación) en un único grupo Admin para reducir el ruido
+  // en el rail. El admin ve una sola área "Administración" con todos los items.
+  const administracion: SidebarGroup = {
+    label: 'Administración',
+    icon: 'building',
     items: [
-      { href: '/admin/seguridad', label: 'Seguridad (MFA)', icon: 'lock' },
+      { href: '/admin', label: 'Panel', icon: 'chart', exactMatch: true },
+      { href: '/admin/usuarios', label: 'Usuarios y roles', icon: 'users' },
+      { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
+      { href: '/admin/comunidad/espacios', label: 'Espacios comunidad', icon: 'hash' },
+      { href: '/admin/comunidad/tags', label: 'Tags comunidad', icon: 'message' },
+      { href: '/admin/branding', label: 'Branding', icon: 'palette' },
+      { href: '/admin/seguridad', label: 'Seguridad', icon: 'shield' },
       { href: '/admin/auditoria', label: 'Auditoría', icon: 'shield' },
+      // Features Enterprise con UI: SIEMPRE visibles (patrón EeGate, ver
+      // docs/UI-EE-GATING.md). Cada página muestra upsell si la capability
+      // no está activa; el backend mantiene @RequiresCapability → 402.
       { href: '/admin/sso', label: 'SSO (OIDC)', icon: 'lock' },
       { href: '/admin/sso-saml', label: 'SSO (SAML)', icon: 'lock' },
       { href: '/admin/scim', label: 'SCIM Provisioning', icon: 'users' },
-    ],
-  };
-
-  const integraciones: SidebarGroup = {
-    label: 'Integraciones',
-    icon: 'package',
-    items: [
-      // "Límites API" — sexto piloto License SDK (gate
-      // `feat:api.rate_limit.elevated`). El item es SIEMPRE visible: la
-      // página informa al admin community del rate "fair" actual y le
-      // ofrece upsell a Enterprise sin tener que llamar a ventas.
       { href: '/admin/rate-limit', label: 'Límites API', icon: 'trending' },
-      // "Webhooks API" — 10º piloto License SDK (gate
-      // `feat:api.webhooks.high_throughput`). El item es SIEMPRE visible:
-      // CRUD endpoints funcional en community con límites estrictos.
       { href: '/admin/webhooks', label: 'Webhooks API', icon: 'package' },
       { href: '/admin/dominios', label: 'Dominios propios', icon: 'building' },
     ],
   };
   if (isSuperAdmin) {
-    integraciones.items.push({
+    administracion.items.push({ href: '/admin/tenants', label: 'Tenants', icon: 'building' });
+    administracion.items.push({
+      href: '/super/users',
+      label: 'Usuarios cross-tenant',
+      icon: 'users',
+    });
+    administracion.items.push({
       href: '/admin/marketplace',
       label: 'Marketplace módulos',
       icon: 'package',
     });
   }
 
-  const facturacion: SidebarGroup = {
-    label: 'Facturación',
-    icon: 'package',
-    items: [],
-  };
-
-  return [learning, formadorAdmin, tenant, seguridad, integraciones, facturacion];
+  return [inicio, espacios, aprendizaje, grupos, agenda, personas, profesor, administracion];
 }

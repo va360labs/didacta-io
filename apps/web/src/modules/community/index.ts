@@ -12,13 +12,6 @@ export const communityExtension: ModuleWebExtension = {
   sidebarItems: [
     {
       group: 'Aprendizaje',
-      href: '/comunidad',
-      label: 'Comunidad',
-      icon: 'users',
-      exactMatch: true,
-    },
-    {
-      group: 'Aprendizaje',
       href: '/comunidad/menciones',
       label: 'Mis menciones',
       icon: 'message',
@@ -29,6 +22,7 @@ export const communityExtension: ModuleWebExtension = {
 export {
   communityApi,
   COMMUNITY_TAG_ICONS,
+  COMMUNITY_SPACE_ICONS,
   type Post,
   type Comment,
   type Reaction,
@@ -36,6 +30,9 @@ export {
   type PostSort,
   type CommunityTag,
   type CommunityTagIcon,
+  type CommunitySpaceIcon,
 } from './client';
 
 export { useCommunityTags, invalidateCommunityTagsCache } from './tags-client';
+export { useCommunitySpaces, invalidateCommunitySpacesCache } from './spaces-client';
+export type { CommunitySpace } from './client';
