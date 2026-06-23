@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CommunityTagChip } from '@/components/community-tag-chip';
+import { EmojiPicker } from '@/components/emoji-picker';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { MentionTextarea } from '@/components/mention-textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
@@ -22,18 +22,7 @@ const EMOJIS = ['👍', '❤️', '🎉', '🤔'];
 
 interface PostDetailViewProps {
   postId: string;
-  /**
-   * Si está presente, el componente se está renderizando dentro de un
-   * modal. Lo usamos para:
-   *  - cerrar el modal tras eliminar el post (en lugar de navegar).
-   *  - notificar al padre que algo cambió y debe refrescar el listado.
-   */
   onClose?: () => void;
-  /**
-   * Disparado cada vez que el detalle se recarga (después de comentar,
-   * reaccionar, ocultar, etc.). El listado lo usa para sincronizar
-   * conteos y reacciones sin esperar a que el modal se cierre.
-   */
   onChanged?: () => void;
 }
 
@@ -42,9 +31,10 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [commentBody, setCommentBody] = useState('');
-  /** Si está set, el form de respuesta inline está abierto bajo este comment. */
+  const [commentEmojiOpen, setCommentEmojiOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState('');
+  const commentBodyRef = useRef<HTMLTextAreaElement>(null);
   const myUserId = authStorage.getSession()?.user.id;
   const myRoles = authStorage.getSession()?.user.roles ?? [];
   const canModerate = myRoles.includes('super_admin') || myRoles.includes('tenant_admin');
@@ -64,6 +54,20 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
     void reload({ silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId]);
+
+  function insertCommentEmoji(emoji: string) {
+    const ta = commentBodyRef.current;
+    if (!ta) {
+      setCommentBody((b) => b + emoji);
+      return;
+    }
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const next = commentBody.slice(0, start) + emoji + commentBody.slice(end);
+    setCommentBody(next);
+    ta.focus();
+    setTimeout(() => ta.setSelectionRange(start + emoji.length, start + emoji.length), 0);
+  }
 
   async function handleAddComment(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -174,9 +178,6 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
     try {
       await communityApi.deletePost(post.id);
       onChanged?.();
-      // En modo modal cerramos el dialog; en modo standalone el padre
-      // (la página /comunidad/[id]) decide qué hacer (típicamente
-      // navegar atrás).
       onClose?.();
     } catch (err) {
       setError(err instanceof ApiHttpError ? err.message : 'No pudimos eliminar el post.');
@@ -232,11 +233,7 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
   }
 
   if (error && !post)
-    return (
-      <Card>
-        <CardContent className="p-6 text-sm text-danger-700">{error}</CardContent>
-      </Card>
-    );
+    return <div className="rounded-lg bg-danger-50 p-4 text-sm text-danger-700">{error}</div>;
   if (!post) {
     return (
       <div className="space-y-4">
@@ -254,7 +251,7 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
       .filter((r) => r.postId === post.id && r.authorId === myUserId)
       .map((r) => r.emoji),
   );
-  const initials = (post.authorDisplayName ?? 'A')
+  const authorInitials = (post.authorDisplayName ?? 'A')
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
@@ -262,182 +259,218 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
     .join('');
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex gap-4">
-            <div
-              aria-hidden="true"
-              className="grid h-12 w-12 shrink-0 place-items-center rounded-full font-display text-base font-bold text-white"
-              style={{
-                background: 'linear-gradient(135deg, #1E5AA8 0%, #18B5A8 100%)',
-              }}
+    <div>
+      {/* ── Post ── */}
+      <div className="flex gap-3">
+        <div
+          aria-hidden="true"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full font-display text-sm font-bold text-white"
+          style={{ background: 'linear-gradient(135deg, #1E5AA8 0%, #18B5A8 100%)' }}
+        >
+          {authorInitials || 'A'}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-[#0D1B2A]">
+              {post.authorDisplayName ?? 'Anónimo'}
+            </span>
+            {post.tags.slice(0, 3).map((t) => (
+              <CommunityTagChip key={t} name={t} tag={tagsByName.get(t)} />
+            ))}
+            <span className="text-xs text-[#94A3B8]">{relTime(post.createdAt)}</span>
+            {post.pinnedAt ? (
+              <Badge variant="warning" dot>
+                Fijado
+              </Badge>
+            ) : null}
+            {post.hiddenAt ? (
+              <Badge variant="warning" dot>
+                Oculto
+              </Badge>
+            ) : null}
+          </div>
+          {post.hiddenAt && post.hiddenReason ? (
+            <p className="mt-2 rounded-md bg-warning-50 px-3 py-1.5 text-xs text-warning-700">
+              Motivo: {post.hiddenReason}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      <h1
+        className="font-display mt-4 text-2xl font-bold leading-tight text-[#0D1B2A]"
+        style={{ letterSpacing: '-0.02em' }}
+      >
+        {post.title}
+      </h1>
+      <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-[#374151]">
+        <BodyWithMentions body={post.body} />
+      </p>
+
+      {/* Reactions + mod actions */}
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        {EMOJIS.map((e) => {
+          const mine = myReactionsForPost.has(e);
+          const count = postReactions[e] ?? 0;
+          return (
+            <button
+              key={e}
+              type="button"
+              onClick={() => handleReactPost(e)}
+              disabled={pending}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors',
+                mine
+                  ? 'border-[rgba(46,125,206,0.32)] bg-(--didacta-info-bg) text-(--didacta-info-fg)'
+                  : 'border-[#E2E8F0] bg-[#F8FAFC] text-[#64748B] hover:border-[#CBD5E1] hover:text-[#374151]',
+              )}
             >
-              {initials || 'A'}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold text-text">
-                  {post.authorDisplayName ?? 'Anónimo'}
-                </span>
-                {post.tags.slice(0, 3).map((t) => (
-                  <CommunityTagChip key={t} name={t} tag={tagsByName.get(t)} />
-                ))}
-                <span className="text-xs text-text-subtle">{relTime(post.createdAt)}</span>
-                {post.pinnedAt ? (
-                  <Badge variant="warning" dot>
-                    Fijado
-                  </Badge>
-                ) : null}
-                {post.hiddenAt ? (
-                  <Badge variant="warning" dot>
-                    Oculto
-                  </Badge>
-                ) : null}
-              </div>
-              {post.hiddenAt && post.hiddenReason ? (
-                <p className="mt-2 rounded-md bg-warning-50 px-3 py-1.5 text-xs text-warning-700">
-                  Motivo: {post.hiddenReason}
-                </p>
-              ) : null}
-              <h1
-                className="font-display mt-3 text-3xl font-bold leading-tight text-text"
-                style={{ letterSpacing: '-0.02em' }}
+              <span>{e}</span>
+              {count > 0 ? <span className="tabular-nums">{count}</span> : null}
+            </button>
+          );
+        })}
+        {canModerate ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleTogglePin}
+            disabled={pending}
+            className="ml-auto text-[#64748B]"
+          >
+            {post.pinnedAt ? 'Desfijar' : 'Fijar'}
+          </Button>
+        ) : null}
+        {canModerate ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleModeratePost}
+            disabled={pending}
+            className="text-[#64748B]"
+          >
+            {post.hiddenAt ? 'Restaurar post' : 'Ocultar post'}
+          </Button>
+        ) : null}
+        {isAuthor ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleDeletePost}
+            disabled={pending}
+            className={
+              canModerate
+                ? 'text-danger-700 hover:bg-danger-50'
+                : 'ml-auto text-danger-700 hover:bg-danger-50'
+            }
+          >
+            Eliminar post
+          </Button>
+        ) : null}
+      </div>
+
+      {error ? (
+        <p className="mt-3 rounded-md bg-danger-50 px-3 py-2 text-xs text-danger-700">{error}</p>
+      ) : null}
+
+      {/* ── Separator ── */}
+      <div className="mt-5 h-px bg-[#F1F5F9]" />
+
+      {/* ── Comment form ── */}
+      <div className="mt-4">
+        <form onSubmit={handleAddComment} className="space-y-3">
+          <MentionTextarea
+            ref={commentBodyRef}
+            rows={3}
+            value={commentBody}
+            onChange={(e) => setCommentBody(e.target.value)}
+            placeholder="Aporta tu respuesta… puedes mencionar con @usuario"
+            required
+            className="border-[#E2E8F0] bg-[#F8FAFC] text-[15px] focus:border-[#1E5AA8] focus:bg-white transition-colors"
+          />
+          <div className="flex items-center gap-2">
+            {/* Emoji picker trigger */}
+            <div className="relative">
+              <button
+                type="button"
+                title="Emoji"
+                onClick={() => setCommentEmojiOpen((v) => !v)}
+                aria-expanded={commentEmojiOpen}
+                aria-haspopup="dialog"
+                className="grid h-8 w-8 place-items-center rounded-lg text-[#94A3B8] hover:bg-[#F1F5F9] hover:text-[#64748B] transition-colors"
               >
-                {post.title}
-              </h1>
-              <p className="mt-3 whitespace-pre-wrap text-base leading-relaxed text-text">
-                <BodyWithMentions body={post.body} />
-              </p>
-              <div className="mt-5 flex flex-wrap items-center gap-2">
-                {EMOJIS.map((e) => {
-                  const mine = myReactionsForPost.has(e);
-                  const count = postReactions[e] ?? 0;
-                  return (
-                    <button
-                      key={e}
-                      type="button"
-                      onClick={() => handleReactPost(e)}
-                      disabled={pending}
-                      className={cn(
-                        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors',
-                        mine
-                          ? 'border-[rgba(46,125,206,0.32)] bg-[var(--didacta-info-bg)] text-[var(--didacta-info-fg)]'
-                          : 'border-border bg-surface text-text-muted hover:border-border-strong hover:text-text',
-                      )}
-                    >
-                      <span>{e}</span>
-                      {count > 0 ? <span className="tabular-nums">{count}</span> : null}
-                    </button>
-                  );
-                })}
-                {canModerate ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleTogglePin}
-                    disabled={pending}
-                    className="ml-auto"
-                  >
-                    {post.pinnedAt ? 'Desfijar' : 'Fijar'}
-                  </Button>
-                ) : null}
-                {canModerate ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleModeratePost}
-                    disabled={pending}
-                  >
-                    {post.hiddenAt ? 'Restaurar post' : 'Ocultar post'}
-                  </Button>
-                ) : null}
-                {isAuthor ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleDeletePost}
-                    disabled={pending}
-                    className={
-                      canModerate
-                        ? 'text-danger-700 hover:bg-danger-50'
-                        : 'ml-auto text-danger-700 hover:bg-danger-50'
-                    }
-                  >
-                    Eliminar post
-                  </Button>
-                ) : null}
-              </div>
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                  <line x1="9" y1="9" x2="9.01" y2="9" />
+                  <line x1="15" y1="9" x2="15.01" y2="9" />
+                </svg>
+              </button>
+              {commentEmojiOpen && (
+                <EmojiPicker
+                  onSelect={insertCommentEmoji}
+                  onClose={() => setCommentEmojiOpen(false)}
+                />
+              )}
+            </div>
+            <div className="ml-auto">
+              <Button type="submit" disabled={pending || !commentBody.trim()}>
+                <Icon name="message" size={16} />
+                {pending ? 'Enviando…' : 'Responder'}
+              </Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      <div>
-        <div className="mb-4 flex items-center justify-between">
-          <h2
-            className="font-display text-xl font-semibold text-text"
-            style={{ letterSpacing: '-0.01em' }}
-          >
-            {post.comments.length} respuesta{post.comments.length === 1 ? '' : 's'}
-          </h2>
-        </div>
-
-        <Card className="mb-4">
-          <CardContent className="p-5">
-            <form onSubmit={handleAddComment} className="space-y-3">
-              <MentionTextarea
-                rows={3}
-                value={commentBody}
-                onChange={(e) => setCommentBody(e.target.value)}
-                placeholder="Aporta tu respuesta… puedes mencionar con @usuario"
-                required
-              />
-              <div className="flex justify-end">
-                <Button type="submit" disabled={pending || !commentBody.trim()}>
-                  <Icon name="message" size={16} />
-                  {pending ? 'Enviando…' : 'Responder'}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-
-        <CommentsSection
-          comments={post.comments}
-          reactions={post.reactions}
-          myUserId={myUserId}
-          canModerate={canModerate}
-          pending={pending}
-          replyTarget={replyTarget}
-          replyBody={replyBody}
-          onReplyOpen={(id) => {
-            setReplyTarget(id);
-            setReplyBody('');
-          }}
-          onReplyClose={() => {
-            setReplyTarget(null);
-            setReplyBody('');
-          }}
-          onReplyChange={setReplyBody}
-          onReplySubmit={handleReply}
-          onReact={handleReactComment}
-          onDelete={handleDeleteComment}
-          onModerate={handleModerateComment}
-        />
+        </form>
       </div>
+
+      {/* ── Comments ── */}
+      <div className="mt-4 h-px bg-[#F1F5F9]" />
+
+      <div className="mt-4 flex items-center justify-between">
+        <h2
+          className="font-display text-base font-semibold text-[#0D1B2A]"
+          style={{ letterSpacing: '-0.01em' }}
+        >
+          {post.comments.length} respuesta{post.comments.length === 1 ? '' : 's'}
+        </h2>
+      </div>
+
+      <CommentsSection
+        comments={post.comments}
+        reactions={post.reactions}
+        myUserId={myUserId}
+        canModerate={canModerate}
+        pending={pending}
+        replyTarget={replyTarget}
+        replyBody={replyBody}
+        onReplyOpen={(id) => {
+          setReplyTarget(id);
+          setReplyBody('');
+        }}
+        onReplyClose={() => {
+          setReplyTarget(null);
+          setReplyBody('');
+        }}
+        onReplyChange={setReplyBody}
+        onReplySubmit={handleReply}
+        onReact={handleReactComment}
+        onDelete={handleDeleteComment}
+        onModerate={handleModerateComment}
+      />
     </div>
   );
 }
 
-/**
- * Renderiza el body resaltando cada `@handle` con un chip Azul confianza
- * sutil. Usa el mismo regex que el parser del backend para que el resaltado
- * y la persistencia estén alineados.
- */
 function BodyWithMentions({ body }: { body: string }) {
   const parts: Array<{ type: 'text' | 'mention'; value: string }> = [];
   const regex = /(?:^|[\s(.,;:!?[\]{}<>])@([A-Za-z0-9._-]+)/g;
@@ -509,11 +542,9 @@ function CommentsSection(props: CommentsSectionProps) {
 
   if (comments.length === 0) {
     return (
-      <Card>
-        <CardContent className="p-8 text-center text-sm text-text-muted">
-          Aún no hay respuestas. Aporta tú la primera.
-        </CardContent>
-      </Card>
+      <div className="py-8 text-center text-sm text-[#94A3B8]">
+        Aún no hay respuestas. Aporta tú la primera.
+      </div>
     );
   }
 
@@ -528,7 +559,7 @@ function CommentsSection(props: CommentsSectionProps) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="mt-2 divide-y divide-[#F1F5F9]">
       {rootComments.map((c) => {
         const replies = repliesByParent.get(c.id) ?? [];
         return (
@@ -590,67 +621,66 @@ function CommentThread({
   onModerate: (commentId: string, isHidden: boolean) => void;
 }) {
   return (
-    <Card>
-      <CardContent className="p-5">
-        <CommentBody
-          comment={comment}
-          reactions={reactions}
-          myUserId={myUserId}
-          canModerate={canModerate}
-          pending={pending}
-          onReact={onReact}
-          onDelete={onDelete}
-          onModerate={onModerate}
-          onReply={onReplyOpen}
-          isReply={false}
-        />
+    <div className="py-4">
+      <CommentBody
+        comment={comment}
+        reactions={reactions}
+        myUserId={myUserId}
+        canModerate={canModerate}
+        pending={pending}
+        onReact={onReact}
+        onDelete={onDelete}
+        onModerate={onModerate}
+        onReply={onReplyOpen}
+        isReply={false}
+      />
 
-        {isReplyOpen ? (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void onReplySubmit();
-            }}
-            className="mt-3 ml-12 space-y-2 border-l-2 border-brand-200 pl-4"
-          >
-            <MentionTextarea
-              value={replyBody}
-              onChange={(e) => onReplyChange(e.target.value)}
-              placeholder={`Responder a ${comment.authorDisplayName ?? 'este comentario'}… (@usuario para mencionar)`}
-              rows={2}
-              autoFocus
-            />
-            <div className="flex items-center gap-2">
-              <Button type="submit" size="sm" disabled={pending || !replyBody.trim()}>
-                Publicar respuesta
-              </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={onReplyClose}>
-                Cancelar
-              </Button>
-            </div>
-          </form>
-        ) : null}
-
-        {replies.length > 0 ? (
-          <div className="mt-4 space-y-3 border-l-2 border-border-soft pl-4">
-            {replies.map((r) => (
-              <CommentBody
-                key={r.id}
-                comment={r}
-                reactions={reactions}
-                myUserId={myUserId}
-                canModerate={canModerate}
-                pending={pending}
-                onReact={onReact}
-                onDelete={onDelete}
-                onModerate={onModerate}
-                isReply={true}
-              />
-            ))}
+      {isReplyOpen ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void onReplySubmit();
+          }}
+          className="mt-3 ml-10 space-y-2 border-l-2 border-[#E2E8F0] pl-4"
+        >
+          <MentionTextarea
+            value={replyBody}
+            onChange={(e) => onReplyChange(e.target.value)}
+            placeholder={`Responder a ${comment.authorDisplayName ?? 'este comentario'}… (@usuario para mencionar)`}
+            rows={2}
+            autoFocus
+            className="border-[#E2E8F0] bg-[#F8FAFC] text-sm"
+          />
+          <div className="flex items-center gap-2">
+            <Button type="submit" size="sm" disabled={pending || !replyBody.trim()}>
+              Publicar respuesta
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={onReplyClose}>
+              Cancelar
+            </Button>
           </div>
-        ) : null}
-      </CardContent>
-    </Card>
+        </form>
+      ) : null}
+
+      {replies.length > 0 ? (
+        <div className="mt-3 space-y-3 border-l-2 border-[#F1F5F9] pl-4 ml-10">
+          {replies.map((r) => (
+            <CommentBody
+              key={r.id}
+              comment={r}
+              reactions={reactions}
+              myUserId={myUserId}
+              canModerate={canModerate}
+              pending={pending}
+              onReact={onReact}
+              onDelete={onDelete}
+              onModerate={onModerate}
+              isReply={true}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -699,22 +729,18 @@ function CommentBody({
           'grid shrink-0 place-items-center rounded-full font-display font-bold text-white',
           isReply ? 'h-7 w-7 text-[10px]' : 'h-9 w-9 text-xs',
         )}
-        style={{
-          background: 'linear-gradient(135deg, #1E5AA8 0%, #18B5A8 100%)',
-        }}
+        style={{ background: 'linear-gradient(135deg, #1E5AA8 0%, #18B5A8 100%)' }}
       >
         {initials || 'A'}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-text">
+          <span className="text-sm font-semibold text-[#0D1B2A]">
             {comment.authorDisplayName ?? 'Anónimo'}
           </span>
-          <span className="text-xs text-text-subtle">{relTime(comment.createdAt)}</span>
+          <span className="text-xs text-[#94A3B8]">{relTime(comment.createdAt)}</span>
           {isReply ? (
-            <span className="text-[10px] uppercase tracking-wider text-text-subtle">
-              · respuesta
-            </span>
+            <span className="text-[10px] uppercase tracking-wider text-[#CBD5E1]">· respuesta</span>
           ) : null}
           {comment.hiddenAt ? (
             <Badge variant="warning" dot>
@@ -722,10 +748,10 @@ function CommentBody({
             </Badge>
           ) : null}
         </div>
-        <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-text">
+        <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-[#374151]">
           <BodyWithMentions body={comment.body} />
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           {EMOJIS.map((e) => {
             const m = mine.has(e);
             const count = grouped[e] ?? 0;
@@ -738,8 +764,8 @@ function CommentBody({
                 className={cn(
                   'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors',
                   m
-                    ? 'border-[rgba(46,125,206,0.32)] bg-[var(--didacta-info-bg)] text-[var(--didacta-info-fg)]'
-                    : 'border-border bg-surface text-text-muted hover:border-border-strong hover:text-text',
+                    ? 'border-[rgba(46,125,206,0.32)] bg-(--didacta-info-bg) text-(--didacta-info-fg)'
+                    : 'border-[#E2E8F0] bg-[#F8FAFC] text-[#94A3B8] hover:border-[#CBD5E1] hover:text-[#64748B]',
                 )}
               >
                 <span>{e}</span>
@@ -752,7 +778,7 @@ function CommentBody({
               type="button"
               onClick={onReply}
               disabled={pending}
-              className="text-xs font-semibold text-brand-600 hover:underline"
+              className="text-xs font-semibold text-[#1E5AA8] hover:underline"
             >
               Responder
             </button>
@@ -762,7 +788,7 @@ function CommentBody({
               type="button"
               onClick={() => onModerate(comment.id, comment.hiddenAt !== null)}
               disabled={pending}
-              className="text-xs font-semibold text-text-muted hover:underline"
+              className="text-xs font-semibold text-[#94A3B8] hover:underline"
             >
               {comment.hiddenAt ? 'Restaurar' : 'Ocultar'}
             </button>

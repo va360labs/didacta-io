@@ -15,7 +15,7 @@ import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
 import { ModuleContextFactory } from './module-context.factory';
 
-const UPLOAD_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
+const UPLOAD_ROLES = new Set(['super_admin', 'tenant_admin', 'formador', 'alumno']);
 
 const ALLOWED_MIME = new Set([
   'image/png',
@@ -23,29 +23,42 @@ const ALLOWED_MIME = new Set([
   'image/webp',
   'image/gif',
   'image/svg+xml',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
 ]);
 
-const MAX_BYTES = 5 * 1024 * 1024; // 5 MiB
-const MAX_BASE64_BYTES = Math.ceil(MAX_BYTES * 1.4); // ~7 MiB en base64
+const MAX_BYTES = 10 * 1024 * 1024; // 10 MiB
+const MAX_BASE64_BYTES = Math.ceil(MAX_BYTES * 1.4); // ~14 MiB en base64
 
 const uploadSchema = z.object({
-  /** Imagen codificada en base64 (sin el prefijo `data:...,`). */
+  /** Archivo codificado en base64 (sin el prefijo `data:...,`). */
   data: z.string().min(1).max(MAX_BASE64_BYTES),
   filename: z.string().trim().min(1).max(200),
-  contentType: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']),
+  contentType: z.enum([
+    'image/png',
+    'image/jpeg',
+    'image/webp',
+    'image/gif',
+    'image/svg+xml',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+  ]),
 });
 
 type UploadDto = z.infer<typeof uploadSchema>;
 
 /**
- * Endpoint genérico de upload de imágenes. Lo usa, por ejemplo, el
- * editor enriquecido de Tiptap para insertar imágenes inline en la
- * descripción del curso. Devuelve una URL servida por el reverse-proxy
- * (storage local) o pre-firmada (S3) para el `<img src>`.
+ * Endpoint genérico de upload de archivos (imágenes y documentos).
+ * Lo usa el editor Tiptap para imágenes inline y el compositor de posts
+ * de comunidad para adjuntar imágenes y documentos.
+ * Devuelve una URL servida por el reverse-proxy (storage local) o
+ * pre-firmada (S3) para usar en `<img src>` o como enlace de descarga.
  *
- * Permisos: super_admin / tenant_admin / formador. El alumno no debería
- * subir contenido al storage del tenant directamente — sus aportes
- * (comentarios) van como texto plano.
+ * Permisos: cualquier usuario autenticado con rol válido (alumno incluido).
  */
 @ApiTags('Storage')
 @ApiBearerAuth()
@@ -58,7 +71,7 @@ export class StorageController {
   @HttpCode(200)
   @ApiOperation({
     summary:
-      'Sube una imagen (PNG/JPG/WebP/GIF/SVG, max 5 MB) al storage del tenant y devuelve la URL.',
+      'Sube un archivo (imagen o documento, max 10 MB) al storage del tenant y devuelve la URL.',
   })
   async upload(
     @CurrentUser() user: SessionClaims | undefined,
@@ -66,7 +79,9 @@ export class StorageController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => UPLOAD_ROLES.has(r))) {
-      throw new ForbiddenException('Solo formadores y admins pueden subir imágenes.');
+      throw new ForbiddenException(
+        'Necesitas estar autenticado con un rol válido para subir archivos.',
+      );
     }
     if (!ALLOWED_MIME.has(dto.contentType)) {
       throw new ForbiddenException('Tipo MIME no permitido.');
