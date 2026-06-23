@@ -47,7 +47,23 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm fetch
 
 # ----------------------------------------------------------------------------
-# Stage 3: builder — copia código y buildea TODO el monorepo (devDeps activas)
+# Stage 3: manifests — extrae package.json + configs de workspace sin código
+# fuente. Permite que el install de pnpm quede en una capa independiente del
+# código: si solo cambia .tsx/.ts, la capa de install se reutiliza del
+# registry cache en vez de reinstalar (~1-2 min ahorrados por iteración).
+# ----------------------------------------------------------------------------
+FROM base AS manifests
+COPY . .
+RUN find . \( -name "package.json" \
+              -o -name "pnpm-workspace.yaml" \
+              -o -name "turbo.json" \) \
+      ! -path "*/node_modules/*" ! -path "*/.next/*" \
+    | while read f; do \
+        install -D "$f" "/out/$f"; \
+      done
+
+# ----------------------------------------------------------------------------
+# Stage 4: builder — instala deps y buildea TODO el monorepo (devDeps activas)
 # ----------------------------------------------------------------------------
 FROM fetcher AS builder
 ARG SKIP_TYPE_CHECK=0
@@ -62,18 +78,22 @@ RUN apk add --no-cache --virtual .build-deps \
     g++ \
     make \
     python3
-COPY . .
-# Defensa frente a `incremental: true` en tsconfig.base.json: si algún
-# .tsbuildinfo se cuela desde el host (a pesar del .dockerignore), tsc lo
-# usa como cache y omite la emisión de dist/. Borrarlos garantiza un build
-# limpio reproducible.
-RUN find . -name "*.tsbuildinfo" -not -path "*/node_modules/*" -delete || true
+# 1) Solo manifests: la capa de install queda cacheada mientras no cambie
+#    ningún package.json / pnpm-workspace.yaml / turbo.json.
+COPY --from=manifests /out/ ./
 # Install completo: crítico que cree los symlinks workspace en
 # node_modules/@didacta/* que tsc necesita para resolver imports
 # cross-package. NOTA: NO usamos --offline porque el cache montado del stage
 # fetcher no parece propagarse de forma fiable a los symlinks workspace.
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
+# 2) Código fuente: solo invalida las waves de build, NO el install.
+COPY . .
+# Defensa frente a `incremental: true` en tsconfig.base.json: si algún
+# .tsbuildinfo se cuela desde el host (a pesar del .dockerignore), tsc lo
+# usa como cache y omite la emisión de dist/. Borrarlos garantiza un build
+# limpio reproducible.
+RUN find . -name "*.tsbuildinfo" -not -path "*/node_modules/*" -delete || true
 RUN pnpm --filter @didacta/database db:generate
 # Build escalonado: cada "wave" garantiza que los dist/*.d.ts de la
 # anterior están escritos antes de empezar la siguiente. `pnpm -r build`
@@ -93,7 +113,7 @@ RUN pnpm --filter "@didacta/mod-*" run build
 RUN pnpm --filter @didacta/api --filter @didacta/web run build
 
 # ----------------------------------------------------------------------------
-# Stage 4: pruner — deja el repo en estado runtime-only
+# Stage 5: pruner — deja el repo en estado runtime-only
 # ----------------------------------------------------------------------------
 # Importante: este stage NO se usa como `FROM` de runner. Solo sirve como
 # fuente de COPY. Sus layers no llegan a la imagen final.
@@ -143,7 +163,7 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
  && pnpm store prune || true
 
 # ----------------------------------------------------------------------------
-# Stage 5: runner — imagen final desde alpine LIMPIO (no hereda del builder)
+# Stage 6: runner — imagen final desde alpine LIMPIO (no hereda del builder)
 # ----------------------------------------------------------------------------
 # DIDACTA_VERSION: version de la app, inyectada en build time.
 # Sobreescribible con: docker build --build-arg DIDACTA_VERSION=0.0.1-alpha.55

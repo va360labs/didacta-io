@@ -75,8 +75,8 @@ jobs:
             ${{ env.IMAGE }}:dev
           build-args: |
             SKIP_TYPE_CHECK=1
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache,mode=max
 
       - name: Redeploy Coolify (tag + core version + deploy) & wait
         env:
