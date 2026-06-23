@@ -61,5 +61,15 @@ services:
         max-size: '50m'
         max-file: '3'
 
+    networks:
+      - didacta_dev
+      - coolify
+
 volumes:
   didacta_dev_data:
+
+networks:
+  didacta_dev:
+    driver: bridge
+  coolify:
+    external: true

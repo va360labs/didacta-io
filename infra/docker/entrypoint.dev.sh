@@ -47,6 +47,10 @@ case "${1:-start}" in
   start)
     run_migrations
 
+    # El .tsbuildinfo de la imagen puede tener noEmit:true del build de paquetes,
+    # lo que impide que nest start --watch emita dist/. Borrarlo fuerza rebuild limpio.
+    find /repo -name "*.tsbuildinfo" -not -path "*/node_modules/*" -delete 2>/dev/null || true
+
     log "Arrancando API en modo watch (:4000) y Web en modo HMR (:${WEB_PORT:-3010})..."
     log "  → API: nest start --watch  (auto-restart en cambios de src/)"
     log "  → Web: next dev            (HMR, cambios en menos de 1 segundo)"
