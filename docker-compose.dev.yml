@@ -67,6 +67,11 @@ services:
 
     labels:
       - 'traefik.enable=true'
+      # El contenedor está en 2 redes (didacta_dev + coolify). Sin esta pista,
+      # el provider Docker de Traefik puede resolver la IP de la red privada
+      # didacta_dev (a la que el coolify-proxy NO está conectado) → 504 Gateway
+      # Timeout. Forzamos que Traefik use la IP de la red `coolify`.
+      - 'traefik.docker.network=coolify'
       - 'traefik.http.middlewares.gzip.compress=true'
       - 'traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https'
       # HTTP → redirige a HTTPS
