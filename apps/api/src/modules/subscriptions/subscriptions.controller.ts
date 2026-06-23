@@ -87,7 +87,7 @@ export class SubscriptionsController {
 
   @Get('me')
   @ApiOperation({ summary: 'Lista las suscripciones del alumno autenticado.' })
-  async listMine(@CurrentUser() user: SessionClaims | undefined) {
+  async listMine(@CurrentUser() user: SessionClaims | undefined): Promise<object> {
     if (!user) throw new UnauthorizedException();
     const subs = await this.registry.getSubscriptionsService().listMine(user.tenantId, user.sub);
     return { subscriptions: subs };
@@ -97,7 +97,10 @@ export class SubscriptionsController {
   @ApiOperation({
     summary: 'Lista facturas de una suscripción propia (Stripe hosted URL incluida).',
   })
-  async invoices(@Param('id') id: string, @CurrentUser() user: SessionClaims | undefined) {
+  async invoices(
+    @Param('id') id: string,
+    @CurrentUser() user: SessionClaims | undefined,
+  ): Promise<object> {
     if (!user) throw new UnauthorizedException();
     if (!id || id.length < 5) throw new BadRequestException('id inválido');
     // Re-leemos la sub para verificar ownership antes de listar invoices.
@@ -120,7 +123,7 @@ export class SubscriptionsController {
     @Param('id') id: string,
     @Body(new ZodValidationPipe(cancelSchema)) body: { immediate?: boolean },
     @CurrentUser() user: SessionClaims | undefined,
-  ) {
+  ): Promise<object> {
     if (!user) throw new UnauthorizedException();
     const updated = await this.registry
       .getSubscriptionsService()

@@ -71,7 +71,7 @@ export class WebhooksAdminControllerEE {
   async listDeadLetter(
     @CurrentUser() user: SessionClaims | undefined,
     @Query('limit') limit?: string,
-  ) {
+  ): Promise<object> {
     const session = requireTenantAdmin(user);
     const take = Math.min(Math.max(Number.parseInt(limit ?? '50', 10) || 50, 1), 200);
     const items = await this.prisma.webhookDeadLetter.findMany({
