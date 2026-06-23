@@ -37,7 +37,12 @@ import {
   FundaeRlptService,
   FundaeService,
 } from '@didacta/mod-fundae';
-import { learningModule, LearningService, ScormService } from '@didacta/mod-learning';
+import {
+  learningModule,
+  LearningService,
+  LearningPathsService,
+  ScormService,
+} from '@didacta/mod-learning';
 import { themingModule, ThemingService } from '@didacta/mod-theming';
 import { zoomLiveModule, ZoomLiveService } from '@didacta/mod-zoom-live';
 import { aiTutorModule, AiTutorChatService, AiTutorIndexerService } from '@didacta/mod-ai-tutor';
@@ -57,6 +62,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private registry?: ModuleRegistry;
   private courses?: CoursesService;
   private learning?: LearningService;
+  private learningPaths?: LearningPathsService;
   private certificates?: CertificatesService;
   private assessments?: AssessmentsService;
   private community?: CommunityService;
@@ -91,6 +97,7 @@ export class ModuleRegistryService implements OnModuleInit {
     const prisma = this.factory.getPrisma() as never;
     this.courses = new CoursesService(prisma, context);
     this.learning = new LearningService(prisma, context);
+    this.learningPaths = new LearningPathsService(prisma, context);
     this.certificates = new CertificatesService(prisma, context);
     this.assessments = new AssessmentsService(prisma, context);
     this.community = new CommunityService(prisma, context);
@@ -453,6 +460,11 @@ export class ModuleRegistryService implements OnModuleInit {
   getLearningService(): LearningService {
     if (!this.learning) throw new Error('ModuleRegistry no está inicializado');
     return this.learning;
+  }
+
+  getLearningPathsService(): LearningPathsService {
+    if (!this.learningPaths) throw new Error('ModuleRegistry no está inicializado');
+    return this.learningPaths;
   }
 
   getCertificatesService(): CertificatesService {

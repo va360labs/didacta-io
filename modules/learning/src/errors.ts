@@ -55,3 +55,33 @@ export class ScormPackageNotFoundError extends LearningError {
     super('SCORM_PACKAGE_NOT_FOUND', 'No hay paquete SCORM asociado a esta lección');
   }
 }
+
+export class LearningPathNotFoundError extends LearningError {
+  constructor() {
+    super('LEARNING_PATH_NOT_FOUND', 'La ruta de aprendizaje no existe o no está publicada');
+  }
+}
+
+export class LearningPathNotPublishedError extends LearningError {
+  constructor() {
+    super('LEARNING_PATH_NOT_PUBLISHED', 'La ruta de aprendizaje no está publicada');
+  }
+}
+
+export class LearningPathAlreadyEnrolledError extends LearningError {
+  constructor() {
+    super('LEARNING_PATH_ALREADY_ENROLLED', 'Ya estás matriculado en esta ruta de aprendizaje');
+  }
+}
+
+export class LearningPathEnrollmentNotFoundError extends LearningError {
+  constructor() {
+    super('LEARNING_PATH_ENROLLMENT_NOT_FOUND', 'No hay matriculación activa en esta ruta');
+  }
+}
+
+export class LearningPathNoCourseError extends LearningError {
+  constructor() {
+    super('LEARNING_PATH_NO_COURSE', 'La ruta debe tener al menos un curso para publicarse');
+  }
+}

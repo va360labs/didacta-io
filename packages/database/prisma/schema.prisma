@@ -2443,3 +2443,83 @@ model ModEventRegistration {
   @@index([tenantId, userId])
   @@map("mod_event_registration")
 }
+
+// ─── Rutas de aprendizaje ────────────────────────────────────────────────────
+
+enum LearningPathStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LearningPathSequenceType {
+  LINEAR
+  FLEXIBLE
+}
+
+enum LearningPathEnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+/// Ruta de aprendizaje: agrupa N cursos en un orden definido.
+/// Sin FK cross-module: courseId en ModLearningPathCourse es UUID lógico.
+model ModLearningPath {
+  id               String                   @id @default(uuid()) @db.Uuid
+  tenantId         String                   @map("tenant_id") @db.Uuid
+  /// Slug URL-friendly único por tenant (generado del título).
+  slug             String
+  title            String                   @db.VarChar(120)
+  description      String?                  @db.VarChar(500)
+  sequenceType     LearningPathSequenceType @default(LINEAR) @map("sequence_type")
+  status           LearningPathStatus       @default(DRAFT)
+  estimatedMinutes Int?                     @map("estimated_minutes")
+  createdById      String?                  @map("created_by_id") @db.Uuid
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @updatedAt @map("updated_at")
+  deletedAt        DateTime?                @map("deleted_at")
+
+  courses     ModLearningPathCourse[]
+  enrollments ModLearningPathEnrollment[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, status])
+  @@map("mod_learning_path")
+}
+
+/// Relación N:M entre ruta y curso (courseId es FK lógica, sin constraint cross-module).
+model ModLearningPathCourse {
+  id       String @id @default(uuid()) @db.Uuid
+  pathId   String @map("path_id") @db.Uuid
+  /// ID lógico del curso (sin FK cross-module — ADR-015).
+  courseId String @map("course_id") @db.Uuid
+  position Int
+
+  path ModLearningPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
+
+  @@unique([pathId, courseId])
+  @@index([pathId, position])
+  @@map("mod_learning_path_course")
+}
+
+/// Matriculación de un usuario en una ruta de aprendizaje.
+model ModLearningPathEnrollment {
+  id              String                       @id @default(uuid()) @db.Uuid
+  tenantId        String                       @map("tenant_id") @db.Uuid
+  pathId          String                       @map("path_id") @db.Uuid
+  /// ID lógico del usuario (sin FK cross-module — ADR-015).
+  userId          String                       @map("user_id") @db.Uuid
+  status          LearningPathEnrollmentStatus @default(ACTIVE)
+  /// Porcentaje completado (0-100): (cursos completados / total cursos) * 100.
+  progressPercent Int                          @default(0) @map("progress_percent")
+  enrolledAt      DateTime                     @default(now()) @map("enrolled_at")
+  completedAt     DateTime?                    @map("completed_at")
+
+  path ModLearningPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, pathId, userId])
+  @@index([tenantId, userId, status])
+  @@index([pathId])
+  @@map("mod_learning_path_enrollment")
+}

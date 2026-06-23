@@ -270,7 +270,15 @@ export class LearningController {
     @Body(new ZodValidationPipe(trackProgressSchema)) dto: TrackProgressDto,
   ) {
     if (!user) throw new UnauthorizedException();
-    return this.registry.getLearningService().trackProgress(user.tenantId, user.sub, dto);
+    const result = await this.registry
+      .getLearningService()
+      .trackProgress(user.tenantId, user.sub, dto);
+    // Side-effect: recalcular progreso de rutas que contengan el curso — fire-and-forget.
+    this.registry
+      .getLearningPathsService()
+      .recalculatePathProgressByEnrollment(user.tenantId, user.sub, dto.enrollmentId)
+      .catch(() => undefined);
+    return result;
   }
 
   @Get('invitations')

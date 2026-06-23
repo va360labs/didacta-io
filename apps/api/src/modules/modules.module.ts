@@ -17,6 +17,7 @@ import { CoursesController } from './courses.controller';
 import { CoursesErrorFilter } from './courses-error.filter';
 import { FormadorStatsController } from './formador-stats.controller';
 import { LearningController } from './learning.controller';
+import { LearningPathsController, LearningPathsMeController } from './learning-paths.controller';
 import { LearningErrorFilter } from './learning-error.filter';
 import { ModuleAccessInterceptor } from './module-access.interceptor';
 import { ModuleContextFactory } from './module-context.factory';
@@ -58,6 +59,8 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
   controllers: [
     CoursesController,
     LearningController,
+    LearningPathsController,
+    LearningPathsMeController,
     AuditController,
     FormadorStatsController,
     TenantSettingsController,

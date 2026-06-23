@@ -262,6 +262,7 @@ function buildGroups({
     items: [
       { href: '/formador', label: 'Panel', icon: 'chart', exactMatch: true },
       { href: '/formador/cursos', label: 'Mis cursos', icon: 'book' },
+      { href: '/formador/rutas', label: 'Mis rutas', icon: 'route' },
       { href: '/formador/correcciones', label: 'Correcciones', icon: 'check' },
     ],
   };

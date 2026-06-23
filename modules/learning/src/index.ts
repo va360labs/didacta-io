@@ -4,6 +4,12 @@ import { manifest } from './manifest.js';
 export { manifest };
 export { LearningService } from './learning.service.js';
 export {
+  LearningPathsService,
+  type CreateLearningPathDto,
+  type UpdateLearningPathDto,
+  type LearningPathCourseInput,
+} from './learning-paths.service.js';
+export {
   ScormService,
   type ScormPackageMetadata,
   type ScormAttemptState,
@@ -34,6 +40,11 @@ export {
   ScormLessonTypeMismatchError,
   ScormPackageInvalidError,
   ScormPackageNotFoundError,
+  LearningPathNotFoundError,
+  LearningPathNotPublishedError,
+  LearningPathAlreadyEnrolledError,
+  LearningPathEnrollmentNotFoundError,
+  LearningPathNoCourseError,
 } from './errors.js';
 
 export const learningModule: DidactaModule = {
