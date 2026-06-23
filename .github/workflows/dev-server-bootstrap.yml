@@ -1,0 +1,72 @@
+name: dev-server-bootstrap
+
+# Setup UNICO del servidor dev. Corre una vez despues de dev-image-build.
+# Prerrequisito: añadir DEV_SERVER_KEY en GitHub -> Settings -> Secrets.
+#
+# Qué hace:
+#   1. Clona el repo en /opt/didacta-dev en el servidor
+#   2. Vuelca las env vars de Coolify a /opt/didacta-dev/.env
+#   3. Arranca docker-compose.dev.yml con la imagen ya construida
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    name: Setup servidor dev (una vez)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Exportar .env desde Coolify y preparar servidor
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEV_SERVER_HOST }}
+          username: ${{ secrets.DEV_SERVER_USER }}
+          key: ${{ secrets.DEV_SERVER_KEY }}
+          port: ${{ secrets.DEV_SERVER_PORT || 22 }}
+          envs: COOLIFY_TOKEN,COOLIFY_BASE,COOLIFY_UUID
+          script: |
+            set -euo pipefail
+            REMOTE="/opt/didacta-dev"
+            REPO="https://github.com/va360labs/didacta-community.git"
+
+            echo "1/4 Clonar o actualizar repo..."
+            if [ -d "$REMOTE/.git" ]; then
+              cd "$REMOTE" && git pull --ff-only
+            else
+              git clone "$REPO" "$REMOTE"
+            fi
+
+            echo "2/4 Exportar env vars desde Coolify..."
+            curl -fsS \
+              -H "Authorization: Bearer $COOLIFY_TOKEN" \
+              "$COOLIFY_BASE/applications/$COOLIFY_UUID/envs" \
+            | jq -r '.[] | select(.is_preview == false) | "\(.key)=\(.value)"' \
+            > "$REMOTE/.env"
+            echo "NODE_ENV=development" >> "$REMOTE/.env"
+            echo "WEB_PORT=3010" >> "$REMOTE/.env"
+            echo ".env escrito ($(wc -l < "$REMOTE/.env") variables)"
+
+            echo "3/4 Arrancar stack dev..."
+            cd "$REMOTE"
+            docker compose -f docker-compose.dev.yml pull
+            docker compose -f docker-compose.dev.yml up -d
+
+            echo "4/4 Esperando healthz..."
+            for i in $(seq 1 18); do
+              ST=$(curl -fsS --max-time 5 http://localhost:4000/healthz 2>/dev/null || true)
+              if echo "$ST" | grep -q '"status":"ok"'; then
+                echo "API respondiendo"; break
+              fi
+              echo "  [$i/18] esperando..."; sleep 10
+            done
+
+            echo ""
+            echo "Dev server listo. Proximos deploys: pnpm dev:push (~5 segundos)"
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_BASE: ${{ secrets.COOLIFY_BASE_URL }}
+          COOLIFY_UUID: ${{ secrets.COOLIFY_APP_UUID }}
