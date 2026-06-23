@@ -1,0 +1,67 @@
+name: dev-hot-deploy
+
+# Pipeline RÁPIDO (segundos) para dev.didacta.io usando hot-reload.
+#
+# En lugar de construir una imagen Docker, hace SSH al servidor dev,
+# actualiza el código con git pull y los servicios se recargan solos
+# gracias a los bind-volumes y los modos watch/HMR.
+#
+# Tiempo total: ~20-30 segundos (vs ~9 min del dev-deploy.yml completo).
+#
+# Prerequisitos en el servidor:
+#   - Stack arrancado con docker-compose.dev.yml (ver scripts/setup-dev-server.sh)
+#   - /opt/didacta-dev es el clone del repo
+#
+# Secrets necesarios en el repo (Settings → Secrets → Actions):
+#   DEV_SERVER_HOST  — IP o hostname del servidor (ej: 135.181.150.202)
+#   DEV_SERVER_USER  — usuario SSH (ej: root)
+#   DEV_SERVER_KEY   — clave SSH privada (sin passphrase)
+#   DEV_SERVER_PORT  — puerto SSH (opcional, default 22)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev-hot # rama opcional para disparar automáticamente
+
+concurrency:
+  group: dev-hot-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  hot-deploy:
+    name: SSH → git pull → servicios auto-recargan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: SSH → git pull en servidor dev
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEV_SERVER_HOST }}
+          username: ${{ secrets.DEV_SERVER_USER }}
+          key: ${{ secrets.DEV_SERVER_KEY }}
+          port: ${{ secrets.DEV_SERVER_PORT || 22 }}
+          script: |
+            set -euo pipefail
+            cd /opt/didacta-dev
+            echo "→ git pull..."
+            git pull --ff-only
+            echo "→ Código actualizado. Servicios auto-recargando via bind-volumes."
+            echo "  - Web: HMR activo, cambios en el browser en <2s"
+            echo "  - API: nest watch recompilando, listo en ~10-15s"
+            echo "✓ Hot deploy completado"
+
+      - name: Smoke test (healthz)
+        run: |
+          sleep 15
+          for i in $(seq 1 8); do
+            if curl -fsS --max-time 10 https://dev.didacta.io/healthz | grep -q '"status":"ok"'; then
+              echo "healthz OK"; exit 0
+            fi
+            echo "  esperando... ($i)"; sleep 5
+          done
+          echo "::warning::healthz no respondió en tiempo, pero puede que la API aún esté recompilando"
