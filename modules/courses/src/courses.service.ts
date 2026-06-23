@@ -35,6 +35,7 @@ export class CoursesService {
         title: dto.title,
         description: dto.description ?? null,
         thumbnailUrl: dto.thumbnailUrl ?? null,
+        featuredVideoUrl: dto.featuredVideoUrl ?? null,
         language: dto.language,
         estimatedMinutes: dto.estimatedMinutes ?? null,
         category: dto.category ?? null,
@@ -77,6 +78,7 @@ export class CoursesService {
         ...(dto.title !== undefined ? { title: dto.title } : {}),
         ...(dto.description !== undefined ? { description: dto.description } : {}),
         ...(dto.thumbnailUrl !== undefined ? { thumbnailUrl: dto.thumbnailUrl } : {}),
+        ...(dto.featuredVideoUrl !== undefined ? { featuredVideoUrl: dto.featuredVideoUrl } : {}),
         ...(dto.estimatedMinutes !== undefined ? { estimatedMinutes: dto.estimatedMinutes } : {}),
         ...(dto.category !== undefined ? { category: dto.category } : {}),
         ...(dto.certificateTemplateId !== undefined

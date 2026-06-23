@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { QuizPlayer } from '@/components/quiz-player';
+import { VideoEmbed } from '@/components/video-embed';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
 import type { CourseLesson } from '@/lib/courses';
 import { learningApi } from '@/lib/learning';
-import { parseYouTubeId, parseYouTubeStartSeconds, youTubeEmbedUrl } from '@/lib/video';
 
 interface Props {
   lesson: CourseLesson & { content: Record<string, unknown> };
@@ -169,49 +169,17 @@ function LessonContent({
     const url = typeof content['videoUrl'] === 'string' ? content['videoUrl'] : '';
     if (!url) return <Empty hint="Falta el video. Pídele al formador que lo cargue." />;
 
-    // Si la URL es de YouTube, embebemos via iframe (privacy-enhanced) en
-    // lugar de usar <video src>, que sólo entiende mp4/webm/HLS directos.
-    // El embed respeta el `t=`/`start=` si el formador lo pegó.
-    const ytId = parseYouTubeId(url);
-    if (ytId) {
-      const start = parseYouTubeStartSeconds(url);
-      return (
-        <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-black">
-          <iframe
-            src={youTubeEmbedUrl(ytId, start ? { startSeconds: start } : {})}
-            title={lesson.title}
-            className="h-full w-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
-      );
-    }
-
-    return (
-      <video
-        controls
-        preload="metadata"
-        className="w-full rounded-lg border border-border bg-text"
-        // eslint-disable-next-line jsx-a11y/media-has-caption
-        src={url}
-        onLoadedMetadata={(e) => {
-          const v = e.currentTarget;
-          if (resumeAt > 0 && resumeAt < v.duration) v.currentTime = resumeAt;
-        }}
-      />
-    );
+    // VideoEmbed resuelve YouTube / Bunny Stream / fichero directo, y debajo
+    // del vídeo pinta los recursos: las líneas `MM:SS - Texto` se vuelven
+    // capítulos clicables que hacen seek en el player.
+    const resources = typeof content['resources'] === 'string' ? content['resources'] : '';
+    return <VideoEmbed url={url} title={lesson.title} resumeAt={resumeAt} resources={resources} />;
   }
 
   if (lesson.type === 'HTML') {
     const html = typeof content['html'] === 'string' ? content['html'] : '';
     if (!html) return <Empty hint="Esta lectura está vacía." />;
-    return (
-      <div
-        className="lesson-prose"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    );
+    return <div className="lesson-prose" dangerouslySetInnerHTML={{ __html: html }} />;
   }
 
   if (lesson.type === 'PDF') {

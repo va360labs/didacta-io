@@ -31,6 +31,7 @@ import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
 import { certificateTemplatesApi, type CertificateTemplate } from '@/modules/certificates';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
+import { storageApi } from '@/lib/storage';
 import {
   coursesApi,
   type CourseCategory,
@@ -472,9 +473,28 @@ function MetadataEditor({
   const [estimatedMinutes, setEstimatedMinutes] = useState(
     course.estimatedMinutes ? String(course.estimatedMinutes) : '',
   );
+  const [thumbnailUrl, setThumbnailUrl] = useState(course.thumbnailUrl ?? '');
+  const [featuredVideoUrl, setFeaturedVideoUrl] = useState(course.featuredVideoUrl ?? '');
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [managedCategories, setManagedCategories] = useState<CourseCategory[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingImage(true);
+    setError(null);
+    try {
+      const result = await storageApi.uploadImage(file);
+      setThumbnailUrl(result.url);
+    } catch (err) {
+      setError(err instanceof ApiHttpError ? err.message : 'No pudimos subir la imagen.');
+    } finally {
+      setUploadingImage(false);
+    }
+  }
 
   useEffect(() => {
     let aborted = false;
@@ -501,6 +521,8 @@ function MetadataEditor({
         description: description.trim() ? description.trim() : null,
         category: category.trim() ? category.trim() : null,
         estimatedMinutes: estimatedMinutes ? Number(estimatedMinutes) : null,
+        thumbnailUrl: thumbnailUrl.trim() ? thumbnailUrl.trim() : null,
+        featuredVideoUrl: featuredVideoUrl.trim() ? featuredVideoUrl.trim() : null,
       });
       await onSaved();
     } catch (e) {
@@ -604,6 +626,73 @@ function MetadataEditor({
                 onChange={(e) => setEstimatedMinutes(e.target.value)}
                 placeholder="Ej: 90"
               />
+            </div>
+          </div>
+
+          {/* Media destacada del hero (se muestra al alumno NO inscrito). */}
+          <div className="space-y-4 rounded-lg border border-border-soft bg-surface-2 p-4">
+            <p className="text-sm font-semibold text-text">Destacados del hero</p>
+            <p className="-mt-2 text-xs text-text-subtle">
+              Imagen y vídeo que verá el alumno antes de matricularse. Una vez inscrito, el hero se
+              simplifica.
+            </p>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="meta-thumbnail">Imagen destacada</Label>
+              <div className="flex flex-wrap items-center gap-3">
+                {thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={thumbnailUrl}
+                    alt="Imagen destacada"
+                    className="h-16 w-28 rounded-md border border-border object-cover"
+                  />
+                ) : (
+                  <div className="grid h-16 w-28 place-items-center rounded-md border border-dashed border-border-strong text-xs text-text-subtle">
+                    Sin imagen
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <input
+                    id="meta-thumbnail"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    onChange={handleImageChange}
+                    className="block w-full text-xs text-text-muted file:mr-3 file:rounded-md file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-brand-700"
+                  />
+                  {thumbnailUrl ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setThumbnailUrl('')}
+                      disabled={uploadingImage}
+                    >
+                      Quitar
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+              {uploadingImage ? (
+                <p className="text-xs text-text-subtle">Subiendo imagen…</p>
+              ) : (
+                <p className="text-xs text-text-subtle">PNG, JPG, WebP o GIF (máx. 10 MB).</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="meta-featured-video">Vídeo destacado (URL)</Label>
+              <Input
+                id="meta-featured-video"
+                type="url"
+                value={featuredVideoUrl}
+                onChange={(e) => setFeaturedVideoUrl(e.target.value)}
+                placeholder="https://iframe.mediadelivery.net/embed/… (Bunny) o YouTube"
+              />
+              <p className="text-xs text-text-subtle">
+                Pega la URL de Bunny Stream (<code>iframe.mediadelivery.net/embed/…</code>), YouTube
+                o un <code>.mp4</code>. Tiene prioridad sobre la imagen en el hero.
+              </p>
             </div>
           </div>
 

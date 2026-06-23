@@ -765,6 +765,10 @@ model ModCoursesCourse {
   title                 String
   description           String?
   thumbnailUrl          String?      @map("thumbnail_url")
+  /// Imagen y vídeo destacados del hero del curso (mostrados al alumno no
+  /// inscrito). El vídeo es una URL de proveedor de streaming (Bunny Stream,
+  /// YouTube) o un fichero directo; la imagen se sube al storage del tenant.
+  featuredVideoUrl      String?      @map("featured_video_url")
   language              String       @default("es-ES")
   estimatedMinutes      Int?         @map("estimated_minutes")
   status                CourseStatus @default(DRAFT)

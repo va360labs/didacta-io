@@ -11,6 +11,7 @@ export interface Course {
   title: string;
   description: string | null;
   thumbnailUrl: string | null;
+  featuredVideoUrl: string | null;
   language: string;
   estimatedMinutes: number | null;
   status: CourseStatus;
@@ -255,6 +256,8 @@ export const coursesApi = {
       category?: string | null;
       estimatedMinutes?: number | null;
       certificateTemplateId?: string | null;
+      thumbnailUrl?: string | null;
+      featuredVideoUrl?: string | null;
     },
   ): Promise<Course> {
     return apiFetch<Course>(

@@ -60,6 +60,9 @@ export function LessonContentEditor({
   const [pdfUrl, setPdfUrl] = useState(
     typeof content['pdfUrl'] === 'string' ? content['pdfUrl'] : '',
   );
+  const [resources, setResources] = useState(
+    typeof content['resources'] === 'string' ? content['resources'] : '',
+  );
   const [html, setHtml] = useState(typeof content['html'] === 'string' ? content['html'] : '');
   const [text, setText] = useState(typeof content['text'] === 'string' ? content['text'] : '');
   const [quizId, setQuizId] = useState(
@@ -71,7 +74,7 @@ export function LessonContentEditor({
   function buildContent(): Record<string, unknown> {
     switch (lesson.type) {
       case 'VIDEO':
-        return { videoUrl };
+        return { videoUrl, resources };
       case 'PDF':
         return { pdfUrl };
       case 'HTML':
@@ -153,10 +156,29 @@ export function LessonContentEditor({
             placeholder="https://www.youtube.com/watch?v=… o https://tu-cdn/leccion.mp4"
           />
           <p className="text-xs text-text-subtle">
-            Acepta enlaces de YouTube (con o sin timestamp <code>t=</code>) y URLs directas a
-            archivos <code>.mp4</code> / <code>.webm</code> / <code>.m3u8</code>. YouTube se embebe
-            con dominio privacy-enhanced (<code>youtube-nocookie.com</code>).
+            Acepta enlaces de YouTube (con o sin timestamp <code>t=</code>), Bunny Stream (
+            <code>iframe.mediadelivery.net/embed/…</code>) y URLs directas a archivos{' '}
+            <code>.mp4</code> / <code>.webm</code> / <code>.m3u8</code>.
           </p>
+
+          <div className="space-y-1.5 pt-2">
+            <Label htmlFor={`resources-${lesson.id}`}>Recursos y capítulos</Label>
+            <Textarea
+              id={`resources-${lesson.id}`}
+              rows={6}
+              value={resources}
+              onChange={(e) => setResources(e.target.value)}
+              placeholder={
+                '00:00 - Introducción\n02:15 - Instalar n8n\nGrupo de Telegram: https://t.me/...'
+              }
+              className="font-mono text-xs"
+            />
+            <p className="text-xs text-text-subtle">
+              Una entrada por línea. Las líneas con formato <code>MM:SS - Texto</code> se muestran
+              como capítulos clicables que saltan a ese punto del vídeo; el resto, como recursos
+              (los enlaces se vuelven clicables).
+            </p>
+          </div>
         </div>
       )}
 

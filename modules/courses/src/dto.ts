@@ -15,6 +15,7 @@ export const createCourseSchema = z.object({
   title: z.string().min(1).max(160),
   description: z.string().max(2000).optional(),
   thumbnailUrl: z.string().url().optional(),
+  featuredVideoUrl: z.string().url().optional(),
   language: z.string().min(2).max(10).default('es-ES'),
   estimatedMinutes: z.number().int().positive().optional(),
   category: z.string().max(60).optional(),
@@ -27,6 +28,7 @@ export const updateCourseSchema = z.object({
   // null = limpiar el campo. Solo afecta a campos opcionales.
   description: z.string().max(2000).nullable().optional(),
   thumbnailUrl: z.string().url().nullable().optional(),
+  featuredVideoUrl: z.string().url().nullable().optional(),
   estimatedMinutes: z.number().int().positive().nullable().optional(),
   category: z.string().max(60).nullable().optional(),
   status: courseStatusSchema.optional(),
