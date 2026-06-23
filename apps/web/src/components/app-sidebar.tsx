@@ -77,7 +77,7 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
             <div className="truncate text-[14px] font-bold leading-tight text-white">
               {formatTenantName(session.user.tenantSlug)}
             </div>
-            <div className="mt-0.5 text-[11px] text-white/40">Comunidad · 1.240 miembros</div>
+            <div className="mt-0.5 text-[11px] text-white/40">Comunidad</div>
           </div>
           <svg
             width="14"

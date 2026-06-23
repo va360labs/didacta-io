@@ -199,7 +199,7 @@ export default function EspaciosAdminPage() {
                       className="grid h-8 w-8 shrink-0 place-items-center rounded-lg"
                       style={{ backgroundColor: `${s.color}22` }}
                     >
-                      <Icon name={s.icon as IconName} size={16} style={{ color: s.color }} />
+                      <SpaceIcon icon={s.icon} color={s.color} size={16} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 text-sm font-medium">

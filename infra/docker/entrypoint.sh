@@ -77,8 +77,11 @@ run_migrations() {
     psql_url="$(strip_url_query "$DATABASE_URL")"
     psql "$psql_url" -v ON_ERROR_STOP=1 -f packages/database/prisma/rls.sql
     log "RLS aplicado correctamente."
+    log "Aplicando seed idempotente (espacios de sistema)…"
+    psql "$psql_url" -v ON_ERROR_STOP=1 -f packages/database/prisma/seed.sql
+    log "Seed aplicado correctamente."
   else
-    log "psql no disponible, salto RLS (verificá imagen base)."
+    log "psql no disponible, salto RLS y seed (verificá imagen base)."
   fi
 }
 

@@ -148,7 +148,12 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
 
       {/* Modal */}
-      <div className="relative z-10 w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Nueva publicación"
+        className="relative z-10 w-full max-w-2xl rounded-2xl bg-white shadow-2xl"
+      >
         {/* Header */}
         <div className="flex items-center gap-3 px-5 pt-5 pb-0">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#0D1B2A] text-sm font-bold text-white">
