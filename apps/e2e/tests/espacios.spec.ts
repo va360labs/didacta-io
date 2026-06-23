@@ -248,7 +248,10 @@ test.describe('Página /espacios/[space]', () => {
 
   test('el selector de ordenación tiene las 3 opciones', async ({ page }) => {
     await withAdminSession(page, '/espacios/general');
-    const options = await page.getByRole('option').allInnerTexts();
+    // getByRole('option') no funciona con <select> nativo cerrado — usar locator directo
+    const select = page.locator('select');
+    await expect(select).toBeVisible({ timeout: 8000 });
+    const options = await page.locator('select option').allInnerTexts();
     expect(options).toContain('Más recientes');
     expect(options).toContain('Más antiguas');
     expect(options).toContain('Más comentadas');
@@ -328,9 +331,9 @@ test.describe('Panel admin — /admin/comunidad/espacios', () => {
 
   test('existe formulario para crear nuevo espacio', async ({ page }) => {
     await withAdminSession(page, '/admin/comunidad/espacios');
-    // Debe haber inputs con placeholder en el form de creación
-    const inputs = page.locator('input[placeholder]');
-    const count = await inputs.count();
+    // count() es síncrono — esperar a que React hidrate antes de contar
+    await expect(page.locator('input[placeholder]').first()).toBeVisible({ timeout: 8000 });
+    const count = await page.locator('input[placeholder]').count();
     expect(count).toBeGreaterThan(0);
   });
 
