@@ -11,7 +11,7 @@ import { meApi } from '@/lib/me';
 import { mergeExtensionSidebarItems } from '@/lib/sidebar-extensions-merge';
 import { filterByActiveModules } from '@/lib/sidebar-modules-filter';
 import { moduleExtensions } from '@/modules';
-import { useCommunitySpaces } from '@/modules/community';
+import { useCommunitySpaces, invalidateCommunitySpacesCache } from '@/modules/community';
 import { isIconName } from '@/components/space-icon';
 import type { IconName } from '@/components/icon';
 import { CreateSpaceModal } from '@/components/create-space-modal';
@@ -40,6 +40,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   function logout() {
     authStorage.clear();
+    // Evita que el cache en memoria de espacios de un tenant se filtre al
+    // siguiente login (navegación SPA sin recargar).
+    invalidateCommunitySpacesCache();
     router.replace('/signin');
   }
 
@@ -87,10 +90,11 @@ function Shell({
   // render) no filtramos — el sidebar se pinta completo y se reordena al
   // resolver la promesa. El backend sigue gateando con ModuleAccessInterceptor
   // aunque el usuario haga clic antes de que llegue la respuesta.
-  // Cargamos el estado de módulos al montar Y cada vez que cambia el
-  // pathname. El re-fetch al navegar cubre el caso típico: el admin
-  // desactiva un módulo en /admin/configuracion y al saltar a cualquier
-  // otra ruta el sidebar refleja el cambio sin necesidad de recargar.
+  // Cargamos el estado de módulos UNA vez al montar. Antes se re-pedía en cada
+  // cambio de pathname, lo que añadía una llamada al API a CADA navegación
+  // (latencia perceptible al cambiar de página). El caso de "admin desactiva un
+  // módulo y se refleja sin recargar" ya lo cubre el listener de
+  // `didacta:modules-changed` de abajo, que se dispara desde el toggle.
   const [activeModules, setActiveModules] = useState<Set<string> | null>(null);
   useEffect(() => {
     const token = authStorage.getAccessToken();
@@ -110,7 +114,7 @@ function Shell({
     return () => {
       cancelled = true;
     };
-  }, [pathname]);
+  }, []);
 
   // Listener para actualización en caliente desde la misma página: cuando
   // /admin/configuracion termina un toggle, dispatchea

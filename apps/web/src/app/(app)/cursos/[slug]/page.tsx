@@ -67,41 +67,29 @@ export default function CourseAlumnoPage() {
       // correctamente cuáles ya marcó. Sin esto, progressByLesson nace
       // vacío y todas las lecciones se ven como "no completadas" hasta
       // que las vuelva a marcar.
-      if (found) {
-        try {
-          const progressList = await learningApi.listMyProgress(found.id);
-          const map: Record<string, boolean> = {};
-          for (const p of progressList) {
-            if (p.completed) map[p.lessonId] = true;
-          }
-          setProgressByLesson(map);
-        } catch {
-          setProgressByLesson({});
+      // Datos dependientes del curso/inscripción, en PARALELO. Antes eran tres
+      // awaits secuenciales (progreso → certificados → zoom) que encadenaban
+      // latencia. Cada uno tolera su propio fallo (módulo deshabilitado → 403).
+      const [progressList, certsList, zoomList] = await Promise.all([
+        found ? learningApi.listMyProgress(found.id).catch(() => null) : Promise.resolve(null),
+        found?.status === 'COMPLETED'
+          ? certificatesApi.listMine().catch(() => null)
+          : Promise.resolve(null),
+        zoomLiveApi.list({ courseId: detail.id }).catch(() => null),
+      ]);
+
+      if (progressList) {
+        const map: Record<string, boolean> = {};
+        for (const p of progressList) {
+          if (p.completed) map[p.lessonId] = true;
         }
+        setProgressByLesson(map);
       } else {
         setProgressByLesson({});
       }
 
-      if (found?.status === 'COMPLETED') {
-        try {
-          const certs = await certificatesApi.listMine();
-          const match = certs.find((c) => c.courseId === detail.id);
-          setCertificate(match ?? null);
-        } catch {
-          setCertificate(null);
-        }
-      } else {
-        setCertificate(null);
-      }
-
-      // Sesiones síncronas Zoom del curso (incluye libres y por lección).
-      // Si el módulo está deshabilitado, el endpoint devuelve 403 y silenciamos.
-      try {
-        const sessions = await zoomLiveApi.list({ courseId: detail.id });
-        setZoomSessions(sessions);
-      } catch {
-        setZoomSessions([]);
-      }
+      setCertificate(certsList?.find((c) => c.courseId === detail.id) ?? null);
+      setZoomSessions(zoomList ?? []);
     } catch (e) {
       setError(
         e instanceof ApiHttpError
@@ -203,7 +191,6 @@ export default function CourseAlumnoPage() {
                 {course.category ? (
                   <Badge variant="info" className="w-fit">
                     {course.category}
-                    {course.language ? ` · ${course.language}` : ''}
                   </Badge>
                 ) : null}
                 <h1 className="font-display text-2xl font-bold leading-tight text-text">
@@ -266,7 +253,6 @@ export default function CourseAlumnoPage() {
               {course.category ? (
                 <Badge variant="info" className="w-fit">
                   {course.category}
-                  {course.language ? ` · ${course.language}` : ''}
                 </Badge>
               ) : null}
               <h1

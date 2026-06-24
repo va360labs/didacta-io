@@ -15,8 +15,12 @@ export interface NotificationStreamEvent {
   createdAt: string;
 }
 
-/** Polling de respaldo cuando el push no está disponible (ms). */
-export const POLL_MS = 60_000;
+/**
+ * Polling de respaldo cuando el push (SSE) no está disponible (ms). Subido de
+ * 60s→5min: las notificaciones no son críticas y el polling agresivo gastaba
+ * batería/red en cada pestaña abierta. El SSE sigue siendo el camino normal.
+ */
+export const POLL_MS = 300_000;
 
 /** Backoff máximo entre reintentos de reconexión (ms). */
 const MAX_BACKOFF_MS = 30_000;
@@ -112,6 +116,9 @@ export function createNotificationsStream(deps: StreamDeps): StreamController {
     deps.onStatus('degraded');
     pollTimer = deps.setInterval(() => {
       if (disposed) return;
+      // No gastamos un request si la pestaña está en segundo plano; al volver
+      // a primer plano el SSE reconecta (o el siguiente tick ya la ve visible).
+      if (typeof document !== 'undefined' && document.hidden) return;
       // En el fallback no tenemos el evento concreto; señalamos al consumidor
       // que re-haga el catch-up (listMine) pasando null.
       deps.onEvent(null);

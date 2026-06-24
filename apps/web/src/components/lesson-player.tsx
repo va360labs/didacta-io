@@ -17,7 +17,10 @@ interface Props {
   onProgress?: (progressPercent: number) => void;
 }
 
-const TICK_SEC = 30;
+// Cada cuánto reportamos tiempo visto al backend. Subido de 30→60s para
+// reducir a la mitad las llamadas durante la reproducción (el progreso se
+// sigue contabilizando con granularidad de 1 min, imperceptible para el alumno).
+const TICK_SEC = 60;
 
 const LESSON_TYPE_META: Record<string, { label: string; icon: string }> = {
   VIDEO: { label: 'Video', icon: '▶' },
