@@ -320,11 +320,18 @@ export class LearningPathsService {
     userId: string,
     courses: Array<{ courseId: string }>,
   ) {
+    if (courses.length === 0) return null;
+    // Una sola query para todas las matriculaciones del usuario en los cursos
+    // de la ruta (antes: una findUnique por curso → N+1 en cada carga del
+    // detalle de la ruta). Resolvemos el "siguiente" en memoria.
+    const courseIds = courses.map((c) => c.courseId);
+    const enrollments = await this.prisma.modLearningEnrollment.findMany({
+      where: { tenantId, userId, courseId: { in: courseIds } },
+      select: { courseId: true, progressPercent: true },
+    });
+    const byCourse = new Map(enrollments.map((e) => [e.courseId, e]));
     for (const { courseId } of courses) {
-      const courseEnrollment = await this.prisma.modLearningEnrollment.findUnique({
-        where: { tenantId_userId_courseId: { tenantId, userId, courseId } },
-        select: { progressPercent: true },
-      });
+      const courseEnrollment = byCourse.get(courseId);
       if (!courseEnrollment || (courseEnrollment.progressPercent ?? 0) < 100) {
         return { courseId, lessonId: null, courseUrl: `/cursos/${courseId}` };
       }
