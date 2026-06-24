@@ -90,6 +90,7 @@ export default function RutaDetailPage() {
   }
 
   const enrolled = path.enrollment;
+  const courses = path.courses ?? [];
   const progress = enrolled?.progressPercent ?? 0;
   const isCompleted = enrolled?.status === 'COMPLETED';
   const isArchived = path.status === 'ARCHIVED';
@@ -182,11 +183,11 @@ export default function RutaDetailPage() {
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-muted">
           Cursos de esta ruta
         </h2>
-        {path.courses.length === 0 ? (
+        {courses.length === 0 ? (
           <p className="text-sm text-text-muted">Esta ruta aún no tiene cursos asignados.</p>
         ) : (
           <div className="space-y-3">
-            {path.courses.map((c, idx) => {
+            {courses.map((c, idx) => {
               const isLinearBlocked =
                 path.sequenceType === 'LINEAR' &&
                 idx > 0 &&

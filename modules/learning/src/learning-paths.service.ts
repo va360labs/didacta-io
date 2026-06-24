@@ -83,6 +83,11 @@ export class LearningPathsService {
     return {
       ...this.formatPath(path, enrollment),
       nextStep,
+      courses: path.courses.map((c) => ({
+        id: c.id,
+        courseId: c.courseId,
+        position: c.position,
+      })),
     };
   }
 
