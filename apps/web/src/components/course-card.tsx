@@ -99,50 +99,44 @@ export function CourseCard({ course, href }: Props) {
               <path d="M10 50 Q60 20 110 50" />
             </svg>
           ) : null}
-
-          <Badge
-            variant={status === 'completed' ? 'success' : status === 'pending' ? 'warning' : 'info'}
-            dot
-            className="bg-white/95"
-          >
-            {status === 'completed'
-              ? 'Completado'
-              : status === 'pending'
-                ? 'Pendiente'
-                : 'En curso'}
-          </Badge>
         </div>
 
         {/* Body */}
         <CardContent className="flex flex-1 flex-col gap-2.5 p-5">
-          {course.category || course.language ? (
-            <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-text-muted">
-              {course.category ? (
-                curatedCategory ? (
-                  <span
-                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                    style={{
-                      backgroundColor: `${curatedCategory.color}2E`,
-                      color: curatedCategory.color,
-                    }}
-                  >
-                    {curatedCategory.icon ? (
-                      <Icon name={curatedCategory.icon as IconName} size={12} />
-                    ) : null}
-                    {curatedCategory.name}
-                  </span>
-                ) : (
-                  <span>{course.category}</span>
-                )
-              ) : null}
-              {course.language ? (
-                <>
-                  {course.category ? <span aria-hidden="true">·</span> : null}
-                  <span>{course.language}</span>
-                </>
-              ) : null}
-            </div>
-          ) : null}
+          {/* Meta: estado (siempre) + categoría (si la hay). El badge de estado
+              vivía sobre la imagen; lo movimos aquí para no taparla. */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-text-muted">
+            <Badge
+              variant={
+                status === 'completed' ? 'success' : status === 'pending' ? 'warning' : 'info'
+              }
+              dot
+            >
+              {status === 'completed'
+                ? 'Completado'
+                : status === 'pending'
+                  ? 'Pendiente'
+                  : 'En curso'}
+            </Badge>
+            {course.category ? (
+              curatedCategory ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                  style={{
+                    backgroundColor: `${curatedCategory.color}2E`,
+                    color: curatedCategory.color,
+                  }}
+                >
+                  {curatedCategory.icon ? (
+                    <Icon name={curatedCategory.icon as IconName} size={12} />
+                  ) : null}
+                  {curatedCategory.name}
+                </span>
+              ) : (
+                <span>{course.category}</span>
+              )
+            ) : null}
+          </div>
 
           <h3
             className="font-display text-lg font-bold leading-tight text-text group-hover:text-brand-700"
