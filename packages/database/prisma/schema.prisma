@@ -507,6 +507,9 @@ model ModCommunityPost {
   @@index([tenantId, courseId, createdAt])
   @@index([tenantId, authorId])
   @@index([tenantId, pinnedAt])
+  /// Índice GIN para el filtro de feed por tag (`tags has`), que sin él hace
+  /// seq scan sobre el array.
+  @@index([tags], type: Gin)
   @@map("mod_community_post")
 }
 
@@ -917,6 +920,9 @@ model ModLearningProgress {
 
   @@unique([enrollmentId, lessonId])
   @@index([tenantId, lessonId])
+  /// Listado de progreso por inscripción (carga del player): filtra por
+  /// (tenantId, enrollmentId), antes solo cubierto parcialmente por el unique.
+  @@index([tenantId, enrollmentId])
   @@map("mod_learning_progress")
 }
 
