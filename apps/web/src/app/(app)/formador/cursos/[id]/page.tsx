@@ -1,9 +1,17 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { CourseEditor } from './course-editor';
 import { InvitationsPanel } from './invitations-panel';
+
+// El editor de curso arrastra librerías pesadas (tiptap ~200KB + dnd-kit ~100KB).
+// Lo cargamos bajo demanda (chunk aparte) para que la página pinte el esqueleto
+// al instante y el editor llegue después, sin lastrar el bundle de la ruta.
+const CourseEditor = dynamic(() => import('./course-editor').then((m) => m.CourseEditor), {
+  ssr: false,
+  loading: () => <div className="skeleton h-64 w-full" />,
+});
 import { ApiHttpError } from '@/lib/api-client';
 import { coursesApi, type CourseDetail } from '@/lib/courses';
 

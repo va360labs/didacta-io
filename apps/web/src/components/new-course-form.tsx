@@ -1,13 +1,20 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { RichTextEditor } from '@/components/rich-text-editor';
 import { ApiHttpError } from '@/lib/api-client';
 import { coursesApi, type Course } from '@/lib/courses';
+
+// Carga diferida del editor (tiptap ~200KB): solo se baja cuando se monta el
+// formulario, no en el bundle base.
+const RichTextEditor = dynamic(
+  () => import('@/components/rich-text-editor').then((m) => m.RichTextEditor),
+  { ssr: false, loading: () => <div className="skeleton h-40 w-full rounded-md" /> },
+);
 
 function slugify(value: string): string {
   return value

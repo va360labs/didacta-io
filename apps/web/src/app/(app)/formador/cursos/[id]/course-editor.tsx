@@ -19,10 +19,16 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import nextDynamic from 'next/dynamic';
 import { CourseStatusBadge } from '@/components/course-status-badge';
 import { Icon, type IconName } from '@/components/icon';
 import { PendingCommentsQueue } from '@/components/pending-comments-queue';
-import { RichTextEditor } from '@/components/rich-text-editor';
+
+// tiptap (~200KB) solo se baja cuando se abre el editor de metadatos.
+const RichTextEditor = nextDynamic(
+  () => import('@/components/rich-text-editor').then((m) => m.RichTextEditor),
+  { ssr: false, loading: () => <div className="skeleton h-40 w-full rounded-md" /> },
+);
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
