@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { invalidateCommunitySpacesCache } from '@/modules/community';
 import { buildOidcStartUrl, fetchOidcStatus } from '@/lib/sso';
 import { useTenantContext } from '@/lib/tenant-context';
 
@@ -72,6 +73,9 @@ export function SignInForm() {
       });
       authStorage.saveTokens(response.tokens.accessToken, response.tokens.refreshToken);
       authStorage.saveSession({ user: response.user, mfaRequired: response.mfaRequired });
+      // Arranca el sidebar de espacios desde cero con el token ya válido (evita
+      // arrastrar un cache vacío o de otro tenant entre navegaciones SPA).
+      invalidateCommunitySpacesCache();
       if (response.mfaRequired) {
         router.push(response.user.mfaEnabled ? '/mfa/verify' : '/mfa/setup');
       } else {

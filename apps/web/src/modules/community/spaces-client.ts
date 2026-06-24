@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ApiHttpError } from '@/lib/api-client';
 import { communityApi, type CommunitySpace } from './client';
 
 let cache: CommunitySpace[] | null = null;
@@ -13,15 +12,15 @@ async function fetchSpaces(): Promise<CommunitySpace[]> {
   inflight = (async () => {
     try {
       const list = await communityApi.listSpaces();
+      // Solo cacheamos respuestas correctas. Antes cacheábamos `[]` también en
+      // error (p.ej. un fetch con token caducado justo antes de re-loguear), y
+      // como `[]` es truthy ese cache vacío persistía entre navegaciones SPA →
+      // los espacios no aparecían tras el login hasta recargar la página. Al no
+      // cachear el error, el siguiente montaje (ya con token válido) reintenta.
       cache = list;
       return list;
-    } catch (e) {
-      if (e instanceof ApiHttpError && e.status === 404) {
-        cache = [];
-        return cache;
-      }
-      cache = [];
-      return cache;
+    } catch {
+      return [];
     } finally {
       inflight = null;
     }
