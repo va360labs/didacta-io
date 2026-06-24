@@ -23,6 +23,7 @@ interface AuthResponse {
     tenantSlug: string;
     roles: string[];
     mfaEnabled: boolean;
+    mustChangePassword?: boolean;
   };
 }
 

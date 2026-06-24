@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { ModulesModule } from '../modules/modules.module';
 import { SsoOidcModule } from '../sso/oidc/oidc.module';
 import { SsoSamlModule } from '../sso/saml/saml.module';
+import { AdminApiKeysController } from './admin-api-keys.controller';
 import { AdminModulesController } from './admin-modules.controller';
 import { AdminSmtpController } from './admin-smtp.controller';
 import { AdminStatsController } from './admin-stats.controller';
@@ -36,6 +37,9 @@ import { SuperUsersService } from './super/super-users.service';
     AdminTenantsController,
     AdminModulesController,
     AdminStatsController,
+    // Gestión de API keys del tenant (Administración → Claves API). Reusa
+    // ApiKeyService + PrismaAuditLogService de AuthModule (ya importado).
+    AdminApiKeysController,
     // SMTP per-tenant — GET/PUT/POST test. Wrappea el almacenamiento
     // genérico de tenant_setting con un contrato dedicado (alpha.75).
     AdminSmtpController,

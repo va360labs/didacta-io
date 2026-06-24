@@ -175,6 +175,10 @@ model User {
   mfaEnabled       Boolean    @default(false) @map("mfa_enabled")
   mfaRecoveryCodes String[]   @default([]) @map("mfa_recovery_codes")
   status           UserStatus @default(ACTIVE)
+  /// True cuando la contraseña actual es temporal (ej. user creado por
+  /// `POST /api/v1/inscribe` tras una compra externa). Mientras sea true,
+  /// el usuario es forzado a establecer una contraseña nueva tras el login.
+  mustChangePassword Boolean  @default(false) @map("must_change_password")
   locale           String     @default("es-ES")
   /// IANA timezone, ej. "America/Argentina/Buenos_Aires" o "Europe/Madrid".
   /// Usado para mostrar timestamps localmente. Default UTC.
@@ -776,6 +780,11 @@ model ModCoursesCourse {
   estimatedMinutes      Int?         @map("estimated_minutes")
   status                CourseStatus @default(DRAFT)
   category              String?
+  /// URL de una página de ventas externa donde se compra el curso (ej.
+  /// "https://va360.academy/curso1"). Si está set, la ficha del curso muestra
+  /// el CTA "Comprar" que redirige a esta URL. La inscripción posterior se
+  /// realiza vía `POST /api/v1/inscribe` con API key. Null = sin venta externa.
+  externalPurchaseUrl   String?      @map("external_purchase_url") @db.VarChar(2048)
   createdById           String?      @map("created_by_id") @db.Uuid
   /// Template de certificado preferido para este curso. Si null, se usa el
   /// default del tenant (mod_certificates_template.is_default = true).
@@ -871,6 +880,9 @@ enum EnrollmentSource {
   /// Enrollment activo mientras la suscripción esté ACTIVE. Pausado durante
   /// PAST_DUE→UNPAID y desenrolado al CANCELED inmediato.
   SUBSCRIPTION
+  /// Inscripción creada por un sistema externo vía `POST /api/v1/inscribe`
+  /// autenticado con API key (compra en una página de ventas de terceros).
+  API
 }
 
 model ModLearningEnrollment {

@@ -481,10 +481,12 @@ function MetadataEditor({
   );
   const [thumbnailUrl, setThumbnailUrl] = useState(course.thumbnailUrl ?? '');
   const [featuredVideoUrl, setFeaturedVideoUrl] = useState(course.featuredVideoUrl ?? '');
+  const [externalPurchaseUrl, setExternalPurchaseUrl] = useState(course.externalPurchaseUrl ?? '');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [managedCategories, setManagedCategories] = useState<CourseCategory[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState(false);
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -529,6 +531,7 @@ function MetadataEditor({
         estimatedMinutes: estimatedMinutes ? Number(estimatedMinutes) : null,
         thumbnailUrl: thumbnailUrl.trim() ? thumbnailUrl.trim() : null,
         featuredVideoUrl: featuredVideoUrl.trim() ? featuredVideoUrl.trim() : null,
+        externalPurchaseUrl: externalPurchaseUrl.trim() ? externalPurchaseUrl.trim() : null,
       });
       await onSaved();
     } catch (e) {
@@ -698,6 +701,50 @@ function MetadataEditor({
               <p className="text-xs text-text-subtle">
                 Pega la URL de Bunny Stream (<code>iframe.mediadelivery.net/embed/…</code>), YouTube
                 o un <code>.mp4</code>. Tiene prioridad sobre la imagen en el hero.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4 rounded-lg border border-border-soft p-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="meta-external-purchase">URL de compra externa</Label>
+              <Input
+                id="meta-external-purchase"
+                type="url"
+                value={externalPurchaseUrl}
+                onChange={(e) => setExternalPurchaseUrl(e.target.value)}
+                placeholder="https://va360.academy/curso1"
+              />
+              <p className="text-xs text-text-subtle">
+                Si la venta de este curso ocurre en una página externa, pega aquí su URL. En la
+                ficha del curso, el botón «Comprar» llevará a esa página. Tras el pago, esa página
+                debe inscribir al alumno llamando a <code>POST /api/v1/inscribe</code>.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="meta-course-id">ID del curso (para la integración)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="meta-course-id"
+                  value={course.id}
+                  readOnly
+                  className="flex-1 font-mono text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(course.id);
+                    setCopiedId(true);
+                    window.setTimeout(() => setCopiedId(false), 1500);
+                  }}
+                >
+                  {copiedId ? 'Copiado' : 'Copiar'}
+                </Button>
+              </div>
+              <p className="text-xs text-text-subtle">
+                Envía este identificador en <code>courseIds</code> al llamar a la API de inscripción
+                desde tu página de ventas.
               </p>
             </div>
           </div>

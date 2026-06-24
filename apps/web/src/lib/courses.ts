@@ -17,6 +17,8 @@ export interface Course {
   status: CourseStatus;
   category: string | null;
   certificateTemplateId: string | null;
+  /** URL de la página de ventas externa donde se compra el curso. */
+  externalPurchaseUrl: string | null;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -258,6 +260,7 @@ export const coursesApi = {
       certificateTemplateId?: string | null;
       thumbnailUrl?: string | null;
       featuredVideoUrl?: string | null;
+      externalPurchaseUrl?: string | null;
     },
   ): Promise<Course> {
     return apiFetch<Course>(

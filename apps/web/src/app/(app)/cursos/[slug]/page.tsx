@@ -103,20 +103,6 @@ export default function CourseAlumnoPage() {
     void reload();
   }, [reload]);
 
-  async function handleEnroll() {
-    if (!course) return;
-    setPending(true);
-    setError(null);
-    try {
-      const newEnrollment = await learningApi.enrollSelf(course.id);
-      if (newEnrollment.status === 'ACTIVE') await reload();
-    } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos matricularte. Prueba de nuevo.');
-    } finally {
-      setPending(false);
-    }
-  }
-
   async function handleDownloadCertificate() {
     if (!certificate) return;
     setDownloadingCert(true);
@@ -364,22 +350,27 @@ export default function CourseAlumnoPage() {
           <CardHeader>
             <CardTitle>Empieza este curso</CardTitle>
             <CardDescription>
-              Matricúlate para acceder al contenido. Si tu organización te dio un código de
+              Compra el curso para acceder al contenido. Si tu organización te dio un código de
               invitación, puedes canjearlo abajo.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="flex flex-wrap gap-3">
-              <Button onClick={handleEnroll} disabled={pending} size="lg">
-                {pending ? 'Procesando…' : 'Matricularme'}
-              </Button>
-              {/*
-                Si tu organización vinculó este curso a un producto Stripe en
-                mod.billing, "Comprar curso" arranca el checkout. Si NO existe
-                producto, el endpoint devuelve 404 BILLING_PRODUCT_NOT_FOUND y
-                BuyCourseButton muestra un mensaje claro al alumno (sin crash).
-              */}
-              <BuyCourseButton courseId={course.id} variant="secondary" size="lg" />
+              {course.externalPurchaseUrl ? (
+                // El curso se vende en una página externa: el CTA redirige allí.
+                // Tras el pago, esa página inscribe al alumno vía POST /api/v1/inscribe.
+                <Button asChild size="lg">
+                  <a href={course.externalPurchaseUrl} target="_blank" rel="noopener noreferrer">
+                    Comprar curso
+                  </a>
+                </Button>
+              ) : (
+                // Sin URL externa: si tu organización vinculó el curso a un producto
+                // Stripe en mod.billing, "Comprar curso" arranca el checkout. Si NO
+                // existe producto, el endpoint devuelve 404 BILLING_PRODUCT_NOT_FOUND y
+                // BuyCourseButton muestra un mensaje claro al alumno (sin crash).
+                <BuyCourseButton courseId={course.id} size="lg" />
+              )}
             </div>
             <form action={handleEnrollByCode} className="space-y-2 border-t border-border pt-5">
               <Label htmlFor="code">¿Tienes un código de invitación?</Label>

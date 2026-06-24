@@ -32,6 +32,8 @@ export const updateCourseSchema = z.object({
   estimatedMinutes: z.number().int().positive().nullable().optional(),
   category: z.string().max(60).nullable().optional(),
   status: courseStatusSchema.optional(),
+  /// URL de la página de ventas externa donde se compra el curso. null = limpiar.
+  externalPurchaseUrl: z.string().url().max(2048).nullable().optional(),
   /// UUID de la plantilla de certificado preferida. null = usar default del tenant.
   certificateTemplateId: z.string().uuid().nullable().optional(),
 });

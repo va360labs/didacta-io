@@ -451,6 +451,65 @@ export async function createPublishedCourseWithShortAnswerQuiz(args: {
   return { course: detail, ...quiz };
 }
 
+/** Crea una API key del tenant (admin). Devuelve el token en plano (única vez). */
+export async function createTenantApiKey(args: {
+  bearer: string;
+  name: string;
+  scopes?: string[];
+}): Promise<{ id: string; token: string; scopes: string[] }> {
+  return api('/api/v1/admin/api-keys', {
+    method: 'POST',
+    body: { name: args.name, scopes: args.scopes ?? ['enrollments:write'] },
+    bearer: args.bearer,
+  });
+}
+
+interface InscribeResponse {
+  userId: string;
+  userCreated: boolean;
+  enrollments: Array<{
+    courseId: string;
+    enrollmentId: string | null;
+    status: 'ACTIVE' | 'FAILED';
+    alreadyEnrolled: boolean;
+    error?: string;
+  }>;
+}
+
+/**
+ * Llama a `POST /api/v1/inscribe` autenticando con `Authorization: ApiKey <token>`
+ * (no Bearer). Replica lo que haría una página de ventas externa tras un pago.
+ */
+export async function inscribeViaApi(args: {
+  apiKey: string;
+  email: string;
+  name?: string;
+  courseIds: string[];
+}): Promise<InscribeResponse> {
+  const res = await fetch(`${API_URL}/api/v1/inscribe`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `ApiKey ${args.apiKey}`,
+    },
+    body: JSON.stringify({
+      email: args.email,
+      ...(args.name ? { name: args.name } : {}),
+      courseIds: args.courseIds,
+    }),
+  });
+  const text = await res.text();
+  const body = text ? (JSON.parse(text) as unknown) : null;
+  if (!res.ok) {
+    const message =
+      body && typeof body === 'object' && 'message' in body
+        ? String((body as { message: unknown }).message)
+        : res.statusText;
+    throw new Error(`POST /inscribe -> ${res.status}: ${message}`);
+  }
+  return body as InscribeResponse;
+}
+
 export async function adminTokenForBootstrap(tenantSlug: string): Promise<string> {
   const adminSeedEmail = process.env.E2E_ADMIN_EMAIL;
   const adminSeedPassword = process.env.E2E_ADMIN_PASSWORD;

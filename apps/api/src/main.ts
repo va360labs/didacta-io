@@ -122,6 +122,18 @@ async function bootstrap(): Promise<void> {
     .setDescription('API REST del LMS modular de VA360 LABS')
     .setVersion('v1')
     .addBearerAuth()
+    // Esquema para integradores externos: el header Authorization lleva
+    // `ApiKey lmsk_xxx` (clave creada por el admin en Administración → Claves API).
+    // Lo usa, p.ej., `POST /api/v1/inscribe`.
+    .addApiKey(
+      {
+        type: 'apiKey',
+        name: 'Authorization',
+        in: 'header',
+        description: 'Formato del valor: `ApiKey lmsk_xxx`',
+      },
+      'ApiKey',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
