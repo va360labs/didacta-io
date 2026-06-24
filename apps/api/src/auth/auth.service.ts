@@ -54,6 +54,8 @@ export interface AuthResult {
     tenantSlug: string;
     roles: string[];
     mfaEnabled: boolean;
+    /** True si la contraseña es temporal y debe cambiarse tras el login. */
+    mustChangePassword: boolean;
   };
 }
 
@@ -157,6 +159,7 @@ export class AuthService {
         tenantSlug: tenant.slug,
         roles,
         mfaEnabled: user.mfaEnabled,
+        mustChangePassword: user.mustChangePassword,
       },
     };
   }
@@ -287,6 +290,7 @@ export class AuthService {
         tenantSlug: tenant.slug,
         roles,
         mfaEnabled: user.mfaEnabled,
+        mustChangePassword: user.mustChangePassword,
       },
     };
   }

@@ -188,7 +188,9 @@ export class MeController {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: user.sub },
-        data: { passwordHash: newHash },
+        // Al fijar una contraseña propia se limpia el flag de contraseña
+        // temporal (p.ej. usuarios creados por `POST /api/v1/inscribe`).
+        data: { passwordHash: newHash, mustChangePassword: false },
       }),
       // Invalidar todas las sessions excepto la actual (no la podemos identificar
       // sin más metadata; aproximamos: cerramos las que NO coinciden con el JWT).

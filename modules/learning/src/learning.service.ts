@@ -99,6 +99,25 @@ export class LearningService {
   }
 
   /**
+   * Matriculación creada por un sistema externo (página de ventas de terceros)
+   * vía `POST /api/v1/inscribe` autenticado con API key. Source `API` la
+   * diferencia en audit y reporting comercial.
+   *
+   * Idempotente: si el alumno ya tiene enrollment ACTIVE (la pasarela reintenta
+   * el webhook de compra), `createEnrollment` lanza `AlreadyEnrolledError`, que
+   * el caller (`InscribeService`) captura como no-op.
+   */
+  async enrollFromApi(tenantId: string, userId: string, courseId: string) {
+    return this.createEnrollment({
+      tenantId,
+      actorId: userId,
+      userId,
+      courseId,
+      source: 'API',
+    });
+  }
+
+  /**
    * Pausa el enrollment de un alumno en un curso. Lo invoca el bridge de
    * mod.subscriptions cuando la suscripción entra en UNPAID (grace expirado).
    *
@@ -462,7 +481,7 @@ export class LearningService {
     actorId: string | null;
     userId: string;
     courseId: string;
-    source: 'ADMIN' | 'CODE' | 'INVITATION_LINK' | 'PURCHASE' | 'IMPORT' | 'SUBSCRIPTION';
+    source: 'ADMIN' | 'CODE' | 'INVITATION_LINK' | 'PURCHASE' | 'IMPORT' | 'SUBSCRIPTION' | 'API';
   }) {
     await this.requirePublishedCourse(params.tenantId, params.courseId);
 

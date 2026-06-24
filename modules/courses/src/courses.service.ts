@@ -81,6 +81,9 @@ export class CoursesService {
         ...(dto.featuredVideoUrl !== undefined ? { featuredVideoUrl: dto.featuredVideoUrl } : {}),
         ...(dto.estimatedMinutes !== undefined ? { estimatedMinutes: dto.estimatedMinutes } : {}),
         ...(dto.category !== undefined ? { category: dto.category } : {}),
+        ...(dto.externalPurchaseUrl !== undefined
+          ? { externalPurchaseUrl: dto.externalPurchaseUrl }
+          : {}),
         ...(dto.certificateTemplateId !== undefined
           ? { certificateTemplateId: dto.certificateTemplateId }
           : {}),

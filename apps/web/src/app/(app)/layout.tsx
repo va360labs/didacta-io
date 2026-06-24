@@ -23,8 +23,16 @@ import { CreateSpaceModal } from '@/components/create-space-modal';
  * provee navegación + bell de notificaciones. Esto evita refactorizar
  * cada page y permite aplicar el UI kit progresivamente.
  */
+/**
+ * Ruta de cambio de contraseña. El usuario con contraseña temporal
+ * (`mustChangePassword`) es forzado aquí; esta ruta queda exenta del redirect
+ * para no entrar en bucle.
+ */
+const CHANGE_PASSWORD_PATH = '/cuenta/seguridad';
+
 export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [session, setSession] = useState<StoredSession | null>(null);
 
   useEffect(() => {
@@ -33,8 +41,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       router.replace('/signin');
       return;
     }
+    // Contraseña temporal (p.ej. alta por `POST /inscribe`): forzamos el cambio
+    // antes de dejar usar el resto de la app. Al cambiarla, la pantalla de
+    // seguridad limpia la sesión y redirige a /signin → el nuevo login ya viene
+    // sin el flag, así que no hay bucle.
+    if (current.user.mustChangePassword && pathname !== CHANGE_PASSWORD_PATH) {
+      router.replace(CHANGE_PASSWORD_PATH);
+      return;
+    }
     setSession(current);
-  }, [router]);
+  }, [router, pathname]);
 
   if (!session) return null;
 
@@ -299,6 +315,7 @@ function buildGroups({
       { href: '/admin/scim', label: 'SCIM Provisioning', icon: 'users' },
       { href: '/admin/rate-limit', label: 'Límites API', icon: 'trending' },
       { href: '/admin/webhooks', label: 'Webhooks API', icon: 'package' },
+      { href: '/admin/api-keys', label: 'Claves API', icon: 'code' },
       { href: '/admin/dominios', label: 'Dominios propios', icon: 'building' },
     ],
   };

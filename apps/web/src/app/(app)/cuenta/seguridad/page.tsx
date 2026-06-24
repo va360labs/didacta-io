@@ -36,6 +36,9 @@ export default function SeguridadPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  // True si la contraseña actual es temporal (alta por inscripción externa):
+  // el shell redirige aquí y mostramos un aviso explicando que debe cambiarla.
+  const [mustChange, setMustChange] = useState(false);
 
   async function loadSessions() {
     const token = authStorage.getAccessToken();
@@ -50,6 +53,7 @@ export default function SeguridadPage() {
 
   useEffect(() => {
     void loadSessions();
+    setMustChange(authStorage.getSession()?.user.mustChangePassword ?? false);
   }, []);
 
   async function handleChangePassword(e: FormEvent) {
@@ -144,6 +148,16 @@ export default function SeguridadPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {mustChange ? (
+            <div
+              role="alert"
+              className="mb-4 rounded-lg border border-warning-200 bg-warning-50 p-3 text-sm text-warning-800"
+            >
+              Tu contraseña es temporal. Por seguridad, debes establecer una nueva antes de seguir
+              usando la plataforma. Introduce la contraseña temporal que recibiste por email como
+              «contraseña actual».
+            </div>
+          ) : null}
           <form onSubmit={handleChangePassword} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="currentPassword">Contraseña actual</Label>

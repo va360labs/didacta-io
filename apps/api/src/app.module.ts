@@ -7,6 +7,7 @@ import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { BrandingModule } from './branding/branding.module';
 import { HealthModule } from './health/health.module';
+import { InscribeModule } from './enrollment/inscribe.module';
 import { ApiLicenseModule } from './license/license.module';
 import { MarketplaceModule } from './marketplace/marketplace.module';
 import { AuditExportModule } from './modules/audit-export/audit-export.module';
@@ -82,6 +83,10 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     TenancyModule,
     AiModule,
     ModulesModule,
+    // Inscripción externa por API (`POST /api/v1/inscribe`). Va después de
+    // ModulesModule porque reusa ModuleRegistryService (mod.learning) y de
+    // AuthModule (JwtOrApiKeyGuard + creación de usuario + SMTP).
+    InscribeModule,
     // Quinto piloto License SDK — gate feat:reports.advanced_signed end-to-end.
     // Vivimos en módulo separado para acoplar `adm-zip` solo donde se usa.
     AuditExportModule,
