@@ -40,10 +40,89 @@ export class ApiHttpError extends Error implements ApiError {
   }
 }
 
+// Claves de almacenamiento (duplicadas de auth-storage.ts a propósito para no
+// acoplar el cliente HTTP a ese módulo — ver nota en readStoredSessionSafe).
+const ACCESS_KEY = 'didacta.access_token';
+const REFRESH_KEY = 'didacta.refresh_token';
+const SESSION_KEY = 'didacta.session';
+
+/**
+ * Promesa de refresco en vuelo, compartida entre todas las peticiones que
+ * reciban 401 a la vez para no disparar N refrescos en paralelo.
+ */
+let refreshInFlight: Promise<string | null> | null = null;
+
+function readToken(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function clearAuthAndRedirect(): void {
+  try {
+    localStorage.removeItem(ACCESS_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(ACCESS_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* almacenamiento no disponible */
+  }
+  if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/signin')) {
+    window.location.assign('/signin');
+  }
+}
+
+/**
+ * Intenta renovar el access token con el refresh token guardado. Devuelve el
+ * nuevo access token (y rota el refresh) o null si no hay refresh / falla.
+ * Coalesce: varias llamadas concurrentes comparten el mismo refresco.
+ */
+async function refreshAccessToken(): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      const refreshToken = readToken(REFRESH_KEY);
+      if (!refreshToken) return null;
+      try {
+        const res = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+        if (!res.ok) return null;
+        const data = (await res.json()) as {
+          tokens?: { accessToken?: string; refreshToken?: string };
+        };
+        const newAccess = data.tokens?.accessToken;
+        if (typeof newAccess !== 'string') return null;
+        try {
+          localStorage.setItem(ACCESS_KEY, newAccess);
+          if (typeof data.tokens?.refreshToken === 'string') {
+            localStorage.setItem(REFRESH_KEY, data.tokens.refreshToken);
+          }
+        } catch {
+          /* ignore */
+        }
+        return newAccess;
+      } catch {
+        return null;
+      }
+    })().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
 export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
   bearer?: string,
+  // Interno: marca el reintento tras un refresco para no entrar en bucle.
+  _isRetry = false,
 ): Promise<T> {
   const url = path.startsWith('http') ? path : `${API_URL}${path}`;
   const headers = new Headers(init.headers);
@@ -68,6 +147,27 @@ export async function apiFetch<T>(
       status: response.status,
       code: typeof payload.code === 'string' ? payload.code : undefined,
     });
+
+    // Sesión expirada: el access token (1h) caducó pero el refresh (30d) puede
+    // seguir vivo. Intentamos renovar y reintentar la petición UNA vez de forma
+    // transparente; si no hay refresh o también caducó, limpiamos y mandamos al
+    // login. No aplica a los propios endpoints de auth ni al reintento.
+    const isAuthEndpoint = path.includes('/auth/refresh') || path.includes('/auth/signin');
+    if (
+      response.status === 401 &&
+      typeof window !== 'undefined' &&
+      !_isRetry &&
+      !isAuthEndpoint &&
+      error.code !== 'mfa_required'
+    ) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        return apiFetch<T>(path, init, newToken, true);
+      }
+      clearAuthAndRedirect();
+      throw error;
+    }
+
     // Auto-redirect del cliente cuando el API rechaza con mfa_required
     // (LMS-109). Cualquier admin que abra una pantalla protegida con sesión
     // sin verificar acaba derivado al flujo MFA en lugar de ver un toast
@@ -93,7 +193,7 @@ export async function apiFetch<T>(
  */
 function readStoredSessionSafe(): { user?: { mfaEnabled?: boolean } } | null {
   try {
-    const raw = sessionStorage.getItem('didacta.session');
+    const raw = localStorage.getItem(SESSION_KEY) ?? sessionStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     return JSON.parse(raw) as { user?: { mfaEnabled?: boolean } };
   } catch {
