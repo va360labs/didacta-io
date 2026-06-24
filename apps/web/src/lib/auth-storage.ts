@@ -20,6 +20,13 @@ export interface StoredSession {
      * antes de introducir el flag.
      */
     mustChangePassword?: boolean;
+    /**
+     * ISO de cuándo completó el onboarding de primera vez, o `null` si aún no.
+     * El shell autenticado fuerza `/onboarding` mientras sea `null`. Opcional
+     * (`undefined`) para sesiones guardadas antes de introducir el flag — en
+     * ese caso NO se gatea (se asume completado) hasta el próximo login.
+     */
+    onboardingCompletedAt?: string | null;
   };
   mfaRequired: boolean;
 }

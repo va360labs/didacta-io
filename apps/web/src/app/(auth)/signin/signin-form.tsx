@@ -24,6 +24,7 @@ interface AuthResponse {
     roles: string[];
     mfaEnabled: boolean;
     mustChangePassword?: boolean;
+    onboardingCompletedAt?: string | null;
   };
 }
 
@@ -79,6 +80,9 @@ export function SignInForm() {
       invalidateCommunitySpacesCache();
       if (response.mfaRequired) {
         router.push(response.user.mfaEnabled ? '/mfa/verify' : '/mfa/setup');
+      } else if (response.user.onboardingCompletedAt === null) {
+        // Usuario que aún no completó el onboarding de primera vez.
+        router.push('/onboarding');
       } else {
         router.push('/');
       }

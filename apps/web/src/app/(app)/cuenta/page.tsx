@@ -11,10 +11,19 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { AvatarUpload } from '@/components/avatar-upload';
+import { NotificationMatrix, fullMatrix } from '@/components/notification-preferences-form';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { communityApi } from '@/modules/community';
-import { LOCALE_OPTIONS, meApi, TIMEZONE_OPTIONS, type UserProfile } from '@/lib/me';
+import {
+  LOCALE_OPTIONS,
+  meApi,
+  TIMEZONE_OPTIONS,
+  type NotificationPreference,
+  type UserProfile,
+} from '@/lib/me';
 
 function humanRole(role: string): string {
   switch (role) {
@@ -54,12 +63,12 @@ export default function CuentaPage() {
   const [timezone, setTimezone] = useState('UTC');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [documentId, setDocumentId] = useState('');
-  const [digestOptOut, setDigestOptOut] = useState(false);
-  const [digestPending, setDigestPending] = useState(false);
-  const [digestSaved, setDigestSaved] = useState(false);
-  // Si el módulo community está deshabilitado para el tenant, el endpoint
-  // devuelve 403 y ocultamos la card directamente (no tiene sentido
-  // mostrarle al usuario un toggle que no funciona).
+  const [bio, setBio] = useState('');
+  const [prefs, setPrefs] = useState<NotificationPreference[]>(fullMatrix([]));
+  const [prefsPending, setPrefsPending] = useState(false);
+  const [prefsSaved, setPrefsSaved] = useState(false);
+  // Si el módulo community está deshabilitado, getMyPreferences devuelve 403;
+  // en ese caso no sincronizamos la celda Comunidad×Email con el digest.
   const [digestAvailable, setDigestAvailable] = useState(true);
 
   async function reload() {
@@ -70,39 +79,57 @@ export default function CuentaPage() {
       const p = await meApi.getProfile(token);
       setProfile(p);
       setName(p.name ?? '');
+      setBio(p.bio ?? '');
       setLocale(p.locale);
       setTimezone(p.timezone);
       setAvatarUrl(p.avatarUrl ?? '');
       setDocumentId(p.documentId ?? '');
-      // Cargar preferencias en paralelo. Si community está deshabilitado en
-      // el tenant, el endpoint devuelve 403 y ocultamos la card.
+      // Matriz de preferencias de notificación (core).
+      let matrix = fullMatrix((await meApi.getNotificationPreferences(token)).preferences);
+      // Reconciliar Comunidad×Email con el digest del módulo community. Si está
+      // deshabilitado, el endpoint devuelve 403/404 y dejamos el default.
       try {
-        const prefs = await communityApi.getMyPreferences();
-        setDigestOptOut(prefs.digestOptOut);
+        const c = await communityApi.getMyPreferences();
+        matrix = matrix.map((m) =>
+          m.category === 'COMMUNITY' && m.channel === 'EMAIL'
+            ? { ...m, enabled: !c.digestOptOut }
+            : m,
+        );
         setDigestAvailable(true);
       } catch (e) {
         if (e instanceof ApiHttpError && (e.status === 403 || e.status === 404)) {
           setDigestAvailable(false);
         }
       }
+      setPrefs(matrix);
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar tu perfil.');
     }
   }
 
-  async function handleDigestToggle(next: boolean) {
-    setDigestPending(true);
-    setDigestSaved(false);
+  async function handleSavePrefs() {
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    setPrefsPending(true);
+    setPrefsSaved(false);
     try {
-      const r = await communityApi.updateMyPreferences({ digestOptOut: next });
-      setDigestOptOut(r.digestOptOut);
-      setDigestSaved(true);
-      setTimeout(() => setDigestSaved(false), 2500);
+      const res = await meApi.updateNotificationPreferences(token, prefs);
+      setPrefs(fullMatrix(res.preferences));
+      // Reconciliar el digest de community con la celda Comunidad×Email.
+      const communityEmail = prefs.find((p) => p.category === 'COMMUNITY' && p.channel === 'EMAIL');
+      if (communityEmail && digestAvailable) {
+        try {
+          await communityApi.updateMyPreferences({ digestOptOut: !communityEmail.enabled });
+        } catch {
+          /* community deshabilitado */
+        }
+      }
+      setPrefsSaved(true);
+      setTimeout(() => setPrefsSaved(false), 2500);
     } catch {
-      // Revertir en caso de fallo.
-      setDigestOptOut(!next);
+      // Dejamos el estado como está; el usuario puede reintentar.
     } finally {
-      setDigestPending(false);
+      setPrefsPending(false);
     }
   }
 
@@ -120,6 +147,7 @@ export default function CuentaPage() {
     try {
       await meApi.updateProfile(token, {
         name: name.trim(),
+        bio: bio.trim() === '' ? null : bio.trim(),
         locale,
         timezone,
         avatarUrl: avatarUrl.trim() || null,
@@ -256,14 +284,29 @@ export default function CuentaPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="avatarUrl">URL del avatar</Label>
-                  <Input
-                    id="avatarUrl"
-                    type="url"
-                    value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
-                    placeholder="https://… (deja vacío para usar tus iniciales)"
+                  <Label>Foto de perfil</Label>
+                  <AvatarUpload
+                    value={avatarUrl || null}
+                    onChange={(u) => setAvatarUrl(u ?? '')}
+                    name={name || null}
+                    email={profile.email}
                   />
+                  <p className="text-xs text-text-subtle">
+                    Los cambios de la foto se aplican al pulsar «Guardar cambios».
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="bio">Biografía</Label>
+                  <Textarea
+                    id="bio"
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    maxLength={280}
+                    rows={3}
+                    placeholder="Cuéntanos algo sobre ti (máx 280 caracteres)"
+                  />
+                  <p className="text-right text-xs text-text-subtle">{bio.length}/280</p>
                 </div>
 
                 <div className="space-y-1.5">
@@ -347,53 +390,42 @@ export default function CuentaPage() {
         </TabsContent>
 
         <TabsContent value="notificaciones" className="space-y-6">
-          {digestAvailable ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Notificaciones</CardTitle>
-                <CardDescription>
-                  Controla qué emails y avisos recibes de la plataforma. Los avisos críticos
-                  (seguridad, cuenta) se envían siempre.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <label className="flex items-start gap-3 rounded-lg border border-border-soft p-4 transition hover:border-border-strong">
-                  <input
-                    type="checkbox"
-                    className="mt-1 h-4 w-4 rounded border-border-strong"
-                    checked={!digestOptOut}
-                    disabled={digestPending}
-                    onChange={(e) => void handleDigestToggle(!e.target.checked)}
-                  />
-                  <span className="flex-1 space-y-1">
-                    <span className="block font-medium text-text">
-                      Resumen semanal de comunidad
-                    </span>
-                    <span className="block text-sm text-text-muted">
-                      Email cada lunes con tus menciones y respuestas de la semana. Si lo
-                      desactivas, no recibirás este resumen pero sigues viendo todo en{' '}
-                      <Link href="/comunidad" className="underline">
-                        Comunidad
-                      </Link>
-                      .
-                    </span>
-                    {digestSaved ? (
-                      <span className="block text-xs font-semibold text-success-700">
-                        ✓ Guardado
-                      </span>
-                    ) : null}
+          <Card>
+            <CardHeader>
+              <CardTitle>Notificaciones</CardTitle>
+              <CardDescription>
+                Elige por qué canal quieres recibir cada tipo de aviso. Los avisos críticos
+                (seguridad, cuenta) se envían siempre.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <NotificationMatrix value={prefs} onChange={setPrefs} disabled={prefsPending} />
+              {!digestAvailable ? (
+                <p className="text-xs text-text-subtle">
+                  La comunidad no está habilitada en tu organización todavía; la fila «Comunidad» no
+                  tendrá efecto hasta que se active.
+                </p>
+              ) : null}
+              <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
+                {prefsSaved ? (
+                  <span className="text-sm font-semibold text-success-700">
+                    ✓ Preferencias guardadas
                   </span>
-                </label>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="p-6 text-text-muted">
-                Tu organización no tiene la funcionalidad de comunidad habilitada todavía. Cuando se
-                active, vas a poder gestionar tus emails de resumen desde acá.
-              </CardContent>
-            </Card>
-          )}
+                ) : (
+                  <span className="text-sm text-text-subtle">
+                    Tus cambios se aplican al guardar.
+                  </span>
+                )}
+                <Button
+                  type="button"
+                  onClick={() => void handleSavePrefs()}
+                  disabled={prefsPending}
+                >
+                  {prefsPending ? 'Guardando…' : 'Guardar preferencias'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="seguridad" className="space-y-6">

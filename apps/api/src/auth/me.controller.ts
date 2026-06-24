@@ -10,8 +10,10 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Req,
   UnauthorizedException,
+  UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -31,13 +33,28 @@ const ALLOWED_LOCALES = ['es-ES', 'es-AR', 'en-US', 'pt-BR'] as const;
 
 const updateProfileSchema = z.object({
   name: z.string().min(1).max(120).optional(),
+  /**
+   * Biografía corta opcional (máx 280). `''` o `null` la borran; omitir la
+   * deja como estaba.
+   */
+  bio: z.union([z.string().max(280), z.literal(''), z.null()]).optional(),
   locale: z.enum(ALLOWED_LOCALES).optional(),
   timezone: z.string().min(1).max(64).optional(),
+  /**
+   * URL pública del avatar. Acepta una URL https absoluta (S3/CDN) o una ruta
+   * relativa de storage (`/api/v1/storage/file/...`, que es lo que devuelve el
+   * driver local-disk en dev). `null` borra el avatar. Omitir lo deja igual.
+   */
   avatarUrl: z
-    .string()
-    .url()
-    .refine((u) => u.startsWith('https://'), { message: 'Avatar URL debe usar https' })
-    .nullable()
+    .union([
+      z
+        .string()
+        .max(2048)
+        .refine((u) => u.startsWith('https://') || u.startsWith('/'), {
+          message: 'Avatar URL debe usar https o ser una ruta de storage.',
+        }),
+      z.null(),
+    ])
     .optional(),
   /**
    * DNI o NIE español. Se normaliza (mayúsculas, sin guiones/puntos) antes
@@ -66,6 +83,27 @@ const changePasswordSchema = z.object({
 });
 type ChangePasswordDto = z.infer<typeof changePasswordSchema>;
 
+/**
+ * Matriz de preferencias de notificación del usuario: categoría × canal.
+ * Solo EMAIL/IN_APP son configurables por el usuario (WEBHOOK es a nivel
+ * tenant). Si no existe fila para una combinación, el default es `true`.
+ */
+const PREF_CATEGORIES = ['COMMUNITY', 'LEARNING', 'ASSESSMENTS', 'SYSTEM'] as const;
+const PREF_CHANNELS = ['EMAIL', 'IN_APP'] as const;
+
+const notificationPreferencesSchema = z.object({
+  preferences: z
+    .array(
+      z.object({
+        category: z.enum(PREF_CATEGORIES),
+        channel: z.enum(PREF_CHANNELS),
+        enabled: z.boolean(),
+      }),
+    )
+    .max(PREF_CATEGORIES.length * PREF_CHANNELS.length),
+});
+type NotificationPreferencesDto = z.infer<typeof notificationPreferencesSchema>;
+
 @ApiTags('Me')
 @ApiBearerAuth()
 @Controller('me')
@@ -91,6 +129,7 @@ export class MeController {
       id: dbUser.id,
       email: dbUser.email,
       name: dbUser.name,
+      bio: dbUser.bio,
       avatarUrl: dbUser.avatarUrl,
       locale: dbUser.locale,
       timezone: dbUser.timezone,
@@ -99,6 +138,7 @@ export class MeController {
       emailVerified: dbUser.emailVerified,
       createdAt: dbUser.createdAt.toISOString(),
       lastLoginAt: dbUser.lastLoginAt?.toISOString() ?? null,
+      onboardingCompletedAt: dbUser.onboardingCompletedAt?.toISOString() ?? null,
       roles: dbUser.roles.map((r) => r.role.name),
     };
   }
@@ -119,11 +159,15 @@ export class MeController {
         : dto.documentId === '' || dto.documentId === null
           ? null
           : dto.documentId;
+    // `''` borra la bio (→ null); cualquier otro string se guarda tal cual.
+    const bioValue =
+      dto.bio === undefined ? undefined : dto.bio === '' || dto.bio === null ? null : dto.bio;
     try {
       const updated = await this.prisma.user.update({
         where: { id: user.sub },
         data: {
           ...(dto.name !== undefined ? { name: dto.name } : {}),
+          ...(bioValue !== undefined ? { bio: bioValue } : {}),
           ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
           ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
           ...(dto.avatarUrl !== undefined ? { avatarUrl: dto.avatarUrl } : {}),
@@ -145,6 +189,7 @@ export class MeController {
         id: updated.id,
         email: updated.email,
         name: updated.name,
+        bio: updated.bio,
         avatarUrl: updated.avatarUrl,
         locale: updated.locale,
         timezone: updated.timezone,
@@ -158,6 +203,163 @@ export class MeController {
       }
       throw e;
     }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Onboarding de primera vez
+  // ──────────────────────────────────────────────────────────────────────────
+
+  @Get('onboarding/status')
+  @MfaExempt()
+  @ApiOperation({ summary: 'Estado del onboarding (completado + campos obligatorios que faltan).' })
+  async onboardingStatus(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    const dbUser = await this.prisma.user.findUnique({ where: { id: user.sub } });
+    if (!dbUser) throw new UnauthorizedException();
+    return {
+      completed: dbUser.onboardingCompletedAt !== null,
+      completedAt: dbUser.onboardingCompletedAt?.toISOString() ?? null,
+      missing: this.missingOnboardingFields(dbUser),
+    };
+  }
+
+  @Post('onboarding/complete')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Marca el onboarding como completado. Requiere nombre y avatar. Idempotente (solo null → fecha).',
+  })
+  async completeOnboarding(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    const dbUser = await this.prisma.user.findUnique({ where: { id: user.sub } });
+    if (!dbUser) throw new UnauthorizedException();
+
+    // Idempotente: si ya estaba completado, no re-audita ni cambia el timestamp.
+    if (dbUser.onboardingCompletedAt) {
+      return {
+        ok: true,
+        alreadyCompleted: true,
+        onboardingCompletedAt: dbUser.onboardingCompletedAt.toISOString(),
+      };
+    }
+
+    const missing = this.missingOnboardingFields(dbUser);
+    if (missing.length > 0) {
+      throw new UnprocessableEntityException({
+        message: 'Faltan datos obligatorios para completar el onboarding.',
+        missing,
+      });
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: user.sub },
+      data: { onboardingCompletedAt: new Date() },
+    });
+    const ctx = extractClientContext(req);
+    await this.auditLog.record({
+      tenantId: user.tenantId,
+      actorId: user.sub,
+      action: 'user.onboarding.completed',
+      resourceType: 'user',
+      resourceId: user.sub,
+      metadata: {},
+      ip: ctx.ip ?? undefined,
+      userAgent: ctx.userAgent ?? undefined,
+    });
+    return { ok: true, onboardingCompletedAt: updated.onboardingCompletedAt!.toISOString() };
+  }
+
+  private missingOnboardingFields(dbUser: {
+    name: string | null;
+    avatarUrl: string | null;
+  }): string[] {
+    const missing: string[] = [];
+    if (!dbUser.name || dbUser.name.trim() === '') missing.push('name');
+    if (!dbUser.avatarUrl) missing.push('avatar');
+    return missing;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Preferencias de notificación (matriz categoría × canal)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  @Get('notification-preferences')
+  @MfaExempt()
+  @ApiOperation({ summary: 'Matriz de preferencias de notificación del usuario.' })
+  async getNotificationPreferences(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    const rows = await this.prisma.userNotificationPreference.findMany({
+      where: { userId: user.sub },
+    });
+    return { preferences: this.buildPreferenceMatrix(rows) };
+  }
+
+  @Put('notification-preferences')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Actualiza (upsert batch) las preferencias de notificación.' })
+  async updateNotificationPreferences(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(notificationPreferencesSchema)) dto: NotificationPreferencesDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    await this.prisma.$transaction(
+      dto.preferences.map((p) =>
+        this.prisma.userNotificationPreference.upsert({
+          where: {
+            tenantId_userId_category_channel: {
+              tenantId: user.tenantId,
+              userId: user.sub,
+              category: p.category,
+              channel: p.channel,
+            },
+          },
+          create: {
+            tenantId: user.tenantId,
+            userId: user.sub,
+            category: p.category,
+            channel: p.channel,
+            enabled: p.enabled,
+          },
+          update: { enabled: p.enabled },
+        }),
+      ),
+    );
+    const ctx = extractClientContext(req);
+    await this.auditLog.record({
+      tenantId: user.tenantId,
+      actorId: user.sub,
+      action: 'user.notification_preferences.updated',
+      resourceType: 'user',
+      resourceId: user.sub,
+      metadata: { count: dto.preferences.length },
+      ip: ctx.ip ?? undefined,
+      userAgent: ctx.userAgent ?? undefined,
+    });
+    const rows = await this.prisma.userNotificationPreference.findMany({
+      where: { userId: user.sub },
+    });
+    return { preferences: this.buildPreferenceMatrix(rows) };
+  }
+
+  /**
+   * Matriz completa categoría × canal, rellenando con `true` las combinaciones
+   * sin fila persistida (default = activado).
+   */
+  private buildPreferenceMatrix(
+    rows: { category: string; channel: string; enabled: boolean }[],
+  ): { category: string; channel: string; enabled: boolean }[] {
+    const byKey = new Map(rows.map((r) => [`${r.category}:${r.channel}`, r.enabled]));
+    const out: { category: string; channel: string; enabled: boolean }[] = [];
+    for (const category of PREF_CATEGORIES) {
+      for (const channel of PREF_CHANNELS) {
+        out.push({ category, channel, enabled: byKey.get(`${category}:${channel}`) ?? true });
+      }
+    }
+    return out;
   }
 
   @Post('security/password')

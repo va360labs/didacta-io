@@ -6,6 +6,8 @@ export interface UserProfile {
   id: string;
   email: string;
   name: string | null;
+  /** Biografía corta opcional (máx 280). NULL si no la declaró. */
+  bio: string | null;
   avatarUrl: string | null;
   locale: string;
   timezone: string;
@@ -15,16 +17,36 @@ export interface UserProfile {
   emailVerified: boolean;
   createdAt: string;
   lastLoginAt: string | null;
+  /** ISO de cuándo completó el onboarding, o NULL si aún no. */
+  onboardingCompletedAt: string | null;
   roles: string[];
 }
 
 export interface UpdateProfileInput {
   name?: string;
+  /** Pasar `null` o `''` para borrar la bio. */
+  bio?: string | null;
   locale?: string;
   timezone?: string;
   avatarUrl?: string | null;
   /** Pasar `null` o `''` para borrar el documento. */
   documentId?: string | null;
+}
+
+export type NotificationPrefCategory = 'COMMUNITY' | 'LEARNING' | 'ASSESSMENTS' | 'SYSTEM';
+export type NotificationPrefChannel = 'EMAIL' | 'IN_APP';
+
+export interface NotificationPreference {
+  category: NotificationPrefCategory;
+  channel: NotificationPrefChannel;
+  enabled: boolean;
+}
+
+export interface OnboardingStatus {
+  completed: boolean;
+  completedAt: string | null;
+  /** Campos obligatorios pendientes: 'name' | 'avatar'. */
+  missing: string[];
 }
 
 export interface ActiveSession {
@@ -85,6 +107,41 @@ export const meApi = {
     return apiFetch<{ activeModules: string[]; enabledCapabilities: string[] }>(
       '/api/v1/me/modules',
       { method: 'GET' },
+      bearer,
+    );
+  },
+
+  // ── Onboarding ─────────────────────────────────────────────────────────────
+  async getOnboardingStatus(bearer: string): Promise<OnboardingStatus> {
+    return apiFetch<OnboardingStatus>('/api/v1/me/onboarding/status', { method: 'GET' }, bearer);
+  },
+  async completeOnboarding(
+    bearer: string,
+  ): Promise<{ ok: boolean; onboardingCompletedAt: string; alreadyCompleted?: boolean }> {
+    return apiFetch<{ ok: boolean; onboardingCompletedAt: string; alreadyCompleted?: boolean }>(
+      '/api/v1/me/onboarding/complete',
+      { method: 'POST' },
+      bearer,
+    );
+  },
+
+  // ── Preferencias de notificación ────────────────────────────────────────────
+  async getNotificationPreferences(
+    bearer: string,
+  ): Promise<{ preferences: NotificationPreference[] }> {
+    return apiFetch<{ preferences: NotificationPreference[] }>(
+      '/api/v1/me/notification-preferences',
+      { method: 'GET' },
+      bearer,
+    );
+  },
+  async updateNotificationPreferences(
+    bearer: string,
+    preferences: NotificationPreference[],
+  ): Promise<{ preferences: NotificationPreference[] }> {
+    return apiFetch<{ preferences: NotificationPreference[] }>(
+      '/api/v1/me/notification-preferences',
+      { method: 'PUT', body: JSON.stringify({ preferences }) },
       bearer,
     );
   },

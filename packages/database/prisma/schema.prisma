@@ -170,6 +170,9 @@ model User {
   email            String
   emailVerified    Boolean    @default(false) @map("email_verified")
   name             String?
+  /// Biografía corta del usuario, opcional. Se captura en el onboarding y se
+  /// edita en /cuenta. Máx 280 caracteres.
+  bio              String?    @db.VarChar(280)
   passwordHash     String?    @map("password_hash")
   mfaSecret        String?    @map("mfa_secret")
   mfaEnabled       Boolean    @default(false) @map("mfa_enabled")
@@ -201,6 +204,11 @@ model User {
   updatedAt        DateTime   @updatedAt @map("updated_at")
   deletedAt        DateTime?  @map("deleted_at")
   lastLoginAt      DateTime?  @map("last_login_at")
+  /// Timestamp en que el usuario completó el onboarding de primera vez.
+  /// Null = aún no lo completó → el shell lo fuerza a /onboarding antes de
+  /// dejarlo entrar. Backfill de usuarios previos = created_at (no se les
+  /// interrumpe). Solo `null` → fecha; nunca vuelve a null.
+  onboardingCompletedAt DateTime? @map("onboarding_completed_at")
 
   tenant   Tenant     @relation(fields: [tenantId], references: [id])
   sessions Session[]
@@ -306,6 +314,38 @@ model ApiKey {
   @@index([tenantId])
   @@index([userId])
   @@map("api_key")
+}
+
+// ============================================================================
+// NOTIFICATION PREFERENCES (core) — matriz canal × categoría por usuario.
+// Una fila por combinación (categoría, canal). Si no hay fila, el default es
+// "activado" (lo resuelve la API). El usuario las configura en el onboarding y
+// en /cuenta. El módulo community conserva su propio `digestOptOut`; el
+// frontend reconcilia la celda COMMUNITY×EMAIL con esa preferencia, sin
+// acoplamiento cross-módulo en backend. Reutiliza el enum core
+// NotificationChannel (solo EMAIL/IN_APP son configurables; WEBHOOK es a nivel
+// tenant). Tabla con tenant_id → hereda la política RLS genérica de rls.sql.
+// ============================================================================
+model UserNotificationPreference {
+  id        String                         @id @default(uuid()) @db.Uuid
+  tenantId  String                         @map("tenant_id") @db.Uuid
+  userId    String                         @map("user_id") @db.Uuid
+  category  NotificationPreferenceCategory
+  channel   NotificationChannel
+  enabled   Boolean                        @default(true)
+  createdAt DateTime                       @default(now()) @map("created_at")
+  updatedAt DateTime                       @updatedAt @map("updated_at")
+
+  @@unique([tenantId, userId, category, channel], map: "user_notification_preference_unique")
+  @@index([tenantId, userId])
+  @@map("user_notification_preference")
+}
+
+enum NotificationPreferenceCategory {
+  COMMUNITY
+  LEARNING
+  ASSESSMENTS
+  SYSTEM
 }
 
 // ============================================================================

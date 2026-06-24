@@ -56,6 +56,12 @@ export interface AuthResult {
     mfaEnabled: boolean;
     /** True si la contraseña es temporal y debe cambiarse tras el login. */
     mustChangePassword: boolean;
+    /**
+     * Timestamp ISO en que el usuario completó el onboarding de primera vez,
+     * o null si aún no lo completó. El shell autenticado lo usa para forzar
+     * /onboarding antes de dejar entrar.
+     */
+    onboardingCompletedAt: string | null;
   };
 }
 
@@ -160,6 +166,7 @@ export class AuthService {
         roles,
         mfaEnabled: user.mfaEnabled,
         mustChangePassword: user.mustChangePassword,
+        onboardingCompletedAt: user.onboardingCompletedAt?.toISOString() ?? null,
       },
     };
   }
@@ -291,6 +298,7 @@ export class AuthService {
         roles,
         mfaEnabled: user.mfaEnabled,
         mustChangePassword: user.mustChangePassword,
+        onboardingCompletedAt: user.onboardingCompletedAt?.toISOString() ?? null,
       },
     };
   }

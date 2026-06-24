@@ -49,6 +49,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       router.replace(CHANGE_PASSWORD_PATH);
       return;
     }
+    // Onboarding de primera vez: mientras `onboardingCompletedAt` sea null,
+    // forzamos el asistente `/onboarding` (ruta fuera del shell, sin sidebar).
+    // `undefined` = sesión guardada antes de introducir el flag → no gateamos
+    // (se asume completado) hasta el próximo login, que ya trae el valor real.
+    if (current.user.onboardingCompletedAt === null) {
+      router.replace('/onboarding');
+      return;
+    }
     setSession(current);
   }, [router, pathname]);
 
