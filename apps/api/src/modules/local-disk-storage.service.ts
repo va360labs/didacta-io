@@ -55,7 +55,16 @@ export class LocalDiskStorageService implements StorageService {
 
   async getSignedUrl(key: string): Promise<string> {
     const safe = this.sanitize(key);
-    return `/storage/${safe}`;
+    // Servimos los ficheros locales por el API (`StorageFileController`), que
+    // el reverse-proxy alcanza vía el rewrite `/api/*`. Devolvemos URL absoluta
+    // cuando conocemos el host público (NEXT_PUBLIC_DEV_HOST / PUBLIC_BASE_URL)
+    // para que pase la validación `z.url()` y sea cargable en `<img src>`; si no,
+    // ruta relativa (también la sirve el mismo origin).
+    const path = `/api/v1/storage/file/${safe}`;
+    const base =
+      process.env['PUBLIC_BASE_URL'] ||
+      (process.env['NEXT_PUBLIC_DEV_HOST'] ? `https://${process.env['NEXT_PUBLIC_DEV_HOST']}` : '');
+    return base ? `${base.replace(/\/+$/, '')}${path}` : path;
   }
 
   private sanitize(key: string): string {

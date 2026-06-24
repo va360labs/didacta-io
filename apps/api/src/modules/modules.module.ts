@@ -27,6 +27,7 @@ import { OutboxQueueService } from './outbox-queue.service';
 import { OutboxRecoveryWorker } from './outbox-recovery.worker';
 import { ScormLearningBridge } from './scorm-learning.bridge';
 import { StorageController } from './storage.controller';
+import { StorageFileController } from './storage-file.controller';
 import { TenantModulesService } from './tenant-modules.service';
 import { TenantModulesErrorFilter } from './tenant-modules-error.filter';
 import { EventsController } from './events.controller';
@@ -67,6 +68,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     ThemingController,
     AdminSystemController,
     StorageController,
+    StorageFileController,
     AiProvidersController,
     // GET /me/modules — sidebar gating UI (módulos activos + capabilities EE).
     MeModulesController,
