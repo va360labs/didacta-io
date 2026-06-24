@@ -10,6 +10,7 @@ import {
   parseYouTubeStartSeconds,
   youTubeEmbedUrl,
 } from '@/lib/video';
+import { useBunnyWatch, type WatchReport } from '@/lib/use-bunny-watch';
 
 interface Props {
   url: string;
@@ -23,6 +24,13 @@ interface Props {
   resumeAt?: number;
   /** Oculta la lista de recursos aunque `resources` traiga contenido. */
   hideResources?: boolean;
+  /**
+   * Reporte de visionado REAL. Hoy solo se mide en Bunny Stream (vía Player.js);
+   * en otros proveedores no se invoca. Si no se pasa, no se mide nada.
+   */
+  onWatch?: (report: WatchReport) => void;
+  /** Habilita/pausa la medición (p.ej. se apaga al completar la lección). */
+  watchEnabled?: boolean;
 }
 
 /**
@@ -32,14 +40,32 @@ interface Props {
  * sitio; en iframes (YouTube/Bunny) re-monta el embed arrancando en ese
  * segundo con autoplay.
  */
-export function VideoEmbed({ url, title, resources, resumeAt = 0, hideResources }: Props) {
+export function VideoEmbed({
+  url,
+  title,
+  resources,
+  resumeAt = 0,
+  hideResources,
+  onWatch,
+  watchEnabled = true,
+}: Props) {
   // `seek` cambia al pulsar un capítulo; `nonce` fuerza el re-mount del iframe.
   const [seek, setSeek] = useState<{ seconds: number; nonce: number } | null>(null);
   const nonceRef = useRef(0);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const bunnyIframeRef = useRef<HTMLIFrameElement>(null);
 
   const bunny = parseBunny(url);
   const ytId = bunny ? null : parseYouTubeId(url);
+
+  // Medición de visionado real (solo Bunny por ahora). El hook no hace nada si
+  // no hay callback, está deshabilitado o no es un iframe de Bunny.
+  useBunnyWatch({
+    iframeRef: bunnyIframeRef,
+    onReport: onWatch ?? (() => {}),
+    enabled: Boolean(bunny && onWatch && watchEnabled),
+    remountKey: seek?.nonce ?? 0,
+  });
 
   function handleSeek(seconds: number) {
     const v = videoRef.current;
@@ -67,6 +93,7 @@ export function VideoEmbed({ url, title, resources, resumeAt = 0, hideResources 
       <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-black">
         <iframe
           key={seek?.nonce ?? 'init'}
+          ref={bunnyIframeRef}
           src={bunnyEmbedUrl(bunny, { startSeconds: seek?.seconds, autoplay: seek != null })}
           title={title}
           loading="lazy"

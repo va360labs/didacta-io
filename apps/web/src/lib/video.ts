@@ -216,3 +216,76 @@ export function parseResources(text: string): ResourceLine[] {
   }
   return lines;
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Medición de tiempo de visionado REAL
+//
+// El reproductor de Bunny es un iframe cross-origin: la página host no recibe
+// los eventos nativos del vídeo. Vía el protocolo Player.js (postMessage) sí
+// podemos leer la posición de reproducción (`timeupdate`) y, con estos
+// helpers, acumular solo los segundos efectivamente reproducidos —
+// descartando pausas (no llegan eventos) y saltos/seeks (delta grande). Es la
+// base fiable para un mínimo de visionado por lección.
+// ──────────────────────────────────────────────────────────────────────────
+
+export interface WatchState {
+  /** Última posición observada (segundos), o null si se cortó la continuidad. */
+  lastSeconds: number | null;
+  /** Segundos efectivamente reproducidos (acumulado desde el inicio). */
+  watchedSeconds: number;
+  /** Posición máxima alcanzada en el vídeo (segundos). */
+  maxPositionSeconds: number;
+}
+
+export function initWatchState(): WatchState {
+  return { lastSeconds: null, watchedSeconds: 0, maxPositionSeconds: 0 };
+}
+
+/**
+ * Procesa una posición de reproducción (`timeupdate`). Suma al tiempo visto
+ * solo el avance "natural" (delta positivo y ≤ `maxStepSeconds`); los saltos
+ * hacia delante y los retrocesos no cuentan como visionado. Actualiza la
+ * posición máxima alcanzada.
+ *
+ * `maxStepSeconds` debe ser algo mayor que el intervalo entre `timeupdate`
+ * (Player.js los emite varias veces por segundo) para tolerar lag sin contar
+ * un seek como visionado. Default 1.5s.
+ */
+export function advanceWatch(
+  state: WatchState,
+  currentSeconds: number,
+  opts: { maxStepSeconds?: number } = {},
+): WatchState {
+  const maxStep = opts.maxStepSeconds ?? 1.5;
+  let watchedSeconds = state.watchedSeconds;
+  if (state.lastSeconds !== null) {
+    const delta = currentSeconds - state.lastSeconds;
+    if (delta > 0 && delta <= maxStep) {
+      watchedSeconds += delta;
+    }
+  }
+  return {
+    lastSeconds: currentSeconds,
+    watchedSeconds,
+    maxPositionSeconds: Math.max(state.maxPositionSeconds, currentSeconds),
+  };
+}
+
+/**
+ * Corta la continuidad de medición (tras pausa, seek o cambio de pestaña): el
+ * próximo `advanceWatch` no contará el salto desde la última posición.
+ */
+export function breakWatchContinuity(state: WatchState): WatchState {
+  return { ...state, lastSeconds: null };
+}
+
+/**
+ * Porcentaje del vídeo cubierto: segundos reproducidos respecto de la
+ * duración, acotado a 0-100. Mide cobertura real (no es "gameable" con un seek
+ * al final, porque los saltos no suman). Devuelve 0 si la duración no es válida.
+ */
+export function watchedPercent(watchedSeconds: number, durationSeconds: number): number {
+  if (!durationSeconds || durationSeconds <= 0) return 0;
+  const pct = (watchedSeconds / durationSeconds) * 100;
+  return Math.max(0, Math.min(100, Math.round(pct)));
+}
