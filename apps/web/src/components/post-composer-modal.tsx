@@ -16,6 +16,20 @@ function initials(name: string | null | undefined): string {
     .toUpperCase();
 }
 
+interface AttachmentImage {
+  id: string;
+  url: string;
+  name: string;
+  previewUrl: string;
+}
+
+interface AttachmentFile {
+  id: string;
+  url: string;
+  name: string;
+  size: number;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -38,6 +52,8 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
   const [uploading, setUploading] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [images, setImages] = useState<AttachmentImage[]>([]);
+  const [files, setFiles] = useState<AttachmentFile[]>([]);
 
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -53,6 +69,8 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
       setTagInput('');
       setError(null);
       setEmojiPickerOpen(false);
+      setImages([]);
+      setFiles([]);
       setTimeout(() => titleRef.current?.focus(), 50);
     }
   }, [open, spaceSlug]);
@@ -142,14 +160,24 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
   }
 
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const selectedFiles = Array.from(e.target.files ?? []);
     e.target.value = '';
+    if (!selectedFiles.length) return;
+    if (images.length + selectedFiles.length > 10) {
+      setError('Máximo 10 imágenes por publicación.');
+      return;
+    }
     setUploading(true);
     setError(null);
     try {
-      const url = await uploadCommunityImage(file);
-      insertAtCursor(`![${file.name}](${url})`);
+      for (const file of selectedFiles) {
+        const previewUrl = URL.createObjectURL(file);
+        const url = await uploadCommunityImage(file);
+        setImages((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), url, name: file.name, previewUrl },
+        ]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al subir la imagen.');
     } finally {
@@ -161,11 +189,15 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
+    if (files.length >= 5) {
+      setError('Máximo 5 archivos por publicación.');
+      return;
+    }
     setUploading(true);
     setError(null);
     try {
       const { url, name } = await uploadCommunityFile(file);
-      insertAtCursor(`[${name}](${url})`);
+      setFiles((prev) => [...prev, { id: crypto.randomUUID(), url, name, size: file.size }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al subir el archivo.');
     } finally {
@@ -179,7 +211,15 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
     setError(null);
     try {
       const allTags = [...new Set([selectedSpace, ...tags])];
-      await communityApi.createPost({ title: title.trim(), body: body.trim(), tags: allTags });
+      let finalBody = body.trim();
+      if (images.length > 0 || files.length > 0) {
+        const attachments = {
+          images: images.map((img) => ({ url: img.url, name: img.name })),
+          files: files.map((f) => ({ url: f.url, name: f.name, size: f.size })),
+        };
+        finalBody += `\n\n<!--didacta-attachments:${JSON.stringify(attachments)}-->`;
+      }
+      await communityApi.createPost({ title: title.trim(), body: finalBody, tags: allTags });
       onSuccess();
       onClose();
     } catch (err) {
@@ -196,15 +236,13 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* Overlay */}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
 
-      {/* Modal */}
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Nueva publicación"
-        className="relative z-10 w-full max-w-2xl rounded-2xl bg-white shadow-2xl"
+        className="relative z-10 w-full max-w-2xl rounded-2xl bg-white shadow-2xl max-h-[90vh] overflow-y-auto"
       >
         {/* Header */}
         <div className="flex items-center gap-3 px-5 pt-5 pb-0">
@@ -213,8 +251,6 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
           </div>
           <div className="flex-1">
             <p className="text-sm font-semibold text-[#0D1B2A]">{userName}</p>
-
-            {/* Space selector */}
             <div className="relative mt-0.5 inline-block">
               <button
                 type="button"
@@ -235,7 +271,6 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
                   <path d="m6 9 6 6 6-6" />
                 </svg>
               </button>
-
               {spaceOpen && (
                 <div className="absolute top-full left-0 mt-1 w-52 rounded-xl border border-[#E2E8F0] bg-white shadow-lg z-20">
                   {spaces.map((s) => (
@@ -256,8 +291,6 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
               )}
             </div>
           </div>
-
-          {/* Close */}
           <button
             type="button"
             onClick={onClose}
@@ -278,7 +311,6 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
 
         {/* Body */}
         <div className="px-5 pt-4 space-y-3">
-          {/* Título */}
           <input
             ref={titleRef}
             type="text"
@@ -288,8 +320,6 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
             maxLength={200}
             className="w-full border-none bg-transparent text-2xl font-bold text-[#0D1B2A] placeholder:text-[#CBD5E1] focus:outline-none"
           />
-
-          {/* Cuerpo */}
           <textarea
             ref={bodyRef}
             value={body}
@@ -299,6 +329,67 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
             maxLength={10000}
             className="w-full resize-none border-none bg-transparent text-[15px] leading-relaxed text-[#374151] placeholder:text-[#CBD5E1] focus:outline-none"
           />
+
+          {/* Previsualización de imágenes */}
+          {images.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {images.map((img) => (
+                <div key={img.id} className="relative group">
+                  <img
+                    src={img.previewUrl}
+                    alt={img.name}
+                    className="h-20 w-20 rounded-lg object-cover border border-[#E2E8F0]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setImages((prev) => prev.filter((i) => i.id !== img.id))}
+                    className="absolute -top-1.5 -right-1.5 grid h-5 w-5 place-items-center rounded-full bg-[#0D1B2A] text-white opacity-0 group-hover:opacity-100 transition-opacity text-xs leading-none"
+                    title="Eliminar imagen"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              {uploading && (
+                <div className="h-20 w-20 rounded-lg border border-dashed border-[#CBD5E1] flex items-center justify-center bg-[#F8FAFC]">
+                  <span className="text-xs text-[#94A3B8]">...</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Archivos adjuntos */}
+          {files.length > 0 && (
+            <div className="flex flex-col gap-1.5 pt-1">
+              {files.map((f) => (
+                <div
+                  key={f.id}
+                  className="flex items-center gap-2 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] px-3 py-2"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#64748B"
+                    strokeWidth="2"
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                  <span className="flex-1 text-xs text-[#374151] truncate">{f.name}</span>
+                  <span className="text-xs text-[#94A3B8]">{(f.size / 1024).toFixed(0)} KB</span>
+                  <button
+                    type="button"
+                    onClick={() => setFiles((prev) => prev.filter((x) => x.id !== f.id))}
+                    className="text-[#94A3B8] hover:text-[#374151] transition-colors text-sm leading-none"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Tags */}
           <div className="flex flex-wrap items-center gap-2 min-h-8">
@@ -387,12 +478,12 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
 
           <div className="mx-1 h-5 w-px bg-[#E2E8F0]" />
 
-          {/* Imagen */}
+          {/* Imagen — múltiple */}
           <button
             type="button"
-            title="Imagen"
+            title="Imágenes"
             onClick={() => imageInputRef.current?.click()}
-            disabled={uploading || submitting}
+            disabled={uploading || submitting || images.length >= 10}
             className="grid h-8 w-8 place-items-center rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0D1B2A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <svg
@@ -414,7 +505,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
             type="button"
             title="Adjunto"
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || submitting}
+            disabled={uploading || submitting || files.length >= 5}
             className="grid h-8 w-8 place-items-center rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0D1B2A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <svg
@@ -429,7 +520,6 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
             </svg>
           </button>
 
-          {/* Encuesta — requiere migración DB */}
           <button
             type="button"
             title="Encuesta (próximamente)"
@@ -483,11 +573,12 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
           </div>
         </div>
 
-        {/* Hidden file inputs */}
+        {/* Hidden inputs */}
         <input
           ref={imageInputRef}
           type="file"
           accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+          multiple
           className="hidden"
           onChange={handleImageSelect}
         />
@@ -518,7 +609,6 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
             </svg>
             Visible para toda la comunidad
           </p>
-
           <div className="flex items-center gap-3">
             {uploading && <p className="text-xs text-[#64748B]">Subiendo…</p>}
             {error && <p className="text-xs text-red-500">{error}</p>}

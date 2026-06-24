@@ -303,9 +303,18 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
       >
         {post.title}
       </h1>
-      <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-[#374151]">
-        <BodyWithMentions body={post.body} />
-      </p>
+      {(() => {
+        const { cleanBody, images, files } = parseBodyAttachments(post.body);
+        return (
+          <>
+            <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-[#374151]">
+              <BodyWithMentions body={cleanBody} />
+            </p>
+            {images.length > 0 && <ImageGallery images={images} />}
+            {files.length > 0 && <FileList files={files} />}
+          </>
+        );
+      })()}
 
       {/* Reactions + mod actions */}
       <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -470,6 +479,240 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
     </div>
   );
 }
+
+// ── Attachment parsing ────────────────────────────────────────────────────────
+
+interface AttachmentImage {
+  url: string;
+  name: string;
+}
+interface AttachmentFile {
+  url: string;
+  name: string;
+  size?: number;
+}
+
+function parseBodyAttachments(body: string): {
+  cleanBody: string;
+  images: AttachmentImage[];
+  files: AttachmentFile[];
+} {
+  const marker = '<!--didacta-attachments:';
+  const idx = body.indexOf(marker);
+  if (idx === -1) return { cleanBody: body, images: [], files: [] };
+  const jsonStart = idx + marker.length;
+  const jsonEnd = body.indexOf('-->', jsonStart);
+  if (jsonEnd === -1) return { cleanBody: body, images: [], files: [] };
+  try {
+    const raw = JSON.parse(body.slice(jsonStart, jsonEnd)) as {
+      images?: AttachmentImage[];
+      files?: AttachmentFile[];
+    };
+    return {
+      cleanBody: body.slice(0, idx).trimEnd(),
+      images: raw.images ?? [],
+      files: raw.files ?? [],
+    };
+  } catch {
+    return { cleanBody: body, images: [], files: [] };
+  }
+}
+
+// ── Image gallery + lightbox ──────────────────────────────────────────────────
+
+function ImageGallery({ images }: { images: AttachmentImage[] }) {
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+
+  return (
+    <>
+      <div
+        className={`mt-3 grid gap-2 ${images.length === 1 ? 'grid-cols-1' : images.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}
+      >
+        {images.map((img, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => setLightboxIdx(i)}
+            className="relative overflow-hidden rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] aspect-square focus:outline-none focus:ring-2 focus:ring-[#1E5AA8]"
+          >
+            <img
+              src={img.url}
+              alt={img.name}
+              className="h-full w-full object-cover transition-transform hover:scale-105 duration-200"
+            />
+          </button>
+        ))}
+      </div>
+
+      {lightboxIdx !== null && (
+        <Lightbox images={images} initialIdx={lightboxIdx} onClose={() => setLightboxIdx(null)} />
+      )}
+    </>
+  );
+}
+
+function Lightbox({
+  images,
+  initialIdx,
+  onClose,
+}: {
+  images: AttachmentImage[];
+  initialIdx: number;
+  onClose: () => void;
+}) {
+  const [idx, setIdx] = useState(initialIdx);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowRight') setIdx((i) => (i + 1) % images.length);
+      if (e.key === 'ArrowLeft') setIdx((i) => (i - 1 + images.length) % images.length);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [images.length, onClose]);
+
+  const img = images[idx];
+  if (!img) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-100 flex items-center justify-center bg-black/85"
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+      >
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path d="M18 6 6 18M6 6l12 12" />
+        </svg>
+      </button>
+
+      {images.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIdx((i) => (i - 1 + images.length) % images.length);
+            }}
+            className="absolute left-4 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIdx((i) => (i + 1) % images.length);
+            }}
+            className="absolute right-4 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+          </button>
+        </>
+      )}
+
+      <img
+        src={img.url}
+        alt={img.name}
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[90vh] max-w-[90vw] rounded-xl object-contain shadow-2xl"
+      />
+
+      {images.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+          {images.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIdx(i);
+              }}
+              className={`h-1.5 rounded-full transition-all ${i === idx ? 'w-4 bg-white' : 'w-1.5 bg-white/40'}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── File list ─────────────────────────────────────────────────────────────────
+
+function FileList({ files }: { files: AttachmentFile[] }) {
+  return (
+    <div className="mt-3 flex flex-col gap-1.5">
+      {files.map((f, i) => (
+        <a
+          key={i}
+          href={f.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2.5 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-sm text-[#374151] hover:bg-[#F1F5F9] transition-colors"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#64748B"
+            strokeWidth="2"
+          >
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+          </svg>
+          <span className="flex-1 truncate font-medium">{f.name}</span>
+          {f.size !== undefined && (
+            <span className="text-xs text-[#94A3B8]">{(f.size / 1024).toFixed(0)} KB</span>
+          )}
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#94A3B8"
+            strokeWidth="2"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+        </a>
+      ))}
+    </div>
+  );
+}
+
+// ── Body renderer ─────────────────────────────────────────────────────────────
 
 function BodyWithMentions({ body }: { body: string }) {
   const parts: Array<{ type: 'text' | 'mention'; value: string }> = [];
