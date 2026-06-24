@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
 import type { CourseLesson } from '@/lib/courses';
 import { learningApi } from '@/lib/learning';
+import { parseBunny } from '@/lib/video';
+import type { WatchReport } from '@/lib/use-bunny-watch';
 
 interface Props {
   lesson: CourseLesson & { content: Record<string, unknown> };
@@ -35,8 +37,10 @@ const LESSON_TYPE_META: Record<string, { label: string; icon: string }> = {
  * tipográfica clara, badge de tipo de lección, CTAs primarios, estado
  * "completada" con celebración sutil, errores que ayudan en panel propio.
  *
- * Reporta deltas de tiempo cada 30s al backend (solo cuando la pestaña
- * está visible) y permite marcar la lección como completada manualmente.
+ * Mide el tiempo dedicado y lo reporta al backend: en vídeos de Bunny es el
+ * visionado REAL (Player.js, vía VideoEmbed→useBunnyWatch); en el resto de
+ * tipos, un tick de presencia cada 60s mientras la pestaña esté visible.
+ * Permite además marcar la lección como completada manualmente.
  */
 export function LessonPlayer({
   lesson,
@@ -49,6 +53,15 @@ export function LessonPlayer({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // En vídeos de Bunny medimos el tiempo de visionado REAL vía Player.js (ver
+  // useBunnyWatch en VideoEmbed). En el resto de tipos de lección seguimos con
+  // el tick de presencia (pestaña visible) como aproximación.
+  const videoUrl =
+    lesson.type === 'VIDEO' && typeof lesson.content['videoUrl'] === 'string'
+      ? (lesson.content['videoUrl'] as string)
+      : '';
+  const isBunnyVideo = Boolean(videoUrl && parseBunny(videoUrl));
 
   const sendDelta = useCallback(
     async (delta: number, opts: { resumePositionSec?: number; completed?: boolean } = {}) => {
@@ -73,7 +86,8 @@ export function LessonPlayer({
   );
 
   useEffect(() => {
-    if (completed) return;
+    // Bunny mide visionado real; no sumamos tiempo de "pestaña abierta".
+    if (completed || isBunnyVideo) return;
     tickRef.current = setInterval(() => {
       if (document.visibilityState === 'visible') {
         void sendDelta(TICK_SEC);
@@ -82,7 +96,20 @@ export function LessonPlayer({
     return () => {
       if (tickRef.current) clearInterval(tickRef.current);
     };
-  }, [completed, sendDelta]);
+  }, [completed, isBunnyVideo, sendDelta]);
+
+  // Reporte de visionado real de Bunny: convertimos el delta (segundos
+  // reproducidos) en una llamada de progreso y fijamos la posición de reanudación.
+  const handleWatch = useCallback(
+    (report: WatchReport) => {
+      const delta = Math.round(report.watchedSecondsDelta);
+      if (delta <= 0 && !report.ended) return;
+      void sendDelta(Math.max(0, delta), {
+        resumePositionSec: Math.round(report.positionSeconds),
+      });
+    },
+    [sendDelta],
+  );
 
   async function markCompleted() {
     setPending(true);
@@ -136,6 +163,8 @@ export function LessonPlayer({
           lesson={lesson}
           resumeAt={initialResumePositionSec}
           onTick={sendDelta}
+          onWatch={handleWatch}
+          watchEnabled={!completed}
           enrollmentId={enrollmentId}
           onQuizPassed={() => setCompleted(true)}
         />
@@ -159,12 +188,16 @@ function LessonContent({
   resumeAt,
   enrollmentId,
   onQuizPassed,
+  onWatch,
+  watchEnabled,
 }: {
   lesson: CourseLesson & { content: Record<string, unknown> };
   resumeAt: number;
   onTick: (delta: number, opts?: { resumePositionSec?: number }) => Promise<void>;
   enrollmentId: string;
   onQuizPassed: () => void;
+  onWatch: (report: WatchReport) => void;
+  watchEnabled: boolean;
 }) {
   const content = lesson.content;
 
@@ -174,9 +207,19 @@ function LessonContent({
 
     // VideoEmbed resuelve YouTube / Bunny Stream / fichero directo, y debajo
     // del vídeo pinta los recursos: las líneas `MM:SS - Texto` se vuelven
-    // capítulos clicables que hacen seek en el player.
+    // capítulos clicables que hacen seek en el player. En Bunny, `onWatch`
+    // recibe el tiempo de visionado real medido vía Player.js.
     const resources = typeof content['resources'] === 'string' ? content['resources'] : '';
-    return <VideoEmbed url={url} title={lesson.title} resumeAt={resumeAt} resources={resources} />;
+    return (
+      <VideoEmbed
+        url={url}
+        title={lesson.title}
+        resumeAt={resumeAt}
+        resources={resources}
+        onWatch={onWatch}
+        watchEnabled={watchEnabled}
+      />
+    );
   }
 
   if (lesson.type === 'HTML') {

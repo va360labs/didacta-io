@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  advanceWatch,
+  breakWatchContinuity,
   bunnyEmbedUrl,
   formatSeconds,
+  initWatchState,
   parseBunny,
   parseResources,
   parseTimestampToSeconds,
   parseYouTubeId,
   parseYouTubeStartSeconds,
+  watchedPercent,
   youTubeEmbedUrl,
 } from './video';
 
@@ -152,5 +156,75 @@ describe('parseResources', () => {
   it('mezcla capítulos y recursos', () => {
     const lines = parseResources('01:00 - Demo\nDocs: https://docs.example.com');
     expect(lines.map((l) => l.kind)).toEqual(['chapter', 'text']);
+  });
+});
+
+describe('advanceWatch', () => {
+  it('suma los avances naturales de reproducción', () => {
+    let s = initWatchState();
+    // Simula timeupdates espaciados ~1s reproduciendo de 0 a 3s.
+    for (const t of [0, 1, 2, 3]) s = advanceWatch(s, t);
+    expect(s.watchedSeconds).toBe(3);
+    expect(s.maxPositionSeconds).toBe(3);
+    expect(s.lastSeconds).toBe(3);
+  });
+
+  it('el primer evento no suma (no hay posición previa)', () => {
+    const s = advanceWatch(initWatchState(), 10);
+    expect(s.watchedSeconds).toBe(0);
+    expect(s.maxPositionSeconds).toBe(10);
+  });
+
+  it('ignora los saltos hacia delante (seek), pero actualiza la posición máxima', () => {
+    let s = initWatchState();
+    s = advanceWatch(s, 0);
+    s = advanceWatch(s, 1); // +1 visto
+    s = advanceWatch(s, 120); // seek a 2:00 → no cuenta como visto
+    expect(s.watchedSeconds).toBe(1);
+    expect(s.maxPositionSeconds).toBe(120);
+  });
+
+  it('ignora los retrocesos (rewind)', () => {
+    let s = initWatchState();
+    s = advanceWatch(s, 50);
+    s = advanceWatch(s, 51); // +1
+    s = advanceWatch(s, 10); // rewind → no resta ni suma
+    expect(s.watchedSeconds).toBe(1);
+    expect(s.maxPositionSeconds).toBe(51);
+  });
+
+  it('respeta maxStepSeconds configurable', () => {
+    let s = initWatchState();
+    s = advanceWatch(s, 0, { maxStepSeconds: 5 });
+    s = advanceWatch(s, 4, { maxStepSeconds: 5 }); // delta 4 ≤ 5 → cuenta
+    expect(s.watchedSeconds).toBe(4);
+  });
+});
+
+describe('breakWatchContinuity', () => {
+  it('evita contar el salto tras una pausa/seek', () => {
+    let s = initWatchState();
+    s = advanceWatch(s, 10);
+    s = advanceWatch(s, 11); // +1
+    s = breakWatchContinuity(s); // el alumno pausa y salta
+    s = advanceWatch(s, 200); // primer evento tras el corte → no suma
+    expect(s.watchedSeconds).toBe(1);
+    expect(s.maxPositionSeconds).toBe(200);
+    s = advanceWatch(s, 201); // reanuda → +1
+    expect(s.watchedSeconds).toBe(2);
+  });
+});
+
+describe('watchedPercent', () => {
+  it('calcula el porcentaje de cobertura redondeado', () => {
+    expect(watchedPercent(90, 100)).toBe(90);
+    expect(watchedPercent(33, 100)).toBe(33);
+  });
+  it('acota a 100 aunque se repita contenido', () => {
+    expect(watchedPercent(150, 100)).toBe(100);
+  });
+  it('devuelve 0 si la duración no es válida', () => {
+    expect(watchedPercent(50, 0)).toBe(0);
+    expect(watchedPercent(50, -1)).toBe(0);
   });
 });
