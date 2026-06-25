@@ -49,16 +49,30 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       router.replace(CHANGE_PASSWORD_PATH);
       return;
     }
-    // Onboarding de primera vez: mientras `onboardingCompletedAt` sea null,
-    // forzamos el asistente `/onboarding` (ruta fuera del shell, sin sidebar).
-    // `undefined` = sesión guardada antes de introducir el flag → no gateamos
-    // (se asume completado) hasta el próximo login, que ya trae el valor real.
-    if (current.user.onboardingCompletedAt === null) {
+    // Onboarding OBLIGATORIO para todos los usuarios actuales: mientras
+    // `onboardingCompletedAt` no sea un timestamp real, forzamos el asistente
+    // `/onboarding` (ruta fuera del shell, sin sidebar). Cubrimos también
+    // `undefined` (sesiones guardadas antes del flag) y `null` (usuarios sin
+    // backfill), de modo que también se gatea a quienes NO entran por primera
+    // vez. Solo se libera al completar el onboarding (timestamp truthy).
+    if (!current.user.onboardingCompletedAt) {
       router.replace('/onboarding');
       return;
     }
     setSession(current);
   }, [router, pathname]);
+
+  // Refresco en caliente de la sesión: /cuenta (y el onboarding) actualizan el
+  // nombre/avatar en localStorage y disparan este evento para que el sidebar se
+  // re-renderice al instante sin navegar ni recargar.
+  useEffect(() => {
+    function refresh() {
+      const s = authStorage.getSession();
+      if (s) setSession(s);
+    }
+    window.addEventListener('didacta:session-updated', refresh);
+    return () => window.removeEventListener('didacta:session-updated', refresh);
+  }, []);
 
   if (!session) return null;
 
@@ -312,6 +326,7 @@ function buildGroups({
       { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
       { href: '/admin/comunidad/espacios', label: 'Espacios comunidad', icon: 'hash' },
       { href: '/admin/comunidad/tags', label: 'Tags comunidad', icon: 'message' },
+      { href: '/admin/competencias', label: 'Competencias', icon: 'award' },
       { href: '/admin/branding', label: 'Branding', icon: 'palette' },
       { href: '/admin/seguridad', label: 'Seguridad', icon: 'shield' },
       { href: '/admin/auditoria', label: 'Auditoría', icon: 'shield' },

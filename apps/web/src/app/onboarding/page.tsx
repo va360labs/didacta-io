@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { LOCALE_OPTIONS, meApi, TIMEZONE_OPTIONS, type NotificationPreference } from '@/lib/me';
+import { useTenantContext } from '@/lib/tenant-context';
 import { communityApi } from '@/modules/community';
 
 const STEPS = ['Foto', 'Tus datos', 'Notificaciones', 'Listo'];
@@ -25,6 +26,7 @@ const STEPS = ['Foto', 'Tus datos', 'Notificaciones', 'Listo'];
  */
 export default function OnboardingPage() {
   const router = useRouter();
+  const { tenant } = useTenantContext();
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(0);
   const [email, setEmail] = useState('');
@@ -47,6 +49,7 @@ export default function OnboardingPage() {
     }
     let cancelled = false;
     void (async () => {
+      // 1) Perfil: única llamada CRÍTICA. Si falla, mostramos el error.
       try {
         const p = await meApi.getProfile(token);
         if (cancelled) return;
@@ -62,8 +65,19 @@ export default function OnboardingPage() {
         setTimezone(p.timezone);
         setDocumentId(p.documentId ?? '');
         setAvatarUrl(p.avatarUrl);
+        setError(null);
+      } catch {
+        if (!cancelled) {
+          setError('No pudimos cargar tu perfil. Recarga la página.');
+          setLoading(false);
+        }
+        return;
+      }
+      // 2) Preferencias de notificación: BEST-EFFORT. Un fallo aquí NO debe
+      //    mostrar el error de perfil ni bloquear el onboarding — caemos al
+      //    default (matriz todo-activado, ya en el estado inicial).
+      try {
         let matrix = fullMatrix((await meApi.getNotificationPreferences(token)).preferences);
-        // Reconciliar Comunidad×Email con el digest del módulo community.
         try {
           const c = await communityApi.getMyPreferences();
           matrix = matrix.map((m) =>
@@ -76,10 +90,9 @@ export default function OnboardingPage() {
         }
         if (!cancelled) setPrefs(matrix);
       } catch {
-        if (!cancelled) setError('No pudimos cargar tu perfil. Recarga la página.');
-      } finally {
-        if (!cancelled) setLoading(false);
+        /* prefs no disponibles: dejamos la matriz por defecto */
       }
+      if (!cancelled) setLoading(false);
     })();
     return () => {
       cancelled = true;
@@ -119,6 +132,10 @@ export default function OnboardingPage() {
       const session = authStorage.getSession();
       if (session) {
         session.user.onboardingCompletedAt = res.onboardingCompletedAt;
+        // Refrescamos nombre y avatar en la sesión para que el sidebar los
+        // muestre al instante (sin esperar a un nuevo login).
+        session.user.name = name.trim();
+        session.user.avatarUrl = avatarUrl;
         authStorage.saveSession(session);
       }
       router.replace('/inicio');
@@ -143,7 +160,9 @@ export default function OnboardingPage() {
   return (
     <div className="space-y-6">
       <header className="text-center">
-        <p className="label-uppercase text-text-muted">Bienvenido/a a Didacta</p>
+        <p className="label-uppercase text-text-muted">
+          Bienvenido/a a {tenant?.name ?? 'Didacta'}
+        </p>
         <h1 className="font-display mt-2 text-2xl font-bold tracking-tight">
           Completa tu perfil para empezar
         </h1>

@@ -50,6 +50,8 @@ export interface AuthResult {
     id: string;
     email: string;
     name: string | null;
+    /** URL del avatar (https o ruta relativa de storage), o null. */
+    avatarUrl: string | null;
     tenantId: string;
     tenantSlug: string;
     roles: string[];
@@ -161,6 +163,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         name: user.name,
+        avatarUrl: user.avatarUrl ?? null,
         tenantId: tenant.id,
         tenantSlug: tenant.slug,
         roles,
@@ -293,6 +296,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         name: user.name,
+        avatarUrl: user.avatarUrl ?? null,
         tenantId: tenant.id,
         tenantSlug: tenant.slug,
         roles,

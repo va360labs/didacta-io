@@ -225,22 +225,45 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
       </nav>
 
       {/* ── User strip ── */}
+      {/* La identidad (avatar + nombre) ES el enlace a "Mi perfil" (/cuenta).
+          No hay item de menú separado: se accede pulsando el nombre del usuario. */}
       <div className="border-t border-white/8 px-3.5 py-3">
-        <div className="flex items-center gap-2.5">
-          <div
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-bold text-white"
-            style={{ background: 'linear-gradient(135deg, #2E7DCE 0%, #18B5A8 100%)' }}
+        <div className="flex items-center gap-1.5">
+          <Link
+            href={'/cuenta' as never}
+            title="Mi perfil"
+            aria-label="Mi perfil"
+            className={
+              (pathname?.startsWith('/cuenta') ? 'bg-white/8 ' : 'hover:bg-white/5 ') +
+              'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors'
+            }
           >
-            {initials || '·'}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[12px] font-semibold leading-tight text-white">
-              {name}
+            {session.user.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={session.user.avatarUrl}
+                alt=""
+                width={32}
+                height={32}
+                className="h-8 w-8 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <div
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-bold text-white"
+                style={{ background: 'linear-gradient(135deg, #2E7DCE 0%, #18B5A8 100%)' }}
+              >
+                {initials || '·'}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[12px] font-semibold leading-tight text-white">
+                {name}
+              </div>
+              <div className="truncate text-[11px] text-white/40">
+                {humanRole(role)} · {session.user.tenantSlug}
+              </div>
             </div>
-            <div className="truncate text-[11px] text-white/40">
-              {humanRole(role)} · {session.user.tenantSlug}
-            </div>
-          </div>
+          </Link>
           <button
             type="button"
             onClick={onLogout}

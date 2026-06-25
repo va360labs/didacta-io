@@ -9,6 +9,9 @@ export interface StoredSession {
     id: string;
     email: string;
     name: string | null;
+    /** URL del avatar (https o ruta relativa de storage), o null. Se refresca
+     * tras editar el perfil/onboarding y en cada login. */
+    avatarUrl?: string | null;
     tenantId: string;
     tenantSlug: string;
     roles: string[];
