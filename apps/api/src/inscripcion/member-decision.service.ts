@@ -131,11 +131,18 @@ export class MemberDecisionService {
       where: { id: record.userId },
       select: { email: true, name: true },
     });
+    // Branding del tenant (la tabla `tenant` es global, sin RLS) para que los
+    // emails al usuario lleven el nombre de su academia y no "Didacta".
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: record.tenantId },
+      select: { name: true },
+    });
+    const tenantName = tenant?.name ?? 'Didacta';
 
     if (record.action === 'APPROVE') {
       await this.enrollAllPublished(record.tenantId, record.userId);
       const signinUrl = `${process.env['WEB_PUBLIC_URL']?.trim() ?? ''}/signin`;
-      const { subject, text, html } = buildWelcomeEmail(user?.name ?? '', signinUrl);
+      const { subject, text, html } = buildWelcomeEmail(user?.name ?? '', signinUrl, tenantName);
       await this.sendEmail(record.tenantId, user?.email ?? null, subject, text, html);
       await this.auditLog.record({
         tenantId: record.tenantId,
@@ -150,7 +157,7 @@ export class MemberDecisionService {
       return { outcome: 'approved' };
     }
 
-    const { subject, text, html } = buildRejectionEmail(user?.name ?? '');
+    const { subject, text, html } = buildRejectionEmail(user?.name ?? '', tenantName);
     await this.sendEmail(record.tenantId, user?.email ?? null, subject, text, html);
     await this.auditLog.record({
       tenantId: record.tenantId,
