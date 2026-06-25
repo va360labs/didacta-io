@@ -173,6 +173,13 @@ model User {
   /// Biografía corta del usuario, opcional. Se captura en el onboarding y se
   /// edita en /cuenta. Máx 280 caracteres.
   bio              String?    @db.VarChar(280)
+  /// Cargo / puesto del usuario (ej. "Director de Formación"). Opcional,
+  /// editable por el propio usuario en /cuenta. Máx 120.
+  jobTitle         String?    @map("job_title") @db.VarChar(120)
+  /// Departamento / área (ej. "Talento y Cultura"). Opcional. Máx 120.
+  department       String?    @db.VarChar(120)
+  /// Ubicación libre (ej. "Madrid, España"). Opcional. Máx 120.
+  location         String?    @db.VarChar(120)
   passwordHash     String?    @map("password_hash")
   mfaSecret        String?    @map("mfa_secret")
   mfaEnabled       Boolean    @default(false) @map("mfa_enabled")
@@ -2584,4 +2591,49 @@ model ModLearningPathEnrollment {
   @@index([tenantId, userId, status])
   @@index([pathId])
   @@map("mod_learning_path_enrollment")
+}
+
+// ============================================================================
+// COMPETENCIAS (derivadas de cursos) — Fase 2 de "Mi perfil".
+// El catálogo lo gestiona admin/formador; el mapeo curso↔competencia define de
+// qué cursos sale cada competencia. Las puntuaciones por usuario NO se
+// almacenan: se derivan en tiempo de lectura del progreso de sus matrículas
+// (ver getMyCompetencies). Sin datos de cartón.
+// ============================================================================
+
+/// Catálogo de competencias del tenant (ej. "Comunicación", "Liderazgo").
+model ModLearningCompetency {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  name        String   @db.VarChar(80)
+  description String?  @db.VarChar(280)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  courses ModLearningCourseCompetency[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, sortOrder])
+  @@map("mod_learning_competency")
+}
+
+/// Mapeo curso ↔ competencia con peso. El score de una competencia para un
+/// usuario es la media de `progressPercent` de sus matrículas en los cursos
+/// asociados, ponderada por `weight`.
+model ModLearningCourseCompetency {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  /// ID lógico del curso (sin FK cross-module — ADR-015).
+  courseId     String   @map("course_id") @db.Uuid
+  competencyId String   @map("competency_id") @db.Uuid
+  weight       Int      @default(1)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  competency ModLearningCompetency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, courseId, competencyId])
+  @@index([tenantId, courseId])
+  @@index([competencyId])
+  @@map("mod_learning_course_competency")
 }

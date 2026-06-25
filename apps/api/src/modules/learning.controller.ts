@@ -8,6 +8,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Put,
   Query,
   UnauthorizedException,
   UseGuards,
@@ -46,6 +47,25 @@ const uploadScormSchema = z.object({
 });
 type UploadScormDto = z.infer<typeof uploadScormSchema>;
 
+const createCompetencySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  description: z.string().max(280).nullable().optional(),
+  sortOrder: z.number().int().min(0).optional(),
+});
+type CreateCompetencyDto = z.infer<typeof createCompetencySchema>;
+
+const setCourseCompetenciesSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        competencyId: z.string().uuid(),
+        weight: z.number().int().min(1).max(10).optional(),
+      }),
+    )
+    .max(50),
+});
+type SetCourseCompetenciesDto = z.infer<typeof setCourseCompetenciesSchema>;
+
 function requireScormEditor(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   if (!user.roles.some((r) => SCORM_EDITOR_ROLES.has(r))) {
@@ -66,6 +86,78 @@ export class LearningController {
   async listMine(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
     return this.registry.getLearningService().listMyEnrollments(user.tenantId, user.sub);
+  }
+
+  @Get('me/stats')
+  @ApiOperation({
+    summary: 'Stats de aprendizaje del usuario (cursos completados + segundos vistos)',
+  })
+  async myStats(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getLearningService().getMyStats(user.tenantId, user.sub);
+  }
+
+  // -------------------- Competencias --------------------
+
+  @Get('me/competencies')
+  @ApiOperation({ summary: 'Mapa de competencias del usuario (derivado de cursos)' })
+  async myCompetencies(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getLearningService().getMyCompetencies(user.tenantId, user.sub);
+  }
+
+  @Get('competencies')
+  @ApiOperation({ summary: 'Catálogo de competencias del tenant' })
+  async listCompetencies(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getLearningService().listCompetencies(user.tenantId);
+  }
+
+  @Post('competencies')
+  @ApiOperation({ summary: 'Crear competencia (formador/admin)' })
+  async createCompetency(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(createCompetencySchema)) dto: CreateCompetencyDto,
+  ) {
+    const u = requireScormEditor(user);
+    try {
+      return await this.registry.getLearningService().createCompetency(u.tenantId, dto);
+    } catch (e) {
+      if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002') {
+        throw new BadRequestException('Ya existe una competencia con ese nombre.');
+      }
+      throw e;
+    }
+  }
+
+  @Delete('competencies/:id')
+  @ApiOperation({ summary: 'Eliminar competencia (formador/admin)' })
+  async deleteCompetency(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    const u = requireScormEditor(user);
+    return this.registry.getLearningService().deleteCompetency(u.tenantId, id);
+  }
+
+  @Get('courses/:courseId/competencies')
+  @ApiOperation({ summary: 'Competencias asociadas a un curso' })
+  async courseCompetencies(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('courseId') courseId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getLearningService().getCourseCompetencies(user.tenantId, courseId);
+  }
+
+  @Put('courses/:courseId/competencies')
+  @ApiOperation({ summary: 'Definir competencias de un curso (formador/admin)' })
+  async setCourseCompetencies(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('courseId') courseId: string,
+    @Body(new ZodValidationPipe(setCourseCompetenciesSchema)) dto: SetCourseCompetenciesDto,
+  ) {
+    const u = requireScormEditor(user);
+    return this.registry
+      .getLearningService()
+      .setCourseCompetencies(u.tenantId, courseId, dto.items);
   }
 
   @Get('me/enrollments/:enrollmentId/progress')

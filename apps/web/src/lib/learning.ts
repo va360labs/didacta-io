@@ -79,11 +79,91 @@ function bearer(): string {
   return token;
 }
 
+export interface Competency {
+  id: string;
+  tenantId: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+}
+
+export interface CourseCompetency {
+  competencyId: string;
+  name: string;
+  weight: number;
+}
+
+export interface MyCompetencies {
+  competencies: Array<{ id: string; name: string; score: number }>;
+  globalScore: number | null;
+  globalLevel: string | null;
+}
+
 export const learningApi = {
   async listMine(): Promise<Enrollment[]> {
     return apiFetch<Enrollment[]>(
       '/api/v1/modules/learning/me/enrollments',
       { method: 'GET' },
+      bearer(),
+    );
+  },
+
+  /** Stats de aprendizaje para el perfil: cursos completados + segundos vistos. */
+  async getMyStats(): Promise<{ completedCourses: number; trainingSeconds: number }> {
+    return apiFetch<{ completedCourses: number; trainingSeconds: number }>(
+      '/api/v1/modules/learning/me/stats',
+      { method: 'GET' },
+      bearer(),
+    );
+  },
+
+  // -------------------- Competencias --------------------
+  async getMyCompetencies(): Promise<MyCompetencies> {
+    return apiFetch<MyCompetencies>(
+      '/api/v1/modules/learning/me/competencies',
+      { method: 'GET' },
+      bearer(),
+    );
+  },
+  async listCompetencies(): Promise<Competency[]> {
+    return apiFetch<Competency[]>(
+      '/api/v1/modules/learning/competencies',
+      { method: 'GET' },
+      bearer(),
+    );
+  },
+  async createCompetency(input: {
+    name: string;
+    description?: string | null;
+    sortOrder?: number;
+  }): Promise<Competency> {
+    return apiFetch<Competency>(
+      '/api/v1/modules/learning/competencies',
+      { method: 'POST', body: JSON.stringify(input) },
+      bearer(),
+    );
+  },
+  async deleteCompetency(id: string): Promise<{ ok: true }> {
+    return apiFetch<{ ok: true }>(
+      `/api/v1/modules/learning/competencies/${id}`,
+      { method: 'DELETE' },
+      bearer(),
+    );
+  },
+  async getCourseCompetencies(courseId: string): Promise<CourseCompetency[]> {
+    return apiFetch<CourseCompetency[]>(
+      `/api/v1/modules/learning/courses/${courseId}/competencies`,
+      { method: 'GET' },
+      bearer(),
+    );
+  },
+  async setCourseCompetencies(
+    courseId: string,
+    items: Array<{ competencyId: string; weight?: number }>,
+  ): Promise<CourseCompetency[]> {
+    return apiFetch<CourseCompetency[]>(
+      `/api/v1/modules/learning/courses/${courseId}/competencies`,
+      { method: 'PUT', body: JSON.stringify({ items }) },
       bearer(),
     );
   },

@@ -38,6 +38,12 @@ const updateProfileSchema = z.object({
    * deja como estaba.
    */
   bio: z.union([z.string().max(280), z.literal(''), z.null()]).optional(),
+  /** Cargo/puesto. `''`/`null` lo borran; omitir lo deja igual. */
+  jobTitle: z.union([z.string().max(120), z.literal(''), z.null()]).optional(),
+  /** Departamento/área. `''`/`null` lo borran; omitir lo deja igual. */
+  department: z.union([z.string().max(120), z.literal(''), z.null()]).optional(),
+  /** Ubicación libre. `''`/`null` la borran; omitir la deja igual. */
+  location: z.union([z.string().max(120), z.literal(''), z.null()]).optional(),
   locale: z.enum(ALLOWED_LOCALES).optional(),
   timezone: z.string().min(1).max(64).optional(),
   /**
@@ -130,6 +136,9 @@ export class MeController {
       email: dbUser.email,
       name: dbUser.name,
       bio: dbUser.bio,
+      jobTitle: dbUser.jobTitle,
+      department: dbUser.department,
+      location: dbUser.location,
       avatarUrl: dbUser.avatarUrl,
       locale: dbUser.locale,
       timezone: dbUser.timezone,
@@ -159,15 +168,23 @@ export class MeController {
         : dto.documentId === '' || dto.documentId === null
           ? null
           : dto.documentId;
-    // `''` borra la bio (→ null); cualquier otro string se guarda tal cual.
-    const bioValue =
-      dto.bio === undefined ? undefined : dto.bio === '' || dto.bio === null ? null : dto.bio;
+    // `''` borra el campo (→ null); cualquier otro string se guarda tal cual;
+    // `undefined` lo deja como estaba.
+    const blank = (v: string | null | undefined) =>
+      v === undefined ? undefined : v === '' || v === null ? null : v;
+    const bioValue = blank(dto.bio);
+    const jobTitleValue = blank(dto.jobTitle);
+    const departmentValue = blank(dto.department);
+    const locationValue = blank(dto.location);
     try {
       const updated = await this.prisma.user.update({
         where: { id: user.sub },
         data: {
           ...(dto.name !== undefined ? { name: dto.name } : {}),
           ...(bioValue !== undefined ? { bio: bioValue } : {}),
+          ...(jobTitleValue !== undefined ? { jobTitle: jobTitleValue } : {}),
+          ...(departmentValue !== undefined ? { department: departmentValue } : {}),
+          ...(locationValue !== undefined ? { location: locationValue } : {}),
           ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
           ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
           ...(dto.avatarUrl !== undefined ? { avatarUrl: dto.avatarUrl } : {}),
@@ -190,6 +207,9 @@ export class MeController {
         email: updated.email,
         name: updated.name,
         bio: updated.bio,
+        jobTitle: updated.jobTitle,
+        department: updated.department,
+        location: updated.location,
         avatarUrl: updated.avatarUrl,
         locale: updated.locale,
         timezone: updated.timezone,

@@ -8,6 +8,12 @@ export interface UserProfile {
   name: string | null;
   /** Biografía corta opcional (máx 280). NULL si no la declaró. */
   bio: string | null;
+  /** Cargo/puesto (ej. "Director de Formación"). NULL si no lo declaró. */
+  jobTitle: string | null;
+  /** Departamento/área (ej. "Talento y Cultura"). NULL si no lo declaró. */
+  department: string | null;
+  /** Ubicación libre (ej. "Madrid, España"). NULL si no la declaró. */
+  location: string | null;
   avatarUrl: string | null;
   locale: string;
   timezone: string;
@@ -26,6 +32,12 @@ export interface UpdateProfileInput {
   name?: string;
   /** Pasar `null` o `''` para borrar la bio. */
   bio?: string | null;
+  /** Cargo/puesto. `null`/`''` lo borran. */
+  jobTitle?: string | null;
+  /** Departamento. `null`/`''` lo borran. */
+  department?: string | null;
+  /** Ubicación. `null`/`''` la borran. */
+  location?: string | null;
   locale?: string;
   timezone?: string;
   avatarUrl?: string | null;

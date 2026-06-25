@@ -254,6 +254,124 @@ export class LearningService {
   }
 
   /**
+   * Estadísticas de aprendizaje del usuario para el perfil ("Mi perfil"):
+   * cursos completados y segundos totales de visionado real (suma de
+   * `watchedSeconds` de su progreso). Las horas las redondea el frontend.
+   */
+  async getMyStats(
+    tenantId: string,
+    userId: string,
+  ): Promise<{ completedCourses: number; trainingSeconds: number }> {
+    const enrollments = await this.prisma.modLearningEnrollment.findMany({
+      where: { tenantId, userId },
+      select: { id: true, status: true },
+    });
+    const completedCourses = enrollments.filter((e) => e.status === 'COMPLETED').length;
+    const enrollmentIds = enrollments.map((e) => e.id);
+    let trainingSeconds = 0;
+    if (enrollmentIds.length > 0) {
+      const agg = await this.prisma.modLearningProgress.aggregate({
+        where: { tenantId, enrollmentId: { in: enrollmentIds } },
+        _sum: { watchedSeconds: true },
+      });
+      trainingSeconds = agg._sum.watchedSeconds ?? 0;
+    }
+    return { completedCourses, trainingSeconds };
+  }
+
+  // -------------------- Competencias (derivadas de cursos) --------------------
+
+  /**
+   * Mapa de competencias del usuario, DERIVADO de cursos: el score 0-100 de
+   * cada competencia es la media de `progressPercent` de las matrículas del
+   * usuario en los cursos asociados a esa competencia, ponderada por `weight`.
+   * Competencias sin cursos cursados por el usuario se omiten (no se inventan).
+   */
+  async getMyCompetencies(
+    tenantId: string,
+    userId: string,
+  ): Promise<{
+    competencies: Array<{ id: string; name: string; score: number }>;
+    globalScore: number | null;
+    globalLevel: string | null;
+  }> {
+    const [competencies, mappings, enrollments] = await Promise.all([
+      this.prisma.modLearningCompetency.findMany({
+        where: { tenantId },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      }),
+      this.prisma.modLearningCourseCompetency.findMany({ where: { tenantId } }),
+      this.prisma.modLearningEnrollment.findMany({
+        where: { tenantId, userId },
+        select: { courseId: true, progressPercent: true },
+      }),
+    ]);
+
+    const progressByCourse = new Map(enrollments.map((e) => [e.courseId, e.progressPercent]));
+    return computeCompetencyScores(competencies, mappings, progressByCourse);
+  }
+
+  async listCompetencies(tenantId: string) {
+    return this.prisma.modLearningCompetency.findMany({
+      where: { tenantId },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+  }
+
+  async createCompetency(
+    tenantId: string,
+    input: { name: string; description?: string | null; sortOrder?: number },
+  ) {
+    return this.prisma.modLearningCompetency.create({
+      data: {
+        tenantId,
+        name: input.name.trim(),
+        description: input.description?.trim() || null,
+        sortOrder: input.sortOrder ?? 0,
+      },
+    });
+  }
+
+  async deleteCompetency(tenantId: string, id: string) {
+    await this.prisma.modLearningCompetency.deleteMany({ where: { tenantId, id } });
+    return { ok: true as const };
+  }
+
+  async getCourseCompetencies(tenantId: string, courseId: string) {
+    const rows = await this.prisma.modLearningCourseCompetency.findMany({
+      where: { tenantId, courseId },
+      include: { competency: { select: { id: true, name: true } } },
+    });
+    return rows.map((r) => ({
+      competencyId: r.competencyId,
+      name: r.competency.name,
+      weight: r.weight,
+    }));
+  }
+
+  /** Reemplaza el set de competencias de un curso (borra + recrea). */
+  async setCourseCompetencies(
+    tenantId: string,
+    courseId: string,
+    items: Array<{ competencyId: string; weight?: number }>,
+  ) {
+    await this.prisma.$transaction([
+      this.prisma.modLearningCourseCompetency.deleteMany({ where: { tenantId, courseId } }),
+      ...items.map((it) =>
+        this.prisma.modLearningCourseCompetency.create({
+          data: {
+            tenantId,
+            courseId,
+            competencyId: it.competencyId,
+            weight: Math.max(1, it.weight ?? 1),
+          },
+        }),
+      ),
+    ]);
+    return this.getCourseCompetencies(tenantId, courseId);
+  }
+
+  /**
    * Devuelve el progreso por lección de UNA matriculación del usuario.
    * Lo usa el player del curso para hidratar qué lecciones ya completó
    * el alumno al cargar la página (evita que vuelva a marcarlas como
@@ -630,4 +748,57 @@ export class LearningService {
       },
     });
   }
+}
+
+// ── Competencias: lógica pura (testeable sin Prisma) ─────────────────────────
+
+/** Nivel global a partir del score agregado. */
+export function competencyLevel(score: number | null): string | null {
+  if (score === null) return null;
+  if (score < 40) return 'Inicial';
+  if (score < 65) return 'Intermedio';
+  if (score < 85) return 'Avanzado';
+  return 'Experto';
+}
+
+/**
+ * Calcula los scores de competencia de un usuario a partir del catálogo, el
+ * mapeo curso↔competencia y el progreso del usuario por curso (0-100).
+ * Cada competencia = media ponderada (por `weight`) del progreso en los cursos
+ * mapeados en los que el usuario está matriculado. Competencias sin cursos
+ * cursados se omiten. Función pura para poder testearla sin Prisma.
+ */
+export function computeCompetencyScores(
+  competencies: Array<{ id: string; name: string }>,
+  mappings: Array<{ competencyId: string; courseId: string; weight: number }>,
+  progressByCourse: Map<string, number>,
+): {
+  competencies: Array<{ id: string; name: string; score: number }>;
+  globalScore: number | null;
+  globalLevel: string | null;
+} {
+  const byComp = new Map<string, Array<{ courseId: string; weight: number }>>();
+  for (const m of mappings) {
+    const arr = byComp.get(m.competencyId) ?? [];
+    arr.push({ courseId: m.courseId, weight: Math.max(1, m.weight) });
+    byComp.set(m.competencyId, arr);
+  }
+
+  const scored: Array<{ id: string; name: string; score: number }> = [];
+  for (const c of competencies) {
+    let weightedSum = 0;
+    let weightTotal = 0;
+    for (const m of byComp.get(c.id) ?? []) {
+      const progress = progressByCourse.get(m.courseId);
+      if (progress === undefined) continue; // usuario no matriculado → no aporta
+      weightedSum += progress * m.weight;
+      weightTotal += m.weight;
+    }
+    if (weightTotal === 0) continue; // sin cursos cursados → se omite
+    scored.push({ id: c.id, name: c.name, score: Math.round(weightedSum / weightTotal) });
+  }
+
+  const globalScore =
+    scored.length > 0 ? Math.round(scored.reduce((s, c) => s + c.score, 0) / scored.length) : null;
+  return { competencies: scored, globalScore, globalLevel: competencyLevel(globalScore) };
 }
