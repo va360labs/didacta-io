@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
 import { MfaSetupFlow } from '@/components/mfa-setup-flow';
-import { useTenantTheme } from '@/components/tenant-theme-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,7 +22,6 @@ import { meApi, type ActiveSession } from '@/lib/me';
  */
 export function AccountSecurityTab() {
   const router = useRouter();
-  const theme = useTenantTheme();
   const [mfaOpen, setMfaOpen] = useState(false);
   const [sessions, setSessions] = useState<ActiveSession[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -300,24 +298,14 @@ export function AccountSecurityTab() {
         maxWidthClass="max-w-md"
         contentClassName="p-6"
       >
-        <div className="mb-5 flex items-center gap-3">
-          {theme?.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={theme.logoUrl}
-              alt=""
-              className="h-9 w-9 shrink-0 rounded-lg object-contain"
-            />
-          ) : null}
-          <div className="min-w-0">
-            <h2 className="font-display text-lg font-bold tracking-tight text-text">
-              Configurar segundo factor
-            </h2>
-            <p className="text-sm text-text-muted">
-              Escanea el QR con tu app TOTP (Google Authenticator, 1Password, Authy) y confirma el
-              código.
-            </p>
-          </div>
+        <div className="mb-5">
+          <h2 className="font-display text-lg font-bold tracking-tight text-text">
+            Configurar segundo factor
+          </h2>
+          <p className="mt-0.5 text-sm text-text-muted">
+            Escanea el QR con tu app TOTP (Google Authenticator, 1Password, Authy) y confirma el
+            código.
+          </p>
         </div>
         {mfaOpen ? (
           <MfaSetupFlow

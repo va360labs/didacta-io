@@ -826,8 +826,7 @@ function EditProfileForm(props: {
               maxLength={20}
             />
             <p className="text-xs text-text-subtle">
-              Solo necesario para acciones formativas Fundae. DNI o NIE español, normalizado en
-              mayúsculas.
+              Solo necesario para solicitar facturas de pago.
             </p>
           </div>
 

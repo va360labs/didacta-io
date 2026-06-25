@@ -284,7 +284,7 @@ export default function OnboardingPage() {
                   placeholder="12345678Z o X1234567L"
                 />
                 <p className="text-xs text-text-subtle">
-                  Solo si vas a participar en formación bonificada (Fundae).
+                  Solo necesario para solicitar facturas de pago.
                 </p>
               </div>
             </div>
