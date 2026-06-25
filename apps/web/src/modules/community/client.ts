@@ -79,6 +79,20 @@ function withAuth(): string {
 
 export type PostSort = 'recent' | 'oldest' | 'most_commented';
 
+/** Adjunto aplanado que devuelve la Galería (ver backend mod-community). */
+export interface CommunityAttachment {
+  kind: 'image' | 'file';
+  url: string;
+  name: string;
+  size?: number;
+  postId: string;
+  postTitle: string;
+  authorId: string;
+  authorName: string | null;
+  /** ISO-8601 (createdAt del post). */
+  createdAt: string;
+}
+
 export const communityApi = {
   async listPosts(
     opts: { courseId?: string; tag?: string; sort?: PostSort; limit?: number } = {},
@@ -90,6 +104,12 @@ export const communityApi = {
     if (opts.limit) params.set('limit', String(opts.limit));
     const path = `/api/v1/modules/community/posts${params.toString() ? `?${params}` : ''}`;
     return apiFetch<Post[]>(path, { method: 'GET' }, withAuth());
+  },
+  async listAttachments(opts: { tag?: string } = {}): Promise<CommunityAttachment[]> {
+    const params = new URLSearchParams();
+    if (opts.tag) params.set('tag', opts.tag);
+    const path = `/api/v1/modules/community/attachments${params.toString() ? `?${params}` : ''}`;
+    return apiFetch<CommunityAttachment[]>(path, { method: 'GET' }, withAuth());
   },
   async getPost(id: string): Promise<PostDetail> {
     return apiFetch<PostDetail>(

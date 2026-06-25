@@ -4,6 +4,14 @@ import { manifest } from './manifest.js';
 export { manifest };
 export { CommunityService } from './community.service.js';
 export {
+  parseBodyAttachments,
+  flattenPostAttachments,
+  type AttachmentImage,
+  type AttachmentFile,
+  type CommunityAttachment,
+  type PostForAttachments,
+} from './attachments.js';
+export {
   addReactionSchema,
   COMMUNITY_TAG_ICONS,
   createCommentSchema,

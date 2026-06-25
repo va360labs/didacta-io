@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -21,6 +20,8 @@ export interface DialogProps {
   description?: ReactNode;
   ariaLabel?: string;
   maxWidthClass?: string;
+  /** Sobrescribe el padding interno del contenido (legacy). Default `p-5`. */
+  contentClassName?: string;
 }
 
 export function Dialog({
@@ -31,6 +32,7 @@ export function Dialog({
   description,
   ariaLabel,
   maxWidthClass = 'max-w-lg',
+  contentClassName,
 }: DialogProps): React.JSX.Element | null {
   const [internalOpen, setInternalOpen] = React.useState(false);
   const open = controlledOpen ?? internalOpen;
@@ -56,6 +58,7 @@ export function Dialog({
         description={description}
         ariaLabel={ariaLabel}
         maxWidthClass={maxWidthClass}
+        contentClassName={contentClassName}
       >
         {children}
       </DialogLegacy>
@@ -194,6 +197,7 @@ function DialogLegacy({
   ariaLabel,
   children,
   maxWidthClass = 'max-w-lg',
+  contentClassName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -202,6 +206,7 @@ function DialogLegacy({
   ariaLabel?: string;
   children: ReactNode;
   maxWidthClass?: string;
+  contentClassName?: string;
 }): React.JSX.Element | null {
   const panelRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
@@ -236,11 +241,14 @@ function DialogLegacy({
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel ?? 'Dialog'}
-        className={cn('relative w-full rounded-lg border bg-surface shadow-2xl', maxWidthClass)}
+        className={cn(
+          'relative flex max-h-[85vh] w-full flex-col overflow-hidden rounded-lg border bg-surface shadow-2xl',
+          maxWidthClass,
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
-          <div className="border-b p-5">
+          <div className="shrink-0 border-b p-5">
             <h2 className="text-lg font-semibold">{title}</h2>
             {description && <p className="text-sm text-text-muted">{description}</p>}
           </div>
@@ -249,11 +257,11 @@ function DialogLegacy({
           type="button"
           onClick={close}
           aria-label="Cerrar"
-          className="absolute right-3 top-3 rounded-md p-1 text-text-muted hover:text-text"
+          className="absolute right-3 top-3 z-10 rounded-md p-1 text-text-muted hover:text-text"
         >
           X
         </button>
-        <div className="p-5">{children}</div>
+        <div className={cn('min-h-0 flex-1 overflow-y-auto p-5', contentClassName)}>{children}</div>
       </div>
     </div>,
     document.body,

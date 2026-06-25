@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { ModuleContext } from '@didacta/core-kernel';
 import type { PrismaClient } from '@didacta/database';
 import type { AddReactionDto, CreateCommentDto, CreatePostDto, ListPostsQueryDto } from './dto.js';
+import { flattenPostAttachments, type CommunityAttachment } from './attachments.js';
 import {
   CommentNotFoundError,
   NestedRepliesTooDeepError,
@@ -12,6 +13,12 @@ import {
   TagNameAlreadyExistsError,
   TagNotFoundError,
 } from './errors.js';
+
+/**
+ * Tope de posts recientes que escanea la Galería para extraer adjuntos.
+ * Cota de seguridad para no traer toda la tabla; suficiente para v1.
+ */
+const ATTACHMENT_POST_SCAN_LIMIT = 1000;
 
 export class CommunityService {
   constructor(
@@ -103,6 +110,45 @@ export class CommunityService {
         },
       },
     });
+  }
+
+  /**
+   * Lista los adjuntos (imágenes y archivos) de los posts del tenant para la
+   * Galería de comunidad. Si `query.tag` viene, filtra al espacio/tag; si no,
+   * agrega todos los espacios (galería global de /comunidad).
+   *
+   * Los adjuntos no viven en una tabla propia: están serializados en el body
+   * de cada post. Escaneamos hasta `ATTACHMENT_POST_SCAN_LIMIT` posts recientes
+   * y aplanamos sus adjuntos en memoria. El filtrado fino (tipo, fecha, autor,
+   * búsqueda) lo hace el cliente sobre este conjunto.
+   *
+   * Respeta visibilidad: oculta posts borrados y, salvo moderadores, los
+   * ocultos por moderación.
+   */
+  async listAttachments(
+    tenantId: string,
+    query: { tag?: string },
+    viewer: { canModerate: boolean } = { canModerate: false },
+  ): Promise<CommunityAttachment[]> {
+    const posts = await this.prisma.modCommunityPost.findMany({
+      where: {
+        tenantId,
+        deletedAt: null,
+        ...(viewer.canModerate ? {} : { hiddenAt: null }),
+        ...(query.tag !== undefined ? { tags: { has: query.tag } } : {}),
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      take: ATTACHMENT_POST_SCAN_LIMIT,
+      select: {
+        id: true,
+        title: true,
+        body: true,
+        authorId: true,
+        authorDisplayName: true,
+        createdAt: true,
+      },
+    });
+    return flattenPostAttachments(posts);
   }
 
   async getPostDetail(

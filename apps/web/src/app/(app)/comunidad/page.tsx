@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { CommunityGalleryModal } from '@/components/community-gallery-modal';
 import { CommunityTagChip } from '@/components/community-tag-chip';
 import { ThreadCard, TAG_COLORS } from '@/components/community-thread-card';
 import { Icon } from '@/components/icon';
@@ -30,6 +31,7 @@ export default function ComunidadPage() {
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [activeTag, setActiveTag] = useState<string>('Todo');
   const [sort, setSort] = useState<PostSort>('recent');
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -91,6 +93,12 @@ export default function ComunidadPage() {
         onSuccess={() => void reload({ sort, tag: activeTag })}
       />
 
+      <CommunityGalleryModal
+        open={galleryOpen}
+        onClose={() => setGalleryOpen(false)}
+        title="Comunidad · Galería"
+      />
+
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1
@@ -103,10 +111,16 @@ export default function ComunidadPage() {
             Conversaciones útiles entre formadores, alumnos y administradores.
           </p>
         </div>
-        <Button onClick={() => setComposerOpen(true)}>
-          <Icon name="plus" size={16} />
-          Nueva conversación
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setComposerOpen(true)}>
+            <Icon name="plus" size={16} />
+            Nueva conversación
+          </Button>
+          <Button variant="secondary" onClick={() => setGalleryOpen(true)}>
+            <Icon name="image" size={16} />
+            Galería
+          </Button>
+        </div>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
@@ -282,7 +296,8 @@ export default function ComunidadPage() {
           if (!open) setSelectedPostId(null);
         }}
         ariaLabel="Detalle de la conversación"
-        maxWidthClass="max-w-3xl"
+        maxWidthClass="max-w-5xl"
+        contentClassName="p-6 sm:p-8"
       >
         {selectedPostId ? (
           <PostDetailView

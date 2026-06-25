@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useEffect, useMemo, useState } from 'react';
+import { CommunityGalleryModal } from '@/components/community-gallery-modal';
 import { ThreadCard } from '@/components/community-thread-card';
 import { Icon } from '@/components/icon';
 import { PostComposerModal } from '@/components/post-composer-modal';
@@ -33,6 +34,7 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [sort, setSort] = useState<PostSort>('recent');
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
 
@@ -78,6 +80,13 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
         onSuccess={() => void reload({ sort })}
       />
 
+      <CommunityGalleryModal
+        open={galleryOpen}
+        onClose={() => setGalleryOpen(false)}
+        tag={space}
+        title={`${meta?.title ?? space} · Galería`}
+      />
+
       {/* Cabecera */}
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -99,10 +108,16 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
             <p className="mt-1 text-text-muted">{meta?.description}</p>
           </div>
         </div>
-        <Button onClick={() => setComposerOpen(true)}>
-          <Icon name="plus" size={16} />
-          Nueva publicación
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setComposerOpen(true)}>
+            <Icon name="plus" size={16} />
+            Nueva publicación
+          </Button>
+          <Button variant="secondary" onClick={() => setGalleryOpen(true)}>
+            <Icon name="image" size={16} />
+            Galería
+          </Button>
+        </div>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
@@ -200,7 +215,8 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
           if (!open) setSelectedPostId(null);
         }}
         ariaLabel="Detalle de la publicación"
-        maxWidthClass="max-w-3xl"
+        maxWidthClass="max-w-5xl"
+        contentClassName="p-6 sm:p-8"
       >
         {selectedPostId ? (
           <PostDetailView

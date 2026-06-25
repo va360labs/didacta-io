@@ -5,9 +5,17 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Icon } from '@/components/icon';
 import { PostReactions } from '@/components/post-reactions';
-import type { CommunityTag, Post } from '@/modules/community';
+import { parseBodyAttachments, type CommunityTag, type Post } from '@/modules/community';
 
 export const TAG_COLORS = ['#1E5AA8', '#18B5A8', '#FF6F61', '#2E7DCE', '#0D1B2A'];
+
+/** Máximo de miniaturas de adjuntos que mostramos en la tarjeta del feed. */
+const MAX_FEED_THUMBS = 6;
+
+type AttachmentTile =
+  | { kind: 'image'; url: string; name: string }
+  | { kind: 'file'; name: string }
+  | { kind: 'overflow'; count: number };
 
 export function relTime(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -39,6 +47,21 @@ export function ThreadCard({
     .slice(0, 2)
     .map((s) => s[0]?.toUpperCase() ?? '')
     .join('');
+
+  // El body trae los adjuntos serializados en un comentario HTML al final.
+  // En el feed mostramos solo el texto + miniaturas de los adjuntos.
+  const { cleanBody, images, files } = parseBodyAttachments(post.body);
+  const allAttachments: AttachmentTile[] = [
+    ...images.map((img) => ({ kind: 'image' as const, url: img.url, name: img.name })),
+    ...files.map((f) => ({ kind: 'file' as const, name: f.name })),
+  ];
+  const attachmentTiles: AttachmentTile[] =
+    allAttachments.length > MAX_FEED_THUMBS
+      ? [
+          ...allAttachments.slice(0, MAX_FEED_THUMBS - 1),
+          { kind: 'overflow', count: allAttachments.length - (MAX_FEED_THUMBS - 1) },
+        ]
+      : allAttachments;
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -94,11 +117,44 @@ export function ThreadCard({
               >
                 {post.title}
               </h3>
-              <p className="line-clamp-4 text-sm leading-relaxed text-text-muted">{post.body}</p>
-              {post.body.length > 240 ? (
+              {cleanBody ? (
+                <p className="line-clamp-4 text-sm leading-relaxed text-text-muted">{cleanBody}</p>
+              ) : null}
+              {cleanBody.length > 240 ? (
                 <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand-700">
                   Leer más →
                 </span>
+              ) : null}
+              {attachmentTiles.length > 0 ? (
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  {attachmentTiles.map((tile, i) =>
+                    tile.kind === 'image' ? (
+                      <img
+                        key={i}
+                        src={tile.url}
+                        alt={tile.name}
+                        title={tile.name}
+                        loading="lazy"
+                        className="h-20 w-20 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] object-cover"
+                      />
+                    ) : tile.kind === 'file' ? (
+                      <div
+                        key={i}
+                        title={tile.name}
+                        className="grid h-20 w-20 place-items-center rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] text-text-muted"
+                      >
+                        <Icon name="file" size={28} />
+                      </div>
+                    ) : (
+                      <div
+                        key={i}
+                        className="grid h-20 w-20 place-items-center rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] text-sm font-medium text-text-muted"
+                      >
+                        +{tile.count}
+                      </div>
+                    ),
+                  )}
+                </div>
               ) : null}
               <div className="mt-2 flex flex-wrap items-center gap-3">
                 <span className="inline-flex items-center gap-1.5 text-xs text-text-muted">

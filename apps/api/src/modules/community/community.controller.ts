@@ -58,6 +58,10 @@ const createSpaceSchema = z.object({
 
 const updateSpaceSchema = createSpaceSchema.omit({ slug: true }).partial();
 
+const listAttachmentsQuerySchema = z.object({
+  tag: z.string().min(1).max(40).optional(),
+});
+
 @ApiTags('Modules · Community')
 @ApiBearerAuth()
 @Controller('modules/community')
@@ -103,6 +107,20 @@ export class CommunityController {
     return this.registry
       .getCommunityService()
       .listPosts(user.tenantId, query, { canModerate: canModerate(user) });
+  }
+
+  @Get('attachments')
+  @ApiOperation({
+    summary: 'Listar adjuntos (imágenes y archivos) de los posts, filtrable por espacio/tag',
+  })
+  async listAttachments(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(listAttachmentsQuerySchema)) query: { tag?: string },
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry
+      .getCommunityService()
+      .listAttachments(user.tenantId, query, { canModerate: canModerate(user) });
   }
 
   @Get('posts/:id')

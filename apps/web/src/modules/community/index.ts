@@ -31,8 +31,21 @@ export {
   type CommunityTag,
   type CommunityTagIcon,
   type CommunitySpaceIcon,
+  type CommunityAttachment,
 } from './client';
 
 export { useCommunityTags, invalidateCommunityTagsCache } from './tags-client';
 export { useCommunitySpaces, invalidateCommunitySpacesCache } from './spaces-client';
 export type { CommunitySpace } from './client';
+
+export { parseBodyAttachments, buildBodyWithAttachments } from './attachments';
+export type { AttachmentImage, AttachmentFile, ParsedBody } from './attachments';
+
+export {
+  filterGalleryAttachments,
+  galleryAuthorOptions,
+  DEFAULT_GALLERY_FILTERS,
+  type GalleryFilters,
+  type GalleryType,
+  type GallerySort,
+} from './gallery';

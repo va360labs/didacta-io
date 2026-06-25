@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { EmojiPicker } from '@/components/emoji-picker';
 import { authStorage } from '@/lib/auth-storage';
 import { uploadCommunityFile, uploadCommunityImage } from '@/lib/community-upload';
-import { communityApi, useCommunitySpaces } from '@/modules/community';
+import { buildBodyWithAttachments, communityApi, useCommunitySpaces } from '@/modules/community';
 
 function initials(name: string | null | undefined): string {
   if (!name) return '?';
@@ -211,14 +211,11 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
     setError(null);
     try {
       const allTags = [...new Set([selectedSpace, ...tags])];
-      let finalBody = body.trim();
-      if (images.length > 0 || files.length > 0) {
-        const attachments = {
-          images: images.map((img) => ({ url: img.url, name: img.name })),
-          files: files.map((f) => ({ url: f.url, name: f.name, size: f.size })),
-        };
-        finalBody += `\n\n<!--didacta-attachments:${JSON.stringify(attachments)}-->`;
-      }
+      const finalBody = buildBodyWithAttachments(
+        body,
+        images.map((img) => ({ url: img.url, name: img.name })),
+        files.map((f) => ({ url: f.url, name: f.name, size: f.size })),
+      );
       await communityApi.createPost({ title: title.trim(), body: finalBody, tags: allTags });
       onSuccess();
       onClose();
