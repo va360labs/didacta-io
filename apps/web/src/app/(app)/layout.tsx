@@ -24,11 +24,14 @@ import { CreateSpaceModal } from '@/components/create-space-modal';
  * cada page y permite aplicar el UI kit progresivamente.
  */
 /**
- * Ruta de cambio de contraseña. El usuario con contraseña temporal
- * (`mustChangePassword`) es forzado aquí; esta ruta queda exenta del redirect
- * para no entrar en bucle.
+ * Destino del cambio de contraseña: la pestaña Seguridad del perfil
+ * (`/cuenta?tab=seguridad`). El usuario con contraseña temporal
+ * (`mustChangePassword`) es forzado a `/cuenta`; esa ruta queda exenta del
+ * redirect para no entrar en bucle. (Antes había una página dedicada
+ * `/cuenta/seguridad`; se consolidó en el tab.)
  */
-const CHANGE_PASSWORD_PATH = '/cuenta/seguridad';
+const ACCOUNT_PATH = '/cuenta';
+const CHANGE_PASSWORD_REDIRECT = '/cuenta?tab=seguridad';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -45,8 +48,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     // antes de dejar usar el resto de la app. Al cambiarla, la pantalla de
     // seguridad limpia la sesión y redirige a /signin → el nuevo login ya viene
     // sin el flag, así que no hay bucle.
-    if (current.user.mustChangePassword && pathname !== CHANGE_PASSWORD_PATH) {
-      router.replace(CHANGE_PASSWORD_PATH);
+    if (current.user.mustChangePassword && pathname !== ACCOUNT_PATH) {
+      router.replace(CHANGE_PASSWORD_REDIRECT);
       return;
     }
     // Onboarding OBLIGATORIO para todos los usuarios actuales: mientras

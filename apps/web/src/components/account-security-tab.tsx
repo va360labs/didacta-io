@@ -13,19 +13,13 @@ import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { meApi, type ActiveSession } from '@/lib/me';
 
-function relTime(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(ms / 60_000);
-  if (min < 1) return 'recién';
-  if (min < 60) return `hace ${min} min`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `hace ${h} h`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `hace ${d} d`;
-  return new Date(iso).toLocaleDateString('es-ES');
-}
-
-export default function SeguridadPage() {
+/**
+ * Contenido de la pestaña "Seguridad" del perfil (/cuenta): cambio de
+ * contraseña, sesiones activas y MFA. Antes vivía en la ruta /cuenta/seguridad,
+ * que se eliminó para consolidar todo en el perfil. El gate de contraseña
+ * temporal (`mustChangePassword`) redirige a /cuenta?tab=seguridad.
+ */
+export function AccountSecurityTab() {
   const router = useRouter();
   const [sessions, setSessions] = useState<ActiveSession[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,8 +30,6 @@ export default function SeguridadPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  // True si la contraseña actual es temporal (alta por inscripción externa):
-  // el shell redirige aquí y mostramos un aviso explicando que debe cambiarla.
   const [mustChange, setMustChange] = useState(false);
 
   async function loadSessions() {
@@ -127,18 +119,6 @@ export default function SeguridadPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Seguridad</h1>
-          <p className="mt-1 text-text-muted">
-            Cambia tu contraseña, gestiona tus sesiones activas y configura MFA.
-          </p>
-        </div>
-        <Button variant="ghost" asChild>
-          <Link href="/cuenta">← Volver al perfil</Link>
-        </Button>
-      </header>
-
       <Card>
         <CardHeader>
           <CardTitle>Cambiar contraseña</CardTitle>
@@ -203,7 +183,7 @@ export default function SeguridadPage() {
               </p>
             ) : null}
             {pwSuccess ? (
-              <div className="inline-flex items-center gap-2 rounded-lg bg-[var(--didacta-success-bg)] px-3 py-2 text-sm font-semibold text-[var(--didacta-success-fg)]">
+              <div className="inline-flex items-center gap-2 rounded-lg bg-success-50 px-3 py-2 text-sm font-semibold text-success-700">
                 <Icon name="check" size={16} />
                 Contraseña actualizada. Te redirigimos a iniciar sesión otra vez…
               </div>
@@ -217,12 +197,12 @@ export default function SeguridadPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-end justify-between gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <CardTitle>Sesiones activas</CardTitle>
               <CardDescription>
                 Estas son las sesiones abiertas en tus distintos dispositivos. Si ves alguna que no
-                reconoces, cerrala.
+                reconoces, ciérrala.
               </CardDescription>
             </div>
             <Button variant="destructive" onClick={handleRevokeAll} disabled={busy === 'all'}>
@@ -250,11 +230,7 @@ export default function SeguridadPage() {
                   <div className="flex min-w-0 flex-1 items-start gap-3">
                     <span
                       aria-hidden="true"
-                      className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
-                      style={{
-                        background: 'var(--didacta-info-bg)',
-                        color: 'var(--didacta-info-fg)',
-                      }}
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-info-50 text-info-700"
                     >
                       <Icon name="lock" size={16} />
                     </span>
@@ -286,11 +262,7 @@ export default function SeguridadPage() {
         <CardContent className="flex flex-wrap items-start gap-4 p-6">
           <span
             aria-hidden="true"
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl"
-            style={{
-              background: 'var(--didacta-info-bg)',
-              color: 'var(--didacta-info-fg)',
-            }}
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-info-50 text-info-700"
           >
             <Icon name="shield" size={24} />
           </span>
@@ -320,9 +292,20 @@ export default function SeguridadPage() {
   );
 }
 
+function relTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60_000);
+  if (min < 1) return 'recién';
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `hace ${d} d`;
+  return new Date(iso).toLocaleDateString('es-ES');
+}
+
 function parseUserAgent(ua: string | null): string {
   if (!ua) return 'Dispositivo desconocido';
-  // Heurística simple — extrae OS y browser comunes.
   const browser =
     /Edg\/(\d+)/.exec(ua)?.[0] ||
     /Chrome\/(\d+)/.exec(ua)?.[0] ||

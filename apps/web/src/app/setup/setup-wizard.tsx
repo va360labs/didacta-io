@@ -65,8 +65,10 @@ function evaluatePassword(pw: string): PasswordStrength {
   if (/\d/.test(pw)) variety++;
   if (/[^a-zA-Z0-9]/.test(pw)) variety++;
   const long = pw.length >= 16;
-  if (variety <= 2) return { score: 2, label: 'Aceptable', hint: 'Mezcla mayúsculas, números y símbolos.' };
-  if (variety === 3 && !long) return { score: 3, label: 'Buena', hint: 'Si la haces más larga, mejor.' };
+  if (variety <= 2)
+    return { score: 2, label: 'Aceptable', hint: 'Mezcla mayúsculas, números y símbolos.' };
+  if (variety === 3 && !long)
+    return { score: 3, label: 'Buena', hint: 'Si la haces más larga, mejor.' };
   return { score: 4, label: 'Excelente', hint: '' };
 }
 
@@ -143,7 +145,8 @@ export function SetupWizard() {
   const passwordStrength = useMemo(() => evaluatePassword(adminPassword), [adminPassword]);
   const passwordsMatch = adminPassword === adminPasswordConfirm;
 
-  const orgValid = orgName.trim().length > 0 && /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(orgSlug);
+  const orgValid =
+    orgName.trim().length > 0 && /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(orgSlug);
   const adminValid =
     adminName.trim().length > 0 &&
     /.+@.+\..+/.test(adminEmail) &&
@@ -209,9 +212,7 @@ export function SetupWizard() {
       <ProgressIndicator step={step} />
 
       <section className="mt-8 rounded-2xl border border-border-soft bg-surface p-6 shadow-sm sm:p-10">
-        {step === 'welcome' && (
-          <StepWelcome onContinue={() => setStep('organization')} />
-        )}
+        {step === 'welcome' && <StepWelcome onContinue={() => setStep('organization')} />}
 
         {step === 'organization' && (
           <StepOrganization
@@ -274,8 +275,8 @@ export function SetupWizard() {
       </section>
 
       <footer className="mt-8 text-center text-xs text-text-subtle">
-        Esta pantalla solo aparece la primera vez. Tras crear tu cuenta admin puedes
-        invitar al resto de tu equipo desde Configuración → Usuarios.
+        Esta pantalla solo aparece la primera vez. Tras crear tu cuenta admin puedes invitar al
+        resto de tu equipo desde Configuración → Usuarios.
       </footer>
     </div>
   );
@@ -397,8 +398,8 @@ function StepOrganization(props: {
       <div>
         <h2 className="text-2xl font-bold text-text">Tu organización</h2>
         <p className="mt-1 text-sm text-text-muted">
-          Datos básicos del tenant principal. Puedes añadir más organizaciones después desde el panel
-          de super_admin.
+          Datos básicos del tenant principal. Puedes añadir más organizaciones después desde el
+          panel de super_admin.
         </p>
       </div>
 
@@ -489,9 +490,9 @@ function StepModules(props: {
       <div>
         <h2 className="text-2xl font-bold text-text">Activa los módulos que vas a usar</h2>
         <p className="mt-2 text-sm text-text-muted">
-          Esto define qué áreas de la plataforma están disponibles para tu organización al
-          arrancar. Los marcados aquí quedan activos por defecto en tu tenant; cualquiera puede
-          activarse o desactivarse después desde Configuración → Módulos.
+          Esto define qué áreas de la plataforma están disponibles para tu organización al arrancar.
+          Los marcados aquí quedan activos por defecto en tu tenant; cualquiera puede activarse o
+          desactivarse después desde Configuración → Módulos.
         </p>
       </div>
 
@@ -501,9 +502,7 @@ function StepModules(props: {
         </div>
       )}
 
-      {loading && (
-        <p className="text-sm text-text-muted">Cargando módulos disponibles…</p>
-      )}
+      {loading && <p className="text-sm text-text-muted">Cargando módulos disponibles…</p>}
 
       {coreModules.length > 0 && (
         <section>
@@ -512,7 +511,13 @@ function StepModules(props: {
           </h3>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {coreModules.map((m) => (
-              <ModuleCard key={m.name} module={m} checked={true} disabled={true} onToggle={() => {}} />
+              <ModuleCard
+                key={m.name}
+                module={m}
+                checked={true}
+                disabled={true}
+                onToggle={() => {}}
+              />
             ))}
           </div>
         </section>
@@ -560,7 +565,9 @@ function ModuleCard(props: {
     <label
       className={[
         'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
-        checked ? 'border-brand-500 bg-brand-50' : 'border-border bg-surface hover:border-border-strong',
+        checked
+          ? 'border-brand-500 bg-brand-50'
+          : 'border-border bg-surface hover:border-border-strong',
         disabled ? 'cursor-not-allowed opacity-80' : '',
       ].join(' ')}
     >
@@ -574,9 +581,7 @@ function ModuleCard(props: {
       <div className="flex flex-col gap-0.5">
         <span className="text-sm font-medium text-text">{module.displayName}</span>
         <code className="text-xs text-text-subtle">{module.name}</code>
-        {module.description && (
-          <p className="mt-1 text-xs text-text-muted">{module.description}</p>
-        )}
+        {module.description && <p className="mt-1 text-xs text-text-muted">{module.description}</p>}
       </div>
     </label>
   );
@@ -742,16 +747,17 @@ function StepTour({ onFinish }: { onFinish: () => void }) {
           entre ellos.
         </TourCard>
         <TourCard icon="⚙️" title="Administración">
-          Usuarios, roles, branding, módulos activos, integraciones. Todo lo de la organización
-          vive bajo /admin.
+          Usuarios, roles, branding, módulos activos, integraciones. Todo lo de la organización vive
+          bajo /admin.
         </TourCard>
       </div>
 
       <div className="rounded-lg border border-brand-200 bg-brand-50 p-4 text-sm text-text">
         <p className="font-semibold text-brand-700">Próximo paso recomendado</p>
         <p className="mt-1 text-text-muted">
-          Activa MFA para tu cuenta admin desde <span className="font-mono text-xs">/cuenta/seguridad</span>{' '}
-          en cuanto entres. Es lo único que te separa del resto del mundo.
+          Activa MFA para tu cuenta admin desde tu perfil{' '}
+          <span className="font-mono text-xs">(Mi perfil → Seguridad)</span> en cuanto entres. Es lo
+          único que te separa del resto del mundo.
         </p>
       </div>
 

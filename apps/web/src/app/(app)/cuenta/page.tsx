@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { AccountSecurityTab } from '@/components/account-security-tab';
 import { AvatarUpload } from '@/components/avatar-upload';
 import { CompetencyRadar } from '@/components/competency-radar';
 import { NotificationMatrix, fullMatrix } from '@/components/notification-preferences-form';
@@ -231,6 +232,12 @@ export default function CuentaPage() {
   if (!profile) return null;
 
   const isAdmin = profile.roles.some((r) => r === 'super_admin' || r === 'tenant_admin');
+  // Pestaña inicial desde la URL (?tab=seguridad) — usado por el gate de
+  // contraseña temporal, que redirige a /cuenta?tab=seguridad.
+  const initialTab =
+    typeof window !== 'undefined'
+      ? (new URLSearchParams(window.location.search).get('tab') ?? 'datos')
+      : 'datos';
 
   return (
     <div className="flex flex-col gap-6">
@@ -300,10 +307,9 @@ export default function CuentaPage() {
         ) : null}
       </header>
 
-      <Tabs defaultValue="datos" className="space-y-6">
+      <Tabs defaultValue={initialTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="datos">Datos</TabsTrigger>
-          <TabsTrigger value="competencias">Competencias</TabsTrigger>
           <TabsTrigger value="notificaciones">Notificaciones</TabsTrigger>
           <TabsTrigger value="seguridad">Seguridad</TabsTrigger>
         </TabsList>
@@ -362,16 +368,12 @@ export default function CuentaPage() {
                   <AccountInfoCard profile={profile} />
                 </div>
                 <div className="flex flex-col gap-6">
+                  <CompetencyMapCard data={competencies} />
                   <RecentCertificatesCard certs={recentCerts} />
                 </div>
               </div>
             </>
           )}
-        </TabsContent>
-
-        {/* ── Competencias ── */}
-        <TabsContent value="competencias" className="space-y-6">
-          <CompetencyMapCard data={competencies} />
         </TabsContent>
 
         {/* ── Notificaciones ── */}
@@ -412,29 +414,7 @@ export default function CuentaPage() {
 
         {/* ── Seguridad ── */}
         <TabsContent value="seguridad" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Seguridad</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-center justify-between gap-4">
-              <p className="text-sm text-text-muted">
-                MFA actual:{' '}
-                {profile.mfaEnabled ? (
-                  <Badge variant="success" dot>
-                    Activo
-                  </Badge>
-                ) : (
-                  <Badge variant="muted">No configurado</Badge>
-                )}
-              </p>
-              <Button asChild>
-                <Link href="/cuenta/seguridad">
-                  <Icon name="lock" size={16} />
-                  Ir a seguridad
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
+          <AccountSecurityTab />
         </TabsContent>
       </Tabs>
     </div>
