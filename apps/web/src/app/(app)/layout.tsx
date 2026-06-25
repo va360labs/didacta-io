@@ -326,6 +326,7 @@ function buildGroups({
     items: [
       { href: '/admin', label: 'Panel', icon: 'chart', exactMatch: true },
       { href: '/admin/usuarios', label: 'Usuarios y roles', icon: 'users' },
+      { href: '/admin/impagos', label: 'Impagos', icon: 'shield' },
       { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
       { href: '/admin/comunidad/espacios', label: 'Espacios comunidad', icon: 'hash' },
       { href: '/admin/comunidad/tags', label: 'Tags comunidad', icon: 'message' },

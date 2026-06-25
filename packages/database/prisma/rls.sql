@@ -90,3 +90,14 @@ BEGIN
     CREATE ROLE didacta_super BYPASSRLS;
   END IF;
 END $$;
+
+-- ----------------------------------------------------------------------------
+-- Índices únicos parciales (Prisma no expresa @@unique con WHERE)
+-- Se aplican aquí porque el deploy usa `prisma db push` + este script (psql).
+-- Idempotentes (IF NOT EXISTS).
+-- ----------------------------------------------------------------------------
+-- Inscripción de miembros: telegram_id único por tenant cuando está presente.
+-- Permite múltiples NULL (usuarios no creados por el flujo de Telegram).
+CREATE UNIQUE INDEX IF NOT EXISTS user_tenant_telegram_id_key
+  ON "user" ("tenant_id", "telegram_id")
+  WHERE telegram_id IS NOT NULL;

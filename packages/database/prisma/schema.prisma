@@ -216,6 +216,18 @@ model User {
   /// dejarlo entrar. Backfill de usuarios previos = created_at (no se les
   /// interrumpe). Solo `null` → fecha; nunca vuelve a null.
   onboardingCompletedAt DateTime? @map("onboarding_completed_at")
+  /// ID numérico de Telegram capturado en la inscripción de miembros (gate
+  /// Telegram). Null para usuarios no creados por ese flujo. Único por tenant
+  /// cuando está set: el índice único parcial vive en rls.sql porque Prisma no
+  /// expresa índices parciales (WHERE telegram_id IS NOT NULL). Ver PRD Notion.
+  telegramId       String?    @map("telegram_id") @db.VarChar(32)
+  /// Pertenencia al grupo de Telegram en el momento del registro (tri-estado):
+  /// true = en el grupo, false = fuera, null = no verificable (error Bot API).
+  /// Solo significativo cuando `telegramId` está set.
+  telegramInGroup  Boolean?   @map("telegram_in_group")
+  /// Sello de la decisión del aprobador (aprobar/rechazar) sobre una inscripción
+  /// PENDING. Una vez con valor, los enlaces firmados quedan inutilizados.
+  approvalDecidedAt DateTime? @map("approval_decided_at")
 
   tenant   Tenant     @relation(fields: [tenantId], references: [id])
   sessions Session[]
@@ -226,6 +238,7 @@ model User {
   @@unique([tenantId, documentId], map: "user_tenant_document_id_key")
   @@index([tenantId, status])
   @@index([tenantId, externalSource, externalId], map: "user_external_ref_idx")
+  @@index([tenantId, telegramId], map: "user_tenant_telegram_idx")
   @@map("user")
 }
 
@@ -1725,6 +1738,82 @@ model PasswordResetToken {
   @@index([tenantId, userId])
   @@index([expiresAt])
   @@map("password_reset_token")
+}
+
+// ============================================================================
+// INSCRIPCIÓN DE MIEMBROS — gate Telegram + OTP email + validación manual.
+// Migración de la comunidad de Telegram de VA360 a Didacta "con control".
+// Patrón de tokens clonado de PasswordResetToken (SHA-256, single-use, TTL).
+// Fuente de verdad documental: PRD en Notion (LMS Ship).
+// ============================================================================
+
+/// Código OTP de verificación de email (6 dígitos) del paso 1.5 de inscripción,
+/// ANTES de crear el User PENDING. Indexado por (tenant, email) porque aún no
+/// existe User. Se guarda SHA-256 del código (nunca en claro), TTL corto,
+/// single-use y con contador de intentos. El código viaja solo por email.
+model EmailVerificationCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  email     String
+  /// SHA-256 hex del código de 6 dígitos.
+  codeHash  String    @map("code_hash") @db.VarChar(64)
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  attempts  Int       @default(0)
+  requestIp String?   @map("request_ip")
+  requestUa String?   @map("request_ua")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, email])
+  @@index([expiresAt])
+  @@map("email_verification_code")
+}
+
+enum MemberDecisionAction {
+  APPROVE
+  REJECT
+}
+
+/// Tokens firmados de un solo uso para que el aprobador decida una inscripción
+/// PENDING desde el email (1 click). Se generan DOS por inscripción (APPROVE +
+/// REJECT); al consumir cualquiera se sella `decidedAt` de AMBOS en la misma
+/// transacción que el cambio de status del User. TTL ~7 días. El raw del token
+/// viaja solo por email; en BD solo el SHA-256.
+model MemberRegistrationDecisionToken {
+  id        String               @id @default(uuid()) @db.Uuid
+  tenantId  String               @map("tenant_id") @db.Uuid
+  userId    String               @map("user_id") @db.Uuid
+  action    MemberDecisionAction
+  tokenHash String               @unique @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime             @map("expires_at")
+  decidedAt DateTime?            @map("decided_at")
+  requestIp String?              @map("request_ip")
+  requestUa String?              @map("request_ua")
+  createdAt DateTime             @default(now()) @map("created_at")
+
+  @@index([tenantId, userId])
+  @@index([expiresAt])
+  @@map("member_registration_decision_token")
+}
+
+/// Lista de referencia de estado de pago de miembros, gestionada por el admin
+/// (panel /admin/impagos: alta manual + import CSV). El join con la inscripción
+/// es lógico por `telegram_id` dentro del mismo tenant (sin FK). Permite mostrar
+/// "consta como impago" en la ficha/email de aprobación. Dato real del admin,
+/// nunca hardcodeado (regla #3).
+model MemberPaymentFlag {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  telegramId   String   @map("telegram_id") @db.VarChar(32)
+  name         String?
+  isDelinquent Boolean  @default(true) @map("is_delinquent")
+  note         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, telegramId], map: "member_payment_flag_tenant_tg_key")
+  @@index([tenantId, isDelinquent])
+  @@map("member_payment_flag")
 }
 
 // ============================================================================

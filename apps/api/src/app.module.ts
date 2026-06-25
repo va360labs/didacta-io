@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { BrandingModule } from './branding/branding.module';
 import { HealthModule } from './health/health.module';
 import { InscribeModule } from './enrollment/inscribe.module';
+import { InscripcionModule } from './inscripcion/inscripcion.module';
 import { ApiLicenseModule } from './license/license.module';
 import { MarketplaceModule } from './marketplace/marketplace.module';
 import { AuditExportModule } from './modules/audit-export/audit-export.module';
@@ -87,6 +88,10 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     // ModulesModule porque reusa ModuleRegistryService (mod.learning) y de
     // AuthModule (JwtOrApiKeyGuard + creación de usuario + SMTP).
     InscribeModule,
+    // Inscripción de miembros (gate Telegram + OTP por email + validación
+    // manual). Infra CORE del host; reusa AuthModule (PasswordService, SMTP,
+    // audit, JwtAuthGuard) y ModulesModule (ModuleRegistryService).
+    InscripcionModule,
     // Quinto piloto License SDK — gate feat:reports.advanced_signed end-to-end.
     // Vivimos en módulo separado para acoplar `adm-zip` solo donde se usa.
     AuditExportModule,
