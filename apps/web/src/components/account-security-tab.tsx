@@ -1,12 +1,14 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
+import { MfaSetupFlow } from '@/components/mfa-setup-flow';
+import { useTenantTheme } from '@/components/tenant-theme-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError } from '@/lib/api-client';
@@ -21,6 +23,8 @@ import { meApi, type ActiveSession } from '@/lib/me';
  */
 export function AccountSecurityTab() {
   const router = useRouter();
+  const theme = useTenantTheme();
+  const [mfaOpen, setMfaOpen] = useState(false);
   const [sessions, setSessions] = useState<ActiveSession[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pwError, setPwError] = useState<string | null>(null);
@@ -280,14 +284,51 @@ export function AccountSecurityTab() {
               alumnos y formadores — añade una capa extra contra contraseñas robadas.
             </p>
           </div>
-          <Button asChild>
-            <Link href="/mfa/setup">
-              <Icon name="lock" size={16} />
-              Configurar MFA
-            </Link>
+          <Button onClick={() => setMfaOpen(true)}>
+            <Icon name="lock" size={16} />
+            Configurar MFA
           </Button>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={mfaOpen}
+        onOpenChange={(o) => {
+          if (!o) setMfaOpen(false);
+        }}
+        ariaLabel="Configurar MFA"
+        maxWidthClass="max-w-md"
+        contentClassName="p-6"
+      >
+        <div className="mb-5 flex items-center gap-3">
+          {theme?.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={theme.logoUrl}
+              alt=""
+              className="h-9 w-9 shrink-0 rounded-lg object-contain"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <h2 className="font-display text-lg font-bold tracking-tight text-text">
+              Configurar segundo factor
+            </h2>
+            <p className="text-sm text-text-muted">
+              Escanea el QR con tu app TOTP (Google Authenticator, 1Password, Authy) y confirma el
+              código.
+            </p>
+          </div>
+        </div>
+        {mfaOpen ? (
+          <MfaSetupFlow
+            onDone={() => {
+              setMfaOpen(false);
+              // Recargamos para reflejar mfaEnabled=true en perfil y stats.
+              window.location.reload();
+            }}
+          />
+        ) : null}
+      </Dialog>
     </div>
   );
 }

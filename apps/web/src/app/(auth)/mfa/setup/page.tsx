@@ -1,4 +1,4 @@
-import { MfaSetupFlow } from './mfa-setup-flow';
+import { MfaSetupFlow } from '@/components/mfa-setup-flow';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export const metadata = { title: 'Configurar MFA' };

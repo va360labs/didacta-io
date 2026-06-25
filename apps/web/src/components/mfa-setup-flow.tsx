@@ -20,7 +20,15 @@ interface EnableResponse {
   tokens: { accessToken: string; refreshToken: string; expiresIn: number };
 }
 
-export function MfaSetupFlow() {
+/**
+ * Flujo de alta de MFA (QR + recovery codes + confirmación del código).
+ * Reutilizable en dos contextos:
+ *  - Página `/mfa/setup` (login forzado por rol): sin `onDone` → al activar
+ *    navega a `/`.
+ *  - Modal "Configurar MFA" del perfil: con `onDone` → al activar lo invoca
+ *    (cerrar modal + refrescar) en vez de navegar.
+ */
+export function MfaSetupFlow({ onDone }: { onDone?: () => void }) {
   const router = useRouter();
   const [setup, setSetup] = useState<SetupResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +76,8 @@ export function MfaSetupFlow() {
         access,
       );
       authStorage.saveTokens(response.tokens.accessToken, response.tokens.refreshToken);
-      router.push('/');
+      if (onDone) onDone();
+      else router.push('/');
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No se pudo confirmar el código');
     } finally {
@@ -78,14 +87,14 @@ export function MfaSetupFlow() {
 
   if (error && !setup) {
     return (
-      <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+      <p role="alert" className="text-sm text-danger-700">
         {error}
       </p>
     );
   }
 
   if (!setup) {
-    return <p className="text-sm text-neutral-500">Generando código…</p>;
+    return <p className="text-sm text-text-subtle">Generando código…</p>;
   }
 
   return (
@@ -97,17 +106,15 @@ export function MfaSetupFlow() {
           width={192}
           height={192}
           unoptimized
-          className="rounded-md border border-neutral-200 dark:border-neutral-800"
+          className="rounded-md border border-border"
         />
-        <details className="text-xs text-neutral-500">
+        <details className="text-xs text-text-subtle">
           <summary className="cursor-pointer">URL otpauth (manual)</summary>
-          <code className="mt-2 block break-all rounded bg-neutral-100 p-2 dark:bg-neutral-800">
-            {setup.otpauthUrl}
-          </code>
+          <code className="mt-2 block break-all rounded bg-surface-2 p-2">{setup.otpauthUrl}</code>
         </details>
       </div>
 
-      <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+      <div className="rounded-md border border-warning-200 bg-warning-50 p-3 text-xs text-warning-800">
         <p className="font-semibold">Guarda estos recovery codes en un lugar seguro.</p>
         <p className="mt-1">Cada uno funciona una sola vez si pierdes el acceso a tu app TOTP.</p>
         <ul className="mt-2 grid grid-cols-2 gap-1 font-mono">
@@ -131,7 +138,7 @@ export function MfaSetupFlow() {
           />
         </div>
         {error ? (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          <p role="alert" className="text-sm text-danger-700">
             {error}
           </p>
         ) : null}
