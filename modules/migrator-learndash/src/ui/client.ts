@@ -34,6 +34,15 @@ export interface SampleConfig {
 }
 
 export interface ImportOptions {
+  /**
+   * Qué migrar (v1.1.0+). El backend (readScopeConfig) lo lee y deriva qué
+   * entidades extrae/carga. 'all' = comportamiento legacy (todo).
+   *   - 'courses': solo contenido (cursos + lecciones + temas + quizzes).
+   *   - 'enrolled-students': solo usuarios con ≥1 matrícula + sus matrículas
+   *     (asume cursos ya migrados; modo diferido).
+   *   - 'all': todo.
+   */
+  mode: 'courses' | 'enrolled-students' | 'all';
   dedupeUsersBy: ('email' | 'username')[];
   passwordStrategy: 'activation_reset' | 'preserve_hash';
   copyMediaBinaries: boolean;

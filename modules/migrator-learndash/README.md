@@ -87,14 +87,11 @@ Todos los endpoints respetan el namespace global del host
 
 ## Eventos emitidos
 
-```
-migrator-learndash.import.started
-migrator-learndash.import.completed
-migrator-learndash.import.failed
-migrator-learndash.import.cancelled
-migrator-learndash.import.rollback.started
-migrator-learndash.import.rollback.completed
-```
+Ninguno por ahora. El host todavía no expone un cliente de emisión de
+eventos (`ctx.events`) a los módulos sandbox, así que el manifest declara
+`eventsEmitted: []`. Cuando exista esa infraestructura se volverán a
+declarar los eventos del ciclo de migración
+(`import.started`/`completed`/`failed`/`cancelled`/`rollback.*`).
 
 No consume eventos de otros módulos (es un consumidor unidireccional
 del origen LearnDash).
