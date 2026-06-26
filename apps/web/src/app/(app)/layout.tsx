@@ -201,12 +201,19 @@ function Shell({
     })),
   };
 
-  const baseGroups = buildGroups({
-    isAdminOrFormador,
-    isAdmin,
-    isSuperAdmin,
-    espacios: espaciosGroup,
-  });
+  // Área de admin: cuando el admin está en /admin o /super, el sidebar cambia a
+  // las sub-secciones de administración (buildAdminGroups). Fuera de ahí, el
+  // menú principal (con una sola entrada "Administración").
+  const isAdminArea =
+    isAdmin && ((pathname ?? '').startsWith('/admin') || (pathname ?? '').startsWith('/super'));
+  const baseGroups = isAdminArea
+    ? buildAdminGroups({ isSuperAdmin })
+    : buildGroups({
+        isAdminOrFormador,
+        isAdmin,
+        isSuperAdmin,
+        espacios: espaciosGroup,
+      });
   const userRoles = new Set(session.user.roles);
   const mergedGroups = mergeExtensionSidebarItems(baseGroups, moduleExtensions, userRoles);
   const groups = filterByActiveModules(mergedGroups, activeModules);
@@ -378,50 +385,92 @@ function buildGroups({
     return [inicio, espacios, aprendizaje, grupos, agenda, personas, profesor];
   }
 
-  // ── Administración ─────────────────────────────────────────────────────────
-  // Consolida lo que antes eran 4 grupos separados (Tenant, Seguridad,
-  // Integraciones, Facturación) en un único grupo Admin para reducir el ruido
-  // en el rail. El admin ve una sola área "Administración" con todos los items.
-  const administracion: SidebarGroup = {
-    label: 'Administración',
+  // ── Administración (entrada) ─────────────────────────────────────────────
+  // El admin tiene su PROPIA área (buildAdminGroups): el menú principal solo
+  // muestra UNA entrada que lleva a /admin, donde el sidebar cambia a las
+  // sub-secciones de administración. Así el rail principal no se satura con ~20
+  // items. La etiqueta del grupo es 'Gestión' (NO 'Administración') a propósito:
+  // así las extensiones de módulos que apuntan a 'Administración' NO se cuelan
+  // en el menú principal — solo aparecen dentro del área admin.
+  const entradaAdmin: SidebarGroup = {
+    label: 'Gestión',
+    icon: 'building',
+    items: [{ href: '/admin', label: 'Administración', icon: 'building' }],
+  };
+
+  return [inicio, espacios, aprendizaje, grupos, agenda, personas, profesor, entradaAdmin];
+}
+
+/**
+ * Sidebar del ÁREA de administración. Se usa cuando el pathname empieza por
+ * `/admin` o `/super` (ver Shell): reemplaza al sidebar principal para que el
+ * admin tenga su propio espacio, organizado en sub-secciones + "Volver a la app".
+ *
+ * Los labels 'Facturación' / 'Integraciones' / 'Administración' coinciden A
+ * PROPÓSITO con los `group` que declaran las extensiones de módulos (billing →
+ * Facturación, fundae → Integraciones, migrator → Administración) para que
+ * `mergeExtensionSidebarItems` inserte sus items aquí dentro.
+ */
+function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): SidebarGroup[] {
+  const general: SidebarGroup = {
+    label: 'General',
     icon: 'building',
     items: [
+      { href: '/comunidad', label: '← Volver a la app', icon: 'home', exactMatch: true },
       { href: '/admin', label: 'Panel', icon: 'chart', exactMatch: true },
       { href: '/admin/usuarios', label: 'Usuarios y roles', icon: 'users' },
       { href: '/admin/grupos-acceso', label: 'Grupos de acceso', icon: 'lock' },
-      { href: '/admin/impagos', label: 'Impagos', icon: 'shield' },
-      { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
-      { href: '/admin/comunidad/espacios', label: 'Espacios comunidad', icon: 'hash' },
-      { href: '/admin/comunidad/tags', label: 'Tags comunidad', icon: 'message' },
       { href: '/admin/competencias', label: 'Competencias', icon: 'award' },
       { href: '/admin/branding', label: 'Branding', icon: 'palette' },
+      { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
+    ],
+  };
+  const comunidad: SidebarGroup = {
+    label: 'Comunidad',
+    icon: 'hash',
+    items: [
+      { href: '/admin/comunidad/espacios', label: 'Espacios', icon: 'hash' },
+      { href: '/admin/comunidad/tags', label: 'Tags', icon: 'message' },
+    ],
+  };
+  const facturacion: SidebarGroup = {
+    label: 'Facturación',
+    icon: 'shield',
+    items: [{ href: '/admin/impagos', label: 'Impagos', icon: 'shield' }],
+  };
+  const seguridad: SidebarGroup = {
+    label: 'Seguridad',
+    icon: 'shield',
+    items: [
       { href: '/admin/seguridad', label: 'Seguridad', icon: 'shield' },
       { href: '/admin/auditoria', label: 'Auditoría', icon: 'shield' },
-      // Features Enterprise con UI: SIEMPRE visibles (patrón EeGate, ver
-      // docs/UI-EE-GATING.md). Cada página muestra upsell si la capability
-      // no está activa; el backend mantiene @RequiresCapability → 402.
+      // Features EE con UI: siempre visibles (patrón EeGate); el backend gatea.
       { href: '/admin/sso', label: 'SSO (OIDC)', icon: 'lock' },
       { href: '/admin/sso-saml', label: 'SSO (SAML)', icon: 'lock' },
       { href: '/admin/scim', label: 'SCIM Provisioning', icon: 'users' },
-      { href: '/admin/rate-limit', label: 'Límites API', icon: 'trending' },
+    ],
+  };
+  const integraciones: SidebarGroup = {
+    label: 'Integraciones',
+    icon: 'package',
+    items: [
       { href: '/admin/webhooks', label: 'Webhooks API', icon: 'package' },
       { href: '/admin/api-keys', label: 'Claves API', icon: 'code' },
+      { href: '/admin/rate-limit', label: 'Límites API', icon: 'trending' },
       { href: '/admin/dominios', label: 'Dominios propios', icon: 'building' },
     ],
   };
+  const groups: SidebarGroup[] = [general, comunidad, facturacion, seguridad, integraciones];
   if (isSuperAdmin) {
-    administracion.items.push({ href: '/admin/tenants', label: 'Tenants', icon: 'building' });
-    administracion.items.push({
-      href: '/super/users',
-      label: 'Usuarios cross-tenant',
-      icon: 'users',
-    });
-    administracion.items.push({
-      href: '/admin/marketplace',
-      label: 'Marketplace módulos',
-      icon: 'package',
+    groups.push({
+      label: 'Administración',
+      icon: 'building',
+      items: [
+        { href: '/admin/tenants', label: 'Tenants', icon: 'building' },
+        { href: '/super/users', label: 'Usuarios cross-tenant', icon: 'users' },
+        { href: '/admin/marketplace', label: 'Marketplace módulos', icon: 'package' },
+      ],
     });
   }
-
-  return [inicio, espacios, aprendizaje, grupos, agenda, personas, profesor, administracion];
+  return groups;
 }
