@@ -9,12 +9,23 @@ import type { PrismaAuditLogService } from '../src/modules/prisma-audit-log.serv
 const SECRET = 'wp-sso-secreto-compartido-de-prueba-1234567890';
 const TENANT_SLUG = 'va360';
 
-function makeToken(opts: { email?: string; name?: string; jti?: string; ttl?: number } = {}) {
+function makeToken(
+  opts: {
+    email?: string;
+    name?: string;
+    jti?: string;
+    ttl?: number;
+    sub?: string;
+    emailVerified?: boolean;
+  } = {},
+) {
   const now = Math.floor(Date.now() / 1000);
   return new SignJWT({
     email: opts.email ?? 'nuevo@va360.academy',
     ...(opts.name ? { name: opts.name } : {}),
     jti: opts.jti ?? `jti-${Math.floor(now)}-${opts.email ?? 'x'}`,
+    ...(opts.sub ? { sub: opts.sub } : {}),
+    ...(opts.emailVerified !== undefined ? { email_verified: opts.emailVerified } : {}),
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt(now)
@@ -32,6 +43,11 @@ interface Mocks {
       update: ReturnType<typeof vi.fn>;
     };
     role: { findFirst: ReturnType<typeof vi.fn> };
+    userExternalIdentity: {
+      findUnique: ReturnType<typeof vi.fn>;
+      create: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
   };
   tokens: { sign: ReturnType<typeof vi.fn> };
   auditLog: { record: ReturnType<typeof vi.fn> };
@@ -53,6 +69,11 @@ function build(): { svc: WpSsoService; m: Mocks } {
         update: vi.fn().mockResolvedValue({}),
       },
       role: { findFirst: vi.fn().mockResolvedValue({ id: 'role-alumno' }) },
+      userExternalIdentity: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: 'idn-new' }),
+        update: vi.fn().mockResolvedValue({}),
+      },
     },
     tokens: { sign: vi.fn().mockResolvedValue({ accessToken: 'AT', refreshToken: 'RT' }) },
     auditLog: { record: vi.fn().mockResolvedValue(undefined) },
@@ -136,5 +157,73 @@ describe('WpSsoService.exchange', () => {
       .setAudience('didacta-wp-sso')
       .sign(new TextEncoder().encode('secreto-equivocado-aaaaaaaaaaaaaaaaaaaa'));
     await expect(svc.exchange(bad)).rejects.toBeInstanceOf(WpSsoTokenError);
+  });
+
+  it('con sub: provisión crea identidad estable (linkMethod auto_provision)', async () => {
+    const { svc, m } = build();
+    await svc.exchange(await makeToken({ email: 'nuevo@va360.academy', sub: 'wp-100' }));
+    expect(m.prisma.userExternalIdentity.findUnique).toHaveBeenCalledTimes(1);
+    expect(m.prisma.user.create).toHaveBeenCalledTimes(1);
+    expect(m.prisma.userExternalIdentity.create).toHaveBeenCalledTimes(1);
+    const linkArg = m.prisma.userExternalIdentity.create.mock.calls[0][0];
+    expect(linkArg.data.externalId).toBe('wp-100');
+    expect(linkArg.data.provider).toBe('wp');
+    expect(linkArg.data.linkMethod).toBe('auto_provision');
+    expect(m.auditLog.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'sso.wp.user.provisioned' }),
+    );
+  });
+
+  it('con sub: identidad existente resuelve por sub (sin create ni provisión)', async () => {
+    const { svc, m } = build();
+    m.prisma.userExternalIdentity.findUnique.mockResolvedValue({ id: 'idn-1', userId: 'user-7' });
+    m.prisma.user.findUnique.mockResolvedValue({
+      id: 'user-7',
+      email: 'ana@va360.academy',
+      name: 'Ana',
+      status: 'ACTIVE',
+      roles: [{ role: { name: 'alumno' } }],
+    });
+    const out = await svc.exchange(await makeToken({ email: 'ana@va360.academy', sub: 'wp-7' }));
+    expect(m.prisma.user.create).not.toHaveBeenCalled();
+    expect(m.prisma.userExternalIdentity.create).not.toHaveBeenCalled();
+    expect(m.prisma.userExternalIdentity.update).toHaveBeenCalledTimes(1); // refresca lastSeenAt
+    expect(out.user.id).toBe('user-7');
+  });
+
+  it('con sub: usuario existente por email se vincula lazy (linkMethod auto_email)', async () => {
+    const { svc, m } = build();
+    m.prisma.user.findUnique.mockResolvedValue({
+      id: 'user-9',
+      email: 'pepe@va360.academy',
+      name: 'Pepe',
+      status: 'ACTIVE',
+      roles: [{ role: { name: 'alumno' } }],
+    });
+    const out = await svc.exchange(await makeToken({ email: 'pepe@va360.academy', sub: 'wp-9' }));
+    expect(m.prisma.user.create).not.toHaveBeenCalled();
+    expect(m.prisma.userExternalIdentity.create).toHaveBeenCalledTimes(1);
+    expect(m.prisma.userExternalIdentity.create.mock.calls[0][0].data.linkMethod).toBe(
+      'auto_email',
+    );
+    expect(out.user.id).toBe('user-9');
+    expect(m.auditLog.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'sso.wp.account.linked' }),
+    );
+  });
+
+  it('un usuario PENDING no entra por SSO (status != ACTIVE)', async () => {
+    const { svc, m } = build();
+    m.prisma.user.findUnique.mockResolvedValue({
+      id: 'user-p',
+      email: 'pending@va360.academy',
+      name: 'Pend',
+      status: 'PENDING',
+      roles: [],
+    });
+    await expect(
+      svc.exchange(await makeToken({ email: 'pending@va360.academy', sub: 'wp-p' })),
+    ).rejects.toThrow(/no está activa/);
+    expect(m.prisma.userExternalIdentity.create).not.toHaveBeenCalled();
   });
 });

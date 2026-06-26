@@ -15,7 +15,11 @@ import { WpSsoTokenError } from './errors.js';
  * Claims esperados en el token de WP:
  *   - `aud`   audiencia fija — default 'didacta-wp-sso'.
  *   - `iss`   URL del WordPress origen (opcional, se valida si se configura).
+ *   - `sub`   WordPress `user_id` — identidad ESTABLE (plugin ≥ 0.2.0). Opcional
+ *             aquí para tolerar tokens legacy 0.1.0; el host degrada a email-only
+ *             con warning si falta (ventana de migración).
  *   - `email` email del usuario logueado en WP (obligatorio).
+ *   - `email_verified` si el origen declara el email como verificado (opcional).
  *   - `name`  nombre para mostrar (opcional).
  *   - `iat`/`exp` emisión + expiración corta.
  *   - `jti`   nonce único para anti-replay (obligatorio).
@@ -30,6 +34,14 @@ export interface WpSsoClaims {
   jti: string;
   /** Issuer (WordPress origen), si vino. */
   iss?: string;
+  /**
+   * WordPress `user_id` (claim `sub`) — clave de identidad ESTABLE e inmutable.
+   * `undefined` si el token viene de un plugin legacy 0.1.0 (sin `sub`): el host
+   * degrada a resolución por email con warning durante la ventana de migración.
+   */
+  subject?: string;
+  /** El origen declaró el email como verificado (fuente fiable). Default false. */
+  emailVerified: boolean;
   /** Expiración (epoch s) — el host usa esto como TTL del marcado anti-replay. */
   exp: number;
 }
@@ -137,6 +149,11 @@ export async function verifyWpSsoToken(
   const name =
     typeof payload.name === 'string' && payload.name.trim() ? payload.name.trim() : undefined;
   const iss = typeof payload.iss === 'string' ? payload.iss : undefined;
+  // Identidad estable (plugin ≥ 0.2.0). Si falta, el host degrada a email-only.
+  const subject =
+    typeof payload.sub === 'string' && payload.sub.trim() ? payload.sub.trim() : undefined;
+  // Solo confiamos en `true` explícito; cualquier otra cosa = no verificado.
+  const emailVerified = payload.email_verified === true;
 
-  return { email: rawEmail, name, jti, iss, exp };
+  return { email: rawEmail, name, jti, iss, exp, subject, emailVerified };
 }

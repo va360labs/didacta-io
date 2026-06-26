@@ -12,8 +12,10 @@ import { TokenService } from '../../auth/token.service';
  *   1. Verifica el token (firma HMAC, audiencia, issuer, exp, TTL máx) →
  *      mod.wp-sso `verifyWpSsoToken` (pura).
  *   2. Anti-replay: marca el `jti` como usado (Redis SET NX EX). Single-use.
- *   3. Resuelve el usuario por email en el tenant configurado. Si no existe y
- *      el provisioning está activo, lo crea con rol `alumno`.
+ *   3. Resuelve el usuario por IDENTIDAD ESTABLE (`sub` = WordPress user_id) vía
+ *      `UserExternalIdentity`. Si no hay vínculo, cae a email: lazy-link de la
+ *      cuenta existente o auto-provisión (rol `alumno`) si está habilitada. Un
+ *      token legacy 0.1.0 sin `sub` degrada a email-only con warning.
  *   4. Emite la sesión (TokenService) y devuelve tokens + datos del user.
  *
  * Config (V1, por env del host):
@@ -41,6 +43,22 @@ export class WpSsoService {
   /** True si WP-SSO está configurado (secreto + tenant). Lo usa el endpoint de status. */
   isConfigured(): boolean {
     return Boolean(process.env['WP_SSO_SHARED_SECRET'] && process.env['WP_SSO_TENANT_SLUG']);
+  }
+
+  /**
+   * Config pública (SIN secretos) que consume el signin para el auto-bounce
+   * transparente:
+   *   - configured:   hay secreto + tenant.
+   *   - autoRedirect: `WP_SSO_AUTO_REDIRECT=true` → el signin rebota a WordPress
+   *                   en modo `try` (silencioso) si no hay sesión Didacta.
+   *   - wordpressUrl: `WP_SSO_ISSUER` (home_url de WP) — destino del bounce.
+   */
+  ssoConfig(): { configured: boolean; autoRedirect: boolean; wordpressUrl: string | null } {
+    return {
+      configured: this.isConfigured(),
+      autoRedirect: process.env['WP_SSO_AUTO_REDIRECT'] === 'true',
+      wordpressUrl: process.env['WP_SSO_ISSUER']?.trim().replace(/\/+$/, '') || null,
+    };
   }
 
   async exchange(token: string): Promise<{
@@ -86,48 +104,139 @@ export class WpSsoService {
       );
     }
 
-    let user = await this.prisma.user.findUnique({
-      where: { tenantId_email: { tenantId: tenant.id, email: claims.email } },
-      include: { roles: { include: { role: true } } },
-    });
-
+    const provider = 'wp';
+    // Issuer de la identidad: el `iss` del token (home_url de WP), con fallback al
+    // env configurado y, en último caso, una constante estable.
+    const issuer = claims.iss ?? process.env['WP_SSO_ISSUER'] ?? 'wordpress';
     const autoCreate = (process.env['WP_SSO_AUTOCREATE'] ?? 'true') !== 'false';
 
+    // 1) Resolución por IDENTIDAD ESTABLE (sub). Independiente del email: resiste
+    //    cambios y reuso de email en WordPress. Solo si el plugin firmó `sub` (≥0.2.0).
+    const identity = claims.subject
+      ? await this.prisma.userExternalIdentity.findUnique({
+          where: {
+            tenantId_provider_issuer_externalId: {
+              tenantId: tenant.id,
+              provider,
+              issuer,
+              externalId: claims.subject,
+            },
+          },
+        })
+      : null;
+
+    let user = identity ? await this.loadUserWithRoles(identity.userId) : null;
+    let provisioned = false;
+
+    if (user) {
+      // Vino por identidad estable: validar estado.
+      if (user.status !== 'ACTIVE') {
+        throw new UnauthorizedException('Tu cuenta no está activa. Contacta al administrador.');
+      }
+    } else {
+      // 2) Sin identidad → resolver por email (lazy-link o auto-provisión).
+      user = await this.prisma.user.findUnique({
+        where: { tenantId_email: { tenantId: tenant.id, email: claims.email } },
+        include: { roles: { include: { role: true } } },
+      });
+
+      if (!user) {
+        if (!autoCreate) {
+          await this.auditLog.record({
+            tenantId: tenant.id,
+            actorId: null,
+            action: 'sso.wp.callback.rejected',
+            resourceType: 'wp_sso',
+            resourceId: claims.jti.slice(0, 12),
+            metadata: { reason: 'user_not_provisioned', email: claims.email },
+          });
+          throw new UnauthorizedException(
+            'No tienes cuenta en Didacta. Pídele al administrador que te dé de alta.',
+          );
+        }
+        user = await this.provisionUser(tenant.id, claims.email, claims.name ?? null);
+        provisioned = true;
+      } else if (user.status !== 'ACTIVE') {
+        // Un PENDING (p.ej. esperando aprobación de inscripcion-miembros) NO entra
+        // por SSO hasta su aprobación. Regla de coexistencia deseada.
+        throw new UnauthorizedException('Tu cuenta no está activa. Contacta al administrador.');
+      }
+    }
+
+    // Salvaguarda de tipado/lógica: a este punto siempre hay user (o lanzamos).
     if (!user) {
-      if (!autoCreate) {
+      throw new WpSsoTokenError('invalid', 'No se pudo resolver el usuario del token SSO.');
+    }
+
+    // 3) Persistir el VÍNCULO ESTABLE (solo si el token trae sub).
+    if (claims.subject) {
+      if (identity) {
+        await this.prisma.userExternalIdentity.update({
+          where: { id: identity.id },
+          data: {
+            lastSeenAt: new Date(),
+            emailVerified: claims.emailVerified,
+            emailAtLink: claims.email,
+          },
+        });
+      } else {
+        const linkMethod = provisioned ? 'auto_provision' : 'auto_email';
+        await this.prisma.userExternalIdentity.create({
+          data: {
+            tenantId: tenant.id,
+            userId: user.id,
+            provider,
+            issuer,
+            externalId: claims.subject,
+            emailAtLink: claims.email,
+            emailVerified: claims.emailVerified,
+            linkMethod,
+            lastSeenAt: new Date(),
+          },
+        });
         await this.auditLog.record({
           tenantId: tenant.id,
-          actorId: null,
-          action: 'sso.wp.callback.rejected',
-          resourceType: 'wp_sso',
-          resourceId: claims.jti.slice(0, 12),
-          metadata: { reason: 'user_not_provisioned', email: claims.email },
+          actorId: user.id,
+          action: provisioned ? 'sso.wp.user.provisioned' : 'sso.wp.account.linked',
+          resourceType: 'user',
+          resourceId: user.id,
+          metadata: {
+            email: claims.email,
+            sub: claims.subject,
+            issuer,
+            emailVerified: claims.emailVerified,
+            linkMethod,
+          },
         });
-        throw new UnauthorizedException(
-          'No tienes cuenta en Didacta. Pídele al administrador que te dé de alta.',
-        );
       }
-      user = await this.provisionUser(tenant.id, claims.email, claims.name ?? null);
+    } else if (provisioned) {
+      // Token legacy 0.1.0 sin sub: provisión degradada a email-only (con warning).
+      this.logger.warn(
+        'WP-SSO: token sin `sub` (plugin legacy 0.1.0). Provisión por email sin vínculo estable; actualiza el plugin a ≥0.2.0.',
+      );
       await this.auditLog.record({
         tenantId: tenant.id,
         actorId: user.id,
         action: 'sso.wp.user.provisioned',
         resourceType: 'user',
         resourceId: user.id,
-        metadata: { email: claims.email, name: claims.name ?? null, iss: claims.iss ?? null },
-      });
-    } else {
-      if (user.status !== 'ACTIVE') {
-        throw new UnauthorizedException('Tu cuenta no está activa. Contacta al administrador.');
-      }
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          lastLoginAt: new Date(),
-          ...(claims.name && claims.name !== user.name ? { name: claims.name } : {}),
+        metadata: {
+          email: claims.email,
+          name: claims.name ?? null,
+          iss: claims.iss ?? null,
+          legacyNoSub: true,
         },
       });
     }
+
+    // 4) Refrescar lastLogin + name (si vino y cambió). No pisamos el email canónico.
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt: new Date(),
+        ...(claims.name && claims.name !== user.name ? { name: claims.name } : {}),
+      },
+    });
 
     const roles = user.roles.map((r) => r.role.name);
     const tokens = await this.tokens.sign({
@@ -175,6 +284,14 @@ export class WpSsoService {
         passwordHash: null,
         ...(alumnoRole ? { roles: { create: { roleId: alumnoRole.id } } } : {}),
       },
+      include: { roles: { include: { role: true } } },
+    });
+  }
+
+  /** Carga un user con sus roles (mismo include que el resto del flujo). */
+  private loadUserWithRoles(userId: string) {
+    return this.prisma.user.findUnique({
+      where: { id: userId },
       include: { roles: { include: { role: true } } },
     });
   }

@@ -40,18 +40,18 @@ model Tenant {
   updatedAt DateTime     @updatedAt @map("updated_at")
   deletedAt DateTime?    @map("deleted_at")
 
-  users           User[]
-  sessions        Session[]
-  apiKeys         ApiKey[]
-  tenantModules   TenantModule[]
-  auditLogs       AuditLog[]
-  evidenceEntries EvidenceVaultEntry[]
-  outboxEvents    OutboxEvent[]
-  webhookEndpoints WebhookEndpoint[]
+  users              User[]
+  sessions           Session[]
+  apiKeys            ApiKey[]
+  tenantModules      TenantModule[]
+  auditLogs          AuditLog[]
+  evidenceEntries    EvidenceVaultEntry[]
+  outboxEvents       OutboxEvent[]
+  webhookEndpoints   WebhookEndpoint[]
   webhookDeadLetters WebhookDeadLetter[]
-  notifTemplates  NotificationTemplate[]
-  tenantSettings  TenantSetting[]
-  domains         TenantDomain[]
+  notifTemplates     NotificationTemplate[]
+  tenantSettings     TenantSetting[]
+  domains            TenantDomain[]
 
   @@index([slug])
   @@index([status])
@@ -165,74 +165,75 @@ model TenantModule {
 // ============================================================================
 
 model User {
-  id               String     @id @default(uuid()) @db.Uuid
-  tenantId         String     @map("tenant_id") @db.Uuid
-  email            String
-  emailVerified    Boolean    @default(false) @map("email_verified")
-  name             String?
+  id                    String     @id @default(uuid()) @db.Uuid
+  tenantId              String     @map("tenant_id") @db.Uuid
+  email                 String
+  emailVerified         Boolean    @default(false) @map("email_verified")
+  name                  String?
   /// Biografía corta del usuario, opcional. Se captura en el onboarding y se
   /// edita en /cuenta. Máx 280 caracteres.
-  bio              String?    @db.VarChar(280)
+  bio                   String?    @db.VarChar(280)
   /// Cargo / puesto del usuario (ej. "Director de Formación"). Opcional,
   /// editable por el propio usuario en /cuenta. Máx 120.
-  jobTitle         String?    @map("job_title") @db.VarChar(120)
+  jobTitle              String?    @map("job_title") @db.VarChar(120)
   /// Departamento / área (ej. "Talento y Cultura"). Opcional. Máx 120.
-  department       String?    @db.VarChar(120)
+  department            String?    @db.VarChar(120)
   /// Ubicación libre (ej. "Madrid, España"). Opcional. Máx 120.
-  location         String?    @db.VarChar(120)
-  passwordHash     String?    @map("password_hash")
-  mfaSecret        String?    @map("mfa_secret")
-  mfaEnabled       Boolean    @default(false) @map("mfa_enabled")
-  mfaRecoveryCodes String[]   @default([]) @map("mfa_recovery_codes")
-  status           UserStatus @default(ACTIVE)
+  location              String?    @db.VarChar(120)
+  passwordHash          String?    @map("password_hash")
+  mfaSecret             String?    @map("mfa_secret")
+  mfaEnabled            Boolean    @default(false) @map("mfa_enabled")
+  mfaRecoveryCodes      String[]   @default([]) @map("mfa_recovery_codes")
+  status                UserStatus @default(ACTIVE)
   /// True cuando la contraseña actual es temporal (ej. user creado por
   /// `POST /api/v1/inscribe` tras una compra externa). Mientras sea true,
   /// el usuario es forzado a establecer una contraseña nueva tras el login.
-  mustChangePassword Boolean  @default(false) @map("must_change_password")
-  locale           String     @default("es-ES")
+  mustChangePassword    Boolean    @default(false) @map("must_change_password")
+  locale                String     @default("es-ES")
   /// IANA timezone, ej. "America/Argentina/Buenos_Aires" o "Europe/Madrid".
   /// Usado para mostrar timestamps localmente. Default UTC.
-  timezone         String     @default("UTC") @map("timezone")
+  timezone              String     @default("UTC") @map("timezone")
   /// URL pública (S3/CDN) del avatar del usuario. Null = usar iniciales.
-  avatarUrl        String?    @map("avatar_url")
+  avatarUrl             String?    @map("avatar_url")
   /// Documento de identidad (DNI o NIE español) en mayúsculas y sin
   /// separadores. Requerido para Fundae cuando el usuario participa
   /// en una acción formativa bonificada. Único por tenant si está set.
-  documentId       String?    @map("document_id") @db.VarChar(20)
+  documentId            String?    @map("document_id") @db.VarChar(20)
   /// Origen de los datos cuando el user fue importado por un módulo
   /// third-party (ej. "learndash"). Combinado con `externalId`, forma la
   /// clave de idempotencia que usa `ctx.didacta.users.upsertByExternalRef`.
   /// Null para users creados directamente en Didacta. Ver ADR-014.
-  externalSource   String?    @map("external_source") @db.VarChar(40)
+  externalSource        String?    @map("external_source") @db.VarChar(40)
   /// ID del user en el sistema origen (ej. WordPress user_id). Free-form.
   /// Solo significativo en combinación con `externalSource`. Ver ADR-014.
-  externalId       String?    @map("external_id") @db.VarChar(200)
-  createdAt        DateTime   @default(now()) @map("created_at")
-  updatedAt        DateTime   @updatedAt @map("updated_at")
-  deletedAt        DateTime?  @map("deleted_at")
-  lastLoginAt      DateTime?  @map("last_login_at")
+  externalId            String?    @map("external_id") @db.VarChar(200)
+  createdAt             DateTime   @default(now()) @map("created_at")
+  updatedAt             DateTime   @updatedAt @map("updated_at")
+  deletedAt             DateTime?  @map("deleted_at")
+  lastLoginAt           DateTime?  @map("last_login_at")
   /// Timestamp en que el usuario completó el onboarding de primera vez.
   /// Null = aún no lo completó → el shell lo fuerza a /onboarding antes de
   /// dejarlo entrar. Backfill de usuarios previos = created_at (no se les
   /// interrumpe). Solo `null` → fecha; nunca vuelve a null.
-  onboardingCompletedAt DateTime? @map("onboarding_completed_at")
+  onboardingCompletedAt DateTime?  @map("onboarding_completed_at")
   /// ID numérico de Telegram capturado en la inscripción de miembros (gate
   /// Telegram). Null para usuarios no creados por ese flujo. Único por tenant
   /// cuando está set: el índice único parcial vive en rls.sql porque Prisma no
   /// expresa índices parciales (WHERE telegram_id IS NOT NULL). Ver PRD Notion.
-  telegramId       String?    @map("telegram_id") @db.VarChar(32)
+  telegramId            String?    @map("telegram_id") @db.VarChar(32)
   /// Pertenencia al grupo de Telegram en el momento del registro (tri-estado):
   /// true = en el grupo, false = fuera, null = no verificable (error Bot API).
   /// Solo significativo cuando `telegramId` está set.
-  telegramInGroup  Boolean?   @map("telegram_in_group")
+  telegramInGroup       Boolean?   @map("telegram_in_group")
   /// Sello de la decisión del aprobador (aprobar/rechazar) sobre una inscripción
   /// PENDING. Una vez con valor, los enlaces firmados quedan inutilizados.
-  approvalDecidedAt DateTime? @map("approval_decided_at")
+  approvalDecidedAt     DateTime?  @map("approval_decided_at")
 
-  tenant   Tenant     @relation(fields: [tenantId], references: [id])
-  sessions Session[]
-  apiKeys  ApiKey[]
-  roles    UserRole[]
+  tenant             Tenant                 @relation(fields: [tenantId], references: [id])
+  sessions           Session[]
+  apiKeys            ApiKey[]
+  roles              UserRole[]
+  externalIdentities UserExternalIdentity[]
 
   @@unique([tenantId, email])
   @@unique([tenantId, documentId], map: "user_tenant_document_id_key")
@@ -247,6 +248,45 @@ enum UserStatus {
   PENDING
   SUSPENDED
   DEACTIVATED
+}
+
+/// Identidad federada de un usuario en un proveedor externo (WordPress, etc.).
+/// La clave de identidad ESTABLE es (provider, issuer, externalId=sub), inmutable
+/// e independiente del email (que puede cambiar en el origen). Es DISTINTA de
+/// `User.externalSource`/`externalId` (mono-source por fila, ocupadas por el
+/// migrator learndash, ver ADR-014): esta tabla es multi-provider, así un mismo
+/// user puede tener identidad `learndash` (migración) y `wp` (SSO) sin colisión.
+/// Vive en el CORE igual que OIDC/SAML escriben `User`; la parte portable del SSO
+/// (verificación de token + plugin de WordPress) sigue en `modules/wp-sso/`.
+model UserExternalIdentity {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  /// Proveedor de identidad. 'wp' = WordPress. (futuro: 'oidc', 'saml')
+  provider      String    @db.VarChar(40)
+  /// Issuer del proveedor: `home_url` de WordPress (claim `iss` del token).
+  issuer        String    @db.VarChar(255)
+  /// ID estable del usuario en el origen: WordPress `user_id` (claim `sub`).
+  externalId    String    @map("external_id") @db.VarChar(255)
+  /// Email en el momento del vínculo. Solo auditoría/diagnóstico, NUNCA clave.
+  emailAtLink   String?   @map("email_at_link")
+  /// Si el origen declaró el email como verificado (de una fuente fiable).
+  emailVerified Boolean   @default(false) @map("email_verified")
+  /// Cómo se creó el vínculo: auto_provision | auto_email | consent | admin | backfill
+  linkMethod    String    @map("link_method") @db.VarChar(30)
+  linkedAt      DateTime  @default(now()) @map("linked_at")
+  lastSeenAt    DateTime? @map("last_seen_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Un (provider, issuer, sub) ↔ un único user por tenant (clave de identidad).
+  @@unique([tenantId, provider, issuer, externalId], map: "user_ext_identity_subject_key")
+  // Un user no puede tener dos identidades del mismo provider+issuer.
+  @@unique([tenantId, userId, provider, issuer], map: "user_ext_identity_one_per_provider_key")
+  @@index([tenantId, provider, externalId])
+  @@map("user_external_identity")
 }
 
 model Role {
@@ -1988,24 +2028,24 @@ model ModAiGraderRubric {
 }
 
 model ModAiGraderSuggestion {
-  id              String   @id @default(uuid()) @db.Uuid
-  tenantId        String   @map("tenant_id") @db.Uuid
-  attemptId       String   @map("attempt_id") @db.Uuid
-  answerId        String   @map("answer_id") @db.Uuid
-  questionId      String   @map("question_id") @db.Uuid
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  attemptId       String    @map("attempt_id") @db.Uuid
+  answerId        String    @map("answer_id") @db.Uuid
+  questionId      String    @map("question_id") @db.Uuid
   /// Score total propuesto (Σ scores de perCriterion). 0 ≤ x ≤ question.points.
-  proposedScore   Int      @map("proposed_score")
+  proposedScore   Int       @map("proposed_score")
   /// Desglose por criterio: [{ name, score, justification }]. Lectura UI.
-  perCriterion    Json     @map("per_criterion")
-  overallFeedback String   @map("overall_feedback")
+  perCriterion    Json      @map("per_criterion")
+  overallFeedback String    @map("overall_feedback")
   provider        String
   model           String
   /// True cuando el formador aplicó la sugerencia vía gradeAttempt.
-  applied         Boolean  @default(false)
+  applied         Boolean   @default(false)
   /// User id del formador que aplicó (null mientras esté en draft).
-  appliedById     String?  @map("applied_by_id") @db.Uuid
+  appliedById     String?   @map("applied_by_id") @db.Uuid
   appliedAt       DateTime? @map("applied_at")
-  createdAt       DateTime @default(now()) @map("created_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   /// Una sugerencia por (attempt, answer): regenerar reemplaza la anterior.
   @@unique([attemptId, answerId], map: "mod_ai_grader_suggestion_attempt_answer_key")
@@ -2023,27 +2063,27 @@ model ModAiGraderSuggestion {
 // ============================================================================
 
 model InstallationRegistry {
-  id                String    @id @default(uuid()) @db.Uuid
+  id               String    @id @default(uuid()) @db.Uuid
   /// UUID generado en cliente al hacer opt-in. Identifica esta instancia
   /// frente a Cloud god a perpetuidad.
-  installationId    String    @unique @map("installation_id")
-  email             String
-  organizationName  String    @map("organization_name")
+  installationId   String    @unique @map("installation_id")
+  email            String
+  organizationName String    @map("organization_name")
   /// URL pública del despliegue, opcional. Solo informativa.
-  deploymentUrl     String?   @map("deployment_url")
+  deploymentUrl    String?   @map("deployment_url")
   /// Token opaco devuelto por Cloud god tras /registry/install.
-  registryToken     String?   @map("registry_token")
+  registryToken    String?   @map("registry_token")
   /// Aceptación de términos por el admin.
-  termsAcceptedAt   DateTime  @map("terms_accepted_at")
-  optInAt           DateTime  @default(now()) @map("opt_in_at")
+  termsAcceptedAt  DateTime  @map("terms_accepted_at")
+  optInAt          DateTime  @default(now()) @map("opt_in_at")
   /// Fecha de opt-out (null mientras esté activo).
-  optedOutAt        DateTime? @map("opted_out_at")
+  optedOutAt       DateTime? @map("opted_out_at")
   /// Última vez que la instancia envió telemetría agregada.
-  lastTelemetryAt   DateTime? @map("last_telemetry_at")
+  lastTelemetryAt  DateTime? @map("last_telemetry_at")
   /// Permite desactivar el envío de telemetría manteniendo registro.
-  telemetryEnabled  Boolean   @default(true) @map("telemetry_enabled")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
+  telemetryEnabled Boolean   @default(true) @map("telemetry_enabled")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   @@map("core_installation_registry")
 }
@@ -2227,7 +2267,7 @@ model ModSubscriptionsSubscription {
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
 
-  invoices             ModSubscriptionsInvoice[]
+  invoices ModSubscriptionsInvoice[]
 
   @@index([tenantId, userId])
   @@index([tenantId, status])
@@ -2245,28 +2285,28 @@ model ModSubscriptionsSubscription {
 /// Guardamos las invoices localmente para mostrarle al alumno su historial
 /// de pagos en /cuenta/suscripciones sin ir a Stripe en cada render.
 model ModSubscriptionsInvoice {
-  id                String                    @id @default(uuid()) @db.Uuid
-  tenantId          String                    @map("tenant_id") @db.Uuid
+  id               String                    @id @default(uuid()) @db.Uuid
+  tenantId         String                    @map("tenant_id") @db.Uuid
   /// ID lógico de la suscripción local (FK conceptual, no real para mantener
   /// la regla de no-FK pero al estar en el mismo módulo sí podemos usar FK).
-  subscriptionId    String                    @map("subscription_id") @db.Uuid
+  subscriptionId   String                    @map("subscription_id") @db.Uuid
   /// Stripe Invoice ID (in_...).
-  stripeInvoiceId   String                    @unique @map("stripe_invoice_id")
-  status            SubscriptionInvoiceStatus @default(OPEN)
+  stripeInvoiceId  String                    @unique @map("stripe_invoice_id")
+  status           SubscriptionInvoiceStatus @default(OPEN)
   /// Importe de la factura en céntimos.
-  amount            Int
-  currency          String                    @default("eur")
+  amount           Int
+  currency         String                    @default("eur")
   /// URL hosted de Stripe a la factura — el alumno la ve si quiere descargar PDF.
-  hostedInvoiceUrl  String?                   @map("hosted_invoice_url")
+  hostedInvoiceUrl String?                   @map("hosted_invoice_url")
   /// Cuándo Stripe la cobró exitosamente (NULL si OPEN/UNCOLLECTIBLE/VOID).
-  paidAt            DateTime?                 @map("paid_at")
+  paidAt           DateTime?                 @map("paid_at")
   /// Fecha del periodo de facturación que cubre esta invoice.
-  periodStart       DateTime                  @map("period_start")
-  periodEnd         DateTime                  @map("period_end")
-  createdAt         DateTime                  @default(now()) @map("created_at")
-  updatedAt         DateTime                  @updatedAt @map("updated_at")
+  periodStart      DateTime                  @map("period_start")
+  periodEnd        DateTime                  @map("period_end")
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
 
-  subscription      ModSubscriptionsSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: NoAction, map: "fk_mod_subs_invoice_subscription")
+  subscription ModSubscriptionsSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: NoAction, map: "fk_mod_subs_invoice_subscription")
 
   @@index([tenantId, subscriptionId])
   @@index([tenantId, status])
@@ -2412,66 +2452,66 @@ enum InstalledModuleStatus {
 }
 
 model InstalledModule {
-  id           String                @id @default(uuid()) @db.Uuid
+  id                   String                @id @default(uuid()) @db.Uuid
   /// Slug del módulo (ej. "mod.gamification"). Único por instancia, una sola
   /// versión activa a la vez. Para upgrade in-place se actualiza el row.
-  name         String                @unique
-  version      String
+  name                 String                @unique
+  version              String
   /// Versión anterior si este row es resultado de un upgrade. Permite revert.
-  prevVersion  String?               @map("prev_version")
-  vendor       InstalledModuleVendor
+  prevVersion          String?               @map("prev_version")
+  vendor               InstalledModuleVendor
   /// Origen de la instalación (DISC-002). Determina badge y nivel de confianza.
-  source       InstalledModuleSource @default(DIRECT_UPLOAD)
-  displayName  String                @map("display_name")
-  description  String?
+  source               InstalledModuleSource @default(DIRECT_UPLOAD)
+  displayName          String                @map("display_name")
+  description          String?
   /// Manifest del módulo serializado (ADR-008 + extensiones ADR-009).
   /// Se persiste como JSON ya verificado para queries rápidas y para diff
   /// entre versiones tras un upgrade.
-  manifestJson Json                  @map("manifest_json")
+  manifestJson         Json                  @map("manifest_json")
   /// JWT compact tal cual viene en el ZIP (`manifest.jwt`). Es el
   /// artefacto autoritativo: lleva el manifest + firma ES256 firmada por
   /// AWS KMS `alias/didacta-issuer-2026`. Re-verificable en cualquier
   /// momento — útil para auditoría y para re-checkear tras rotación de
   /// claves públicas.
   /// NULL si el módulo fue subido directamente sin firma válida (DISC-002).
-  manifestJwt  String?               @map("manifest_jwt")
+  manifestJwt          String?               @map("manifest_jwt")
   /// `signedAt` declarado por el publisher. Solo informativo, no se compara
   /// con el reloj del receiver — los relojes de los clientes self-host no
   /// son confiables.
   /// NULL si el módulo fue subido sin firma (source=DIRECT_UPLOAD).
-  signedAt     DateTime?             @map("signed_at")
+  signedAt             DateTime?             @map("signed_at")
   /// Clave del *.didactamod en object storage de la instancia (S3/MinIO).
   /// Ejemplo: "modules/mod.gamification-1.2.0.didactamod".
-  packageStorageKey String            @map("package_storage_key")
+  packageStorageKey    String                @map("package_storage_key")
   /// Hash SHA-256 hex del paquete. Verificado al re-leerlo del storage.
-  packageSha256     String            @map("package_sha256")
+  packageSha256        String                @map("package_sha256")
   /// Tamaño en bytes; útil para listados sin abrir el ZIP.
-  packageSizeBytes  Int               @map("package_size_bytes")
+  packageSizeBytes     Int                   @map("package_size_bytes")
   /// Restricciones runtime del manifest (cacheadas como columnas para query
   /// rápido). El contenido autoritativo sigue en `manifestJson`.
-  coreVersionRequired String          @map("core_version_required")
-  tablePrefix         String          @map("table_prefix")
-  apiNamespace        String          @map("api_namespace")
-  requiredCapabilities String[]       @default([]) @map("required_capabilities")
-  requiredEnvVars      String[]       @default([]) @map("required_env_vars")
+  coreVersionRequired  String                @map("core_version_required")
+  tablePrefix          String                @map("table_prefix")
+  apiNamespace         String                @map("api_namespace")
+  requiredCapabilities String[]              @default([]) @map("required_capabilities")
+  requiredEnvVars      String[]              @default([]) @map("required_env_vars")
   /// Modelo de aislamiento solicitado: 'vm' (node:vm) o 'worker_thread'.
   /// MVP solo soporta 'vm'.
-  isolation     String                @default("vm")
-  status        InstalledModuleStatus @default(INSTALLING)
-  errorMessage  String?               @map("error_message")
+  isolation            String                @default("vm")
+  status               InstalledModuleStatus @default(INSTALLING)
+  errorMessage         String?               @map("error_message")
   /// Migraciones SQL del paquete (subdir `prisma/migrations/` del ZIP)
   /// aplicadas con éxito a la BD de la instancia, en orden alfabético.
   /// El array crece append-only por install/upgrade. NULL si el paquete
   /// no traía migrations o si aún no se intentó aplicarlas.
-  migrationsApplied String[]           @default([]) @map("migrations_applied")
-  migrationsAppliedAt DateTime?        @map("migrations_applied_at")
+  migrationsApplied    String[]              @default([]) @map("migrations_applied")
+  migrationsAppliedAt  DateTime?             @map("migrations_applied_at")
   /// Super_admin que inició la instalación. FK lógica (sin REFERENCES) para
   /// no acoplar marketplace al ciclo de vida del usuario; si el user se
   /// borra, el row queda con la traza histórica.
-  installedById String                @map("installed_by_id") @db.Uuid
-  installedAt   DateTime?             @map("installed_at")
-  createdAt     DateTime              @default(now()) @map("created_at")
-  updatedAt     DateTime              @updatedAt @map("updated_at")
+  installedById        String                @map("installed_by_id") @db.Uuid
+  installedAt          DateTime?             @map("installed_at")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
 
   @@index([status])
   @@index([vendor])
@@ -2505,20 +2545,20 @@ model InstalledModule {
 /// expired; un GC periódico borra los rows físicos para que la quota no
 /// crezca con basura caducada.
 model ModSecret {
-  id        String    @id @default(uuid()) @db.Uuid
-  tenantId  String    @map("tenant_id") @db.Uuid
-  moduleId  String    @map("module_id") @db.VarChar(60)
-  secretKey String    @map("secret_key") @db.VarChar(128)
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  moduleId         String    @map("module_id") @db.VarChar(60)
+  secretKey        String    @map("secret_key") @db.VarChar(128)
   /// Value cifrado (AES-256-GCM). `Bytes` se mapea a `bytea` en Postgres.
-  ciphertext Bytes
+  ciphertext       Bytes
   /// Nonce 96-bit del GCM. Distinto por cada `set()`.
-  iv         Bytes
+  iv               Bytes
   /// Auth tag 128-bit. Verifica integridad al decrypt.
-  tag        Bytes
+  tag              Bytes
   /// Tamaño aproximado del value plaintext (bytes). Cacheado para que
   /// `list()` pueda devolverlo sin descifrar (que requiere round-trip al
   /// cipher service por cada row).
-  approxValueBytes Int      @map("approx_value_bytes")
+  approxValueBytes Int       @map("approx_value_bytes")
   expiresAt        DateTime? @map("expires_at")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")

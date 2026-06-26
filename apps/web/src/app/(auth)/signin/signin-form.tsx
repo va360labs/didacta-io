@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { invalidateCommunitySpacesCache } from '@/modules/community';
-import { buildOidcStartUrl, fetchOidcStatus } from '@/lib/sso';
+import { buildOidcStartUrl, buildWpSsoTryUrl, fetchOidcStatus, fetchWpSsoStatus } from '@/lib/sso';
 import { useTenantContext } from '@/lib/tenant-context';
 import { requestThemeRefresh } from '@/lib/theming';
 
@@ -47,6 +47,10 @@ export function SignInForm() {
   // arriba del form clásico. Sin tenant resuelto NO mostramos el botón —
   // requiere conocer el slug para construir el endpoint /auth/oidc/:slug/start.
   const [ssoEnabled, setSsoEnabled] = useState<boolean>(false);
+  // mod.wp-sso: auto-bounce TRANSPARENTE a WordPress (VA360.academy). Si hay
+  // sesión WP, el usuario vuelve autenticado sin tocar este form.
+  const [wpBouncing, setWpBouncing] = useState<boolean>(false);
+  const [wpLoginRequired, setWpLoginRequired] = useState<boolean>(false);
 
   useEffect(() => {
     if (!tenant?.slug) {
@@ -61,6 +65,36 @@ export function SignInForm() {
       aborted = true;
     };
   }, [tenant?.slug]);
+
+  // Auto-bounce a WordPress: si WP-SSO está configurado con auto-redirect y no
+  // hay sesión Didacta, rebotamos al WP en modo `try` (silencioso). El plugin,
+  // si no hay sesión WP, nos devuelve con ?wp_sso=login_required y mostramos el
+  // form clásico. El flag de sessionStorage evita bucles de redirect.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const wpSso = params.get('wp_sso');
+    if (wpSso) {
+      sessionStorage.setItem('wp_sso_attempted', '1');
+      if (wpSso === 'login_required') setWpLoginRequired(true);
+      return;
+    }
+    if (authStorage.getAccessToken()) return; // ya hay sesión Didacta
+    if (sessionStorage.getItem('wp_sso_attempted')) return; // ya lo intentamos
+
+    let aborted = false;
+    void fetchWpSsoStatus().then((s) => {
+      if (aborted) return;
+      if (s.configured && s.autoRedirect && s.wordpressUrl) {
+        sessionStorage.setItem('wp_sso_attempted', '1');
+        setWpBouncing(true);
+        window.location.href = buildWpSsoTryUrl(s.wordpressUrl);
+      }
+    });
+    return () => {
+      aborted = true;
+    };
+  }, []);
 
   async function onSubmit(form: FormData) {
     setError(null);
@@ -109,6 +143,16 @@ export function SignInForm() {
     }
   }
 
+  // Rebotando a VA360.academy (WordPress) para SSO transparente.
+  if (wpBouncing) {
+    return (
+      <div className="flex items-center gap-3 py-4">
+        <div className="h-2 w-2 animate-pulse rounded-full bg-brand-500" />
+        <p className="text-sm text-text-muted">Conectando con VA360.academy…</p>
+      </div>
+    );
+  }
+
   // Estado de carga inicial (evita flash de campo "Organización" innecesario).
   if (tenantLoading) {
     return (
@@ -122,6 +166,14 @@ export function SignInForm() {
 
   return (
     <div className="space-y-5">
+      {/* Volvimos de WordPress sin sesión activa: explicamos por qué ven el form. */}
+      {wpLoginRequired ? (
+        <div className="rounded-lg border border-border-soft bg-surface-2 p-3 text-sm text-text-muted">
+          No detectamos una sesión activa en VA360.academy. Inicia sesión aquí con tu email y
+          contraseña.
+        </div>
+      ) : null}
+
       {/* Botón SSO — solo si el tenant resuelto tiene OIDC habilitado.
           Se renderiza ARRIBA del form clásico para que sea la opción
           preferida en tenants enterprise. */}

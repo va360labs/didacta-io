@@ -144,3 +144,38 @@ export async function fetchOidcStatus(tenantSlug: string): Promise<OidcStatusRes
 export function buildOidcStartUrl(tenantSlug: string): string {
   return `/api/v1/auth/oidc/${encodeURIComponent(tenantSlug)}/start`;
 }
+
+// ---------------------------------------------------------------------------
+// WordPress SSO (mod.wp-sso) — status público + bounce transparente
+// ---------------------------------------------------------------------------
+
+/** Config pública de WP-SSO. Coincide con `WpSsoService.ssoConfig()` del backend. */
+export interface WpSsoStatus {
+  configured: boolean;
+  /** Si el signin debe rebotar a WordPress en modo `try` cuando no hay sesión. */
+  autoRedirect: boolean;
+  /** URL del WordPress origen (home_url) — destino del bounce. */
+  wordpressUrl: string | null;
+}
+
+/**
+ * Estado del SSO de WordPress (público, sin auth). El signin lo usa para decidir
+ * el auto-bounce transparente. No throws: ante cualquier fallo devuelve apagado
+ * para no romper el login clásico.
+ */
+export async function fetchWpSsoStatus(): Promise<WpSsoStatus> {
+  try {
+    return await apiFetch<WpSsoStatus>('/api/v1/modules/wp-sso/status', { method: 'GET' });
+  } catch {
+    return { configured: false, autoRedirect: false, wordpressUrl: null };
+  }
+}
+
+/**
+ * URL de bounce TRANSPARENTE: lleva al WordPress en modo `try`. Si hay sesión WP,
+ * vuelve autenticado al callback; si no, el plugin devuelve EN SILENCIO a la
+ * signin con `?wp_sso=login_required` (sin mostrar wp-login).
+ */
+export function buildWpSsoTryUrl(wordpressUrl: string): string {
+  return `${wordpressUrl.replace(/\/+$/, '')}/?didacta_sso=try`;
+}

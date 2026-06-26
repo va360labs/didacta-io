@@ -13,14 +13,14 @@ export const manifest: ModuleManifest = parseModuleManifest({
   displayName: 'SSO desde WordPress',
   description:
     'Permite que los usuarios autenticados en WordPress entren a Didacta sin volver a iniciar sesión. WordPress firma un token corto (HMAC) y Didacta lo verifica y emite la sesión.',
-  version: '0.1.0',
+  version: '0.2.0',
   author: 'VA360 LABS',
   license: 'Proprietary',
   category: 'integration',
   coreVersionRequired: '^1.0.0',
   tablePrefix: 'mod_wpsso_',
   permissions: ['wp-sso.callback.exchange'],
-  eventsEmitted: ['wp-sso.signin.success', 'wp-sso.user.provisioned'],
+  eventsEmitted: ['wp-sso.signin.success', 'wp-sso.user.provisioned', 'wp-sso.account.linked'],
   eventsConsumed: [],
   apiNamespace: '/modules/wp-sso',
 });

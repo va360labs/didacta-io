@@ -19,6 +19,8 @@ async function makeToken(
     jti?: string | null;
     aud?: string;
     iss?: string;
+    sub?: string | null;
+    emailVerified?: unknown;
     iatOffset?: number; // segundos respecto a "ahora"
     ttl?: number; // exp - iat
   } = {},
@@ -30,6 +32,8 @@ async function makeToken(
     ...(opts.email !== undefined ? { email: opts.email } : { email: 'alumno@va360.academy' }),
     ...(opts.name ? { name: opts.name } : {}),
     ...(opts.jti === null ? {} : { jti: opts.jti ?? 'nonce-unico-1' }),
+    ...(opts.sub === null ? {} : { sub: opts.sub ?? 'wp-42' }),
+    ...(opts.emailVerified !== undefined ? { email_verified: opts.emailVerified } : {}),
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt(iat)
@@ -40,14 +44,36 @@ async function makeToken(
 }
 
 describe('verifyWpSsoToken', () => {
-  it('acepta un token válido y devuelve email normalizado + jti + name', async () => {
-    const token = await makeToken({ email: 'Alumno@VA360.Academy', name: 'Ana Pérez' });
+  it('acepta un token válido y devuelve email normalizado + jti + name + sub', async () => {
+    const token = await makeToken({
+      email: 'Alumno@VA360.Academy',
+      name: 'Ana Pérez',
+      sub: 'wp-7',
+    });
     const claims = await verifyWpSsoToken(token, { sharedSecret: SECRET, expectedIssuer: ISS });
     expect(claims.email).toBe('alumno@va360.academy'); // trim + lowercase
     expect(claims.name).toBe('Ana Pérez');
     expect(claims.jti).toBe('nonce-unico-1');
     expect(claims.iss).toBe(ISS);
+    expect(claims.subject).toBe('wp-7');
+    expect(claims.emailVerified).toBe(false); // ausente → no verificado
     expect(typeof claims.exp).toBe('number');
+  });
+
+  it('parsea email_verified=true solo cuando es el booleano true', async () => {
+    const verificado = await makeToken({ emailVerified: true });
+    expect((await verifyWpSsoToken(verificado, { sharedSecret: SECRET })).emailVerified).toBe(true);
+    // "true" string NO cuenta como verificado (defensa contra coerción).
+    const stringTrue = await makeToken({ emailVerified: 'true' });
+    expect((await verifyWpSsoToken(stringTrue, { sharedSecret: SECRET })).emailVerified).toBe(
+      false,
+    );
+  });
+
+  it('subject undefined si el token es legacy 0.1.0 (sin sub)', async () => {
+    const legacy = await makeToken({ sub: null });
+    const claims = await verifyWpSsoToken(legacy, { sharedSecret: SECRET });
+    expect(claims.subject).toBeUndefined();
   });
 
   it('rechaza firma inválida (secreto distinto)', async () => {

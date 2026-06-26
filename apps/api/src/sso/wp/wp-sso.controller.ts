@@ -24,10 +24,12 @@ export class WpSsoController {
   @Get('status')
   @Public()
   @ApiOperation({
-    summary: 'Indica si WP-SSO está configurado en esta instancia (sin exponer secretos).',
+    summary:
+      'Config pública de WP-SSO (sin secretos): { configured, autoRedirect, wordpressUrl }. ' +
+      'La consume el signin para el auto-bounce transparente.',
   })
   status() {
-    return { configured: this.wpSso.isConfigured() };
+    return this.wpSso.ssoConfig();
   }
 
   @Get('callback')
