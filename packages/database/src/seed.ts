@@ -93,7 +93,10 @@ async function main() {
 
   const user = await prisma.user.upsert({
     where: { tenantId_email: { tenantId: tenant.id, email: adminEmail } },
-    update: { passwordHash, name: adminName, status: 'ACTIVE' },
+    // NO pisamos passwordHash en update: si el usuario ya cambió su contraseña
+    // (en la app), re-correr el seed en un deploy NO debe revertirla. La
+    // contraseña de BOOTSTRAP_PASSWORD solo se aplica al CREAR el usuario.
+    update: { name: adminName, status: 'ACTIVE' },
     create: {
       tenantId: tenant.id,
       email: adminEmail,
