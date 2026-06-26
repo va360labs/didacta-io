@@ -158,9 +158,11 @@ RUN rm -rf apps/web/.next/cache apps/e2e || true
 #    node_modules sin TTY (sin esto aborta silenciosamente y la imagen se
 #    queda con devDeps).
 ENV CI=true
+# NOTA: no usamos `--offline` ni `pnpm store prune` aquí. El `store prune`
+# corrompe el cache mount compartido de buildkit (borra paquetes que un build
+# posterior con --offline ya no encuentra → prisma CLI sin `build/`, etc.).
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --offline --frozen-lockfile --prod \
- && pnpm store prune || true
+    pnpm install --frozen-lockfile --prod
 
 # ----------------------------------------------------------------------------
 # Stage 6: runner — imagen final desde alpine LIMPIO (no hereda del builder)
@@ -211,6 +213,16 @@ RUN addgroup -S -g 1001 didacta \
 # Repo limpio: una sola layer con el árbol final, sin acumular layers gordas
 # del builder. Aquí está el truco para bajar de 3GB a <1GB.
 COPY --from=pruner --chown=didacta:didacta /repo /repo
+
+# El `pnpm install --prod` del pruner restaura @prisma/client a su estado de
+# paquete (stub de 2KB que lanza "did not initialize yet" en runtime),
+# perdiendo el `prisma generate` del builder. Como regenerar tras el prune
+# falla (engines podados), copiamos el client YA GENERADO desde el builder
+# (que conserva index.js real + el query engine linux-musl). La versión del
+# path debe coincidir con la de pnpm-lock.yaml (@prisma/client 5.22.0).
+COPY --from=builder --chown=didacta:didacta \
+  /repo/node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/.prisma \
+  /repo/node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/.prisma
 
 # Entrypoint: migraciones + rls + arranque.
 COPY --chown=didacta:didacta infra/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
