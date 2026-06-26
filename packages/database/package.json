@@ -27,6 +27,7 @@
     "db:studio": "prisma studio",
     "db:rls:apply": "psql \"$DATABASE_URL\" -f prisma/rls.sql",
     "db:seed": "tsx src/seed.ts",
+    "db:backfill:access-groups": "tsx src/backfill-access-groups.ts",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {

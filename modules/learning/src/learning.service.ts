@@ -118,6 +118,49 @@ export class LearningService {
   }
 
   /**
+   * Matriculación otorgada por un grupo de acceso (mod.access-groups). Source
+   * `GROUP` la diferencia para la revocación segura por refcount: solo los
+   * enrollments `GROUP` se cancelan al salir del último grupo que los otorgaba
+   * (`unenrollFromGroup`); compra/suscripción quedan intactos.
+   *
+   * Idempotente: si el alumno ya tiene enrollment ACTIVE (por otro grupo, compra
+   * o suscripción), `createEnrollment` lanza `AlreadyEnrolledError`, que el
+   * caller (`AccessGroupsService`) captura como no-op (el acceso ya existe; solo
+   * registra el grant para el refcount).
+   */
+  async enrollFromGroup(tenantId: string, userId: string, courseId: string) {
+    return this.createEnrollment({
+      tenantId,
+      actorId: null,
+      userId,
+      courseId,
+      source: 'GROUP',
+    });
+  }
+
+  /**
+   * Cancela el enrollment de un grupo de acceso cuando el refcount de grants
+   * vivos para (user, course) llega a 0. SOLO toca enrollments con
+   * `source = 'GROUP'`: un curso obtenido además por PURCHASE/SUBSCRIPTION/API
+   * (mismo (tenant,user,course), un único enrollment) NO se cancela aquí —
+   * el caller decide no llamar a este método si el enrollment proviene de otra
+   * fuente. No-op si no hay enrollment GROUP activo/pausado.
+   */
+  async unenrollFromGroup(tenantId: string, userId: string, courseId: string): Promise<void> {
+    await this.prisma.modLearningEnrollment.updateMany({
+      where: {
+        tenantId,
+        userId,
+        courseId,
+        status: { in: ['ACTIVE', 'PAUSED'] },
+        source: 'GROUP',
+      },
+      data: { status: 'CANCELLED', cancelledAt: new Date() },
+    });
+    await this.publish(tenantId, userId, 'learning.enrollment.cancelled', { courseId, userId });
+  }
+
+  /**
    * Pausa el enrollment de un alumno en un curso. Lo invoca el bridge de
    * mod.subscriptions cuando la suscripción entra en UNPAID (grace expirado).
    *
@@ -599,7 +642,15 @@ export class LearningService {
     actorId: string | null;
     userId: string;
     courseId: string;
-    source: 'ADMIN' | 'CODE' | 'INVITATION_LINK' | 'PURCHASE' | 'IMPORT' | 'SUBSCRIPTION' | 'API';
+    source:
+      | 'ADMIN'
+      | 'CODE'
+      | 'INVITATION_LINK'
+      | 'PURCHASE'
+      | 'IMPORT'
+      | 'SUBSCRIPTION'
+      | 'API'
+      | 'GROUP';
   }) {
     await this.requirePublishedCourse(params.tenantId, params.courseId);
 
@@ -610,8 +661,32 @@ export class LearningService {
         courseId: params.courseId,
       },
     });
-    if (existing && existing.status === 'ACTIVE') {
-      throw new AlreadyEnrolledError();
+    if (existing) {
+      if (existing.status === 'ACTIVE') {
+        throw new AlreadyEnrolledError();
+      }
+      if (existing.status === 'COMPLETED') {
+        // Ya completó el curso: re-otorgar (p.ej. re-añadirlo a un grupo de
+        // acceso) NO debe degradar la finalización ni crear otra fila (chocaría
+        // con @@unique([tenantId,userId,courseId]) → P2002). No-op idempotente.
+        return existing;
+      }
+      // CANCELLED / PAUSED: el acceso se había revocado/pausado. NO podemos
+      // crear una segunda fila por el @@unique([tenantId,userId,courseId]):
+      // REACTIVAMOS la existente. Esto cubre el ciclo quitar→re-añadir de los
+      // grupos de acceso (unenrollFromGroup deja la fila en CANCELLED) sin
+      // reventar con P2002.
+      const reactivated = await this.prisma.modLearningEnrollment.update({
+        where: { id: existing.id },
+        data: { status: 'ACTIVE', source: params.source, cancelledAt: null },
+      });
+      await this.publish(params.tenantId, params.actorId, 'learning.enrollment.created', {
+        enrollmentId: reactivated.id,
+        userId: params.userId,
+        courseId: params.courseId,
+        source: params.source,
+      });
+      return reactivated;
     }
 
     const enrollment = await this.prisma.modLearningEnrollment.create({

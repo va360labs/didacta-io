@@ -12,6 +12,7 @@ import { mergeExtensionSidebarItems } from '@/lib/sidebar-extensions-merge';
 import { filterByActiveModules } from '@/lib/sidebar-modules-filter';
 import { moduleExtensions } from '@/modules';
 import { useCommunitySpaces, invalidateCommunitySpacesCache } from '@/modules/community';
+import { themeCache, requestThemeRefresh } from '@/lib/theming';
 import { isIconName } from '@/components/space-icon';
 import type { IconName } from '@/components/icon';
 import { CreateSpaceModal } from '@/components/create-space-modal';
@@ -80,10 +81,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   if (!session) return null;
 
   function logout() {
+    const tenantId = session?.user.tenantId;
     authStorage.clear();
     // Evita que el cache en memoria de espacios de un tenant se filtre al
     // siguiente login (navegación SPA sin recargar).
     invalidateCommunitySpacesCache();
+    // Limpia el branding del tenant que cerró sesión: borra el cache y resetea
+    // el TenantThemeProvider a los defaults (sin token, el handler pone null),
+    // para que las pantallas de auth no muestren la marca del tenant anterior.
+    if (tenantId) themeCache.clear(tenantId);
+    requestThemeRefresh();
     router.replace('/signin');
   }
 
@@ -326,6 +333,7 @@ function buildGroups({
     items: [
       { href: '/admin', label: 'Panel', icon: 'chart', exactMatch: true },
       { href: '/admin/usuarios', label: 'Usuarios y roles', icon: 'users' },
+      { href: '/admin/grupos-acceso', label: 'Grupos de acceso', icon: 'lock' },
       { href: '/admin/impagos', label: 'Impagos', icon: 'shield' },
       { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
       { href: '/admin/comunidad/espacios', label: 'Espacios comunidad', icon: 'hash' },

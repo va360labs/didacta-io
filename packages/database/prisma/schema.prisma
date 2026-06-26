@@ -943,6 +943,10 @@ enum EnrollmentSource {
   /// Inscripción creada por un sistema externo vía `POST /api/v1/inscribe`
   /// autenticado con API key (compra en una página de ventas de terceros).
   API
+  /// Enrollment otorgado por un grupo de acceso (mod.access-groups). Permite
+  /// la revocación segura por refcount: al salir de todos los grupos que lo
+  /// otorgaban, `unenrollFromGroup` lo cancela — sin tocar PURCHASE/SUBSCRIPTION.
+  GROUP
 }
 
 model ModLearningEnrollment {
@@ -2600,6 +2604,95 @@ model ModEventRegistration {
   @@unique([eventId, userId], name: "mod_event_registration_unique", map: "mod_event_registration_unique")
   @@index([tenantId, userId])
   @@map("mod_event_registration")
+}
+
+// ============================================================================
+// MOD.ACCESS-GROUPS — Fase 2 (grupos de acceso configurables)
+// Entitlement: qué SET de cursos puede ver un miembro. Tres kinds:
+// ALL_COURSES (VA360.pro = todos), COURSE, MULTI_COURSE. Sin FK cross-módulo:
+// userId/courseId son IDs lógicos. El acceso se materializa como enrollments
+// (source GROUP) vía LearningService; mod_access_groups_grant lleva el
+// refcount para revocación segura. Ver PRD §14.
+// ============================================================================
+
+enum AccessGroupKind {
+  ALL_COURSES
+  COURSE
+  MULTI_COURSE
+}
+
+model ModAccessGroup {
+  id                   String          @id @default(uuid()) @db.Uuid
+  tenantId             String          @map("tenant_id") @db.Uuid
+  slug                 String          @db.VarChar(120)
+  name                 String
+  description          String?
+  kind                 AccessGroupKind
+  /// Grupo asignado automáticamente a un miembro al aprobar su inscripción.
+  /// Como máximo uno por tenant debería tenerlo en true.
+  isDefaultForApproval Boolean         @default(false) @map("is_default_for_approval")
+  /// Solo relevante para kind ALL_COURSES: matricula a los miembros en cada
+  /// curso nuevo al publicarse (consumer de courses.course.published).
+  autoGrantNewCourses  Boolean         @default(true) @map("auto_grant_new_courses")
+  memberCount          Int             @default(0) @map("member_count")
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
+  deletedAt            DateTime?       @map("deleted_at")
+
+  courses ModAccessGroupCourse[]
+  members ModAccessGroupMember[]
+
+  @@unique([tenantId, slug], name: "mod_access_groups_group_tenant_slug", map: "mod_access_groups_group_tenant_slug_key")
+  @@index([tenantId, deletedAt])
+  @@map("mod_access_groups_group")
+}
+
+model ModAccessGroupCourse {
+  id        String   @id @default(uuid()) @db.Uuid
+  groupId   String   @map("group_id") @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  /// ID lógico del curso (sin FK cross-module)
+  courseId  String   @map("course_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  group ModAccessGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, courseId], name: "mod_access_groups_group_course_unique", map: "mod_access_groups_group_course_unique")
+  @@index([tenantId, courseId])
+  @@map("mod_access_groups_group_course")
+}
+
+model ModAccessGroupMember {
+  id        String    @id @default(uuid()) @db.Uuid
+  groupId   String    @map("group_id") @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  /// ID lógico del usuario (sin FK cross-module)
+  userId    String    @map("user_id") @db.Uuid
+  /// ACTIVE | REVOKED
+  status    String    @default("ACTIVE") @db.VarChar(20)
+  grantedAt DateTime  @default(now()) @map("granted_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  group ModAccessGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId], name: "mod_access_groups_member_unique", map: "mod_access_groups_member_unique")
+  @@index([tenantId, userId])
+  @@map("mod_access_groups_group_member")
+}
+
+model ModAccessGroupGrant {
+  id                   String    @id @default(uuid()) @db.Uuid
+  tenantId             String    @map("tenant_id") @db.Uuid
+  groupId              String    @map("group_id") @db.Uuid
+  userId               String    @map("user_id") @db.Uuid
+  courseId             String    @map("course_id") @db.Uuid
+  enrollmentExternalId String?   @map("enrollment_external_id")
+  grantedAt            DateTime  @default(now()) @map("granted_at")
+  revokedAt            DateTime? @map("revoked_at")
+
+  @@unique([tenantId, groupId, userId, courseId], name: "mod_access_groups_grant_unique", map: "mod_access_groups_grant_unique")
+  @@index([tenantId, userId, courseId])
+  @@map("mod_access_groups_grant")
 }
 
 // ─── Rutas de aprendizaje ────────────────────────────────────────────────────

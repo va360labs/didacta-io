@@ -32,6 +32,9 @@ import { TenantModulesService } from './tenant-modules.service';
 import { TenantModulesErrorFilter } from './tenant-modules-error.filter';
 import { EventsController } from './events.controller';
 import { GroupsController } from './groups.controller';
+import { AccessGroupsController } from './access-groups/access-groups.controller';
+import { AccessGroupsService } from './access-groups/access-groups.service';
+import { AccessGroupsCoursesBridge } from './access-groups/access-groups-courses.bridge';
 import { LeaderboardController } from './leaderboard.controller';
 import { MeModulesController } from './me-modules.controller';
 import { TenantSettingsController } from './tenant-settings.controller';
@@ -75,6 +78,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     LeaderboardController,
     GroupsController,
     EventsController,
+    AccessGroupsController,
   ],
   providers: [
     ...outboxMetricsProviders,
@@ -84,6 +88,8 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     ModuleRegistryService,
     OutboxRecoveryWorker,
     ScormLearningBridge,
+    AccessGroupsService,
+    AccessGroupsCoursesBridge,
     TenantModulesService,
     ModuleAccessInterceptor,
     { provide: APP_INTERCEPTOR, useExisting: ModuleAccessInterceptor },
@@ -98,6 +104,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     ModuleContextFactory,
     TenantModulesService,
     ModuleAccessInterceptor,
+    AccessGroupsService,
   ],
 })
 export class ModulesModule {}

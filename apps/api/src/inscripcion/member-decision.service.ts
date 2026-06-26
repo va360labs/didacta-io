@@ -1,14 +1,12 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
-import { AlreadyEnrolledError, LearningError } from '@didacta/mod-learning';
 import type { ClientContext } from '../auth/client-context';
-import { ModuleRegistryService } from '../modules/module-registry.service';
+import { AccessGroupsService } from '../modules/access-groups/access-groups.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { SmtpAdapterService } from '../modules/smtp-adapter.service';
 import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { TenantContextService } from '../tenancy/tenant-context.service';
 import { buildRejectionEmail, buildWelcomeEmail } from './email-templates';
 
 /** Tokens RAW de decisión que se envían en el email del aprobador (uno por acción). */
@@ -36,8 +34,9 @@ export type DecisionOutcome = 'approved' | 'rejected' | 'already' | 'invalid' | 
  *     los enlaces del email del aprobador.
  *  2. `decide` consume cualquiera de los dos: cambia el status del User
  *     (ACTIVE / DEACTIVATED), sella `decidedAt` de AMBOS tokens en la misma
- *     transacción y, si fue aprobado, matricula al usuario en todos los cursos
- *     publicados del tenant. Notifica al usuario por email (best-effort).
+ *     transacción y, si fue aprobado, le asigna el grupo de acceso por defecto
+ *     del tenant (mod.access-groups), que materializa los enrollments. Notifica
+ *     al usuario por email (best-effort).
  *
  * Es CORE del host (no un módulo): conecta inscripción + auth + enrollment.
  * Multi-tenant en path anónimo: cada query Prisma se filtra por tenantId.
@@ -46,11 +45,10 @@ export type DecisionOutcome = 'approved' | 'rejected' | 'already' | 'invalid' | 
 export class MemberDecisionService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly registry: ModuleRegistryService,
+    private readonly accessGroups: AccessGroupsService,
     private readonly smtp: SmtpAdapterService,
     private readonly smtpResolver: TenantSmtpResolverService,
     private readonly auditLog: PrismaAuditLogService,
-    private readonly tenantContext: TenantContextService,
     private readonly logger: PinoLogger,
   ) {}
 
@@ -140,7 +138,7 @@ export class MemberDecisionService {
     const tenantName = tenant?.name ?? 'Didacta';
 
     if (record.action === 'APPROVE') {
-      await this.enrollAllPublished(record.tenantId, record.userId);
+      await this.accessGroups.assignDefaultGroupOnApproval(record.tenantId, record.userId);
       const signinUrl = `${process.env['WEB_PUBLIC_URL']?.trim() ?? ''}/signin`;
       const { subject, text, html } = buildWelcomeEmail(user?.name ?? '', signinUrl, tenantName);
       await this.sendEmail(record.tenantId, user?.email ?? null, subject, text, html);
@@ -170,37 +168,6 @@ export class MemberDecisionService {
       userAgent: ctx.userAgent ?? undefined,
     });
     return { outcome: 'rejected' };
-  }
-
-  /**
-   * Matricula al usuario aprobado en TODOS los cursos publicados del tenant.
-   * Envuelve la operación en el TenantContext porque los servicios de módulos
-   * (`courses` / `learning`) leen el tenant del AsyncLocalStorage. Idempotente:
-   * si ya estaba matriculado se ignora; los errores de un curso concreto
-   * (`LearningError`) no abortan el resto.
-   */
-  private async enrollAllPublished(tenantId: string, userId: string): Promise<void> {
-    await this.tenantContext.run({ tenantId, traceId: randomUUID() }, async () => {
-      const courses = await this.registry
-        .getCoursesService()
-        .listCourses(tenantId, { status: 'PUBLISHED' });
-      const learning = this.registry.getLearningService();
-      for (const course of courses) {
-        try {
-          await learning.enrollByAdmin(tenantId, null, { userId, courseId: course.id });
-        } catch (err) {
-          if (err instanceof AlreadyEnrolledError) continue;
-          if (err instanceof LearningError) {
-            this.logger.warn(
-              { tenantId, userId, courseId: course.id, code: err.code },
-              'member-decision: fallo al matricular en un curso publicado — se omite',
-            );
-            continue;
-          }
-          throw err;
-        }
-      }
-    });
   }
 
   /**

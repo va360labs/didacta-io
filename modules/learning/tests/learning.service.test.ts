@@ -314,6 +314,63 @@ describe('LearningService', () => {
     ).rejects.toBeInstanceOf(AlreadyEnrolledError);
   });
 
+  it('reactiva un enrollment CANCELLED al re-otorgar por grupo (no P2002, no duplica fila)', async () => {
+    // Regresión del ciclo quitar→re-añadir de grupos de acceso: unenrollFromGroup
+    // deja la fila en CANCELLED; re-otorgar NO debe crear una segunda fila
+    // (chocaría con @@unique([tenantId,userId,courseId]) → P2002) sino reactivar
+    // la existente. Sembramos el estado post-unenroll directamente.
+    const fake = makeFakePrisma();
+    fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
+    fake.enrollments.set('en-old', {
+      id: 'en-old',
+      tenantId: 't-1',
+      userId: 'u-1',
+      courseId: 'c-1',
+      status: 'CANCELLED',
+      source: 'GROUP',
+      completionThreshold: 75,
+      progressPercent: 0,
+      enrolledAt: new Date(),
+      startedAt: null,
+      completedAt: null,
+      cancelledAt: new Date(),
+    });
+    const service = new LearningService(fake.prisma as never, makeContext());
+
+    const reactivated = await service.enrollFromGroup('t-1', 'u-1', 'c-1');
+
+    expect(reactivated.id).toBe('en-old'); // reusa la MISMA fila
+    expect(reactivated.status).toBe('ACTIVE');
+    expect(reactivated.cancelledAt).toBeNull();
+    expect(fake.enrollments.size).toBe(1); // no duplicó → no habría P2002
+  });
+
+  it('re-otorgar por grupo un curso COMPLETED es no-op (no degrada la finalización)', async () => {
+    const fake = makeFakePrisma();
+    fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
+    fake.enrollments.set('en-done', {
+      id: 'en-done',
+      tenantId: 't-1',
+      userId: 'u-1',
+      courseId: 'c-1',
+      status: 'COMPLETED',
+      source: 'GROUP',
+      completionThreshold: 75,
+      progressPercent: 100,
+      enrolledAt: new Date(),
+      startedAt: new Date(),
+      completedAt: new Date(),
+      cancelledAt: null,
+    });
+    const service = new LearningService(fake.prisma as never, makeContext());
+
+    const result = await service.enrollFromGroup('t-1', 'u-1', 'c-1');
+
+    expect(result.id).toBe('en-done');
+    expect(result.status).toBe('COMPLETED'); // intacto, no se degrada a ACTIVE
+    expect(fake.enrollments.size).toBe(1);
+  });
+
   it('enrollByCode usa invitación válida y la incrementa', async () => {
     const fake = makeFakePrisma();
     fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });

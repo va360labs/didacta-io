@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
-import { Prisma } from '@prisma/client';
 import type { ClientContext } from '../auth/client-context';
 import { PasswordService } from '../auth/password.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
@@ -14,6 +13,18 @@ import { MemberPaymentFlagService } from './member-payment-flag.service';
 
 const DEFAULT_ALUMNO_ROLE = 'alumno';
 const DEFAULT_TENANT_NAME = 'Didacta';
+
+/**
+ * Type guard del error P2002 (violación de unique) de Prisma, SIN depender del
+ * namespace `Prisma` de '@prisma/client': su `instanceof` no estrecha el tipo
+ * en el build limpio de tsc (`nest build`) y provoca TS18046 ('e' is unknown).
+ * Chequea la forma estructural `{ code: 'P2002' }`.
+ */
+function isUniqueConstraintViolation(e: unknown): boolean {
+  return (
+    typeof e === 'object' && e !== null && 'code' in e && (e as { code?: unknown }).code === 'P2002'
+  );
+}
 
 /** Datos de entrada para crear una inscripción PENDING (ya validados aguas arriba). */
 export interface MemberRegistrationInput {
@@ -109,7 +120,7 @@ export class MemberRegistrationService {
         return created;
       });
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      if (isUniqueConstraintViolation(e)) {
         const again = await this.prisma.user.findUnique({
           where: { tenantId_email: { tenantId, email: input.email } },
           select: { id: true },

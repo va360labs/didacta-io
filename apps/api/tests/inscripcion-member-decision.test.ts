@@ -7,9 +7,13 @@
  *  - decide token inexistente → {outcome:'invalid'}.
  *  - decide token ya decidido (decidedAt set) → {outcome:'already'}.
  *  - decide token expirado → {outcome:'expired'}.
- *  - decide APPROVE válido → User ACTIVE + sella decidedAt de ambos + enrollAllPublished → {outcome:'approved'}.
- *  - decide REJECT válido → User DEACTIVATED → {outcome:'rejected'}.
- *  - AlreadyEnrolledError en un curso no aborta el bucle de matriculación.
+ *  - decide APPROVE válido → User ACTIVE + sella decidedAt de ambos +
+ *    delega el acceso en AccessGroupsService.assignDefaultGroupOnApproval → {outcome:'approved'}.
+ *  - decide REJECT válido → User DEACTIVATED (sin asignar grupo) → {outcome:'rejected'}.
+ *
+ * Fase 2: el fan-out a cursos (antes enrollAllPublished en este service) vive
+ * ahora en AccessGroupsService; aquí solo se verifica la DELEGACIÓN. La lógica
+ * de matriculación/refcount se cubre en access-groups.service.test.ts.
  *
  * Usa fake-prisma in-memory. El service hashea los raw con node:crypto real
  * (SHA-256), así que guardamos los raw que issueDecisionTokens devuelve y los
@@ -18,7 +22,6 @@
 
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { AlreadyEnrolledError, LearningError } from '@didacta/mod-learning';
 import { MemberDecisionService } from '../src/inscripcion/member-decision.service';
 import type { ClientContext } from '../src/auth/client-context';
 
@@ -52,16 +55,8 @@ interface UserRow {
   approvalDecidedAt: Date | null;
 }
 
-/**
- * Monta el harness con fake-prisma in-memory + mocks. `enrollImpl` permite
- * inyectar el comportamiento de enrollByAdmin (p. ej. lanzar AlreadyEnrolledError).
- */
-function makeHarness(
-  opts: {
-    courses?: Array<{ id: string }>;
-    enrollImpl?: (tenantId: string, userId: string, courseId: string) => Promise<unknown>;
-  } = {},
-) {
+/** Monta el harness con fake-prisma in-memory + mocks. */
+function makeHarness() {
   const tokens: DecisionTokenRow[] = [];
   let tokenAutoId = 1;
   const users: UserRow[] = [
@@ -118,6 +113,11 @@ function makeHarness(
         return users.find((u) => u.id === args.where.id) ?? null;
       },
     },
+    tenant: {
+      async findUnique() {
+        return { name: 'VA360 LABS' };
+      },
+    },
     memberRegistrationDecisionToken: {
       async create(args: { data: Omit<DecisionTokenRow, 'id' | 'decidedAt'> }) {
         const row: DecisionTokenRow = {
@@ -137,43 +137,26 @@ function makeHarness(
     },
   } as never;
 
-  const courses = opts.courses ?? [{ id: 'c1' }];
-  const listCourses = vi.fn().mockResolvedValue(courses);
-  const enrollByAdmin = vi.fn(
-    opts.enrollImpl ??
-      (async (_t: string, _admin: unknown, payload: { courseId: string }) => ({
-        id: `enr-${payload.courseId}`,
-      })),
-  );
-  const coursesService = { listCourses };
-  const learningService = { enrollByAdmin };
-  const registry = {
-    getCoursesService: () => coursesService,
-    getLearningService: () => learningService,
-  } as never;
+  const assignDefaultGroupOnApproval = vi.fn().mockResolvedValue(undefined);
+  const accessGroups = { assignDefaultGroupOnApproval } as never;
 
   const smtp = { send: vi.fn().mockResolvedValue({ ok: true }) };
   const smtpResolver = {
     resolve: vi.fn().mockResolvedValue({ config: {}, source: 'global', verified: true }),
   } as never;
   const auditLog = { record: vi.fn().mockResolvedValue(undefined) };
-  const tenantContext = {
-    // run ejecuta el callback directamente (sin AsyncLocalStorage real).
-    run: vi.fn((_ctx: unknown, fn: () => unknown) => fn()),
-  } as never;
   const logger = { warn: vi.fn(), log: vi.fn(), error: vi.fn(), debug: vi.fn() } as never;
 
   const service = new MemberDecisionService(
     prisma,
-    registry,
+    accessGroups,
     smtp as never,
     smtpResolver,
     auditLog as never,
-    tenantContext,
     logger,
   );
 
-  return { service, prisma, tokens, users, listCourses, enrollByAdmin, smtp, auditLog };
+  return { service, prisma, tokens, users, assignDefaultGroupOnApproval, smtp, auditLog };
 }
 
 describe('MemberDecisionService.issueDecisionTokens', () => {
@@ -193,12 +176,10 @@ describe('MemberDecisionService.issueDecisionTokens', () => {
     expect(h.tokens).toHaveLength(2);
     const actions = h.tokens.map((t) => t.action).sort();
     expect(actions).toEqual(['APPROVE', 'REJECT']);
-    // Solo se persiste el hash, no el raw.
     const approveRow = h.tokens.find((t) => t.action === 'APPROVE')!;
     const rejectRow = h.tokens.find((t) => t.action === 'REJECT')!;
     expect(approveRow.tokenHash).toBe(sha256(approveToken));
     expect(rejectRow.tokenHash).toBe(sha256(rejectToken));
-    // TTL futuro y ctx capturado.
     expect(approveRow.expiresAt.getTime()).toBeGreaterThan(Date.now());
     expect(approveRow.requestIp).toBe('1.2.3.4');
     expect(approveRow.requestUa).toBe('vitest');
@@ -215,7 +196,6 @@ describe('MemberDecisionService.decide', () => {
   it('token ya decidido (decidedAt set) → already', async () => {
     const h = makeHarness();
     const { approveToken } = await h.service.issueDecisionTokens(TENANT_ID, USER_ID, CTX);
-    // Forzamos que el token ya esté sellado.
     h.tokens.forEach((t) => (t.decidedAt = new Date()));
 
     const result = await h.service.decide(approveToken, CTX);
@@ -225,37 +205,29 @@ describe('MemberDecisionService.decide', () => {
   it('token expirado → expired', async () => {
     const h = makeHarness();
     const { approveToken } = await h.service.issueDecisionTokens(TENANT_ID, USER_ID, CTX);
-    // Forzamos expiración en el pasado.
     h.tokens.forEach((t) => (t.expiresAt = new Date(Date.now() - 1000)));
 
     const result = await h.service.decide(approveToken, CTX);
     expect(result).toEqual({ outcome: 'expired' });
   });
 
-  it('APPROVE válido → User ACTIVE, sella decidedAt de ambos tokens, matricula y devuelve approved', async () => {
-    const h = makeHarness({ courses: [{ id: 'c1' }] });
+  it('APPROVE válido → User ACTIVE, sella ambos tokens, asigna grupo por defecto y devuelve approved', async () => {
+    const h = makeHarness();
     const { approveToken } = await h.service.issueDecisionTokens(TENANT_ID, USER_ID, CTX);
 
     const result = await h.service.decide(approveToken, CTX);
 
     expect(result).toEqual({ outcome: 'approved' });
-    // User pasó a ACTIVE.
     expect(h.users[0].status).toBe('ACTIVE');
     expect(h.users[0].approvalDecidedAt).not.toBeNull();
-    // AMBOS tokens (el consumido y su pareja) quedan sellados.
     expect(h.tokens.every((t) => t.decidedAt !== null)).toBe(true);
-    // Matrícula en todos los cursos publicados.
-    expect(h.listCourses).toHaveBeenCalledWith(TENANT_ID, { status: 'PUBLISHED' });
-    expect(h.enrollByAdmin).toHaveBeenCalledTimes(1);
-    expect(h.enrollByAdmin).toHaveBeenCalledWith(TENANT_ID, null, {
-      userId: USER_ID,
-      courseId: 'c1',
-    });
-    // Audit member.approved.
+    // Delega el acceso en mod.access-groups (grupo por defecto al aprobar).
+    expect(h.assignDefaultGroupOnApproval).toHaveBeenCalledTimes(1);
+    expect(h.assignDefaultGroupOnApproval).toHaveBeenCalledWith(TENANT_ID, USER_ID);
     expect(h.auditLog.record.mock.calls[0][0].action).toBe('member.approved');
   });
 
-  it('REJECT válido → User DEACTIVATED y devuelve rejected (sin matricular)', async () => {
+  it('REJECT válido → User DEACTIVATED y devuelve rejected (sin asignar grupo)', async () => {
     const h = makeHarness();
     const { rejectToken } = await h.service.issueDecisionTokens(TENANT_ID, USER_ID, CTX);
 
@@ -264,38 +236,7 @@ describe('MemberDecisionService.decide', () => {
     expect(result).toEqual({ outcome: 'rejected' });
     expect(h.users[0].status).toBe('DEACTIVATED');
     expect(h.tokens.every((t) => t.decidedAt !== null)).toBe(true);
-    // Rechazo no matricula.
-    expect(h.enrollByAdmin).not.toHaveBeenCalled();
+    expect(h.assignDefaultGroupOnApproval).not.toHaveBeenCalled();
     expect(h.auditLog.record.mock.calls[0][0].action).toBe('member.rejected');
-  });
-
-  it('AlreadyEnrolledError en un curso no rompe el bucle: sigue con el resto y aprueba', async () => {
-    const enrollImpl = vi.fn(async (_t: string, _admin: unknown, payload: { courseId: string }) => {
-      if (payload.courseId === 'c1') throw new AlreadyEnrolledError();
-      return { id: `enr-${payload.courseId}` };
-    });
-    const h = makeHarness({ courses: [{ id: 'c1' }, { id: 'c2' }], enrollImpl });
-    const { approveToken } = await h.service.issueDecisionTokens(TENANT_ID, USER_ID, CTX);
-
-    const result = await h.service.decide(approveToken, CTX);
-
-    expect(result).toEqual({ outcome: 'approved' });
-    // Se intentó matricular en ambos pese al AlreadyEnrolledError del primero.
-    expect(h.enrollByAdmin).toHaveBeenCalledTimes(2);
-    expect(h.users[0].status).toBe('ACTIVE');
-  });
-
-  it('LearningError genérico en un curso tampoco rompe el bucle', async () => {
-    const enrollImpl = vi.fn(async (_t: string, _admin: unknown, payload: { courseId: string }) => {
-      if (payload.courseId === 'c1') throw new LearningError('SOME_CODE', 'boom');
-      return { id: `enr-${payload.courseId}` };
-    });
-    const h = makeHarness({ courses: [{ id: 'c1' }, { id: 'c2' }], enrollImpl });
-    const { approveToken } = await h.service.issueDecisionTokens(TENANT_ID, USER_ID, CTX);
-
-    const result = await h.service.decide(approveToken, CTX);
-
-    expect(result).toEqual({ outcome: 'approved' });
-    expect(h.enrollByAdmin).toHaveBeenCalledTimes(2);
   });
 });

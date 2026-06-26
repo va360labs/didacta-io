@@ -1546,7 +1546,15 @@ interface PrismaEnrollmentRow {
   userId: string;
   courseId: string;
   status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'PAUSED';
-  source: 'ADMIN' | 'CODE' | 'INVITATION_LINK' | 'PURCHASE' | 'IMPORT' | 'SUBSCRIPTION' | 'API';
+  source:
+    | 'ADMIN'
+    | 'CODE'
+    | 'INVITATION_LINK'
+    | 'PURCHASE'
+    | 'IMPORT'
+    | 'SUBSCRIPTION'
+    | 'API'
+    | 'GROUP';
   progressPercent: number;
   externalSource: string | null;
   externalId: string | null;
