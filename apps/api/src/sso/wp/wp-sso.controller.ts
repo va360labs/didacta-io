@@ -3,7 +3,7 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { WpSsoTokenError } from '@didacta/mod-wp-sso';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { Public } from '../../auth/decorators';
-import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
+import { resolveWebBaseUrlForAuthRedirect } from '../../common/resolve-web-base-url';
 import { WpSsoService } from './wp-sso.service';
 
 /**
@@ -45,12 +45,27 @@ export class WpSsoController {
     @Req() req: FastifyRequest,
     @Res({ passthrough: false }) res: FastifyReply,
   ): Promise<void> {
-    const base = resolveWebBaseUrl(req);
+    // Base endurecida: para un redirect que porta tokens NO confiamos en el
+    // header Host (open-redirect con exfiltración); solo WEB_PUBLIC_URL o un host
+    // de la allowlist. Ver resolveWebBaseUrlForAuthRedirect.
+    const base = resolveWebBaseUrlForAuthRedirect(req);
     try {
       const result = await this.wpSso.exchange(token ?? '');
+      // El handler del frontend (oidc-callback-handler) EXIGE el set completo:
+      // sin userId/email/tenantId/tenantSlug aborta a /auth/error?reason=missing_tokens.
+      // Replicamos lo que emite el callback OIDC (oidc.controller.ts).
       const url = new URL(`${base}/auth/callback`);
       url.searchParams.set('accessToken', result.tokens.accessToken);
       url.searchParams.set('refreshToken', result.tokens.refreshToken);
+      url.searchParams.set('userId', result.user.id);
+      url.searchParams.set('email', result.user.email);
+      if (result.user.name) url.searchParams.set('name', result.user.name);
+      url.searchParams.set('tenantId', result.user.tenantId);
+      url.searchParams.set('tenantSlug', result.user.tenantSlug);
+      url.searchParams.set('roles', result.user.roles.join(','));
+      // WordPress ya autenticó al usuario; el cliente refleja mfaEnabled=true para
+      // no proponer setup de MFA local (mismo criterio que OIDC/SAML).
+      url.searchParams.set('mfaEnabled', 'true');
       void res.status(HttpStatus.FOUND).redirect(url.toString());
     } catch (e) {
       const reason =

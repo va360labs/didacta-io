@@ -71,6 +71,55 @@ export function resolveWebBaseUrl(req?: RequestLike): string {
   return 'http://localhost:3000';
 }
 
+/**
+ * Variante ENDURECIDA de `resolveWebBaseUrl` para redirects que PORTAN TOKENS de
+ * sesión (callbacks SSO: WP-SSO, etc.). A diferencia de `resolveWebBaseUrl` —que
+ * deriva del host del request a propósito para los links de email—, esta NUNCA
+ * confía en el header `Host`/`X-Forwarded-Host` salvo que el host esté en una
+ * allowlist explícita (`WEB_PUBLIC_ALLOWED_HOSTS`, CSV). Así un atacante que
+ * controle el `Host` del request NO puede desviar `accessToken`/`refreshToken`
+ * a un host arbitrario (open-redirect con exfiltración de tokens). Cascada:
+ *
+ *   1. `WEB_PUBLIC_URL` si es una URL http/https válida (caso normal en prod).
+ *   2. Derivar del request SOLO si el host está en `WEB_PUBLIC_ALLOWED_HOSTS`.
+ *   3. Fallback dev `http://localhost:3000` (constante, no controlable por el atacante).
+ */
+export function resolveWebBaseUrlForAuthRedirect(req?: RequestLike): string {
+  const fromEnv = process.env.WEB_PUBLIC_URL?.trim();
+  if (fromEnv && isValidHttpUrl(fromEnv)) {
+    return stripTrailingSlash(fromEnv);
+  }
+
+  if (req) {
+    const host = firstHeader(req.headers['x-forwarded-host']) ?? firstHeader(req.headers['host']);
+    if (host && isAllowedWebHost(host)) {
+      const proto =
+        firstHeader(req.headers['x-forwarded-proto']) ??
+        (req.protocol && req.protocol.length > 0 ? req.protocol : 'https');
+      const cleanProto = (proto.split(',')[0] ?? proto).trim();
+      return stripTrailingSlash(`${cleanProto}://${host}`);
+    }
+  }
+
+  // Sin env válida y host no confiable: NO emitir tokens a un host arbitrario.
+  return 'http://localhost:3000';
+}
+
+/**
+ * True si `host` está en la allowlist `WEB_PUBLIC_ALLOWED_HOSTS` (CSV). Sin la
+ * env definida, ningún host derivado del request es confiable para tokens.
+ */
+function isAllowedWebHost(host: string): boolean {
+  const raw = process.env.WEB_PUBLIC_ALLOWED_HOSTS;
+  if (!raw) return false;
+  const normalized = host.trim().toLowerCase();
+  return raw
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter((h) => h.length > 0)
+    .includes(normalized);
+}
+
 function stripTrailingSlash(url: string): string {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 }
