@@ -13,7 +13,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { InstalledModule, InstalledModuleStatus, InstalledModuleVendor } from '@didacta/database';
+import type {
+  InstalledModule,
+  InstalledModuleStatus,
+  InstalledModuleVendor,
+} from '@didacta/database';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { SessionClaims } from '../auth/token.service';
@@ -42,6 +46,10 @@ function toPublicInstall(row: InstalledModule): Record<string, unknown> {
     version: row.version,
     prevVersion: row.prevVersion,
     vendor: row.vendor,
+    // Origen de la instalación (DISC-002). El frontend lo pinta como badge
+    // Oficial / Comunidad / No verificado. Faltaba en el DTO → la API nunca lo
+    // devolvía y el frontend mostraba siempre el fallback "Desconocido".
+    source: row.source,
     displayName: row.displayName,
     description: row.description,
     coreVersionRequired: row.coreVersionRequired,
@@ -112,7 +120,10 @@ export class AdminMarketplaceController {
   }
 
   @Get('installed')
-  @ApiOperation({ summary: 'Listado de módulos instalados a nivel instancia. Filtros opcionales por status / vendor.' })
+  @ApiOperation({
+    summary:
+      'Listado de módulos instalados a nivel instancia. Filtros opcionales por status / vendor.',
+  })
   async list(
     @CurrentUser() user: SessionClaims | undefined,
     @Query('status') status?: string,
@@ -153,7 +164,10 @@ export class AdminMarketplaceController {
     requireSuperAdmin(user);
     const row = await this.installed.findByName(name);
     if (!row) {
-      throw new MarketplacePackageError('NOT_FOUND', `Módulo "${name}" no está instalado en esta instancia.`);
+      throw new MarketplacePackageError(
+        'NOT_FOUND',
+        `Módulo "${name}" no está instalado en esta instancia.`,
+      );
     }
     return toPublicInstall(row);
   }
