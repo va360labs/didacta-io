@@ -50,7 +50,10 @@ const createSpaceSchema = z.object({
     .max(80)
     .regex(/^[a-z0-9-]+$/, 'Solo minúsculas, números y guiones'),
   title: z.string().min(1).max(120),
-  description: z.string().max(500).optional(),
+  // El form admin envía `description: null` cuando se deja vacío. Aceptamos
+  // null además de string/undefined para no romper con
+  // "Expected string, received null". El service ya trata null como "sin descripción".
+  description: z.string().max(500).nullable().optional(),
   icon: z.string().max(10).optional(),
   color: z.string().max(100).optional(),
   sortOrder: z.number().int().min(0).optional(),
