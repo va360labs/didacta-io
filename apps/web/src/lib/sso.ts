@@ -146,10 +146,10 @@ export function buildOidcStartUrl(tenantSlug: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// WordPress SSO (mod.wp-sso) — status público + bounce transparente
+// WordPress SSO (mod.wp-sso) — status público + bounce + admin config (por tenant)
 // ---------------------------------------------------------------------------
 
-/** Config pública de WP-SSO. Coincide con `WpSsoService.ssoConfig()` del backend. */
+/** Estado público de WP-SSO del tenant. Coincide con WpSsoPublicStatus del backend. */
 export interface WpSsoStatus {
   configured: boolean;
   /** Si el signin debe rebotar a WordPress en modo `try` cuando no hay sesión. */
@@ -159,13 +159,16 @@ export interface WpSsoStatus {
 }
 
 /**
- * Estado del SSO de WordPress (público, sin auth). El signin lo usa para decidir
- * el auto-bounce transparente. No throws: ante cualquier fallo devuelve apagado
+ * Estado del SSO de WordPress del tenant (público, sin auth). El signin lo usa
+ * para decidir el auto-bounce. No throws: ante cualquier fallo devuelve apagado
  * para no romper el login clásico.
  */
-export async function fetchWpSsoStatus(): Promise<WpSsoStatus> {
+export async function fetchWpSsoStatus(tenantSlug: string): Promise<WpSsoStatus> {
   try {
-    return await apiFetch<WpSsoStatus>('/api/v1/modules/wp-sso/status', { method: 'GET' });
+    return await apiFetch<WpSsoStatus>(
+      `/api/v1/modules/wp-sso/${encodeURIComponent(tenantSlug)}/status`,
+      { method: 'GET' },
+    );
   } catch {
     return { configured: false, autoRedirect: false, wordpressUrl: null };
   }
@@ -179,3 +182,63 @@ export async function fetchWpSsoStatus(): Promise<WpSsoStatus> {
 export function buildWpSsoTryUrl(wordpressUrl: string): string {
   return `${wordpressUrl.replace(/\/+$/, '')}/?didacta_sso=try`;
 }
+
+// --- Admin config (panel /admin/sso-wordpress) ---
+
+/** Vista safe de la config WP-SSO. Coincide con SafeWpSsoConfigView del backend. */
+export interface WpSsoSafeConfig {
+  enabled: boolean;
+  /** True si hay secreto guardado (el plaintext nunca se devuelve). */
+  hasSecret: boolean;
+  issuer: string;
+  audience: string;
+  autoCreate: boolean;
+  autoRedirect: boolean;
+  /** URL exacta a pegar en DIDACTA_SSO_CALLBACK de wp-config.php (incluye el slug). */
+  callbackUrl: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WpSsoConfigResponseExisting {
+  exists: true;
+  config: WpSsoSafeConfig;
+}
+export interface WpSsoConfigResponseEmpty {
+  exists: false;
+  /** Callback URL computada — el panel la muestra readonly desde el inicio. */
+  callbackUrl: string;
+}
+export type WpSsoConfigResponse = WpSsoConfigResponseExisting | WpSsoConfigResponseEmpty;
+
+export interface WpSsoConfigPutBody {
+  enabled: boolean;
+  /** Plaintext. Sólo enviar si se crea o rota — vacío/undefined preserva el guardado. */
+  sharedSecret?: string;
+  issuer?: string;
+  audience?: string;
+  autoCreate: boolean;
+  autoRedirect: boolean;
+}
+
+const WP_SSO_ADMIN_BASE = '/api/v1/admin/sso/wp';
+
+export const wpSsoAdminApi = {
+  async getConfig(bearer: string): Promise<WpSsoConfigResponse> {
+    return apiFetch<WpSsoConfigResponse>(`${WP_SSO_ADMIN_BASE}/config`, { method: 'GET' }, bearer);
+  },
+  async saveConfig(bearer: string, body: WpSsoConfigPutBody): Promise<WpSsoConfigResponseExisting> {
+    return apiFetch<WpSsoConfigResponseExisting>(
+      `${WP_SSO_ADMIN_BASE}/config`,
+      { method: 'PUT', body: JSON.stringify(body) },
+      bearer,
+    );
+  },
+  async deleteConfig(bearer: string): Promise<{ deleted: boolean }> {
+    return apiFetch<{ deleted: boolean }>(
+      `${WP_SSO_ADMIN_BASE}/config`,
+      { method: 'DELETE' },
+      bearer,
+    );
+  },
+};

@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { ModulesModule } from '../modules/modules.module';
 import { SsoOidcModule } from '../sso/oidc/oidc.module';
 import { SsoSamlModule } from '../sso/saml/saml.module';
+import { SsoWpModule } from '../sso/wp/wp-sso.module';
 import { AdminApiKeysController } from './admin-api-keys.controller';
 import { AdminModulesController } from './admin-modules.controller';
 import { AdminSmtpController } from './admin-smtp.controller';
@@ -17,6 +18,7 @@ import { CustomDomainsService } from './custom-domains/custom-domains.service';
 import { ScimAdminTokenController } from './scim/scim-admin.controller';
 import { OidcAdminController } from './sso/oidc-admin.controller';
 import { SamlAdminController } from './sso/saml-admin.controller';
+import { WpSsoAdminController } from './sso/wp-sso-admin.controller';
 import { SuperUsersController } from './super/super-users.controller';
 import { SuperUsersService } from './super/super-users.service';
 
@@ -31,7 +33,7 @@ import { SuperUsersService } from './super/super-users.service';
  * Importa ModulesModule para reusar TenantModulesService (HU-TA-002).
  */
 @Module({
-  imports: [AuthModule, ModulesModule, SsoOidcModule, SsoSamlModule],
+  imports: [AuthModule, ModulesModule, SsoOidcModule, SsoSamlModule, SsoWpModule],
   controllers: [
     AdminUsersController,
     AdminTenantsController,
@@ -55,6 +57,9 @@ import { SuperUsersService } from './super/super-users.service';
     // 9º piloto License SDK — gestión config SAML del tenant. Reutiliza
     // SamlService importado vía SsoSamlModule.
     SamlAdminController,
+    // WP-SSO (Community, sin gate EE) — gestión config por tenant desde
+    // /admin/sso-wordpress. Reutiliza WpSsoConfigService vía SsoWpModule.
+    WpSsoAdminController,
     // Follow-up `feat:multi_tenant.real` — listings cross-tenant para
     // super_admin (holdings con varias filiales). Gateado por capability EE.
     SuperUsersController,

@@ -1,48 +1,54 @@
-import { Controller, Get, HttpStatus, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Param, Query, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { WpSsoTokenError } from '@didacta/mod-wp-sso';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { Public } from '../../auth/decorators';
 import { resolveWebBaseUrlForAuthRedirect } from '../../common/resolve-web-base-url';
 import { WpSsoService } from './wp-sso.service';
+import { WpSsoConfigService } from './wp-sso-config.service';
 
 /**
- * Endpoint público de SSO desde WordPress. Llega como GET desde el navegador
- * del usuario (clic en el enlace que genera el plugin de WP), así que respondemos
- * con redirect 302 — igual que OIDC/SAML:
+ * Endpoints públicos de SSO desde WordPress, POR TENANT (el slug va en la ruta).
+ * Llega como GET desde el navegador (clic o auto-bounce), así que respondemos con
+ * redirect 302 — igual que OIDC/SAML:
  *   - OK    → ${WEB}/auth/callback?accessToken=...&refreshToken=...
  *   - Error → ${WEB}/auth/error?reason=<code>
  *
- * Montado bajo el prefijo global /api/v1 → /api/v1/modules/wp-sso/*
- * (coincide con apiNamespace del manifest de mod.wp-sso).
+ * Montado bajo el prefijo global /api/v1 → /api/v1/modules/wp-sso/:tenantSlug/*
+ * (coincide con apiNamespace del manifest de mod.wp-sso). La config NO viene de
+ * env: WpSsoConfigService la lee cifrada de BD por tenant.
  */
 @ApiTags('Modules · WP-SSO')
 @Controller('modules/wp-sso')
 export class WpSsoController {
-  constructor(private readonly wpSso: WpSsoService) {}
+  constructor(
+    private readonly wpSso: WpSsoService,
+    private readonly config: WpSsoConfigService,
+  ) {}
 
-  @Get('status')
+  @Get(':tenantSlug/status')
   @Public()
   @ApiOperation({
     summary:
-      'Config pública de WP-SSO (sin secretos): { configured, autoRedirect, wordpressUrl }. ' +
+      'Config pública de WP-SSO del tenant (sin secretos): { configured, autoRedirect, wordpressUrl }. ' +
       'La consume el signin para el auto-bounce transparente.',
   })
-  status() {
-    return this.wpSso.ssoConfig();
+  status(@Param('tenantSlug') tenantSlug: string) {
+    return this.config.getPublicStatus(tenantSlug);
   }
 
-  @Get('callback')
+  @Get(':tenantSlug/callback')
   @Public()
   @ApiOperation({
     summary:
-      'Callback SSO: recibe el token firmado por WordPress (?token=), lo verifica, resuelve/crea el usuario y redirige al frontend con la sesión.',
+      'Callback SSO del tenant: recibe el token firmado por WordPress (?token=), lo verifica con la config del tenant, resuelve/crea el usuario y redirige al frontend con la sesión.',
   })
   @ApiResponse({
     status: 302,
     description: 'Redirect a /auth/callback (OK) o /auth/error (fallo).',
   })
   async callback(
+    @Param('tenantSlug') tenantSlug: string,
     @Query('token') token: string | undefined,
     @Req() req: FastifyRequest,
     @Res({ passthrough: false }) res: FastifyReply,
@@ -52,7 +58,7 @@ export class WpSsoController {
     // de la allowlist. Ver resolveWebBaseUrlForAuthRedirect.
     const base = resolveWebBaseUrlForAuthRedirect(req);
     try {
-      const result = await this.wpSso.exchange(token ?? '');
+      const result = await this.wpSso.exchange(tenantSlug, token ?? '');
       // El handler del frontend (oidc-callback-handler) EXIGE el set completo:
       // sin userId/email/tenantId/tenantSlug aborta a /auth/error?reason=missing_tokens.
       // Replicamos lo que emite el callback OIDC (oidc.controller.ts).

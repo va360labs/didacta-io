@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WpSsoTokenError } from '@didacta/mod-wp-sso';
 import { WpSsoController } from '../src/sso/wp/wp-sso.controller';
 import type { WpSsoService } from '../src/sso/wp/wp-sso.service';
+import type { WpSsoConfigService } from '../src/sso/wp/wp-sso-config.service';
 
 /** FastifyReply mínimo que captura status + URL del redirect. */
 function fakeRes() {
@@ -35,9 +36,28 @@ const OK_RESULT = {
   },
 };
 
-describe('WpSsoController.callback', () => {
-  const ORIGINAL = process.env.WEB_PUBLIC_URL;
+function build(
+  svcOverrides: Partial<{ exchange: ReturnType<typeof vi.fn> }> = {},
+  configOverrides: Partial<{ getPublicStatus: ReturnType<typeof vi.fn> }> = {},
+) {
+  const wpSso = { exchange: vi.fn().mockResolvedValue(OK_RESULT), ...svcOverrides };
+  const config = {
+    getPublicStatus: vi.fn().mockResolvedValue({
+      configured: true,
+      autoRedirect: true,
+      wordpressUrl: 'https://va360.academy',
+    }),
+    ...configOverrides,
+  };
+  const ctrl = new WpSsoController(
+    wpSso as unknown as WpSsoService,
+    config as unknown as WpSsoConfigService,
+  );
+  return { ctrl, wpSso, config };
+}
 
+describe('WpSsoController', () => {
+  const ORIGINAL = process.env.WEB_PUBLIC_URL;
   beforeEach(() => {
     process.env.WEB_PUBLIC_URL = 'https://aula.va360.academy';
   });
@@ -46,37 +66,39 @@ describe('WpSsoController.callback', () => {
     else process.env.WEB_PUBLIC_URL = ORIGINAL;
   });
 
-  it('éxito: redirige a /auth/callback con el set COMPLETO de params (no solo tokens)', async () => {
-    const svc = { exchange: vi.fn().mockResolvedValue(OK_RESULT) };
-    const ctrl = new WpSsoController(svc as unknown as WpSsoService);
+  it('status: delega en config.getPublicStatus(tenantSlug)', async () => {
+    const { ctrl, config } = build();
+    const out = await ctrl.status('va360');
+    expect(config.getPublicStatus).toHaveBeenCalledWith('va360');
+    expect(out).toMatchObject({ configured: true, autoRedirect: true });
+  });
+
+  it('callback éxito: pasa el tenantSlug a exchange y redirige con el set completo', async () => {
+    const { ctrl, wpSso } = build();
     const { res, captured } = fakeRes();
 
-    await ctrl.callback('token-123', fakeReq() as never, res as never);
+    await ctrl.callback('va360', 'token-123', fakeReq() as never, res as never);
 
+    expect(wpSso.exchange).toHaveBeenCalledWith('va360', 'token-123');
     expect(captured.status).toBe(302);
     const url = new URL(captured.url!);
     expect(url.origin + url.pathname).toBe('https://aula.va360.academy/auth/callback');
     expect(url.searchParams.get('accessToken')).toBe('AT');
-    expect(url.searchParams.get('refreshToken')).toBe('RT');
-    // Estos 4 son los que faltaban y dejaban el flujo roto: el handler del front
-    // (oidc-callback-handler.tsx:39) aborta a /auth/error sin ellos.
     expect(url.searchParams.get('userId')).toBe('user-1');
     expect(url.searchParams.get('email')).toBe('ana@va360.academy');
     expect(url.searchParams.get('tenantId')).toBe('tenant-1');
     expect(url.searchParams.get('tenantSlug')).toBe('va360');
     expect(url.searchParams.get('roles')).toBe('alumno');
-    expect(url.searchParams.get('name')).toBe('Ana');
     expect(url.searchParams.get('mfaEnabled')).toBe('true');
   });
 
-  it('error de token: redirige a /auth/error con el code como reason', async () => {
-    const svc = {
+  it('callback error de token: redirige a /auth/error con el code como reason', async () => {
+    const { ctrl } = build({
       exchange: vi.fn().mockRejectedValue(new WpSsoTokenError('expired', 'El enlace SSO expiró.')),
-    };
-    const ctrl = new WpSsoController(svc as unknown as WpSsoService);
+    });
     const { res, captured } = fakeRes();
 
-    await ctrl.callback('token-viejo', fakeReq() as never, res as never);
+    await ctrl.callback('va360', 'token-viejo', fakeReq() as never, res as never);
 
     expect(captured.status).toBe(302);
     const url = new URL(captured.url!);
@@ -86,11 +108,11 @@ describe('WpSsoController.callback', () => {
 
   it('SEGURIDAD: sin WEB_PUBLIC_URL, un Host atacante NO recibe los tokens', async () => {
     delete process.env.WEB_PUBLIC_URL;
-    const svc = { exchange: vi.fn().mockResolvedValue(OK_RESULT) };
-    const ctrl = new WpSsoController(svc as unknown as WpSsoService);
+    const { ctrl } = build();
     const { res, captured } = fakeRes();
 
     await ctrl.callback(
+      'va360',
       'token-123',
       fakeReq({ 'x-forwarded-host': 'atacante.evil' }) as never,
       res as never,

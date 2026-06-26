@@ -447,6 +447,8 @@ function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): SidebarG
       // Features EE con UI: siempre visibles (patrón EeGate); el backend gatea.
       { href: '/admin/sso', label: 'SSO (OIDC)', icon: 'lock' },
       { href: '/admin/sso-saml', label: 'SSO (SAML)', icon: 'lock' },
+      // WP-SSO es Community (sin gate EE) — login desde WordPress.
+      { href: '/admin/sso-wordpress', label: 'SSO (WordPress)', icon: 'lock' },
       { href: '/admin/scim', label: 'SCIM Provisioning', icon: 'users' },
     ],
   };

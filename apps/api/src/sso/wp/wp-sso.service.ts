@@ -4,6 +4,7 @@ import IORedis, { type Redis } from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PrismaAuditLogService } from '../../modules/prisma-audit-log.service';
 import { TokenService } from '../../auth/token.service';
+import { WpSsoConfigService } from './wp-sso-config.service';
 
 /**
  * WpSsoService — intercambia el token firmado por WordPress por una sesión
@@ -18,13 +19,10 @@ import { TokenService } from '../../auth/token.service';
  *      token legacy 0.1.0 sin `sub` degrada a email-only con warning.
  *   4. Emite la sesión (TokenService) y devuelve tokens + datos del user.
  *
- * Config (V1, por env del host):
- *   - WP_SSO_SHARED_SECRET   (obligatorio) secreto HMAC compartido con WP.
- *   - WP_SSO_TENANT_SLUG     (obligatorio) tenant destino de los usuarios WP.
- *   - WP_SSO_ISSUER          (opcional) URL del WordPress origen — si se define,
- *                            el token debe declararla en `iss`.
- *   - WP_SSO_AUDIENCE        (opcional) audiencia esperada (default didacta-wp-sso).
- *   - WP_SSO_AUTOCREATE      (opcional, default 'true') auto-crea usuarios nuevos.
+ * Config POR TENANT (cifrada en BD, gestionada en /admin/sso-wordpress — NO env):
+ * `WpSsoConfigService` resuelve por slug del tenant {sharedSecret, issuer,
+ * audience, autoCreate, autoRedirect, enabled}. El callback recibe el slug en la
+ * ruta (/api/v1/modules/wp-sso/:tenantSlug/callback).
  */
 @Injectable()
 export class WpSsoService {
@@ -38,30 +36,13 @@ export class WpSsoService {
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
     private readonly auditLog: PrismaAuditLogService,
+    private readonly config: WpSsoConfigService,
   ) {}
 
-  /** True si WP-SSO está configurado (secreto + tenant). Lo usa el endpoint de status. */
-  isConfigured(): boolean {
-    return Boolean(process.env['WP_SSO_SHARED_SECRET'] && process.env['WP_SSO_TENANT_SLUG']);
-  }
-
-  /**
-   * Config pública (SIN secretos) que consume el signin para el auto-bounce
-   * transparente:
-   *   - configured:   hay secreto + tenant.
-   *   - autoRedirect: `WP_SSO_AUTO_REDIRECT=true` → el signin rebota a WordPress
-   *                   en modo `try` (silencioso) si no hay sesión Didacta.
-   *   - wordpressUrl: `WP_SSO_ISSUER` (home_url de WP) — destino del bounce.
-   */
-  ssoConfig(): { configured: boolean; autoRedirect: boolean; wordpressUrl: string | null } {
-    return {
-      configured: this.isConfigured(),
-      autoRedirect: process.env['WP_SSO_AUTO_REDIRECT'] === 'true',
-      wordpressUrl: process.env['WP_SSO_ISSUER']?.trim().replace(/\/+$/, '') || null,
-    };
-  }
-
-  async exchange(token: string): Promise<{
+  async exchange(
+    tenantSlug: string,
+    token: string,
+  ): Promise<{
     tokens: { accessToken: string; refreshToken: string };
     user: {
       id: string;
@@ -72,19 +53,14 @@ export class WpSsoService {
       roles: string[];
     };
   }> {
-    const sharedSecret = process.env['WP_SSO_SHARED_SECRET'] ?? '';
-    const tenantSlug = process.env['WP_SSO_TENANT_SLUG'] ?? '';
-    if (!sharedSecret || !tenantSlug) {
-      throw new WpSsoTokenError(
-        'not_configured',
-        'WP-SSO no configurado: faltan WP_SSO_SHARED_SECRET y/o WP_SSO_TENANT_SLUG en el host.',
-      );
-    }
+    // Config del tenant (cifrada en BD). Lanza WpSsoTokenError si no está
+    // configurado/habilitado para este tenant.
+    const { tenant, config } = await this.config.resolveTenantConfig(tenantSlug);
 
     const claims = await verifyWpSsoToken(token, {
-      sharedSecret,
-      expectedIssuer: process.env['WP_SSO_ISSUER'] || undefined,
-      expectedAudience: process.env['WP_SSO_AUDIENCE'] || undefined,
+      sharedSecret: config.sharedSecret,
+      expectedIssuer: config.issuer || undefined,
+      expectedAudience: config.audience || undefined,
     });
 
     // Anti-replay: el jti es de un solo uso.
@@ -96,19 +72,11 @@ export class WpSsoService {
       );
     }
 
-    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-    if (!tenant) {
-      throw new WpSsoTokenError(
-        'not_configured',
-        `WP_SSO_TENANT_SLUG="${tenantSlug}" no corresponde a ningún tenant.`,
-      );
-    }
-
     const provider = 'wp';
-    // Issuer de la identidad: el `iss` del token (home_url de WP), con fallback al
-    // env configurado y, en último caso, una constante estable.
-    const issuer = claims.iss ?? process.env['WP_SSO_ISSUER'] ?? 'wordpress';
-    const autoCreate = (process.env['WP_SSO_AUTOCREATE'] ?? 'true') !== 'false';
+    // Issuer de la identidad: el `iss` del token (home_url de WP), con fallback a
+    // la config del tenant y, en último caso, una constante estable.
+    const issuer = claims.iss ?? config.issuer ?? 'wordpress';
+    const autoCreate = config.autoCreate;
 
     // 1) Resolución por IDENTIDAD ESTABLE (sub). Independiente del email: resiste
     //    cambios y reuso de email en WordPress. Solo si el plugin firmó `sub` (≥0.2.0).

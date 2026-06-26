@@ -79,11 +79,12 @@ export function SignInForm() {
       if (wpSso === 'login_required') setWpLoginRequired(true);
       return;
     }
+    if (!tenant?.slug) return; // necesitamos el slug del tenant para el status/bounce
     if (authStorage.getAccessToken()) return; // ya hay sesión Didacta
     if (sessionStorage.getItem('wp_sso_attempted')) return; // ya lo intentamos
 
     let aborted = false;
-    void fetchWpSsoStatus().then((s) => {
+    void fetchWpSsoStatus(tenant.slug).then((s) => {
       if (aborted) return;
       if (s.configured && s.autoRedirect && s.wordpressUrl) {
         sessionStorage.setItem('wp_sso_attempted', '1');
@@ -94,7 +95,7 @@ export function SignInForm() {
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [tenant?.slug]);
 
   async function onSubmit(form: FormData) {
     setError(null);

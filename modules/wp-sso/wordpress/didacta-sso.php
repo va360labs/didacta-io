@@ -9,7 +9,8 @@
  *  1. Copia este archivo a wp-content/plugins/didacta-sso/didacta-sso.php y actívalo.
  *  2. En wp-config.php define (mismos valores que en Didacta):
  *       define('DIDACTA_SSO_SECRET', 'el-secreto-compartido-largo-y-aleatorio');
- *       define('DIDACTA_SSO_CALLBACK', 'https://dev.didacta.io/api/v1/modules/wp-sso/callback');
+ *       // Incluye el slug del tenant; cópialo TAL CUAL del panel /admin/sso-wordpress:
+ *       define('DIDACTA_SSO_CALLBACK', 'https://dev.didacta.io/api/v1/modules/wp-sso/<tenant-slug>/callback');
  *     Opcionales:
  *       define('DIDACTA_SSO_AUDIENCE', 'didacta-wp-sso'); // default
  *       define('DIDACTA_SSO_TTL', 120);                    // segundos, default 120
