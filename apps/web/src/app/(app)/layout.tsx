@@ -8,6 +8,8 @@ import { LicenseProvider } from '@/components/license-provider';
 import { NotificationsBell } from '@/components/notifications-bell';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
 import { meApi } from '@/lib/me';
+import { formatTenantName } from '@/lib/tenant-name';
+import { useTenantContext } from '@/lib/tenant-context';
 import { mergeExtensionSidebarItems } from '@/lib/sidebar-extensions-merge';
 import { filterByActiveModules } from '@/lib/sidebar-modules-filter';
 import { moduleExtensions } from '@/modules';
@@ -209,6 +211,23 @@ function Shell({
   const mergedGroups = mergeExtensionSidebarItems(baseGroups, moduleExtensions, userRoles);
   const groups = filterByActiveModules(mergedGroups, activeModules);
 
+  // `<title>` del documento: "Sección actual | Nombre del Tenant | Didacta".
+  // Antes todas las páginas mostraban solo "Didacta" (default del root layout):
+  // este shell es client component, así que en vez de metadata sincronizamos
+  // document.title. La sección se deriva del pathname contra el mapa ruta→label
+  // del propio sidebar (mergedGroups, sin filtrar por módulo para que el label
+  // resuelva aunque activeModules aún no haya cargado). Si la ruta no está en el
+  // sidebar (p.ej. detalle), cae a "Tenant | Didacta". El nombre del tenant usa
+  // el nombre REAL resuelto por host (useTenantContext, igual que el sidebar),
+  // con fallback al slug title-cased.
+  const { tenant: hostTenant } = useTenantContext();
+  const tenantName = hostTenant?.name?.trim() || formatTenantName(session.user.tenantSlug);
+  const sectionLabel = resolveSectionLabel(mergedGroups, pathname ?? '');
+  useEffect(() => {
+    const parts = [sectionLabel, tenantName, 'Didacta'].filter((p): p is string => Boolean(p));
+    document.title = parts.join(' | ');
+  }, [sectionLabel, tenantName]);
+
   return (
     <div className="flex min-h-dvh bg-bg-subtle">
       <CreateSpaceModal open={createSpaceOpen} onClose={() => setCreateSpaceOpen(false)} />
@@ -237,6 +256,42 @@ function Shell({
       </div>
     </div>
   );
+}
+
+/**
+ * Rutas del shell que NO tienen item en el sidebar pero merecen un nombre de
+ * sección en el `<title>` (se acceden desde el menú de perfil, banners, etc.).
+ */
+const SECTION_TITLE_EXTRAS: ReadonlyArray<{ href: string; label: string }> = [
+  { href: '/cuenta', label: 'Mi perfil' },
+];
+
+/**
+ * Deriva el label de la sección actual a partir del pathname, reutilizando el
+ * mapa ruta→label del sidebar (más SECTION_TITLE_EXTRAS). Match por prefijo más
+ * largo (la ruta más específica gana); respeta `exactMatch`. Devuelve null si
+ * ninguna ruta coincide (el `<title>` cae a "Tenant | Didacta").
+ */
+function resolveSectionLabel(groups: SidebarGroup[], pathname: string): string | null {
+  if (!pathname) return null;
+  const candidates: Array<{ href: string; label: string; exact?: boolean }> = [];
+  for (const g of groups) {
+    for (const it of g.items) {
+      if (it.href) candidates.push({ href: it.href, label: it.label, exact: it.exactMatch });
+    }
+  }
+  candidates.push(...SECTION_TITLE_EXTRAS);
+
+  let best: { href: string; label: string } | null = null;
+  for (const c of candidates) {
+    const match = c.exact
+      ? pathname === c.href
+      : pathname === c.href || pathname.startsWith(`${c.href}/`);
+    if (match && (!best || c.href.length > best.href.length)) {
+      best = { href: c.href, label: c.label };
+    }
+  }
+  return best?.label ?? null;
 }
 
 function buildGroups({

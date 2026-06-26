@@ -7,6 +7,7 @@ import { useTenantTheme } from '@/components/tenant-theme-provider';
 import { VersionUpdateBanner } from '@/components/version-update-banner';
 import type { StoredSession } from '@/lib/auth-storage';
 import { useTenantContext } from '@/lib/tenant-context';
+import { formatTenantName } from '@/lib/tenant-name';
 
 export interface SidebarItem {
   href: string;
@@ -291,13 +292,6 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
       <VersionUpdateBanner />
     </aside>
   );
-}
-
-function formatTenantName(slug: string): string {
-  return slug
-    .split(/[-_]/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
 }
 
 function humanRole(role: string): string {

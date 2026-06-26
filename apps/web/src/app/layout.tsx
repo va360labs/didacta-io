@@ -21,7 +21,7 @@ const sora = Sora({
 export const metadata: Metadata = {
   title: {
     default: 'Didacta',
-    template: '%s · Didacta',
+    template: '%s | Didacta',
   },
   description: 'Plataforma educativa modular, abierta y preparada para escalar.',
   robots: { index: false, follow: false },
