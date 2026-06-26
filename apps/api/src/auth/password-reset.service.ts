@@ -277,7 +277,7 @@ export class PasswordResetService {
    * Best-effort: cualquier error (sin fila, query falla) devuelve null para
    * que el email se envíe igual sin logo (no rompemos el reset por branding).
    */
-  private async resolveTenantLogoUrl(tenantId: string, webBaseUrl: string): Promise<string | null> {
+  async resolveTenantLogoUrl(tenantId: string, webBaseUrl: string): Promise<string | null> {
     try {
       const theme = await this.prisma.modThemingTenantTheme.findUnique({
         where: { tenantId },

@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { authStorage } from '@/lib/auth-storage';
 import {
   buildThemeStyleBlock,
+  SESSION_THEME_REFRESH_EVENT,
   THEME_UPDATED_EVENT,
   themeCache,
   themingApi,
@@ -79,6 +80,34 @@ export function TenantThemeProvider({ children }: { children: ReactNode }) {
     }
     window.addEventListener(THEME_UPDATED_EVENT, onThemeUpdated);
     return () => window.removeEventListener(THEME_UPDATED_EVENT, onThemeUpdated);
+  }, []);
+
+  // Re-fetch tras login: el provider vive en el root layout y NO se re-monta en
+  // navegaciones SPA, así que el fetch de mount (hecho en /signin, sin token) no
+  // vuelve a correr → el logo del tenant no aparecía hasta recargar. El signin
+  // dispara SESSION_THEME_REFRESH_EVENT y aquí recogemos el branding al vuelo.
+  useEffect(() => {
+    function onRefresh() {
+      const token = authStorage.getAccessToken();
+      if (!token) {
+        // Logout: sin sesión NO debe quedar pegada la marca del tenant anterior
+        // sobre las pantallas de auth (este provider vive en el root layout y no
+        // se re-monta). Volvemos a los defaults Didacta.
+        setTheme(null);
+        return;
+      }
+      void themingApi
+        .getMine(token)
+        .then((fresh) => {
+          setTheme(fresh);
+          themeCache.save(fresh);
+        })
+        .catch(() => {
+          // Falla silenciosa: se mantienen los defaults Didacta.
+        });
+    }
+    window.addEventListener(SESSION_THEME_REFRESH_EVENT, onRefresh);
+    return () => window.removeEventListener(SESSION_THEME_REFRESH_EVENT, onRefresh);
   }, []);
 
   return (

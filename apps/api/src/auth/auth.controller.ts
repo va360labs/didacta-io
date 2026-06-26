@@ -45,8 +45,13 @@ export class AuthController {
     const host = req.headers.host ?? req.headers['x-forwarded-host'];
     const hostStr = Array.isArray(host) ? host[0] : host;
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
+    // Logo del tenant (mod.theming) para que las páginas anónimas (signin,
+    // inscripción) muestren la marca del tenant en vez de "Didacta".
+    const logoUrl = tenant
+      ? await this.passwordReset.resolveTenantLogoUrl(tenant.id, resolveWebBaseUrl(req))
+      : null;
     return {
-      tenant: tenant ? { id: tenant.id, slug: tenant.slug, name: tenant.name } : null,
+      tenant: tenant ? { id: tenant.id, slug: tenant.slug, name: tenant.name, logoUrl } : null,
       host: hostStr ?? null,
     };
   }

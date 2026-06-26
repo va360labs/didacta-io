@@ -80,6 +80,21 @@ export const themingApi = {
 export const THEME_UPDATED_EVENT = 'didacta:theme-updated';
 
 /**
+ * Evento que pide al TenantThemeProvider RE-FETCHEAR el theme del tenant. Se
+ * dispara justo después de iniciar sesión: el provider vive en el root layout y
+ * NO se re-monta en navegaciones SPA, así que su fetch de mount (hecho en
+ * /signin, sin token) no vuelve a correr tras el login → el logo del tenant no
+ * aparecía hasta un reload duro. Con este evento se recoge el branding al vuelo.
+ */
+export const SESSION_THEME_REFRESH_EVENT = 'didacta:session-theme-refresh';
+
+/** Pide al provider re-fetchear el theme (úsalo justo después de loguear). */
+export function requestThemeRefresh(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(SESSION_THEME_REFRESH_EVENT));
+}
+
+/**
  * Persiste el theme en cache y notifica al TenantThemeProvider para que
  * reaplique el branding de inmediato. Úsalo tras guardar / resetear / cambiar
  * el logo en la pantalla de branding.

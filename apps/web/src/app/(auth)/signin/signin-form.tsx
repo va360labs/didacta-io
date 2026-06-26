@@ -11,6 +11,7 @@ import { authStorage } from '@/lib/auth-storage';
 import { invalidateCommunitySpacesCache } from '@/modules/community';
 import { buildOidcStartUrl, fetchOidcStatus } from '@/lib/sso';
 import { useTenantContext } from '@/lib/tenant-context';
+import { requestThemeRefresh } from '@/lib/theming';
 
 interface AuthResponse {
   tokens: { accessToken: string; refreshToken: string; expiresIn: number };
@@ -79,6 +80,9 @@ export function SignInForm() {
       // Arranca el sidebar de espacios desde cero con el token ya válido (evita
       // arrastrar un cache vacío o de otro tenant entre navegaciones SPA).
       invalidateCommunitySpacesCache();
+      // El TenantThemeProvider (root layout) no se re-monta en la navegación SPA
+      // post-login, así que pedimos que recoja el branding (logo) ahora mismo.
+      requestThemeRefresh();
       if (response.mfaRequired) {
         router.push(response.user.mfaEnabled ? '/mfa/verify' : '/mfa/setup');
       } else if (response.user.onboardingCompletedAt === null) {
@@ -141,31 +145,9 @@ export function SignInForm() {
       ) : null}
 
       <form action={onSubmit} className="space-y-4">
-        {/* Si el host está mapeado a un tenant, mostramos su nombre y omitimos
-          el campo "Organización". Si no hay tenant, mostramos el campo
-          (dev local sin domain configurado, o multi-tenant). */}
-        {tenant ? (
-          <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
-            <span className="text-text-muted">Inicias sesión en</span>{' '}
-            <strong className="text-brand-700">{tenant.name}</strong>
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            <Label htmlFor="tenantSlug">
-              Organización <span className="text-text-subtle text-xs">(opcional)</span>
-            </Label>
-            <Input
-              id="tenantSlug"
-              name="tenantSlug"
-              autoComplete="organization"
-              placeholder="Si tu admin te dio un nombre corto, escribilo aquí"
-            />
-            <p className="text-xs text-text-subtle">
-              Si no lo sabes, deja vacío — intentamos identificar tu organización por tu email.
-            </p>
-          </div>
-        )}
-
+        {/* El tenant se identifica por el dominio (o por el email en el backend);
+          el form solo pide email y contraseña. El logo del tenant va en el header.
+          NO mostramos ni el campo "Organización" ni un banner de tenant. */}
         {tenantCandidates && tenantCandidates.length > 0 ? (
           <div className="space-y-1.5">
             <Label htmlFor="tenantSlugSelect">Elige tu organización</Label>

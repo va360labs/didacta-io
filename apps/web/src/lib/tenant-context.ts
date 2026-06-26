@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from './api-client';
 
 export interface TenantContextResponse {
-  tenant: { id: string; slug: string; name: string } | null;
+  tenant: { id: string; slug: string; name: string; logoUrl: string | null } | null;
   host: string | null;
 }
 

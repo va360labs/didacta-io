@@ -6,6 +6,7 @@ import { Icon, type IconName } from '@/components/icon';
 import { useTenantTheme } from '@/components/tenant-theme-provider';
 import { VersionUpdateBanner } from '@/components/version-update-banner';
 import type { StoredSession } from '@/lib/auth-storage';
+import { useTenantContext } from '@/lib/tenant-context';
 
 export interface SidebarItem {
   href: string;
@@ -41,6 +42,11 @@ interface Props {
 export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
   const theme = useTenantTheme();
   const logoUrl = theme?.logoUrl ?? null;
+  // Nombre visible de la organización: el nombre real del tenant (editable en
+  // /admin/tenants), no el slug capitalizado. Fallback al slug si aún no se
+  // resolvió el tenant por host.
+  const { tenant: hostTenant } = useTenantContext();
+  const orgName = hostTenant?.name?.trim() || formatTenantName(session.user.tenantSlug);
 
   const name = session.user.name ?? session.user.email;
   const initials = name
@@ -74,9 +80,7 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[14px] font-bold leading-tight text-white">
-              {formatTenantName(session.user.tenantSlug)}
-            </div>
+            <div className="truncate text-[14px] font-bold leading-tight text-white">{orgName}</div>
             <div className="mt-0.5 text-[11px] text-white/40">Comunidad</div>
           </div>
           <svg
