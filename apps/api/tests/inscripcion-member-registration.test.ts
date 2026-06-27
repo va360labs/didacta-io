@@ -9,6 +9,10 @@
  *  - Carrera P2002 en el create: recupera el existente y devuelve {created:false}.
  *  - Audit log 'member.inscription.created' tras crear.
  *  - Email al aprobador con destinatario MEMBER_APPROVAL_EMAIL (smtp mockeado).
+ *
+ * NOTA: el lookup de suscripción + la notificación al aprobador corren en SEGUNDO
+ * PLANO (no bloquean la respuesta al usuario), así que los asserts del envío del
+ * email usan `vi.waitFor` para esperar a que el background se complete.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -91,6 +95,11 @@ function makeHarness(
     lookup: vi.fn().mockResolvedValue({ isDelinquent: false, name: null }),
   } as never;
 
+  // El lookup de suscripción corre en background; por defecto no encuentra nada.
+  const subscriptionLookup = {
+    runAndStore: vi.fn().mockResolvedValue({ matches: [], failures: [] }),
+  } as never;
+
   const smtp = { send: vi.fn().mockResolvedValue({ ok: true }) };
   const smtpResolver = {
     resolve: vi.fn().mockResolvedValue({ config: {}, source: 'global', verified: true }),
@@ -103,13 +112,27 @@ function makeHarness(
     passwords,
     decision,
     paymentFlags,
+    subscriptionLookup,
     smtp as never,
     smtpResolver,
     auditLog as never,
     logger,
   );
 
-  return { service, prisma, passwords, decision, paymentFlags, smtp, auditLog, txUser, txUserRole };
+  return {
+    service,
+    prisma,
+    passwords,
+    decision,
+    paymentFlags,
+    subscriptionLookup,
+    smtp,
+    smtpResolver,
+    auditLog,
+    logger,
+    txUser,
+    txUserRole,
+  };
 }
 
 describe('MemberRegistrationService.createPending', () => {
@@ -143,12 +166,24 @@ describe('MemberRegistrationService.createPending', () => {
 
     await h.service.createPending(TENANT_ID, BASE_INPUT, WEB_BASE_URL, CTX);
 
+    // La notificación al aprobador corre en SEGUNDO PLANO (tras el lookup de
+    // suscripción), así que esperamos a que el envío del email se complete.
+    await vi.waitFor(() => {
+      expect(h.smtp.send).toHaveBeenCalledTimes(1);
+    });
+
+    // El lookup de suscripción se disparó (con el email del solicitante).
+    expect(h.subscriptionLookup.runAndStore).toHaveBeenCalledWith(
+      'tenant-1',
+      'new-user',
+      'ana@x.com',
+    );
+
     // issueDecisionTokens se llamó con (tenant, userId nuevo, ctx).
     expect(h.decision.issueDecisionTokens).toHaveBeenCalledTimes(1);
     expect(h.decision.issueDecisionTokens).toHaveBeenCalledWith('tenant-1', 'new-user', CTX);
 
     // Email enviado al aprobador (destinatario del env).
-    expect(h.smtp.send).toHaveBeenCalledTimes(1);
     const [, message] = h.smtp.send.mock.calls[0];
     expect(message.to).toBe('aprobador@va360.com');
     // Los enlaces firmados van embebidos en el cuerpo.
@@ -212,6 +247,11 @@ describe('MemberRegistrationService.createPending', () => {
     const result = await h.service.createPending(TENANT_ID, BASE_INPUT, WEB_BASE_URL, CTX);
 
     expect(result.created).toBe(true);
+    // La notificación corre en background y debe abortar al faltar el aprobador
+    // (loguea un warn). Esperamos a ese warn y confirmamos que NO se envió email.
+    await vi.waitFor(() => {
+      expect(h.logger.warn).toHaveBeenCalled();
+    });
     expect(h.smtp.send).not.toHaveBeenCalled();
   });
 });

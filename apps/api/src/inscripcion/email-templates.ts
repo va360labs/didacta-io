@@ -1,4 +1,7 @@
-import type { MemberSubscriptionMatch } from '@didacta/mod-payment-connections';
+import type {
+  MemberSubscriptionMatch,
+  MemberSubscriptionLookupFailure,
+} from '@didacta/mod-payment-connections';
 import type { TelegramMembership } from './inscripcion.dto';
 
 // ============================================================================
@@ -75,6 +78,8 @@ export interface DecisionEmailParams {
   tenantName?: string;
   /** Suscripciones detectadas del solicitante en las cuentas de pago conectadas. */
   subscriptionMatches?: MemberSubscriptionMatch[];
+  /** Conexiones que NO se pudieron consultar (caídas/credencial/timeout): el resultado puede ser incompleto. */
+  subscriptionFailures?: MemberSubscriptionLookupFailure[];
 }
 
 /** Texto del estado de pertenencia al grupo según el tri-estado. */
@@ -115,11 +120,25 @@ export function buildDecisionEmail(params: DecisionEmailParams): EmailContent {
   const tenantName = params.tenantName ?? 'Didacta';
   const heading = membershipHeading(inGroup);
   const matches = params.subscriptionMatches ?? [];
+  const failures = params.subscriptionFailures ?? [];
+  const failedNote = failures.length
+    ? ` (no se pudo consultar ${failures.length} cuenta(s) de pago: ${failures
+        .map((f) => f.connectionName)
+        .join(', ')})`
+    : '';
 
   const delinquentLineText = isDelinquent ? '\n⚠ CONSTA COMO IMPAGO\n' : '';
-  const subscriptionText = matches.length
-    ? `\nSuscripción detectada:\n${matches.map((m) => `  • ${describeMatch(m)}`).join('\n')}\n`
-    : '\nSuscripción detectada: ninguna en las cuentas de pago conectadas.\n';
+  // 3 casos: con matches / sin matches pero con fallos (no concluyente) / sin nada.
+  let subscriptionText: string;
+  if (matches.length) {
+    subscriptionText = `\nSuscripción detectada:\n${matches
+      .map((m) => `  • ${describeMatch(m)}`)
+      .join('\n')}${failedNote ? `\n  ⚠ Resultado parcial${failedNote}.` : ''}\n`;
+  } else if (failures.length) {
+    subscriptionText = `\n⚠ No se pudo verificar la suscripción${failedNote}. Revisar manualmente antes de decidir.\n`;
+  } else {
+    subscriptionText = '\nSuscripción detectada: ninguna en las cuentas de pago conectadas.\n';
+  }
   const subject = `Nueva inscripción pendiente — ${name}`;
   const text = `Hola,
 
@@ -145,16 +164,31 @@ Powered by Didacta.io`;
   </p>`
     : '';
 
-  const subscriptionBlock = matches.length
-    ? `<div style="margin: 16px 0; padding: 12px 16px; background: #ecfdf5; border: 1px solid #10b981; border-radius: 8px;">
+  const failedNoteHtml = failures.length
+    ? `<p style="margin: 6px 0 0; font-size: 13px; color: #b45309;">⚠ Resultado parcial: no se pudo consultar ${failures.length} cuenta(s) de pago (${escapeHtml(
+        failures.map((f) => f.connectionName).join(', '),
+      )}).</p>`
+    : '';
+  let subscriptionBlock: string;
+  if (matches.length) {
+    subscriptionBlock = `<div style="margin: 16px 0; padding: 12px 16px; background: #ecfdf5; border: 1px solid #10b981; border-radius: 8px;">
     <p style="margin: 0 0 8px; font-weight: 700; color: #065f46; font-size: 15px;">Suscripción detectada</p>
     <ul style="margin: 0; padding-left: 18px; color: #065f46; font-size: 14px;">
       ${matches.map((m) => `<li>${escapeHtml(describeMatch(m))}</li>`).join('\n      ')}
     </ul>
-  </div>`
-    : `<p style="margin: 16px 0; padding: 12px 16px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; color: #475569; font-size: 14px;">
+    ${failedNoteHtml}
+  </div>`;
+  } else if (failures.length) {
+    subscriptionBlock = `<p style="margin: 16px 0; padding: 12px 16px; background: #fffbeb; border: 1px solid #f59e0b; border-radius: 8px; color: #92400e; font-size: 14px;">
+    ⚠ No se pudo verificar la suscripción (${escapeHtml(
+      failures.map((f) => f.connectionName).join(', '),
+    )}). Revisar manualmente antes de decidir.
+  </p>`;
+  } else {
+    subscriptionBlock = `<p style="margin: 16px 0; padding: 12px 16px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; color: #475569; font-size: 14px;">
     Sin suscripción detectada en las cuentas de pago conectadas.
   </p>`;
+  }
 
   const html = `<!DOCTYPE html>
 <html lang="es"><body style="font-family: 'Inter', system-ui, sans-serif; color: #0D1B2A; line-height: 1.6;">

@@ -128,6 +128,77 @@ describe('buildDecisionEmail', () => {
     const { text } = buildDecisionEmail(baseDecisionParams());
     expect(text).toContain('Didacta');
   });
+
+  // ── Sección de suscripción detectada ────────────────────────────────────
+  const MATCH = {
+    provider: 'stripe',
+    connectionId: 'conn_1',
+    connectionName: 'Stripe ES',
+    planName: 'Plan Pro',
+    status: 'active',
+    unitAmount: 1999,
+    currency: 'eur',
+    subscriptionId: 'sub_1',
+  };
+
+  it('sin matches ni fallos: dice "ninguna" (negativo honesto)', () => {
+    const { text, html } = buildDecisionEmail(
+      baseDecisionParams({ subscriptionMatches: [], subscriptionFailures: [] }),
+    );
+    expect(text).toContain('ninguna en las cuentas de pago conectadas');
+    expect(html).toContain('Sin suscripción detectada');
+  });
+
+  it('con match: muestra proveedor, plan, estado e importe en text y html', () => {
+    const { text, html } = buildDecisionEmail(baseDecisionParams({ subscriptionMatches: [MATCH] }));
+    expect(text).toContain('Stripe: Plan Pro (active)');
+    expect(text).toContain('19.99 EUR');
+    expect(html).toContain('Suscripción detectada');
+    expect(html).toContain('Stripe: Plan Pro (active)');
+  });
+
+  it('sin match pero con fallo: NO afirma "ninguna" — avisa de no verificable', () => {
+    const { text, html } = buildDecisionEmail(
+      baseDecisionParams({
+        subscriptionMatches: [],
+        subscriptionFailures: [
+          { provider: 'paypal', connectionName: 'PayPal Main', message: 'timeout' },
+        ],
+      }),
+    );
+    expect(text).not.toContain('ninguna en las cuentas de pago conectadas');
+    expect(text).toContain('No se pudo verificar');
+    expect(text).toContain('PayPal Main');
+    expect(html).toContain('No se pudo verificar');
+    expect(html).toContain('Revisar manualmente');
+  });
+
+  it('con match y además un fallo: marca resultado parcial', () => {
+    const { text, html } = buildDecisionEmail(
+      baseDecisionParams({
+        subscriptionMatches: [MATCH],
+        subscriptionFailures: [
+          { provider: 'woocommerce', connectionName: 'Tienda', message: 'down' },
+        ],
+      }),
+    );
+    expect(text).toContain('Resultado parcial');
+    expect(html).toContain('Resultado parcial');
+  });
+
+  it('escapa los datos de la suscripción/fallos en el html (anti-inyección)', () => {
+    const { html } = buildDecisionEmail(
+      baseDecisionParams({
+        subscriptionMatches: [{ ...MATCH, planName: 'Plan <b>X</b>' }],
+        subscriptionFailures: [
+          { provider: 'stripe', connectionName: 'A & <b>B</b>', message: 'x' },
+        ],
+      }),
+    );
+    expect(html).toContain('Plan &lt;b&gt;X&lt;/b&gt;');
+    expect(html).toContain('A &amp; &lt;b&gt;B&lt;/b&gt;');
+    expect(html).not.toContain('Plan <b>X</b>');
+  });
 });
 
 describe('buildWelcomeEmail', () => {

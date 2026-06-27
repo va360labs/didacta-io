@@ -16,9 +16,12 @@
  *  - verifyConnection: ok → VERIFIED; fallo → ERROR persistido + throw.
  *  - disconnectConnection: borra fila + secret.
  *  - listConnections: solo del tenant.
+ *  - findUserSubscriptions: agrega matches por email de las conexiones VERIFIED,
+ *    salta no-VERIFIED y adapters sin el método, aísla fallos (failures) y
+ *    normaliza el email.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   PaymentConnectionsService,
   normalizeEmail,
@@ -369,6 +372,108 @@ describe('disconnectConnection', () => {
     expect(
       await svc.config.get(TENANT, 'payment-connections', `stripe:${row.id}:credentials`),
     ).toBeUndefined();
+  });
+});
+
+describe('findUserSubscriptions', () => {
+  const FLAKY_KEY = 'rk_test_flaky';
+  const SUB_PAID = sub('sub_paid', 'buyer@x.com', 'active'); // planName 'Plan Pro', 1999 eur
+
+  /** Adapter de lectura con (o sin) findSubscriptionsByEmail; valida en el add. */
+  function emailAdapter(
+    find?: (email: string) => Promise<StripeSubscriberRecord[]>,
+  ): StripeReadAdapter {
+    const base: StripeReadAdapter = {
+      retrieveAccount: async () => ({ id: 'acct', email: null, country: null, businessName: null }),
+      listActiveSubscriptions: async () => ({ subscribers: [], truncated: false }),
+    };
+    return find ? { ...base, findSubscriptionsByEmail: find } : base;
+  }
+
+  async function addStripe(svc: ReturnType<typeof buildService>, displayName: string, key: string) {
+    return svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName,
+      credentials: { apiKey: key },
+    });
+  }
+
+  it('agrega los matches de una conexión VERIFIED y mapea los campos (email normalizado)', async () => {
+    const find = vi.fn(async (_email: string) => [SUB_PAID]);
+    const svc = buildService({ [VALID_KEY]: emailAdapter(find) });
+    const row = await addStripe(svc, 'Stripe ES', VALID_KEY);
+
+    const { matches, failures } = await svc.service.findUserSubscriptions(TENANT, 'BUYER@x.com');
+
+    expect(failures).toEqual([]);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      provider: 'stripe',
+      connectionId: row.id,
+      connectionName: 'Stripe ES',
+      planName: 'Plan Pro',
+      status: 'active',
+      unitAmount: 1999,
+      currency: 'eur',
+      subscriptionId: 'sub_paid',
+    });
+    // El email se normaliza (minúsculas + trim) antes de pasarlo al adapter.
+    expect(find).toHaveBeenCalledWith('buyer@x.com');
+  });
+
+  it('salta las conexiones que no están VERIFIED (no las consulta)', async () => {
+    const find = vi.fn(async () => [SUB_PAID]);
+    const svc = buildService({ [VALID_KEY]: emailAdapter(find) });
+    const row = await addStripe(svc, 'Stripe ES', VALID_KEY);
+    svc.prisma.rows.get(row.id)!.status = 'PENDING'; // ya no VERIFIED
+
+    const { matches, failures } = await svc.service.findUserSubscriptions(TENANT, 'buyer@x.com');
+
+    expect(matches).toEqual([]);
+    expect(failures).toEqual([]);
+    expect(find).not.toHaveBeenCalled();
+  });
+
+  it('salta los adapters sin findSubscriptionsByEmail sin romper ni registrar fallo', async () => {
+    const svc = buildService({ [VALID_KEY]: emailAdapter() }); // sin método
+    await addStripe(svc, 'Stripe ES', VALID_KEY);
+
+    const res = await svc.service.findUserSubscriptions(TENANT, 'buyer@x.com');
+
+    expect(res).toEqual({ matches: [], failures: [] });
+  });
+
+  it('una conexión caída no tumba el lookup: registra el fallo y sigue con las demás', async () => {
+    const good = vi.fn(async () => [SUB_PAID]);
+    const svc = buildService({
+      [VALID_KEY]: emailAdapter(good),
+      [FLAKY_KEY]: emailAdapter(async () => {
+        throw new Error('cuenta caída');
+      }),
+    });
+    await addStripe(svc, 'Buena', VALID_KEY);
+    await addStripe(svc, 'Caída', FLAKY_KEY);
+
+    const { matches, failures } = await svc.service.findUserSubscriptions(TENANT, 'buyer@x.com');
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]!.connectionName).toBe('Buena');
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatchObject({ provider: 'stripe', connectionName: 'Caída' });
+    expect(failures[0]!.message).toContain('cuenta caída');
+  });
+
+  it('email vacío → resultado vacío sin consultar ninguna cuenta', async () => {
+    const find = vi.fn(async () => [SUB_PAID]);
+    const svc = buildService({ [VALID_KEY]: emailAdapter(find) });
+    await addStripe(svc, 'Stripe ES', VALID_KEY);
+
+    const res = await svc.service.findUserSubscriptions(TENANT, '   ');
+
+    expect(res).toEqual({ matches: [], failures: [] });
+    expect(find).not.toHaveBeenCalled();
   });
 });
 

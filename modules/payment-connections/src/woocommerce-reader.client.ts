@@ -33,6 +33,8 @@ type FetchFn = typeof fetch;
 const WC_ACTIVE_STATUSES = ['active', 'on-hold'];
 const PER_PAGE = 100;
 const DEFAULT_MAX_PAGES = 50;
+/** Aborta cada request a los 10s (como Stripe) para que el job de fondo nunca cuelgue. */
+const REQUEST_TIMEOUT_MS = 10_000;
 
 export class WooCommerceReadSdkAdapter implements StripeReadAdapter {
   private readonly base: string;
@@ -164,6 +166,7 @@ export class WooCommerceReadSdkAdapter implements StripeReadAdapter {
   private get(path: string): Promise<Response> {
     return this.fetchFn(`${this.base}${path}`, {
       headers: { Authorization: this.authHeader, Accept: 'application/json' },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   }
 }

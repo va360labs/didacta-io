@@ -10,7 +10,10 @@ import { membershipToBoolean, type TelegramMembership } from './inscripcion.dto'
 import { buildDecisionEmail } from './email-templates';
 import { MemberDecisionService } from './member-decision.service';
 import { MemberPaymentFlagService } from './member-payment-flag.service';
-import type { MemberSubscriptionMatch } from '@didacta/mod-payment-connections';
+import type {
+  MemberSubscriptionMatch,
+  MemberSubscriptionLookupFailure,
+} from '@didacta/mod-payment-connections';
 import { MemberSubscriptionLookupService } from './member-subscription-lookup.service';
 
 const DEFAULT_ALUMNO_ROLE = 'alumno';
@@ -176,10 +179,13 @@ export class MemberRegistrationService {
     webBaseUrl: string,
     ctx: ClientContext,
   ): Promise<void> {
-    const matches = await this.subscriptionLookup
+    const { matches, failures } = await this.subscriptionLookup
       .runAndStore(tenantId, userId, input.email)
-      .catch(() => [] as MemberSubscriptionMatch[]);
-    await this.notifyApprover(tenantId, userId, input, webBaseUrl, ctx, matches);
+      .catch(() => ({
+        matches: [] as MemberSubscriptionMatch[],
+        failures: [] as MemberSubscriptionLookupFailure[],
+      }));
+    await this.notifyApprover(tenantId, userId, input, webBaseUrl, ctx, matches, failures);
   }
 
   private async notifyApprover(
@@ -189,6 +195,7 @@ export class MemberRegistrationService {
     webBaseUrl: string,
     ctx: ClientContext,
     matches: MemberSubscriptionMatch[],
+    failures: MemberSubscriptionLookupFailure[],
   ): Promise<void> {
     try {
       const { approveToken, rejectToken } = await this.decision.issueDecisionTokens(
@@ -235,6 +242,7 @@ export class MemberRegistrationService {
         rejectUrl,
         tenantName,
         subscriptionMatches: matches,
+        subscriptionFailures: failures,
       });
       const result = await this.smtp.send(resolved.config, {
         to: approver,

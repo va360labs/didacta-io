@@ -42,6 +42,8 @@ export type {
   AddConnectionInput,
   ReconcileResult,
   MemberSubscriptionMatch,
+  MemberSubscriptionLookupFailure,
+  MemberSubscriptionLookupResult,
 } from './payment-connections.service.js';
 export { StripeReadSdkAdapter } from './stripe-reader.client.js';
 export type {

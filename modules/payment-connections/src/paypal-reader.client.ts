@@ -37,6 +37,8 @@ const DEFAULT_LOOKBACK_MONTHS = 13;
 /** Los datos tardan ~3h en aparecer en Transaction Search. */
 const LATENCY_MS = 3 * 60 * 60 * 1000;
 const PAGE_SIZE = 500;
+/** Aborta cada request a los 10s (como Stripe) para que el job de fondo nunca cuelgue. */
+const REQUEST_TIMEOUT_MS = 10_000;
 
 export class PayPalReadSdkAdapter implements StripeReadAdapter {
   private readonly base: string;
@@ -97,7 +99,7 @@ export class PayPalReadSdkAdapter implements StripeReadAdapter {
           url.searchParams.set('page_size', String(PAGE_SIZE));
           url.searchParams.set('page', String(page));
 
-          const resp = await this.fetchFn(url.toString(), {
+          const resp = await this.fetchWithTimeout(url.toString(), {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (resp.status === 401 || resp.status === 403) {
@@ -146,11 +148,16 @@ export class PayPalReadSdkAdapter implements StripeReadAdapter {
     return subscribers.filter((s) => (s.email ?? '').trim().toLowerCase() === target);
   }
 
+  /** Igual que `fetchFn` pero con AbortSignal de 10s: PayPal no se cuelga el job. */
+  private fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+    return this.fetchFn(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+  }
+
   private async getToken(): Promise<{ value: string; appId: string | null }> {
     const basic = Buffer.from(`${this.creds.clientId}:${this.creds.clientSecret}`).toString(
       'base64',
     );
-    const resp = await this.fetchFn(`${this.base}/v1/oauth2/token`, {
+    const resp = await this.fetchWithTimeout(`${this.base}/v1/oauth2/token`, {
       method: 'POST',
       headers: {
         Authorization: `Basic ${basic}`,
@@ -223,6 +230,10 @@ function mapTxn(tx: PayPalTxn): StripeSubscriberRecord | null {
     name,
     priceId: null,
     productId: null,
+    // Transaction Search NO trae el nombre del plan. Follow-up: resolverlo vía
+    // Subscriptions API (GET /v1/billing/subscriptions/{id} → plan_id →
+    // /v1/billing/plans/{plan_id}.name) si la app tiene ese permiso. Mientras
+    // tanto, el aprobador ve el importe (unitAmount/currency) como desambiguador.
     productName: null,
     unitAmount: parsed != null && !Number.isNaN(parsed) ? parsed : null,
     currency: ti.transaction_amount?.currency_code ?? null,

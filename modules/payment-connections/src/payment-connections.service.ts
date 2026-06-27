@@ -136,6 +136,24 @@ export interface MemberSubscriptionMatch {
   subscriptionId: string;
 }
 
+/** Una conexión que NO se pudo consultar durante el lookup (caída, credencial inválida, timeout…). */
+export interface MemberSubscriptionLookupFailure {
+  provider: string;
+  connectionName: string;
+  message: string;
+}
+
+/**
+ * Resultado del lookup de suscripción de un email. `matches` son las suscripciones
+ * encontradas; `failures` son las conexiones VERIFIED que fallaron al consultarse.
+ * Distinguir ambos es clave: `matches: []` + `failures: []` = "no tiene suscripción",
+ * pero `matches: []` + `failures: [...]` = "no se pudo verificar" (NO afirmar que no paga).
+ */
+export interface MemberSubscriptionLookupResult {
+  matches: MemberSubscriptionMatch[];
+  failures: MemberSubscriptionLookupFailure[];
+}
+
 export function normalizeEmail(value: string | null | undefined): string | null {
   if (!value) return null;
   const trimmed = value.trim().toLowerCase();
@@ -356,11 +374,15 @@ export class PaymentConnectionsService {
    * (Stripe + PayPal + WooCommerce). Best-effort por conexión: si una falla, se
    * registra y se sigue con las demás. Lo usa el job de inscripción de miembros.
    */
-  async findUserSubscriptions(tenantId: string, email: string): Promise<MemberSubscriptionMatch[]> {
+  async findUserSubscriptions(
+    tenantId: string,
+    email: string,
+  ): Promise<MemberSubscriptionLookupResult> {
     const norm = normalizeEmail(email);
-    if (!norm) return [];
+    if (!norm) return { matches: [], failures: [] };
     const conns = await this.listConnections(tenantId);
-    const out: MemberSubscriptionMatch[] = [];
+    const matches: MemberSubscriptionMatch[] = [];
+    const failures: MemberSubscriptionLookupFailure[] = [];
     for (const c of conns) {
       if (c.status !== 'VERIFIED') continue;
       try {
@@ -369,7 +391,7 @@ export class PaymentConnectionsService {
         if (!adapter.findSubscriptionsByEmail) continue;
         const subs = await adapter.findSubscriptionsByEmail(norm);
         for (const s of subs) {
-          out.push({
+          matches.push({
             provider: c.provider,
             connectionId: c.id,
             connectionName: c.displayName,
@@ -380,11 +402,18 @@ export class PaymentConnectionsService {
             subscriptionId: s.subscriptionId,
           });
         }
-      } catch {
-        // Una cuenta caída no debe tumbar el lookup completo.
+      } catch (err) {
+        // Una cuenta caída no debe tumbar el lookup completo, pero SÍ debe
+        // registrarse para no presentarle al aprobador un "sin suscripción"
+        // falso (la cuenta podría tener una y no haberse podido consultar).
+        failures.push({
+          provider: c.provider,
+          connectionName: c.displayName,
+          message: ((err as Error)?.message ?? 'error').slice(0, 300),
+        });
       }
     }
-    return out;
+    return { matches, failures };
   }
 
   // ---------------- internos ----------------
