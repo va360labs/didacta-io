@@ -1,5 +1,6 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { ModuleRegistry } from '@didacta/core-registry';
+import { Prisma } from '@didacta/database';
 import {
   AiContentService,
   buildAiContentModule,
@@ -24,6 +25,18 @@ import {
   type SubscriptionsEventPublisher,
   type SubscriptionsStripeAdapter,
 } from '@didacta/mod-subscriptions';
+import {
+  PaymentConnectionsService,
+  PaymentTiersService,
+  StripeReadSdkAdapter,
+  PayPalReadSdkAdapter,
+  buildPaymentConnectionsModule,
+  type ConfigPort as PaymentConnectionsConfigPort,
+  type PaymentReadAdapterFactory,
+  type StripeCredentials,
+  type PayPalCredentials,
+  type UserDirectoryPort as PaymentConnectionsUserDirectoryPort,
+} from '@didacta/mod-payment-connections';
 import { buildCertificatesModule, CertificatesService } from '@didacta/mod-certificates';
 import { communityModule, CommunityService } from '@didacta/mod-community';
 import { coursesModule, CoursesService } from '@didacta/mod-courses';
@@ -83,6 +96,8 @@ export class ModuleRegistryService implements OnModuleInit {
   private stripeAdapter?: StripeAdapter;
   private subscriptions?: SubscriptionsService;
   private subscriptionsStripeAdapter?: SubscriptionsStripeAdapter;
+  private paymentConnections?: PaymentConnectionsService;
+  private paymentTiers?: PaymentTiersService;
 
   constructor(
     private readonly factory: ModuleContextFactory,
@@ -355,6 +370,61 @@ export class ModuleRegistryService implements OnModuleInit {
       ? buildSubscriptionsModule(this.subscriptions)
       : null;
 
+    // mod.payment-connections: agregador read-only multi-cuenta. NO se gatea por
+    // env (las API keys son per-conexión, cifradas en tenant_setting vía el
+    // config service). El SDK de Stripe se carga perezosamente la primera vez
+    // que se usa una conexión, así boot/test no requieren `stripe`.
+    let pcStripeCtor: (new (key: string, opts?: unknown) => unknown) | undefined;
+    const pcAdapterFactory: PaymentReadAdapterFactory = (provider, credentials) => {
+      if (provider === 'stripe') {
+        if (!pcStripeCtor) {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const mod = require('stripe');
+          pcStripeCtor = mod.default ?? mod;
+        }
+        return new StripeReadSdkAdapter(
+          (credentials as StripeCredentials).apiKey,
+          pcStripeCtor as never,
+        );
+      }
+      if (provider === 'paypal') {
+        // PayPal usa fetch global (Node 22) — sin SDK que cargar.
+        return new PayPalReadSdkAdapter(credentials as PayPalCredentials);
+      }
+      throw new Error(`Proveedor de pago no soportado: ${provider}`);
+    };
+    const pcPrisma = this.factory.getPrisma();
+    const pcUserDirectory: PaymentConnectionsUserDirectoryPort = {
+      // Match case-insensitive por email contra la tabla user del tenant.
+      // `emails` ya viene normalizado (lowercase) desde el service.
+      findByNormalizedEmails: async (tenantId, emails) => {
+        if (emails.length === 0) return [];
+        return pcPrisma.$queryRaw<
+          Array<{
+            id: string;
+            email: string;
+            name: string | null;
+            status: string;
+            avatarUrl: string | null;
+          }>
+        >`
+          SELECT id, email, name, status, avatar_url AS "avatarUrl"
+          FROM "user"
+          WHERE tenant_id = ${tenantId}::uuid
+            AND deleted_at IS NULL
+            AND lower(email) IN (${Prisma.join(emails)})
+        `;
+      },
+    };
+    this.paymentConnections = new PaymentConnectionsService(
+      prisma,
+      this.factory.getTenantConfig() as unknown as PaymentConnectionsConfigPort,
+      pcAdapterFactory,
+      pcUserDirectory,
+    );
+    const paymentConnectionsModule = buildPaymentConnectionsModule(this.paymentConnections);
+    this.paymentTiers = new PaymentTiersService(prisma);
+
     await this.registry.register([
       helloWorldModule,
       coursesModule,
@@ -371,6 +441,7 @@ export class ModuleRegistryService implements OnModuleInit {
       wpSsoModule,
       ...(billingModuleOrNull ? [billingModuleOrNull] : []),
       ...(subscriptionsModuleOrNull ? [subscriptionsModuleOrNull] : []),
+      paymentConnectionsModule,
     ]);
 
     await this.persistManifests();
@@ -589,6 +660,20 @@ export class ModuleRegistryService implements OnModuleInit {
       );
     }
     return this.subscriptionsStripeAdapter;
+  }
+
+  getPaymentConnectionsService(): PaymentConnectionsService {
+    if (!this.paymentConnections) {
+      throw new Error('mod.payment-connections no está inicializado');
+    }
+    return this.paymentConnections;
+  }
+
+  getPaymentTiersService(): PaymentTiersService {
+    if (!this.paymentTiers) {
+      throw new Error('mod.payment-connections (tiers) no está inicializado');
+    }
+    return this.paymentTiers;
   }
 
   async recoverOutbox(): Promise<{ processed: number; failed: number }> {

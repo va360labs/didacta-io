@@ -48,6 +48,7 @@ interface FakeProgress {
   resumePositionSec: number;
   completed: boolean;
   completedAt: Date | null;
+  lastAccessedAt: Date | null;
 }
 interface FakeLesson {
   id: string;
@@ -55,6 +56,24 @@ interface FakeLesson {
   moduleId: string;
   courseId: string;
   deletedAt: Date | null;
+  title?: string;
+  type?: 'VIDEO' | 'HTML' | 'PDF' | 'TEXT' | 'QUIZ' | 'SCORM';
+  position?: number;
+  durationMinutes?: number | null;
+}
+interface FakeModule {
+  id: string;
+  tenantId: string;
+  courseId: string;
+  title: string;
+  position: number;
+  deletedAt: Date | null;
+}
+interface FakeUser {
+  id: string;
+  tenantId: string;
+  email: string | null;
+  name: string | null;
 }
 
 function makeFakePrisma() {
@@ -63,6 +82,8 @@ function makeFakePrisma() {
   const invitations = new Map<string, FakeInvitation>();
   const progress = new Map<string, FakeProgress>();
   const lessons = new Map<string, FakeLesson>();
+  const modules = new Map<string, FakeModule>();
+  const users = new Map<string, FakeUser>();
   let counter = 0;
   const id = (p = 'id') => `${p}-${++counter}`;
 
@@ -72,7 +93,28 @@ function makeFakePrisma() {
     invitations,
     progress,
     lessons,
+    modules,
+    users,
     prisma: {
+      user: {
+        findFirst: vi.fn(
+          async ({ where }: { where: { tenantId: string; id: string } }) =>
+            [...users.values()].find((u) => u.tenantId === where.tenantId && u.id === where.id) ??
+            null,
+        ),
+      },
+      modCoursesModule: {
+        findMany: vi.fn(async ({ where }: { where: { tenantId: string; courseId: string } }) =>
+          [...modules.values()]
+            .filter(
+              (m) =>
+                m.tenantId === where.tenantId &&
+                m.courseId === where.courseId &&
+                m.deletedAt === null,
+            )
+            .sort((a, b) => a.position - b.position),
+        ),
+      },
       modCoursesCourse: {
         findFirst: vi.fn(
           async ({ where }: { where: { tenantId: string; id: string } }) =>
@@ -87,6 +129,17 @@ function makeFakePrisma() {
             (l) => l.courseId === where.module.courseId && l.deletedAt === null,
           ).length;
         }),
+        findMany: vi.fn(
+          async ({ where }: { where: { tenantId: string; moduleId: { in: string[] } } }) =>
+            [...lessons.values()]
+              .filter(
+                (l) =>
+                  l.tenantId === where.tenantId &&
+                  where.moduleId.in.includes(l.moduleId) &&
+                  l.deletedAt === null,
+              )
+              .sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+        ),
       },
       modLearningEnrollment: {
         findFirst: vi.fn(async ({ where }: { where: Partial<FakeEnrollment> }) => {
@@ -209,6 +262,11 @@ function makeFakePrisma() {
             (p) => p.enrollmentId === where.enrollmentId && p.completed === where.completed,
           ).length;
         }),
+        findMany: vi.fn(async ({ where }: { where: { tenantId: string; enrollmentId: string } }) =>
+          [...progress.values()].filter(
+            (p) => p.tenantId === where.tenantId && p.enrollmentId === where.enrollmentId,
+          ),
+        ),
         upsert: vi.fn(
           async ({
             where,
@@ -249,6 +307,7 @@ function makeFakePrisma() {
               resumePositionSec: create.resumePositionSec ?? 0,
               completed: create.completed ?? false,
               completedAt: create.completedAt ?? null,
+              lastAccessedAt: new Date(),
             };
             progress.set(key, created);
             return created;
@@ -495,5 +554,115 @@ describe('LearningService', () => {
     await expect(service.cancelEnrollment('t-1', 'u-1', 'no-existe')).rejects.toBeInstanceOf(
       EnrollmentNotFoundError,
     );
+  });
+
+  describe('getEnrollmentProgressDetail (vista del formador)', () => {
+    it('lanza EnrollmentNotFoundError si la matrícula no existe', async () => {
+      const fake = makeFakePrisma();
+      const service = new LearningService(fake.prisma as never, makeContext());
+      await expect(
+        service.getEnrollmentProgressDetail('t-1', 'c-1', 'no-existe'),
+      ).rejects.toBeInstanceOf(EnrollmentNotFoundError);
+    });
+
+    it('hace left-join: la lección sin progreso aparece en 0 y respeta el orden', async () => {
+      const fake = makeFakePrisma();
+      fake.users.set('u-1', { id: 'u-1', tenantId: 't-1', email: 'a@b.com', name: 'Alumno' });
+      fake.enrollments.set('en-1', {
+        id: 'en-1',
+        tenantId: 't-1',
+        userId: 'u-1',
+        courseId: 'c-1',
+        status: 'ACTIVE',
+        source: 'ADMIN',
+        completionThreshold: 75,
+        progressPercent: 50,
+        startedAt: new Date(),
+        completedAt: null,
+        cancelledAt: null,
+        enrolledAt: new Date(),
+      });
+      fake.modules.set('m-1', {
+        id: 'm-1',
+        tenantId: 't-1',
+        courseId: 'c-1',
+        title: 'Módulo 1',
+        position: 0,
+        deletedAt: null,
+      });
+      // l-1 (position 0) con progreso completado; l-2 (position 1) SIN fila de progreso.
+      fake.lessons.set('l-1', {
+        id: 'l-1',
+        tenantId: 't-1',
+        moduleId: 'm-1',
+        courseId: 'c-1',
+        deletedAt: null,
+        title: 'Lección 1',
+        type: 'VIDEO',
+        position: 0,
+        durationMinutes: 10,
+      });
+      fake.lessons.set('l-2', {
+        id: 'l-2',
+        tenantId: 't-1',
+        moduleId: 'm-1',
+        courseId: 'c-1',
+        deletedAt: null,
+        title: 'Lección 2',
+        type: 'HTML',
+        position: 1,
+        durationMinutes: null,
+      });
+      const completedAt = new Date('2026-06-26T10:00:00.000Z');
+      const lastAccessedAt = new Date('2026-06-26T11:00:00.000Z');
+      fake.progress.set('en-1::l-1', {
+        id: 'p-1',
+        tenantId: 't-1',
+        enrollmentId: 'en-1',
+        lessonId: 'l-1',
+        watchedSeconds: 120,
+        resumePositionSec: 90,
+        completed: true,
+        completedAt,
+        lastAccessedAt,
+      });
+
+      const service = new LearningService(fake.prisma as never, makeContext());
+      const detail = await service.getEnrollmentProgressDetail('t-1', 'c-1', 'en-1');
+
+      expect(detail.enrollmentId).toBe('en-1');
+      expect(detail.userId).toBe('u-1');
+      expect(detail.userEmail).toBe('a@b.com');
+      expect(detail.userName).toBe('Alumno');
+      expect(detail.status).toBe('ACTIVE');
+      expect(detail.progressPercent).toBe(50);
+      expect(detail.totalWatchedSeconds).toBe(120);
+      expect(detail.lessonsCompleted).toBe(1);
+      expect(detail.lessonsTotal).toBe(2);
+
+      expect(detail.modules).toHaveLength(1);
+      const mod = detail.modules[0]!;
+      expect(mod.moduleId).toBe('m-1');
+      expect(mod.lessons.map((l) => l.lessonId)).toEqual(['l-1', 'l-2']); // orden por position
+
+      const lesson1 = mod.lessons[0]!;
+      expect(lesson1.type).toBe('VIDEO');
+      expect(lesson1.watchedSeconds).toBe(120);
+      expect(lesson1.resumePositionSec).toBe(90);
+      expect(lesson1.completed).toBe(true);
+      expect(lesson1.durationMinutes).toBe(10);
+      expect(lesson1.completedAt).toBe(completedAt.toISOString());
+      expect(lesson1.lastAccessedAt).toBe(lastAccessedAt.toISOString());
+
+      // Lección nunca empezada → todo en 0 / null, pero presente.
+      const lesson2 = mod.lessons[1]!;
+      expect(lesson2.type).toBe('HTML');
+      expect(lesson2.watchedSeconds).toBe(0);
+      expect(lesson2.resumePositionSec).toBe(0);
+      expect(lesson2.completed).toBe(false);
+      expect(lesson2.completedAt).toBeNull();
+      expect(lesson2.lastAccessedAt).toBeNull();
+      expect(lesson2.durationMinutes).toBeNull();
+    });
   });
 });

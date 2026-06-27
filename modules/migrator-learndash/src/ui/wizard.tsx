@@ -77,6 +77,7 @@ type Step =
 const SAMPLE_DEFAULTS = { courses: 1, usersPerCourse: 5 } as const;
 
 const DEFAULT_OPTIONS: ImportOptions = {
+  mode: 'all',
   dedupeUsersBy: ['email'],
   passwordStrategy: 'activation_reset',
   copyMediaBinaries: true,
@@ -92,6 +93,55 @@ const DEFAULT_OPTIONS: ImportOptions = {
     quizzes: true,
   },
   retentionDays: 30,
+};
+
+/// Presets de "qué migrar" (v1.1.0+). Al elegir un modo, seteamos a la vez el
+/// `mode` (que el backend lee directo) y los booleanos de `scope` coherentes,
+/// para que ambos caminos de lectura del backend (mode explícito o derivar de
+/// scope) den el mismo resultado.
+const SCOPE_PRESETS: Record<
+  ImportOptions['mode'],
+  { label: string; help: string; scope: ImportOptions['scope'] }
+> = {
+  courses: {
+    label: 'Solo cursos',
+    help: 'Importa el contenido: cursos, lecciones, temas y quizzes. No crea usuarios ni matrículas.',
+    scope: {
+      courses: true,
+      quizzes: true,
+      users: false,
+      groups: false,
+      enrollments: false,
+      progress: false,
+      media: true,
+    },
+  },
+  'enrolled-students': {
+    label: 'Solo alumnos matriculados en cursos',
+    help: 'Importa los alumnos con al menos una matrícula y sus inscripciones. Requiere que los cursos ya estén migrados (modo diferido).',
+    scope: {
+      courses: false,
+      quizzes: false,
+      users: true,
+      groups: false,
+      enrollments: true,
+      progress: false,
+      media: false,
+    },
+  },
+  all: {
+    label: 'Todo',
+    help: 'Importa contenido + usuarios + matrículas. Es la opción completa.',
+    scope: {
+      courses: true,
+      quizzes: true,
+      users: true,
+      groups: true,
+      enrollments: true,
+      progress: true,
+      media: true,
+    },
+  },
 };
 
 const POLL_INTERVAL_MS = 3000;
@@ -397,6 +447,41 @@ export function MigratorWizard(): React.ReactElement {
             <CardDescription>Los valores por defecto son los más seguros.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div>
+              <Label>¿Qué quieres migrar?</Label>
+              <div className="space-y-1">
+                {(['courses', 'enrolled-students', 'all'] as const).map((m) => (
+                  <label key={m} className="flex items-start gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="migration-mode"
+                      className="mt-1"
+                      checked={options.mode === m}
+                      onChange={() =>
+                        setOptions({ ...options, mode: m, scope: SCOPE_PRESETS[m].scope })
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">{SCOPE_PRESETS[m].label}</span>
+                      <span className="block text-muted-foreground">{SCOPE_PRESETS[m].help}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {options.mode === 'enrolled-students' && (
+                <div className="mt-2">
+                  <Alert>
+                    <AlertTitle>Migra los cursos primero</AlertTitle>
+                    <AlertDescription>
+                      Este modo solo trae alumnos y matrículas. Las inscripciones se vinculan a los
+                      cursos que ya existan en Didacta: si un curso aún no se ha migrado, esa
+                      matrícula quedará registrada como incidencia en el informe. Lanza antes una
+                      migración de “Solo cursos” (o “Todo”).
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              )}
+            </div>
             <div>
               <Label>Contraseñas</Label>
               <div className="space-y-1">

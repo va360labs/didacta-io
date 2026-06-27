@@ -12,6 +12,9 @@ const CourseEditor = dynamic(() => import('./course-editor').then((m) => m.Cours
   ssr: false,
   loading: () => <div className="skeleton h-64 w-full" />,
 });
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/icon';
 import { ApiHttpError } from '@/lib/api-client';
 import { coursesApi, type CourseDetail } from '@/lib/courses';
 
@@ -55,6 +58,14 @@ export default function CourseEditorPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <Button variant="secondary" asChild>
+          <Link href={`/formador/cursos/${course.id}/alumnos` as never}>
+            <Icon name="users" size={16} />
+            Ver alumnos
+          </Link>
+        </Button>
+      </div>
       <CourseEditor initial={course} onChange={reload} />
       <InvitationsPanel courseId={course.id} />
     </div>

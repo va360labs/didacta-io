@@ -2340,6 +2340,108 @@ model ModSubscriptionsWebhookEvent {
 // Lo declaramos como atributo @relation aparte para no contaminar el primer model.
 
 // ============================================================================
+// mod.payment-connections — Conexiones de pago (Stripe) solo lectura + reconciliación
+// ============================================================================
+
+enum PaymentConnectionStatus {
+  PENDING
+  VERIFIED
+  ERROR
+  DISCONNECTED
+}
+
+/// Una cuenta de pago externa conectada por el admin en modo SOLO LECTURA.
+/// Guarda solo metadata no-secreta; la API key restringida vive cifrada en
+/// `tenant_setting` (módulo `payment-connections`, key `stripe:<id>:api_key`).
+/// Multi-proveedor desde el día 1 (columna `provider`); PayPal en roadmap.
+model ModPaymentConnectionsConnection {
+  id             String                  @id @default(uuid()) @db.Uuid
+  tenantId       String                  @map("tenant_id") @db.Uuid
+  /// Slug del proveedor: 'stripe' (V1) | 'paypal' (roadmap).
+  provider       String
+  /// Alias legible que pone el admin (ej. "Stripe ES").
+  displayName    String                  @map("display_name")
+  status         PaymentConnectionStatus @default(PENDING)
+  /// Metadata pública de accounts.retrieve (account id, email, país, nombre,
+  /// livemode). NUNCA contiene secretos.
+  publicMetadata Json?                   @map("public_metadata")
+  lastVerifiedAt DateTime?               @map("last_verified_at")
+  lastSyncedAt   DateTime?               @map("last_synced_at")
+  lastError      String?                 @map("last_error")
+  lastErrorAt    DateTime?               @map("last_error_at")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+
+  @@unique([tenantId, provider, displayName], map: "payment_conn_tenant_provider_name_key")
+  @@index([tenantId, provider])
+  @@index([tenantId, status])
+  @@map("mod_payment_connections_connection")
+}
+
+/// Log de auditoría opcional de acciones sobre conexiones (verify/invite/etc.).
+model ModPaymentConnectionsLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  connectionId String   @map("connection_id") @db.Uuid
+  action       String
+  resultStatus String   @map("result_status")
+  errorMessage String?  @map("error_message")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, connectionId])
+  @@map("mod_payment_connections_log")
+}
+
+/// Catálogo de tiers (planes de suscripción) gestionado por el tenant. El admin
+/// asigna tiers manualmente a usuarios; uno puede marcarse como el tier gratuito.
+model ModPaymentConnectionsTier {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  /// True para el tier "gratis" (usuarios sin pago). Por convención uno por
+  /// tenant; no forzado en BD.
+  isFree    Boolean  @default(false) @map("is_free")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  userTiers ModPaymentConnectionsUserTier[]
+
+  @@unique([tenantId, name], map: "payment_conn_tier_tenant_name_key")
+  @@index([tenantId])
+  @@map("mod_payment_connections_tier")
+}
+
+/// Tier de un usuario: manual (catálogo, override del admin) y/o derivado de
+/// pagos (nombre del producto/suscripción en Stripe/PayPal/WooCommerce). El
+/// efectivo = manual si existe, si no el derivado, si no "Desconocido".
+/// `userId` sin FK a `user` (tabla del core; no se cruzan FKs entre módulos).
+model ModPaymentConnectionsUserTier {
+  id                  String    @id @default(uuid()) @db.Uuid
+  tenantId            String    @map("tenant_id") @db.Uuid
+  userId              String    @map("user_id") @db.Uuid
+  /// Tier manual del catálogo (override del admin). Null = sin asignación manual.
+  manualTierId        String?   @map("manual_tier_id") @db.Uuid
+  /// Tier derivado del pago: nombre del producto/suscripción. Null = no sincronizado.
+  derivedLabel        String?   @map("derived_label")
+  /// Proveedor del derivado: 'stripe' | 'paypal' | 'woocommerce'.
+  derivedProvider     String?   @map("derived_provider")
+  derivedConnectionId String?   @map("derived_connection_id") @db.Uuid
+  derivedRef          String?   @map("derived_ref")
+  derivedSyncedAt     DateTime? @map("derived_synced_at")
+  assignedById        String?   @map("assigned_by_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  manualTier ModPaymentConnectionsTier? @relation(fields: [manualTierId], references: [id], onDelete: SetNull, map: "fk_pc_user_tier_manual")
+
+  @@unique([tenantId, userId], map: "payment_conn_user_tier_tenant_user_key")
+  @@index([tenantId])
+  @@index([manualTierId])
+  @@map("mod_payment_connections_user_tier")
+}
+
+// ============================================================================
 // mod.ai-content — Generador IA de borradores (resúmenes / flashcards / quizzes)
 // ============================================================================
 

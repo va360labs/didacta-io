@@ -766,6 +766,57 @@ async function upsertStgGroup(
   );
 }
 
+/// Upsert de una matrícula a stg_enrollments (v1.1.0+). A diferencia del resto
+/// de staging, aquí el `canonical` se computa en el EXTRACT (mapDirectEnrollment
+/// es puro y trivial) y se persiste con `is_valid=TRUE` — no hay paso transform
+/// dedicado para enrollments.
+///
+/// `sourceGroupId`/`sourceCourseId` se escriben como `''` (no NULL) cuando no
+/// aplican: el unique index (tenant, job, source_user_id, source_course_id,
+/// source_group_id, enrollment_kind) NO deduplica si una columna es NULL
+/// (NULL != NULL en Postgres), así que el sentinel vacío garantiza idempotencia
+/// del ON CONFLICT ante reintentos de tick.
+async function upsertStgEnrollment(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+  sourceUserId: string,
+  sourceCourseId: string,
+  sourceGroupId: string,
+  kind: 'direct' | 'group',
+  raw: unknown,
+  canonical: unknown | null,
+  checksum: string,
+): Promise<void> {
+  await db.execute(
+    `INSERT INTO mod_migrator_learndash_stg_enrollments
+       (tenant_id, job_id, source_user_id, source_course_id, source_group_id, enrollment_kind,
+        raw_payload, canonical, is_valid, validation_errors, checksum)
+     VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, NULL, $10)
+     ON CONFLICT (tenant_id, job_id, source_user_id, source_course_id, source_group_id, enrollment_kind)
+     DO UPDATE
+       SET raw_payload = EXCLUDED.raw_payload,
+           canonical = EXCLUDED.canonical,
+           is_valid = EXCLUDED.is_valid,
+           validation_errors = NULL,
+           checksum = EXCLUDED.checksum,
+           target_id = NULL,
+           loaded_at = NULL`,
+    [
+      tenantId,
+      jobId,
+      sourceUserId,
+      sourceCourseId,
+      sourceGroupId,
+      kind,
+      JSON.stringify(raw),
+      canonical ? JSON.stringify(canonical) : null,
+      canonical !== null,
+      checksum,
+    ],
+  );
+}
+
 /// Catálogo de entidades paginables vía WP REST. ORDEN IMPORTA: courses
 /// antes de lessons/topics (lessons llevan parent_course_id derivado del
 /// payload pero el load phase de Sprint 4 / ET-003 los carga al core
@@ -814,7 +865,11 @@ interface ExtractCursor {
   /// quizzes (que son perCourse y solo verán el único curso del staging).
   /// Sin esta subphase, paginate iteraría globalmente todos los users del
   /// origen aunque el job sea de prueba.
-  subphase?: 'sample-pick' | 'paginate' | 'fixup';
+  /// `'enroll'` (v1.1.0+): tras fixup, si el scope incluye enrollments, extrae
+  /// las matrículas curso→usuario (un curso por tick vía /sfwd-courses/{id}/users)
+  /// y las escribe en stg_enrollments con canonical ya computado. Al agotar los
+  /// cursos, transición a transforming.
+  subphase?: 'sample-pick' | 'paginate' | 'fixup' | 'enroll';
   current: string;
   page: number;
   completed: string[];
@@ -853,7 +908,10 @@ function parseExtractCursor(progress: unknown): ExtractCursor {
     typeof (progress as { page?: unknown }).page === 'number'
   ) {
     const c = progress as ExtractCursor;
-    const sp = c.subphase === 'fixup' || c.subphase === 'sample-pick' ? c.subphase : 'paginate';
+    const sp =
+      c.subphase === 'fixup' || c.subphase === 'sample-pick' || c.subphase === 'enroll'
+        ? c.subphase
+        : 'paginate';
     return {
       ...c,
       subphase: sp,
@@ -878,6 +936,95 @@ function readSampleConfig(options: unknown): { courses: number; usersPerCourse: 
     courses: Math.min(5, Math.max(1, Math.floor(courses))),
     usersPerCourse: Math.min(50, Math.max(1, Math.floor(usersPerCourse))),
   };
+}
+
+/// Modo de migración (v1.1.0+): el operador elige QUÉ migra.
+///   'courses'           → solo contenido (cursos + lecciones + temas + quizzes).
+///   'enrolled-students' → solo usuarios con ≥1 matrícula + sus matrículas.
+///                          Asume que los cursos YA fueron migrados (diferido).
+///   'all'               → todo (comportamiento legacy, default de compat).
+export type MigrationMode = 'courses' | 'enrolled-students' | 'all';
+
+export interface ScopeConfig {
+  mode: MigrationMode;
+  /// Entidades que se CARGAN al core (intención del operador).
+  load: Set<string>;
+  /// Entidades que se EXTRAEN a staging (load ∪ dependencias). En 'enrolled-students'
+  /// se extraen cursos solo para obtener sus IDs (no se cargan).
+  extract: Set<string>;
+  /// Solo migrar usuarios con ≥1 matrícula (modo 'enrolled-students').
+  onlyEnrolledUsers: boolean;
+}
+
+/// Lee `options.mode` / `options.scope` de forma defensiva (mismo patrón que
+/// `readSampleConfig`). Prioridad: (1) `options.mode` explícito; (2) derivar de
+/// los booleanos de `options.scope` que manda la wizard; (3) default 'all' para
+/// jobs legacy creados antes de v1.1.0 (sin el campo) — cero regresión.
+///
+/// Nota: las entidades 'enrollments' del set se ignoran de forma natural mientras
+/// la fase de enrollments no exista en EXTRACT_ENTITIES/STG_TABLES (Inc. 2): el
+/// gating filtra contra las listas reales, así que un nombre inexistente es no-op.
+export function readScopeConfig(options: unknown): ScopeConfig {
+  const o = options && typeof options === 'object' ? (options as Record<string, unknown>) : {};
+  const rawMode = typeof o['mode'] === 'string' ? (o['mode'] as string) : null;
+  const scope =
+    o['scope'] && typeof o['scope'] === 'object' ? (o['scope'] as Record<string, unknown>) : null;
+
+  let mode: MigrationMode;
+  if (rawMode === 'courses' || rawMode === 'enrolled-students' || rawMode === 'all') {
+    mode = rawMode;
+  } else if (scope) {
+    // Derivar del scope booleano (compat con wizard que solo manda `scope`).
+    const wantsContent = scope['courses'] !== false;
+    const wantsUsers = scope['users'] !== false;
+    const wantsEnroll = scope['enrollments'] !== false;
+    if (wantsContent && wantsUsers) mode = 'all';
+    else if (!wantsContent && (wantsUsers || wantsEnroll)) mode = 'enrolled-students';
+    else mode = 'courses';
+  } else {
+    mode = 'all';
+  }
+
+  switch (mode) {
+    case 'courses':
+      return {
+        mode,
+        load: new Set(['courses', 'lessons', 'topics', 'quizzes']),
+        extract: new Set(['courses', 'lessons', 'topics', 'quizzes']),
+        onlyEnrolledUsers: false,
+      };
+    case 'enrolled-students':
+      return {
+        mode,
+        load: new Set(['users', 'enrollments']),
+        extract: new Set(['courses', 'users', 'enrollments']),
+        onlyEnrolledUsers: true,
+      };
+    case 'all':
+    default:
+      return {
+        mode,
+        load: new Set([
+          'users',
+          'courses',
+          'lessons',
+          'topics',
+          'quizzes',
+          'groups',
+          'enrollments',
+        ]),
+        extract: new Set([
+          'users',
+          'courses',
+          'lessons',
+          'topics',
+          'quizzes',
+          'groups',
+          'enrollments',
+        ]),
+        onlyEnrolledUsers: false,
+      };
+  }
 }
 
 function nextEntity(cursor: ExtractCursor): string | null {
@@ -921,6 +1068,10 @@ const STG_TABLES: Record<string, string> = {
   topics: 'mod_migrator_learndash_stg_topics',
   quizzes: 'mod_migrator_learndash_stg_quizzes',
   groups: 'mod_migrator_learndash_stg_groups',
+  // v1.1.0+: lo usa el conteo de reconcile (mismas columnas is_valid/target_id).
+  // El LOAD de enrollments NO pasa por el path genérico de STG_TABLES — tiene un
+  // branch dedicado (forma de fila distinta) que retorna antes de este lookup.
+  enrollments: 'mod_migrator_learndash_stg_enrollments',
 };
 
 async function listInvalidStg(
@@ -991,6 +1142,38 @@ async function listValidUnloadedStg(
   const result = await db.query<StgRow>(
     `SELECT id::text AS id, source_id, raw_payload, canonical, is_valid, target_id
        FROM ${table}
+      WHERE tenant_id = $1::uuid AND job_id = $2::uuid AND is_valid = TRUE
+        AND (target_id IS NULL OR target_id LIKE '!SKIP:%')
+      LIMIT ${Math.max(1, Math.min(1000, limit))}`,
+    [tenantId, jobId],
+  );
+  return result.rows;
+}
+
+interface StgEnrollmentRow {
+  id: string;
+  source_user_id: string;
+  source_course_id: string | null;
+  source_group_id: string | null;
+  enrollment_kind: string;
+  canonical: unknown;
+  raw_payload: unknown;
+  target_id: string | null;
+}
+
+/// Como listValidUnloadedStg pero para stg_enrollments, cuya forma difiere (no
+/// tiene `source_id` único sino source_user_id/source_course_id/...). Mismo
+/// criterio: filas válidas aún no cargadas (target NULL o sentinel !SKIP).
+async function listValidUnloadedStgEnrollments(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+  limit: number,
+): Promise<StgEnrollmentRow[]> {
+  const result = await db.query<StgEnrollmentRow>(
+    `SELECT id::text AS id, source_user_id, source_course_id, source_group_id,
+            enrollment_kind, canonical, raw_payload, target_id
+       FROM mod_migrator_learndash_stg_enrollments
       WHERE tenant_id = $1::uuid AND job_id = $2::uuid AND is_valid = TRUE
         AND (target_id IS NULL OR target_id LIKE '!SKIP:%')
       LIMIT ${Math.max(1, Math.min(1000, limit))}`,
@@ -1149,6 +1332,39 @@ function adaptCanonicalToDidacta(
   entity: string,
   canonical: Record<string, unknown>,
 ): AdapterResult {
+  // enrollments (v1.1.0+): el canonical (de mapDirectEnrollment) NO tiene
+  // `sourceId` sino userSourceId/courseSourceId, así que se maneja ANTES del
+  // guard genérico de sourceId. El host (enrollments.upsertByExternalRef) espera
+  // externalRef propio del enrollment + userExternalRef + courseExternalRef y
+  // resuelve ambos por (externalSource, externalId). Si el course no existe aún
+  // lanza DIDACTA_FOREIGN_REFERENCE → DLQ (modo diferido: migrar cursos primero).
+  if (entity === 'enrollments') {
+    const userSourceId = String(canonical['userSourceId'] ?? '');
+    const courseSourceId = String(canonical['courseSourceId'] ?? '');
+    const extId = String(canonical['externalId'] ?? '');
+    if (!userSourceId || !courseSourceId) {
+      return {
+        ok: false,
+        skip: false,
+        code: 'ADAPTER_ENROLLMENT_NO_REFS',
+        message: `enrollment sin userSourceId/courseSourceId (user=${userSourceId} course=${courseSourceId})`,
+      };
+    }
+    const rawStatus = String(canonical['status'] ?? 'active').toLowerCase();
+    const status = rawStatus === 'completed' ? 'COMPLETED' : 'ACTIVE';
+    return {
+      ok: true,
+      ns: 'enrollments',
+      input: {
+        externalSource: 'learndash',
+        externalId: extId || `enrollment:${courseSourceId}:${userSourceId}`,
+        userExternalRef: { externalSource: 'learndash', externalId: userSourceId },
+        courseExternalRef: { externalSource: 'learndash', externalId: courseSourceId },
+        status,
+      },
+    };
+  }
+
   const sourceId = String(canonical['sourceId'] ?? '');
   if (!sourceId) {
     return {
@@ -2455,6 +2671,29 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
           cursor = { ...cursor, subphase: 'sample-pick' };
         }
 
+        // Scope (v1.1.0+): en extract, saltar las entidades fuera del scope
+        // marcándolas como `completed` en el cursor fresco — el paginate normal
+        // (nextEntity) no las recorrerá. Mismo mecanismo que sample-pick. No
+        // aplica en sample-pick (gestiona su propio completed) ni en modo 'all'
+        // (extract.set las contiene todas → skipped vacío → cero cambio).
+        const scopeCfg = readScopeConfig((job0 as { options?: unknown }).options);
+        if (isFreshExtract && cursor.subphase !== 'sample-pick' && cursor.subphase !== 'fixup') {
+          const allNames = EXTRACT_ENTITIES.map((e) => e.name);
+          const skipped = allNames.filter((n) => !scopeCfg.extract.has(n));
+          if (skipped.length > 0) {
+            const firstNeeded = allNames.find((n) => scopeCfg.extract.has(n)) ?? allNames[0]!;
+            cursor = {
+              ...cursor,
+              current: firstNeeded,
+              completed: Array.from(new Set([...cursor.completed, ...skipped])),
+            };
+            ctx.log(
+              'log',
+              `tick ${tickIndex}: scope='${scopeCfg.mode}' — extract salta [${skipped.join(', ')}], arranca en '${firstNeeded}'.`,
+            );
+          }
+        }
+
         // SUBPHASE SAMPLE-PICK: ejecuta UNA VEZ por job en sample mode.
         // Elige UN curso aleatorio del origen que tenga ≥1 alumno enrolado,
         // inyecta a stg_courses ese único curso + a stg_users hasta N alumnos
@@ -2641,7 +2880,21 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
           // para las que SÍ aparecen.
 
           if (idx >= courseIds.length) {
-            // Todos los cursos procesados — transicionar a transforming.
+            // Todos los cursos procesados en fixup. Si el scope incluye
+            // enrollments (modos 'all' / 'enrolled-students'), pasamos a la
+            // subfase 'enroll'; si no, transición directa a transforming.
+            if (scopeCfg.extract.has('enrollments')) {
+              await setJobProgress(db, tenantId, jobId, {
+                ...cursor,
+                subphase: 'enroll',
+                courseIdx: 0,
+              } as unknown as Record<string, unknown>);
+              ctx.log(
+                'log',
+                `tick ${tickIndex}: fixup completed. Scope '${scopeCfg.mode}' incluye enrollments → subfase 'enroll'.`,
+              );
+              return { status: 'continue', delaySec: 0 };
+            }
             const advanced = await tryTransition(db, tenantId, jobId, 'extracting', 'transforming');
             if (!advanced) return { status: 'continue', delaySec: 0 };
             ctx.log(
@@ -2684,56 +2937,119 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                 if (s === 'quiz' || s === 'sfwd-quiz' || s === 'r') return 'sfwd-quiz';
                 return null;
               };
-              const walk = (node: unknown, parentLessonId: number | null): void => {
-                if (!node || typeof node !== 'object') return;
-                if (Array.isArray(node)) {
-                  for (const it of node) {
-                    if (it && typeof it === 'object') {
-                      const obj = it as { id?: number | string; type?: string };
-                      if (obj.id !== undefined && typeof obj.type === 'string') {
-                        const t = resolveType(obj.type);
-                        if (t) {
-                          flat.push({
-                            id: typeof obj.id === 'number' ? obj.id : parseInt(String(obj.id), 10),
-                            type: t,
-                            parentLessonId: t === 'sfwd-lessons' ? null : parentLessonId,
-                          });
-                        }
-                      }
-                      walk(it, parentLessonId);
-                    }
-                  }
-                  return;
-                }
-                for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-                  // Regex permisivo: `[a-zA-Z][a-zA-Z0-9_-]*` cubre `sfwd-lessons`,
-                  // `sfwd-topic`, `lesson`, `topic`, `l`, etc. El bug del 1.0.23
-                  // era que el rango `[a-zA-Z]+` NO matcheaba `sfwd-lessons:N`
-                  // porque tiene guión.
-                  const m = key.match(/^([a-zA-Z][a-zA-Z0-9_-]*):(\d+)$/);
-                  if (m) {
-                    const resolvedType = resolveType(m[1]!);
-                    const id = parseInt(m[2]!, 10);
-                    if (resolvedType) {
-                      flat.push({
-                        id,
-                        type: resolvedType,
-                        parentLessonId: resolvedType === 'sfwd-lessons' ? null : parentLessonId,
-                      });
-                    }
-                    const newParent = resolvedType === 'sfwd-lessons' ? id : parentLessonId;
-                    if (value && typeof value === 'object') {
-                      const innerSteps = (value as { steps?: unknown }).steps;
-                      if (innerSteps !== undefined && innerSteps !== null)
-                        walk(innerSteps, newParent);
-                      else walk(value, newParent);
-                    }
-                  } else if (value && typeof value === 'object') {
-                    walk(value, parentLessonId);
-                  }
-                }
+              // IDs de un nodo hijo de la jerarquía `h`: o un array de números,
+              // o un objeto keyed-by-id (`{ "6048": [] }`). Ambos aparecen.
+              const idsOf = (v: unknown): number[] => {
+                if (Array.isArray(v))
+                  return v
+                    .map((x) => (typeof x === 'number' ? x : parseInt(String(x), 10)))
+                    .filter((n) => Number.isFinite(n) && n > 0);
+                if (v && typeof v === 'object')
+                  return Object.keys(v as Record<string, unknown>)
+                    .map((k) => parseInt(k, 10))
+                    .filter((n) => Number.isFinite(n) && n > 0);
+                return [];
               };
-              walk(parsed, null);
+
+              // FORMATO REAL de LearnDash REST v1 `/sfwd-courses/{id}/steps`
+              // (verificado contra va360.academy, 2026-06-26):
+              //   h: { "sfwd-lessons": { "<lessonId>": { "sfwd-topic": {…|[]},
+              //                                          "sfwd-quiz": {…|[]} }, … },
+              //        "sfwd-quiz": {…|[]} }   // quizzes a nivel curso
+              //   l: [ "sfwd-lessons:<id>", "sfwd-quiz:<id>", … ]  // lista plana
+              //   sections: [ { post_title, steps: [<lessonId>…] }, … ]
+              // El parser ANTERIOR (walk) solo entendía claves "type:id" — un
+              // formato que ESTA instalación NO emite — así que `flat` salía
+              // vacío y NINGUNA lección se reasignaba a su curso/sección (todas
+              // quedaban bajo el curso catch-all del extract). Ahora leemos `h`
+              // (estructura primaria) con fallback a `l` y al formato legacy.
+              const hRoot = (parsed as { h?: unknown }).h;
+              if (hRoot && typeof hRoot === 'object' && !Array.isArray(hRoot)) {
+                const hobj = hRoot as Record<string, unknown>;
+                const lessonsNode = hobj['sfwd-lessons'];
+                if (lessonsNode && typeof lessonsNode === 'object' && !Array.isArray(lessonsNode)) {
+                  for (const [lidStr, lval] of Object.entries(
+                    lessonsNode as Record<string, unknown>,
+                  )) {
+                    const lid = parseInt(lidStr, 10);
+                    if (!Number.isFinite(lid) || lid <= 0) continue;
+                    flat.push({ id: lid, type: 'sfwd-lessons', parentLessonId: null });
+                    if (lval && typeof lval === 'object') {
+                      const lobj = lval as Record<string, unknown>;
+                      for (const tid of idsOf(lobj['sfwd-topic']))
+                        flat.push({ id: tid, type: 'sfwd-topic', parentLessonId: lid });
+                      for (const qid of idsOf(lobj['sfwd-quiz']))
+                        flat.push({ id: qid, type: 'sfwd-quiz', parentLessonId: lid });
+                    }
+                  }
+                }
+                for (const qid of idsOf(hobj['sfwd-quiz']))
+                  flat.push({ id: qid, type: 'sfwd-quiz', parentLessonId: null });
+              }
+
+              // Fallback 1: lista plana `l` con strings "type:id" (si `h` faltó).
+              if (flat.length === 0) {
+                const lList = (parsed as { l?: unknown }).l;
+                if (Array.isArray(lList)) {
+                  for (const item of lList) {
+                    if (typeof item !== 'string') continue;
+                    const m = item.match(/^([a-zA-Z][a-zA-Z0-9_-]*):(\d+)$/);
+                    if (!m) continue;
+                    const t = resolveType(m[1]!);
+                    if (t) flat.push({ id: parseInt(m[2]!, 10), type: t, parentLessonId: null });
+                  }
+                }
+              }
+
+              // Fallback 2: formato legacy con claves "type:id" anidadas
+              // (instalaciones que SÍ lo emiten). Solo si los anteriores fallan.
+              if (flat.length === 0) {
+                const walk = (node: unknown, parentLessonId: number | null): void => {
+                  if (!node || typeof node !== 'object') return;
+                  if (Array.isArray(node)) {
+                    for (const it of node) {
+                      if (it && typeof it === 'object') {
+                        const obj = it as { id?: number | string; type?: string };
+                        if (obj.id !== undefined && typeof obj.type === 'string') {
+                          const t = resolveType(obj.type);
+                          if (t)
+                            flat.push({
+                              id:
+                                typeof obj.id === 'number' ? obj.id : parseInt(String(obj.id), 10),
+                              type: t,
+                              parentLessonId: t === 'sfwd-lessons' ? null : parentLessonId,
+                            });
+                        }
+                        walk(it, parentLessonId);
+                      }
+                    }
+                    return;
+                  }
+                  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+                    const m = key.match(/^([a-zA-Z][a-zA-Z0-9_-]*):(\d+)$/);
+                    if (m) {
+                      const resolvedType = resolveType(m[1]!);
+                      const id = parseInt(m[2]!, 10);
+                      if (resolvedType)
+                        flat.push({
+                          id,
+                          type: resolvedType,
+                          parentLessonId: resolvedType === 'sfwd-lessons' ? null : parentLessonId,
+                        });
+                      const newParent = resolvedType === 'sfwd-lessons' ? id : parentLessonId;
+                      if (value && typeof value === 'object') {
+                        const innerSteps = (value as { steps?: unknown }).steps;
+                        if (innerSteps !== undefined && innerSteps !== null)
+                          walk(innerSteps, newParent);
+                        else walk(value, newParent);
+                      }
+                    } else if (value && typeof value === 'object') {
+                      walk(value, parentLessonId);
+                    }
+                  }
+                };
+                walk(parsed, null);
+              }
 
               // Parsear `sections` del response — el course builder de
               // LearnDash agrupa lessons en "section-headings" con
@@ -2834,47 +3150,16 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                   quizzesHit += r.rowCount ?? 0;
                 }
               }
+              // Diagnóstico del fixup en el log (NO en audit_events). Antes
+              // se insertaba un evento `fixup.steps.debug` con hash sintético
+              // ('debug-...') en la cadena de auditoría — rompía la
+              // continuidad prev_hash→hash de la cadena SHA-256 e inflaba el
+              // eventsCount que el report usa para `verified`. El diagnóstico
+              // vive aquí, fuera de la cadena criptográfica.
               ctx.log(
                 'log',
-                `tick ${tickIndex}: fixup curso #${idx + 1}/${totalCourses} (${courseSourceId}) — flat=${flat.length} lessons=${lessonsHit} topics=${topicsHit} quizzes=${quizzesHit}.`,
+                `tick ${tickIndex}: fixup curso #${idx + 1}/${totalCourses} (${courseSourceId}) — flat=${flat.length} lessons=${lessonsHit} topics=${topicsHit} quizzes=${quizzesHit} sample_ids=[${sampleIdsTried.join(', ')}].`,
               );
-
-              // Diagnóstico persistente: TODOS los cursos del fixup ahora
-              // (no solo los 2 primeros) registran flat_count + rowCounts +
-              // sample IDs intentados en audit_events. Si los rowCounts son 0
-              // a pesar de tener flat > 0 y los IDs existir en stg → bug del
-              // sandbox/SQL. Si flat=0 → bug del parser. Si todo > 0 → ok.
-              try {
-                await db.execute(
-                  `INSERT INTO mod_migrator_learndash_audit_events
-                     (tenant_id, job_id, entity_type, entity_id, action, actor, meta, hash, prev_hash, occurred_at)
-                   VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8, $9, NOW())`,
-                  [
-                    tenantId,
-                    jobId,
-                    'fixup',
-                    courseSourceId,
-                    'fixup.steps.debug',
-                    'system',
-                    JSON.stringify({
-                      course: courseSourceId,
-                      flat_count: flat.length,
-                      lessons_hit: lessonsHit,
-                      topics_hit: topicsHit,
-                      quizzes_hit: quizzesHit,
-                      sample_ids: sampleIdsTried,
-                      body_preview: idx < 2 ? resp.body.slice(0, 1500) : null,
-                    }),
-                    'debug-' + jobId + '-' + idx + '-' + Date.now(),
-                    'debug-' + jobId + '-' + (idx - 1),
-                  ],
-                );
-              } catch (e) {
-                ctx.log(
-                  'warn',
-                  `fixup audit insert falló (no crítico): ${e instanceof Error ? e.message : e}`,
-                );
-              }
             }
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
@@ -2896,6 +3181,100 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
             jobId,
             fixupCursor as unknown as Record<string, unknown>,
           );
+          return { status: 'continue', delaySec: 0 };
+        }
+
+        // SUBFASE ENROLL (v1.1.0+): extraer matrículas curso→usuario. Igual que
+        // fixup, procesa UN curso por tick (pagina /sfwd-courses/{id}/users) y
+        // por cada alumno escribe una fila en stg_enrollments con canonical ya
+        // computado (mapDirectEnrollment) e is_valid=TRUE. Idempotente por el
+        // unique index. Al agotar los cursos, transición a transforming.
+        if (cursor.subphase === 'enroll') {
+          const coursesQ = await db.query<{ source_id: string }>(
+            `SELECT source_id FROM mod_migrator_learndash_stg_courses
+              WHERE tenant_id = $1::uuid AND job_id = $2::uuid
+              ORDER BY source_id ASC`,
+            [tenantId, jobId],
+          );
+          const courseIds = coursesQ.rows.map((r) => r.source_id);
+          const idx = cursor.courseIdx ?? 0;
+          if (idx >= courseIds.length) {
+            const advanced = await tryTransition(db, tenantId, jobId, 'extracting', 'transforming');
+            if (!advanced) return { status: 'continue', delaySec: 0 };
+            ctx.log(
+              'log',
+              `tick ${tickIndex}: enroll completed (${courseIds.length} cursos). Transition a transforming.`,
+            );
+            return { status: 'continue', delaySec: 0 };
+          }
+          const courseSourceId = courseIds[idx]!;
+          let enrolledCount = 0;
+          try {
+            const PER_PAGE = 100;
+            const MAX_PAGES = 200; // defensa: hasta 20k alumnos/curso en un tick
+            let page = 1;
+            while (page <= MAX_PAGES) {
+              const url = `${baseUrl}/wp-json/ldlms/v1/sfwd-courses/${encodeURIComponent(courseSourceId)}/users?per_page=${PER_PAGE}&page=${page}`;
+              const r = await ctx.http.get(url, {
+                headers: { Authorization: authHeader, Accept: 'application/json' },
+                timeoutMs: 30_000,
+              });
+              if (r.status === 400 && r.body.includes('rest_post_invalid_page_number')) break;
+              if (r.status >= 400) {
+                ctx.log(
+                  'warn',
+                  `tick ${tickIndex}: enroll curso ${courseSourceId} page=${page} HTTP ${r.status}: ${r.body.slice(0, 200)}.`,
+                );
+                break;
+              }
+              let arr: unknown;
+              try {
+                arr = JSON.parse(r.body);
+              } catch {
+                break;
+              }
+              if (!Array.isArray(arr) || arr.length === 0) break;
+              for (const u of arr) {
+                if (!u || typeof u !== 'object') continue;
+                const rawId = (u as { id?: number | string }).id;
+                const uid = typeof rawId === 'number' ? rawId : parseInt(String(rawId ?? ''), 10);
+                if (!Number.isFinite(uid)) continue;
+                const userObj = { ...(u as Record<string, unknown>), id: uid };
+                const mapped = mapDirectEnrollment(
+                  courseSourceId,
+                  userObj as Parameters<typeof mapDirectEnrollment>[1],
+                );
+                await upsertStgEnrollment(
+                  db,
+                  tenantId,
+                  jobId,
+                  String(uid),
+                  courseSourceId,
+                  '',
+                  'direct',
+                  u,
+                  mapped.ok ? mapped.canonical : null,
+                  computeChecksum({ c: courseSourceId, u: uid }),
+                );
+                enrolledCount += 1;
+              }
+              if (arr.length < PER_PAGE) break;
+              page += 1;
+            }
+          } catch (e) {
+            ctx.log(
+              'warn',
+              `tick ${tickIndex}: enroll curso ${courseSourceId} excepción: ${e instanceof Error ? e.message : e}. Sigue al siguiente.`,
+            );
+          }
+          ctx.log(
+            'log',
+            `tick ${tickIndex}: enroll curso #${idx + 1}/${courseIds.length} (${courseSourceId}) — ${enrolledCount} matrículas.`,
+          );
+          await setJobProgress(db, tenantId, jobId, {
+            ...cursor,
+            courseIdx: idx + 1,
+          } as unknown as Record<string, unknown>);
           return { status: 'continue', delaySec: 0 };
         }
 
@@ -3292,7 +3671,131 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
         // marcado como cargado; las questions persisten en stg pero no se
         // suben al core. Pendiente: ET-003b cuando DD-006 esté listo.
 
-        const cursor = parseLoadCursor(job.progress);
+        const cursor0 = parseLoadCursor(job.progress);
+        // Scope (v1.1.0+): cargar solo las entidades dentro de scope.load, en el
+        // orden de deps. En modo 'courses' el cursor fresco arranca en 'users'
+        // (default de parseLoadCursor) que queda fuera del scope → lo reubicamos
+        // a la primera entidad cargable, si no se transicionaría a reconciling
+        // saltándose courses. En modo 'all' el filtro no cambia nada.
+        const scopeCfg = readScopeConfig((job as { options?: unknown }).options);
+        // enrollments al final: requiere que los cursos ya estén cargados (en
+        // este mismo job o en uno previo — idempotencia por externalRef).
+        const loadOrder = [
+          'users',
+          'courses',
+          'lessons',
+          'topics',
+          'quizzes',
+          'groups',
+          'enrollments',
+        ].filter((e) => scopeCfg.load.has(e));
+        const cursor =
+          loadOrder.length === 0 || loadOrder.includes(cursor0.current)
+            ? cursor0
+            : { ...cursor0, current: loadOrder[0]! };
+
+        // Branch dedicado de enrollments: forma de fila distinta (no source_id),
+        // load vía ctx.didacta.enrollments.upsertByExternalRef. Retorna antes del
+        // path genérico de STG_TABLES.
+        if (cursor.current === 'enrollments') {
+          const rows = await listValidUnloadedStgEnrollments(db, tenantId, jobId, LOAD_BATCH_SIZE);
+          if (rows.length === 0) {
+            const completed = [...cursor.completed, 'enrollments'];
+            const idx = loadOrder.indexOf('enrollments');
+            const next = idx >= 0 && idx + 1 < loadOrder.length ? loadOrder[idx + 1]! : null;
+            if (next === null) {
+              await setJobProgress(db, tenantId, jobId, {
+                ...cursor,
+                completed,
+              } as unknown as Record<string, unknown>);
+              const advanced = await tryTransition(db, tenantId, jobId, 'loading', 'reconciling');
+              if (!advanced) return { status: 'continue', delaySec: 0 };
+              ctx.log(
+                'log',
+                `tick ${tickIndex}: load completed (enrollments). Transition a reconciling.`,
+              );
+              return { status: 'continue', delaySec: 0 };
+            }
+            await setJobProgress(db, tenantId, jobId, {
+              ...cursor,
+              current: next,
+              completed,
+            } as unknown as Record<string, unknown>);
+            return { status: 'continue', delaySec: 0 };
+          }
+          const enrollApi = (
+            ctx.didacta as Record<
+              string,
+              { upsertByExternalRef: (i: Record<string, unknown>) => Promise<{ id: string }> }
+            >
+          )['enrollments'];
+          let okE = 0;
+          let dlqE = 0;
+          const enrollTable = 'mod_migrator_learndash_stg_enrollments';
+          for (const row of rows) {
+            const canonical = (row.canonical ?? {}) as Record<string, unknown>;
+            const adapted = adaptCanonicalToDidacta('enrollments', canonical);
+            if (!adapted.ok) {
+              await appendDlq(
+                db,
+                tenantId,
+                jobId,
+                'enrollments',
+                row.source_user_id,
+                'load',
+                adapted.code,
+                adapted.message,
+                row.raw_payload,
+                canonical,
+              );
+              await setStgLoaded(db, enrollTable, row.id, `!FAIL:${adapted.code}`);
+              dlqE += 1;
+              continue;
+            }
+            if (!enrollApi || typeof enrollApi.upsertByExternalRef !== 'function') {
+              await appendDlq(
+                db,
+                tenantId,
+                jobId,
+                'enrollments',
+                row.source_user_id,
+                'load',
+                'DIDACTA_NS_MISSING',
+                'ctx.didacta.enrollments no disponible',
+                row.raw_payload,
+                canonical,
+              );
+              await setStgLoaded(db, enrollTable, row.id, '!FAIL:NS');
+              dlqE += 1;
+              continue;
+            }
+            try {
+              const result = await enrollApi.upsertByExternalRef(adapted.input);
+              await setStgLoaded(db, enrollTable, row.id, result.id);
+              okE += 1;
+            } catch (e) {
+              const code = (e as { code?: string })?.code ?? 'DIDACTA_UPSERT_FAILED';
+              const msg = e instanceof Error ? e.message : String(e);
+              await appendDlq(
+                db,
+                tenantId,
+                jobId,
+                'enrollments',
+                row.source_user_id,
+                'load',
+                code,
+                msg,
+                row.raw_payload,
+                canonical,
+              );
+              await setStgLoaded(db, enrollTable, row.id, `!FAIL:${code}`);
+              dlqE += 1;
+            }
+          }
+          ctx.log('log', `tick ${tickIndex}: load enrollments batch ok=${okE} dlq=${dlqE}.`);
+          return { status: 'continue', delaySec: 0 };
+        }
+
         const table = STG_TABLES[cursor.current];
         const didacta = ctx.didacta as Record<
           string,
@@ -3306,10 +3809,29 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
           } as unknown as Record<string, unknown>);
           return { status: 'continue', delaySec: 0 };
         }
+        // onlyEnrolledUsers (modo 'enrolled-students'): excluir del load los
+        // usuarios SIN ninguna matrícula marcándolos is_valid=FALSE. Así
+        // listValidUnloadedStg (que exige is_valid=TRUE) no los toma y nunca se
+        // cargan. El transform ya corrió (load es posterior) → no se revierte.
+        // Idempotente (re-ejecutar el UPDATE no cambia nada).
+        if (cursor.current === 'users' && scopeCfg.onlyEnrolledUsers) {
+          await db.execute(
+            `UPDATE mod_migrator_learndash_stg_users u
+                SET is_valid = FALSE,
+                    validation_errors = '{"skipped":"NOT_ENROLLED"}'::jsonb
+              WHERE u.tenant_id = $1::uuid AND u.job_id = $2::uuid
+                AND u.target_id IS NULL
+                AND NOT EXISTS (
+                  SELECT 1 FROM mod_migrator_learndash_stg_enrollments e
+                   WHERE e.tenant_id = u.tenant_id AND e.job_id = u.job_id
+                     AND e.source_user_id = u.source_id
+                )`,
+            [tenantId, jobId],
+          );
+        }
         const batch = await listValidUnloadedStg(db, table, tenantId, jobId, LOAD_BATCH_SIZE);
         if (batch.length === 0) {
           const completed = [...cursor.completed, cursor.current];
-          const loadOrder = ['users', 'courses', 'lessons', 'topics', 'quizzes', 'groups'];
           const idx = loadOrder.indexOf(cursor.current);
           const next = idx >= 0 && idx + 1 < loadOrder.length ? loadOrder[idx + 1]! : null;
           if (next === null) {
@@ -3545,7 +4067,18 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
         // mayormente count + insert; escala bien hasta ~50 entidades).
         // Si necesitamos partir por entidad en el futuro, refactor a cursor.
 
-        const entities = ['users', 'courses', 'lessons', 'topics', 'quizzes', 'groups'];
+        // Scope (v1.1.0+): reconciliar solo las entidades que entraron al scope
+        // de extracción (lo que realmente se procesó en este job).
+        const scopeCfg = readScopeConfig((job as { options?: unknown }).options);
+        const entities = [
+          'users',
+          'courses',
+          'lessons',
+          'topics',
+          'quizzes',
+          'groups',
+          'enrollments',
+        ].filter((e) => scopeCfg.extract.has(e));
         for (const entity of entities) {
           const table = STG_TABLES[entity];
           if (!table) continue;

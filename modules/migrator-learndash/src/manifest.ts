@@ -130,14 +130,11 @@ export const manifest: ModuleManifest = {
     'migrator-learndash.report.read',
     'migrator-learndash.report.export',
   ],
-  eventsEmitted: [
-    'migrator-learndash.import.started',
-    'migrator-learndash.import.completed',
-    'migrator-learndash.import.failed',
-    'migrator-learndash.import.cancelled',
-    'migrator-learndash.import.rollback.started',
-    'migrator-learndash.import.rollback.completed',
-  ],
+  // Vacío a propósito: el host todavía NO expone un cliente de eventos
+  // (ctx.events) a los módulos sandbox, así que declarar eventsEmitted sería
+  // un contrato que el módulo no puede cumplir (nada los emitiría). Re-declarar
+  // los eventos del ciclo de migración cuando exista la infra de emisión.
+  eventsEmitted: [],
   eventsConsumed: [],
   // Origen del cliente es arbitrario (cada usuario apunta a su propio
   // WordPress) — `*` con reconocimiento explícito vía `unrestrictedHosts`.

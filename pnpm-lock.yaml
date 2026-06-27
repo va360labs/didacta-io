@@ -98,6 +98,9 @@ importers:
       '@didacta/mod-learning':
         specifier: workspace:*
         version: link:../../modules/learning
+      '@didacta/mod-payment-connections':
+        specifier: workspace:*
+        version: link:../../modules/payment-connections
       '@didacta/mod-subscriptions':
         specifier: workspace:*
         version: link:../../modules/subscriptions
@@ -649,6 +652,28 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
+
+  modules/payment-connections:
+    dependencies:
+      '@didacta/core-kernel':
+        specifier: workspace:*
+        version: link:../../packages/core-kernel
+      '@didacta/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      stripe:
+        specifier: ^17.5.0
+        version: 17.7.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.17
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
         version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
 
   modules/subscriptions:

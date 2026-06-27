@@ -1,6 +1,6 @@
 {
   "name": "mod.migrator-learndash",
-  "version": "1.0.38",
+  "version": "1.1.1",
   "displayName": "Migrador desde WordPress + LearnDash",
   "description": "Importa cursos, lecciones, temas, quizzes, preguntas, usuarios, grupos, matrículas, media y progreso desde una instalación WordPress + LearnDash hacia Didacta. Wizard didáctico paso a paso, ETL con staging, idempotencia por checksum, reportes auditables.",
   "coreVersionRequired": "^0.0.1-alpha.81",
@@ -30,32 +30,7 @@
       "description": "Exportar reportes (CSV/PDF) para auditor."
     }
   ],
-  "eventsEmitted": [
-    {
-      "name": "migrator-learndash.import.started",
-      "description": "Una migración acaba de iniciarse."
-    },
-    {
-      "name": "migrator-learndash.import.completed",
-      "description": "Una migración terminó correctamente."
-    },
-    {
-      "name": "migrator-learndash.import.failed",
-      "description": "Una migración terminó con fallo bloqueante."
-    },
-    {
-      "name": "migrator-learndash.import.cancelled",
-      "description": "Una migración fue cancelada por el operador."
-    },
-    {
-      "name": "migrator-learndash.import.rollback.started",
-      "description": "Inicio de rollback de una migración previa."
-    },
-    {
-      "name": "migrator-learndash.import.rollback.completed",
-      "description": "Rollback de una migración previa completado."
-    }
-  ],
+  "eventsEmitted": [],
   "eventsConsumed": [],
   "hooksProvided": [],
   "hooksConsumed": [],
