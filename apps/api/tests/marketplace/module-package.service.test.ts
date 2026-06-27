@@ -30,9 +30,9 @@ describe('ModulePackageService.validatePackage', () => {
 
   it('PACKAGE_INVALID_ZIP con buffer vacío', async () => {
     const { pkg } = makeServices();
-    await expect(pkg.validatePackage(Buffer.alloc(0), { coreVersion: '1.0.0' })).rejects.toMatchObject(
-      { code: 'PACKAGE_INVALID_ZIP' },
-    );
+    await expect(
+      pkg.validatePackage(Buffer.alloc(0), { coreVersion: '1.0.0' }),
+    ).rejects.toMatchObject({ code: 'PACKAGE_INVALID_ZIP' });
   });
 
   it('PACKAGE_INVALID_ZIP con bytes que no son ZIP', async () => {
@@ -70,12 +70,12 @@ describe('ModulePackageService.validatePackage', () => {
       signatureService: sig,
       manifestJwtOverride: 'no-soy-un-jwt',
     });
-    await expect(pkg.validatePackage(fixture.buffer, { coreVersion: '1.0.0' })).rejects.toMatchObject(
-      { code: 'SIGNATURE_INVALID' },
-    );
+    await expect(
+      pkg.validatePackage(fixture.buffer, { coreVersion: '1.0.0' }),
+    ).rejects.toMatchObject({ code: 'SIGNATURE_INVALID' });
   });
 
-  it('SIGNATURE_VERIFY_FAILED si la firma del JWT está manipulada', async () => {
+  it('firma manipulada → NO bloquea (DISC-002): source DIRECT_UPLOAD y manifestJwt null', async () => {
     const { pkg, sig } = makeServices();
     const fixture = await buildTestPackage({ signatureService: sig });
     // Cortamos la última parte (signature) y la sustituimos por un valor inválido.
@@ -85,9 +85,12 @@ describe('ModulePackageService.validatePackage', () => {
       signatureService: sig,
       manifestJwtOverride: tampered,
     });
-    await expect(
-      pkg.validatePackage(tamperedFixture.buffer, { coreVersion: '1.0.0' }),
-    ).rejects.toMatchObject({ code: 'SIGNATURE_VERIFY_FAILED' });
+    // DISC-002: la verificación de firma ya NO bloquea; un JWT manipulado se
+    // trata como subida directa (no de confianza) en lugar de rechazarse.
+    const result = await pkg.validatePackage(tamperedFixture.buffer, { coreVersion: '1.0.0' });
+    expect(result.signatureVerified).toBe(false);
+    expect(result.manifestJwt).toBeNull();
+    expect(result.source).toBe('DIRECT_UPLOAD');
   });
 
   it('MANIFEST_SCHEMA_INVALID si el JWT lleva un manifest con name inválido', async () => {
@@ -96,9 +99,9 @@ describe('ModulePackageService.validatePackage', () => {
       signatureService: sig,
       manifest: { name: 'invalid' as `mod.${string}` },
     });
-    await expect(pkg.validatePackage(fixture.buffer, { coreVersion: '1.0.0' })).rejects.toMatchObject(
-      { code: 'MANIFEST_SCHEMA_INVALID' },
-    );
+    await expect(
+      pkg.validatePackage(fixture.buffer, { coreVersion: '1.0.0' }),
+    ).rejects.toMatchObject({ code: 'MANIFEST_SCHEMA_INVALID' });
   });
 
   it('MANIFEST_CONSISTENCY_INVALID si tablePrefix no deriva del name', async () => {
@@ -107,20 +110,26 @@ describe('ModulePackageService.validatePackage', () => {
       signatureService: sig,
       manifest: { name: 'mod.alpha', tablePrefix: 'mod_beta_', apiNamespace: '/modules/alpha' },
     });
-    await expect(pkg.validatePackage(fixture.buffer, { coreVersion: '1.0.0' })).rejects.toMatchObject(
-      { code: 'MANIFEST_CONSISTENCY_INVALID' },
-    );
+    await expect(
+      pkg.validatePackage(fixture.buffer, { coreVersion: '1.0.0' }),
+    ).rejects.toMatchObject({ code: 'MANIFEST_CONSISTENCY_INVALID' });
   });
 
-  it('VENDOR_NOT_TRUSTED si vendor=community (no soportado MVP)', async () => {
+  it('vendor=community → NO se rechaza (DISC-002): se acepta como DIRECT_UPLOAD no confiable', async () => {
     const { pkg, sig } = makeServices();
     const fixture = await buildTestPackage({
       signatureService: sig,
       manifest: { vendor: 'community' as const },
     });
-    await expect(pkg.validatePackage(fixture.buffer, { coreVersion: '1.0.0' })).rejects.toMatchObject(
-      { code: 'VENDOR_NOT_TRUSTED' },
-    );
+    // DISC-002: el gate de vendor-trust dejó de bloquear. verifyManifestJwt aún
+    // marca VENDOR_NOT_TRUSTED internamente, pero tryVerifyManifestJwt lo degrada
+    // a no-verificado → el paquete valida como DIRECT_UPLOAD (no de confianza)
+    // en lugar de lanzar. La confianza se expresa por `source`, no rechazando.
+    const result = await pkg.validatePackage(fixture.buffer, { coreVersion: '1.0.0' });
+    expect(result.signatureVerified).toBe(false);
+    expect(result.source).toBe('DIRECT_UPLOAD');
+    expect(result.manifestJwt).toBeNull();
+    expect(result.manifest.vendor).toBe('community');
   });
 
   it('CORE_VERSION_INCOMPATIBLE si el core actual no satisface coreVersionRequired', async () => {
@@ -129,9 +138,9 @@ describe('ModulePackageService.validatePackage', () => {
       signatureService: sig,
       manifest: { coreVersionRequired: '^2.0.0' },
     });
-    await expect(pkg.validatePackage(fixture.buffer, { coreVersion: '1.5.0' })).rejects.toMatchObject(
-      { code: 'CORE_VERSION_INCOMPATIBLE' },
-    );
+    await expect(
+      pkg.validatePackage(fixture.buffer, { coreVersion: '1.5.0' }),
+    ).rejects.toMatchObject({ code: 'CORE_VERSION_INCOMPATIBLE' });
   });
 
   it('NAME_RESERVED si el nombre coincide con un built-in', async () => {
@@ -146,9 +155,9 @@ describe('ModulePackageService.validatePackage', () => {
         apiNamespace: `/modules/${slug}`,
       },
     });
-    await expect(pkg.validatePackage(fixture.buffer, { coreVersion: '1.0.0' })).rejects.toMatchObject(
-      { code: 'NAME_RESERVED' },
-    );
+    await expect(
+      pkg.validatePackage(fixture.buffer, { coreVersion: '1.0.0' }),
+    ).rejects.toMatchObject({ code: 'NAME_RESERVED' });
   });
 
   it('reusa la misma clave para múltiples paquetes (fixture compartible)', async () => {
@@ -235,5 +244,4 @@ describe('isCoreVersionCompatible', () => {
       expect(isCoreVersionCompatible('^0.0.1-alpha.0', '0.0.1-beta.0')).toBe(true);
     });
   });
-
 });

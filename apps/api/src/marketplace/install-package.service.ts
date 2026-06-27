@@ -130,20 +130,15 @@ export class InstallPackageService implements OnApplicationBootstrap {
         const sandboxed = this.sandbox.loadModule(distSource, manifest.name, manifest);
 
         if (sandboxed.routes && sandboxed.routes.length > 0) {
-          this.router.registerModule(
-            manifest.name,
-            manifest.apiNamespace,
-            sandboxed.routes,
-            {
-              httpConfig: manifest.http ?? null,
-              dbEnabled: manifest.requiresDb === true,
-              tablePrefix: manifest.tablePrefix,
-              didactaConfig: manifest.didacta ?? null,
-              jobLifecycleConfig: manifest.jobLifecycle ?? null,
-              requiresSecrets: manifest.requiresSecrets === true,
-              secretsLifecycleConfig: manifest.secretsLifecycle ?? null,
-            },
-          );
+          this.router.registerModule(manifest.name, manifest.apiNamespace, sandboxed.routes, {
+            httpConfig: manifest.http ?? null,
+            dbEnabled: manifest.requiresDb === true,
+            tablePrefix: manifest.tablePrefix,
+            didactaConfig: manifest.didacta ?? null,
+            jobLifecycleConfig: manifest.jobLifecycle ?? null,
+            requiresSecrets: manifest.requiresSecrets === true,
+            secretsLifecycleConfig: manifest.secretsLifecycle ?? null,
+          });
         }
 
         if (sandboxed.onJobTick) {
@@ -179,12 +174,20 @@ export class InstallPackageService implements OnApplicationBootstrap {
     });
 
     const previous = await this.installedModules.findByName(validated.manifest.name);
-    if (previous && previous.version === validated.manifest.version && previous.status === 'INSTALLED') {
+    if (
+      previous &&
+      previous.version === validated.manifest.version &&
+      previous.status === 'INSTALLED'
+    ) {
       // Idempotencia explícita: misma versión ya instalada y sana.
       throw new MarketplacePackageError(
         'ALREADY_INSTALLED',
         `El módulo "${validated.manifest.name}" ya está instalado en esta versión.`,
-        { name: validated.manifest.name, version: validated.manifest.version, existingId: previous.id },
+        {
+          name: validated.manifest.name,
+          version: validated.manifest.version,
+          existingId: previous.id,
+        },
       );
     }
 
@@ -376,11 +379,7 @@ export class InstallPackageService implements OnApplicationBootstrap {
   /// real con tenantId del request actual (super_admin que disparó el
   /// install). El `onInstall` típicamente solo siembra tablas globales
   /// del módulo, pero pasamos el tenantId por si el módulo lo necesita.
-  private buildScopedDb(
-    moduleName: string,
-    requiresDb: boolean,
-    tablePrefix: string,
-  ): SandboxedDb {
+  private buildScopedDb(moduleName: string, requiresDb: boolean, tablePrefix: string): SandboxedDb {
     if (!requiresDb) return new BlockedSandboxedDb(moduleName);
     const tenantId = this.tenantContext.get()?.tenantId ?? null;
     return this.dbService.build(moduleName, tablePrefix, tenantId);
@@ -432,8 +431,11 @@ function extractDistSource(packageBuffer: Buffer): string {
 /// (caso: el operador subió un build corrupto, lo arregló, vuelve a
 /// subir). El cleanup de versiones huérfanas no está en MVP.
 export function buildStorageKey(name: string, version: string): string {
-  const safeName = name.replace(/[^A-Za-z0-9.-]/g, '_');
-  const safeVersion = version.replace(/[^A-Za-z0-9.+-]/g, '_');
+  // Saneamos chars no permitidos y, además, colapsamos secuencias de puntos
+  // (`..`) para que ningún input pueda inyectar un path-traversal en la key del
+  // object storage (p.ej. `1.0.0/../etc` → `1.0.0__etc`, sin `..` ni `/etc`).
+  const safeName = name.replace(/[^A-Za-z0-9.-]/g, '_').replace(/\.{2,}/g, '_');
+  const safeVersion = version.replace(/[^A-Za-z0-9.+-]/g, '_').replace(/\.{2,}/g, '_');
   const ts = Date.now();
   return `modules/${safeName}/${safeVersion}-${ts}.zip`;
 }

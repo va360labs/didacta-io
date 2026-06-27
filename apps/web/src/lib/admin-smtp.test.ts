@@ -16,15 +16,19 @@ const FAKE_TOKEN = 'fake-bearer-token';
 
 beforeEach(() => {
   vi.spyOn(globalThis, 'fetch').mockImplementation(vi.fn());
-  // Mockeamos sessionStorage para que `authStorage.getAccessToken` devuelva
-  // un token y no tire 401 en cada test.
+  // Mockeamos el storage para que `authStorage.getAccessToken` devuelva un
+  // token y no tire 401 en cada test. El access token ahora se lee primero de
+  // localStorage (commit f778ad1) con fallback a sessionStorage, así que
+  // stubeamos AMBOS con el mismo store.
   const store = new Map<string, string>();
   store.set('didacta.access_token', FAKE_TOKEN);
-  vi.stubGlobal('sessionStorage', {
+  const storageMock = {
     getItem: (k: string) => store.get(k) ?? null,
     setItem: (k: string, v: string) => store.set(k, v),
     removeItem: (k: string) => store.delete(k),
-  });
+  };
+  vi.stubGlobal('localStorage', storageMock);
+  vi.stubGlobal('sessionStorage', storageMock);
   // Definimos `window` para que `authStorage` no caiga al branch SSR.
   vi.stubGlobal('window', globalThis);
 });

@@ -14,7 +14,9 @@ function makePrismaMock(seed: Partial<InstalledModule>[] = []): {
   }
   const prisma = {
     installedModule: {
-      findUnique: vi.fn(async ({ where }: { where: { name: string } }) => store.get(where.name) ?? null),
+      findUnique: vi.fn(
+        async ({ where }: { where: { name: string } }) => store.get(where.name) ?? null,
+      ),
       findMany: vi.fn(async ({ where }: { where: Partial<InstalledModule> }) => {
         const all = Array.from(store.values());
         return all.filter((row) => {
@@ -75,7 +77,7 @@ describe('InstalledModuleService', () => {
     expect(row.status).toBe('INSTALLING');
     expect(row.name).toBe('mod.example');
     expect(row.vendor).toBe('DIDACTA');
-    expect(store.get('mod.example')?.manifestJwt).toBe('sig');
+    expect(store.get('mod.example')?.manifestJwt).toBe('fake.jwt.token');
   });
 
   it('createInstalling actúa como upsert: reinstall sobreescribe row previo', async () => {

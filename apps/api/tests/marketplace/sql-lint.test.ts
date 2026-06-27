@@ -1,11 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import {
-  lintMigrationSql,
-  parseStatement,
-  splitStatements,
-} from '../../src/marketplace/sql-lint';
+import { lintMigrationSql, parseStatement, splitStatements } from '../../src/marketplace/sql-lint';
 
 const PREFIX = 'mod_example_';
+
+/**
+ * Asevera que `fn` lanza un MarketplacePackageError con code MODULE_LINT_FAILED.
+ * El code va en `.code` (el mensaje es narrativo), así que `toThrowError(/regex/)`
+ * —que mira solo el message— no sirve para este caso.
+ */
+function expectSqlLintFailed(fn: () => unknown) {
+  try {
+    fn();
+    expect.fail('debería haber lanzado MODULE_LINT_FAILED');
+  } catch (err) {
+    expect((err as { code?: string }).code).toBe('MODULE_LINT_FAILED');
+  }
+}
 
 describe('splitStatements', () => {
   it('separa por ; ignorando comentarios', () => {
@@ -36,12 +46,16 @@ describe('splitStatements', () => {
 describe('parseStatement', () => {
   it.each([
     ['CREATE TABLE mod_example_foo (id UUID)', 'CREATE_TABLE', 'mod_example_foo'],
-    ['CREATE UNIQUE INDEX mod_example_foo_idx ON mod_example_foo(id)', 'CREATE_INDEX', 'mod_example_foo_idx'],
+    [
+      'CREATE UNIQUE INDEX mod_example_foo_idx ON mod_example_foo(id)',
+      'CREATE_INDEX',
+      'mod_example_foo_idx',
+    ],
     ['ALTER TABLE mod_example_foo ADD COLUMN x INT', 'ALTER_TABLE', 'mod_example_foo'],
     ['DROP TABLE IF EXISTS mod_example_foo', 'DROP_TABLE', 'mod_example_foo'],
     ['CREATE SEQUENCE mod_example_seq', 'CREATE_SEQUENCE', 'mod_example_seq'],
-    ['CREATE TYPE mod_example_status AS ENUM (\'a\', \'b\')', 'CREATE_TYPE', 'mod_example_status'],
-    ['INSERT INTO mod_example_foo (id) VALUES (\'x\')', 'INSERT', 'mod_example_foo'],
+    ["CREATE TYPE mod_example_status AS ENUM ('a', 'b')", 'CREATE_TYPE', 'mod_example_status'],
+    ["INSERT INTO mod_example_foo (id) VALUES ('x')", 'INSERT', 'mod_example_foo'],
   ])('parsea %s como %s/%s', (raw, kind, ident) => {
     const stmt = parseStatement(raw);
     expect(stmt.kind).toBe(kind);
@@ -60,13 +74,13 @@ describe('parseStatement', () => {
     'CREATE EXTENSION pgcrypto',
     'GRANT SELECT ON foo TO public',
     'TRUNCATE TABLE mod_example_foo',
-    'COPY foo FROM \'/etc/passwd\'',
+    "COPY foo FROM '/etc/passwd'",
   ])('rechaza statement prohibido: %s', (raw) => {
-    expect(() => parseStatement(raw)).toThrowError(/MODULE_LINT_FAILED/);
+    expectSqlLintFailed(() => parseStatement(raw));
   });
 
   it('rechaza statement no parseable', () => {
-    expect(() => parseStatement('NOT A SQL STATEMENT')).toThrowError(/MODULE_LINT_FAILED/);
+    expectSqlLintFailed(() => parseStatement('NOT A SQL STATEMENT'));
   });
 });
 
@@ -87,7 +101,7 @@ describe('lintMigrationSql', () => {
 
   it('rechaza ALTER TABLE en tabla del core', () => {
     const sql = `ALTER TABLE "user" ADD COLUMN gamification_score INT;`;
-    expect(() => lintMigrationSql(sql, PREFIX)).toThrowError(/MODULE_LINT_FAILED/);
+    expectSqlLintFailed(() => lintMigrationSql(sql, PREFIX));
   });
 
   it('rechaza REFERENCES a tabla fuera del prefix', () => {

@@ -3,6 +3,20 @@ import { ModuleLintService } from '../../src/marketplace/module-lint.service';
 
 const lint = new ModuleLintService();
 
+/**
+ * Asevera que `fn` lanza un MarketplacePackageError con code MODULE_LINT_FAILED.
+ * El code va en `.code`, no en el mensaje (que es narrativo), así que no se puede
+ * matchear con `toThrowError(/regex/)` (eso mira solo el message).
+ */
+function expectLintFailed(fn: () => unknown) {
+  try {
+    fn();
+    expect.fail('debería haber lanzado MODULE_LINT_FAILED');
+  } catch (err) {
+    expect((err as { code?: string }).code).toBe('MODULE_LINT_FAILED');
+  }
+}
+
 describe('ModuleLintService.lintBundle', () => {
   it('acepta require de la allowlist y devuelve la lista detectada', () => {
     const code = `
@@ -16,14 +30,14 @@ describe('ModuleLintService.lintBundle', () => {
 
   it('rechaza requires fuera de la allowlist', () => {
     const code = `const lodash = require('lodash');`;
-    expect(() => lint.lintBundle(code)).toThrowError(/MODULE_LINT_FAILED/);
+    expectLintFailed(() => lint.lintBundle(code));
   });
 
   it.each(['fs', 'node:fs', 'child_process', 'net', 'http', 'https', 'tls', 'worker_threads'])(
     'rechaza built-in prohibido %s',
     (mod) => {
       const code = `const f = require('${mod}');`;
-      expect(() => lint.lintBundle(code)).toThrowError(/MODULE_LINT_FAILED/);
+      expectLintFailed(() => lint.lintBundle(code));
     },
   );
 

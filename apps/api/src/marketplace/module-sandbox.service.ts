@@ -88,7 +88,11 @@ export class ModuleSandboxService {
     this.lint.lintBundle(distSource);
 
     const sandbox = this.buildSandbox(moduleName);
-    const context = createContext(sandbox);
+    // codeGeneration.strings/wasm:false → eval() y new Function('code') lanzan
+    // dentro del contexto (no se puede generar código en runtime desde el módulo).
+    const context = createContext(sandbox, {
+      codeGeneration: { strings: false, wasm: false },
+    });
 
     try {
       runInContext(distSource, context, {
@@ -190,8 +194,10 @@ export class ModuleSandboxService {
       log: (...args: unknown[]) => this.logger.log(`[mod:${moduleName}] ${formatLogArgs(args)}`),
       info: (...args: unknown[]) => this.logger.log(`[mod:${moduleName}] ${formatLogArgs(args)}`),
       warn: (...args: unknown[]) => this.logger.warn(`[mod:${moduleName}] ${formatLogArgs(args)}`),
-      error: (...args: unknown[]) => this.logger.error(`[mod:${moduleName}] ${formatLogArgs(args)}`),
-      debug: (...args: unknown[]) => this.logger.debug?.(`[mod:${moduleName}] ${formatLogArgs(args)}`),
+      error: (...args: unknown[]) =>
+        this.logger.error(`[mod:${moduleName}] ${formatLogArgs(args)}`),
+      debug: (...args: unknown[]) =>
+        this.logger.debug?.(`[mod:${moduleName}] ${formatLogArgs(args)}`),
     };
 
     return {
@@ -214,6 +220,11 @@ export class ModuleSandboxService {
         return setTimeout(cb, ms).unref();
       },
       clearTimeout,
+      // El contexto vm provee `eval` como intrínseco de V8; lo sombreamos a
+      // undefined para cumplir la promesa del sandbox (`typeof eval` ===
+      // 'undefined'). La generación de código en runtime queda además bloqueada
+      // vía `codeGeneration` en createContext (defensa en profundidad).
+      eval: undefined,
       // Globals JS estándar (no inyectables).
       JSON,
       Math,

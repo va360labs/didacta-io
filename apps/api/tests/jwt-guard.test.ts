@@ -11,15 +11,21 @@ import {
 import { TokenService } from '../src/auth/token.service';
 
 const ORIGINAL = process.env['AUTH_SECRET'];
+const ORIGINAL_MFA = process.env['DIDACTA_REQUIRE_MFA_ADMIN'];
 
 beforeAll(() => {
   process.env['AUTH_SECRET'] = 'a'.repeat(64);
   process.env['AUTH_URL'] = 'https://didacta.test';
+  // Este archivo prueba el enforcement de MFA para admins. El default cambió a
+  // opt-in (commit 4c1b5aa), así que lo activamos explícitamente.
+  process.env['DIDACTA_REQUIRE_MFA_ADMIN'] = 'true';
 });
 
 afterAll(() => {
   if (ORIGINAL === undefined) delete process.env['AUTH_SECRET'];
   else process.env['AUTH_SECRET'] = ORIGINAL;
+  if (ORIGINAL_MFA === undefined) delete process.env['DIDACTA_REQUIRE_MFA_ADMIN'];
+  else process.env['DIDACTA_REQUIRE_MFA_ADMIN'] = ORIGINAL_MFA;
 });
 
 function makeContext(headers: Record<string, string>, metadata: Record<string, unknown> = {}) {

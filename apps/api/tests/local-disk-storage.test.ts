@@ -48,8 +48,8 @@ describe('LocalDiskStorageService', () => {
     await expect(storage.delete('does/not/exist.bin')).resolves.toBeUndefined();
   });
 
-  it('getSignedUrl devuelve ruta /storage/...', async () => {
+  it('getSignedUrl devuelve la ruta /api/v1/storage/file/... (servida por el API)', async () => {
     const url = await storage.getSignedUrl('foo/bar.bin');
-    expect(url).toBe('/storage/foo/bar.bin');
+    expect(url).toBe('/api/v1/storage/file/foo/bar.bin');
   });
 });

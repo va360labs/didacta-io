@@ -12,6 +12,11 @@ import { ConflictException } from '@nestjs/common';
 import { SetupService } from '../src/setup/setup.service';
 import { PasswordService } from '../src/auth/password.service';
 
+// `new PasswordService()` (a nivel módulo, abajo) carga loadAuthConfig() en su
+// constructor, que exige AUTH_SECRET >= 32 chars. vitest no carga apps/api/.env,
+// así que lo fijamos aquí (mismo patrón que jwt-guard.test.ts).
+process.env['AUTH_SECRET'] = process.env['AUTH_SECRET'] ?? 'a'.repeat(64);
+
 interface TenantRow {
   id: string;
   slug: string;
@@ -75,8 +80,9 @@ function makeFakePrisma() {
   const client = {
     tenant: {
       count: vi.fn(async ({ where }: { where?: { deletedAt?: null } } = {}) => {
-        return state.tenants.filter((t) => (where?.deletedAt === null ? t.deletedAt === null : true))
-          .length;
+        return state.tenants.filter((t) =>
+          where?.deletedAt === null ? t.deletedAt === null : true,
+        ).length;
       }),
       create: vi.fn(async ({ data }: { data: Omit<TenantRow, 'id' | 'deletedAt'> }) => {
         const row: TenantRow = { id: id('tenant'), deletedAt: null, ...data };
@@ -125,13 +131,11 @@ function makeFakePrisma() {
       }),
     },
     tenantDomain: {
-      create: vi.fn(
-        async ({ data }: { data: Omit<TenantDomainRow, 'id'> }) => {
-          const row: TenantDomainRow = { id: id('domain'), ...data };
-          state.tenantDomains.push(row);
-          return row;
-        },
-      ),
+      create: vi.fn(async ({ data }: { data: Omit<TenantDomainRow, 'id'> }) => {
+        const row: TenantDomainRow = { id: id('domain'), ...data };
+        state.tenantDomains.push(row);
+        return row;
+      }),
       upsert: vi.fn(
         async ({
           where,
@@ -161,6 +165,17 @@ function makeFakePrisma() {
         state.auditLogs.push(row);
         return row;
       }),
+    },
+    // Activación de módulos en el tenant inicial (setup.service.ts:182-198).
+    // Sin módulos en el registry, findMany devuelve [] → createMany no se llama.
+    module: {
+      findMany: vi.fn(
+        async () =>
+          [] as Array<{ id: string; name: string; manifest: unknown; enabledByDefault: boolean }>,
+      ),
+    },
+    tenantModule: {
+      createMany: vi.fn(async () => ({ count: 0 })),
     },
     $transaction: async (cb: (tx: typeof client) => Promise<unknown>) => cb(client),
   };
@@ -232,7 +247,11 @@ describe('SetupService.init', () => {
     const result = await svc.init(validDto, 'lms.acme.test', { ip: null, userAgent: null });
 
     expect(state.tenants).toHaveLength(1);
-    expect(state.tenants[0]).toMatchObject({ slug: 'acme-corp', name: 'ACME Corp', status: 'ACTIVE' });
+    expect(state.tenants[0]).toMatchObject({
+      slug: 'acme-corp',
+      name: 'ACME Corp',
+      status: 'ACTIVE',
+    });
     expect(state.roles.map((r) => r.name).sort()).toEqual([
       'alumno',
       'auditor',

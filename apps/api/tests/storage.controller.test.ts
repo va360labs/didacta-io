@@ -49,11 +49,11 @@ describe('StorageController · POST /storage/upload (FU-5)', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('rol alumno → ForbiddenException', async () => {
+  it('rol no permitido (invitado) → ForbiddenException', async () => {
     const { factory } = makeFakeFactory();
     const c = new StorageController(factory);
     await expect(
-      c.upload(makeUser({ roles: ['alumno'] }), {
+      c.upload(makeUser({ roles: ['invitado'] }), {
         data: PNG_PIXEL_BASE64,
         filename: 'pixel.png',
         contentType: 'image/png',
@@ -61,7 +61,7 @@ describe('StorageController · POST /storage/upload (FU-5)', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it.each(['formador', 'tenant_admin', 'super_admin'] as const)(
+  it.each(['formador', 'tenant_admin', 'super_admin', 'alumno'] as const)(
     'rol %s → permitido',
     async (role) => {
       const { factory, spies } = makeFakeFactory();
@@ -78,12 +78,12 @@ describe('StorageController · POST /storage/upload (FU-5)', () => {
     },
   );
 
-  it('imagen >5 MiB tras decodificar → ForbiddenException', async () => {
+  it('imagen >10 MiB tras decodificar → ForbiddenException', async () => {
     const { factory } = makeFakeFactory();
     const c = new StorageController(factory);
-    // Buffer de 6 MiB → base64 ≈ 8 MiB. La pipe no corre acá; lo que validamos
-    // es la guarda manual de tamaño en bytes después del decode.
-    const big = Buffer.alloc(6 * 1024 * 1024, 0x42).toString('base64');
+    // Buffer de 11 MiB (> MAX_BYTES=10 MiB). La pipe no corre acá; lo que
+    // validamos es la guarda manual de tamaño en bytes después del decode.
+    const big = Buffer.alloc(11 * 1024 * 1024, 0x42).toString('base64');
     await expect(
       c.upload(makeUser(), {
         data: big,

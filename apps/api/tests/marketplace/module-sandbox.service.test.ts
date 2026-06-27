@@ -27,8 +27,14 @@ describe('ModuleSandboxService.loadModule', () => {
       module.exports = { onInstall: () => {} };
     `;
     const svc = makeSandbox();
-    // Lint estático lo coge antes — el mensaje es MODULE_LINT_FAILED.
-    expect(() => svc.loadModule(code, 'mod.test')).toThrowError(/MODULE_LINT_FAILED/);
+    // Lint estático lo coge antes. El error lleva el code en `.code`, no en el
+    // mensaje (que es narrativo) — verificamos por code (patrón de líneas 179-186).
+    try {
+      svc.loadModule(code, 'mod.test');
+      expect.fail('debería haber lanzado MODULE_LINT_FAILED');
+    } catch (err) {
+      expect((err as { code?: string }).code).toBe('MODULE_LINT_FAILED');
+    }
   });
 
   it('require runtime también rechaza si el lint estático no lo cogió (dynamic name)', () => {
@@ -61,7 +67,13 @@ describe('ModuleSandboxService.loadModule', () => {
   it('captura errores síncronos del top-level y los envuelve en MODULE_BOOT_FAILED', () => {
     const code = `throw new Error('boom en top-level');`;
     const svc = makeSandbox();
-    expect(() => svc.loadModule(code, 'mod.test')).toThrowError(/MODULE_BOOT_FAILED/);
+    // El code va en `.code` (el mensaje conserva el error original del módulo).
+    try {
+      svc.loadModule(code, 'mod.test');
+      expect.fail('debería haber lanzado MODULE_BOOT_FAILED');
+    } catch (err) {
+      expect((err as { code?: string }).code).toBe('MODULE_BOOT_FAILED');
+    }
   });
 
   it('captura errores síncronos del onInstall', async () => {

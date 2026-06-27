@@ -1,6 +1,6 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
-import { NotificationTemplatesController } from '../src/modules/notification-templates.controller';
+import { NotificationTemplatesController } from '../src/modules/notifications/notification-templates.controller';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import type { SessionClaims } from '../src/auth/token.service';
 

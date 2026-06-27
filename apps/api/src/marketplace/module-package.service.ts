@@ -1,10 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import { createHash } from 'node:crypto';
-import {
-  validatePackageLayout,
-  type PackageEntries,
-} from '@didacta/module-package-spec';
+import { validatePackageLayout, type PackageEntries } from '@didacta/module-package-spec';
 import {
   validateManifestConsistency,
   validateSurfaceBundles,
@@ -25,11 +22,7 @@ export const MAX_PACKAGE_BYTES = 50 * 1024 * 1024;
 ///
 /// `manifest.jwt` reemplaza el par `manifest.json` + `manifest.sig` del
 /// diseño inicial: el JWT lleva manifest+firma en una sola línea ES256.
-export const REQUIRED_FILES = [
-  'manifest.jwt',
-  'package.json',
-  'dist/index.js',
-] as const;
+export const REQUIRED_FILES = ['manifest.jwt', 'package.json', 'dist/index.js'] as const;
 
 /// Slugs reservados que ningún módulo de marketplace puede registrar:
 /// son built-ins de la imagen `didactaio/community` o nombres infra que
@@ -287,6 +280,12 @@ export function isCoreVersionCompatible(required: string, actual: string): boole
     if (aPatch === rPatch && rPrerelease && aPrerelease) {
       return comparePrerelease(aPrerelease, rPrerelease) >= 0;
     }
+
+    // Tilde es ESTRICTO con prerelease (a diferencia de caret, que es permisivo):
+    // un rango con prerelease sólo aplica a prereleases de la MISMA tupla
+    // [major,minor,patch]. Si la requerida lleva prerelease, la actual no, y la
+    // patch difiere → rechazar (~0.0.1-alpha.0 NO matchea 0.0.2).
+    if (rPrerelease && !aPrerelease && aPatch !== rPatch) return false;
 
     return true;
   }

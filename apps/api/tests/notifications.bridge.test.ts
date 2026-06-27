@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DomainEvent } from '@didacta/core-kernel';
-import { NotificationsBridge } from '../src/modules/notifications.bridge';
+import { NotificationsBridge } from '../src/modules/notifications/notifications.bridge';
 
 const noopLogger = {
   log: vi.fn(),
