@@ -53,12 +53,18 @@ export interface StripeSubscriptionsResult {
 }
 
 export interface StripeReadAdapter {
-  /** Valida la key y devuelve metadata no-secreta de la cuenta. */
+  /** Valida la credencial y devuelve metadata no-secreta de la cuenta. */
   retrieveAccount(): Promise<StripeAccountInfo>;
   /** Lista (paginado) las suscripciones de los estados pedidos, con su customer. */
   listActiveSubscriptions(
     options?: ListActiveSubscriptionsOptions,
   ): Promise<StripeSubscriptionsResult>;
+  /**
+   * Busca las suscripciones activas de UN email concreto (lookup por-usuario que
+   * usa el job de inscripción). Opcional: si el proveedor no lo implementa, el
+   * caller lo omite. Devuelve [] si el email no tiene suscripción en esa cuenta.
+   */
+  findSubscriptionsByEmail?(email: string): Promise<StripeSubscriberRecord[]>;
 }
 
 const DEFAULT_STATUSES = ['active', 'trialing', 'past_due'];
@@ -142,6 +148,34 @@ export class StripeReadSdkAdapter implements StripeReadAdapter {
 
     await this.fillProductNames(subscribers);
     return { subscribers, truncated };
+  }
+
+  async findSubscriptionsByEmail(email: string): Promise<StripeSubscriberRecord[]> {
+    const activeSet = new Set(DEFAULT_STATUSES);
+    const out: StripeSubscriberRecord[] = [];
+    try {
+      const customers = await this.client.customers.list({ email, limit: 100 });
+      for (const c of customers.data) {
+        const subs = await this.client.subscriptions.list({
+          customer: c.id,
+          status: 'all',
+          limit: 100,
+          expand: ['data.items.data.price'],
+        });
+        for (const sub of subs.data) {
+          if (!activeSet.has(sub.status)) continue;
+          const rec = mapSubscription(sub);
+          rec.email = c.email ?? email;
+          rec.customerId = c.id;
+          rec.name = c.name ?? rec.name;
+          out.push(rec);
+        }
+      }
+    } catch (err) {
+      throw mapStripeError(err);
+    }
+    await this.fillProductNames(out);
+    return out;
   }
 
   /**

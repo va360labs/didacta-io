@@ -88,6 +88,13 @@ export type ConnectBody =
       clientId: string;
       clientSecret: string;
       environment: 'sandbox' | 'live';
+    }
+  | {
+      provider: 'woocommerce';
+      displayName: string;
+      storeUrl: string;
+      consumerKey: string;
+      consumerSecret: string;
     };
 
 const BASE = '/api/v1/modules/payment-connections';

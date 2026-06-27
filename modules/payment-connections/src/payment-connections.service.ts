@@ -88,7 +88,12 @@ export interface PayPalCredentials {
   clientSecret: string;
   environment: 'sandbox' | 'live';
 }
-export type PaymentCredentials = StripeCredentials | PayPalCredentials;
+export interface WooCommerceCredentials {
+  storeUrl: string;
+  consumerKey: string;
+  consumerSecret: string;
+}
+export type PaymentCredentials = StripeCredentials | PayPalCredentials | WooCommerceCredentials;
 
 /** Construye un lector de SOLO LECTURA para el proveedor + credenciales dados. */
 export type PaymentReadAdapterFactory = (
@@ -96,8 +101,8 @@ export type PaymentReadAdapterFactory = (
   credentials: PaymentCredentials,
 ) => StripeReadAdapter;
 
-/** Proveedores soportados en esta versión (multi-proveedor: WooCommerce en roadmap). */
-export const SUPPORTED_PROVIDERS = ['stripe', 'paypal'] as const;
+/** Proveedores soportados (Stripe, PayPal, WooCommerce Subscriptions). */
+export const SUPPORTED_PROVIDERS = ['stripe', 'paypal', 'woocommerce'] as const;
 
 export interface AddConnectionInput {
   tenantId: string;
@@ -373,5 +378,6 @@ function computeLivemode(provider: string, credentials: PaymentCredentials): boo
   if (provider === 'paypal') {
     return (credentials as PayPalCredentials).environment === 'live';
   }
+  // WooCommerce no tiene test/live: la tienda es la que es.
   return true;
 }

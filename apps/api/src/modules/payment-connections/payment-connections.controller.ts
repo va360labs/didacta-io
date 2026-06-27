@@ -65,9 +65,24 @@ const createPaypalSchema = z
   })
   .strict();
 
+const createWoocommerceSchema = z
+  .object({
+    provider: z.literal('woocommerce'),
+    displayName: z.string().trim().min(1).max(120),
+    storeUrl: z
+      .string()
+      .trim()
+      .url()
+      .startsWith('https://', 'La URL de la tienda debe ser https://'),
+    consumerKey: z.string().trim().min(10).max(120),
+    consumerSecret: z.string().trim().min(10).max(120),
+  })
+  .strict();
+
 const createConnectionSchema = z.discriminatedUnion('provider', [
   createStripeSchema,
   createPaypalSchema,
+  createWoocommerceSchema,
 ]);
 type CreateConnectionBody = z.infer<typeof createConnectionSchema>;
 
@@ -130,14 +145,22 @@ export class PaymentConnectionsController {
     body: CreateConnectionBody,
   ) {
     const user = this.assertSuperAdmin(rawUser);
-    const credentials =
-      body.provider === 'stripe'
-        ? { apiKey: body.apiKey }
-        : {
-            clientId: body.clientId,
-            clientSecret: body.clientSecret,
-            environment: body.environment,
-          };
+    let credentials;
+    if (body.provider === 'stripe') {
+      credentials = { apiKey: body.apiKey };
+    } else if (body.provider === 'paypal') {
+      credentials = {
+        clientId: body.clientId,
+        clientSecret: body.clientSecret,
+        environment: body.environment,
+      };
+    } else {
+      credentials = {
+        storeUrl: body.storeUrl,
+        consumerKey: body.consumerKey,
+        consumerSecret: body.consumerSecret,
+      };
+    }
     const connection = await this.registry.getPaymentConnectionsService().addConnection({
       tenantId: user.tenantId,
       actorId: user.sub,

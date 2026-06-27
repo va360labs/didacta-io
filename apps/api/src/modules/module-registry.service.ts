@@ -30,11 +30,13 @@ import {
   PaymentTiersService,
   StripeReadSdkAdapter,
   PayPalReadSdkAdapter,
+  WooCommerceReadSdkAdapter,
   buildPaymentConnectionsModule,
   type ConfigPort as PaymentConnectionsConfigPort,
   type PaymentReadAdapterFactory,
   type StripeCredentials,
   type PayPalCredentials,
+  type WooCommerceCredentials,
   type UserDirectoryPort as PaymentConnectionsUserDirectoryPort,
 } from '@didacta/mod-payment-connections';
 import { buildCertificatesModule, CertificatesService } from '@didacta/mod-certificates';
@@ -390,6 +392,10 @@ export class ModuleRegistryService implements OnModuleInit {
       if (provider === 'paypal') {
         // PayPal usa fetch global (Node 22) — sin SDK que cargar.
         return new PayPalReadSdkAdapter(credentials as PayPalCredentials);
+      }
+      if (provider === 'woocommerce') {
+        // WooCommerce REST API vía fetch global — sin SDK.
+        return new WooCommerceReadSdkAdapter(credentials as WooCommerceCredentials);
       }
       throw new Error(`Proveedor de pago no soportado: ${provider}`);
     };

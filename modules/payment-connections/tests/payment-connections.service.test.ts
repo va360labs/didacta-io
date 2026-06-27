@@ -253,13 +253,13 @@ describe('addConnection', () => {
     expect(svc.prisma.rows.size).toBe(0);
   });
 
-  it('rechaza provider distinto de stripe', async () => {
+  it('rechaza un provider no soportado', async () => {
     await expect(
       svc.service.addConnection({
         tenantId: TENANT,
         actorId: null,
-        provider: 'woocommerce',
-        displayName: 'WooCommerce',
+        provider: 'mercadopago',
+        displayName: 'Mercado Pago',
         credentials: { apiKey: 'whatever' },
       }),
     ).rejects.toBeInstanceOf(PaymentConnectionProviderNotSupportedError);

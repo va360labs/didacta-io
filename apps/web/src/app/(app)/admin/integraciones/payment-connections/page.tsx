@@ -79,12 +79,15 @@ function PaymentConnectionsPanel() {
   const [actionInfo, setActionInfo] = useState<string | null>(null);
 
   // Form alta
-  const [provider, setProvider] = useState<'stripe' | 'paypal'>('stripe');
+  const [provider, setProvider] = useState<'stripe' | 'paypal' | 'woocommerce'>('stripe');
   const [displayName, setDisplayName] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [environment, setEnvironment] = useState<'live' | 'sandbox'>('live');
+  const [storeUrl, setStoreUrl] = useState('');
+  const [wooKey, setWooKey] = useState('');
+  const [wooSecret, setWooSecret] = useState('');
   const [creating, setCreating] = useState(false);
 
   // Reconciliación
@@ -126,7 +129,7 @@ function PaymentConnectionsPanel() {
         return;
       }
       body = { provider: 'stripe', displayName: displayName.trim(), apiKey: apiKey.trim() };
-    } else {
+    } else if (provider === 'paypal') {
       if (!clientId.trim() || !clientSecret.trim()) {
         setActionError(
           'PayPal necesita el Client ID y el Secret de una app REST con el permiso «Transaction Search».',
@@ -140,6 +143,20 @@ function PaymentConnectionsPanel() {
         clientSecret: clientSecret.trim(),
         environment,
       };
+    } else {
+      if (!/^https:\/\//i.test(storeUrl.trim()) || !wooKey.trim() || !wooSecret.trim()) {
+        setActionError(
+          'WooCommerce necesita la URL https:// de la tienda + Consumer Key y Secret (WooCommerce → Ajustes → Avanzado → REST API).',
+        );
+        return;
+      }
+      body = {
+        provider: 'woocommerce',
+        displayName: displayName.trim(),
+        storeUrl: storeUrl.trim(),
+        consumerKey: wooKey.trim(),
+        consumerSecret: wooSecret.trim(),
+      };
     }
 
     setCreating(true);
@@ -152,6 +169,9 @@ function PaymentConnectionsPanel() {
       setApiKey('');
       setClientId('');
       setClientSecret('');
+      setStoreUrl('');
+      setWooKey('');
+      setWooSecret('');
       setActionInfo(`Cuenta "${connection.displayName}" conectada y verificada.`);
     } catch (e) {
       setActionError(
@@ -286,7 +306,7 @@ function PaymentConnectionsPanel() {
                 con permisos <code className="font-mono">Customers = Read</code> y{' '}
                 <code className="font-mono">Subscriptions = Read</code>. Se guarda cifrada.
               </>
-            ) : (
+            ) : provider === 'paypal' ? (
               <>
                 Usa el <strong>Client ID</strong> y <strong>Secret</strong> de una app REST de{' '}
                 <a
@@ -299,6 +319,12 @@ function PaymentConnectionsPanel() {
                 </a>{' '}
                 con el permiso <strong>Transaction Search</strong> activado. Se guardan cifrados.
               </>
+            ) : (
+              <>
+                Usa la URL de tu tienda + <strong>Consumer Key</strong> y <strong>Secret</strong>{' '}
+                (WooCommerce → Ajustes → Avanzado → REST API, permiso <em>Lectura</em>). Requiere el
+                plugin <strong>WooCommerce Subscriptions</strong> y HTTPS. Se guardan cifrados.
+              </>
             )}
           </CardDescription>
         </CardHeader>
@@ -310,19 +336,28 @@ function PaymentConnectionsPanel() {
                 <Select
                   id="provider"
                   value={provider}
-                  onChange={(e) => setProvider(e.target.value as 'stripe' | 'paypal')}
+                  onChange={(e) =>
+                    setProvider(e.target.value as 'stripe' | 'paypal' | 'woocommerce')
+                  }
                   disabled={creating}
                   className="min-w-32"
                 >
                   <option value="stripe">Stripe</option>
                   <option value="paypal">PayPal</option>
+                  <option value="woocommerce">WooCommerce</option>
                 </Select>
               </div>
               <div className="flex flex-1 flex-col gap-1.5">
                 <Label htmlFor="displayName">Nombre de la cuenta</Label>
                 <Input
                   id="displayName"
-                  placeholder={provider === 'stripe' ? 'Stripe ES' : 'PayPal ES'}
+                  placeholder={
+                    provider === 'stripe'
+                      ? 'Stripe ES'
+                      : provider === 'paypal'
+                        ? 'PayPal ES'
+                        : 'WooCommerce ES'
+                  }
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   disabled={creating}
@@ -345,7 +380,7 @@ function PaymentConnectionsPanel() {
                   type="password"
                 />
               </div>
-            ) : (
+            ) : provider === 'paypal' ? (
               <div className="flex flex-col gap-3 md:flex-row">
                 <div className="flex flex-1 flex-col gap-1.5">
                   <Label htmlFor="clientId">PayPal Client ID</Label>
@@ -384,6 +419,46 @@ function PaymentConnectionsPanel() {
                     <option value="live">Live</option>
                     <option value="sandbox">Sandbox</option>
                   </Select>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 md:flex-row">
+                <div className="flex flex-[2] flex-col gap-1.5">
+                  <Label htmlFor="storeUrl">URL de la tienda</Label>
+                  <Input
+                    id="storeUrl"
+                    placeholder="https://tutienda.com"
+                    value={storeUrl}
+                    onChange={(e) => setStoreUrl(e.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
+                    disabled={creating}
+                  />
+                </div>
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Label htmlFor="wooKey">Consumer Key</Label>
+                  <Input
+                    id="wooKey"
+                    placeholder="ck_…"
+                    value={wooKey}
+                    onChange={(e) => setWooKey(e.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
+                    disabled={creating}
+                  />
+                </div>
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Label htmlFor="wooSecret">Consumer Secret</Label>
+                  <Input
+                    id="wooSecret"
+                    placeholder="cs_…"
+                    value={wooSecret}
+                    onChange={(e) => setWooSecret(e.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
+                    disabled={creating}
+                    type="password"
+                  />
                 </div>
               </div>
             )}

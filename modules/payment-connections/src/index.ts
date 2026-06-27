@@ -38,6 +38,7 @@ export type {
   PaymentCredentials,
   StripeCredentials,
   PayPalCredentials,
+  WooCommerceCredentials,
   AddConnectionInput,
   ReconcileResult,
 } from './payment-connections.service.js';
@@ -51,6 +52,8 @@ export type {
 } from './stripe-reader.client.js';
 export { PayPalReadSdkAdapter } from './paypal-reader.client.js';
 export type { PayPalReaderCredentials } from './paypal-reader.client.js';
+export { WooCommerceReadSdkAdapter } from './woocommerce-reader.client.js';
+export type { WooCommerceReaderCredentials } from './woocommerce-reader.client.js';
 export {
   PaymentConnectionsError,
   PaymentConnectionNotFoundError,

@@ -138,6 +138,14 @@ export class PayPalReadSdkAdapter implements StripeReadAdapter {
     return { subscribers: [...byKey.values()], truncated };
   }
 
+  async findSubscriptionsByEmail(email: string): Promise<StripeSubscriberRecord[]> {
+    // PayPal no permite filtrar por email; escaneamos (Transaction Search) y
+    // filtramos por el email del pagador.
+    const target = email.trim().toLowerCase();
+    const { subscribers } = await this.listActiveSubscriptions();
+    return subscribers.filter((s) => (s.email ?? '').trim().toLowerCase() === target);
+  }
+
   private async getToken(): Promise<{ value: string; appId: string | null }> {
     const basic = Buffer.from(`${this.creds.clientId}:${this.creds.clientSecret}`).toString(
       'base64',
