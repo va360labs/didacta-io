@@ -22,7 +22,11 @@ export const migratorLearndashExtension: ModuleWebExtension = {
   name: 'mod.migrator-learndash',
   sidebarItems: [
     {
-      group: 'Integraciones',
+      // El sidebar consolidó "Integraciones" dentro de "Administración"
+      // (ver buildGroups en (app)/layout.tsx). El merge solo inserta en
+      // grupos EXISTENTES, así que apuntar a un grupo inexistente descartaba
+      // el item en silencio. Va en "Administración" junto a Marketplace/Tenants.
+      group: 'Administración',
       href: '/admin/integraciones/migrator-learndash',
       label: 'Migrar desde LearnDash',
       icon: 'download-cloud',
