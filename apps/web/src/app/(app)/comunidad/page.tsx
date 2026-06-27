@@ -245,11 +245,12 @@ export default function ComunidadPage() {
         <aside className="flex flex-col gap-4">
           <Card>
             <CardContent className="p-5">
-              <h4 className="font-display text-base font-semibold text-text">Tu actividad</h4>
+              <h4 className="font-display text-base font-semibold text-text">Actividad</h4>
               <div className="mt-3 divide-y divide-border-soft text-sm">
-                <ActivityRow label="Publicaciones" value={posts?.length ?? 0} />
-                <ActivityRow label="Respuestas útiles" value={0} tone="success" />
-                <ActivityRow label="Reconocimientos" value={0} tone="info" />
+                {/* Solo datos reales: nº de publicaciones del feed actual. Las
+                    métricas "Respuestas útiles"/"Reconocimientos" se quitaron por
+                    no tener endpoint que las respalde (regla: cero datos de cartón). */}
+                <ActivityRow label="Publicaciones en el feed" value={posts?.length ?? 0} />
               </div>
             </CardContent>
           </Card>

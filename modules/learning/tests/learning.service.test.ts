@@ -84,6 +84,7 @@ function makeFakePrisma() {
   const lessons = new Map<string, FakeLesson>();
   const modules = new Map<string, FakeModule>();
   const users = new Map<string, FakeUser>();
+  const lessonComments = new Map<string, Record<string, unknown>>();
   let counter = 0;
   const id = (p = 'id') => `${p}-${++counter}`;
 
@@ -95,6 +96,7 @@ function makeFakePrisma() {
     lessons,
     modules,
     users,
+    lessonComments,
     prisma: {
       user: {
         findFirst: vi.fn(
@@ -194,6 +196,31 @@ function makeFakePrisma() {
             if (!e) throw new Error('not found');
             const merged = { ...e, ...data };
             enrollments.set(where.id, merged);
+            return merged;
+          },
+        ),
+      },
+      modLearningLessonComment: {
+        findFirst: vi.fn(
+          async ({
+            where,
+          }: {
+            where: { id: string; tenantId?: string; deletedAt?: Date | null };
+          }) => {
+            const c = lessonComments.get(where.id);
+            if (!c) return null;
+            // Filtra por tenant (y deletedAt si se pide) igual que Prisma.
+            if (where.tenantId !== undefined && c['tenantId'] !== where.tenantId) return null;
+            if (where.deletedAt === null && c['deletedAt'] != null) return null;
+            return c;
+          },
+        ),
+        update: vi.fn(
+          async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+            const c = lessonComments.get(where.id);
+            if (!c) throw new Error('not found');
+            const merged = { ...c, ...data };
+            lessonComments.set(where.id, merged);
             return merged;
           },
         ),
@@ -663,6 +690,47 @@ describe('LearningService', () => {
       expect(lesson2.completedAt).toBeNull();
       expect(lesson2.lastAccessedAt).toBeNull();
       expect(lesson2.durationMinutes).toBeNull();
+    });
+  });
+
+  describe('moderación de comentarios de lección (aislamiento por tenant)', () => {
+    function seedComment(fake: ReturnType<typeof makeFakePrisma>, tenantId: string) {
+      fake.lessonComments.set('cm-1', {
+        id: 'cm-1',
+        tenantId,
+        status: 'PENDING',
+        deletedAt: null,
+        authorId: 'u-1',
+      });
+    }
+
+    it('approveLessonComment aprueba un comentario del propio tenant', async () => {
+      const fake = makeFakePrisma();
+      seedComment(fake, 't-1');
+      const service = new LearningService(fake.prisma as never, makeContext());
+      const res = await service.approveLessonComment('t-1', 'rev-1', 'cm-1');
+      expect((res as { status: string }).status).toBe('APPROVED');
+    });
+
+    it('approveLessonComment NO aprueba un comentario de OTRO tenant (write cross-tenant bloqueado)', async () => {
+      const fake = makeFakePrisma();
+      seedComment(fake, 't-2'); // comentario del tenant B
+      const service = new LearningService(fake.prisma as never, makeContext());
+      await expect(service.approveLessonComment('t-1', 'rev-1', 'cm-1')).rejects.toBeInstanceOf(
+        EnrollmentNotFoundError,
+      );
+      // La fila del otro tenant NO se mutó.
+      expect(fake.lessonComments.get('cm-1')!['status']).toBe('PENDING');
+    });
+
+    it('rejectLessonComment NO rechaza un comentario de OTRO tenant', async () => {
+      const fake = makeFakePrisma();
+      seedComment(fake, 't-2');
+      const service = new LearningService(fake.prisma as never, makeContext());
+      await expect(
+        service.rejectLessonComment('t-1', 'rev-1', 'cm-1', 'spam'),
+      ).rejects.toBeInstanceOf(EnrollmentNotFoundError);
+      expect(fake.lessonComments.get('cm-1')!['status']).toBe('PENDING');
     });
   });
 });

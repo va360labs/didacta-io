@@ -544,6 +544,14 @@ export class LearningService {
   }
 
   async approveLessonComment(tenantId: string, reviewerId: string, commentId: string) {
+    // Guard de tenant ANTES de mutar: el PrismaService de módulo no aplica RLS
+    // (rol con BYPASSRLS), así que update({where:{id}}) ignoraría el tenant y
+    // permitiría escribir un comentario de OTRO tenant. Mismo patrón que
+    // deleteLessonComment.
+    const comment = await this.prisma.modLearningLessonComment.findFirst({
+      where: { id: commentId, tenantId, deletedAt: null },
+    });
+    if (!comment) throw new EnrollmentNotFoundError();
     return this.prisma.modLearningLessonComment.update({
       where: { id: commentId },
       data: {
@@ -561,6 +569,11 @@ export class LearningService {
     commentId: string,
     reason?: string,
   ) {
+    // Mismo guard de tenant que approveLessonComment (evita write cross-tenant).
+    const comment = await this.prisma.modLearningLessonComment.findFirst({
+      where: { id: commentId, tenantId, deletedAt: null },
+    });
+    if (!comment) throw new EnrollmentNotFoundError();
     return this.prisma.modLearningLessonComment.update({
       where: { id: commentId },
       data: {
