@@ -41,6 +41,7 @@ export type {
   WooCommerceCredentials,
   AddConnectionInput,
   ReconcileResult,
+  MemberSubscriptionMatch,
 } from './payment-connections.service.js';
 export { StripeReadSdkAdapter } from './stripe-reader.client.js';
 export type {

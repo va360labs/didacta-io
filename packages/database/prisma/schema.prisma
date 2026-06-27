@@ -1860,6 +1860,31 @@ model MemberPaymentFlag {
   @@map("member_payment_flag")
 }
 
+/// Resultado del lookup automático de suscripción al registrarse un miembro en
+/// /inscripcion-miembros. Un job no bloqueante busca la suscripción del email en
+/// las cuentas de pago conectadas (Stripe/PayPal/WooCommerce) y guarda aquí el
+/// resultado para que el admin lo vea al validar la solicitud.
+model MemberSubscriptionLookup {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  email       String
+  /// PENDING (job en curso) | DONE (terminó) | ERROR (falló).
+  status      String   @default("PENDING")
+  /// Array JSON de MemberSubscriptionMatch (provider, planName, status, importe…).
+  results     Json     @default("[]")
+  /// Nº de suscripciones encontradas (cache para listar sin parsear el JSON).
+  matchCount  Int      @default(0) @map("match_count")
+  error       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  completedAt DateTime? @map("completed_at")
+
+  @@unique([tenantId, userId], map: "member_subscription_lookup_tenant_user_key")
+  @@index([tenantId])
+  @@map("member_subscription_lookup")
+}
+
 // ============================================================================
 // AI GATEWAY — configuración multi-provider por tenant (LMS-90.B).
 //

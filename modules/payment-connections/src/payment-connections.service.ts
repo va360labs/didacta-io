@@ -124,6 +124,18 @@ export interface ReconcileResult {
   counts: { total: number; matched: number; unmatched: number; withoutEmail: number };
 }
 
+/** Una suscripción encontrada para un email concreto (lookup por-usuario). */
+export interface MemberSubscriptionMatch {
+  provider: string;
+  connectionId: string;
+  connectionName: string;
+  planName: string | null;
+  status: string;
+  unitAmount: number | null;
+  currency: string | null;
+  subscriptionId: string;
+}
+
 export function normalizeEmail(value: string | null | undefined): string | null {
   if (!value) return null;
   const trimmed = value.trim().toLowerCase();
@@ -335,6 +347,44 @@ export class PaymentConnectionsService {
         withoutEmail,
       },
     };
+  }
+
+  // ---------------- Lookup por usuario (job de inscripción) ----------------
+
+  /**
+   * Busca las suscripciones de UN email en TODAS las cuentas conectadas
+   * (Stripe + PayPal + WooCommerce). Best-effort por conexión: si una falla, se
+   * registra y se sigue con las demás. Lo usa el job de inscripción de miembros.
+   */
+  async findUserSubscriptions(tenantId: string, email: string): Promise<MemberSubscriptionMatch[]> {
+    const norm = normalizeEmail(email);
+    if (!norm) return [];
+    const conns = await this.listConnections(tenantId);
+    const out: MemberSubscriptionMatch[] = [];
+    for (const c of conns) {
+      if (c.status !== 'VERIFIED') continue;
+      try {
+        const credentials = await this.loadCredentials(tenantId, c.id, c.provider);
+        const adapter = this.adapterFactory(c.provider, credentials);
+        if (!adapter.findSubscriptionsByEmail) continue;
+        const subs = await adapter.findSubscriptionsByEmail(norm);
+        for (const s of subs) {
+          out.push({
+            provider: c.provider,
+            connectionId: c.id,
+            connectionName: c.displayName,
+            planName: s.productName ?? null,
+            status: s.status,
+            unitAmount: s.unitAmount,
+            currency: s.currency,
+            subscriptionId: s.subscriptionId,
+          });
+        }
+      } catch {
+        // Una cuenta caída no debe tumbar el lookup completo.
+      }
+    }
+    return out;
   }
 
   // ---------------- internos ----------------

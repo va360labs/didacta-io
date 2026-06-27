@@ -1,3 +1,4 @@
+import type { MemberSubscriptionMatch } from '@didacta/mod-payment-connections';
 import type { TelegramMembership } from './inscripcion.dto';
 
 // ============================================================================
@@ -72,6 +73,8 @@ export interface DecisionEmailParams {
   approveUrl: string;
   rejectUrl: string;
   tenantName?: string;
+  /** Suscripciones detectadas del solicitante en las cuentas de pago conectadas. */
+  subscriptionMatches?: MemberSubscriptionMatch[];
 }
 
 /** Texto del estado de pertenencia al grupo según el tri-estado. */
@@ -79,6 +82,28 @@ function membershipHeading(inGroup: TelegramMembership): string {
   if (inGroup === 'true') return 'Miembro del grupo VA360';
   if (inGroup === 'false') return 'NO está en el grupo - revisar caso';
   return 'Pertenencia NO verificable (error Telegram)';
+}
+
+/** Nombre legible del proveedor de pago. */
+function providerLabel(provider: string): string {
+  if (provider === 'stripe') return 'Stripe';
+  if (provider === 'paypal') return 'PayPal';
+  if (provider === 'woocommerce') return 'WooCommerce';
+  return provider;
+}
+
+/** Formatea un importe en la unidad menor (céntimos) a string con moneda. */
+function formatMatchAmount(unitAmount: number | null, currency: string | null): string {
+  if (unitAmount == null) return '';
+  const amount = (unitAmount / 100).toFixed(2);
+  const cur = (currency ?? '').toUpperCase();
+  return cur ? ` — ${amount} ${cur}` : ` — ${amount}`;
+}
+
+/** Describe una suscripción detectada en una sola línea legible. */
+function describeMatch(m: MemberSubscriptionMatch): string {
+  const plan = m.planName ?? 'suscripción';
+  return `${providerLabel(m.provider)}: ${plan} (${m.status})${formatMatchAmount(m.unitAmount, m.currency)}`;
 }
 
 /**
@@ -89,8 +114,12 @@ export function buildDecisionEmail(params: DecisionEmailParams): EmailContent {
   const { name, email, telegramId, inGroup, isDelinquent, approveUrl, rejectUrl } = params;
   const tenantName = params.tenantName ?? 'Didacta';
   const heading = membershipHeading(inGroup);
+  const matches = params.subscriptionMatches ?? [];
 
   const delinquentLineText = isDelinquent ? '\n⚠ CONSTA COMO IMPAGO\n' : '';
+  const subscriptionText = matches.length
+    ? `\nSuscripción detectada:\n${matches.map((m) => `  • ${describeMatch(m)}`).join('\n')}\n`
+    : '\nSuscripción detectada: ninguna en las cuentas de pago conectadas.\n';
   const subject = `Nueva inscripción pendiente — ${name}`;
   const text = `Hola,
 
@@ -101,7 +130,7 @@ ${delinquentLineText}
   Nombre: ${name}
   Email: ${email}
   Telegram ID: ${telegramId}
-
+${subscriptionText}
 Aprobar: ${approveUrl}
 Rechazar: ${rejectUrl}
 
@@ -116,6 +145,17 @@ Powered by Didacta.io`;
   </p>`
     : '';
 
+  const subscriptionBlock = matches.length
+    ? `<div style="margin: 16px 0; padding: 12px 16px; background: #ecfdf5; border: 1px solid #10b981; border-radius: 8px;">
+    <p style="margin: 0 0 8px; font-weight: 700; color: #065f46; font-size: 15px;">Suscripción detectada</p>
+    <ul style="margin: 0; padding-left: 18px; color: #065f46; font-size: 14px;">
+      ${matches.map((m) => `<li>${escapeHtml(describeMatch(m))}</li>`).join('\n      ')}
+    </ul>
+  </div>`
+    : `<p style="margin: 16px 0; padding: 12px 16px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; color: #475569; font-size: 14px;">
+    Sin suscripción detectada en las cuentas de pago conectadas.
+  </p>`;
+
   const html = `<!DOCTYPE html>
 <html lang="es"><body style="font-family: 'Inter', system-ui, sans-serif; color: #0D1B2A; line-height: 1.6;">
   <p>Hola,</p>
@@ -127,6 +167,7 @@ Powered by Didacta.io`;
     <tr><td style="padding: 2px 8px; color: #5b6b7c;">Email</td><td style="padding: 2px 8px;"><strong>${escapeHtml(email)}</strong></td></tr>
     <tr><td style="padding: 2px 8px; color: #5b6b7c;">Telegram ID</td><td style="padding: 2px 8px;"><strong>${escapeHtml(telegramId)}</strong></td></tr>
   </table>
+  ${subscriptionBlock}
   <p style="margin: 32px 0;">
     <a href="${approveUrl}" style="display: inline-block; background: #16a34a; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-right: 12px;">
       Aprobar

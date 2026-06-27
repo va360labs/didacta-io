@@ -10,6 +10,8 @@ import { membershipToBoolean, type TelegramMembership } from './inscripcion.dto'
 import { buildDecisionEmail } from './email-templates';
 import { MemberDecisionService } from './member-decision.service';
 import { MemberPaymentFlagService } from './member-payment-flag.service';
+import type { MemberSubscriptionMatch } from '@didacta/mod-payment-connections';
+import { MemberSubscriptionLookupService } from './member-subscription-lookup.service';
 
 const DEFAULT_ALUMNO_ROLE = 'alumno';
 const DEFAULT_TENANT_NAME = 'Didacta';
@@ -64,6 +66,7 @@ export class MemberRegistrationService {
     private readonly passwords: PasswordService,
     private readonly decision: MemberDecisionService,
     private readonly paymentFlags: MemberPaymentFlagService,
+    private readonly subscriptionLookup: MemberSubscriptionLookupService,
     private readonly smtp: SmtpAdapterService,
     private readonly smtpResolver: TenantSmtpResolverService,
     private readonly auditLog: PrismaAuditLogService,
@@ -151,8 +154,11 @@ export class MemberRegistrationService {
       userAgent: ctx.userAgent ?? undefined,
     });
 
-    // 5) Notificar al aprobador (best-effort: nunca rompe el registro).
-    await this.notifyApprover(tenantId, user.id, input, webBaseUrl, ctx);
+    // 5) En SEGUNDO PLANO (NO se hace await → no bloquea la respuesta al
+    //    usuario): busca la suscripción del email en las cuentas de pago
+    //    conectadas (Stripe/PayPal/WooCommerce) y LUEGO notifica al aprobador
+    //    incluyendo esa suscripción en el email de validación.
+    void this.lookupThenNotify(tenantId, user.id, input, webBaseUrl, ctx);
 
     return { userId: user.id, created: true, status: 'PENDING' };
   }
@@ -162,12 +168,27 @@ export class MemberRegistrationService {
    * Todo el método es best-effort: cualquier fallo se loguea como warn y NO se
    * propaga (la inscripción ya quedó persistida y debe sobrevivir).
    */
+  /** Background: corre el lookup de suscripción y luego notifica al aprobador con ella. */
+  private async lookupThenNotify(
+    tenantId: string,
+    userId: string,
+    input: MemberRegistrationInput,
+    webBaseUrl: string,
+    ctx: ClientContext,
+  ): Promise<void> {
+    const matches = await this.subscriptionLookup
+      .runAndStore(tenantId, userId, input.email)
+      .catch(() => [] as MemberSubscriptionMatch[]);
+    await this.notifyApprover(tenantId, userId, input, webBaseUrl, ctx, matches);
+  }
+
   private async notifyApprover(
     tenantId: string,
     userId: string,
     input: MemberRegistrationInput,
     webBaseUrl: string,
     ctx: ClientContext,
+    matches: MemberSubscriptionMatch[],
   ): Promise<void> {
     try {
       const { approveToken, rejectToken } = await this.decision.issueDecisionTokens(
@@ -213,6 +234,7 @@ export class MemberRegistrationService {
         approveUrl,
         rejectUrl,
         tenantName,
+        subscriptionMatches: matches,
       });
       const result = await this.smtp.send(resolved.config, {
         to: approver,

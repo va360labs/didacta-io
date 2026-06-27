@@ -7,6 +7,7 @@ import { MemberDecisionService } from './member-decision.service';
 import { MemberPaymentFlagService } from './member-payment-flag.service';
 import { MemberPurgeWorker } from './member-purge.worker';
 import { MemberRegistrationService } from './member-registration.service';
+import { MemberSubscriptionLookupService } from './member-subscription-lookup.service';
 import { PaymentFlagController } from './payment-flag.controller';
 import { TelegramService } from './telegram.service';
 
@@ -33,6 +34,7 @@ import { TelegramService } from './telegram.service';
     MemberRegistrationService,
     MemberDecisionService,
     MemberPaymentFlagService,
+    MemberSubscriptionLookupService,
     MemberPurgeWorker,
   ],
 })
