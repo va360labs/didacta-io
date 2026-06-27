@@ -64,7 +64,12 @@ interface DidactaRuntime {
   api: {
     fetch: <T>(path: string, init?: RequestInit, bearer?: string) => Promise<T>;
     fetchAuth: <T>(path: string, init?: RequestInit) => Promise<T>;
-    ApiHttpError: any;
+    // Constructor real del host (extends Error) para que `instanceof` estreche
+    // `e` en los catch y exponga `.message`/`.status` con tipos (no `any`).
+    ApiHttpError: new (payload: { message: string; status: number; code?: string }) => Error & {
+      status: number;
+      code?: string;
+    };
     me: any;
     marketplace: any;
   };
