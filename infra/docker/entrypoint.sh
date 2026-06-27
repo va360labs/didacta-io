@@ -68,8 +68,13 @@ run_migrations() {
 
   ensure_pgvector_extension
 
-  log "Sincronizando schema con prisma db push…"
-  pnpm --filter @didacta/database exec prisma db push --skip-generate --accept-data-loss
+  # SIN --accept-data-loss en producción: `db push` aplica cambios ADITIVOS
+  # (nuevas tablas/columnas) pero ABORTA si un cambio requiere borrar datos, en
+  # vez de destruirlos en silencio. Footgun eliminado: un deploy con un schema
+  # que implique pérdida de datos falla ruidosamente y se resuelve con migración
+  # manual, nunca dropeando el DB de prod en el arranque del contenedor.
+  log "Sincronizando schema con prisma db push (aditivo, sin --accept-data-loss)…"
+  pnpm --filter @didacta/database exec prisma db push --skip-generate
 
   if command -v psql >/dev/null 2>&1; then
     log "Aplicando políticas RLS…"

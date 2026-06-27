@@ -67,6 +67,9 @@ SYNC_DIRS=(
   "packages/database/prisma"
   "packages/database/src"
   "modules"
+  # El Dockerfile COPIA el entrypoint desde aquí; sin sincronizarlo, el build
+  # usaría el entrypoint viejo del server (drift). Cerrado: árbol completo.
+  "infra/docker"
 )
 
 # Archivos sueltos del build context (manifests + config de build). Se COPIAN
