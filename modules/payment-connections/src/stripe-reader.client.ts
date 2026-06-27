@@ -71,6 +71,8 @@ const PAGE_SIZE = 100;
  */
 export class StripeReadSdkAdapter implements StripeReadAdapter {
   private readonly client: Stripe;
+  /** Cache de productId → nombre, para no re-pedir el mismo producto. */
+  private readonly productNameCache = new Map<string, string | null>();
 
   constructor(apiKey: string, StripeCtor: new (key: string, opts?: Stripe.StripeConfig) => Stripe) {
     if (!apiKey) throw new StripeReadKeyInvalidError('clave vacía');
@@ -114,9 +116,10 @@ export class StripeReadSdkAdapter implements StripeReadAdapter {
           const resp = await this.client.subscriptions.list({
             status: status as Stripe.SubscriptionListParams.Status,
             limit: PAGE_SIZE,
-            // Expandimos también el producto del precio para sacar su NOMBRE,
-            // que es el "tier" que se asigna al usuario.
-            expand: ['data.customer', 'data.items.data.price.product'],
+            // Stripe NO permite expandir más de 4 niveles, así que expandimos
+            // hasta el price (data.items.data.price) y el NOMBRE del producto lo
+            // resolvemos aparte (fillProductNames) — es el "tier" del usuario.
+            expand: ['data.customer', 'data.items.data.price'],
             ...(startingAfter ? { starting_after: startingAfter } : {}),
           });
           for (const sub of resp.data) {
@@ -137,7 +140,34 @@ export class StripeReadSdkAdapter implements StripeReadAdapter {
       throw mapStripeError(err);
     }
 
+    await this.fillProductNames(subscribers);
     return { subscribers, truncated };
+  }
+
+  /**
+   * Resuelve el nombre del producto de cada suscripción (no se puede expandir a
+   * 5 niveles). Pide `products.retrieve` por cada productId único (cacheado),
+   * con un tope defensivo. Si falla, deja el nickname del price como fallback.
+   */
+  private async fillProductNames(subscribers: StripeSubscriberRecord[]): Promise<void> {
+    const ids = [
+      ...new Set(subscribers.map((s) => s.productId).filter((x): x is string => !!x)),
+    ].slice(0, 200);
+    for (const id of ids) {
+      if (this.productNameCache.has(id)) continue;
+      try {
+        const product = await this.client.products.retrieve(id);
+        const name = !product.deleted ? ((product as Stripe.Product).name ?? null) : null;
+        this.productNameCache.set(id, name);
+      } catch {
+        this.productNameCache.set(id, null);
+      }
+    }
+    for (const s of subscribers) {
+      const resolved = s.productId ? this.productNameCache.get(s.productId) : null;
+      // Prioridad: nombre del producto > nickname del price (ya en s.productName).
+      if (resolved) s.productName = resolved;
+    }
   }
 }
 
@@ -159,10 +189,9 @@ function mapSubscription(sub: Stripe.Subscription): StripeSubscriberRecord {
   const item = sub.items?.data?.[0];
   const price = item?.price ?? null;
   const product = price?.product ?? null;
-  const productName =
-    product && typeof product === 'object' && !('deleted' in product && product.deleted)
-      ? ((product as { name?: string | null }).name ?? null)
-      : null;
+  // El producto viene como id (string): su NOMBRE lo rellena fillProductNames.
+  // Fallback inmediato sin llamada extra: el nickname del price, si existe.
+  const productName = price?.nickname ?? null;
 
   return {
     subscriptionId: sub.id,
