@@ -306,6 +306,27 @@ export class LearningController {
     });
   }
 
+  @Get('courses/:courseId/enrollments/:enrollmentId/progress')
+  @ApiOperation({
+    summary:
+      'Detalle de progreso por lección de un alumno en un curso (tiempo visto). Solo formador / tenant_admin / super_admin.',
+  })
+  async getEnrollmentProgressDetail(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('courseId') courseId: string,
+    @Param('enrollmentId') enrollmentId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r))) {
+      throw new ForbiddenException(
+        'Solo formadores y administradores pueden ver el progreso de un alumno.',
+      );
+    }
+    return this.registry
+      .getLearningService()
+      .getEnrollmentProgressDetail(user.tenantId, courseId, enrollmentId);
+  }
+
   @Post('enrollments')
   @ApiOperation({ summary: 'Enrollar a un usuario por admin' })
   async enrollAdmin(

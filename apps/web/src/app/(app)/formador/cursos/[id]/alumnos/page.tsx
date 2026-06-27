@@ -232,7 +232,7 @@ export default function AlumnosPage() {
                         Matriculado
                       </SortHeader>
                     </th>
-                    <th className="px-6 py-3 text-right">
+                    <th className="px-3 py-3 text-right">
                       <SortHeader
                         active={sortKey === 'lastLogin'}
                         dir={sortDir}
@@ -241,6 +241,7 @@ export default function AlumnosPage() {
                         Último login
                       </SortHeader>
                     </th>
+                    <th className="px-6 py-3 text-right">Detalle</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -278,8 +279,17 @@ export default function AlumnosPage() {
                       <td className="px-3 py-3 text-xs text-text-muted tabular-nums">
                         {formatDate(r.enrolledAt)}
                       </td>
-                      <td className="px-6 py-3 text-right text-xs text-text-muted tabular-nums">
+                      <td className="px-3 py-3 text-right text-xs text-text-muted tabular-nums">
                         {r.lastLoginAt ? new Date(r.lastLoginAt).toLocaleDateString('es-ES') : '—'}
+                      </td>
+                      <td className="px-6 py-3 text-right">
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link
+                            href={`/formador/cursos/${courseId}/alumnos/${r.enrollmentId}` as never}
+                          >
+                            Ver progreso →
+                          </Link>
+                        </Button>
                       </td>
                     </tr>
                   ))}

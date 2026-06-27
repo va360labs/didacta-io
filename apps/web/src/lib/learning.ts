@@ -309,7 +309,53 @@ export const learningApi = {
       bearer(),
     );
   },
+
+  /** HU-FORM: detalle del progreso (tiempo visto por lección) de un alumno en un curso. */
+  async getEnrollmentProgressDetail(
+    courseId: string,
+    enrollmentId: string,
+  ): Promise<EnrollmentProgressDetail> {
+    return apiFetch<EnrollmentProgressDetail>(
+      `/api/v1/modules/learning/courses/${courseId}/enrollments/${enrollmentId}/progress`,
+      { method: 'GET' },
+      bearer(),
+    );
+  },
 };
+
+/** Progreso de una lección concreta dentro del detalle de un alumno (vista formador). */
+export interface StudentLessonProgress {
+  lessonId: string;
+  lessonTitle: string;
+  type: LessonType;
+  durationMinutes: number | null;
+  watchedSeconds: number;
+  resumePositionSec: number;
+  completed: boolean;
+  completedAt: string | null;
+  lastAccessedAt: string | null;
+}
+
+/** Módulo del curso con sus lecciones y el progreso del alumno. */
+export interface StudentProgressModule {
+  moduleId: string;
+  moduleTitle: string;
+  lessons: StudentLessonProgress[];
+}
+
+/** Detalle del progreso de un alumno en un curso (tiempo visto por lección). */
+export interface EnrollmentProgressDetail {
+  enrollmentId: string;
+  userId: string;
+  userEmail: string | null;
+  userName: string | null;
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'PAUSED';
+  progressPercent: number;
+  totalWatchedSeconds: number;
+  lessonsCompleted: number;
+  lessonsTotal: number;
+  modules: StudentProgressModule[];
+}
 
 export interface CourseEnrollmentRow {
   enrollmentId: string;

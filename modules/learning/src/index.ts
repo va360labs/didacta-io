@@ -2,7 +2,11 @@ import type { DidactaModule, ModuleContext } from '@didacta/core-kernel';
 import { manifest } from './manifest.js';
 
 export { manifest };
-export { LearningService } from './learning.service.js';
+export {
+  LearningService,
+  type EnrollmentProgressDetail,
+  type LessonType,
+} from './learning.service.js';
 export {
   LearningPathsService,
   type CreateLearningPathDto,

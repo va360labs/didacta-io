@@ -19,6 +19,46 @@ const TOKEN_BYTES = 24;
 const CODE_GROUPS = 2;
 const CODE_GROUP_LEN = 4;
 
+/**
+ * Tipo de lección (mismo dominio que el enum `LessonType` de Prisma). Se declara
+ * aquí como unión de literales para no acoplar el módulo a `@prisma/client`
+ * directamente (la dependencia de Prisma vive encapsulada en `@didacta/database`).
+ */
+export type LessonType = 'VIDEO' | 'HTML' | 'PDF' | 'TEXT' | 'QUIZ' | 'SCORM';
+
+/**
+ * Detalle del progreso de UN alumno en UN curso, lección a lección. Es la vista
+ * del formador/admin: agrupa las lecciones del curso por módulo y, para cada una,
+ * el tiempo visto y el estado de finalización del alumno. Las lecciones nunca
+ * empezadas aparecen igualmente en 0 (left-join contra el progreso real).
+ */
+export interface EnrollmentProgressDetail {
+  enrollmentId: string;
+  userId: string;
+  userEmail: string | null;
+  userName: string | null;
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'PAUSED';
+  progressPercent: number;
+  totalWatchedSeconds: number;
+  lessonsCompleted: number;
+  lessonsTotal: number;
+  modules: Array<{
+    moduleId: string;
+    moduleTitle: string;
+    lessons: Array<{
+      lessonId: string;
+      lessonTitle: string;
+      type: LessonType;
+      durationMinutes: number | null;
+      watchedSeconds: number;
+      resumePositionSec: number;
+      completed: boolean;
+      completedAt: string | null;
+      lastAccessedAt: string | null;
+    }>;
+  }>;
+}
+
 export class LearningService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -552,6 +592,118 @@ export class LearningService {
         completionThreshold: e.completionThreshold,
       };
     });
+  }
+
+  /**
+   * Vista del formador/admin: detalle del progreso por lección de UN alumno en
+   * UN curso. Devuelve la estructura del curso (módulos → lecciones, en orden de
+   * `position`) y, para cada lección, el tiempo visto y el estado de finalización
+   * del alumno. Hace left-join con el progreso real: las lecciones que el alumno
+   * nunca empezó aparecen igualmente en 0 (no se ocultan).
+   *
+   * No hace cross-module FK — lee el usuario por su ID lógico con el mismo patrón
+   * que `listEnrollmentsByCourse`.
+   */
+  async getEnrollmentProgressDetail(
+    tenantId: string,
+    courseId: string,
+    enrollmentId: string,
+  ): Promise<EnrollmentProgressDetail> {
+    const enrollment = await this.prisma.modLearningEnrollment.findFirst({
+      where: { tenantId, courseId, id: enrollmentId },
+    });
+    if (!enrollment) throw new EnrollmentNotFoundError();
+
+    const user = await this.prisma.user.findFirst({
+      where: { tenantId, id: enrollment.userId },
+      select: { id: true, email: true, name: true },
+    });
+
+    const courseModules = await this.prisma.modCoursesModule.findMany({
+      where: { tenantId, courseId, deletedAt: null },
+      orderBy: { position: 'asc' },
+      select: { id: true, title: true, position: true },
+    });
+
+    const moduleIds = courseModules.map((m) => m.id);
+    const lessons =
+      moduleIds.length > 0
+        ? await this.prisma.modCoursesLesson.findMany({
+            where: { tenantId, moduleId: { in: moduleIds }, deletedAt: null },
+            orderBy: { position: 'asc' },
+            select: {
+              id: true,
+              title: true,
+              type: true,
+              position: true,
+              durationMinutes: true,
+              moduleId: true,
+            },
+          })
+        : [];
+
+    const progressRows = await this.prisma.modLearningProgress.findMany({
+      where: { tenantId, enrollmentId },
+      select: {
+        lessonId: true,
+        watchedSeconds: true,
+        resumePositionSec: true,
+        completed: true,
+        completedAt: true,
+        lastAccessedAt: true,
+      },
+    });
+    const progressByLesson = new Map(progressRows.map((p) => [p.lessonId, p]));
+
+    // Recorre las lecciones EN ORDEN del curso (módulo.position, lección.position)
+    // y las agrupa por módulo con left-join contra el progreso real.
+    const lessonsByModule = new Map<string, typeof lessons>();
+    for (const l of lessons) {
+      const arr = lessonsByModule.get(l.moduleId) ?? [];
+      arr.push(l);
+      lessonsByModule.set(l.moduleId, arr);
+    }
+
+    let totalWatchedSeconds = 0;
+    let lessonsCompleted = 0;
+    let lessonsTotal = 0;
+
+    const modules = courseModules.map((m) => ({
+      moduleId: m.id,
+      moduleTitle: m.title,
+      lessons: (lessonsByModule.get(m.id) ?? []).map((l) => {
+        const p = progressByLesson.get(l.id);
+        const watchedSeconds = p?.watchedSeconds ?? 0;
+        const completed = p?.completed ?? false;
+        totalWatchedSeconds += watchedSeconds;
+        if (completed) lessonsCompleted += 1;
+        lessonsTotal += 1;
+        return {
+          lessonId: l.id,
+          lessonTitle: l.title,
+          type: l.type as LessonType,
+          durationMinutes: l.durationMinutes ?? null,
+          watchedSeconds,
+          resumePositionSec: p?.resumePositionSec ?? 0,
+          completed,
+          completedAt: p?.completedAt?.toISOString() ?? null,
+          lastAccessedAt: p?.lastAccessedAt?.toISOString() ?? null,
+        };
+      }),
+    }));
+
+    return {
+      enrollmentId: enrollment.id,
+      userId: enrollment.userId,
+      userEmail: user?.email ?? null,
+      userName: user?.name ?? null,
+      status: enrollment.status,
+      progressPercent: enrollment.progressPercent,
+      totalWatchedSeconds,
+      lessonsCompleted,
+      lessonsTotal,
+      modules,
+    };
   }
 
   async createInvitation(tenantId: string, actorId: string | null, dto: CreateInvitationDto) {
