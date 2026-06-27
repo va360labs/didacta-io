@@ -1,0 +1,19 @@
+{
+  "name": "payment-connections",
+  "version": "1.0.0",
+  "edition": "community",
+  "coreVersionRequired": "^0.0.1",
+  "displayName": "Conexiones de pago (Stripe)",
+  "category": "core",
+  "tablePrefix": "mod_payment_connections_",
+  "permissions": [
+    "payment_connections:connection:read",
+    "payment_connections:connection:create",
+    "payment_connections:connection:update",
+    "payment_connections:connection:delete"
+  ],
+  "events": [],
+  "hooks": [],
+  "apiNamespace": "/modules/payment-connections",
+  "surfaces": ["admin"]
+}

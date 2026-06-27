@@ -17,6 +17,7 @@ import {
   type UserListItem,
   type UserStatus,
 } from '@/lib/admin-users';
+import { paymentTiersApi, type PaymentTier, type UserTier } from '@/lib/payment-connections';
 import { authStorage } from '@/lib/auth-storage';
 
 /// Tamaño de página por defecto. Coincide con el `limit` default del API.
@@ -49,6 +50,11 @@ export default function UsuariosPage() {
   const [statusFilter, setStatusFilter] = useState<'' | UserStatus>('');
   const [roleFilter, setRoleFilter] = useState<'' | AssignableRole>('');
   const [sourceFilter, setSourceFilter] = useState<string>('');
+  // Tiers (mod.payment-connections). Si el módulo no está / no hay permiso, la
+  // columna se oculta (tiersEnabled=false) y /admin/usuarios sigue funcionando.
+  const [tiersEnabled, setTiersEnabled] = useState(false);
+  const [tierCatalog, setTierCatalog] = useState<PaymentTier[]>([]);
+  const [tierByUser, setTierByUser] = useState<Record<string, UserTier>>({});
 
   async function reload(targetPage: number = page) {
     const token = authStorage.getAccessToken();
@@ -67,8 +73,42 @@ export default function UsuariosPage() {
       setTotal(res.total);
       setHasMore(res.hasMore);
       setPage(res.page);
+      void loadTiers(res.items);
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los usuarios.');
+    }
+  }
+
+  async function loadTiers(items: UserListItem[]) {
+    const token = authStorage.getAccessToken();
+    if (!token || items.length === 0) return;
+    try {
+      const [catRes, utRes] = await Promise.all([
+        paymentTiersApi.listCatalog(token),
+        paymentTiersApi.getUserTiers(
+          token,
+          items.map((u) => u.id),
+        ),
+      ]);
+      setTierCatalog(catRes.tiers);
+      const map: Record<string, UserTier> = {};
+      for (const t of utRes.tiers) map[t.userId] = t;
+      setTierByUser(map);
+      setTiersEnabled(true);
+    } catch {
+      // Módulo de pagos desactivado o sin permiso (tenant_admin) → sin columna.
+      setTiersEnabled(false);
+    }
+  }
+
+  async function assignTier(userId: string, tierId: string | null) {
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    try {
+      const { tier } = await paymentTiersApi.assignUserTier(token, userId, tierId);
+      setTierByUser((prev) => ({ ...prev, [userId]: tier }));
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No se pudo asignar el tier.');
     }
   }
 
@@ -218,6 +258,7 @@ export default function UsuariosPage() {
                   <th className="px-6 py-3 font-semibold">Persona</th>
                   <th className="px-3 py-3 font-semibold">Roles</th>
                   <th className="px-3 py-3 font-semibold">Estado</th>
+                  {tiersEnabled ? <th className="px-3 py-3 font-semibold">Tier</th> : null}
                   <th className="px-3 py-3 font-semibold">Origen</th>
                   <th className="px-3 py-3 font-semibold">MFA</th>
                   <th className="px-6 py-3 font-semibold text-right">Último login</th>
@@ -267,6 +308,15 @@ export default function UsuariosPage() {
                     <td className="px-3 py-3">
                       <Badge variant={STATUS_VARIANT[u.status]}>{STATUS_LABELS[u.status]}</Badge>
                     </td>
+                    {tiersEnabled ? (
+                      <td className="px-3 py-3">
+                        <TierCell
+                          tier={tierByUser[u.id]}
+                          catalog={tierCatalog}
+                          onAssign={(tierId) => void assignTier(u.id, tierId)}
+                        />
+                      </td>
+                    ) : null}
                     <td className="px-3 py-3">
                       {u.externalSource ? (
                         <Badge variant="muted" title={u.externalId ?? undefined}>
@@ -319,6 +369,45 @@ export default function UsuariosPage() {
           ) : null}
         </Card>
       )}
+    </div>
+  );
+}
+
+/// Celda de tier: muestra el tier efectivo (manual o derivado de pagos, o
+/// "Desconocido") y un desplegable para asignar el tier manual del catálogo
+/// (incluido el "Free"). El derivado se sincroniza aparte desde Conexiones de pago.
+function TierCell({
+  tier,
+  catalog,
+  onAssign,
+}: {
+  tier: UserTier | undefined;
+  catalog: PaymentTier[];
+  onAssign: (tierId: string | null) => void;
+}) {
+  const effective = tier?.effectiveLabel ?? null;
+  const manualId = tier?.manualTierId ?? '';
+  return (
+    <div className="flex flex-col items-start gap-1">
+      {effective ? (
+        <Badge variant={tier?.source === 'derived' ? 'success' : 'muted'}>{effective}</Badge>
+      ) : (
+        <span className="text-xs italic text-text-subtle">Desconocido</span>
+      )}
+      <Select
+        value={manualId}
+        onChange={(e) => onAssign(e.target.value || null)}
+        className="min-w-32 text-xs"
+        aria-label="Asignar tier manual"
+      >
+        <option value="">— manual —</option>
+        {catalog.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+            {t.isFree ? ' (free)' : ''}
+          </option>
+        ))}
+      </Select>
     </div>
   );
 }

@@ -1,0 +1,395 @@
+/**
+ * Tests unit de PaymentConnectionsService — sin red, sin DB real, sin Stripe SDK.
+ *
+ * Estrategia:
+ *  - Prisma mockeado con mapas in-memory.
+ *  - StripeReadAdapter stub determinista (por api key).
+ *  - ConfigPort stub in-memory (simula tenant_setting cifrado).
+ *  - UserDirectoryPort stub (simula el match contra la tabla user).
+ *
+ * Cobertura priorizada:
+ *  - addConnection: valida key (ok / inválida), rechaza provider no-stripe,
+ *    rechaza displayName duplicado, persiste fila VERIFIED + guarda secret.
+ *  - reconcile: separa matched/unmatched con email normalizado (incluye email
+ *    en MAYÚSCULAS para cubrir el bug de normalización), cuenta los sin email,
+ *    propaga truncated.
+ *  - verifyConnection: ok → VERIFIED; fallo → ERROR persistido + throw.
+ *  - disconnectConnection: borra fila + secret.
+ *  - listConnections: solo del tenant.
+ */
+
+import { describe, it, expect, beforeEach } from 'vitest';
+import {
+  PaymentConnectionsService,
+  normalizeEmail,
+  type ConfigPort,
+  type UserDirectoryPort,
+  type DidactaUserRecord,
+  type PaymentCredentials,
+} from '../src/payment-connections.service.js';
+import {
+  PaymentConnectionAlreadyExistsError,
+  PaymentConnectionProviderNotSupportedError,
+  StripeReadKeyInvalidError,
+} from '../src/errors.js';
+import type { StripeReadAdapter, StripeSubscriberRecord } from '../src/stripe-reader.client.js';
+
+// ---------- Mocks ----------
+
+interface ConnectionRow {
+  id: string;
+  tenantId: string;
+  provider: string;
+  displayName: string;
+  status: string;
+  publicMetadata: unknown;
+  lastVerifiedAt: Date | null;
+  lastSyncedAt: Date | null;
+  lastError: string | null;
+  lastErrorAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+class MockPrisma {
+  rows = new Map<string, ConnectionRow>();
+  private seq = 0;
+
+  modPaymentConnectionsConnection = {
+    findFirst: async (args: { where: Record<string, unknown> }) => {
+      const w = args.where;
+      for (const r of this.rows.values()) {
+        const idOk = !w['id'] || r.id === w['id'];
+        const tenantOk = !w['tenantId'] || r.tenantId === w['tenantId'];
+        const providerOk = !w['provider'] || r.provider === w['provider'];
+        const nameOk = !w['displayName'] || r.displayName === w['displayName'];
+        if (idOk && tenantOk && providerOk && nameOk) return { ...r };
+      }
+      return null;
+    },
+    findMany: async (args: { where: Record<string, unknown> }) => {
+      const w = args.where ?? {};
+      const out = [...this.rows.values()].filter(
+        (r) => !w['tenantId'] || r.tenantId === w['tenantId'],
+      );
+      out.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return out.map((r) => ({ ...r }));
+    },
+    create: async (args: { data: Record<string, unknown> }) => {
+      this.seq += 1;
+      const now = new Date();
+      const row: ConnectionRow = {
+        id: `conn_${this.seq}`,
+        tenantId: args.data['tenantId'] as string,
+        provider: args.data['provider'] as string,
+        displayName: args.data['displayName'] as string,
+        status: (args.data['status'] as string) ?? 'PENDING',
+        publicMetadata: args.data['publicMetadata'] ?? null,
+        lastVerifiedAt: (args.data['lastVerifiedAt'] as Date) ?? null,
+        lastSyncedAt: null,
+        lastError: null,
+        lastErrorAt: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      this.rows.set(row.id, row);
+      return { ...row };
+    },
+    update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = this.rows.get(args.where.id);
+      if (!row) throw new Error('not found');
+      Object.assign(row, args.data, { updatedAt: new Date() });
+      return { ...row };
+    },
+    delete: async (args: { where: { id: string } }) => {
+      const row = this.rows.get(args.where.id);
+      this.rows.delete(args.where.id);
+      return row ? { ...row } : null;
+    },
+  };
+}
+
+class MockConfig implements ConfigPort {
+  store = new Map<string, unknown>();
+  private k(t: string, m: string, key: string) {
+    return `${t}::${m}::${key}`;
+  }
+  async get<T>(tenantId: string, moduleName: string, key: string): Promise<T | undefined> {
+    return this.store.get(this.k(tenantId, moduleName, key)) as T | undefined;
+  }
+  async set<T>(tenantId: string, moduleName: string, key: string, value: T): Promise<void> {
+    this.store.set(this.k(tenantId, moduleName, key), value);
+  }
+  async delete(tenantId: string, moduleName: string, key: string): Promise<void> {
+    this.store.delete(this.k(tenantId, moduleName, key));
+  }
+}
+
+const TENANT = '11111111-1111-1111-1111-111111111111';
+const VALID_KEY = 'rk_test_valid';
+const BAD_KEY = 'rk_test_bad';
+
+const SUBSCRIBERS: StripeSubscriberRecord[] = [
+  // Email en MAYÚSCULAS: debe casar con el usuario 'match@x.com' tras normalizar.
+  sub('sub_1', 'Match@X.com', 'active'),
+  sub('sub_2', 'nobody@x.com', 'active'),
+  sub('sub_3', null, 'trialing'),
+];
+
+function sub(id: string, email: string | null, status: string): StripeSubscriberRecord {
+  return {
+    subscriptionId: id,
+    status,
+    customerId: `cus_${id}`,
+    email,
+    name: email ? email.split('@')[0]! : null,
+    priceId: 'price_1',
+    productId: 'prod_1',
+    productName: 'Plan Pro',
+    unitAmount: 1999,
+    currency: 'eur',
+    interval: 'month',
+    currentPeriodEnd: 1900000000,
+    created: 1800000000,
+  };
+}
+
+function makeAdapter(opts: { truncated?: boolean } = {}): StripeReadAdapter {
+  return {
+    retrieveAccount: async () => ({
+      id: 'acct_123',
+      email: 'owner@x.com',
+      country: 'ES',
+      businessName: 'Mi Academia',
+    }),
+    listActiveSubscriptions: async () => ({
+      subscribers: SUBSCRIBERS,
+      truncated: opts.truncated ?? false,
+    }),
+  };
+}
+
+function badAdapter(): StripeReadAdapter {
+  return {
+    retrieveAccount: async () => {
+      throw new StripeReadKeyInvalidError('Invalid API Key provided');
+    },
+    listActiveSubscriptions: async () => ({ subscribers: [], truncated: false }),
+  };
+}
+
+const users: UserDirectoryPort = {
+  async findByNormalizedEmails(_tenantId: string, emails: string[]): Promise<DidactaUserRecord[]> {
+    const known: DidactaUserRecord = {
+      id: 'user_1',
+      email: 'match@x.com',
+      name: 'Persona Match',
+      status: 'ACTIVE',
+      avatarUrl: null,
+    };
+    return emails.includes('match@x.com') ? [known] : [];
+  },
+};
+
+function buildService(adapterOverrides?: Record<string, StripeReadAdapter>) {
+  const prisma = new MockPrisma();
+  const config = new MockConfig();
+  const adapters: Record<string, StripeReadAdapter> = adapterOverrides ?? {
+    [VALID_KEY]: makeAdapter(),
+    [BAD_KEY]: badAdapter(),
+  };
+  const factory = (_provider: string, credentials: PaymentCredentials): StripeReadAdapter =>
+    adapters[(credentials as { apiKey?: string }).apiKey ?? ''] ?? badAdapter();
+  const service = new PaymentConnectionsService(prisma as never, config, factory, users);
+  return { service, prisma, config };
+}
+
+// ---------- Tests ----------
+
+describe('normalizeEmail', () => {
+  it('baja a minúsculas y recorta; null/empty → null', () => {
+    expect(normalizeEmail('  Foo@Bar.COM ')).toBe('foo@bar.com');
+    expect(normalizeEmail('')).toBeNull();
+    expect(normalizeEmail(null)).toBeNull();
+    expect(normalizeEmail(undefined)).toBeNull();
+  });
+});
+
+describe('addConnection', () => {
+  let svc: ReturnType<typeof buildService>;
+  beforeEach(() => {
+    svc = buildService();
+  });
+
+  it('valida la key, persiste VERIFIED y guarda el secret cifrado aparte', async () => {
+    const row = await svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: 'admin_1',
+      provider: 'stripe',
+      displayName: 'Stripe ES',
+      credentials: { apiKey: VALID_KEY },
+    });
+    expect(row.status).toBe('VERIFIED');
+    expect((row.publicMetadata as { accountId: string }).accountId).toBe('acct_123');
+    // El secret NO está en la fila; está en config bajo la key derivada.
+    const creds = await svc.config.get(
+      TENANT,
+      'payment-connections',
+      `stripe:${row.id}:credentials`,
+    );
+    expect(creds).toEqual({ apiKey: VALID_KEY });
+  });
+
+  it('rechaza una key inválida (no crea fila)', async () => {
+    await expect(
+      svc.service.addConnection({
+        tenantId: TENANT,
+        actorId: null,
+        provider: 'stripe',
+        displayName: 'Stripe Malo',
+        credentials: { apiKey: BAD_KEY },
+      }),
+    ).rejects.toBeInstanceOf(StripeReadKeyInvalidError);
+    expect(svc.prisma.rows.size).toBe(0);
+  });
+
+  it('rechaza provider distinto de stripe', async () => {
+    await expect(
+      svc.service.addConnection({
+        tenantId: TENANT,
+        actorId: null,
+        provider: 'woocommerce',
+        displayName: 'WooCommerce',
+        credentials: { apiKey: 'whatever' },
+      }),
+    ).rejects.toBeInstanceOf(PaymentConnectionProviderNotSupportedError);
+  });
+
+  it('rechaza displayName duplicado en el mismo tenant', async () => {
+    await svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName: 'Stripe ES',
+      credentials: { apiKey: VALID_KEY },
+    });
+    await expect(
+      svc.service.addConnection({
+        tenantId: TENANT,
+        actorId: null,
+        provider: 'stripe',
+        displayName: 'Stripe ES',
+        credentials: { apiKey: VALID_KEY },
+      }),
+    ).rejects.toBeInstanceOf(PaymentConnectionAlreadyExistsError);
+  });
+});
+
+describe('reconcile', () => {
+  it('separa matched/unmatched con email normalizado y cuenta los sin email', async () => {
+    const svc = buildService();
+    const row = await svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName: 'Stripe ES',
+      credentials: { apiKey: VALID_KEY },
+    });
+    const res = await svc.service.reconcile(TENANT, row.id);
+
+    expect(res.counts.total).toBe(3);
+    expect(res.counts.matched).toBe(1);
+    expect(res.counts.unmatched).toBe(2);
+    expect(res.counts.withoutEmail).toBe(1);
+    // El sub con email en MAYÚSCULAS casa con el usuario Didacta.
+    expect(res.matched[0]!.subscription.subscriptionId).toBe('sub_1');
+    expect(res.matched[0]!.user.id).toBe('user_1');
+    // lastSyncedAt quedó estampado.
+    expect(svc.prisma.rows.get(row.id)!.lastSyncedAt).toBeInstanceOf(Date);
+  });
+
+  it('propaga truncated cuando se alcanza el tope de páginas', async () => {
+    const svc = buildService({ [VALID_KEY]: makeAdapter({ truncated: true }) });
+    const row = await svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName: 'Stripe Grande',
+      credentials: { apiKey: VALID_KEY },
+    });
+    const res = await svc.service.reconcile(TENANT, row.id);
+    expect(res.truncated).toBe(true);
+  });
+});
+
+describe('verifyConnection', () => {
+  it('ok → VERIFIED; key rota → ERROR persistido + throw', async () => {
+    const prisma = new MockPrisma();
+    const config = new MockConfig();
+    // Adapter que primero valida (add) y luego falla (verify), según la key.
+    const adapters: Record<string, StripeReadAdapter> = {
+      [VALID_KEY]: makeAdapter(),
+    };
+    const factory = (_provider: string, credentials: PaymentCredentials): StripeReadAdapter =>
+      adapters[(credentials as { apiKey?: string }).apiKey ?? ''] ?? badAdapter();
+    const service = new PaymentConnectionsService(prisma as never, config, factory, users);
+
+    const row = await service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName: 'Stripe ES',
+      credentials: { apiKey: VALID_KEY },
+    });
+    const ok = await service.verifyConnection(TENANT, row.id, null);
+    expect(ok.status).toBe('VERIFIED');
+
+    // Ahora la cuenta deja de validar: el adapter de VALID_KEY pasa a fallar.
+    adapters[VALID_KEY] = badAdapter();
+    await expect(service.verifyConnection(TENANT, row.id, null)).rejects.toBeInstanceOf(
+      StripeReadKeyInvalidError,
+    );
+    expect(prisma.rows.get(row.id)!.status).toBe('ERROR');
+    expect(prisma.rows.get(row.id)!.lastError).toBeTruthy();
+  });
+});
+
+describe('disconnectConnection', () => {
+  it('borra la fila y el secret', async () => {
+    const svc = buildService();
+    const row = await svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName: 'Stripe ES',
+      credentials: { apiKey: VALID_KEY },
+    });
+    await svc.service.disconnectConnection(TENANT, row.id, null);
+    expect(svc.prisma.rows.size).toBe(0);
+    expect(
+      await svc.config.get(TENANT, 'payment-connections', `stripe:${row.id}:credentials`),
+    ).toBeUndefined();
+  });
+});
+
+describe('listConnections', () => {
+  it('devuelve solo las del tenant, más recientes primero', async () => {
+    const svc = buildService();
+    await svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName: 'A',
+      credentials: { apiKey: VALID_KEY },
+    });
+    await svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName: 'B',
+      credentials: { apiKey: VALID_KEY },
+    });
+    const list = await svc.service.listConnections(TENANT);
+    expect(list.length).toBe(2);
+  });
+});

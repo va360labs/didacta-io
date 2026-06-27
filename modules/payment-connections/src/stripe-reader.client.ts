@@ -1,0 +1,198 @@
+/**
+ * Cliente de SOLO LECTURA sobre el SDK de Stripe para mod.payment-connections.
+ *
+ * Distinto a propósito de los adapters de mod.billing / mod.subscriptions:
+ *   - NO se importan cross-module (regla del contrato).
+ *   - Solo expone métodos de lectura (retrieveAccount + listActiveSubscriptions).
+ *     Una restricted key read-only no puede crear/cancelar nada, así que la
+ *     superficie de escritura ni existe. Cancelar una suscripción se hace por
+ *     deep-link al dashboard de Stripe desde la UI.
+ *   - Multi-cuenta: una instancia por conexión, construida bajo demanda con la
+ *     api key descifrada (NO una sola global desde env, como billing).
+ */
+
+import type Stripe from 'stripe';
+import { StripeReadApiError, StripeReadKeyInvalidError } from './errors.js';
+
+export interface StripeAccountInfo {
+  id: string;
+  email: string | null;
+  country: string | null;
+  businessName: string | null;
+}
+
+/** Una suscripción activa leída de Stripe, aplanada para reconciliar. */
+export interface StripeSubscriberRecord {
+  subscriptionId: string;
+  status: string;
+  customerId: string | null;
+  email: string | null;
+  name: string | null;
+  priceId: string | null;
+  productId: string | null;
+  /** Nombre del producto Stripe = el TIER del usuario (cuando se sincroniza). */
+  productName: string | null;
+  unitAmount: number | null;
+  currency: string | null;
+  interval: string | null;
+  currentPeriodEnd: number | null;
+  created: number;
+}
+
+export interface ListActiveSubscriptionsOptions {
+  /** Estados Stripe que cuentan como "activa". Default: active, trialing, past_due. */
+  statuses?: string[];
+  /** Tope defensivo de páginas por estado (100 subs/página). Default 50. */
+  maxPages?: number;
+}
+
+export interface StripeSubscriptionsResult {
+  subscribers: StripeSubscriberRecord[];
+  /** True si se alcanzó el tope de páginas y puede haber más subs sin leer. */
+  truncated: boolean;
+}
+
+export interface StripeReadAdapter {
+  /** Valida la key y devuelve metadata no-secreta de la cuenta. */
+  retrieveAccount(): Promise<StripeAccountInfo>;
+  /** Lista (paginado) las suscripciones de los estados pedidos, con su customer. */
+  listActiveSubscriptions(
+    options?: ListActiveSubscriptionsOptions,
+  ): Promise<StripeSubscriptionsResult>;
+}
+
+const DEFAULT_STATUSES = ['active', 'trialing', 'past_due'];
+const DEFAULT_MAX_PAGES = 50;
+const PAGE_SIZE = 100;
+
+/**
+ * Implementación real basada en el SDK oficial de Stripe. Construir una por
+ * conexión con la api key descifrada. En tests pasamos un adapter mockeado.
+ */
+export class StripeReadSdkAdapter implements StripeReadAdapter {
+  private readonly client: Stripe;
+
+  constructor(apiKey: string, StripeCtor: new (key: string, opts?: Stripe.StripeConfig) => Stripe) {
+    if (!apiKey) throw new StripeReadKeyInvalidError('clave vacía');
+    this.client = new StripeCtor(apiKey, {
+      apiVersion: '2024-12-18.acacia' as Stripe.LatestApiVersion,
+      timeout: 10_000,
+      maxNetworkRetries: 1,
+    });
+  }
+
+  async retrieveAccount(): Promise<StripeAccountInfo> {
+    try {
+      const account = await this.client.accounts.retrieve();
+      return {
+        id: account.id,
+        email: account.email ?? null,
+        country: account.country ?? null,
+        businessName:
+          account.business_profile?.name ?? account.settings?.dashboard?.display_name ?? null,
+      };
+    } catch (err) {
+      throw mapStripeError(err);
+    }
+  }
+
+  async listActiveSubscriptions(
+    options?: ListActiveSubscriptionsOptions,
+  ): Promise<StripeSubscriptionsResult> {
+    const statuses = options?.statuses?.length ? options.statuses : DEFAULT_STATUSES;
+    const maxPages =
+      options?.maxPages && options.maxPages > 0 ? options.maxPages : DEFAULT_MAX_PAGES;
+    const subscribers: StripeSubscriberRecord[] = [];
+    let truncated = false;
+
+    try {
+      for (const status of statuses) {
+        let startingAfter: string | undefined;
+        let pages = 0;
+        // Paginación manual con starting_after (cursor estable de Stripe).
+        for (;;) {
+          const resp = await this.client.subscriptions.list({
+            status: status as Stripe.SubscriptionListParams.Status,
+            limit: PAGE_SIZE,
+            // Expandimos también el producto del precio para sacar su NOMBRE,
+            // que es el "tier" que se asigna al usuario.
+            expand: ['data.customer', 'data.items.data.price.product'],
+            ...(startingAfter ? { starting_after: startingAfter } : {}),
+          });
+          for (const sub of resp.data) {
+            subscribers.push(mapSubscription(sub));
+          }
+          pages += 1;
+          if (!resp.has_more) break;
+          if (pages >= maxPages) {
+            truncated = true;
+            break;
+          }
+          const last = resp.data[resp.data.length - 1];
+          if (!last) break;
+          startingAfter = last.id;
+        }
+      }
+    } catch (err) {
+      throw mapStripeError(err);
+    }
+
+    return { subscribers, truncated };
+  }
+}
+
+function mapSubscription(sub: Stripe.Subscription): StripeSubscriberRecord {
+  const customer = sub.customer;
+  let customerId: string | null = null;
+  let email: string | null = null;
+  let name: string | null = null;
+  if (typeof customer === 'string') {
+    customerId = customer;
+  } else if (customer && !customer.deleted) {
+    customerId = customer.id;
+    email = customer.email ?? null;
+    name = customer.name ?? null;
+  } else if (customer) {
+    customerId = customer.id;
+  }
+
+  const item = sub.items?.data?.[0];
+  const price = item?.price ?? null;
+  const product = price?.product ?? null;
+  const productName =
+    product && typeof product === 'object' && !('deleted' in product && product.deleted)
+      ? ((product as { name?: string | null }).name ?? null)
+      : null;
+
+  return {
+    subscriptionId: sub.id,
+    status: sub.status,
+    customerId,
+    email,
+    name,
+    priceId: price?.id ?? null,
+    productId: typeof product === 'string' ? product : (product?.id ?? null),
+    productName,
+    unitAmount: price?.unit_amount ?? null,
+    currency: price?.currency ?? sub.currency ?? null,
+    interval: price?.recurring?.interval ?? null,
+    currentPeriodEnd: sub.current_period_end ?? null,
+    created: sub.created,
+  };
+}
+
+/**
+ * Mapea errores del SDK a errores de dominio. Las claves inválidas o sin
+ * permiso (401/403) → StripeReadKeyInvalidError; el resto → StripeReadApiError.
+ * NUNCA incluimos la api key en el mensaje.
+ */
+function mapStripeError(err: unknown): PaymentConnectionsDomainError {
+  const type = (err as { type?: string })?.type;
+  const message = (err as Error)?.message ?? 'error desconocido';
+  if (type === 'StripeAuthenticationError' || type === 'StripePermissionError') {
+    return new StripeReadKeyInvalidError(message);
+  }
+  return new StripeReadApiError(message);
+}
+
+type PaymentConnectionsDomainError = StripeReadKeyInvalidError | StripeReadApiError;

@@ -21,6 +21,7 @@ import { communityExtension } from './community';
 import { fundaeExtension } from './fundae';
 import { migratorLearndashExtension } from './migrator-learndash';
 import { notificationsExtension } from './notifications';
+import { paymentConnectionsExtension } from './payment-connections';
 import { subscriptionsExtension } from './subscriptions';
 import { zoomLiveExtension } from './zoom-live';
 
@@ -35,6 +36,7 @@ export const moduleExtensions: readonly ModuleWebExtension[] = [
   fundaeExtension,
   migratorLearndashExtension,
   notificationsExtension,
+  paymentConnectionsExtension,
   subscriptionsExtension,
   zoomLiveExtension,
 ];

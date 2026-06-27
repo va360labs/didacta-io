@@ -11,6 +11,7 @@ import { AssessmentsModule } from './assessments/assessments.module';
 import { AuditController } from './audit.controller';
 import { BillingModule } from './billing/billing.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { PaymentConnectionsModule } from './payment-connections/payment-connections.module';
 import { CertificatesModule } from './certificates/certificates.module';
 import { CommunityModule } from './community/community.module';
 import { CoursesController } from './courses.controller';
@@ -51,6 +52,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     forwardRef(() => AssessmentsModule),
     forwardRef(() => BillingModule),
     forwardRef(() => SubscriptionsModule),
+    forwardRef(() => PaymentConnectionsModule),
     forwardRef(() => CommunityModule),
     forwardRef(() => CertificatesModule),
     forwardRef(() => AiTutorModule),
