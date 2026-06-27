@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Icon } from '@/components/icon';
 import { PostReactions } from '@/components/post-reactions';
 import { parseBodyAttachments, type CommunityTag, type Post } from '@/modules/community';
+import { AuthorNameLink, CommunityAvatar } from '@/components/community-avatar';
 
 export const TAG_COLORS = ['#1E5AA8', '#18B5A8', '#FF6F61', '#2E7DCE', '#0D1B2A'];
 
@@ -30,6 +31,7 @@ export function ThreadCard({
   post,
   viewerUserId,
   tagsByName,
+  authorAvatarUrl,
   onOpen,
   onTagClick,
   onReactionToggle,
@@ -37,17 +39,12 @@ export function ThreadCard({
   post: Post;
   viewerUserId: string | null;
   tagsByName: ReadonlyMap<string, CommunityTag>;
+  /** Avatar del autor resuelto por la página (por authorId). Null = iniciales. */
+  authorAvatarUrl?: string | null;
   onOpen: () => void;
   onTagClick: (tag: string) => void;
   onReactionToggle: (emoji: string) => void;
 }) {
-  const initials = (post.authorDisplayName ?? 'A')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase() ?? '')
-    .join('');
-
   // El body trae los adjuntos serializados en un comentario HTML al final.
   // En el feed mostramos solo el texto + miniaturas de los adjuntos.
   const { cleanBody, images, files } = parseBodyAttachments(post.body);
@@ -81,13 +78,12 @@ export function ThreadCard({
       <Card interactive className="transition-shadow">
         <CardContent className="p-5">
           <div className="flex gap-3.5">
-            <div
-              aria-hidden="true"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-full font-display text-sm font-bold text-white"
-              style={{ background: 'linear-gradient(135deg, #1E5AA8 0%, #18B5A8 100%)' }}
-            >
-              {initials || 'A'}
-            </div>
+            <CommunityAvatar
+              userId={post.authorId}
+              name={post.authorDisplayName}
+              avatarUrl={authorAvatarUrl}
+              size={44}
+            />
             <div className="min-w-0 flex-1 space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
                 {post.pinnedAt ? (
@@ -95,9 +91,11 @@ export function ThreadCard({
                     Fijado
                   </Badge>
                 ) : null}
-                <span className="text-sm font-semibold text-text">
-                  {post.authorDisplayName ?? 'Anónimo'}
-                </span>
+                <AuthorNameLink
+                  userId={post.authorId}
+                  name={post.authorDisplayName}
+                  className="text-sm font-semibold text-text"
+                />
                 {post.tags.slice(0, 2).map((t) => (
                   <CommunityTagChip
                     key={t}

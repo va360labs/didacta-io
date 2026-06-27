@@ -3,6 +3,7 @@
 import { use, useEffect, useMemo, useState } from 'react';
 import { CommunityGalleryModal } from '@/components/community-gallery-modal';
 import { ThreadCard } from '@/components/community-thread-card';
+import { usePublicUsers } from '@/lib/public-users';
 import { Icon } from '@/components/icon';
 import { PostComposerModal } from '@/components/post-composer-modal';
 import { PostDetailView } from '@/components/post-detail-view';
@@ -32,6 +33,7 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
   const meta = spaces.find((s) => s.slug === space) ?? spaces[0];
 
   const [posts, setPosts] = useState<Post[] | null>(null);
+  const authorAvatars = usePublicUsers((posts ?? []).map((p) => p.authorId));
   const [error, setError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -170,6 +172,7 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
                 post={p}
                 viewerUserId={viewerUserId}
                 tagsByName={tagsByName}
+                authorAvatarUrl={authorAvatars.get(p.authorId)?.avatarUrl ?? null}
                 onOpen={() => setSelectedPostId(p.id)}
                 onTagClick={() => {}}
                 onReactionToggle={(emoji) => void handleReactPost(p.id, emoji)}

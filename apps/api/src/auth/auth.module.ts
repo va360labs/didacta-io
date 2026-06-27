@@ -17,6 +17,7 @@ import { MfaController } from './mfa.controller';
 import { MfaPolicyController } from './mfa-policy/mfa-policy.controller';
 import { MfaPolicyService } from './mfa-policy/mfa-policy.service';
 import { MfaService } from './mfa.service';
+import { PublicProfileController } from './public-profile.controller';
 import { PasswordResetService } from './password-reset.service';
 import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
@@ -40,7 +41,14 @@ function loadCipherKeyForAuth(): string {
 }
 
 @Module({
-  controllers: [AuthController, MfaController, MfaPolicyController, ApiKeyController, MeController],
+  controllers: [
+    AuthController,
+    MfaController,
+    MfaPolicyController,
+    ApiKeyController,
+    MeController,
+    PublicProfileController,
+  ],
   providers: [
     AuthService,
     PasswordResetService,

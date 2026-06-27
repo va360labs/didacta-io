@@ -95,13 +95,20 @@ export interface CommunityAttachment {
 
 export const communityApi = {
   async listPosts(
-    opts: { courseId?: string; tag?: string; sort?: PostSort; limit?: number } = {},
+    opts: {
+      courseId?: string;
+      tag?: string;
+      sort?: PostSort;
+      limit?: number;
+      authorId?: string;
+    } = {},
   ): Promise<Post[]> {
     const params = new URLSearchParams();
     if (opts.courseId) params.set('courseId', opts.courseId);
     if (opts.tag) params.set('tag', opts.tag);
     if (opts.sort) params.set('sort', opts.sort);
     if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.authorId) params.set('authorId', opts.authorId);
     const path = `/api/v1/modules/community/posts${params.toString() ? `?${params}` : ''}`;
     return apiFetch<Post[]>(path, { method: 'GET' }, withAuth());
   },

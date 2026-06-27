@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CommunityGalleryModal } from '@/components/community-gallery-modal';
 import { CommunityTagChip } from '@/components/community-tag-chip';
 import { ThreadCard, TAG_COLORS } from '@/components/community-thread-card';
+import { usePublicUsers } from '@/lib/public-users';
 import { Icon } from '@/components/icon';
 import { PostComposerModal } from '@/components/post-composer-modal';
 import { PostDetailView } from '@/components/post-detail-view';
@@ -29,6 +30,8 @@ const SORT_LABELS: Record<PostSort, string> = {
 
 export default function ComunidadPage() {
   const [posts, setPosts] = useState<Post[] | null>(null);
+  // Avatares de los autores (resueltos por authorId; no vienen en el post).
+  const authorAvatars = usePublicUsers((posts ?? []).map((p) => p.authorId));
   const [error, setError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -229,6 +232,7 @@ export default function ComunidadPage() {
                 post={p}
                 viewerUserId={viewerUserId}
                 tagsByName={tagsByName}
+                authorAvatarUrl={authorAvatars.get(p.authorId)?.avatarUrl ?? null}
                 onOpen={() => setSelectedPostId(p.id)}
                 onTagClick={(t) => setActiveTag(t)}
                 onReactionToggle={(emoji) => void handleReactPost(p.id, emoji)}

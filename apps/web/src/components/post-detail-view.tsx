@@ -11,6 +11,8 @@ import { MentionTextarea } from '@/components/mention-textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { cn } from '@/lib/utils';
+import { AuthorNameLink, CommunityAvatar } from '@/components/community-avatar';
+import { usePublicUsers } from '@/lib/public-users';
 import {
   communityApi,
   parseBodyAttachments,
@@ -43,6 +45,9 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
   const myRoles = authStorage.getSession()?.user.roles ?? [];
   const canModerate = myRoles.includes('super_admin') || myRoles.includes('tenant_admin');
   const tagsByName = useCommunityTags();
+  // Avatar del autor del post (por authorId). Los comentarios resuelven el suyo
+  // en CommentBody (reusa este cache).
+  const postAuthor = usePublicUsers(post ? [post.authorId] : []);
 
   async function reload(opts: { silent?: boolean } = {}) {
     try {
@@ -255,29 +260,23 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
       .filter((r) => r.postId === post.id && r.authorId === myUserId)
       .map((r) => r.emoji),
   );
-  const authorInitials = (post.authorDisplayName ?? 'A')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase() ?? '')
-    .join('');
-
   return (
     <div>
       {/* ── Post ── */}
       <div className="flex gap-3">
-        <div
-          aria-hidden="true"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-full font-display text-sm font-bold text-white"
-          style={{ background: 'linear-gradient(135deg, #1E5AA8 0%, #18B5A8 100%)' }}
-        >
-          {authorInitials || 'A'}
-        </div>
+        <CommunityAvatar
+          userId={post.authorId}
+          name={post.authorDisplayName}
+          avatarUrl={postAuthor.get(post.authorId)?.avatarUrl ?? null}
+          size={40}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-[#0D1B2A]">
-              {post.authorDisplayName ?? 'Anónimo'}
-            </span>
+            <AuthorNameLink
+              userId={post.authorId}
+              name={post.authorDisplayName}
+              className="text-sm font-semibold text-[#0D1B2A]"
+            />
             {post.tags.slice(0, 3).map((t) => (
               <CommunityTagChip key={t} name={t} tag={tagsByName.get(t)} />
             ))}
@@ -786,30 +785,23 @@ function CommentBody({
       .map((r) => r.emoji),
   );
   const isAuthor = comment.authorId === myUserId;
-  const initials = (comment.authorDisplayName ?? 'A')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase() ?? '')
-    .join('');
+  const commentAuthor = usePublicUsers([comment.authorId]);
 
   return (
     <div className="flex gap-3">
-      <div
-        aria-hidden="true"
-        className={cn(
-          'grid shrink-0 place-items-center rounded-full font-display font-bold text-white',
-          isReply ? 'h-7 w-7 text-[10px]' : 'h-9 w-9 text-xs',
-        )}
-        style={{ background: 'linear-gradient(135deg, #1E5AA8 0%, #18B5A8 100%)' }}
-      >
-        {initials || 'A'}
-      </div>
+      <CommunityAvatar
+        userId={comment.authorId}
+        name={comment.authorDisplayName}
+        avatarUrl={commentAuthor.get(comment.authorId)?.avatarUrl ?? null}
+        size={isReply ? 28 : 36}
+      />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-[#0D1B2A]">
-            {comment.authorDisplayName ?? 'Anónimo'}
-          </span>
+          <AuthorNameLink
+            userId={comment.authorId}
+            name={comment.authorDisplayName}
+            className="text-sm font-semibold text-[#0D1B2A]"
+          />
           <span className="text-xs text-[#94A3B8]">{relTime(comment.createdAt)}</span>
           {isReply ? (
             <span className="text-[10px] uppercase tracking-wider text-[#CBD5E1]">· respuesta</span>

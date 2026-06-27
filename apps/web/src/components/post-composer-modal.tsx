@@ -227,12 +227,9 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
+    // El modal NO se cierra al pinchar fuera (perder lo escrito es molesto): solo
+    // con la X o el botón Cancelar. El overlay queda sin handler de cierre.
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
 
       <div
