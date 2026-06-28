@@ -72,3 +72,6 @@ work/
 # Claude Code settings locales
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Evidencia local de e2e (se regenera al correr el spec)
+drip-evidence/
