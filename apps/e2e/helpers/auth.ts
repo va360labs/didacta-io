@@ -20,6 +20,8 @@ export async function injectSession(
       tenantSlug: string;
       roles: string[];
       mfaEnabled: boolean;
+      /** Si se setea, evita el gate de onboarding de primera vez en el web. */
+      onboardingCompletedAt?: string | null;
     };
   },
 ): Promise<void> {
