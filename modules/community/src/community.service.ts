@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { ModuleContext } from '@didacta/core-kernel';
 import type { PrismaClient } from '@didacta/database';
-import type { AddReactionDto, CreateCommentDto, CreatePostDto, ListPostsQueryDto } from './dto.js';
+import type {
+  AddReactionDto,
+  CreateCommentDto,
+  CreatePostDto,
+  CreateSpaceDto,
+  ListPostsQueryDto,
+  UpdateSpaceDto,
+} from './dto.js';
 import { flattenPostAttachments, type CommunityAttachment } from './attachments.js';
 import {
   CommentNotFoundError,
@@ -10,6 +17,9 @@ import {
   ParentCommentMismatchError,
   PostNotFoundError,
   ReactionTargetMissingError,
+  SpaceAlreadyExistsError,
+  SpaceNotDeletableError,
+  SpaceNotFoundError,
   TagNameAlreadyExistsError,
   TagNotFoundError,
 } from './errors.js';
@@ -836,6 +846,89 @@ export class CommunityService {
         idempotencyKey: `${name}:${JSON.stringify(data)}:${Date.now()}`,
       },
     });
+  }
+
+  // ── Espacios de comunidad ──────────────────────────────────────────────────
+
+  /** Lista los espacios del tenant ordenados por sortOrder. */
+  async listSpaces(tenantId: string) {
+    return this.prisma.modCommunitySpace.findMany({
+      where: { tenantId },
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        description: true,
+        icon: true,
+        color: true,
+        sortOrder: true,
+        isSystem: true,
+      },
+    });
+  }
+
+  /** Crea un espacio. Rechaza slug duplicado en el tenant. */
+  async createSpace(tenantId: string, createdById: string, dto: CreateSpaceDto) {
+    const existing = await this.prisma.modCommunitySpace.findUnique({
+      where: { tenantId_slug: { tenantId, slug: dto.slug } },
+    });
+    if (existing) throw new SpaceAlreadyExistsError(dto.slug);
+    return this.prisma.modCommunitySpace.create({
+      data: {
+        tenantId,
+        slug: dto.slug,
+        title: dto.title,
+        description: dto.description ?? null,
+        icon: dto.icon ?? '#',
+        color: dto.color ?? 'var(--didacta-trust)',
+        sortOrder: dto.sortOrder ?? 0,
+        createdById,
+      },
+    });
+  }
+
+  /** Edita un espacio existente (parcial). */
+  async updateSpace(tenantId: string, slug: string, dto: UpdateSpaceDto) {
+    const space = await this.prisma.modCommunitySpace.findUnique({
+      where: { tenantId_slug: { tenantId, slug } },
+    });
+    if (!space) throw new SpaceNotFoundError(slug);
+    return this.prisma.modCommunitySpace.update({
+      where: { tenantId_slug: { tenantId, slug } },
+      data: {
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.icon !== undefined && { icon: dto.icon }),
+        ...(dto.color !== undefined && { color: dto.color }),
+        ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
+      },
+    });
+  }
+
+  /** Elimina un espacio. Bloqueado si es de sistema o tiene publicaciones. */
+  async deleteSpace(tenantId: string, slug: string) {
+    const space = await this.prisma.modCommunitySpace.findUnique({
+      where: { tenantId_slug: { tenantId, slug } },
+    });
+    if (!space) throw new SpaceNotFoundError(slug);
+    if (space.isSystem) {
+      throw new SpaceNotDeletableError(
+        `El espacio '${slug}' es de sistema y no se puede eliminar.`,
+      );
+    }
+    const postCount = await this.prisma.modCommunityPost.count({
+      where: { tenantId, tags: { has: slug }, deletedAt: null },
+    });
+    if (postCount > 0) {
+      throw new SpaceNotDeletableError(
+        `El espacio '${slug}' tiene ${postCount} publicaciones y no se puede eliminar.`,
+      );
+    }
+    await this.prisma.modCommunitySpace.delete({
+      where: { tenantId_slug: { tenantId, slug } },
+    });
+    return { deleted: true };
   }
 }
 

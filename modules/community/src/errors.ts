@@ -67,3 +67,21 @@ export class TagNameAlreadyExistsError extends CommunityError {
     super('TAG_NAME_EXISTS', `Ya existe un tag llamado "${tagName}" en este tenant`);
   }
 }
+
+export class SpaceNotFoundError extends CommunityError {
+  constructor(slug: string) {
+    super('SPACE_NOT_FOUND', `El espacio '${slug}' no existe o no pertenece al tenant`);
+  }
+}
+
+export class SpaceAlreadyExistsError extends CommunityError {
+  constructor(slug: string) {
+    super('SPACE_EXISTS', `Ya existe un espacio con slug '${slug}'.`);
+  }
+}
+
+export class SpaceNotDeletableError extends CommunityError {
+  constructor(message: string) {
+    super('SPACE_NOT_DELETABLE', message);
+  }
+}

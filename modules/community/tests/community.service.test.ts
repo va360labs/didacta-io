@@ -5,6 +5,9 @@ import {
   NotAuthorError,
   PostNotFoundError,
   ReactionTargetMissingError,
+  SpaceAlreadyExistsError,
+  SpaceNotDeletableError,
+  SpaceNotFoundError,
 } from '../src/errors.js';
 
 interface PostRow {
@@ -937,5 +940,134 @@ describe('CommunityService.pin', () => {
     list = await svc.listPosts('t1', { sort: 'oldest', limit: 50 });
     expect(list[0]!.id).toBe(a.id);
     void b;
+  });
+});
+
+// ── Espacios de comunidad ──────────────────────────────────────────────────
+/** Fake Prisma mínimo para los métodos de espacios (modCommunitySpace + count de posts). */
+function makeSpacePrisma() {
+  const spaces: Array<Record<string, unknown>> = [];
+  let postCount = 0;
+  return {
+    spaces,
+    setPostCount: (n: number) => {
+      postCount = n;
+    },
+    prisma: {
+      modCommunitySpace: {
+        async findUnique({
+          where,
+        }: {
+          where: { tenantId_slug: { tenantId: string; slug: string } };
+        }) {
+          const { tenantId, slug } = where.tenantId_slug;
+          return spaces.find((s) => s['tenantId'] === tenantId && s['slug'] === slug) ?? null;
+        },
+        async findMany({ where }: { where: { tenantId: string } }) {
+          return spaces
+            .filter((s) => s['tenantId'] === where.tenantId)
+            .sort((a, b) => (a['sortOrder'] as number) - (b['sortOrder'] as number));
+        },
+        async create({ data }: { data: Record<string, unknown> }) {
+          const row = { id: `sp-${spaces.length + 1}`, isSystem: false, ...data };
+          spaces.push(row);
+          return row;
+        },
+        async update({
+          where,
+          data,
+        }: {
+          where: { tenantId_slug: { tenantId: string; slug: string } };
+          data: Record<string, unknown>;
+        }) {
+          const { tenantId, slug } = where.tenantId_slug;
+          const s = spaces.find((x) => x['tenantId'] === tenantId && x['slug'] === slug)!;
+          Object.assign(s, data);
+          return s;
+        },
+        async delete({ where }: { where: { tenantId_slug: { tenantId: string; slug: string } } }) {
+          const { tenantId, slug } = where.tenantId_slug;
+          const i = spaces.findIndex((x) => x['tenantId'] === tenantId && x['slug'] === slug);
+          const [removed] = spaces.splice(i, 1);
+          return removed;
+        },
+      },
+      modCommunityPost: {
+        async count() {
+          return postCount;
+        },
+      },
+    },
+  };
+}
+
+describe('CommunityService — espacios', () => {
+  it('createSpace rechaza slug duplicado en el tenant', async () => {
+    const f = makeSpacePrisma();
+    f.spaces.push({
+      id: 'sp-1',
+      tenantId: 't1',
+      slug: 'general',
+      title: 'General',
+      isSystem: true,
+    });
+    const svc = new CommunityService(f.prisma as never, trackingCtx([]));
+    await expect(
+      svc.createSpace('t1', 'u1', { slug: 'general', title: 'Otro' }),
+    ).rejects.toBeInstanceOf(SpaceAlreadyExistsError);
+  });
+
+  it('createSpace aplica defaults (icon/color/sortOrder/createdById)', async () => {
+    const f = makeSpacePrisma();
+    const svc = new CommunityService(f.prisma as never, trackingCtx([]));
+    const sp = (await svc.createSpace('t1', 'u1', { slug: 'nuevo', title: 'Nuevo' })) as Record<
+      string,
+      unknown
+    >;
+    expect(sp['icon']).toBe('#');
+    expect(sp['color']).toBe('var(--didacta-trust)');
+    expect(sp['sortOrder']).toBe(0);
+    expect(sp['createdById']).toBe('u1');
+  });
+
+  it('updateSpace lanza SpaceNotFoundError si el espacio no existe en el tenant', async () => {
+    const f = makeSpacePrisma();
+    const svc = new CommunityService(f.prisma as never, trackingCtx([]));
+    await expect(svc.updateSpace('t1', 'ghost', { title: 'X' })).rejects.toBeInstanceOf(
+      SpaceNotFoundError,
+    );
+  });
+
+  it('deleteSpace bloquea los espacios de sistema', async () => {
+    const f = makeSpacePrisma();
+    f.spaces.push({ id: 'sp-1', tenantId: 't1', slug: 'general', isSystem: true });
+    const svc = new CommunityService(f.prisma as never, trackingCtx([]));
+    await expect(svc.deleteSpace('t1', 'general')).rejects.toBeInstanceOf(SpaceNotDeletableError);
+    expect(f.spaces).toHaveLength(1); // no se borró
+  });
+
+  it('deleteSpace bloquea si el espacio tiene publicaciones', async () => {
+    const f = makeSpacePrisma();
+    f.spaces.push({ id: 'sp-1', tenantId: 't1', slug: 'anuncios', isSystem: false });
+    f.setPostCount(3);
+    const svc = new CommunityService(f.prisma as never, trackingCtx([]));
+    await expect(svc.deleteSpace('t1', 'anuncios')).rejects.toBeInstanceOf(SpaceNotDeletableError);
+    expect(f.spaces).toHaveLength(1);
+  });
+
+  it('deleteSpace borra un espacio normal sin publicaciones', async () => {
+    const f = makeSpacePrisma();
+    f.spaces.push({ id: 'sp-1', tenantId: 't1', slug: 'temp', isSystem: false });
+    f.setPostCount(0);
+    const svc = new CommunityService(f.prisma as never, trackingCtx([]));
+    const res = await svc.deleteSpace('t1', 'temp');
+    expect(res).toEqual({ deleted: true });
+    expect(f.spaces).toHaveLength(0);
+  });
+
+  it('deleteSpace lanza SpaceNotFoundError si no existe', async () => {
+    const f = makeSpacePrisma();
+    const svc = new CommunityService(f.prisma as never, trackingCtx([]));
+    await expect(svc.deleteSpace('t1', 'ghost')).rejects.toBeInstanceOf(SpaceNotFoundError);
   });
 });

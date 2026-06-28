@@ -1,11 +1,9 @@
 import {
   Body,
-  ConflictException,
   Controller,
   Delete,
   Get,
   HttpCode,
-  NotFoundException,
   Param,
   Patch,
   Post,
@@ -19,18 +17,22 @@ import {
   addReactionSchema,
   createCommentSchema,
   createPostSchema,
+  createSpaceSchema,
   createTagSchema,
   listPostsQuerySchema,
   moderationActionSchema,
   NotModeratorError,
+  updateSpaceSchema,
   updateTagSchema,
   userPreferencesSchema,
   type AddReactionDto,
   type CreateCommentDto,
   type CreatePostDto,
+  type CreateSpaceDto,
   type CreateTagDto,
   type ListPostsQueryDto,
   type ModerationActionDto,
+  type UpdateSpaceDto,
   type UpdateTagDto,
   type UserPreferencesDto,
 } from '@didacta/mod-community';
@@ -42,24 +44,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { SessionClaims } from '../../auth/token.service';
 import { CommunityDigestWorker } from './community-digest.worker';
 import { ModuleRegistryService } from '../module-registry.service';
-
-const createSpaceSchema = z.object({
-  slug: z
-    .string()
-    .min(1)
-    .max(80)
-    .regex(/^[a-z0-9-]+$/, 'Solo minúsculas, números y guiones'),
-  title: z.string().min(1).max(120),
-  // El form admin envía `description: null` cuando se deja vacío. Aceptamos
-  // null además de string/undefined para no romper con
-  // "Expected string, received null". El service ya trata null como "sin descripción".
-  description: z.string().max(500).nullable().optional(),
-  icon: z.string().max(10).optional(),
-  color: z.string().max(100).optional(),
-  sortOrder: z.number().int().min(0).optional(),
-});
-
-const updateSpaceSchema = createSpaceSchema.omit({ slug: true }).partial();
 
 const listAttachmentsQuerySchema = z.object({
   tag: z.string().min(1).max(40).optional(),
@@ -356,46 +340,18 @@ export class CommunityController {
   @ApiOperation({ summary: 'Listar espacios de comunidad del tenant' })
   async listSpaces(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
-    return this.prisma.modCommunitySpace.findMany({
-      where: { tenantId: user.tenantId },
-      orderBy: { sortOrder: 'asc' },
-      select: {
-        id: true,
-        slug: true,
-        title: true,
-        description: true,
-        icon: true,
-        color: true,
-        sortOrder: true,
-        isSystem: true,
-      },
-    });
+    return this.registry.getCommunityService().listSpaces(user.tenantId);
   }
 
   @Post('spaces')
   @ApiOperation({ summary: 'Crear espacio. Solo super_admin / tenant_admin.' })
   async createSpace(
     @CurrentUser() user: SessionClaims | undefined,
-    @Body(new ZodValidationPipe(createSpaceSchema)) dto: z.infer<typeof createSpaceSchema>,
+    @Body(new ZodValidationPipe(createSpaceSchema)) dto: CreateSpaceDto,
   ) {
     if (!user) throw new UnauthorizedException();
     if (!canModerate(user)) throw new NotModeratorError();
-    const existing = await this.prisma.modCommunitySpace.findUnique({
-      where: { tenantId_slug: { tenantId: user.tenantId, slug: dto.slug } },
-    });
-    if (existing) throw new ConflictException(`Ya existe un espacio con slug '${dto.slug}'.`);
-    return this.prisma.modCommunitySpace.create({
-      data: {
-        tenantId: user.tenantId,
-        slug: dto.slug,
-        title: dto.title,
-        description: dto.description ?? null,
-        icon: dto.icon ?? '#',
-        color: dto.color ?? 'var(--didacta-trust)',
-        sortOrder: dto.sortOrder ?? 0,
-        createdById: user.sub,
-      },
-    });
+    return this.registry.getCommunityService().createSpace(user.tenantId, user.sub, dto);
   }
 
   @Patch('spaces/:slug')
@@ -403,24 +359,11 @@ export class CommunityController {
   async updateSpace(
     @CurrentUser() user: SessionClaims | undefined,
     @Param('slug') slug: string,
-    @Body(new ZodValidationPipe(updateSpaceSchema)) dto: z.infer<typeof updateSpaceSchema>,
+    @Body(new ZodValidationPipe(updateSpaceSchema)) dto: UpdateSpaceDto,
   ) {
     if (!user) throw new UnauthorizedException();
     if (!canModerate(user)) throw new NotModeratorError();
-    const space = await this.prisma.modCommunitySpace.findUnique({
-      where: { tenantId_slug: { tenantId: user.tenantId, slug } },
-    });
-    if (!space) throw new NotFoundException(`Espacio '${slug}' no encontrado.`);
-    return this.prisma.modCommunitySpace.update({
-      where: { tenantId_slug: { tenantId: user.tenantId, slug } },
-      data: {
-        ...(dto.title !== undefined && { title: dto.title }),
-        ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.icon !== undefined && { icon: dto.icon }),
-        ...(dto.color !== undefined && { color: dto.color }),
-        ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
-      },
-    });
+    return this.registry.getCommunityService().updateSpace(user.tenantId, slug, dto);
   }
 
   @Delete('spaces/:slug')
@@ -431,23 +374,7 @@ export class CommunityController {
   async deleteSpace(@CurrentUser() user: SessionClaims | undefined, @Param('slug') slug: string) {
     if (!user) throw new UnauthorizedException();
     if (!canModerate(user)) throw new NotModeratorError();
-    const space = await this.prisma.modCommunitySpace.findUnique({
-      where: { tenantId_slug: { tenantId: user.tenantId, slug } },
-    });
-    if (!space) throw new NotFoundException(`Espacio '${slug}' no encontrado.`);
-    if (space.isSystem)
-      throw new ConflictException(`El espacio '${slug}' es de sistema y no se puede eliminar.`);
-    const postCount = await this.prisma.modCommunityPost.count({
-      where: { tenantId: user.tenantId, tags: { has: slug }, deletedAt: null },
-    });
-    if (postCount > 0)
-      throw new ConflictException(
-        `El espacio '${slug}' tiene ${postCount} publicaciones y no se puede eliminar.`,
-      );
-    await this.prisma.modCommunitySpace.delete({
-      where: { tenantId_slug: { tenantId: user.tenantId, slug } },
-    });
-    return { deleted: true };
+    return this.registry.getCommunityService().deleteSpace(user.tenantId, slug);
   }
 
   // ── UC-010 ─────────────────────────────────────────────────────────────────

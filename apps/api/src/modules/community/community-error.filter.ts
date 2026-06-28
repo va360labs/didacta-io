@@ -18,6 +18,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   NOT_MODERATOR: HttpStatus.FORBIDDEN,
   TAG_NOT_FOUND: HttpStatus.NOT_FOUND,
   TAG_NAME_EXISTS: HttpStatus.CONFLICT,
+  SPACE_NOT_FOUND: HttpStatus.NOT_FOUND,
+  SPACE_EXISTS: HttpStatus.CONFLICT,
+  SPACE_NOT_DELETABLE: HttpStatus.CONFLICT,
 };
 
 @Catch(CommunityError)

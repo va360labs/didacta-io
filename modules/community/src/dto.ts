@@ -116,3 +116,23 @@ export const updateTagSchema = z.object({
   icon: z.enum(COMMUNITY_TAG_ICONS).nullable().optional(),
 });
 export type UpdateTagDto = z.infer<typeof updateTagSchema>;
+
+// ── Espacios de comunidad ────────────────────────────────────────────────────
+export const createSpaceSchema = z.object({
+  slug: z
+    .string()
+    .min(1)
+    .max(80)
+    .regex(/^[a-z0-9-]+$/, 'Solo minúsculas, números y guiones'),
+  title: z.string().min(1).max(120),
+  // El form admin envía `description: null` cuando se deja vacío. Aceptamos
+  // null además de string/undefined; el service trata null como "sin descripción".
+  description: z.string().max(500).nullable().optional(),
+  icon: z.string().max(10).optional(),
+  color: z.string().max(100).optional(),
+  sortOrder: z.number().int().min(0).optional(),
+});
+export type CreateSpaceDto = z.infer<typeof createSpaceSchema>;
+
+export const updateSpaceSchema = createSpaceSchema.omit({ slug: true }).partial();
+export type UpdateSpaceDto = z.infer<typeof updateSpaceSchema>;
