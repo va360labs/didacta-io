@@ -109,6 +109,26 @@ export const zoomLiveApi = {
     );
   },
 
+  async upsertCredentials(value: {
+    accountId: string;
+    clientId: string;
+    clientSecret: string;
+  }): Promise<void> {
+    await apiFetch(
+      '/api/v1/tenant-settings/zoom-live/credentials',
+      { method: 'PUT', body: JSON.stringify({ value, isSecret: true }) },
+      withAuth(),
+    );
+  },
+
+  async removeCredentials(): Promise<void> {
+    await apiFetch(
+      '/api/v1/tenant-settings/zoom-live/credentials',
+      { method: 'DELETE' },
+      withAuth(),
+    );
+  },
+
   async listWebhookEvents(
     opts: {
       eventType?: string;

@@ -36,5 +36,13 @@ export const manifest: ModuleManifest = parseModuleManifest({
       async: true,
     },
   ],
+  dependencies: {
+    modules: [],
+    // mod.certificates: al actualizar un curso se valida la plantilla de
+    // certificado (lectura cross-table de mod_certificates_template — ADR-016,
+    // módulo core first-party). Acoplamiento bidireccional con certificates →
+    // candidato a romper vía service público en un follow-up.
+    optionalModules: [{ name: 'mod.certificates', version: '^1.0.0' }],
+  },
   apiNamespace: '/modules/courses',
 });
