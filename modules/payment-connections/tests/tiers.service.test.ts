@@ -232,3 +232,57 @@ describe('asignación + tier efectivo', () => {
     expect(views).toEqual([]);
   });
 });
+
+describe('sync: auto-crear tiers de catálogo + conteo de usuarios', () => {
+  let svc: ReturnType<typeof build>;
+  beforeEach(() => {
+    svc = build();
+  });
+
+  it('applyDerivedTiers crea un tier de catálogo por plan distinto (sin duplicar)', async () => {
+    const r = await svc.service.applyDerivedTiers(TENANT, [
+      { userId: 'u1', label: 'Plan Pro', provider: 'stripe' },
+      { userId: 'u2', label: 'Plan Pro', provider: 'stripe' }, // mismo plan → no duplica
+      { userId: 'u3', label: 'Premium', provider: 'paypal' },
+    ]);
+    expect(r.tiersCreated).toBe(2);
+    expect(r.updated).toBe(3);
+    const catalog = await svc.service.listCatalog(TENANT);
+    expect(catalog.map((t) => t.name).sort()).toEqual(['Plan Pro', 'Premium']);
+  });
+
+  it('no recrea un tier que ya existe en el catálogo', async () => {
+    await svc.service.createTier(TENANT, { name: 'Plan Pro' });
+    const r = await svc.service.applyDerivedTiers(TENANT, [
+      { userId: 'u1', label: 'Plan Pro', provider: 'stripe' },
+    ]);
+    expect(r.tiersCreated).toBe(0);
+    expect((await svc.service.listCatalog(TENANT)).length).toBe(1);
+  });
+
+  it('listCatalogWithCounts cuenta usuarios por tier (manual + derivado por nombre)', async () => {
+    const pro = await svc.service.createTier(TENANT, { name: 'Plan Pro' });
+    await svc.service.createTier(TENANT, { name: 'Free', isFree: true });
+    await svc.service.assignManualTier(TENANT, 'um', pro.id, 'admin');
+    await svc.service.applyDerivedTiers(TENANT, [
+      { userId: 'ud1', label: 'Plan Pro', provider: 'stripe' },
+      { userId: 'ud2', label: 'Plan Pro', provider: 'stripe' },
+      { userId: 'ud3', label: 'Free', provider: 'stripe' },
+    ]);
+    const wc = await svc.service.listCatalogWithCounts(TENANT);
+    expect(wc.find((t) => t.name === 'Plan Pro')!.memberCount).toBe(3); // 1 manual + 2 derivados
+    expect(wc.find((t) => t.name === 'Free')!.memberCount).toBe(1);
+  });
+
+  it('un manual a otro tier NO cuenta en el tier del nombre derivado (manual gana)', async () => {
+    const pro = await svc.service.createTier(TENANT, { name: 'Plan Pro' });
+    const free = await svc.service.createTier(TENANT, { name: 'Free', isFree: true });
+    await svc.service.applyDerivedTiers(TENANT, [
+      { userId: 'u1', label: 'Plan Pro', provider: 'stripe' },
+    ]);
+    await svc.service.assignManualTier(TENANT, 'u1', free.id, 'admin');
+    const wc = await svc.service.listCatalogWithCounts(TENANT);
+    expect(wc.find((t) => t.id === pro.id)!.memberCount).toBe(0);
+    expect(wc.find((t) => t.id === free.id)!.memberCount).toBe(1);
+  });
+});

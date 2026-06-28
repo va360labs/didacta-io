@@ -180,6 +180,8 @@ export interface PaymentTier {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  /** Nº de usuarios cuyo tier efectivo es este (lo rellena listCatalog). */
+  memberCount?: number;
 }
 
 export interface UserTier {
@@ -264,6 +266,8 @@ export const paymentTiersApi = {
 
 export interface TierSyncResult {
   updated: number;
+  /** Nº de tiers de catálogo creados desde planes nuevos. */
+  tiersCreated: number;
   connections: number;
   matched: number;
   errors: Array<{ connectionId: string; message: string }>;

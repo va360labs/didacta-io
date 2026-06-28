@@ -62,6 +62,29 @@ export class PaymentTiersService {
     });
   }
 
+  /**
+   * Catálogo + nº de usuarios cuyo tier EFECTIVO es cada tier: manual asignado a
+   * ese tier, o (sin manual) derivado cuyo `derivedLabel` coincide con el nombre.
+   * Lo usa el panel para mostrar "X usuarios" por tier.
+   */
+  async listCatalogWithCounts(tenantId: string): Promise<Array<TierRow & { memberCount: number }>> {
+    const [tiers, userTiers] = await Promise.all([
+      this.listCatalog(tenantId),
+      this.prisma.modPaymentConnectionsUserTier.findMany({
+        where: { tenantId },
+        select: { manualTierId: true, derivedLabel: true },
+      }),
+    ]);
+    return tiers.map((t) => ({
+      ...t,
+      memberCount: userTiers.filter(
+        (ut) =>
+          ut.manualTierId === t.id ||
+          (ut.manualTierId == null && (ut.derivedLabel ?? null) === t.name),
+      ).length,
+    }));
+  }
+
   async createTier(tenantId: string, input: CreateTierInput): Promise<TierRow> {
     const name = input.name.trim();
     const existing = await this.prisma.modPaymentConnectionsTier.findFirst({
@@ -154,7 +177,25 @@ export class PaymentTiersService {
   async applyDerivedTiers(
     tenantId: string,
     entries: DerivedTierEntry[],
-  ): Promise<{ updated: number }> {
+  ): Promise<{ updated: number; tiersCreated: number }> {
+    // 1) Crear en el CATÁLOGO un tier por cada plan distinto que aún no exista,
+    //    para que el sync "cree los tiers" visibles en el panel (no solo el
+    //    derivedLabel por usuario). El admin luego puede renombrarlos/marcarlos free.
+    const distinctLabels = [...new Set(entries.map((e) => e.label.trim()).filter(Boolean))];
+    let tiersCreated = 0;
+    for (const name of distinctLabels) {
+      const existing = await this.prisma.modPaymentConnectionsTier.findFirst({
+        where: { tenantId, name },
+      });
+      if (!existing) {
+        await this.prisma.modPaymentConnectionsTier.create({
+          data: { tenantId, name, isFree: false, sortOrder: 0 },
+        });
+        tiersCreated += 1;
+      }
+    }
+
+    // 2) Asignar el tier DERIVADO a cada usuario con suscripción (no toca el manual).
     let updated = 0;
     for (const e of entries) {
       await this.prisma.modPaymentConnectionsUserTier.upsert({
@@ -178,7 +219,7 @@ export class PaymentTiersService {
       });
       updated += 1;
     }
-    return { updated };
+    return { updated, tiersCreated };
   }
 }
 

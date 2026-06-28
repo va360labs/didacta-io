@@ -524,17 +524,20 @@ function TierCatalogPanel() {
   const [syncing, setSyncing] = useState(false);
   const [syncInfo, setSyncInfo] = useState<string | null>(null);
 
-  useEffect(() => {
+  async function loadTiers() {
     const token = authStorage.getAccessToken();
     if (!token) return;
-    void (async () => {
-      try {
-        const res = await paymentTiersApi.listCatalog(token);
-        setTiers(res.tiers);
-      } catch (e) {
-        setErr(e instanceof ApiHttpError ? e.message : 'No se pudo cargar el catálogo de tiers.');
-      }
-    })();
+    try {
+      const res = await paymentTiersApi.listCatalog(token);
+      setTiers(res.tiers);
+    } catch (e) {
+      setErr(e instanceof ApiHttpError ? e.message : 'No se pudo cargar el catálogo de tiers.');
+    }
+  }
+
+  useEffect(() => {
+    void loadTiers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSync() {
@@ -547,8 +550,10 @@ function TierCatalogPanel() {
       const res = await paymentTiersApi.syncFromPayments(token);
       const errSuffix = res.errors.length ? ` · ${res.errors.length} cuenta(s) con error` : '';
       setSyncInfo(
-        `Sincronizadas ${res.connections} cuenta(s): ${res.updated} usuario(s) con tier de pago${errSuffix}.`,
+        `Sincronizadas ${res.connections} cuenta(s): ${res.tiersCreated} tier(s) nuevo(s) en el ` +
+          `catálogo, ${res.updated} usuario(s) con tier de pago${errSuffix}.`,
       );
+      await loadTiers(); // refrescar para ver los tiers recién creados + sus conteos
     } catch (e) {
       setErr(e instanceof ApiHttpError ? e.message : 'No se pudo sincronizar desde pagos.');
     } finally {
@@ -646,6 +651,9 @@ function TierCatalogPanel() {
               >
                 <span className="font-semibold">{t.name}</span>
                 {t.isFree ? <Badge variant="outline">free</Badge> : null}
+                <span className="text-xs text-text-muted" title="Usuarios con este tier">
+                  {t.memberCount ?? 0} usuario{(t.memberCount ?? 0) === 1 ? '' : 's'}
+                </span>
                 <button
                   type="button"
                   onClick={() => handleDelete(t)}

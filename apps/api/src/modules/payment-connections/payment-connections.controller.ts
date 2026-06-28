@@ -271,7 +271,7 @@ export class PaymentConnectionsController {
   @ApiOperation({ summary: 'Lista el catálogo de tiers del tenant.' })
   async listTierCatalog(@CurrentUser() rawUser: SessionClaims | undefined) {
     const user = this.assertSuperAdmin(rawUser);
-    const tiers = await this.registry.getPaymentTiersService().listCatalog(user.tenantId);
+    const tiers = await this.registry.getPaymentTiersService().listCatalogWithCounts(user.tenantId);
     return { tiers };
   }
 
@@ -383,10 +383,10 @@ export class PaymentConnectionsController {
       }
     }
 
-    const { updated } = await this.registry
+    const { updated, tiersCreated } = await this.registry
       .getPaymentTiersService()
       .applyDerivedTiers(user.tenantId, entries);
-    return { updated, connections: conns.length, matched: entries.length, errors };
+    return { updated, tiersCreated, connections: conns.length, matched: entries.length, errors };
   }
 }
 
