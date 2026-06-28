@@ -89,7 +89,11 @@ export function classifySubscriptionStatus(status: string): SubscriptionStatusIn
     case 'unpaid':
       return { category: 'unpaid', label: 'Impago — suspendida', entitled: false };
     case 'on-hold':
-      return { category: 'paused', label: 'En espera (impago)', entitled: false };
+      // WooCommerce 'on-hold' = impago/espera de pago. El set activo de la
+      // reconciliación de tiers (WC_ACTIVE_STATUSES) la cuenta como suscrita, así
+      // que aquí también es `entitled` (con etiqueta de impago) para no contradecir
+      // al sync de tiers — mismo criterio que el past_due de Stripe.
+      return { category: 'past_due', label: 'En espera (impago)', entitled: true };
     case 'paused':
       return { category: 'paused', label: 'Pausada', entitled: false };
     case 'pending-cancel':

@@ -478,23 +478,42 @@ describe('findUserSubscriptions', () => {
   });
 });
 
+/**
+ * Tabla CANÓNICA de clasificación de estados. Es el contrato compartido entre la
+ * copia backend (este módulo) y la copia web (apps/web/src/lib/payment-connections.ts,
+ * que NO puede importar el módulo). El mismo objeto se asserta en el test web; si
+ * cualquiera de las dos copias diverge, su test falla → guardia de paridad.
+ */
+export const SUBSCRIPTION_STATUS_TABLE: Record<
+  string,
+  { category: string; label: string; entitled: boolean }
+> = {
+  active: { category: 'active', label: 'Activa', entitled: true },
+  trialing: { category: 'active', label: 'En prueba', entitled: true },
+  past_due: { category: 'past_due', label: 'Pago atrasado (impago)', entitled: true },
+  unpaid: { category: 'unpaid', label: 'Impago — suspendida', entitled: false },
+  'on-hold': { category: 'past_due', label: 'En espera (impago)', entitled: true },
+  paused: { category: 'paused', label: 'Pausada', entitled: false },
+  'pending-cancel': { category: 'canceled', label: 'Baja programada', entitled: true },
+  canceled: { category: 'canceled', label: 'Dada de baja', entitled: false },
+  cancelled: { category: 'canceled', label: 'Dada de baja', entitled: false },
+  expired: { category: 'canceled', label: 'Expirada', entitled: false },
+  incomplete: { category: 'incomplete', label: 'Pago no completado', entitled: false },
+  incomplete_expired: { category: 'incomplete', label: 'Pago no completado', entitled: false },
+  pending: { category: 'incomplete', label: 'Pendiente de pago', entitled: false },
+};
+
 describe('classifySubscriptionStatus', () => {
-  it('marca como vigentes (entitled) los estados con acceso', () => {
-    for (const s of ['active', 'trialing', 'past_due', 'pending-cancel']) {
-      expect(classifySubscriptionStatus(s).entitled).toBe(true);
+  it('respeta la tabla canónica de (category, label, entitled) para cada estado', () => {
+    for (const [status, expected] of Object.entries(SUBSCRIPTION_STATUS_TABLE)) {
+      expect({ status, ...classifySubscriptionStatus(status) }).toEqual({ status, ...expected });
     }
   });
 
-  it('marca como NO vigentes las bajas y los impagos', () => {
-    for (const s of ['canceled', 'cancelled', 'unpaid', 'expired', 'on-hold', 'incomplete']) {
-      expect(classifySubscriptionStatus(s).entitled).toBe(false);
-    }
-  });
-
-  it('da etiquetas legibles para baja e impago', () => {
-    expect(classifySubscriptionStatus('canceled').label).toBe('Dada de baja');
-    expect(classifySubscriptionStatus('past_due').category).toBe('past_due');
-    expect(classifySubscriptionStatus('unpaid').label).toContain('Impago');
+  it('on-hold (WooCommerce) es vigente igual que past_due, para no contradecir al sync de tiers', () => {
+    // WC_ACTIVE_STATUSES incluye on-hold → la reconciliación la trata como suscrita.
+    expect(classifySubscriptionStatus('on-hold').entitled).toBe(true);
+    expect(classifySubscriptionStatus('on-hold').label).toContain('impago');
   });
 
   it('es tolerante con mayúsculas/espacios y cae a "Desconocido" si no lo reconoce', () => {
