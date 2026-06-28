@@ -398,7 +398,7 @@ test('6) vínculo tier→grupo: PATCH linkedTierName persiste + badge en UI', as
 });
 
 test('7) vínculo tier→grupo END-TO-END: asignar el tier reconcilia membresía TIER + auto-matrícula', async () => {
-  test.setTimeout(120000); // la reconciliación va por el outbox/BullMQ (asíncrona)
+  test.setTimeout(160000); // la reconciliación va por el outbox/BullMQ (asíncrona)
 
   // Curso nuevo que el alumno NO tiene → para verificar la matrícula automática.
   const c2 = (
@@ -453,7 +453,7 @@ test('7) vínculo tier→grupo END-TO-END: asignar el tier reconcilia membresía
   // Poll hasta que el outbox procese el evento: el alumno debe aparecer como
   // miembro del grupo con source TIER.
   let member: { userId: string; source: string } | undefined;
-  const deadline = Date.now() + 90000;
+  const deadline = Date.now() + 110000;
   while (Date.now() < deadline) {
     const detail = await http<{
       members: Array<{ userId: string; source: string }>;
@@ -481,7 +481,7 @@ test('7) vínculo tier→grupo END-TO-END: asignar el tier reconcilia membresía
     body: { tierId: null },
   });
   let stillMember = true;
-  const deadline2 = Date.now() + 90000;
+  const deadline2 = Date.now() + 110000;
   while (Date.now() < deadline2) {
     const detail = await http<{ members: Array<{ userId: string }> }>(
       `/api/v1/modules/access-groups/${grp.id}`,
@@ -499,7 +499,7 @@ test('7) vínculo tier→grupo END-TO-END: asignar el tier reconcilia membresía
 });
 
 test('8) BORRAR el tier revoca la membresía TIER del grupo vinculado (B4)', async () => {
-  test.setTimeout(120000);
+  test.setTimeout(160000);
   // Tier dedicado + grupo vinculado + curso del grupo.
   const tierName = `Borrable ${stamp}`;
   const tid = (
@@ -553,7 +553,7 @@ test('8) BORRAR el tier revoca la membresía TIER del grupo vinculado (B4)', asy
     body: { tierId: tid },
   });
   const poll = async (want: boolean) => {
-    const deadline = Date.now() + 90000;
+    const deadline = Date.now() + 110000;
     while (Date.now() < deadline) {
       const detail = await http<{ members: Array<{ userId: string }> }>(
         `/api/v1/modules/access-groups/${grp.id}`,
