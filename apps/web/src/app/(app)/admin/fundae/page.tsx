@@ -116,6 +116,12 @@ export default function FundaePage() {
         </div>
         <div className="flex items-center gap-2">
           <Button asChild type="button" variant="secondary">
+            <Link href="/admin/fundae/grupos">
+              <Icon name="users" size={14} />
+              Grupos bonificables
+            </Link>
+          </Button>
+          <Button asChild type="button" variant="secondary">
             <Link href="/admin/fundae/empresas">
               <Icon name="building" size={14} />
               Empresas bonificadas
