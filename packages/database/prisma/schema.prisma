@@ -2510,6 +2510,64 @@ model ModPaymentConnectionsUserTier {
   @@map("mod_payment_connections_user_tier")
 }
 
+/// Suscriptor materializado por el sync del dashboard de control de suscripciones.
+/// Snapshot por (conexión, suscripción) de lo que devuelve `reconcile` de cada
+/// cuenta conectada. `userId` null = suscriptor que aún no es usuario de Didacta
+/// (unmatched). Sin FK a `user` (no se cruzan FKs entre módulos). El dashboard lee
+/// SOLO esta tabla (no consulta a los proveedores en vivo).
+model ModPaymentConnectionsSubscriber {
+  id                     String    @id @default(uuid()) @db.Uuid
+  tenantId               String    @map("tenant_id") @db.Uuid
+  connectionId           String    @map("connection_id") @db.Uuid
+  provider               String
+  subscriptionId         String    @map("subscription_id")
+  subscriptionCustomerId String?   @map("subscription_customer_id")
+  /// Null si el suscriptor aún no es usuario de Didacta (unmatched).
+  userId                 String?   @map("user_id") @db.Uuid
+  /// Email normalizado del suscriptor (snapshot; clave del match con Didacta).
+  userEmail              String    @map("user_email")
+  /// Estado crudo del proveedor (last-known) y su categoría normalizada.
+  status                 String
+  statusCategory         String    @map("status_category")
+  entitled               Boolean   @default(false)
+  productName            String?   @map("product_name")
+  unitAmount             Int?      @map("unit_amount")
+  currency               String?
+  interval               String?
+  currentPeriodEnd       DateTime? @map("current_period_end")
+  /// Enlace de renovación read-only (Stripe hosted_invoice_url); se rellena lazy.
+  renewalUrl             String?   @map("renewal_url")
+  /// Última corrida del sync en la que se vio este suscriptor (para churn).
+  lastSeenAt             DateTime  @default(now()) @map("last_seen_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  @@unique([tenantId, connectionId, subscriptionId], map: "payment_conn_subscriber_unique")
+  @@index([tenantId, statusCategory])
+  @@index([tenantId, provider])
+  @@index([tenantId, userId])
+  @@map("mod_payment_connections_subscriber")
+}
+
+/// Historial de cada corrida del sync de suscriptores (por conexión): traza de
+/// frescura/errores para el dashboard.
+model ModPaymentConnectionsSyncHistory {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  connectionId   String    @map("connection_id") @db.Uuid
+  /// running | success | error
+  status         String
+  matchedCount   Int       @default(0) @map("matched_count")
+  unmatchedCount Int       @default(0) @map("unmatched_count")
+  truncated      Boolean   @default(false)
+  errorMessage   String?   @map("error_message")
+  startedAt      DateTime  @default(now()) @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+
+  @@index([tenantId, connectionId, completedAt])
+  @@map("mod_payment_connections_sync_history")
+}
+
 // ============================================================================
 // mod.ai-content — Generador IA de borradores (resúmenes / flashcards / quizzes)
 // ============================================================================

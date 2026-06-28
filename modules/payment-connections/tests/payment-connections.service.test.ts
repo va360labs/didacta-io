@@ -55,9 +55,104 @@ interface ConnectionRow {
   updatedAt: Date;
 }
 
+/** Filtro in-memory que cubre los operadores que usa el servicio (eq, null, not, lt, contains). */
+function matchWhere(r: Record<string, unknown>, w: Record<string, unknown>): boolean {
+  for (const [k, cond] of Object.entries(w)) {
+    const v = r[k];
+    if (cond === null) {
+      if (v !== null && v !== undefined) return false;
+    } else if (cond && typeof cond === 'object') {
+      const c = cond as Record<string, unknown>;
+      if ('not' in c && v === c['not']) return false;
+      if ('lt' in c && !(v instanceof Date && v < (c['lt'] as Date))) return false;
+      if ('contains' in c && !String(v ?? '').includes(String(c['contains']))) return false;
+    } else if (v !== cond) {
+      return false;
+    }
+  }
+  return true;
+}
+
 class MockPrisma {
   rows = new Map<string, ConnectionRow>();
+  subscribers = new Map<string, Record<string, unknown>>();
+  history = new Map<string, Record<string, unknown>>();
   private seq = 0;
+
+  modPaymentConnectionsSubscriber = {
+    upsert: async (args: {
+      where: { tenantId_connectionId_subscriptionId: Record<string, string> };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }) => {
+      const { tenantId, connectionId, subscriptionId } =
+        args.where.tenantId_connectionId_subscriptionId;
+      const key = `${tenantId}::${connectionId}::${subscriptionId}`;
+      const existing = this.subscribers.get(key);
+      if (existing) {
+        Object.assign(existing, args.update, { updatedAt: new Date() });
+        return { ...existing };
+      }
+      this.seq += 1;
+      const row = {
+        id: `subr_${this.seq}`,
+        renewalUrl: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...args.create,
+      };
+      this.subscribers.set(key, row);
+      return { ...row };
+    },
+    findMany: async (args: { where?: Record<string, unknown>; take?: number; skip?: number }) => {
+      const out = [...this.subscribers.values()].filter((r) => matchWhere(r, args.where ?? {}));
+      const skip = args.skip ?? 0;
+      const take = args.take ?? out.length;
+      return out.slice(skip, skip + take).map((r) => ({ ...r }));
+    },
+    count: async (args: { where?: Record<string, unknown> }) =>
+      [...this.subscribers.values()].filter((r) => matchWhere(r, args.where ?? {})).length,
+    updateMany: async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+      let count = 0;
+      for (const r of this.subscribers.values()) {
+        if (matchWhere(r, args.where)) {
+          Object.assign(r, args.data);
+          count += 1;
+        }
+      }
+      return { count };
+    },
+    groupBy: async (args: { by: string[]; where?: Record<string, unknown> }) => {
+      const field = args.by[0]!;
+      const rows = [...this.subscribers.values()].filter((r) => matchWhere(r, args.where ?? {}));
+      const m = new Map<unknown, number>();
+      for (const r of rows) m.set(r[field], (m.get(r[field]) ?? 0) + 1);
+      return [...m.entries()].map(([k, v]) => ({ [field]: k, _count: { _all: v } }));
+    },
+  };
+
+  modPaymentConnectionsSyncHistory = {
+    create: async (args: { data: Record<string, unknown> }) => {
+      this.seq += 1;
+      const row = { id: `sh_${this.seq}`, startedAt: new Date(), completedAt: null, ...args.data };
+      this.history.set(row.id as string, row);
+      return { ...row };
+    },
+    update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = this.history.get(args.where.id);
+      if (row) Object.assign(row, args.data);
+      return { ...(row ?? {}) };
+    },
+    findFirst: async (args: { where?: Record<string, unknown> }) => {
+      const rows = [...this.history.values()].filter((r) => matchWhere(r, args.where ?? {}));
+      rows.sort(
+        (a, b) =>
+          ((b['completedAt'] as Date)?.getTime() ?? 0) -
+          ((a['completedAt'] as Date)?.getTime() ?? 0),
+      );
+      return rows[0] ? { ...rows[0] } : null;
+    },
+  };
 
   modPaymentConnectionsConnection = {
     findFirst: async (args: { where: Record<string, unknown> }) => {
@@ -544,5 +639,86 @@ describe('listConnections', () => {
     });
     const list = await svc.service.listConnections(TENANT);
     expect(list.length).toBe(2);
+  });
+});
+
+describe('dashboard: syncSubscribers / listSubscribers / subscriberSummary', () => {
+  async function setup(adapter?: StripeReadAdapter) {
+    const svc = buildService(adapter ? { [VALID_KEY]: adapter } : undefined);
+    await svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName: 'Stripe ES',
+      credentials: { apiKey: VALID_KEY },
+    });
+    return svc;
+  }
+
+  it('materializa matched + unmatched y registra el SyncHistory', async () => {
+    const svc = await setup();
+    const r = await svc.service.syncSubscribers(TENANT);
+    expect(r).toMatchObject({ connections: 1, upserted: 3, markedGone: 0, failures: [] });
+    const { rows, total } = await svc.service.listSubscribers(TENANT);
+    expect(total).toBe(3);
+    expect(rows.filter((x) => x.userId === 'user_1')).toHaveLength(1); // sub_1 matched
+    expect(rows.filter((x) => x.userId === null)).toHaveLength(2); // sub_2/sub_3 unmatched
+  });
+
+  it('listSubscribers filtra onlyUnmatched y por provider', async () => {
+    const svc = await setup();
+    await svc.service.syncSubscribers(TENANT);
+    expect((await svc.service.listSubscribers(TENANT, { onlyUnmatched: true })).total).toBe(2);
+    expect((await svc.service.listSubscribers(TENANT, { provider: 'stripe' })).total).toBe(3);
+    expect((await svc.service.listSubscribers(TENANT, { provider: 'paypal' })).total).toBe(0);
+  });
+
+  it('subscriberSummary cuenta por categoría/proveedor + última corrida', async () => {
+    const svc = await setup();
+    await svc.service.syncSubscribers(TENANT);
+    const s = await svc.service.subscriberSummary(TENANT);
+    expect(s.total).toBe(3);
+    expect(s.byCategory['active']).toBe(3); // active + trialing → categoría 'active'
+    expect(s.byProvider['stripe']).toBe(3);
+    expect(s.lastSyncStatus).toBe('success');
+    expect(s.lastSyncedAt).toBeInstanceOf(Date);
+  });
+
+  it('churn: un suscriptor que desaparece se marca baja (si no vino truncado)', async () => {
+    let only = false;
+    const adapter: StripeReadAdapter = {
+      retrieveAccount: async () => ({ id: 'acct', email: null, country: null, businessName: null }),
+      listActiveSubscriptions: async () => ({
+        subscribers: only ? [SUBSCRIBERS[0]!] : SUBSCRIBERS,
+        truncated: false,
+      }),
+    };
+    const svc = await setup(adapter);
+    await svc.service.syncSubscribers(TENANT);
+    await new Promise((r) => setTimeout(r, 5)); // garantiza now2 > now1 para el churn
+    only = true;
+    const r2 = await svc.service.syncSubscribers(TENANT);
+    expect(r2.markedGone).toBe(2); // sub_2 y sub_3 desaparecen → baja
+    const canceled = await svc.service.listSubscribers(TENANT, { statusCategory: 'canceled' });
+    expect(canceled.total).toBe(2);
+    expect(canceled.rows.every((x) => x.entitled === false)).toBe(true);
+  });
+
+  it('no marca baja si la conexión vino truncada (no se listaron todos)', async () => {
+    let trunc = false;
+    const adapter: StripeReadAdapter = {
+      retrieveAccount: async () => ({ id: 'acct', email: null, country: null, businessName: null }),
+      listActiveSubscriptions: async () => ({
+        subscribers: trunc ? [SUBSCRIBERS[0]!] : SUBSCRIBERS,
+        truncated: trunc,
+      }),
+    };
+    const svc = await setup(adapter);
+    await svc.service.syncSubscribers(TENANT);
+    await new Promise((r) => setTimeout(r, 5));
+    trunc = true; // 2ª corrida truncada con solo 1 sub → NO debe marcar bajas
+    const r2 = await svc.service.syncSubscribers(TENANT);
+    expect(r2.markedGone).toBe(0);
+    expect((await svc.service.listSubscribers(TENANT, { statusCategory: 'active' })).total).toBe(3);
   });
 });

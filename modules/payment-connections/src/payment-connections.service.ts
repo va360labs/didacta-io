@@ -19,7 +19,7 @@
  * en vez de servicios concretos, para mockear Stripe/DB/usuarios en unit tests.
  */
 
-import type { PrismaClient } from '@didacta/database';
+import type { Prisma, PrismaClient } from '@didacta/database';
 import {
   PaymentConnectionsError,
   PaymentConnectionAlreadyExistsError,
@@ -217,6 +217,63 @@ export function normalizeEmail(value: string | null | undefined): string | null 
   if (!value) return null;
   const trimmed = value.trim().toLowerCase();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+// ── Dashboard de control de suscripciones (tabla materializada) ───────────────
+
+/** Resultado de una corrida de `syncSubscribers`. */
+export interface SubscriberSyncResult {
+  /** Nº de conexiones VERIFIED procesadas. */
+  connections: number;
+  /** Filas de suscriptor insertadas/actualizadas. */
+  upserted: number;
+  /** Suscriptores marcados como baja por no aparecer en esta corrida (churn). */
+  markedGone: number;
+  /** Conexiones que fallaron (no tumban el resto). */
+  failures: MemberSubscriptionLookupFailure[];
+}
+
+/** Filtros + paginación del listado del dashboard. */
+export interface SubscriberListOptions {
+  statusCategory?: string;
+  provider?: string;
+  connectionId?: string;
+  /** Solo suscriptores que aún no son usuarios de Didacta. */
+  onlyUnmatched?: boolean;
+  /** Búsqueda por email (substring, normalizado). */
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** Fila de suscriptor materializado que lee el dashboard. */
+export interface SubscriberRow {
+  id: string;
+  connectionId: string;
+  provider: string;
+  subscriptionId: string;
+  subscriptionCustomerId: string | null;
+  userId: string | null;
+  userEmail: string;
+  status: string;
+  statusCategory: string;
+  entitled: boolean;
+  productName: string | null;
+  unitAmount: number | null;
+  currency: string | null;
+  interval: string | null;
+  currentPeriodEnd: Date | null;
+  renewalUrl: string | null;
+  lastSeenAt: Date;
+}
+
+/** Agregaciones de cabecera del dashboard. */
+export interface SubscriberSummary {
+  total: number;
+  byCategory: Record<string, number>;
+  byProvider: Record<string, number>;
+  lastSyncedAt: Date | null;
+  lastSyncStatus: string | null;
 }
 
 export class PaymentConnectionsService {
@@ -473,6 +530,176 @@ export class PaymentConnectionsService {
       }
     }
     return { matches, failures };
+  }
+
+  // ---------------- Dashboard de control de suscripciones ----------------
+
+  /**
+   * Materializa los suscriptores de TODAS las cuentas VERIFIED en
+   * `mod_payment_connections_subscriber` (la fuente del dashboard). Por conexión:
+   * `reconcile` (en vivo) → upsert de matched + unmatched (clave lógica
+   * tenant+connection+subscription); los que ya no aparecen se marcan baja (churn),
+   * salvo si la conexión vino truncada (no se listaron todos → no marcar bajas
+   * falsas). Registra cada corrida en SyncHistory. Best-effort por conexión.
+   */
+  async syncSubscribers(tenantId: string): Promise<SubscriberSyncResult> {
+    const conns = await this.listConnections(tenantId);
+    const verified = conns.filter((c) => c.status === 'VERIFIED');
+    let upserted = 0;
+    let markedGone = 0;
+    const failures: MemberSubscriptionLookupFailure[] = [];
+
+    for (const c of verified) {
+      const run = await this.prisma.modPaymentConnectionsSyncHistory.create({
+        data: { tenantId, connectionId: c.id, status: 'running' },
+      });
+      try {
+        const rec = await this.reconcile(tenantId, c.id);
+        const now = new Date();
+        const rows: Array<{ sub: StripeSubscriberRecord; userId: string | null }> = [
+          ...rec.matched.map((m) => ({ sub: m.subscription, userId: m.user.id as string | null })),
+          ...rec.unmatched.map((sub) => ({ sub, userId: null as string | null })),
+        ];
+        for (const { sub, userId } of rows) {
+          const info = classifySubscriptionStatus(sub.status);
+          const data = {
+            provider: c.provider,
+            subscriptionCustomerId: sub.customerId ?? null,
+            userId,
+            userEmail: normalizeEmail(sub.email) ?? sub.email?.trim() ?? '',
+            status: sub.status,
+            statusCategory: info.category,
+            entitled: info.entitled,
+            productName: sub.productName ?? null,
+            unitAmount: sub.unitAmount ?? null,
+            currency: sub.currency ?? null,
+            interval: sub.interval ?? null,
+            currentPeriodEnd: sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd * 1000) : null,
+            lastSeenAt: now,
+          };
+          await this.prisma.modPaymentConnectionsSubscriber.upsert({
+            where: {
+              tenantId_connectionId_subscriptionId: {
+                tenantId,
+                connectionId: c.id,
+                subscriptionId: sub.subscriptionId,
+              },
+            },
+            create: { tenantId, connectionId: c.id, subscriptionId: sub.subscriptionId, ...data },
+            update: data,
+          });
+          upserted += 1;
+        }
+        if (!rec.truncated) {
+          const gone = await this.prisma.modPaymentConnectionsSubscriber.updateMany({
+            where: {
+              tenantId,
+              connectionId: c.id,
+              lastSeenAt: { lt: now },
+              statusCategory: { not: 'canceled' },
+            },
+            data: { statusCategory: 'canceled', entitled: false },
+          });
+          markedGone += gone.count;
+        }
+        await this.prisma.modPaymentConnectionsSyncHistory.update({
+          where: { id: run.id },
+          data: {
+            status: 'success',
+            matchedCount: rec.matched.length,
+            unmatchedCount: rec.unmatched.length,
+            truncated: rec.truncated,
+            completedAt: new Date(),
+          },
+        });
+      } catch (err) {
+        const message = ((err as Error)?.message ?? 'error').slice(0, 500);
+        failures.push({ provider: c.provider, connectionName: c.displayName, message });
+        await this.prisma.modPaymentConnectionsSyncHistory.update({
+          where: { id: run.id },
+          data: { status: 'error', errorMessage: message, completedAt: new Date() },
+        });
+      }
+    }
+    return { connections: verified.length, upserted, markedGone, failures };
+  }
+
+  /** Lista paginada + filtrada de suscriptores materializados (para el dashboard). */
+  async listSubscribers(
+    tenantId: string,
+    opts: SubscriberListOptions = {},
+  ): Promise<{ rows: SubscriberRow[]; total: number }> {
+    const where: Prisma.ModPaymentConnectionsSubscriberWhereInput = { tenantId };
+    if (opts.statusCategory) where.statusCategory = opts.statusCategory;
+    if (opts.provider) where.provider = opts.provider;
+    if (opts.connectionId) where.connectionId = opts.connectionId;
+    if (opts.onlyUnmatched) where.userId = null;
+    const q = opts.q?.trim().toLowerCase();
+    if (q) where.userEmail = { contains: q };
+    const take = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+    const skip = Math.max(opts.offset ?? 0, 0);
+    const [found, total] = await Promise.all([
+      this.prisma.modPaymentConnectionsSubscriber.findMany({
+        where,
+        orderBy: [{ statusCategory: 'asc' }, { unitAmount: 'desc' }],
+        take,
+        skip,
+      }),
+      this.prisma.modPaymentConnectionsSubscriber.count({ where }),
+    ]);
+    const rows: SubscriberRow[] = found.map((r) => ({
+      id: r.id,
+      connectionId: r.connectionId,
+      provider: r.provider,
+      subscriptionId: r.subscriptionId,
+      subscriptionCustomerId: r.subscriptionCustomerId,
+      userId: r.userId,
+      userEmail: r.userEmail,
+      status: r.status,
+      statusCategory: r.statusCategory,
+      entitled: r.entitled,
+      productName: r.productName,
+      unitAmount: r.unitAmount,
+      currency: r.currency,
+      interval: r.interval,
+      currentPeriodEnd: r.currentPeriodEnd,
+      renewalUrl: r.renewalUrl,
+      lastSeenAt: r.lastSeenAt,
+    }));
+    return { rows, total };
+  }
+
+  /** Agregaciones para la cabecera del dashboard (contadores + frescura). */
+  async subscriberSummary(tenantId: string): Promise<SubscriberSummary> {
+    const [byCat, byProv, total, lastRun] = await Promise.all([
+      this.prisma.modPaymentConnectionsSubscriber.groupBy({
+        by: ['statusCategory'],
+        where: { tenantId },
+        _count: { _all: true },
+      }),
+      this.prisma.modPaymentConnectionsSubscriber.groupBy({
+        by: ['provider'],
+        where: { tenantId },
+        _count: { _all: true },
+      }),
+      this.prisma.modPaymentConnectionsSubscriber.count({ where: { tenantId } }),
+      this.prisma.modPaymentConnectionsSyncHistory.findFirst({
+        where: { tenantId, completedAt: { not: null } },
+        orderBy: { completedAt: 'desc' },
+        select: { completedAt: true, status: true },
+      }),
+    ]);
+    const byCategory: Record<string, number> = {};
+    for (const g of byCat) byCategory[g.statusCategory] = g._count._all;
+    const byProvider: Record<string, number> = {};
+    for (const g of byProv) byProvider[g.provider] = g._count._all;
+    return {
+      total,
+      byCategory,
+      byProvider,
+      lastSyncedAt: lastRun?.completedAt ?? null,
+      lastSyncStatus: lastRun?.status ?? null,
+    };
   }
 
   // ---------------- internos ----------------

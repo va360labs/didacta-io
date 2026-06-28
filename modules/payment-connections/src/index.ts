@@ -47,6 +47,10 @@ export type {
   MemberSubscriptionLookupResult,
   SubscriptionStatusCategory,
   SubscriptionStatusInfo,
+  SubscriberSyncResult,
+  SubscriberListOptions,
+  SubscriberRow,
+  SubscriberSummary,
 } from './payment-connections.service.js';
 export { StripeReadSdkAdapter } from './stripe-reader.client.js';
 export type {
