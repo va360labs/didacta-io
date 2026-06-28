@@ -160,6 +160,7 @@ export class MemberRegistrationService {
     input: MemberRegistrationInput,
     webBaseUrl: string,
     ctx: ClientContext,
+    opts: { skipAutoNotify?: boolean } = {},
   ): Promise<MemberRegistrationResult> {
     // 1) Idempotencia: si ya existe el usuario para (tenant, email), no recrear.
     const existing = await this.prisma.user.findUnique({
@@ -233,8 +234,11 @@ export class MemberRegistrationService {
     // 5) En SEGUNDO PLANO (NO se hace await → no bloquea la respuesta al
     //    usuario): busca la suscripción del email en las cuentas de pago
     //    conectadas (Stripe/PayPal/WooCommerce) y LUEGO notifica al aprobador
-    //    incluyendo esa suscripción en el email de validación.
-    void this.lookupThenNotify(tenantId, user.id, input, webBaseUrl, ctx);
+    //    incluyendo esa suscripción en el email de validación. El path admin
+    //    (createManual) lo salta para hacerlo de forma síncrona con override.
+    if (!opts.skipAutoNotify) {
+      void this.lookupThenNotify(tenantId, user.id, input, webBaseUrl, ctx);
+    }
 
     return { userId: user.id, created: true, status: 'PENDING' };
   }
@@ -244,21 +248,36 @@ export class MemberRegistrationService {
    * Todo el método es best-effort: cualquier fallo se loguea como warn y NO se
    * propaga (la inscripción ya quedó persistida y debe sobrevivir).
    */
-  /** Background: corre el lookup de suscripción y luego notifica al aprobador con ella. */
-  private async lookupThenNotify(
+  /**
+   * Corre el lookup de suscripción y luego notifica al aprobador con ella.
+   * Devuelve los matches/failures. `approverOverride` permite dirigir el email de
+   * validación a una dirección concreta (lo usa el alta manual/test del admin).
+   */
+  async lookupThenNotify(
     tenantId: string,
     userId: string,
     input: MemberRegistrationInput,
     webBaseUrl: string,
     ctx: ClientContext,
-  ): Promise<void> {
+    approverOverride?: string,
+  ): Promise<{ matches: MemberSubscriptionMatch[]; failures: MemberSubscriptionLookupFailure[] }> {
     const { matches, failures } = await this.subscriptionLookup
       .runAndStore(tenantId, userId, input.email)
       .catch(() => ({
         matches: [] as MemberSubscriptionMatch[],
         failures: [] as MemberSubscriptionLookupFailure[],
       }));
-    await this.notifyApprover(tenantId, userId, input, webBaseUrl, ctx, matches, failures);
+    await this.notifyApprover(
+      tenantId,
+      userId,
+      input,
+      webBaseUrl,
+      ctx,
+      matches,
+      failures,
+      approverOverride,
+    );
+    return { matches, failures };
   }
 
   private async notifyApprover(
@@ -269,6 +288,7 @@ export class MemberRegistrationService {
     ctx: ClientContext,
     matches: MemberSubscriptionMatch[],
     failures: MemberSubscriptionLookupFailure[],
+    approverOverride?: string,
   ): Promise<void> {
     try {
       const { approveToken, rejectToken } = await this.decision.issueDecisionTokens(
@@ -287,11 +307,12 @@ export class MemberRegistrationService {
       });
       const tenantName = tenant?.name ?? DEFAULT_TENANT_NAME;
 
-      const approver = process.env['MEMBER_APPROVAL_EMAIL']?.trim();
+      // El aprobador es el override (alta manual del admin) o el de la env.
+      const approver = approverOverride?.trim() || process.env['MEMBER_APPROVAL_EMAIL']?.trim();
       if (!approver) {
         this.logger.warn(
           { tenantId, userId },
-          'member-registration: MEMBER_APPROVAL_EMAIL no configurado — aprobador no notificado',
+          'member-registration: sin aprobador (ni override ni MEMBER_APPROVAL_EMAIL) — no notificado',
         );
         return;
       }

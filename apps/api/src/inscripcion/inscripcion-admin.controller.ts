@@ -1,19 +1,39 @@
+import { randomBytes } from 'node:crypto';
 import {
+  Body,
   Controller,
   ForbiddenException,
   Get,
   NotFoundException,
   Param,
   Post,
+  Req,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { FastifyRequest } from 'fastify';
+import { z } from 'zod';
+import { extractClientContext } from '../auth/client-context';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
+import { resolveWebBaseUrl } from '../common/resolve-web-base-url';
 import { MemberRegistrationService } from './member-registration.service';
 import { MemberSubscriptionLookupService } from './member-subscription-lookup.service';
+
+const createManualSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    email: z.string().trim().email(),
+    telegramId: z.string().trim().max(40).optional(),
+    inGroup: z.enum(['true', 'false', 'unknown']).optional(),
+    /** Email al que enviar SOLO la validación al aprobador (no se emaila al solicitante). */
+    approverEmail: z.string().trim().email().optional(),
+  })
+  .strict();
+type CreateManualDto = z.infer<typeof createManualSchema>;
 
 /**
  * Panel ADMIN de solicitudes de inscripción (autenticado, distinto del controller
@@ -51,6 +71,57 @@ export class InscripcionAdminController {
     const user = this.requireAdmin(rawUser);
     const requests = await this.registration.listPendingRequests(user.tenantId);
     return { requests };
+  }
+
+  @Post('requests')
+  @ApiOperation({
+    summary:
+      'Crea una solicitud de inscripción MANUAL (sin OTP): corre el lookup de suscripción en ' +
+      'todas las cuentas conectadas y envía el email de validación SOLO al aprobador indicado ' +
+      '(NO se emaila al solicitante). Para alta manual/onboarding y pruebas.',
+  })
+  async createManual(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(createManualSchema)) dto: CreateManualDto,
+    @Req() req: FastifyRequest,
+  ) {
+    const user = this.requireAdmin(rawUser);
+    const ctx = extractClientContext(req);
+    const webBaseUrl = resolveWebBaseUrl(req);
+    const input = {
+      name: dto.name,
+      email: dto.email,
+      // Contraseña aleatoria: el alta manual no la usa (el miembro queda PENDING
+      // y, al aprobarse, entra por reset/SSO). Solo cumple el contrato del flujo.
+      password: randomBytes(24).toString('base64url'),
+      telegramId: dto.telegramId ?? 'manual',
+      inGroup: dto.inGroup ?? ('unknown' as const),
+    };
+    // skipAutoNotify: notificamos NOSOTROS de forma síncrona con el override del
+    // aprobador (para devolver el resultado y dirigir el email a quien se indique).
+    const { userId, created } = await this.registration.createPending(
+      user.tenantId,
+      input,
+      webBaseUrl,
+      ctx,
+      { skipAutoNotify: true },
+    );
+    const { matches, failures } = await this.registration.lookupThenNotify(
+      user.tenantId,
+      userId,
+      input,
+      webBaseUrl,
+      ctx,
+      dto.approverEmail,
+    );
+    return {
+      userId,
+      created,
+      matchCount: matches.length,
+      matches,
+      failures,
+      approverEmail: dto.approverEmail ?? null,
+    };
   }
 
   @Post('requests/:userId/rerun')
