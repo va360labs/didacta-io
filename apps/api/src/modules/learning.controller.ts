@@ -575,6 +575,10 @@ export class LearningController {
     @Param('lessonId') lessonId: string,
   ) {
     if (!user) throw new UnauthorizedException();
+    // DRIP: SCORM no pasa por trackProgress, así que gateamos aquí también.
+    await this.registry
+      .getLearningService()
+      .assertLessonAccessible(user.tenantId, user.sub, lessonId);
     return this.registry.getScormService().getOrCreateAttempt(user.tenantId, user.sub, lessonId);
   }
 
@@ -590,6 +594,10 @@ export class LearningController {
     @Body() body: { cmiData?: Record<string, string> },
   ) {
     if (!user) throw new UnauthorizedException();
+    // DRIP: bloquear también el commit de una lección no liberada.
+    await this.registry
+      .getLearningService()
+      .assertLessonAccessible(user.tenantId, user.sub, lessonId);
     return this.registry
       .getScormService()
       .commitAttempt(user.tenantId, user.sub, lessonId, body.cmiData ?? {});

@@ -337,8 +337,19 @@ export class PaymentConnectionsController {
   @ApiOperation({ summary: 'Borra un tier (las asignaciones manuales quedan sin tier).' })
   async deleteTier(@Param('id') id: string, @CurrentUser() rawUser: SessionClaims | undefined) {
     const user = this.assertSuperAdmin(rawUser);
-    await this.registry.getPaymentTiersService().deleteTier(user.tenantId, id);
-    return { ok: true };
+    const tiersSvc = this.registry.getPaymentTiersService();
+    const { affectedUserIds } = await tiersSvc.deleteTier(user.tenantId, id);
+    // Emite el tier efectivo recalculado de cada afectado para que el bridge
+    // reconcilie su membresía (un grupo vinculado por nombre al tier borrado
+    // dejará de reconciliarse; estos usuarios pierden el tier).
+    if (affectedUserIds.length > 0) {
+      const views = await tiersSvc.getUserTiers(user.tenantId, affectedUserIds);
+      const byUser = new Map(views.map((v) => [v.userId, v.effectiveLabel]));
+      for (const uid of affectedUserIds) {
+        await this.publishTierChanged(user.tenantId, user.sub, uid, byUser.get(uid) ?? null);
+      }
+    }
+    return { ok: true, affected: affectedUserIds.length };
   }
 
   @Get('user-tiers')
@@ -398,10 +409,13 @@ export class PaymentConnectionsController {
     }> = [];
     const errors: Array<{ connectionId: string; message: string }> = [];
 
+    // Conexiones reconciliadas con éxito (para acotar la detección de churn).
+    const reconciledConnectionIds: string[] = [];
     for (const c of conns) {
       if (c.status !== 'VERIFIED') continue;
       try {
         const rec = await connectionsSvc.reconcile(user.tenantId, c.id);
+        reconciledConnectionIds.push(c.id);
         for (const m of rec.matched) {
           const label = m.subscription.productName?.trim() || tierLabelFallback(m.subscription);
           entries.push({
@@ -418,11 +432,17 @@ export class PaymentConnectionsController {
     }
 
     const tiersSvc = this.registry.getPaymentTiersService();
-    const { updated, tiersCreated } = await tiersSvc.applyDerivedTiers(user.tenantId, entries);
+    const { updated, tiersCreated, clearedUserIds } = await tiersSvc.applyDerivedTiers(
+      user.tenantId,
+      entries,
+      { reconciledConnectionIds },
+    );
 
     // Emite el tier EFECTIVO de cada usuario afectado para que mod.access-groups
-    // reconcilie la membresía de los grupos vinculados (auto-matrícula).
-    const affectedUserIds = [...new Set(entries.map((e) => e.userId))];
+    // reconcilie la membresía de los grupos vinculados. Incluye a los que ENTRARON
+    // (entries) y a los que SALIERON por churn (clearedUserIds): a estos su tier
+    // efectivo ahora es el manual o null → el bridge los retira del grupo.
+    const affectedUserIds = [...new Set([...entries.map((e) => e.userId), ...clearedUserIds])];
     if (affectedUserIds.length > 0) {
       const views = await tiersSvc.getUserTiers(user.tenantId, affectedUserIds);
       const byUser = new Map(views.map((v) => [v.userId, v.effectiveLabel]));
@@ -431,7 +451,14 @@ export class PaymentConnectionsController {
       }
     }
 
-    return { updated, tiersCreated, connections: conns.length, matched: entries.length, errors };
+    return {
+      updated,
+      tiersCreated,
+      cleared: clearedUserIds.length,
+      connections: conns.length,
+      matched: entries.length,
+      errors,
+    };
   }
 }
 

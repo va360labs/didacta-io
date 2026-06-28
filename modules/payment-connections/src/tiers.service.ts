@@ -123,14 +123,32 @@ export class PaymentTiersService {
     });
   }
 
-  async deleteTier(tenantId: string, id: string): Promise<void> {
+  /**
+   * Borra un tier y devuelve los usuarios cuyo tier EFECTIVO cambia por ello
+   * (los que lo tenían manual, o lo tenían como derivado por nombre), para que el
+   * caller emita `user_tier.changed` y el bridge reconcilie su membresía de grupo.
+   */
+  async deleteTier(tenantId: string, id: string): Promise<{ affectedUserIds: string[] }> {
     const tier = await this.prisma.modPaymentConnectionsTier.findFirst({
       where: { id, tenantId },
     });
     if (!tier) throw new TierNotFoundError(id);
+
+    // Usuarios afectados ANTES de borrar: manual = este tier, o derivado por
+    // nombre (sin manual) = el nombre de este tier.
+    const affected = await this.prisma.modPaymentConnectionsUserTier.findMany({
+      where: {
+        tenantId,
+        OR: [{ manualTierId: tier.id }, { manualTierId: null, derivedLabel: tier.name }],
+      },
+      select: { userId: true },
+    });
+
     // onDelete: SetNull en user_tier.manualTierId → las asignaciones manuales
     // quedan sin tier (vuelven al derivado/Desconocido), no se borran.
     await this.prisma.modPaymentConnectionsTier.delete({ where: { id: tier.id } });
+
+    return { affectedUserIds: [...new Set(affected.map((a) => a.userId))] };
   }
 
   // ---------------- Tiers de usuario ----------------
@@ -177,7 +195,8 @@ export class PaymentTiersService {
   async applyDerivedTiers(
     tenantId: string,
     entries: DerivedTierEntry[],
-  ): Promise<{ updated: number; tiersCreated: number }> {
+    opts: { reconciledConnectionIds?: string[] } = {},
+  ): Promise<{ updated: number; tiersCreated: number; clearedUserIds: string[] }> {
     // 1) Crear en el CATÁLOGO un tier por cada plan distinto que aún no exista,
     //    para que el sync "cree los tiers" visibles en el panel (no solo el
     //    derivedLabel por usuario). El admin luego puede renombrarlos/marcarlos free.
@@ -219,7 +238,41 @@ export class PaymentTiersService {
       });
       updated += 1;
     }
-    return { updated, tiersCreated };
+
+    // 3) CHURN: usuarios que ANTES tenían un derivado de una de las conexiones
+    //    reconciliadas en este sync y ya NO aparecen (cancelaron la suscripción).
+    //    Limpiamos su derivado (sin tocar el manual) y los devolvemos para que el
+    //    caller emita user_tier.changed → el bridge los saca del grupo vinculado.
+    //    Acotado a `reconciledConnectionIds` para no tratar como churn a usuarios
+    //    de una conexión que falló en este sync.
+    const clearedUserIds: string[] = [];
+    if (opts.reconciledConnectionIds && opts.reconciledConnectionIds.length > 0) {
+      const entryUserIds = new Set(entries.map((e) => e.userId));
+      const stale = await this.prisma.modPaymentConnectionsUserTier.findMany({
+        where: {
+          tenantId,
+          derivedLabel: { not: null },
+          derivedConnectionId: { in: opts.reconciledConnectionIds },
+        },
+        select: { userId: true },
+      });
+      for (const s of stale) {
+        if (entryUserIds.has(s.userId)) continue; // sigue suscrito → no es churn
+        await this.prisma.modPaymentConnectionsUserTier.update({
+          where: { tenantId_userId: { tenantId, userId: s.userId } },
+          data: {
+            derivedLabel: null,
+            derivedProvider: null,
+            derivedConnectionId: null,
+            derivedRef: null,
+            derivedSyncedAt: new Date(),
+          },
+        });
+        clearedUserIds.push(s.userId);
+      }
+    }
+
+    return { updated, tiersCreated, clearedUserIds };
   }
 }
 

@@ -261,6 +261,78 @@ test('3) enforcement: progreso en lección LIBRE → 200', async () => {
   expect(res.ok, `lección libre → 200 (got ${res.status})`).toBe(true);
 });
 
+test('3b) fuga: el contenido de la lección bloqueada NO viaja al alumno (sí al editor)', async () => {
+  type Detail = {
+    modules: Array<{ lessons: Array<{ id: string; content: unknown }> }>;
+  };
+  // Como ALUMNO: la lección bloqueada llega SIN contenido; la libre con contenido.
+  const asStudent = await http<Detail>(`/api/v1/modules/courses/${courseId}`, {
+    bearer: studentToken,
+  });
+  const sLessons = asStudent.body.modules.flatMap((m) => m.lessons);
+  expect(
+    sLessons.find((l) => l.id === lesson1)?.content,
+    'lección bloqueada → contenido oculto al alumno',
+  ).toBeFalsy();
+  expect(
+    sLessons.find((l) => l.id === lesson0)?.content,
+    'lección libre → contenido presente',
+  ).toBeTruthy();
+
+  // Como EDITOR (admin): ve el contenido completo, incluso de la bloqueada.
+  const asAdmin = await http<Detail>(`/api/v1/modules/courses/${courseId}`, { bearer: adminToken });
+  const aLessons = asAdmin.body.modules.flatMap((m) => m.lessons);
+  expect(
+    aLessons.find((l) => l.id === lesson1)?.content,
+    'el editor sí ve el contenido de la lección bloqueada',
+  ).toBeTruthy();
+});
+
+test('3c) sin matrícula: el alumno recibe la estructura del curso pero NUNCA el contenido', async () => {
+  // Curso publicado en el que el alumno NO está matriculado.
+  const c3 = (
+    await http<{ id: string }>('/api/v1/modules/courses', {
+      method: 'POST',
+      bearer: adminToken,
+      body: {
+        title: `Drip NoEnroll ${stamp}`,
+        slug: `drip-noenroll-${stamp}`,
+        description: 'curso sin matrícula',
+        category: 'general',
+      },
+    })
+  ).body;
+  const m3 = (
+    await http<{ id: string }>(`/api/v1/modules/courses/${c3.id}/modules`, {
+      method: 'POST',
+      bearer: adminToken,
+      body: { title: 'M', orderIndex: 0 },
+    })
+  ).body;
+  await http(`/api/v1/modules/courses/modules/${m3.id}/lessons`, {
+    method: 'POST',
+    bearer: adminToken,
+    body: {
+      title: 'Privada',
+      type: 'TEXT',
+      orderIndex: 0,
+      content: { text: 'secreto' },
+      durationSec: 60,
+    },
+  });
+  await http(`/api/v1/modules/courses/${c3.id}/publish`, { method: 'POST', bearer: adminToken });
+
+  const asStudent = await http<{
+    modules: Array<{ lessons: Array<{ id: string; title: string; content: unknown }> }>;
+  }>(`/api/v1/modules/courses/${c3.id}`, { bearer: studentToken });
+  const lessons = asStudent.body.modules.flatMap((m) => m.lessons);
+  expect(lessons.length, 'la estructura (currículo) sí llega').toBeGreaterThanOrEqual(1);
+  expect(lessons[0]?.title, 'el título de la lección sí llega').toBeTruthy();
+  expect(lessons[0]?.content, 'el contenido NO llega al no-matriculado').toBeFalsy();
+
+  await http(`/api/v1/modules/courses/${c3.id}/archive`, { method: 'POST', bearer: adminToken });
+});
+
 test('4) UI alumno: la lección bloqueada muestra candado + card "no disponible"', async ({
   page,
 }) => {
@@ -424,4 +496,86 @@ test('7) vínculo tier→grupo END-TO-END: asignar el tier reconcilia membresía
   // Cleanup.
   await http(`/api/v1/modules/access-groups/${grp.id}`, { method: 'DELETE', bearer: adminToken });
   await http(`/api/v1/modules/courses/${c2.id}/archive`, { method: 'POST', bearer: adminToken });
+});
+
+test('8) BORRAR el tier revoca la membresía TIER del grupo vinculado (B4)', async () => {
+  test.setTimeout(120000);
+  // Tier dedicado + grupo vinculado + curso del grupo.
+  const tierName = `Borrable ${stamp}`;
+  const tid = (
+    await http<{ tier: { id: string } }>('/api/v1/modules/payment-connections/tiers/catalog', {
+      method: 'POST',
+      bearer: adminToken,
+      body: { name: tierName },
+    })
+  ).body.tier.id;
+  const c4 = (
+    await http<{ id: string }>('/api/v1/modules/courses', {
+      method: 'POST',
+      bearer: adminToken,
+      body: {
+        title: `Drip Del ${stamp}`,
+        slug: `drip-del-${stamp}`,
+        description: 'x',
+        category: 'general',
+      },
+    })
+  ).body;
+  const m4 = (
+    await http<{ id: string }>(`/api/v1/modules/courses/${c4.id}/modules`, {
+      method: 'POST',
+      bearer: adminToken,
+      body: { title: 'M', orderIndex: 0 },
+    })
+  ).body;
+  await http(`/api/v1/modules/courses/modules/${m4.id}/lessons`, {
+    method: 'POST',
+    bearer: adminToken,
+    body: { title: 'L', type: 'TEXT', orderIndex: 0, content: { text: 'x' }, durationSec: 60 },
+  });
+  await http(`/api/v1/modules/courses/${c4.id}/publish`, { method: 'POST', bearer: adminToken });
+  const grp = (
+    await http<{ id: string }>('/api/v1/modules/access-groups', {
+      method: 'POST',
+      bearer: adminToken,
+      body: { name: `DelGroup ${stamp}`, kind: 'MULTI_COURSE', courseIds: [c4.id] },
+    })
+  ).body;
+  await http(`/api/v1/modules/access-groups/${grp.id}`, {
+    method: 'PATCH',
+    bearer: adminToken,
+    body: { linkedTierName: tierName },
+  });
+  // Asignar el tier → reconcile añade al alumno.
+  await http(`/api/v1/modules/payment-connections/user-tiers/${studentUser.id}`, {
+    method: 'PUT',
+    bearer: adminToken,
+    body: { tierId: tid },
+  });
+  const poll = async (want: boolean) => {
+    const deadline = Date.now() + 90000;
+    while (Date.now() < deadline) {
+      const detail = await http<{ members: Array<{ userId: string }> }>(
+        `/api/v1/modules/access-groups/${grp.id}`,
+        { bearer: adminToken },
+      );
+      const isMember = !!detail.body.members?.find((mm) => mm.userId === studentUser.id);
+      if (isMember === want) return true;
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+    return false;
+  };
+  expect(await poll(true), 'el alumno entró al grupo por el tier').toBe(true);
+
+  // BORRAR el tier → debe emitir el evento y el bridge retira la membresía.
+  const del = await http(`/api/v1/modules/payment-connections/tiers/catalog/${tid}`, {
+    method: 'DELETE',
+    bearer: adminToken,
+  });
+  expect(del.ok, `delete tier (got ${del.status})`).toBe(true);
+  expect(await poll(false), 'al borrar el tier, el alumno deja de ser miembro').toBe(true);
+
+  // Cleanup.
+  await http(`/api/v1/modules/access-groups/${grp.id}`, { method: 'DELETE', bearer: adminToken });
+  await http(`/api/v1/modules/courses/${c4.id}/archive`, { method: 'POST', bearer: adminToken });
 });

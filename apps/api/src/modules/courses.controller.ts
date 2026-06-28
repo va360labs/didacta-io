@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpException,
+  NotFoundException,
   Param,
   Post,
   Put,
@@ -38,6 +39,27 @@ const listQuerySchema = z.object({
   q: z.string().trim().min(1).max(120).optional(),
   category: z.string().trim().min(1).max(80).optional(),
 });
+
+/** Roles que gestionan cursos y ven SIEMPRE el contenido completo (sin gating de drip). */
+const COURSE_EDITOR_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
+
+/**
+ * Devuelve el detalle del curso con el `content` de las lecciones puesto a null
+ * cuando `shouldMask(lessonId)` es true. Conserva la estructura (módulos +
+ * títulos/tipos de lección) para que el currículo se muestre; oculta el cuerpo.
+ */
+function maskCourseContent(
+  course: { modules: Array<{ lessons: Array<{ id: string }> }> },
+  shouldMask: (lessonId: string) => boolean,
+): unknown {
+  return {
+    ...course,
+    modules: course.modules.map((m) => ({
+      ...m,
+      lessons: m.lessons.map((l) => (shouldMask(l.id) ? { ...l, content: null } : l)),
+    })),
+  };
+}
 
 @ApiTags('Modules · Courses')
 @ApiBearerAuth()
@@ -189,7 +211,32 @@ export class CoursesController {
   async get(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
     if (!user) throw new UnauthorizedException();
     try {
-      return await this.registry.getCoursesService().getCourseDetail(user.tenantId, id);
+      const course = await this.registry.getCoursesService().getCourseDetail(user.tenantId, id);
+
+      // Los editores (formador/admin) ven el contenido completo para gestionarlo.
+      const isEditor = user.roles.some((r) => COURSE_EDITOR_ROLES.has(r));
+      if (isEditor) return course;
+
+      // Alumno: el curso debe estar publicado (no filtramos DRAFT/ARCHIVED).
+      if ((course as { status?: string }).status !== 'PUBLISHED') {
+        throw new NotFoundException('Curso no encontrado');
+      }
+
+      const learning = this.registry.getLearningService();
+      // Sin matrícula viva: devolvemos la ESTRUCTURA (currículo) pero NUNCA el
+      // `content` de las lecciones. Antes el cuerpo completo viajaba a cualquier
+      // usuario autenticado, dejando el drip (y el muro de pago) en decorativo.
+      const enrolled = await learning.hasActiveEnrollment(user.tenantId, user.sub, id);
+      if (!enrolled) return maskCourseContent(course, () => true);
+
+      // Matriculado: ocultar solo el `content` de las lecciones aún no liberadas
+      // por el drip (lectura adelantada). El resto, completo.
+      const availability = await learning.getCourseAvailability(user.tenantId, user.sub, id);
+      if (!availability.drip) return course;
+      return maskCourseContent(
+        course,
+        (lessonId) => availability.lessons[lessonId]?.available === false,
+      );
     } catch (error) {
       throw this.translate(error);
     }

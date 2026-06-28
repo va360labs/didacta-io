@@ -550,9 +550,16 @@ export class AccessGroupsService {
       return true;
     }
     if (existing.status !== 'ACTIVE') {
+      // Reactivación: MANUAL es sticky — si la membresía revocada era MANUAL, no
+      // la degradamos a TIER aunque la reactive el bridge (un tier-down futuro no
+      // debe quitar lo que el admin añadió a mano).
       await this.prisma.modAccessGroupMember.update({
         where: { mod_access_groups_member_unique: { groupId, userId } },
-        data: { status: 'ACTIVE', revokedAt: null, source },
+        data: {
+          status: 'ACTIVE',
+          revokedAt: null,
+          source: existing.source === 'MANUAL' ? 'MANUAL' : source,
+        },
       });
       return true;
     }
@@ -715,7 +722,16 @@ export class AccessGroupsService {
     }
   }
 
-  /** Revoca el grant de este grupo y desmatricula solo si refcount llega a 0. */
+  /**
+   * Revoca el grant de este grupo y desmatricula solo si refcount llega a 0.
+   *
+   * El patrón "marcar revocado + contar grants vivos + decidir" se serializa con
+   * un advisory lock por (tenant,user,course) dentro de una transacción: sin él,
+   * dos revocaciones concurrentes (dos eventos user_tier.changed en workers
+   * BullMQ, o tier-down + setGroupCourses) podían ver ambas `liveGrants>0` y
+   * dejar el curso matriculado con 0 grants vivos (huérfano). El unenroll va
+   * fuera de la tx (idempotente; un doble-unenroll es no-op).
+   */
   private async revokeCourseFromUser(
     tenantId: string,
     groupId: string,
@@ -723,14 +739,19 @@ export class AccessGroupsService {
     courseId: string,
     learning: LearningServiceLike,
   ): Promise<void> {
-    await this.prisma.modAccessGroupGrant.updateMany({
-      where: { tenantId, groupId, userId, courseId, revokedAt: null },
-      data: { revokedAt: new Date() },
+    const lockKey = `${tenantId}:${userId}:${courseId}`;
+    const shouldUnenroll = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+      await tx.modAccessGroupGrant.updateMany({
+        where: { tenantId, groupId, userId, courseId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      const liveGrants = await tx.modAccessGroupGrant.count({
+        where: { tenantId, userId, courseId, revokedAt: null },
+      });
+      return liveGrants === 0;
     });
-    const liveGrants = await this.prisma.modAccessGroupGrant.count({
-      where: { tenantId, userId, courseId, revokedAt: null },
-    });
-    if (liveGrants === 0) {
+    if (shouldUnenroll) {
       await learning.unenrollFromGroup(tenantId, userId, courseId);
     }
   }

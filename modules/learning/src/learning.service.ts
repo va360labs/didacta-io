@@ -328,12 +328,13 @@ export class LearningService {
     if (!enrollment) throw new EnrollmentNotFoundError();
 
     // DRIP: no permitir registrar progreso en una lección aún no liberada.
+    // Ancla = enrolledAt (mismo criterio que getCourseAvailability; estable).
     await this.assertLessonUnlocked(
       tenantId,
       userId,
       enrollment.courseId,
       dto.lessonId,
-      enrollment.startedAt ?? enrollment.enrolledAt,
+      enrollment.enrolledAt,
     );
 
     const updated = await this.prisma.modLearningProgress.upsert({
@@ -1089,6 +1090,19 @@ export class LearningService {
   }
 
   /**
+   * ¿El usuario tiene una matrícula viva (ACTIVE/COMPLETED) en el curso? Lo usa
+   * el host para gatear la entrega del CONTENIDO del curso a los alumnos (un
+   * no-matriculado no debe recibir el cuerpo de las lecciones).
+   */
+  async hasActiveEnrollment(tenantId: string, userId: string, courseId: string): Promise<boolean> {
+    const enrollment = await this.prisma.modLearningEnrollment.findUnique({
+      where: { tenantId_userId_courseId: { tenantId, userId, courseId } },
+      select: { status: true },
+    });
+    return enrollment?.status === 'ACTIVE' || enrollment?.status === 'COMPLETED';
+  }
+
+  /**
    * Disponibilidad de las lecciones de un curso para un alumno según el drip.
    * La consume el player del alumno para mostrar candados + "disponible en X días".
    */
@@ -1099,15 +1113,21 @@ export class LearningService {
   ): Promise<CourseDripAvailability> {
     const enrollment = await this.prisma.modLearningEnrollment.findUnique({
       where: { tenantId_userId_courseId: { tenantId, userId, courseId } },
-      select: { startedAt: true, enrolledAt: true },
+      select: { status: true, enrolledAt: true },
     });
-    if (!enrollment) return { drip: false, lessons: {} };
+    // Solo aplica drip sobre una matrícula viva (no CANCELLED/PAUSED).
+    if (!enrollment || (enrollment.status !== 'ACTIVE' && enrollment.status !== 'COMPLETED')) {
+      return { drip: false, lessons: {} };
+    }
 
     const rules = await this.getApplicableDripRules(tenantId, userId, courseId);
     if (rules.length === 0) return { drip: false, lessons: {} };
 
     const ordered = await this.orderedLessons(tenantId, courseId);
-    const anchor = enrollment.startedAt ?? enrollment.enrolledAt;
+    // Ancla del drip = enrolledAt (inmutable, momento real de entrada al curso).
+    // NO usamos startedAt: se materializa al primer progreso y desplazaría todo
+    // el calendario hacia delante, re-bloqueando lecciones ya disponibles.
+    const anchor = enrollment.enrolledAt;
     const map = computeDripAvailability(ordered, rules, anchor, new Date());
 
     const lessons: Record<string, { availableAt: string; available: boolean }> = {};
@@ -1115,6 +1135,38 @@ export class LearningService {
       lessons[lessonId] = { availableAt: v.availableAt.toISOString(), available: v.available };
     }
     return { drip: true, lessons };
+  }
+
+  /**
+   * Gate de drip por `lessonId` (sin enrollmentId): resuelve el curso desde la
+   * lección y la matrícula del usuario, y lanza LessonLockedError si la lección
+   * no está liberada. Lo usan los endpoints SCORM (abrir/commitear attempt), que
+   * no pasan por `trackProgress` y por tanto se saltaban el drip.
+   */
+  async assertLessonAccessible(tenantId: string, userId: string, lessonId: string): Promise<void> {
+    const lesson = await this.prisma.modCoursesLesson.findFirst({
+      where: { tenantId, id: lessonId, deletedAt: null },
+      select: { moduleId: true },
+    });
+    if (!lesson) return;
+    const mod = await this.prisma.modCoursesModule.findFirst({
+      where: { tenantId, id: lesson.moduleId },
+      select: { courseId: true },
+    });
+    if (!mod) return;
+    const enrollment = await this.prisma.modLearningEnrollment.findUnique({
+      where: { tenantId_userId_courseId: { tenantId, userId, courseId: mod.courseId } },
+      select: { status: true, enrolledAt: true },
+    });
+    if (!enrollment || (enrollment.status !== 'ACTIVE' && enrollment.status !== 'COMPLETED'))
+      return;
+    await this.assertLessonUnlocked(
+      tenantId,
+      userId,
+      mod.courseId,
+      lessonId,
+      enrollment.enrolledAt,
+    );
   }
 
   /**

@@ -28,14 +28,14 @@ function build(opts: {
   schedules: DripRow[];
   userTier?: { manualName?: string | null; derivedLabel?: string | null } | null;
   memberGroupIds?: string[];
-  enrollment?: { startedAt: Date | null; enrolledAt: Date } | null;
+  enrollment?: { status?: string; startedAt?: Date | null; enrolledAt: Date } | null;
 }) {
   // El service calcula disponibilidad contra el `new Date()` real, así que
   // anclamos la matrícula en "ahora": la unidad 0 queda libre y las siguientes
   // (a +N días) bloqueadas, sea cual sea la fecha real de ejecución del test.
   const enrollment =
     opts.enrollment === undefined
-      ? { startedAt: null as Date | null, enrolledAt: new Date() }
+      ? { status: 'ACTIVE', startedAt: null as Date | null, enrolledAt: new Date() }
       : opts.enrollment;
 
   const prisma = {
@@ -137,5 +137,34 @@ describe('LearningService.getCourseAvailability (drip)', () => {
     expect(res.lessons['L0'].available).toBe(true);
     expect(res.lessons['L1'].available).toBe(true);
     expect(res.lessons['L2'].available).toBe(false);
+  });
+
+  // B2: ancla estable = enrolledAt (no startedAt). Regresión del re-bloqueo.
+  it('ancla estable: usa enrolledAt aunque startedAt sea posterior (no re-bloquea)', async () => {
+    const now = new Date();
+    const later = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000); // como si el 1er progreso fuera 5d después
+    const svc = build({
+      schedules: [tierSchedule()],
+      userTier: { manualName: 'Pro' },
+      enrollment: { status: 'ACTIVE', startedAt: later, enrolledAt: now },
+    });
+    const res = await svc.getCourseAvailability(TENANT, 'u1', COURSE);
+    expect(res.drip).toBe(true);
+    // Con ancla=enrolledAt (now), L0 está libre. Si usara startedAt (later) estaría bloqueada.
+    expect(res.lessons['L0'].available).toBe(true);
+    // L1 se libera a enrolledAt + 7d, no a startedAt + 7d.
+    const unlock = new Date(res.lessons['L1'].availableAt).getTime();
+    expect(Math.abs(unlock - (now.getTime() + 7 * 24 * 60 * 60 * 1000))).toBeLessThan(2000);
+  });
+
+  // M7: el drip no aplica sobre una matrícula no viva (CANCELLED/PAUSED).
+  it('matrícula CANCELLED → sin drip', async () => {
+    const svc = build({
+      schedules: [tierSchedule()],
+      userTier: { manualName: 'Pro' },
+      enrollment: { status: 'CANCELLED', enrolledAt: new Date() },
+    });
+    const res = await svc.getCourseAvailability(TENANT, 'u1', COURSE);
+    expect(res.drip).toBe(false);
   });
 });
