@@ -14,10 +14,5 @@
     { "name": "zoom.session.recording_ready" }
   ],
   "apiNamespace": "/modules/zoom-live",
-  "surfaces": {
-    "admin": {
-      "entry": "dist/ui/admin.js",
-      "roles": ["super_admin", "tenant_admin"]
-    }
-  }
+  "surfaces": ["admin", "formador"]
 }
