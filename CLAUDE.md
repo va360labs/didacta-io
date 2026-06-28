@@ -80,8 +80,10 @@ Toda la documentación vive en Notion → [LMS Ship](https://www.notion.so/LMS-S
 - **Commits**: Conventional Commits obligatorios. Nunca añadir "Co-Authored-By" ni atribuciones a la IA.
 - **Tests**: obligatorios para lógica de negocio. Coverage mínimo 70% en services y handlers.
 - **Contrato de módulo**: respetar en todo cambio a `modules/*`. Si algo no cumple el contrato, no es un módulo de Didacta.
-- **Sin dependencias cruzadas entre módulos**: comunicación solo vía eventos, hooks o APIs públicas del core.
-- **ADRs obligatorias**: para decisiones arquitectónicas no triviales. Ver `docs/adrs/` (cuando exista).
+- **Dependencias entre módulos (ver ADR-016, dos niveles)**:
+  - **Third-party del marketplace** (ZIP firmado, VM sandbox, `sandboxed-db`): independencia **zero-tolerance** — solo sus tablas; comunicación solo vía eventos, hooks o APIs públicas del core. No negociable.
+  - **Core first-party** (in-tree, schema Prisma compartido): puede **leer** (nunca escribir) tablas de otros módulos filtrando por `tenant_id`, **declarando la dependencia en el manifest** (`optionalModules`/`modules`), sin FKs cross-module, y prefiriendo el service público del módulo dueño cuando exista.
+- **ADRs obligatorias**: para decisiones arquitectónicas no triviales. Viven en Notion (índice "ADRs — Architecture Decision Records"), NO en el repo (regla #1). El `docs/adrs/` heredado es legado a migrar.
 - **Ramas**: `feat/<descripción-corta>`, `fix/<descripción>`, `chore/<descripción>`, `docs/<descripción>`.
 - **Pull Requests**: uno por feature. Descripción en español con resumen, cambios y plan de test.
 
@@ -107,8 +109,9 @@ Planificación viva en Notion: [LMS Ship](https://www.notion.so/LMS-Ship-34cb609
 
 ## Anti-patrones prohibidos
 
-- Import directo de código de otro módulo.
-- Lectura directa de tablas ajenas vía Prisma (saltea permisos y API pública).
+- Import directo de código de otro módulo (third-party: siempre; core first-party: tampoco — usa el core o el barrel público).
+- **Escritura** en tablas de otro módulo (en CUALQUIER nivel). La lectura cross-table está acotada por ADR-016: prohibida en third-party (sandbox), permitida en core first-party con `tenant_id` + dependencia declarada en manifest.
+- Lectura cross-table sin filtrar por `tenant_id`, o sin declarar la dependencia en el manifest (core first-party).
 - Modificar el core para añadir features de un módulo.
 - Eventos emitidos sin declararlos en el manifest.
 - FKs entre tablas de módulos distintos.
