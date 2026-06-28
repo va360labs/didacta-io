@@ -18,10 +18,6 @@
     "admin": {
       "entry": "dist/ui/admin.js",
       "roles": ["super_admin", "tenant_admin"]
-    },
-    "formador": {
-      "entry": "dist/ui/formador.js",
-      "roles": ["super_admin", "tenant_admin", "formador"]
     }
   }
 }
