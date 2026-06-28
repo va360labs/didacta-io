@@ -371,7 +371,12 @@ function buildGroups({
   // `moduleExtensions[].sidebarItems`. El core no debe conocer features de
   // un módulo (rompe el contrato de módulo).
   const profesor: SidebarGroup = {
-    label: 'Profesor',
+    // El label DEBE ser 'Formador' (no 'Profesor'): es la clave por la que
+    // `mergeExtensionSidebarItems` inserta los items de extensión de los módulos
+    // (zoom-live → Aula virtual, certificates → Plantillas certificado, …), que
+    // declaran `group: 'Formador'`. Con 'Profesor' el merge no casaba y esos
+    // items se caían silenciosamente (features huérfanas).
+    label: 'Formador',
     icon: 'edit',
     items: [
       { href: '/formador', label: 'Panel', icon: 'chart', exactMatch: true },
@@ -421,6 +426,7 @@ function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): SidebarG
       { href: '/admin/usuarios', label: 'Usuarios y roles', icon: 'users' },
       { href: '/admin/grupos-acceso', label: 'Grupos de acceso', icon: 'lock' },
       { href: '/admin/competencias', label: 'Competencias', icon: 'award' },
+      { href: '/admin/cursos/categorias', label: 'Categorías de cursos', icon: 'book' },
       { href: '/admin/branding', label: 'Branding', icon: 'palette' },
       { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
     ],
@@ -460,6 +466,8 @@ function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): SidebarG
       { href: '/admin/api-keys', label: 'Claves API', icon: 'code' },
       { href: '/admin/rate-limit', label: 'Límites API', icon: 'trending' },
       { href: '/admin/dominios', label: 'Dominios propios', icon: 'building' },
+      { href: '/admin/ia/providers', label: 'Proveedores de IA', icon: 'sparkles' },
+      { href: '/admin/zoom/webhook-events', label: 'Webhooks Zoom', icon: 'calendar' },
     ],
   };
   const groups: SidebarGroup[] = [general, comunidad, facturacion, seguridad, integraciones];
@@ -469,7 +477,6 @@ function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): SidebarG
       icon: 'building',
       items: [
         { href: '/admin/tenants', label: 'Tenants', icon: 'building' },
-        { href: '/super/users', label: 'Usuarios cross-tenant', icon: 'users' },
         { href: '/admin/marketplace', label: 'Marketplace módulos', icon: 'package' },
       ],
     });
