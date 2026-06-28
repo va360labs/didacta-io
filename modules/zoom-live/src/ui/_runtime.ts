@@ -106,6 +106,11 @@ export const CardHeader = runtime.ui.CardHeader;
 export const CardTitle = runtime.ui.CardTitle;
 export const Input = runtime.ui.Input;
 export const Label = runtime.ui.Label;
+export const Badge = runtime.ui.Badge;
+export const Select = runtime.ui.Select;
+export const Textarea = runtime.ui.Textarea;
 
+export const apiFetch = runtime.api.fetch;
 export const apiFetchAuth = runtime.api.fetchAuth;
+export const meApi = runtime.api.me;
 export const ApiHttpError = runtime.api.ApiHttpError;

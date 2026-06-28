@@ -18,7 +18,7 @@
   "scripts": {
     "build": "pnpm run build:server && pnpm run build:ui",
     "build:server": "tsc -p tsconfig.json",
-    "build:ui": "esbuild src/ui/admin.tsx --bundle --platform=browser --target=es2020 --format=iife --global-name=__didacta_module_exports__ --jsx=transform --jsx-factory=React.createElement --jsx-fragment=React.Fragment --outfile=dist/ui/admin.js",
+    "build:ui": "esbuild src/ui/admin.tsx --bundle --platform=browser --target=es2020 --format=iife --global-name=__didacta_module_exports__ --jsx=transform --jsx-factory=React.createElement --jsx-fragment=React.Fragment --outfile=dist/ui/admin.js && esbuild src/ui/formador.tsx --bundle --platform=browser --target=es2020 --format=iife --global-name=__didacta_module_exports__ --jsx=transform --jsx-factory=React.createElement --jsx-fragment=React.Fragment --outfile=dist/ui/formador.js",
     "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.ui.json --noEmit",
     "test": "vitest run",
