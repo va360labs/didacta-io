@@ -32,6 +32,8 @@ export function AccountSecurityTab() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  // True si la contraseña actual es temporal (alta por inscripción externa):
+  // el shell redirige aquí y mostramos un aviso explicando que debe cambiarla.
   const [mustChange, setMustChange] = useState(false);
 
   async function loadSessions() {
