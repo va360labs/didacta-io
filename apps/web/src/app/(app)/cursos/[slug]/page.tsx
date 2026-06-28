@@ -405,55 +405,79 @@ export default function CourseAlumnoPage() {
             </p>
 
             <nav className="mt-4 space-y-5">
-              {course.modules.map((m, idx) => (
-                <div key={m.id}>
-                  <h4 className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
-                    <span className="tabular-nums text-text-subtle">
-                      {String(idx + 1).padStart(2, '0')}
-                    </span>
-                    <span className="flex-1 normal-case tracking-normal text-text">{m.title}</span>
-                  </h4>
-                  <ul className="space-y-0.5">
-                    {m.lessons.map((l, lessonIdx) => {
-                      const isActive = activeLessonId === l.id;
-                      const isDone = progressByLesson[l.id];
-                      const lock = availability[l.id];
-                      const locked = !!lock && !lock.available;
-                      return (
-                        <li key={l.id}>
-                          <button
-                            type="button"
-                            onClick={() => setActiveLessonId(l.id)}
-                            className={
-                              isActive
-                                ? 'flex w-full items-center gap-3 rounded-[10px] border border-[rgba(46,125,206,0.32)] bg-[var(--didacta-info-bg)] px-3 py-2.5 text-left text-sm font-semibold text-[var(--didacta-info-fg)]'
-                                : 'flex w-full items-center gap-3 rounded-[10px] border border-transparent px-3 py-2.5 text-left text-sm text-text transition-colors hover:bg-surface-3'
-                            }
-                          >
-                            <LessonAvatar
-                              done={!!isDone}
-                              active={isActive}
-                              number={lessonIdx + 1}
-                            />
-                            <span className={`flex-1 truncate ${locked ? 'text-text-muted' : ''}`}>
-                              {l.title}
-                            </span>
-                            {locked ? (
-                              <Badge variant="warning" className="shrink-0 text-[10px]">
-                                🔒 {formatLockHint(lock.availableAt)}
-                              </Badge>
-                            ) : (
-                              <Badge variant="muted" className="shrink-0 text-[10px]">
-                                {LESSON_TYPE_LABEL[l.type] ?? l.type}
-                              </Badge>
-                            )}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              ))}
+              {course.modules.map((m, idx) => {
+                // Liberación por MÓDULO: si TODAS las lecciones están bloqueadas y
+                // comparten la misma fecha, mostramos un único candado en la
+                // cabecera ("el módulo se libera el…") en vez de N candados iguales.
+                const modLocks = m.lessons
+                  .map((l) => availability[l.id])
+                  .filter((x): x is { availableAt: string; available: boolean } => !!x);
+                const moduleHint =
+                  m.lessons.length >= 2 &&
+                  modLocks.length === m.lessons.length &&
+                  modLocks.every((x) => !x.available) &&
+                  new Set(modLocks.map((x) => x.availableAt)).size === 1
+                    ? formatLockHint(modLocks[0]!.availableAt)
+                    : null;
+                return (
+                  <div key={m.id}>
+                    <h4 className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+                      <span className="tabular-nums text-text-subtle">
+                        {String(idx + 1).padStart(2, '0')}
+                      </span>
+                      <span className="flex-1 normal-case tracking-normal text-text">
+                        {m.title}
+                      </span>
+                      {moduleHint && (
+                        <Badge variant="warning" className="shrink-0 text-[10px]">
+                          🔒 módulo · {moduleHint}
+                        </Badge>
+                      )}
+                    </h4>
+                    <ul className="space-y-0.5">
+                      {m.lessons.map((l, lessonIdx) => {
+                        const isActive = activeLessonId === l.id;
+                        const isDone = progressByLesson[l.id];
+                        const lock = availability[l.id];
+                        const locked = !!lock && !lock.available;
+                        return (
+                          <li key={l.id}>
+                            <button
+                              type="button"
+                              onClick={() => setActiveLessonId(l.id)}
+                              className={
+                                isActive
+                                  ? 'flex w-full items-center gap-3 rounded-[10px] border border-[rgba(46,125,206,0.32)] bg-[var(--didacta-info-bg)] px-3 py-2.5 text-left text-sm font-semibold text-[var(--didacta-info-fg)]'
+                                  : 'flex w-full items-center gap-3 rounded-[10px] border border-transparent px-3 py-2.5 text-left text-sm text-text transition-colors hover:bg-surface-3'
+                              }
+                            >
+                              <LessonAvatar
+                                done={!!isDone}
+                                active={isActive}
+                                number={lessonIdx + 1}
+                              />
+                              <span
+                                className={`flex-1 truncate ${locked ? 'text-text-muted' : ''}`}
+                              >
+                                {l.title}
+                              </span>
+                              {locked ? (
+                                <Badge variant="warning" className="shrink-0 text-[10px]">
+                                  🔒 {formatLockHint(lock.availableAt)}
+                                </Badge>
+                              ) : (
+                                <Badge variant="muted" className="shrink-0 text-[10px]">
+                                  {LESSON_TYPE_LABEL[l.type] ?? l.type}
+                                </Badge>
+                              )}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })}
             </nav>
           </CardContent>
         </Card>

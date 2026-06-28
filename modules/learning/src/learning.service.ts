@@ -1090,6 +1090,18 @@ export class LearningService {
   }
 
   /**
+   * Borra los calendarios de drip de audiencia GROUP que apuntan a un grupo de
+   * acceso. Lo invoca mod.access-groups al borrar un grupo (orquestación del
+   * host) para no dejar schedules huérfanos referenciando un grupo inexistente.
+   */
+  async deleteDripSchedulesForGroup(tenantId: string, groupId: string): Promise<number> {
+    const res = await this.prisma.modLearningDripSchedule.deleteMany({
+      where: { tenantId, audienceKind: 'GROUP', audienceRef: groupId },
+    });
+    return res.count;
+  }
+
+  /**
    * ¿El usuario tiene una matrícula viva (ACTIVE/COMPLETED) en el curso? Lo usa
    * el host para gatear la entrega del CONTENIDO del curso a los alumnos (un
    * no-matriculado no debe recibir el cuerpo de las lecciones).

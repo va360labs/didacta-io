@@ -299,6 +299,18 @@ export class AccessGroupsService {
       data: { status: 'REVOKED', revokedAt: new Date() },
     });
 
+    // Limpia los calendarios de drip de audiencia GROUP que apuntaban a este
+    // grupo (si no, quedarían huérfanos referenciando un grupo inexistente). No
+    // escribimos la tabla de mod.learning directamente: lo hace su propio service.
+    try {
+      await this.registry.getLearningService().deleteDripSchedulesForGroup(tenantId, id);
+    } catch (err) {
+      this.logger.warn(
+        { err, tenantId, groupId: id },
+        'access-groups: no se pudieron limpiar los drips del grupo borrado (no bloqueante)',
+      );
+    }
+
     await this.audit(tenantId, 'access_group.deleted', id, { revokedMembers: members.length });
     return { deleted: true, revokedMembers: members.length };
   }
@@ -608,11 +620,16 @@ export class AccessGroupsService {
       return { addedToGroups: 0, removedFromGroups: 0 };
     }
 
+    // Conteos REALES de cambios (no candidatos): solo las altas nuevas y las
+    // bajas efectivas, para que el audit y el retorno no engañen.
+    let addedToGroups = 0;
+    const removedToGroups = staleTierMemberships.length;
     await this.tenantContext.run({ tenantId, traceId: randomUUID() }, async () => {
       const learning = this.registry.getLearningService();
       for (const group of linkedGroups) {
         const added = await this.activateMembership(tenantId, group.id, userId, 'TIER');
         if (added) {
+          addedToGroups += 1;
           await this.prisma.modAccessGroup.update({
             where: { id: group.id },
             data: { memberCount: { increment: 1 } },
@@ -636,12 +653,15 @@ export class AccessGroupsService {
       }
     });
 
+    // Auditamos el cambio sobre el USUARIO (resourceId=userId); incluimos userId
+    // en metadata para que sea localizable con independencia del resourceType.
     await this.audit(tenantId, 'access_group.tier_reconciled', userId, {
+      userId,
       tierName,
-      addedToGroups: linkedGroups.length,
-      removedFromGroups: staleTierMemberships.length,
+      addedToGroups,
+      removedFromGroups: removedToGroups,
     });
-    return { addedToGroups: linkedGroups.length, removedFromGroups: staleTierMemberships.length };
+    return { addedToGroups, removedFromGroups: removedToGroups };
   }
 
   /**
