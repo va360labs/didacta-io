@@ -7,6 +7,12 @@
     "isolatedModules": false,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
+    // La API es una APLICACIÓN (su dist se ejecuta, no se importa como librería):
+    // no emitimos .d.ts. Evita TS2742 al inferir tipos de Prisma a través del
+    // límite de paquete — error que SOLO aparece al emitir declaraciones en el
+    // build de producción (`nest build`), no en `tsc --noEmit` ni en `next dev`.
+    "declaration": false,
+    "declarationMap": false,
     "outDir": "./dist",
     "rootDir": "./src",
     "baseUrl": "./src",
