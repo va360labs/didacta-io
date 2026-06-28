@@ -70,6 +70,8 @@ let lesson0 = '';
 let lesson1 = '';
 let dripId = '';
 let studentOnboardedAt = '';
+let evidenciaTierId = '';
+let enrolledAt = '';
 let availability: {
   drip: boolean;
   lessons: Record<string, { availableAt: string; available: boolean }>;
@@ -170,13 +172,13 @@ test.beforeAll(async () => {
   studentOnboardedAt = onb.body?.onboardingCompletedAt ?? new Date().toISOString();
 
   // 5. Matrícula del alumno.
-  const enroll = await http<{ id: string }>('/api/v1/modules/learning/enrollments/me', {
-    method: 'POST',
-    bearer: studentToken,
-    body: { courseId },
-  });
+  const enroll = await http<{ id: string; enrolledAt: string }>(
+    '/api/v1/modules/learning/enrollments/me',
+    { method: 'POST', bearer: studentToken, body: { courseId } },
+  );
   expect(enroll.ok, `self-enroll (got ${enroll.status})`).toBe(true);
   enrollmentId = enroll.body.id;
+  enrolledAt = enroll.body.enrolledAt;
 
   // 5. Drip: TIER del alumno (lo asignamos manual) cada 7 días, por lección.
   //    Asignamos al alumno el tier "Evidencia" y creamos el drip para ese tier
@@ -186,13 +188,14 @@ test.beforeAll(async () => {
     '/api/v1/modules/payment-connections/tiers/catalog',
     { method: 'POST', bearer: adminToken, body: { name: `Evidencia ${stamp}` } },
   );
-  if (tier.ok) {
-    await http(`/api/v1/modules/payment-connections/user-tiers/${studentUser.id}`, {
-      method: 'PUT',
-      bearer: adminToken,
-      body: { tierId: tier.body.tier.id },
-    });
-  }
+  expect(tier.ok, `crear tier (got ${tier.status}; el admin seed debe ser super_admin)`).toBe(true);
+  evidenciaTierId = tier.body.tier.id;
+  const assign = await http(`/api/v1/modules/payment-connections/user-tiers/${studentUser.id}`, {
+    method: 'PUT',
+    bearer: adminToken,
+    body: { tierId: evidenciaTierId },
+  });
+  expect(assign.ok, `asignar tier al alumno (got ${assign.status})`).toBe(true);
   const drip = await http<{ schedule: { id: string } }>(
     `/api/v1/modules/learning/courses/${courseId}/drip`,
     {
@@ -224,14 +227,19 @@ test.afterAll(async () => {
   }
 });
 
-test('1) availability: lección 0 libre, lección 1 bloqueada (~ matrícula + 7 días)', async () => {
+test('1) availability: lección 0 libre, lección 1 bloqueada en enrolledAt + EXACTAMENTE 7 días', async () => {
   expect(availability.drip, 'el curso tiene drip para este alumno').toBe(true);
   expect(availability.lessons[lesson0]?.available, 'lección 0 disponible').toBe(true);
   expect(availability.lessons[lesson1]?.available, 'lección 1 bloqueada').toBe(false);
-  // La fecha de desbloqueo de la lección 1 ≈ ahora + 7 días (±1 día de margen).
+  // Ancla = enrolledAt (sin progreso aún → startedAt null). La fórmula es
+  // exacta: unlock(L1) = enrolledAt + 1×7 días. Tolerancia 2s (no ±1 día) para
+  // que un bug de la aritmética del offset NO pase desapercibido.
   const unlock = new Date(availability.lessons[lesson1]!.availableAt).getTime();
-  const sevenDays = Date.now() + 7 * 24 * 60 * 60 * 1000;
-  expect(Math.abs(unlock - sevenDays)).toBeLessThan(24 * 60 * 60 * 1000);
+  const expected = new Date(enrolledAt).getTime() + 7 * 24 * 60 * 60 * 1000;
+  expect(Math.abs(unlock - expected), 'unlock == enrolledAt + 7d exacto').toBeLessThan(2000);
+  // Y la lección 0 se desbloquea EN el ancla (offset 0), no antes ni después.
+  const unlock0 = new Date(availability.lessons[lesson0]!.availableAt).getTime();
+  expect(Math.abs(unlock0 - new Date(enrolledAt).getTime())).toBeLessThan(2000);
 });
 
 test('2) enforcement: progreso en lección BLOQUEADA → 403 LESSON_LOCKED', async () => {
@@ -280,7 +288,12 @@ test('5) UI admin: el panel de drip del editor muestra el calendario', async ({ 
   await page.goto(`/formador/cursos/${courseId}`);
 
   await expect(page.getByText('Liberación programada (drip)')).toBeVisible({ timeout: 20000 });
-  // El calendario creado aparece en la lista ("1 lección cada 7 día(s)").
+  // Anclamos al tier REAL creado en setup (no a un regex genérico que un
+  // placeholder hardcodeado podría satisfacer): el badge "Tier: Evidencia <stamp>".
+  await expect(page.getByText(new RegExp(`Tier:\\s*Evidencia ${stamp}`))).toBeVisible({
+    timeout: 10000,
+  });
+  // Y la cadencia "cada 7 día(s)" de ese calendario.
   await expect(page.getByText(/cada\s*7\s*día/i)).toBeVisible({ timeout: 10000 });
   await page.screenshot({ path: `${SHOTS}/05-admin-panel-drip.png`, fullPage: true });
 });
@@ -310,4 +323,105 @@ test('6) vínculo tier→grupo: PATCH linkedTierName persiste + badge en UI', as
 
   // Cleanup del grupo temporal.
   await http(`/api/v1/modules/access-groups/${gid}`, { method: 'DELETE', bearer: adminToken });
+});
+
+test('7) vínculo tier→grupo END-TO-END: asignar el tier reconcilia membresía TIER + auto-matrícula', async () => {
+  test.setTimeout(120000); // la reconciliación va por el outbox/BullMQ (asíncrona)
+
+  // Curso nuevo que el alumno NO tiene → para verificar la matrícula automática.
+  const c2 = (
+    await http<{ id: string }>('/api/v1/modules/courses', {
+      method: 'POST',
+      bearer: adminToken,
+      body: {
+        title: `Drip Reconcile ${stamp}`,
+        slug: `drip-reconcile-${stamp}`,
+        description: 'Curso del grupo vinculado al tier',
+        category: 'general',
+      },
+    })
+  ).body;
+  const m2 = (
+    await http<{ id: string }>(`/api/v1/modules/courses/${c2.id}/modules`, {
+      method: 'POST',
+      bearer: adminToken,
+      body: { title: 'M', orderIndex: 0 },
+    })
+  ).body;
+  await http(`/api/v1/modules/courses/modules/${m2.id}/lessons`, {
+    method: 'POST',
+    bearer: adminToken,
+    body: { title: 'L', type: 'TEXT', orderIndex: 0, content: { text: 'x' }, durationSec: 60 },
+  });
+  await http(`/api/v1/modules/courses/${c2.id}/publish`, { method: 'POST', bearer: adminToken });
+
+  // Grupo con ese curso, vinculado al tier que el alumno YA tiene.
+  const grp = (
+    await http<{ id: string }>('/api/v1/modules/access-groups', {
+      method: 'POST',
+      bearer: adminToken,
+      body: { name: `Reconcile ${stamp}`, kind: 'MULTI_COURSE', courseIds: [c2.id] },
+    })
+  ).body;
+  await http(`/api/v1/modules/access-groups/${grp.id}`, {
+    method: 'PATCH',
+    bearer: adminToken,
+    body: { linkedTierName: `Evidencia ${stamp}` },
+  });
+
+  // Disparador real: re-asignar el tier al alumno emite
+  // payment_connections.user_tier.changed → el bridge reconcilia la membresía.
+  const reassign = await http(`/api/v1/modules/payment-connections/user-tiers/${studentUser.id}`, {
+    method: 'PUT',
+    bearer: adminToken,
+    body: { tierId: evidenciaTierId },
+  });
+  expect(reassign.ok, `re-asignar tier (got ${reassign.status})`).toBe(true);
+
+  // Poll hasta que el outbox procese el evento: el alumno debe aparecer como
+  // miembro del grupo con source TIER.
+  let member: { userId: string; source: string } | undefined;
+  const deadline = Date.now() + 90000;
+  while (Date.now() < deadline) {
+    const detail = await http<{
+      members: Array<{ userId: string; source: string }>;
+    }>(`/api/v1/modules/access-groups/${grp.id}`, { bearer: adminToken });
+    member = detail.body.members?.find((mm) => mm.userId === studentUser.id);
+    if (member) break;
+    await new Promise((r) => setTimeout(r, 2500));
+  }
+  expect(member, 'el alumno fue añadido al grupo por el bridge de tiers').toBeDefined();
+  expect(member!.source, 'la membresía es de origen TIER').toBe('TIER');
+
+  // Y quedó auto-matriculado en el curso del grupo, con source GROUP.
+  const enrolls = await http<Array<{ courseId: string; source: string }>>(
+    '/api/v1/modules/learning/me/enrollments',
+    { bearer: studentToken },
+  );
+  const groupEnroll = enrolls.body.find((e) => e.courseId === c2.id);
+  expect(groupEnroll, 'el alumno se matriculó en el curso del grupo').toBeDefined();
+  expect(groupEnroll!.source, 'matrícula de origen GROUP').toBe('GROUP');
+
+  // BAJA DE TIER: quitar el tier debe revocar la membresía TIER (refcount).
+  await http(`/api/v1/modules/payment-connections/user-tiers/${studentUser.id}`, {
+    method: 'PUT',
+    bearer: adminToken,
+    body: { tierId: null },
+  });
+  let stillMember = true;
+  const deadline2 = Date.now() + 90000;
+  while (Date.now() < deadline2) {
+    const detail = await http<{ members: Array<{ userId: string }> }>(
+      `/api/v1/modules/access-groups/${grp.id}`,
+      { bearer: adminToken },
+    );
+    stillMember = !!detail.body.members?.find((mm) => mm.userId === studentUser.id);
+    if (!stillMember) break;
+    await new Promise((r) => setTimeout(r, 2500));
+  }
+  expect(stillMember, 'al quitar el tier, el alumno deja de ser miembro del grupo').toBe(false);
+
+  // Cleanup.
+  await http(`/api/v1/modules/access-groups/${grp.id}`, { method: 'DELETE', bearer: adminToken });
+  await http(`/api/v1/modules/courses/${c2.id}/archive`, { method: 'POST', bearer: adminToken });
 });
