@@ -411,6 +411,10 @@ export class PaymentConnectionsController {
 
     // Conexiones reconciliadas con éxito (para acotar la detección de churn).
     const reconciledConnectionIds: string[] = [];
+    // Planes de suscriptores SIN usuario en Didacta (unmatched): alimentan el
+    // CATÁLOGO de tiers aunque aún no se pueda asignar el tier a nadie. Sin esto,
+    // el catálogo solo reflejaría los planes de los pocos usuarios ya registrados.
+    const extraCatalogLabels = new Set<string>();
     for (const c of conns) {
       if (c.status !== 'VERIFIED') continue;
       try {
@@ -426,6 +430,10 @@ export class PaymentConnectionsController {
             ref: m.subscription.subscriptionId,
           });
         }
+        for (const sub of rec.unmatched) {
+          const label = sub.productName?.trim() || tierLabelFallback(sub);
+          if (label) extraCatalogLabels.add(label);
+        }
       } catch (err) {
         errors.push({ connectionId: c.id, message: (err as Error).message });
       }
@@ -435,7 +443,7 @@ export class PaymentConnectionsController {
     const { updated, tiersCreated, clearedUserIds } = await tiersSvc.applyDerivedTiers(
       user.tenantId,
       entries,
-      { reconciledConnectionIds },
+      { reconciledConnectionIds, extraCatalogLabels: [...extraCatalogLabels] },
     );
 
     // Emite el tier EFECTIVO de cada usuario afectado para que mod.access-groups

@@ -195,12 +195,23 @@ export class PaymentTiersService {
   async applyDerivedTiers(
     tenantId: string,
     entries: DerivedTierEntry[],
-    opts: { reconciledConnectionIds?: string[] } = {},
+    opts: { reconciledConnectionIds?: string[]; extraCatalogLabels?: string[] } = {},
   ): Promise<{ updated: number; tiersCreated: number; clearedUserIds: string[] }> {
-    // 1) Crear en el CATÁLOGO un tier por cada plan distinto que aún no exista,
-    //    para que el sync "cree los tiers" visibles en el panel (no solo el
-    //    derivedLabel por usuario). El admin luego puede renombrarlos/marcarlos free.
-    const distinctLabels = [...new Set(entries.map((e) => e.label.trim()).filter(Boolean))];
+    // 1) Crear en el CATÁLOGO un tier por cada plan distinto que aún no exista.
+    //    OJO: el catálogo se nutre de los planes de TODOS los suscriptores activos,
+    //    no solo de los que ya son usuarios de Didacta (`entries`). Por eso el caller
+    //    pasa también `extraCatalogLabels` con los planes de los suscriptores SIN
+    //    usuario en Didacta (unmatched): si no, durante la migración (pocos usuarios
+    //    registrados) faltarían más de la mitad de los tiers. La ASIGNACIÓN por
+    //    usuario (paso 2) sigue siendo solo para `entries` (a un no-usuario no se le
+    //    puede asignar tier todavía). El admin luego renombra/marca free.
+    const distinctLabels = [
+      ...new Set(
+        [...entries.map((e) => e.label), ...(opts.extraCatalogLabels ?? [])]
+          .map((l) => l.trim())
+          .filter(Boolean),
+      ),
+    ];
     let tiersCreated = 0;
     for (const name of distinctLabels) {
       const existing = await this.prisma.modPaymentConnectionsTier.findFirst({

@@ -285,4 +285,23 @@ describe('sync: auto-crear tiers de catálogo + conteo de usuarios', () => {
     expect(wc.find((t) => t.id === pro.id)!.memberCount).toBe(0);
     expect(wc.find((t) => t.id === free.id)!.memberCount).toBe(1);
   });
+
+  it('extraCatalogLabels crea tiers de catálogo (planes de suscriptores SIN usuario) sin asignar a nadie', async () => {
+    // Regresión del bug "faltan tiers": el catálogo se nutre también de los planes
+    // de suscriptores unmatched (no registrados en Didacta), no solo de los entries.
+    const r = await svc.service.applyDerivedTiers(
+      TENANT,
+      [{ userId: 'u1', label: 'Plan Pro', provider: 'stripe' }],
+      { extraCatalogLabels: ['Plan Pro', 'Cohorte 2024', 'Anual'] }, // 'Plan Pro' ya en entries → no duplica
+    );
+    expect(r.tiersCreated).toBe(3); // Plan Pro + Cohorte 2024 + Anual
+    expect(r.updated).toBe(1); // solo se asigna al usuario de entries
+    const catalog = await svc.service.listCatalog(TENANT);
+    expect(catalog.map((t) => t.name).sort()).toEqual(['Anual', 'Cohorte 2024', 'Plan Pro']);
+    // Los planes solo-catálogo no asignan tier a ningún usuario.
+    const wc = await svc.service.listCatalogWithCounts(TENANT);
+    expect(wc.find((t) => t.name === 'Cohorte 2024')!.memberCount).toBe(0);
+    expect(wc.find((t) => t.name === 'Anual')!.memberCount).toBe(0);
+    expect(wc.find((t) => t.name === 'Plan Pro')!.memberCount).toBe(1);
+  });
 });
