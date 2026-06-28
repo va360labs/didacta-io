@@ -1,20 +1,32 @@
 /**
- * Tests de `AccessGroupsService` (mod.access-groups, Fase 2).
+ * Tests UNITARIOS de `AccessGroupsService` (mod.access-groups, Fase 2).
  *
- * Cubre la lógica de negocio central:
+ * Cubre la lógica de negocio central del vínculo tier→grupo y la
+ * materialización de accesos como enrollments del core (refcount + provenance):
+ *
  *  - createGroup: validación ALL_COURSES sin cursos explícitos, slug derivado y único.
  *  - assignMembers: fan-out a enrollments (ALL_COURSES → todos los publicados;
  *    COURSE → cursos del grupo), idempotencia (no duplica membresía/grant ni memberCount).
- *  - revokeMember: refcount — desmatricula solo si ningún otro grupo vivo otorga el curso.
+ *  - activateMembership (vía assignMembers/reconcileTierMembership): MANUAL sticky —
+ *    reactivar una MANUAL revocada NO la degrada a TIER; un alta MANUAL sobre una
+ *    TIER activa la promociona a MANUAL.
+ *  - revokeMember / revokeCourseFromUser: refcount — desmatricula solo si ningún
+ *    otro grupo vivo otorga el curso (incluye el advisory lock vía tx.$executeRaw).
  *  - setGroupCourses: reconciliación (otorga añadidos, revoca quitados por refcount).
+ *  - updateGroup(linkedTierName): al cambiar el vínculo retira a los miembros TIER
+ *    del vínculo anterior (revokeGroupTierMembers).
+ *  - reconcileTierMembership: añade TIER + matrícula a los grupos del tier; retira
+ *    (REVOKED) las membresías TIER "stale" de otros grupos y desmatricula; nunca
+ *    toca MANUAL; tierName=null retira todas las TIER; idempotente.
  *  - assignDefaultGroupOnApproval: usa el grupo por defecto; fallback enroll-all-published.
  *  - onCoursePublished: otorga el curso nuevo a miembros de grupos ALL_COURSES autoGrant.
  *
- * Usa fake-prisma in-memory + mocks de ModuleRegistryService (courses/learning).
+ * Usa fake-prisma in-memory + mocks de ModuleRegistryService (courses/learning),
+ * TenantContextService, PrismaAuditLogService y PinoLogger.
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { AlreadyEnrolledError } from '@didacta/mod-learning';
+import { AlreadyEnrolledError, LearningError } from '@didacta/mod-learning';
 import { AccessGroupsService } from '../src/modules/access-groups/access-groups.service';
 
 const TENANT = 'tenant-1';
@@ -28,6 +40,7 @@ interface GroupRow {
   kind: 'ALL_COURSES' | 'COURSE' | 'MULTI_COURSE';
   isDefaultForApproval: boolean;
   autoGrantNewCourses: boolean;
+  linkedTierName: string | null;
   memberCount: number;
   createdAt: Date;
   deletedAt: Date | null;
@@ -44,6 +57,7 @@ interface MemberRow {
   tenantId: string;
   userId: string;
   status: string;
+  source: 'MANUAL' | 'TIER';
   revokedAt: Date | null;
 }
 interface GrantRow {
@@ -55,6 +69,17 @@ interface GrantRow {
   revokedAt: Date | null;
 }
 
+/** Evalúa un valor de `where` que puede ser escalar o un operador Prisma. */
+function matchWhere(actual: unknown, condition: unknown): boolean {
+  if (condition === undefined) return true;
+  if (condition !== null && typeof condition === 'object') {
+    const cond = condition as Record<string, unknown>;
+    if ('in' in cond) return (cond.in as unknown[]).includes(actual);
+    if ('notIn' in cond) return !(cond.notIn as unknown[]).includes(actual);
+  }
+  return actual === condition;
+}
+
 function makeHarness(opts: { publishedCourses?: string[] } = {}) {
   const groups: GroupRow[] = [];
   const groupCourses: CourseRow[] = [];
@@ -64,6 +89,10 @@ function makeHarness(opts: { publishedCourses?: string[] } = {}) {
   const id = (p: string) => `${p}-${seq++}`;
 
   const prisma = {
+    // No-op del advisory lock dentro de la tx (revokeCourseFromUser).
+    async $executeRaw() {
+      return 0;
+    },
     modAccessGroup: {
       async create({ data }: { data: Partial<GroupRow> }) {
         const row: GroupRow = {
@@ -75,6 +104,7 @@ function makeHarness(opts: { publishedCourses?: string[] } = {}) {
           kind: data.kind!,
           isDefaultForApproval: data.isDefaultForApproval ?? false,
           autoGrantNewCourses: data.autoGrantNewCourses ?? true,
+          linkedTierName: data.linkedTierName ?? null,
           memberCount: 0,
           createdAt: new Date(),
           deletedAt: null,
@@ -92,12 +122,12 @@ function makeHarness(opts: { publishedCourses?: string[] } = {}) {
         const g =
           groups.find(
             (x) =>
-              (where.id === undefined || x.id === where.id) &&
-              (where.tenantId === undefined || x.tenantId === where.tenantId) &&
-              (where.slug === undefined || x.slug === where.slug) &&
-              (where.deletedAt === undefined || x.deletedAt === where.deletedAt) &&
-              (where.isDefaultForApproval === undefined ||
-                x.isDefaultForApproval === where.isDefaultForApproval),
+              matchWhere(x.id, where.id) &&
+              matchWhere(x.tenantId, where.tenantId) &&
+              matchWhere(x.slug, where.slug) &&
+              matchWhere(x.deletedAt, where.deletedAt) &&
+              matchWhere(x.isDefaultForApproval, where.isDefaultForApproval) &&
+              matchWhere(x.linkedTierName, where.linkedTierName),
           ) ?? null;
         if (!g) return null;
         if (include) {
@@ -111,20 +141,24 @@ function makeHarness(opts: { publishedCourses?: string[] } = {}) {
             members: include.members
               ? members
                   .filter((m) => m.groupId === g.id && m.status === 'ACTIVE')
-                  .map((m) => ({ userId: m.userId, grantedAt: new Date() }))
+                  .map((m) => ({ userId: m.userId, grantedAt: new Date(), source: m.source }))
               : undefined,
           };
         }
-        return g;
+        // Devolvemos una COPIA: Prisma materializa un objeto nuevo por query, así
+        // `before` (snapshot pre-update en updateGroup) no muta cuando un
+        // `update` posterior toca la fila viva del array in-memory.
+        return { ...g };
       },
       async findMany({ where, include }: { where: Record<string, unknown>; include?: unknown }) {
         const rows = groups.filter(
           (g) =>
-            (where.tenantId === undefined || g.tenantId === where.tenantId) &&
-            (where.deletedAt === undefined || g.deletedAt === where.deletedAt) &&
-            (where.kind === undefined || g.kind === where.kind) &&
-            (where.autoGrantNewCourses === undefined ||
-              g.autoGrantNewCourses === where.autoGrantNewCourses),
+            matchWhere(g.tenantId, where.tenantId) &&
+            matchWhere(g.deletedAt, where.deletedAt) &&
+            matchWhere(g.kind, where.kind) &&
+            matchWhere(g.autoGrantNewCourses, where.autoGrantNewCourses) &&
+            matchWhere(g.linkedTierName, where.linkedTierName) &&
+            matchWhere(g.isDefaultForApproval, where.isDefaultForApproval),
         );
         if (include) {
           return rows.map((g) => ({
@@ -132,13 +166,12 @@ function makeHarness(opts: { publishedCourses?: string[] } = {}) {
             _count: { courses: groupCourses.filter((c) => c.groupId === g.id).length },
           }));
         }
-        return rows;
+        // Copias (semántica Prisma): el caller no debe ver mutaciones in-place.
+        return rows.map((g) => ({ ...g }));
       },
       async count({ where }: { where: Record<string, unknown> }) {
         return groups.filter(
-          (g) =>
-            (where.tenantId === undefined || g.tenantId === where.tenantId) &&
-            (where.deletedAt === undefined || g.deletedAt === where.deletedAt),
+          (g) => matchWhere(g.tenantId, where.tenantId) && matchWhere(g.deletedAt, where.deletedAt),
         ).length;
       },
       async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) {
@@ -164,9 +197,8 @@ function makeHarness(opts: { publishedCourses?: string[] } = {}) {
         let count = 0;
         for (const g of groups) {
           if (
-            (where.tenantId === undefined || g.tenantId === where.tenantId) &&
-            (where.isDefaultForApproval === undefined ||
-              g.isDefaultForApproval === where.isDefaultForApproval) &&
+            matchWhere(g.tenantId, where.tenantId) &&
+            matchWhere(g.isDefaultForApproval, where.isDefaultForApproval) &&
             (where.NOT === undefined || g.id !== (where.NOT as { id: string }).id)
           ) {
             Object.assign(g, data);
@@ -179,9 +211,7 @@ function makeHarness(opts: { publishedCourses?: string[] } = {}) {
     modAccessGroupCourse: {
       async findMany({ where }: { where: Record<string, unknown> }) {
         return groupCourses.filter(
-          (c) =>
-            (where.tenantId === undefined || c.tenantId === where.tenantId) &&
-            (where.groupId === undefined || c.groupId === where.groupId),
+          (c) => matchWhere(c.tenantId, where.tenantId) && matchWhere(c.groupId, where.groupId),
         );
       },
       async createMany({ data }: { data: Array<Partial<CourseRow>> }) {
@@ -226,9 +256,11 @@ function makeHarness(opts: { publishedCourses?: string[] } = {}) {
       async findMany({ where }: { where: Record<string, unknown> }) {
         return members.filter(
           (m) =>
-            (where.tenantId === undefined || m.tenantId === where.tenantId) &&
-            (where.groupId === undefined || m.groupId === where.groupId) &&
-            (where.status === undefined || m.status === where.status),
+            matchWhere(m.tenantId, where.tenantId) &&
+            matchWhere(m.groupId, where.groupId) &&
+            matchWhere(m.userId, where.userId) &&
+            matchWhere(m.status, where.status) &&
+            matchWhere(m.source, where.source),
         );
       },
       async create({ data }: { data: Partial<MemberRow> }) {
@@ -238,6 +270,7 @@ function makeHarness(opts: { publishedCourses?: string[] } = {}) {
           tenantId: data.tenantId!,
           userId: data.userId!,
           status: data.status ?? 'ACTIVE',
+          source: (data.source as 'MANUAL' | 'TIER') ?? 'MANUAL',
           revokedAt: null,
         };
         members.push(row);
@@ -265,9 +298,10 @@ function makeHarness(opts: { publishedCourses?: string[] } = {}) {
         let count = 0;
         for (const m of members) {
           if (
-            m.tenantId === where.tenantId &&
-            m.groupId === where.groupId &&
-            (where.status === undefined || m.status === where.status)
+            matchWhere(m.tenantId, where.tenantId) &&
+            matchWhere(m.groupId, where.groupId) &&
+            matchWhere(m.status, where.status) &&
+            matchWhere(m.source, where.source)
           ) {
             Object.assign(m, data);
             count++;
@@ -409,6 +443,11 @@ function makeHarness(opts: { publishedCourses?: string[] } = {}) {
   };
 }
 
+/** Helper: localiza la membresía (group,user) en el array in-memory. */
+function member(h: ReturnType<typeof makeHarness>, groupId: string, userId: string) {
+  return h.members.find((m) => m.groupId === groupId && m.userId === userId);
+}
+
 describe('AccessGroupsService.createGroup', () => {
   it('rechaza ALL_COURSES con cursos explícitos', async () => {
     const h = makeHarness();
@@ -464,6 +503,17 @@ describe('AccessGroupsService.assignMembers', () => {
     expect(h.groups[0].memberCount).toBe(1);
   });
 
+  it('alta MANUAL marca la membresía con source=MANUAL', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'Solo C1',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.assignMembers(TENANT, g.id, ['u1']);
+    expect(member(h, g.id, 'u1')?.source).toBe('MANUAL');
+  });
+
   it('AlreadyEnrolledError de un curso no rompe el fan-out (grant igualmente registrado)', async () => {
     const h = makeHarness({ publishedCourses: ['c1', 'c2'] });
     h.enrollFromGroup.mockImplementation(async (_t: string, _u: string, courseId: string) => {
@@ -472,6 +522,18 @@ describe('AccessGroupsService.assignMembers', () => {
     });
     const g = await h.service.createGroup(TENANT, { name: 'Pro', kind: 'ALL_COURSES' } as never);
     await h.service.assignMembers(TENANT, g.id, ['u1']);
+    expect(h.grants.filter((x) => x.revokedAt === null)).toHaveLength(2);
+  });
+
+  it('LearningError no-AlreadyEnrolled no rompe el fan-out (grant registrado, se omite)', async () => {
+    const h = makeHarness({ publishedCourses: ['c1', 'c2'] });
+    h.enrollFromGroup.mockImplementation(async (_t: string, _u: string, courseId: string) => {
+      if (courseId === 'c1') throw new LearningError('COURSE_NOT_PUBLISHED', 'no publicado');
+      return { id: 'enr' };
+    });
+    const g = await h.service.createGroup(TENANT, { name: 'Pro', kind: 'ALL_COURSES' } as never);
+    await h.service.assignMembers(TENANT, g.id, ['u1']);
+    // Ambos grants quedan registrados aunque c1 no haya podido matricular.
     expect(h.grants.filter((x) => x.revokedAt === null)).toHaveLength(2);
   });
 
@@ -525,6 +587,18 @@ describe('AccessGroupsService.revokeMember (refcount)', () => {
     // Ya ningún grupo lo otorga → se desmatricula.
     expect(h.unenrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c1');
   });
+
+  it('revocar a un usuario no-miembro es no-op', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'G',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    const res = await h.service.revokeMember(TENANT, g.id, 'fantasma');
+    expect(res).toEqual({ revoked: false });
+    expect(h.unenrollFromGroup).not.toHaveBeenCalled();
+  });
 });
 
 describe('AccessGroupsService.setGroupCourses (reconciliación)', () => {
@@ -550,6 +624,218 @@ describe('AccessGroupsService.setGroupCourses (reconciliación)', () => {
     await expect(h.service.setGroupCourses(TENANT, g.id, { courseIds: ['c1'] })).rejects.toThrow(
       /ALL_COURSES/,
     );
+  });
+});
+
+describe('AccessGroupsService.updateGroup (vínculo de tier)', () => {
+  it('al cambiar linkedTierName retira a los miembros TIER del vínculo anterior', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'Pro',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    // Vinculamos al tier "gold" y reconciliamos a un usuario por tier.
+    await h.service.updateGroup(TENANT, g.id, { linkedTierName: 'gold' });
+    await h.service.reconcileTierMembership(TENANT, 'u1', 'gold');
+    expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
+    expect(member(h, g.id, 'u1')?.source).toBe('TIER');
+    expect(h.groups[0].memberCount).toBe(1);
+    h.unenrollFromGroup.mockClear();
+
+    // Cambiamos el vínculo a otro tier → los TIER del vínculo anterior se retiran.
+    await h.service.updateGroup(TENANT, g.id, { linkedTierName: 'silver' });
+    expect(member(h, g.id, 'u1')?.status).toBe('REVOKED');
+    expect(h.unenrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c1');
+    expect(h.groups[0].memberCount).toBe(0);
+  });
+
+  it('cadena vacía en linkedTierName se normaliza a null (desvincula)', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, { name: 'Pro', kind: 'ALL_COURSES' } as never);
+    await h.service.updateGroup(TENANT, g.id, { linkedTierName: 'gold' });
+    expect(h.groups[0].linkedTierName).toBe('gold');
+    await h.service.updateGroup(TENANT, g.id, { linkedTierName: '   ' });
+    expect(h.groups[0].linkedTierName).toBeNull();
+  });
+
+  it('no toca a los miembros MANUAL al cambiar el vínculo de tier', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'Pro',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.updateGroup(TENANT, g.id, { linkedTierName: 'gold' });
+    await h.service.assignMembers(TENANT, g.id, ['manual1']); // MANUAL
+    h.unenrollFromGroup.mockClear();
+
+    await h.service.updateGroup(TENANT, g.id, { linkedTierName: 'silver' });
+    expect(member(h, g.id, 'manual1')?.status).toBe('ACTIVE');
+    expect(h.unenrollFromGroup).not.toHaveBeenCalled();
+  });
+});
+
+describe('AccessGroupsService.reconcileTierMembership', () => {
+  it('añade al usuario como TIER y lo matricula en los cursos del grupo del tier', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'Gold',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.updateGroup(TENANT, g.id, { linkedTierName: 'gold' });
+
+    const res = await h.service.reconcileTierMembership(TENANT, 'u1', 'gold');
+    expect(res).toEqual({ addedToGroups: 1, removedFromGroups: 0 });
+    expect(member(h, g.id, 'u1')?.source).toBe('TIER');
+    expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
+    expect(h.enrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c1');
+    expect(h.groups[0].memberCount).toBe(1);
+  });
+
+  it('cambio de tier: retira la membresía TIER stale de otro grupo y desmatricula', async () => {
+    const h = makeHarness();
+    const gold = await h.service.createGroup(TENANT, {
+      name: 'Gold',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    const silver = await h.service.createGroup(TENANT, {
+      name: 'Silver',
+      kind: 'COURSE',
+      courseIds: ['c2'],
+    } as never);
+    await h.service.updateGroup(TENANT, gold.id, { linkedTierName: 'gold' });
+    await h.service.updateGroup(TENANT, silver.id, { linkedTierName: 'silver' });
+
+    // Entra por gold.
+    await h.service.reconcileTierMembership(TENANT, 'u1', 'gold');
+    expect(member(h, gold.id, 'u1')?.status).toBe('ACTIVE');
+    h.enrollFromGroup.mockClear();
+    h.unenrollFromGroup.mockClear();
+
+    // Sube a silver → sale de gold (stale TIER) y entra en silver.
+    const res = await h.service.reconcileTierMembership(TENANT, 'u1', 'silver');
+    expect(res).toEqual({ addedToGroups: 1, removedFromGroups: 1 });
+    expect(member(h, gold.id, 'u1')?.status).toBe('REVOKED');
+    expect(member(h, silver.id, 'u1')?.status).toBe('ACTIVE');
+    expect(h.unenrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c1'); // curso de gold
+    expect(h.enrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c2'); // curso de silver
+    expect(h.groups.find((g) => g.id === gold.id)?.memberCount).toBe(0);
+    expect(h.groups.find((g) => g.id === silver.id)?.memberCount).toBe(1);
+  });
+
+  it('NUNCA retira membresías source=MANUAL aunque el tier cambie', async () => {
+    const h = makeHarness();
+    const gold = await h.service.createGroup(TENANT, {
+      name: 'Gold',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.updateGroup(TENANT, gold.id, { linkedTierName: 'gold' });
+    // Alta MANUAL (no por tier).
+    await h.service.assignMembers(TENANT, gold.id, ['u1']);
+    expect(member(h, gold.id, 'u1')?.source).toBe('MANUAL');
+    h.unenrollFromGroup.mockClear();
+
+    // El usuario pasa a un tier que NO incluye gold → la MANUAL no se toca.
+    const res = await h.service.reconcileTierMembership(TENANT, 'u1', 'platinum');
+    expect(res.removedFromGroups).toBe(0);
+    expect(member(h, gold.id, 'u1')?.status).toBe('ACTIVE');
+    expect(member(h, gold.id, 'u1')?.source).toBe('MANUAL');
+    expect(h.unenrollFromGroup).not.toHaveBeenCalled();
+  });
+
+  it('tierName=null retira TODAS las membresías TIER del usuario', async () => {
+    const h = makeHarness();
+    const gold = await h.service.createGroup(TENANT, {
+      name: 'Gold',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.updateGroup(TENANT, gold.id, { linkedTierName: 'gold' });
+    await h.service.reconcileTierMembership(TENANT, 'u1', 'gold');
+    expect(member(h, gold.id, 'u1')?.status).toBe('ACTIVE');
+    h.unenrollFromGroup.mockClear();
+
+    const res = await h.service.reconcileTierMembership(TENANT, 'u1', null);
+    expect(res).toEqual({ addedToGroups: 0, removedFromGroups: 1 });
+    expect(member(h, gold.id, 'u1')?.status).toBe('REVOKED');
+    expect(h.unenrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c1');
+    expect(h.groups[0].memberCount).toBe(0);
+  });
+
+  it('es idempotente: re-reconciliar el mismo tier no descuadra memberCount ni duplica', async () => {
+    const h = makeHarness();
+    const gold = await h.service.createGroup(TENANT, {
+      name: 'Gold',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.updateGroup(TENANT, gold.id, { linkedTierName: 'gold' });
+
+    await h.service.reconcileTierMembership(TENANT, 'u1', 'gold');
+    await h.service.reconcileTierMembership(TENANT, 'u1', 'gold');
+    await h.service.reconcileTierMembership(TENANT, 'u1', 'gold');
+
+    expect(h.members.filter((m) => m.userId === 'u1' && m.groupId === gold.id)).toHaveLength(1);
+    expect(h.grants.filter((g) => g.userId === 'u1' && g.revokedAt === null)).toHaveLength(1);
+    expect(h.groups[0].memberCount).toBe(1);
+  });
+
+  it('sin grupos del tier ni membresías TIER stale → no-op', async () => {
+    const h = makeHarness();
+    const res = await h.service.reconcileTierMembership(TENANT, 'u1', 'inexistente');
+    expect(res).toEqual({ addedToGroups: 0, removedFromGroups: 0 });
+    expect(h.enrollFromGroup).not.toHaveBeenCalled();
+    expect(h.unenrollFromGroup).not.toHaveBeenCalled();
+  });
+});
+
+describe('AccessGroupsService.activateMembership (MANUAL sticky)', () => {
+  it('un alta MANUAL sobre una membresía TIER activa la promociona a MANUAL', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'Gold',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.updateGroup(TENANT, g.id, { linkedTierName: 'gold' });
+    // Entra por tier (TIER).
+    await h.service.reconcileTierMembership(TENANT, 'u1', 'gold');
+    expect(member(h, g.id, 'u1')?.source).toBe('TIER');
+
+    // El admin lo añade a mano → se promociona a MANUAL.
+    await h.service.assignMembers(TENANT, g.id, ['u1']);
+    expect(member(h, g.id, 'u1')?.source).toBe('MANUAL');
+
+    // Y ahora un tier-down ya NO lo retira (MANUAL sticky).
+    h.unenrollFromGroup.mockClear();
+    const res = await h.service.reconcileTierMembership(TENANT, 'u1', null);
+    expect(res.removedFromGroups).toBe(0);
+    expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
+    expect(h.unenrollFromGroup).not.toHaveBeenCalled();
+  });
+
+  it('reactivar una MANUAL revocada NO la degrada a TIER aunque la reactive el bridge', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'Gold',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.updateGroup(TENANT, g.id, { linkedTierName: 'gold' });
+    // Alta MANUAL y luego revocación manual.
+    await h.service.assignMembers(TENANT, g.id, ['u1']);
+    await h.service.revokeMember(TENANT, g.id, 'u1');
+    expect(member(h, g.id, 'u1')?.status).toBe('REVOKED');
+    expect(member(h, g.id, 'u1')?.source).toBe('MANUAL');
+
+    // El bridge de tier reactiva (source=TIER) → debe conservar MANUAL (sticky).
+    await h.service.reconcileTierMembership(TENANT, 'u1', 'gold');
+    expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
+    expect(member(h, g.id, 'u1')?.source).toBe('MANUAL');
   });
 });
 

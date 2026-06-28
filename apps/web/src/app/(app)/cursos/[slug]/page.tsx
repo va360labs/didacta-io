@@ -535,7 +535,13 @@ function formatLockHint(availableAtIso: string): string {
   if (days <= 0) return 'hoy';
   if (days === 1) return 'mañana';
   if (days <= 14) return `en ${days} días`;
-  return `el ${at.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}`;
+  // Incluye el año cuando la fecha cae en otro año (drips largos: "el 03/12/2027").
+  const sameYear = at.getFullYear() === new Date().getFullYear();
+  return `el ${at.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  })}`;
 }
 
 /**

@@ -40,6 +40,12 @@ export function DripPanel({ courseId }: { courseId: string }) {
   const [intervalDays, setIntervalDays] = useState(7);
   const [startOffsetDays, setStartOffsetDays] = useState(0);
 
+  // Edición inline de un calendario existente (la audiencia no cambia).
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editUnit, setEditUnit] = useState<DripUnit>('LESSON');
+  const [editInterval, setEditInterval] = useState(7);
+  const [editOffset, setEditOffset] = useState(0);
+
   async function reload() {
     try {
       setError(null);
@@ -100,6 +106,32 @@ export function DripPanel({ courseId }: { courseId: string }) {
       await reload();
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos actualizar.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startEdit(s: DripSchedule) {
+    setEditId(s.id);
+    setEditUnit(s.unit);
+    setEditInterval(s.intervalDays);
+    setEditOffset(s.startOffsetDays);
+  }
+
+  async function saveEdit() {
+    if (!editId) return;
+    setBusy(true);
+    try {
+      setError(null);
+      await learningApi.updateDripSchedule(editId, {
+        unit: editUnit,
+        intervalDays: editInterval,
+        startOffsetDays: editOffset,
+      });
+      setEditId(null);
+      await reload();
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar los cambios.');
     } finally {
       setBusy(false);
     }
@@ -206,9 +238,9 @@ export function DripPanel({ courseId }: { courseId: string }) {
             <Input
               id="drip-interval"
               type="number"
-              min={0}
+              min={1}
               value={intervalDays}
-              onChange={(e) => setIntervalDays(Math.max(0, Number(e.target.value) || 0))}
+              onChange={(e) => setIntervalDays(Math.max(1, Number(e.target.value) || 1))}
             />
           </div>
 
@@ -247,21 +279,68 @@ export function DripPanel({ courseId }: { courseId: string }) {
                 <Badge variant={s.audienceKind === 'TIER' ? 'warning' : 'info'}>
                   {audienceLabel(s)}
                 </Badge>
-                <span className="text-text">
-                  1 {s.unit === 'MODULE' ? 'módulo' : 'lección'} cada{' '}
-                  <strong>{s.intervalDays}</strong> día(s)
-                  {s.startOffsetDays > 0 ? ` · empieza a los ${s.startOffsetDays}d` : ''}
-                </span>
-                {!s.isActive && <Badge variant="muted">Inactivo</Badge>}
-                <div className="ml-auto flex items-center gap-3">
-                  <div className="flex items-center gap-1">
-                    <Switch checked={s.isActive} onCheckedChange={() => void toggleActive(s)} />
-                    <span className="text-text-muted">Activo</span>
-                  </div>
-                  <Button variant="ghost" onClick={() => void remove(s)} disabled={busy}>
-                    Eliminar
-                  </Button>
-                </div>
+                {editId === s.id ? (
+                  <>
+                    <Select
+                      value={editUnit}
+                      onChange={(e) => setEditUnit(e.target.value as DripUnit)}
+                      className="w-32"
+                    >
+                      <option value="LESSON">Lección</option>
+                      <option value="MODULE">Módulo</option>
+                    </Select>
+                    <label className="flex items-center gap-1">
+                      cada
+                      <Input
+                        type="number"
+                        min={1}
+                        value={editInterval}
+                        onChange={(e) => setEditInterval(Math.max(1, Number(e.target.value) || 1))}
+                        className="w-16"
+                      />
+                      día(s)
+                    </label>
+                    <label className="flex items-center gap-1">
+                      offset
+                      <Input
+                        type="number"
+                        min={0}
+                        value={editOffset}
+                        onChange={(e) => setEditOffset(Math.max(0, Number(e.target.value) || 0))}
+                        className="w-16"
+                      />
+                    </label>
+                    <div className="ml-auto flex items-center gap-2">
+                      <Button onClick={() => void saveEdit()} disabled={busy}>
+                        Guardar
+                      </Button>
+                      <Button variant="ghost" onClick={() => setEditId(null)} disabled={busy}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-text">
+                      1 {s.unit === 'MODULE' ? 'módulo' : 'lección'} cada{' '}
+                      <strong>{s.intervalDays}</strong> día(s)
+                      {s.startOffsetDays > 0 ? ` · empieza a los ${s.startOffsetDays}d` : ''}
+                    </span>
+                    {!s.isActive && <Badge variant="muted">Inactivo</Badge>}
+                    <div className="ml-auto flex items-center gap-3">
+                      <div className="flex items-center gap-1">
+                        <Switch checked={s.isActive} onCheckedChange={() => void toggleActive(s)} />
+                        <span className="text-text-muted">Activo</span>
+                      </div>
+                      <Button variant="ghost" onClick={() => startEdit(s)} disabled={busy}>
+                        Editar
+                      </Button>
+                      <Button variant="ghost" onClick={() => void remove(s)} disabled={busy}>
+                        Eliminar
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             ))
           )}

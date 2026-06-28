@@ -72,7 +72,8 @@ const createDripScheduleSchema = z
     /** Nombre del tier (TIER) o id del grupo de acceso (GROUP). */
     audienceRef: z.string().trim().min(1).max(200),
     unit: z.enum(['LESSON', 'MODULE']).optional(),
-    intervalDays: z.number().int().min(0).max(3650),
+    // Mínimo 1: "cada 0 días" liberaría todo de golpe (desactiva el gating).
+    intervalDays: z.number().int().min(1).max(3650),
     startOffsetDays: z.number().int().min(0).max(3650).optional(),
     isActive: z.boolean().optional(),
   })
@@ -82,7 +83,7 @@ type CreateDripScheduleDto = z.infer<typeof createDripScheduleSchema>;
 const updateDripScheduleSchema = z
   .object({
     unit: z.enum(['LESSON', 'MODULE']).optional(),
-    intervalDays: z.number().int().min(0).max(3650).optional(),
+    intervalDays: z.number().int().min(1).max(3650).optional(),
     startOffsetDays: z.number().int().min(0).max(3650).optional(),
     isActive: z.boolean().optional(),
   })

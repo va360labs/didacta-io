@@ -1049,7 +1049,7 @@ export class LearningService {
         audienceKind: input.audienceKind,
         audienceRef: input.audienceRef.trim(),
         unit: input.unit ?? 'LESSON',
-        intervalDays: Math.max(0, Math.trunc(input.intervalDays)),
+        intervalDays: Math.max(1, Math.trunc(input.intervalDays)),
         startOffsetDays: Math.max(0, Math.trunc(input.startOffsetDays ?? 0)),
         isActive: input.isActive ?? true,
       },
@@ -1074,7 +1074,7 @@ export class LearningService {
         intervalDays:
           input.intervalDays === undefined
             ? undefined
-            : Math.max(0, Math.trunc(input.intervalDays)),
+            : Math.max(1, Math.trunc(input.intervalDays)),
         startOffsetDays:
           input.startOffsetDays === undefined
             ? undefined
