@@ -117,6 +117,20 @@ const assignTierSchema = z
   })
   .strict();
 
+/** Filtros + paginación del listado del dashboard de control de suscripciones. */
+const subscribersQuerySchema = z
+  .object({
+    statusCategory: z.string().trim().max(40).optional(),
+    provider: z.enum(['stripe', 'paypal', 'woocommerce']).optional(),
+    connectionId: z.string().uuid().optional(),
+    onlyUnmatched: z.enum(['true', 'false']).optional(),
+    q: z.string().trim().max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(200).optional(),
+    offset: z.coerce.number().int().min(0).optional(),
+  })
+  .strict();
+type SubscribersQuery = z.infer<typeof subscribersQuerySchema>;
+
 @ApiTags('Payment Connections · Admin')
 @Controller('modules/payment-connections')
 @UseGuards(JwtAuthGuard)
@@ -467,6 +481,48 @@ export class PaymentConnectionsController {
       matched: entries.length,
       errors,
     };
+  }
+
+  // ---------------- Dashboard de control de suscripciones ----------------
+
+  @Post('subscriptions-dashboard/sync')
+  @ApiOperation({
+    summary:
+      'Sincroniza (on-demand) los suscriptores de TODAS las cuentas VERIFIED a la tabla ' +
+      'materializada del dashboard. Síncrono: puede tardar varios segundos por cuenta.',
+  })
+  async syncSubscribersNow(@CurrentUser() rawUser: SessionClaims | undefined) {
+    const user = this.assertSuperAdmin(rawUser);
+    return this.registry.getPaymentConnectionsService().syncSubscribers(user.tenantId);
+  }
+
+  @Get('subscriptions-dashboard')
+  @ApiOperation({
+    summary: 'Lista paginada + filtrada de suscriptores materializados (todas las cuentas).',
+  })
+  async listSubscribersDashboard(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(subscribersQuerySchema)) query: SubscribersQuery,
+  ) {
+    const user = this.assertSuperAdmin(rawUser);
+    return this.registry.getPaymentConnectionsService().listSubscribers(user.tenantId, {
+      statusCategory: query.statusCategory,
+      provider: query.provider,
+      connectionId: query.connectionId,
+      onlyUnmatched: query.onlyUnmatched === 'true',
+      q: query.q,
+      limit: query.limit,
+      offset: query.offset,
+    });
+  }
+
+  @Get('subscriptions-dashboard/summary')
+  @ApiOperation({
+    summary: 'Contadores por estado/proveedor + frescura del último sync (cabecera del dashboard).',
+  })
+  async subscribersSummary(@CurrentUser() rawUser: SessionClaims | undefined) {
+    const user = this.assertSuperAdmin(rawUser);
+    return this.registry.getPaymentConnectionsService().subscriberSummary(user.tenantId);
   }
 }
 

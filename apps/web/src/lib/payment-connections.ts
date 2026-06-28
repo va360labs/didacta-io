@@ -331,3 +331,88 @@ export interface TierSyncResult {
   matched: number;
   errors: Array<{ connectionId: string; message: string }>;
 }
+
+// ── Dashboard de control de suscripciones ─────────────────────────────────────
+
+/** Una fila de suscriptor materializado (lo que devuelve el dashboard). */
+export interface DashboardSubscriber {
+  id: string;
+  connectionId: string;
+  provider: string;
+  subscriptionId: string;
+  subscriptionCustomerId: string | null;
+  userId: string | null;
+  userEmail: string;
+  status: string;
+  statusCategory: string;
+  entitled: boolean;
+  productName: string | null;
+  unitAmount: number | null;
+  currency: string | null;
+  interval: string | null;
+  currentPeriodEnd: string | null;
+  renewalUrl: string | null;
+  lastSeenAt: string;
+}
+
+export interface SubscribersSummary {
+  total: number;
+  byCategory: Record<string, number>;
+  byProvider: Record<string, number>;
+  lastSyncedAt: string | null;
+  lastSyncStatus: string | null;
+}
+
+export interface SubscriberSyncOutcome {
+  connections: number;
+  upserted: number;
+  markedGone: number;
+  failures: Array<{ provider: string; connectionName: string; message: string }>;
+}
+
+export interface SubscribersListFilters {
+  statusCategory?: string;
+  provider?: string;
+  connectionId?: string;
+  onlyUnmatched?: boolean;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export const subscriptionsDashboardApi = {
+  /** Sincroniza on-demand (puede tardar varios segundos por cuenta). */
+  async sync(bearer: string): Promise<SubscriberSyncOutcome> {
+    return apiFetch<SubscriberSyncOutcome>(
+      `${BASE}/subscriptions-dashboard/sync`,
+      { method: 'POST' },
+      bearer,
+    );
+  },
+  async list(
+    bearer: string,
+    filters: SubscribersListFilters = {},
+  ): Promise<{ rows: DashboardSubscriber[]; total: number }> {
+    const qs = new URLSearchParams();
+    if (filters.statusCategory) qs.set('statusCategory', filters.statusCategory);
+    if (filters.provider) qs.set('provider', filters.provider);
+    if (filters.connectionId) qs.set('connectionId', filters.connectionId);
+    if (filters.onlyUnmatched) qs.set('onlyUnmatched', 'true');
+    if (filters.q) qs.set('q', filters.q);
+    if (filters.limit != null) qs.set('limit', String(filters.limit));
+    if (filters.offset != null) qs.set('offset', String(filters.offset));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return apiFetch<{ rows: DashboardSubscriber[]; total: number }>(
+      `${BASE}/subscriptions-dashboard${suffix}`,
+      { method: 'GET' },
+      bearer,
+    );
+  },
+  async summary(bearer: string): Promise<SubscribersSummary> {
+    return apiFetch<SubscribersSummary>(
+      `${BASE}/subscriptions-dashboard/summary`,
+      { method: 'GET' },
+      bearer,
+    );
+  },
+};
