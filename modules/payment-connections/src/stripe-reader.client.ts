@@ -81,7 +81,7 @@ export class StripeReadSdkAdapter implements StripeReadAdapter {
   private readonly productNameCache = new Map<string, string | null>();
 
   constructor(apiKey: string, StripeCtor: new (key: string, opts?: Stripe.StripeConfig) => Stripe) {
-    if (!apiKey) throw new StripeReadKeyInvalidError('clave vacía');
+    if (!apiKey) throw new StripeReadKeyInvalidError('clave de Stripe vacía');
     this.client = new StripeCtor(apiKey, {
       apiVersion: '2024-12-18.acacia' as Stripe.LatestApiVersion,
       timeout: 10_000,
@@ -255,9 +255,13 @@ function mapStripeError(err: unknown): PaymentConnectionsDomainError {
   const type = (err as { type?: string })?.type;
   const message = (err as Error)?.message ?? 'error desconocido';
   if (type === 'StripeAuthenticationError' || type === 'StripePermissionError') {
-    return new StripeReadKeyInvalidError(message);
+    // El hint de permisos es específico de Stripe → va en el reason (el mensaje
+    // base del error ya es neutral de proveedor).
+    return new StripeReadKeyInvalidError(
+      `Stripe: ${message} (la clave necesita permisos de lectura: Customers + Subscriptions = Read)`,
+    );
   }
-  return new StripeReadApiError(message);
+  return new StripeReadApiError(`Stripe: ${message}`);
 }
 
 type PaymentConnectionsDomainError = StripeReadKeyInvalidError | StripeReadApiError;

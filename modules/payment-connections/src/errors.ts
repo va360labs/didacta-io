@@ -44,10 +44,17 @@ export class PaymentConnectionProviderNotSupportedError extends PaymentConnectio
   }
 }
 
+/**
+ * Error de credencial/permiso de lectura. Lo comparten los tres lectores
+ * (Stripe / PayPal / WooCommerce), así que el mensaje es NEUTRAL de proveedor: el
+ * detalle específico (qué proveedor, qué permiso falta) lo aporta cada adaptador
+ * en `reason`. Antes el texto decía "La clave de Stripe…" y mal-etiquetaba como
+ * Stripe los fallos de PayPal/WooCommerce.
+ */
 export class StripeReadKeyInvalidError extends PaymentConnectionsError {
   constructor(reason: string) {
     super(
-      `La clave de Stripe no es válida o no tiene permisos de lectura (Customers + Subscriptions = Read): ${reason}`,
+      `Credencial de la cuenta de pago inválida o sin permiso de lectura: ${reason}`,
       'PAYMENT_CONNECTIONS_STRIPE_KEY_INVALID',
     );
     this.name = 'StripeReadKeyInvalidError';
@@ -56,7 +63,7 @@ export class StripeReadKeyInvalidError extends PaymentConnectionsError {
 
 export class StripeReadApiError extends PaymentConnectionsError {
   constructor(message: string) {
-    super(`Error leyendo de la Stripe API: ${message}`, 'PAYMENT_CONNECTIONS_STRIPE_API_ERROR');
+    super(`Error leyendo de la cuenta de pago: ${message}`, 'PAYMENT_CONNECTIONS_STRIPE_API_ERROR');
     this.name = 'StripeReadApiError';
   }
 }
