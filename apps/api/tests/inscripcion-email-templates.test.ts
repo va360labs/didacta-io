@@ -149,12 +149,25 @@ describe('buildDecisionEmail', () => {
     expect(html).toContain('Sin suscripción detectada');
   });
 
-  it('con match: muestra proveedor, plan, estado e importe en text y html', () => {
+  it('con match vigente: muestra proveedor, plan, estado legible e importe en text y html', () => {
     const { text, html } = buildDecisionEmail(baseDecisionParams({ subscriptionMatches: [MATCH] }));
-    expect(text).toContain('Stripe: Plan Pro (active)');
+    // El estado crudo (active) se muestra clasificado y legible ("Activa").
+    expect(text).toContain('Stripe: Plan Pro — Activa');
     expect(text).toContain('19.99 EUR');
-    expect(html).toContain('Suscripción detectada');
-    expect(html).toContain('Stripe: Plan Pro (active)');
+    expect(text).toContain('Suscripción vigente');
+    expect(html).toContain('Suscripción vigente');
+    expect(html).toContain('Stripe: Plan Pro — Activa');
+  });
+
+  it('con match NO vigente (baja/impago): lo destaca como no vigente, no como detectada', () => {
+    const canceled = { ...MATCH, status: 'canceled', subscriptionId: 'sub_cancel' };
+    const { text, html } = buildDecisionEmail(
+      baseDecisionParams({ subscriptionMatches: [canceled] }),
+    );
+    expect(text).toContain('Suscripción NO vigente');
+    expect(text).toContain('Stripe: Plan Pro — Dada de baja');
+    expect(html).toContain('Suscripción no vigente');
+    expect(html).toContain('Dada de baja');
   });
 
   it('sin match pero con fallo: NO afirma "ninguna" — avisa de no verificable', () => {

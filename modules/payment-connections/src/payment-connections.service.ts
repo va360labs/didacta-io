@@ -38,6 +38,61 @@ export const STRIPE_ACTIVE_STATUSES = ['active', 'trialing', 'past_due'] as cons
 /** Tope defensivo de páginas por estado al listar suscripciones. */
 export const DEFAULT_MAX_PAGES = 50;
 
+/** Categoría normalizada del estado de una suscripción, transversal a proveedores. */
+export type SubscriptionStatusCategory =
+  | 'active'
+  | 'past_due'
+  | 'unpaid'
+  | 'canceled'
+  | 'incomplete'
+  | 'paused'
+  | 'unknown';
+
+export interface SubscriptionStatusInfo {
+  category: SubscriptionStatusCategory;
+  /** Etiqueta legible en español (p.ej. "Dada de baja", "En impago"). */
+  label: string;
+  /** Si el estado concede acceso vigente hoy (sirve para preseleccionar el tier). */
+  entitled: boolean;
+}
+
+/**
+ * Clasifica el `status` crudo de una suscripción (Stripe / WooCommerce / PayPal)
+ * en una categoría normalizada + etiqueta legible. Permite mostrarle al aprobador
+ * "Dada de baja" o "En impago" en lugar de ocultar la suscripción cuando ya no
+ * está activa (un cancelado o un impago no es lo mismo que "sin suscripción").
+ */
+export function classifySubscriptionStatus(status: string): SubscriptionStatusInfo {
+  switch ((status ?? '').toLowerCase().trim()) {
+    case 'active':
+      return { category: 'active', label: 'Activa', entitled: true };
+    case 'trialing':
+      return { category: 'active', label: 'En prueba', entitled: true };
+    case 'past_due':
+      return { category: 'past_due', label: 'Pago atrasado (impago)', entitled: true };
+    case 'unpaid':
+      return { category: 'unpaid', label: 'Impago — suspendida', entitled: false };
+    case 'on-hold':
+      return { category: 'paused', label: 'En espera (impago)', entitled: false };
+    case 'paused':
+      return { category: 'paused', label: 'Pausada', entitled: false };
+    case 'pending-cancel':
+      return { category: 'canceled', label: 'Baja programada', entitled: true };
+    case 'canceled':
+    case 'cancelled':
+      return { category: 'canceled', label: 'Dada de baja', entitled: false };
+    case 'expired':
+      return { category: 'canceled', label: 'Expirada', entitled: false };
+    case 'incomplete':
+    case 'incomplete_expired':
+      return { category: 'incomplete', label: 'Pago no completado', entitled: false };
+    case 'pending':
+      return { category: 'incomplete', label: 'Pendiente de pago', entitled: false };
+    default:
+      return { category: 'unknown', label: status || 'Desconocido', entitled: false };
+  }
+}
+
 /**
  * Subconjunto del contrato del `TenantConfigService` del kernel que necesita
  * este módulo. Lo implementa `PrismaTenantConfigService` del host.

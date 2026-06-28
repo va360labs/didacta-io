@@ -25,6 +25,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   PaymentConnectionsService,
   normalizeEmail,
+  classifySubscriptionStatus,
   type ConfigPort,
   type UserDirectoryPort,
   type DidactaUserRecord,
@@ -474,6 +475,34 @@ describe('findUserSubscriptions', () => {
 
     expect(res).toEqual({ matches: [], failures: [] });
     expect(find).not.toHaveBeenCalled();
+  });
+});
+
+describe('classifySubscriptionStatus', () => {
+  it('marca como vigentes (entitled) los estados con acceso', () => {
+    for (const s of ['active', 'trialing', 'past_due', 'pending-cancel']) {
+      expect(classifySubscriptionStatus(s).entitled).toBe(true);
+    }
+  });
+
+  it('marca como NO vigentes las bajas y los impagos', () => {
+    for (const s of ['canceled', 'cancelled', 'unpaid', 'expired', 'on-hold', 'incomplete']) {
+      expect(classifySubscriptionStatus(s).entitled).toBe(false);
+    }
+  });
+
+  it('da etiquetas legibles para baja e impago', () => {
+    expect(classifySubscriptionStatus('canceled').label).toBe('Dada de baja');
+    expect(classifySubscriptionStatus('past_due').category).toBe('past_due');
+    expect(classifySubscriptionStatus('unpaid').label).toContain('Impago');
+  });
+
+  it('es tolerante con mayúsculas/espacios y cae a "Desconocido" si no lo reconoce', () => {
+    expect(classifySubscriptionStatus('  ACTIVE ').entitled).toBe(true);
+    const unknown = classifySubscriptionStatus('rarísimo');
+    expect(unknown.category).toBe('unknown');
+    expect(unknown.entitled).toBe(false);
+    expect(unknown.label).toBe('rarísimo');
   });
 });
 

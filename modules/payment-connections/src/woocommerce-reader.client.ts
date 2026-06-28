@@ -31,6 +31,19 @@ type FetchFn = typeof fetch;
 
 /** Estados WooCommerce que cuentan como "suscrito" hoy. */
 const WC_ACTIVE_STATUSES = ['active', 'on-hold'];
+/**
+ * Estados consultados en el lookup de inscripción (no solo los vigentes): incluye
+ * bajas e impagos para poder mostrarle al aprobador el estado real en lugar de
+ * ocultar la suscripción. `on-hold`/`pending-cancel`/`cancelled`/`expired`/`pending`.
+ */
+const WC_LOOKUP_STATUSES = [
+  'active',
+  'on-hold',
+  'pending-cancel',
+  'cancelled',
+  'expired',
+  'pending',
+];
 const PER_PAGE = 100;
 const DEFAULT_MAX_PAGES = 50;
 /** Aborta cada request a los 10s (como Stripe) para que el job de fondo nunca cuelgue. */
@@ -146,7 +159,7 @@ export class WooCommerceReadSdkAdapter implements StripeReadAdapter {
 
       const out: StripeSubscriberRecord[] = [];
       for (const c of customers) {
-        for (const status of WC_ACTIVE_STATUSES) {
+        for (const status of WC_LOOKUP_STATUSES) {
           const subResp = await this.get(
             `/subscriptions?customer=${c.id}&status=${status}&per_page=${PER_PAGE}`,
           );

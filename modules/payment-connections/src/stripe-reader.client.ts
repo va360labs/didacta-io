@@ -151,7 +151,6 @@ export class StripeReadSdkAdapter implements StripeReadAdapter {
   }
 
   async findSubscriptionsByEmail(email: string): Promise<StripeSubscriberRecord[]> {
-    const activeSet = new Set(DEFAULT_STATUSES);
     const out: StripeSubscriberRecord[] = [];
     try {
       const customers = await this.client.customers.list({ email, limit: 100 });
@@ -162,8 +161,11 @@ export class StripeReadSdkAdapter implements StripeReadAdapter {
           limit: 100,
           expand: ['data.items.data.price'],
         });
+        // NO filtramos por estado: devolvemos TODAS (incluidas canceladas/impago/
+        // incompletas) con su `status` crudo, para que el lookup de inscripción
+        // pueda mostrarle al aprobador "Dada de baja" o "En impago" en lugar de un
+        // falso "sin suscripción". La clasificación la hace classifySubscriptionStatus.
         for (const sub of subs.data) {
-          if (!activeSet.has(sub.status)) continue;
           const rec = mapSubscription(sub);
           rec.email = c.email ?? email;
           rec.customerId = c.id;

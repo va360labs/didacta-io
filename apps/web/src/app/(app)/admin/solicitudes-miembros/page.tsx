@@ -15,7 +15,12 @@ import {
   type MemberRequest,
   type MemberSubscriptionMatch,
 } from '@/lib/inscripcion';
-import { formatAmount, paymentTiersApi, type PaymentTier } from '@/lib/payment-connections';
+import {
+  classifySubscriptionStatus,
+  formatAmount,
+  paymentTiersApi,
+  type PaymentTier,
+} from '@/lib/payment-connections';
 import { authStorage } from '@/lib/auth-storage';
 
 /**
@@ -33,9 +38,15 @@ export default function SolicitudesMiembrosPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  /** Tier del catálogo cuyo nombre coincide con algún plan de la suscripción detectada. */
+  /**
+   * Tier del catálogo cuyo nombre coincide con algún plan de una suscripción
+   * VIGENTE (activa/en prueba/al corriente). Una baja o un impago NO preselecciona
+   * el tier: el admin decide a mano si quiere darle acceso igualmente.
+   */
   function suggestTierId(req: MemberRequest, catalog: PaymentTier[]): string {
-    const planNames = (req.lookup?.results ?? []).map((m) => (m.planName ?? '').trim());
+    const planNames = (req.lookup?.results ?? [])
+      .filter((m) => classifySubscriptionStatus(m.status).entitled)
+      .map((m) => (m.planName ?? '').trim());
     const match = catalog.find((t) => planNames.includes(t.name.trim()));
     return match?.id ?? '';
   }
@@ -246,20 +257,38 @@ function SubscriptionBlock({ request }: { request: MemberRequest }) {
       </div>
     );
   }
-  if (lookup.matchCount === 0 || lookup.results.length === 0) {
+  const results = lookup.results ?? [];
+  if (lookup.matchCount === 0 || results.length === 0) {
     return (
       <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text-muted">
         Sin suscripción detectada en las cuentas de pago conectadas.
       </p>
     );
   }
+  // ¿Alguna suscripción concede acceso hoy? Si todas son bajas/impagos, lo decimos
+  // explícitamente (no es lo mismo que "sin suscripción").
+  const hasEntitled = results.some((m) => classifySubscriptionStatus(m.status).entitled);
   return (
-    <div className="rounded-lg border border-success/30 bg-success/5 px-3 py-2">
-      <p className="mb-1 text-sm font-medium text-success-700">
-        Suscripción detectada ({lookup.results.length})
+    <div
+      className={
+        hasEntitled
+          ? 'rounded-lg border border-success/30 bg-success/5 px-3 py-2'
+          : 'rounded-lg border border-warning/40 bg-warning/5 px-3 py-2'
+      }
+    >
+      <p
+        className={
+          hasEntitled
+            ? 'mb-1 text-sm font-medium text-success-700'
+            : 'mb-1 text-sm font-medium text-warning-700'
+        }
+      >
+        {hasEntitled
+          ? `Suscripción vigente (${results.length})`
+          : `⚠ Suscripción no vigente — baja o impago (${results.length})`}
       </p>
       <ul className="flex flex-col gap-1">
-        {lookup.results.map((m) => (
+        {results.map((m) => (
           <li key={m.subscriptionId} className="text-sm text-text">
             {describeMatch(m)}
           </li>
@@ -271,6 +300,7 @@ function SubscriptionBlock({ request }: { request: MemberRequest }) {
 
 function describeMatch(m: MemberSubscriptionMatch): string {
   const plan = m.planName ?? 'Plan';
+  const { label } = classifySubscriptionStatus(m.status);
   const amount = m.unitAmount !== null ? ` · ${formatAmount(m.unitAmount, m.currency)}` : '';
-  return `${plan} — ${m.status}${amount} (${m.connectionName})`;
+  return `${plan} — ${label}${amount} (${m.connectionName})`;
 }

@@ -29,6 +29,7 @@ export {
   DEFAULT_MAX_PAGES,
   SUPPORTED_PROVIDERS,
   normalizeEmail,
+  classifySubscriptionStatus,
 } from './payment-connections.service.js';
 export type {
   ConfigPort,
@@ -44,6 +45,8 @@ export type {
   MemberSubscriptionMatch,
   MemberSubscriptionLookupFailure,
   MemberSubscriptionLookupResult,
+  SubscriptionStatusCategory,
+  SubscriptionStatusInfo,
 } from './payment-connections.service.js';
 export { StripeReadSdkAdapter } from './stripe-reader.client.js';
 export type {

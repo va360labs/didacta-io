@@ -1,6 +1,7 @@
-import type {
-  MemberSubscriptionMatch,
-  MemberSubscriptionLookupFailure,
+import {
+  classifySubscriptionStatus,
+  type MemberSubscriptionMatch,
+  type MemberSubscriptionLookupFailure,
 } from '@didacta/mod-payment-connections';
 import type { TelegramMembership } from './inscripcion.dto';
 
@@ -105,10 +106,11 @@ function formatMatchAmount(unitAmount: number | null, currency: string | null): 
   return cur ? ` — ${amount} ${cur}` : ` — ${amount}`;
 }
 
-/** Describe una suscripción detectada en una sola línea legible. */
+/** Describe una suscripción detectada en una sola línea legible (con estado clasificado). */
 function describeMatch(m: MemberSubscriptionMatch): string {
   const plan = m.planName ?? 'suscripción';
-  return `${providerLabel(m.provider)}: ${plan} (${m.status})${formatMatchAmount(m.unitAmount, m.currency)}`;
+  const { label } = classifySubscriptionStatus(m.status);
+  return `${providerLabel(m.provider)}: ${plan} — ${label}${formatMatchAmount(m.unitAmount, m.currency)}`;
 }
 
 /**
@@ -128,10 +130,17 @@ export function buildDecisionEmail(params: DecisionEmailParams): EmailContent {
     : '';
 
   const delinquentLineText = isDelinquent ? '\n⚠ CONSTA COMO IMPAGO\n' : '';
-  // 3 casos: con matches / sin matches pero con fallos (no concluyente) / sin nada.
+  // ¿Alguna de las suscripciones detectadas concede acceso hoy? Si todas son
+  // bajas/impagos, lo decimos explícitamente (no es lo mismo que "sin suscripción").
+  const hasEntitled = matches.some((m) => classifySubscriptionStatus(m.status).entitled);
+  // 4 casos: vigente / detectada-pero-no-vigente / no concluyente (fallos) / nada.
   let subscriptionText: string;
-  if (matches.length) {
-    subscriptionText = `\nSuscripción detectada:\n${matches
+  if (matches.length && hasEntitled) {
+    subscriptionText = `\nSuscripción vigente:\n${matches
+      .map((m) => `  • ${describeMatch(m)}`)
+      .join('\n')}${failedNote ? `\n  ⚠ Resultado parcial${failedNote}.` : ''}\n`;
+  } else if (matches.length) {
+    subscriptionText = `\n⚠ Suscripción NO vigente (baja o impago):\n${matches
       .map((m) => `  • ${describeMatch(m)}`)
       .join('\n')}${failedNote ? `\n  ⚠ Resultado parcial${failedNote}.` : ''}\n`;
   } else if (failures.length) {
@@ -170,10 +179,19 @@ Powered by Didacta.io`;
       )}).</p>`
     : '';
   let subscriptionBlock: string;
-  if (matches.length) {
+  if (matches.length && hasEntitled) {
     subscriptionBlock = `<div style="margin: 16px 0; padding: 12px 16px; background: #ecfdf5; border: 1px solid #10b981; border-radius: 8px;">
-    <p style="margin: 0 0 8px; font-weight: 700; color: #065f46; font-size: 15px;">Suscripción detectada</p>
+    <p style="margin: 0 0 8px; font-weight: 700; color: #065f46; font-size: 15px;">Suscripción vigente</p>
     <ul style="margin: 0; padding-left: 18px; color: #065f46; font-size: 14px;">
+      ${matches.map((m) => `<li>${escapeHtml(describeMatch(m))}</li>`).join('\n      ')}
+    </ul>
+    ${failedNoteHtml}
+  </div>`;
+  } else if (matches.length) {
+    // Hay suscripción(es) pero ninguna vigente: baja o impago. Lo destacamos en ámbar.
+    subscriptionBlock = `<div style="margin: 16px 0; padding: 12px 16px; background: #fffbeb; border: 1px solid #f59e0b; border-radius: 8px;">
+    <p style="margin: 0 0 8px; font-weight: 700; color: #92400e; font-size: 15px;">⚠ Suscripción no vigente (baja o impago)</p>
+    <ul style="margin: 0; padding-left: 18px; color: #92400e; font-size: 14px;">
       ${matches.map((m) => `<li>${escapeHtml(describeMatch(m))}</li>`).join('\n      ')}
     </ul>
     ${failedNoteHtml}
