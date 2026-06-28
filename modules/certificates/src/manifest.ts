@@ -18,7 +18,9 @@ export const manifest: ModuleManifest = parseModuleManifest({
   ],
   dependencies: {
     modules: [{ name: 'mod.learning', version: '^1.0.0' }],
-    optionalModules: [],
+    // mod.courses: se leen datos del curso al emitir certificados y al validar
+    // uso de plantillas (lectura cross-table, módulo core in-tree — ADR-016).
+    optionalModules: [{ name: 'mod.courses', version: '^1.0.0' }],
   },
   eventsEmitted: ['certificates.issued', 'certificates.revoked'],
   eventsConsumed: ['learning.course.completed'],

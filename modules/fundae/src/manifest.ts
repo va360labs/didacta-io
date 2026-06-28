@@ -28,7 +28,12 @@ export const manifest: ModuleManifest = parseModuleManifest({
   ],
   dependencies: {
     modules: [],
-    optionalModules: [{ name: 'mod.courses', version: '^1.0.0' }],
+    // mod.learning: se leen matrículas/completitud para FUNDAE (lectura
+    // cross-table, módulo core in-tree — ADR-016). mod.courses: validación de curso.
+    optionalModules: [
+      { name: 'mod.courses', version: '^1.0.0' },
+      { name: 'mod.learning', version: '^1.0.0' },
+    ],
   },
   eventsEmitted: [
     'fundae.action.created',
