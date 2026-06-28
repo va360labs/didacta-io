@@ -41,6 +41,7 @@ export interface AccessGroupSummary {
   kind: AccessGroupKindDto;
   isDefaultForApproval: boolean;
   autoGrantNewCourses: boolean;
+  linkedTierName: string | null;
   memberCount: number;
   courseCount: number | null;
   createdAt: Date;
@@ -54,9 +55,16 @@ export interface AccessGroupDetailResult {
   kind: AccessGroupKindDto;
   isDefaultForApproval: boolean;
   autoGrantNewCourses: boolean;
+  linkedTierName: string | null;
   memberCount: number;
   courseIds: string[];
-  members: Array<{ userId: string; grantedAt: Date; name: string | null; email: string | null }>;
+  members: Array<{
+    userId: string;
+    grantedAt: Date;
+    name: string | null;
+    email: string | null;
+    source: string;
+  }>;
 }
 
 export interface AccessGroupCourseCatalogItem {
@@ -128,6 +136,7 @@ export class AccessGroupsService {
         kind: g.kind as AccessGroupKindDto,
         isDefaultForApproval: g.isDefaultForApproval,
         autoGrantNewCourses: g.autoGrantNewCourses,
+        linkedTierName: g.linkedTierName,
         memberCount: g.memberCount,
         courseCount: g.kind === 'ALL_COURSES' ? null : g._count.courses,
         createdAt: g.createdAt,
@@ -143,7 +152,7 @@ export class AccessGroupsService {
         courses: { select: { courseId: true } },
         members: {
           where: { status: 'ACTIVE' },
-          select: { userId: true, grantedAt: true },
+          select: { userId: true, grantedAt: true, source: true },
           take: 200,
           orderBy: { grantedAt: 'desc' },
         },
@@ -169,6 +178,7 @@ export class AccessGroupsService {
       kind: group.kind as AccessGroupKindDto,
       isDefaultForApproval: group.isDefaultForApproval,
       autoGrantNewCourses: group.autoGrantNewCourses,
+      linkedTierName: group.linkedTierName,
       memberCount: group.memberCount,
       courseIds: group.courses.map((c) => c.courseId),
       members: group.members.map((m) => ({
@@ -176,6 +186,7 @@ export class AccessGroupsService {
         grantedAt: m.grantedAt,
         name: usersById.get(m.userId)?.name ?? null,
         email: usersById.get(m.userId)?.email ?? null,
+        source: m.source,
       })),
     };
   }
@@ -225,7 +236,15 @@ export class AccessGroupsService {
     id: string,
     dto: UpdateAccessGroupDto,
   ): Promise<AccessGroupDetailResult> {
-    await this.requireGroup(tenantId, id);
+    const before = await this.requireGroup(tenantId, id);
+
+    // Normaliza cadena vacía a null para el vínculo de tier.
+    const linkedTierName =
+      dto.linkedTierName === undefined
+        ? undefined
+        : dto.linkedTierName && dto.linkedTierName.trim().length > 0
+          ? dto.linkedTierName.trim()
+          : null;
 
     await this.prisma.$transaction(async (tx) => {
       if (dto.isDefaultForApproval === true) {
@@ -242,9 +261,16 @@ export class AccessGroupsService {
           description: dto.description === undefined ? undefined : dto.description,
           autoGrantNewCourses: dto.autoGrantNewCourses ?? undefined,
           isDefaultForApproval: dto.isDefaultForApproval ?? undefined,
+          linkedTierName,
         },
       });
     });
+
+    // Si el vínculo con el tier cambió, retira a los miembros que entraron por
+    // el tier anterior (se reincorporarán en el próximo sync si corresponden).
+    if (linkedTierName !== undefined && linkedTierName !== before.linkedTierName) {
+      await this.revokeGroupTierMembers(tenantId, id);
+    }
 
     await this.audit(tenantId, 'access_group.updated', id, {});
     return this.getGroup(tenantId, id);
@@ -503,29 +529,141 @@ export class AccessGroupsService {
     return group;
   }
 
-  /** Crea/reactiva la membresía. Devuelve true si pasó a contar como activa. */
+  /**
+   * Crea/reactiva la membresía. Devuelve true si pasó a contar como activa.
+   * `source` MANUAL (alta del admin) es "sticky": un alta manual sobre una
+   * membresía TIER la promociona a MANUAL para que el tier-down no la retire.
+   */
   private async activateMembership(
     tenantId: string,
     groupId: string,
     userId: string,
+    source: 'MANUAL' | 'TIER' = 'MANUAL',
   ): Promise<boolean> {
     const existing = await this.prisma.modAccessGroupMember.findUnique({
       where: { mod_access_groups_member_unique: { groupId, userId } },
     });
     if (!existing) {
       await this.prisma.modAccessGroupMember.create({
-        data: { groupId, tenantId, userId, status: 'ACTIVE' },
+        data: { groupId, tenantId, userId, status: 'ACTIVE', source },
       });
       return true;
     }
     if (existing.status !== 'ACTIVE') {
       await this.prisma.modAccessGroupMember.update({
         where: { mod_access_groups_member_unique: { groupId, userId } },
-        data: { status: 'ACTIVE', revokedAt: null },
+        data: { status: 'ACTIVE', revokedAt: null, source },
       });
       return true;
     }
+    if (source === 'MANUAL' && existing.source !== 'MANUAL') {
+      await this.prisma.modAccessGroupMember.update({
+        where: { mod_access_groups_member_unique: { groupId, userId } },
+        data: { source: 'MANUAL' },
+      });
+    }
     return false;
+  }
+
+  /**
+   * Reconcilia la membresía TIER de un usuario según su tier efectivo. Lo invoca
+   * el bridge al recibir `payment_connections.user_tier.changed`. Añade al usuario
+   * (miembro TIER + matrícula en los cursos del grupo) a los grupos con
+   * `linkedTierName === tierName`, y lo retira de los grupos donde su membresía
+   * sea TIER pero ya no correspondan al tier actual. Nunca toca membresías MANUAL.
+   */
+  async reconcileTierMembership(
+    tenantId: string,
+    userId: string,
+    tierName: string | null,
+  ): Promise<{ addedToGroups: number; removedFromGroups: number }> {
+    const linkedGroups = tierName
+      ? await this.prisma.modAccessGroup.findMany({
+          where: { tenantId, linkedTierName: tierName, deletedAt: null },
+          select: { id: true, kind: true },
+        })
+      : [];
+    const targetIds = linkedGroups.map((g) => g.id);
+
+    // Membresías TIER vivas que ya NO corresponden al tier actual → retirar.
+    const staleTierMemberships = await this.prisma.modAccessGroupMember.findMany({
+      where: {
+        tenantId,
+        userId,
+        status: 'ACTIVE',
+        source: 'TIER',
+        ...(targetIds.length ? { groupId: { notIn: targetIds } } : {}),
+      },
+      select: { groupId: true },
+    });
+
+    if (linkedGroups.length === 0 && staleTierMemberships.length === 0) {
+      return { addedToGroups: 0, removedFromGroups: 0 };
+    }
+
+    await this.tenantContext.run({ tenantId, traceId: randomUUID() }, async () => {
+      const learning = this.registry.getLearningService();
+      for (const group of linkedGroups) {
+        const added = await this.activateMembership(tenantId, group.id, userId, 'TIER');
+        if (added) {
+          await this.prisma.modAccessGroup.update({
+            where: { id: group.id },
+            data: { memberCount: { increment: 1 } },
+          });
+        }
+        const courseIds = await this.resolveGroupCourseIds(tenantId, group);
+        for (const courseId of courseIds) {
+          await this.grantCourseToUser(tenantId, group.id, userId, courseId, learning);
+        }
+      }
+      for (const m of staleTierMemberships) {
+        await this.revokeAllGrantsForMember(tenantId, m.groupId, userId, learning);
+        await this.prisma.modAccessGroupMember.update({
+          where: { mod_access_groups_member_unique: { groupId: m.groupId, userId } },
+          data: { status: 'REVOKED', revokedAt: new Date() },
+        });
+        await this.prisma.modAccessGroup.update({
+          where: { id: m.groupId },
+          data: { memberCount: { decrement: 1 } },
+        });
+      }
+    });
+
+    await this.audit(tenantId, 'access_group.tier_reconciled', userId, {
+      tierName,
+      addedToGroups: linkedGroups.length,
+      removedFromGroups: staleTierMemberships.length,
+    });
+    return { addedToGroups: linkedGroups.length, removedFromGroups: staleTierMemberships.length };
+  }
+
+  /**
+   * Retira (revoca) todas las membresías TIER de un grupo. Se invoca cuando el
+   * vínculo `linkedTierName` del grupo cambia/desaparece: los miembros que
+   * entraron por el tier antiguo se reconcilian (los que sigan correspondiendo
+   * al nuevo tier volverán a entrar en el próximo sync). No toca membresías MANUAL.
+   */
+  private async revokeGroupTierMembers(tenantId: string, groupId: string): Promise<void> {
+    const tierMembers = await this.prisma.modAccessGroupMember.findMany({
+      where: { tenantId, groupId, status: 'ACTIVE', source: 'TIER' },
+      select: { userId: true },
+    });
+    if (tierMembers.length === 0) return;
+
+    await this.tenantContext.run({ tenantId, traceId: randomUUID() }, async () => {
+      const learning = this.registry.getLearningService();
+      for (const m of tierMembers) {
+        await this.revokeAllGrantsForMember(tenantId, groupId, m.userId, learning);
+      }
+    });
+    await this.prisma.modAccessGroupMember.updateMany({
+      where: { tenantId, groupId, status: 'ACTIVE', source: 'TIER' },
+      data: { status: 'REVOKED', revokedAt: new Date() },
+    });
+    await this.prisma.modAccessGroup.update({
+      where: { id: groupId },
+      data: { memberCount: { decrement: tierMembers.length } },
+    });
   }
 
   private async resolveGroupCourseIds(

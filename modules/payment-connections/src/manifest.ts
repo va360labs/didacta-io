@@ -12,9 +12,10 @@ import { parseModuleManifest, type ModuleManifest } from '@didacta/core-kernel';
  * (columna `provider`); PayPal queda para una fase posterior porque su API no
  * permite listar todas las suscripciones de una cuenta.
  *
- * `eventsEmitted` vacío a propósito: en V1 no se publican eventos de dominio
- * (la auditoría va por el audit log de tenant_setting + la tabla _log opcional).
- * Declarar eventos que no se emiten es un anti-patrón del repo.
+ * Emite `payment_connections.user_tier.changed` cuando el tier efectivo de un
+ * usuario cambia (sync de pagos o asignación manual). mod.access-groups lo
+ * consume para reconciliar la membresía de los grupos vinculados (vínculo
+ * tier→grupo, auto-matrícula). Ver PRD "DRIP de lecciones por tier/grupo".
  */
 export const manifest: ModuleManifest = parseModuleManifest({
   name: 'mod.payment-connections',
@@ -37,7 +38,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
     modules: [],
     optionalModules: [],
   },
-  eventsEmitted: [],
+  eventsEmitted: ['payment_connections.user_tier.changed'],
   eventsConsumed: [],
   apiNamespace: '/modules/payment-connections',
 });

@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { InvitationsPanel } from './invitations-panel';
+import { DripPanel } from './drip-panel';
 
 // El editor de curso arrastra librerías pesadas (tiptap ~200KB + dnd-kit ~100KB).
 // Lo cargamos bajo demanda (chunk aparte) para que la página pinte el esqueleto
@@ -67,6 +68,7 @@ export default function CourseEditorPage() {
         </Button>
       </div>
       <CourseEditor initial={course} onChange={reload} />
+      <DripPanel courseId={course.id} />
       <InvitationsPanel courseId={course.id} />
     </div>
   );

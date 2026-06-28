@@ -19,7 +19,14 @@ export const manifest: ModuleManifest = parseModuleManifest({
   ],
   dependencies: {
     modules: [{ name: 'mod.courses', version: '^1.0.0' }],
-    optionalModules: [],
+    // DRIP: lectura cross-table first-party (ADR-016) del tier efectivo
+    // (mod.payment-connections) y de la membresía de grupos (mod.access-groups)
+    // para resolver a qué alumno aplica un calendario de drip. Solo lectura,
+    // filtrada por tenant_id. Si el módulo no está activo, no hay drip de ese tipo.
+    optionalModules: [
+      { name: 'mod.payment-connections', version: '^1.0.0' },
+      { name: 'mod.access-groups', version: '^1.0.0' },
+    ],
   },
   eventsEmitted: [
     'learning.enrollment.created',

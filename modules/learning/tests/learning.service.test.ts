@@ -283,6 +283,10 @@ function makeFakePrisma() {
           },
         ),
       },
+      // Sin calendarios de drip → el enforcement de trackProgress es no-op.
+      modLearningDripSchedule: {
+        findMany: vi.fn(async () => [] as unknown[]),
+      },
       modLearningProgress: {
         count: vi.fn(async ({ where }: { where: { enrollmentId: string; completed: boolean } }) => {
           return [...progress.values()].filter(

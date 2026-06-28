@@ -36,6 +36,7 @@ import { GroupsController } from './groups.controller';
 import { AccessGroupsController } from './access-groups/access-groups.controller';
 import { AccessGroupsService } from './access-groups/access-groups.service';
 import { AccessGroupsCoursesBridge } from './access-groups/access-groups-courses.bridge';
+import { AccessGroupsTiersBridge } from './access-groups/access-groups-tiers.bridge';
 import { LeaderboardController } from './leaderboard.controller';
 import { MeModulesController } from './me-modules.controller';
 import { TenantSettingsController } from './tenant-settings.controller';
@@ -92,6 +93,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     ScormLearningBridge,
     AccessGroupsService,
     AccessGroupsCoursesBridge,
+    AccessGroupsTiersBridge,
     TenantModulesService,
     ModuleAccessInterceptor,
     { provide: APP_INTERCEPTOR, useExisting: ModuleAccessInterceptor },

@@ -6,7 +6,19 @@ export {
   LearningService,
   type EnrollmentProgressDetail,
   type LessonType,
+  type DripScheduleView,
+  type CreateDripScheduleInput,
+  type UpdateDripScheduleInput,
+  type CourseDripAvailability,
 } from './learning.service.js';
+export {
+  computeDripAvailability,
+  type DripRule,
+  type DripUnit,
+  type DripAudienceKind,
+  type OrderedLesson,
+  type LessonAvailability,
+} from './drip.js';
 export {
   LearningPathsService,
   type CreateLearningPathDto,
@@ -41,6 +53,7 @@ export {
   EnrollmentNotFoundError,
   InvitationInvalidError,
   CourseNotPublishedError,
+  LessonLockedError,
   ScormLessonTypeMismatchError,
   ScormPackageInvalidError,
   ScormPackageNotFoundError,

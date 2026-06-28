@@ -35,6 +35,18 @@ export class CourseNotPublishedError extends LearningError {
   }
 }
 
+/** La lección aún no está liberada por el calendario de drip del curso. */
+export class LessonLockedError extends LearningError {
+  constructor(public readonly availableAt: Date | null) {
+    super(
+      'LESSON_LOCKED',
+      availableAt
+        ? `Esta lección se libera el ${availableAt.toISOString().slice(0, 10)}`
+        : 'Esta lección aún no está disponible',
+    );
+  }
+}
+
 export class ScormPackageInvalidError extends LearningError {
   constructor(reason: string) {
     super('SCORM_PACKAGE_INVALID', `Paquete SCORM inválido: ${reason}`);

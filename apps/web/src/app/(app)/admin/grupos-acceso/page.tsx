@@ -20,6 +20,7 @@ import {
   type CourseCatalogItem,
   type UserCandidate,
 } from '@/lib/access-groups';
+import { paymentTiersApi } from '@/lib/payment-connections';
 import { authStorage } from '@/lib/auth-storage';
 
 const KIND_VARIANT: Record<AccessGroupKind, 'success' | 'warning' | 'muted'> = {
@@ -46,6 +47,10 @@ export default function GruposAccesoPage() {
   const [userQuery, setUserQuery] = useState('');
   const [userResults, setUserResults] = useState<UserCandidate[]>([]);
   const [busy, setBusy] = useState(false);
+
+  // Vínculo con tier (mod.payment-connections)
+  const [tierCatalog, setTierCatalog] = useState<string[]>([]);
+  const [linkedTier, setLinkedTier] = useState('');
 
   function token(): string | null {
     return authStorage.getAccessToken();
@@ -105,6 +110,15 @@ export default function GruposAccesoPage() {
       setSelectedCourses(new Set(d.courseIds));
       setUserQuery('');
       setUserResults([]);
+      setLinkedTier(d.linkedTierName ?? '');
+      // Best-effort: el catálogo de tiers requiere super_admin; si falla, el
+      // campo sigue siendo texto libre (el vínculo es por nombre de tier).
+      try {
+        const tiers = await paymentTiersApi.listCatalog(t);
+        setTierCatalog(tiers.tiers.map((x) => x.name));
+      } catch {
+        setTierCatalog([]);
+      }
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos abrir el grupo.');
     } finally {
@@ -170,6 +184,30 @@ export default function GruposAccesoPage() {
       await reload();
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar los cursos.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveTierLink() {
+    const t = token();
+    if (!t || !detail) return;
+    setBusy(true);
+    try {
+      setError(null);
+      const value = linkedTier.trim();
+      const d = await accessGroupsApi.update(t, detail.id, { linkedTierName: value || null });
+      setDetail(d);
+      setNotice(
+        value
+          ? `Grupo vinculado al tier «${value}». Los miembros con ese tier se reconcilian al sincronizar pagos.`
+          : 'Vínculo con tier eliminado.',
+      );
+      await reload();
+    } catch (e) {
+      setError(
+        e instanceof ApiHttpError ? e.message : 'No pudimos guardar el vínculo con el tier.',
+      );
     } finally {
       setBusy(false);
     }
@@ -298,6 +336,7 @@ export default function GruposAccesoPage() {
                     <span className="font-medium text-text">{g.name}</span>
                     <Badge variant={KIND_VARIANT[g.kind]}>{ACCESS_GROUP_KIND_LABELS[g.kind]}</Badge>
                     {g.isDefaultForApproval && <Badge variant="success">Por defecto</Badge>}
+                    {g.linkedTierName && <Badge variant="warning">Tier: {g.linkedTierName}</Badge>}
                     {g.kind === 'ALL_COURSES' && g.autoGrantNewCourses && (
                       <Badge variant="muted">Auto-otorga nuevos</Badge>
                     )}
@@ -384,6 +423,41 @@ export default function GruposAccesoPage() {
               </div>
             )}
 
+            {/* Vínculo con tier */}
+            <div>
+              <h3 className="mb-1 font-medium text-text">Vínculo con tier (pagos)</h3>
+              <p className="mb-2 text-sm text-text-muted">
+                Si vinculas un tier, los usuarios cuyo tier efectivo coincida se añaden a este grupo
+                (y se matriculan en sus cursos) al pulsar «Sincronizar tiers desde pagos». Bajar de
+                tier los retira. No afecta a los miembros añadidos a mano.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="flex-1">
+                  <Label htmlFor="ag-tier">Nombre del tier</Label>
+                  <Input
+                    id="ag-tier"
+                    list="ag-tier-options"
+                    value={linkedTier}
+                    onChange={(e) => setLinkedTier(e.target.value)}
+                    placeholder="p.ej. Mensual 2026 (vacío = sin vínculo)"
+                  />
+                  <datalist id="ag-tier-options">
+                    {tierCatalog.map((name) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                </div>
+                <Button variant="secondary" onClick={() => void saveTierLink()} disabled={busy}>
+                  Guardar vínculo
+                </Button>
+              </div>
+              {detail.linkedTierName && (
+                <p className="mt-2 text-sm text-brand-700">
+                  Vinculado al tier <strong>{detail.linkedTierName}</strong>.
+                </p>
+              )}
+            </div>
+
             {/* Miembros */}
             <div>
               <h3 className="mb-2 font-medium text-text">Miembros</h3>
@@ -430,9 +504,12 @@ export default function GruposAccesoPage() {
                         key={m.userId}
                         className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
                       >
-                        <span>
-                          {m.name ?? m.email ?? m.userId}
-                          {m.email ? <span className="text-text-muted"> ({m.email})</span> : null}
+                        <span className="flex items-center gap-2">
+                          <span>
+                            {m.name ?? m.email ?? m.userId}
+                            {m.email ? <span className="text-text-muted"> ({m.email})</span> : null}
+                          </span>
+                          {m.source === 'TIER' && <Badge variant="warning">Por tier</Badge>}
                         </span>
                         <Button
                           variant="ghost"

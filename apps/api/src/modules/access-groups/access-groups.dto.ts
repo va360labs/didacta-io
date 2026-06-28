@@ -26,6 +26,12 @@ export const updateAccessGroupSchema = z
     description: z.string().max(500).nullable().optional(),
     autoGrantNewCourses: z.boolean().optional(),
     isDefaultForApproval: z.boolean().optional(),
+    /**
+     * Nombre del tier (mod.payment-connections) vinculado a este grupo, o null
+     * para desvincular. Al vincular, los miembros con ese tier efectivo se
+     * reconcilian al sincronizar pagos. Cadena vacía se normaliza a null.
+     */
+    linkedTierName: z.string().max(200).nullable().optional(),
   })
   .strict();
 export type UpdateAccessGroupDto = z.infer<typeof updateAccessGroupSchema>;

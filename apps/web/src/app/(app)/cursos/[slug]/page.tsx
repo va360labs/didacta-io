@@ -37,6 +37,11 @@ export default function CourseAlumnoPage() {
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
   const [progressByLesson, setProgressByLesson] = useState<Record<string, boolean>>({});
+  // Disponibilidad por drip: lessonId → { availableAt ISO, available }. Las
+  // lecciones que NO aparecen están libres (sin gating).
+  const [availability, setAvailability] = useState<
+    Record<string, { availableAt: string; available: boolean }>
+  >({});
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [certificate, setCertificate] = useState<Certificate | null>(null);
@@ -70,12 +75,15 @@ export default function CourseAlumnoPage() {
       // Datos dependientes del curso/inscripción, en PARALELO. Antes eran tres
       // awaits secuenciales (progreso → certificados → zoom) que encadenaban
       // latencia. Cada uno tolera su propio fallo (módulo deshabilitado → 403).
-      const [progressList, certsList, zoomList] = await Promise.all([
+      const [progressList, certsList, zoomList, avail] = await Promise.all([
         found ? learningApi.listMyProgress(found.id).catch(() => null) : Promise.resolve(null),
         found?.status === 'COMPLETED'
           ? certificatesApi.listMine().catch(() => null)
           : Promise.resolve(null),
         zoomLiveApi.list({ courseId: detail.id }).catch(() => null),
+        found
+          ? learningApi.getCourseAvailability(detail.id).catch(() => null)
+          : Promise.resolve(null),
       ]);
 
       if (progressList) {
@@ -87,6 +95,8 @@ export default function CourseAlumnoPage() {
       } else {
         setProgressByLesson({});
       }
+
+      setAvailability(avail?.drip ? avail.lessons : {});
 
       setCertificate(certsList?.find((c) => c.courseId === detail.id) ?? null);
       setZoomSessions(zoomList ?? []);
@@ -407,6 +417,8 @@ export default function CourseAlumnoPage() {
                     {m.lessons.map((l, lessonIdx) => {
                       const isActive = activeLessonId === l.id;
                       const isDone = progressByLesson[l.id];
+                      const lock = availability[l.id];
+                      const locked = !!lock && !lock.available;
                       return (
                         <li key={l.id}>
                           <button
@@ -423,10 +435,18 @@ export default function CourseAlumnoPage() {
                               active={isActive}
                               number={lessonIdx + 1}
                             />
-                            <span className="flex-1 truncate">{l.title}</span>
-                            <Badge variant="muted" className="shrink-0 text-[10px]">
-                              {LESSON_TYPE_LABEL[l.type] ?? l.type}
-                            </Badge>
+                            <span className={`flex-1 truncate ${locked ? 'text-text-muted' : ''}`}>
+                              {l.title}
+                            </span>
+                            {locked ? (
+                              <Badge variant="warning" className="shrink-0 text-[10px]">
+                                🔒 {formatLockHint(lock.availableAt)}
+                              </Badge>
+                            ) : (
+                              <Badge variant="muted" className="shrink-0 text-[10px]">
+                                {LESSON_TYPE_LABEL[l.type] ?? l.type}
+                              </Badge>
+                            )}
                           </button>
                         </li>
                       );
@@ -446,6 +466,18 @@ export default function CourseAlumnoPage() {
                 <p className="max-w-md text-sm text-text-muted">
                   Matricúlate al curso para empezar a ver las lecciones, marcar tu progreso y
                   recibir tu certificado al completar.
+                </p>
+              </CardContent>
+            </Card>
+          ) : activeLesson && availability[activeLesson.id]?.available === false ? (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+                <span className="text-4xl">🔒</span>
+                <h3 className="font-display text-xl font-semibold">Lección aún no disponible</h3>
+                <p className="max-w-md text-sm text-text-muted">
+                  «{activeLesson.title}» se libera{' '}
+                  {formatLockHint(availability[activeLesson.id]!.availableAt)}. Las clases de este
+                  curso se van liberando con el tiempo desde que te matriculaste.
                 </p>
               </CardContent>
             </Card>
@@ -491,6 +523,19 @@ export default function CourseAlumnoPage() {
       </div>
     </section>
   );
+}
+
+/**
+ * Texto de ayuda para una lección bloqueada por drip: "en X días", "mañana" o
+ * "el DD/MM" según cuánto falte para `availableAt`.
+ */
+function formatLockHint(availableAtIso: string): string {
+  const at = new Date(availableAtIso);
+  const days = Math.ceil((at.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+  if (days <= 0) return 'hoy';
+  if (days === 1) return 'mañana';
+  if (days <= 14) return `en ${days} días`;
+  return `el ${at.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}`;
 }
 
 /**

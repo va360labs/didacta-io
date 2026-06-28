@@ -1042,6 +1042,50 @@ model ModLearningProgress {
   @@map("mod_learning_progress")
 }
 
+/// A quién aplica un calendario de drip: a un TIER (por nombre) o a un GRUPO de
+/// acceso (por id). Ambos resuelven a un conjunto de alumnos en tiempo de lectura.
+enum DripAudienceKind {
+  TIER
+  GROUP
+}
+
+/// Unidad que se libera en cada paso del drip: la LECCIÓN individual o el
+/// MÓDULO/sección entero (todas sus lecciones a la vez).
+enum DripUnit {
+  LESSON
+  MODULE
+}
+
+/// mod.learning — Calendario de liberación programada (DRIP) de un curso.
+///
+/// Modelo de intervalo RELATIVO: la unidad nº i (lección o módulo, en orden) se
+/// libera a `ancla + startOffsetDays + i × intervalDays` días, siendo el ancla
+/// la fecha de entrada de cada alumno al curso (enrollment.startedAt ?? enrolledAt).
+/// Un schedule se asigna a un tier o a un grupo; si a un alumno le aplican varios,
+/// gana el MÁS PERMISIVO (la fecha de desbloqueo más temprana por unidad). Sin
+/// schedule aplicable → sin drip (todo disponible, comportamiento por defecto).
+model ModLearningDripSchedule {
+  id              String           @id @default(uuid()) @db.Uuid
+  tenantId        String           @map("tenant_id") @db.Uuid
+  /// ID lógico del curso (sin FK cross-module)
+  courseId        String           @map("course_id") @db.Uuid
+  audienceKind    DripAudienceKind @map("audience_kind")
+  /// Nombre del tier (TIER) o id del grupo de acceso (GROUP). Acople por label/id.
+  audienceRef     String           @map("audience_ref")
+  unit            DripUnit         @default(LESSON)
+  /// Días entre liberaciones consecutivas.
+  intervalDays    Int              @map("interval_days")
+  /// Días tras el ancla (entrada del alumno) para liberar la 1ª unidad.
+  startOffsetDays Int              @default(0) @map("start_offset_days")
+  isActive        Boolean          @default(true) @map("is_active")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  @@unique([tenantId, courseId, audienceKind, audienceRef], name: "mod_learning_drip_schedule_unique", map: "mod_learning_drip_schedule_unique")
+  @@index([tenantId, courseId])
+  @@map("mod_learning_drip_schedule")
+}
+
 model ModLearningInvitation {
   id          String    @id @default(uuid()) @db.Uuid
   tenantId    String    @map("tenant_id") @db.Uuid
@@ -2801,6 +2845,11 @@ model ModAccessGroup {
   /// Solo relevante para kind ALL_COURSES: matricula a los miembros en cada
   /// curso nuevo al publicarse (consumer de courses.course.published).
   autoGrantNewCourses  Boolean         @default(true) @map("auto_grant_new_courses")
+  /// Vínculo opcional con un TIER (mod.payment-connections) por NOMBRE (acople
+  /// débil, sin FK cross-module). Si está, el bridge de tiers reconcilia la
+  /// membresía: entrar en ese tier (al sincronizar pagos) añade al usuario a
+  /// este grupo como miembro `TIER`; bajar de tier lo retira. NULL = sin vínculo.
+  linkedTierName       String?         @map("linked_tier_name")
   memberCount          Int             @default(0) @map("member_count")
   createdAt            DateTime        @default(now()) @map("created_at")
   updatedAt            DateTime        @updatedAt @map("updated_at")
@@ -2837,6 +2886,10 @@ model ModAccessGroupMember {
   userId    String    @map("user_id") @db.Uuid
   /// ACTIVE | REVOKED
   status    String    @default("ACTIVE") @db.VarChar(20)
+  /// Origen de la membresía: MANUAL (alta del admin) | TIER (reconciliada por el
+  /// vínculo tier→grupo). El bridge de tiers solo crea/retira membresías TIER;
+  /// nunca toca las MANUAL. Si una manual y una de tier coinciden, gana MANUAL.
+  source    String    @default("MANUAL") @db.VarChar(20)
   grantedAt DateTime  @default(now()) @map("granted_at")
   revokedAt DateTime? @map("revoked_at")
 

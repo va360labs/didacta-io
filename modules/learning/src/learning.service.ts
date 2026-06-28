@@ -6,7 +6,15 @@ import {
   CourseNotPublishedError,
   EnrollmentNotFoundError,
   InvitationInvalidError,
+  LessonLockedError,
 } from './errors.js';
+import {
+  computeDripAvailability,
+  type DripRule,
+  type DripUnit,
+  type DripAudienceKind,
+  type OrderedLesson,
+} from './drip.js';
 import type {
   CreateInvitationDto,
   EnrollByAdminDto,
@@ -14,6 +22,46 @@ import type {
   EnrollByLinkDto,
   TrackProgressDto,
 } from './dto.js';
+
+/** Vista de un calendario de drip de un curso (para el panel del formador). */
+export interface DripScheduleView {
+  id: string;
+  courseId: string;
+  audienceKind: DripAudienceKind;
+  audienceRef: string;
+  unit: DripUnit;
+  intervalDays: number;
+  startOffsetDays: number;
+  isActive: boolean;
+}
+
+export interface CreateDripScheduleInput {
+  courseId: string;
+  audienceKind: DripAudienceKind;
+  audienceRef: string;
+  unit?: DripUnit;
+  intervalDays: number;
+  startOffsetDays?: number;
+  isActive?: boolean;
+}
+
+export interface UpdateDripScheduleInput {
+  unit?: DripUnit;
+  intervalDays?: number;
+  startOffsetDays?: number;
+  isActive?: boolean;
+}
+
+/** Disponibilidad de las lecciones de un curso para un alumno (drip). */
+export interface CourseDripAvailability {
+  /** ¿El curso tiene drip aplicable a este alumno? */
+  drip: boolean;
+  /**
+   * Por cada lección bajo drip: fecha ISO de desbloqueo y si ya está disponible.
+   * Las lecciones que no aparecen están disponibles (sin gating).
+   */
+  lessons: Record<string, { availableAt: string; available: boolean }>;
+}
 
 const TOKEN_BYTES = 24;
 const CODE_GROUPS = 2;
@@ -278,6 +326,15 @@ export class LearningService {
       where: { tenantId, userId, id: dto.enrollmentId },
     });
     if (!enrollment) throw new EnrollmentNotFoundError();
+
+    // DRIP: no permitir registrar progreso en una lección aún no liberada.
+    await this.assertLessonUnlocked(
+      tenantId,
+      userId,
+      enrollment.courseId,
+      dto.lessonId,
+      enrollment.startedAt ?? enrollment.enrolledAt,
+    );
 
     const updated = await this.prisma.modLearningProgress.upsert({
       where: {
@@ -969,6 +1026,196 @@ export class LearningService {
     return groups.join('-');
   }
 
+  // ==================== DRIP (liberación programada) ====================
+
+  /** Lista los calendarios de drip de un curso (panel del formador/admin). */
+  async listDripSchedules(tenantId: string, courseId: string): Promise<DripScheduleView[]> {
+    const rows = await this.prisma.modLearningDripSchedule.findMany({
+      where: { tenantId, courseId },
+      orderBy: [{ audienceKind: 'asc' }, { createdAt: 'asc' }],
+    });
+    return rows.map(toDripView);
+  }
+
+  async createDripSchedule(
+    tenantId: string,
+    input: CreateDripScheduleInput,
+  ): Promise<DripScheduleView> {
+    const row = await this.prisma.modLearningDripSchedule.create({
+      data: {
+        tenantId,
+        courseId: input.courseId,
+        audienceKind: input.audienceKind,
+        audienceRef: input.audienceRef.trim(),
+        unit: input.unit ?? 'LESSON',
+        intervalDays: Math.max(0, Math.trunc(input.intervalDays)),
+        startOffsetDays: Math.max(0, Math.trunc(input.startOffsetDays ?? 0)),
+        isActive: input.isActive ?? true,
+      },
+    });
+    return toDripView(row);
+  }
+
+  async updateDripSchedule(
+    tenantId: string,
+    id: string,
+    input: UpdateDripScheduleInput,
+  ): Promise<DripScheduleView> {
+    const existing = await this.prisma.modLearningDripSchedule.findFirst({
+      where: { tenantId, id },
+      select: { id: true },
+    });
+    if (!existing) throw new EnrollmentNotFoundError();
+    const row = await this.prisma.modLearningDripSchedule.update({
+      where: { id },
+      data: {
+        unit: input.unit ?? undefined,
+        intervalDays:
+          input.intervalDays === undefined
+            ? undefined
+            : Math.max(0, Math.trunc(input.intervalDays)),
+        startOffsetDays:
+          input.startOffsetDays === undefined
+            ? undefined
+            : Math.max(0, Math.trunc(input.startOffsetDays)),
+        isActive: input.isActive ?? undefined,
+      },
+    });
+    return toDripView(row);
+  }
+
+  async deleteDripSchedule(tenantId: string, id: string): Promise<void> {
+    await this.prisma.modLearningDripSchedule.deleteMany({ where: { tenantId, id } });
+  }
+
+  /**
+   * Disponibilidad de las lecciones de un curso para un alumno según el drip.
+   * La consume el player del alumno para mostrar candados + "disponible en X días".
+   */
+  async getCourseAvailability(
+    tenantId: string,
+    userId: string,
+    courseId: string,
+  ): Promise<CourseDripAvailability> {
+    const enrollment = await this.prisma.modLearningEnrollment.findUnique({
+      where: { tenantId_userId_courseId: { tenantId, userId, courseId } },
+      select: { startedAt: true, enrolledAt: true },
+    });
+    if (!enrollment) return { drip: false, lessons: {} };
+
+    const rules = await this.getApplicableDripRules(tenantId, userId, courseId);
+    if (rules.length === 0) return { drip: false, lessons: {} };
+
+    const ordered = await this.orderedLessons(tenantId, courseId);
+    const anchor = enrollment.startedAt ?? enrollment.enrolledAt;
+    const map = computeDripAvailability(ordered, rules, anchor, new Date());
+
+    const lessons: Record<string, { availableAt: string; available: boolean }> = {};
+    for (const [lessonId, v] of map) {
+      lessons[lessonId] = { availableAt: v.availableAt.toISOString(), available: v.available };
+    }
+    return { drip: true, lessons };
+  }
+
+  /**
+   * ¿Puede el alumno acceder a esta lección ahora? True si no hay drip aplicable
+   * o si la lección ya está liberada. Lo usa `trackProgress` para bloquear el
+   * registro de progreso en lecciones aún no disponibles.
+   */
+  private async assertLessonUnlocked(
+    tenantId: string,
+    userId: string,
+    courseId: string,
+    lessonId: string,
+    anchor: Date,
+  ): Promise<void> {
+    const rules = await this.getApplicableDripRules(tenantId, userId, courseId);
+    if (rules.length === 0) return;
+    const ordered = await this.orderedLessons(tenantId, courseId);
+    const map = computeDripAvailability(ordered, rules, anchor, new Date());
+    const entry = map.get(lessonId);
+    if (entry && !entry.available) throw new LessonLockedError(entry.availableAt);
+  }
+
+  /** Reglas de drip aplicables a un alumno (por su tier efectivo y sus grupos). */
+  private async getApplicableDripRules(
+    tenantId: string,
+    userId: string,
+    courseId: string,
+  ): Promise<DripRule[]> {
+    const schedules = await this.prisma.modLearningDripSchedule.findMany({
+      where: { tenantId, courseId, isActive: true },
+    });
+    if (schedules.length === 0) return [];
+
+    const rules: DripRule[] = [];
+    const tierSchedules = schedules.filter((s) => s.audienceKind === 'TIER');
+    const groupSchedules = schedules.filter((s) => s.audienceKind === 'GROUP');
+
+    if (tierSchedules.length > 0) {
+      const tierName = await this.getEffectiveTierName(tenantId, userId);
+      if (tierName) {
+        for (const s of tierSchedules) {
+          if (s.audienceRef === tierName) rules.push(toRule(s));
+        }
+      }
+    }
+    if (groupSchedules.length > 0) {
+      const groupIds = await this.getActiveGroupIds(tenantId, userId);
+      for (const s of groupSchedules) {
+        if (groupIds.has(s.audienceRef)) rules.push(toRule(s));
+      }
+    }
+    return rules;
+  }
+
+  /**
+   * Tier EFECTIVO del usuario (manual ?? derivado) leyendo la tabla de
+   * mod.payment-connections. Cross-table read first-party (ADR-016): filtrado por
+   * tenant_id, sin escritura, dependencia declarada en el manifest de mod.learning.
+   */
+  private async getEffectiveTierName(tenantId: string, userId: string): Promise<string | null> {
+    const ut = await this.prisma.modPaymentConnectionsUserTier.findUnique({
+      where: { tenantId_userId: { tenantId, userId } },
+      include: { manualTier: { select: { name: true } } },
+    });
+    if (!ut) return null;
+    return ut.manualTier?.name ?? ut.derivedLabel ?? null;
+  }
+
+  /** IDs de los grupos de acceso ACTIVE del usuario (cross-table read, ADR-016). */
+  private async getActiveGroupIds(tenantId: string, userId: string): Promise<Set<string>> {
+    const rows = await this.prisma.modAccessGroupMember.findMany({
+      where: { tenantId, userId, status: 'ACTIVE' },
+      select: { groupId: true },
+    });
+    return new Set(rows.map((r) => r.groupId));
+  }
+
+  /** Lecciones del curso en orden global (módulo.position → lección.position). */
+  private async orderedLessons(tenantId: string, courseId: string): Promise<OrderedLesson[]> {
+    const modules = await this.prisma.modCoursesModule.findMany({
+      where: { tenantId, courseId, deletedAt: null },
+      orderBy: { position: 'asc' },
+      select: { id: true },
+    });
+    const out: OrderedLesson[] = [];
+    let lessonIndex = 0;
+    let moduleIndex = 0;
+    for (const mod of modules) {
+      const lessons = await this.prisma.modCoursesLesson.findMany({
+        where: { tenantId, moduleId: mod.id, deletedAt: null },
+        orderBy: { position: 'asc' },
+        select: { id: true },
+      });
+      for (const l of lessons) {
+        out.push({ lessonId: l.id, lessonIndex: lessonIndex++, moduleIndex });
+      }
+      moduleIndex += 1;
+    }
+    return out;
+  }
+
   private async publish(
     tenantId: string,
     actorId: string | null,
@@ -988,6 +1235,37 @@ export class LearningService {
       },
     });
   }
+}
+
+/** Fila Prisma de drip → vista pública. */
+function toDripView(row: {
+  id: string;
+  courseId: string;
+  audienceKind: string;
+  audienceRef: string;
+  unit: string;
+  intervalDays: number;
+  startOffsetDays: number;
+  isActive: boolean;
+}): DripScheduleView {
+  return {
+    id: row.id,
+    courseId: row.courseId,
+    audienceKind: row.audienceKind as DripAudienceKind,
+    audienceRef: row.audienceRef,
+    unit: row.unit as DripUnit,
+    intervalDays: row.intervalDays,
+    startOffsetDays: row.startOffsetDays,
+    isActive: row.isActive,
+  };
+}
+
+function toRule(row: { unit: string; intervalDays: number; startOffsetDays: number }): DripRule {
+  return {
+    unit: row.unit as DripUnit,
+    intervalDays: row.intervalDays,
+    startOffsetDays: row.startOffsetDays,
+  };
 }
 
 // ── Competencias: lógica pura (testeable sin Prisma) ─────────────────────────

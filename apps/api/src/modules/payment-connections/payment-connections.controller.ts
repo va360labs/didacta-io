@@ -24,8 +24,10 @@ import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import type { SessionClaims } from '../../auth/token.service';
+import { randomUUID } from 'node:crypto';
 import { AdminUsersService, type AssignableRole } from '../../admin/admin-users.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { ModuleContextFactory } from '../module-context.factory';
 
 /**
  * Endpoints admin de mod.payment-connections (todos super_admin):
@@ -123,6 +125,7 @@ export class PaymentConnectionsController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly adminUsers: AdminUsersService,
+    private readonly contextFactory: ModuleContextFactory,
   ) {}
 
   private assertSuperAdmin(user: SessionClaims | undefined): SessionClaims {
@@ -131,6 +134,36 @@ export class PaymentConnectionsController {
       throw new ForbiddenException('Solo super_admin puede gestionar conexiones de pago.');
     }
     return user;
+  }
+
+  /**
+   * Publica `payment_connections.user_tier.changed` para que mod.access-groups
+   * reconcilie la membresía del usuario en los grupos vinculados a ese tier.
+   * Best-effort: un fallo de publish no debe abortar la respuesta del sync/assign.
+   */
+  private async publishTierChanged(
+    tenantId: string,
+    actorId: string | null,
+    userId: string,
+    tierName: string | null,
+  ): Promise<void> {
+    try {
+      await this.contextFactory.getEventBus().publish({
+        name: 'payment_connections.user_tier.changed',
+        version: 1,
+        data: { userId, tierName },
+        metadata: {
+          tenantId,
+          userId: actorId ?? undefined,
+          timestamp: new Date().toISOString(),
+          traceId: randomUUID(),
+          idempotencyKey: `payment_connections.user_tier.changed:${userId}:${tierName ?? 'null'}:${Date.now()}`,
+        },
+      });
+    } catch {
+      // swallow — el outbox/dispatcher es la garantía; un publish puntual fallido
+      // no debe romper el sync. El próximo sync vuelve a emitir.
+    }
   }
 
   @Post('connections')
@@ -341,6 +374,7 @@ export class PaymentConnectionsController {
     const tier = await this.registry
       .getPaymentTiersService()
       .assignManualTier(user.tenantId, userId, body.tierId, user.sub);
+    await this.publishTierChanged(user.tenantId, user.sub, userId, tier.effectiveLabel);
     return { tier };
   }
 
@@ -383,9 +417,20 @@ export class PaymentConnectionsController {
       }
     }
 
-    const { updated, tiersCreated } = await this.registry
-      .getPaymentTiersService()
-      .applyDerivedTiers(user.tenantId, entries);
+    const tiersSvc = this.registry.getPaymentTiersService();
+    const { updated, tiersCreated } = await tiersSvc.applyDerivedTiers(user.tenantId, entries);
+
+    // Emite el tier EFECTIVO de cada usuario afectado para que mod.access-groups
+    // reconcilie la membresía de los grupos vinculados (auto-matrícula).
+    const affectedUserIds = [...new Set(entries.map((e) => e.userId))];
+    if (affectedUserIds.length > 0) {
+      const views = await tiersSvc.getUserTiers(user.tenantId, affectedUserIds);
+      const byUser = new Map(views.map((v) => [v.userId, v.effectiveLabel]));
+      for (const uid of affectedUserIds) {
+        await this.publishTierChanged(user.tenantId, user.sub, uid, byUser.get(uid) ?? null);
+      }
+    }
+
     return { updated, tiersCreated, connections: conns.length, matched: entries.length, errors };
   }
 }

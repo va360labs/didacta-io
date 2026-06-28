@@ -321,7 +321,88 @@ export const learningApi = {
       bearer(),
     );
   },
+
+  // -------------------- DRIP (liberación programada) --------------------
+  async listDripSchedules(courseId: string): Promise<DripSchedule[]> {
+    const res = await apiFetch<{ schedules: DripSchedule[] }>(
+      `/api/v1/modules/learning/courses/${courseId}/drip`,
+      { method: 'GET' },
+      bearer(),
+    );
+    return res.schedules;
+  },
+
+  async createDripSchedule(courseId: string, input: CreateDripInput): Promise<DripSchedule> {
+    const res = await apiFetch<{ schedule: DripSchedule }>(
+      `/api/v1/modules/learning/courses/${courseId}/drip`,
+      { method: 'POST', body: JSON.stringify(input) },
+      bearer(),
+    );
+    return res.schedule;
+  },
+
+  async updateDripSchedule(id: string, input: UpdateDripInput): Promise<DripSchedule> {
+    const res = await apiFetch<{ schedule: DripSchedule }>(
+      `/api/v1/modules/learning/drip/${id}`,
+      { method: 'PUT', body: JSON.stringify(input) },
+      bearer(),
+    );
+    return res.schedule;
+  },
+
+  async deleteDripSchedule(id: string): Promise<void> {
+    await apiFetch<{ ok: true }>(
+      `/api/v1/modules/learning/drip/${id}`,
+      { method: 'DELETE' },
+      bearer(),
+    );
+  },
+
+  /** Disponibilidad (drip) de las lecciones de un curso para el alumno actual. */
+  async getCourseAvailability(courseId: string): Promise<CourseAvailability> {
+    return apiFetch<CourseAvailability>(
+      `/api/v1/modules/learning/courses/${courseId}/availability`,
+      { method: 'GET' },
+      bearer(),
+    );
+  },
 };
+
+export type DripAudienceKind = 'TIER' | 'GROUP';
+export type DripUnit = 'LESSON' | 'MODULE';
+
+export interface DripSchedule {
+  id: string;
+  courseId: string;
+  audienceKind: DripAudienceKind;
+  audienceRef: string;
+  unit: DripUnit;
+  intervalDays: number;
+  startOffsetDays: number;
+  isActive: boolean;
+}
+
+export interface CreateDripInput {
+  audienceKind: DripAudienceKind;
+  audienceRef: string;
+  unit?: DripUnit;
+  intervalDays: number;
+  startOffsetDays?: number;
+  isActive?: boolean;
+}
+
+export interface UpdateDripInput {
+  unit?: DripUnit;
+  intervalDays?: number;
+  startOffsetDays?: number;
+  isActive?: boolean;
+}
+
+/** Disponibilidad por lección (drip). Lecciones no listadas = libres. */
+export interface CourseAvailability {
+  drip: boolean;
+  lessons: Record<string, { availableAt: string; available: boolean }>;
+}
 
 /** Progreso de una lección concreta dentro del detalle de un alumno (vista formador). */
 export interface StudentLessonProgress {

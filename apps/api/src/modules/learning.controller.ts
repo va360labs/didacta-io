@@ -66,6 +66,29 @@ const setCourseCompetenciesSchema = z.object({
 });
 type SetCourseCompetenciesDto = z.infer<typeof setCourseCompetenciesSchema>;
 
+const createDripScheduleSchema = z
+  .object({
+    audienceKind: z.enum(['TIER', 'GROUP']),
+    /** Nombre del tier (TIER) o id del grupo de acceso (GROUP). */
+    audienceRef: z.string().trim().min(1).max(200),
+    unit: z.enum(['LESSON', 'MODULE']).optional(),
+    intervalDays: z.number().int().min(0).max(3650),
+    startOffsetDays: z.number().int().min(0).max(3650).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strict();
+type CreateDripScheduleDto = z.infer<typeof createDripScheduleSchema>;
+
+const updateDripScheduleSchema = z
+  .object({
+    unit: z.enum(['LESSON', 'MODULE']).optional(),
+    intervalDays: z.number().int().min(0).max(3650).optional(),
+    startOffsetDays: z.number().int().min(0).max(3650).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strict();
+type UpdateDripScheduleDto = z.infer<typeof updateDripScheduleSchema>;
+
 function requireScormEditor(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   if (!user.roles.some((r) => SCORM_EDITOR_ROLES.has(r))) {
@@ -171,6 +194,82 @@ export class LearningController {
   ) {
     if (!user) throw new UnauthorizedException();
     return this.registry.getLearningService().listMyProgress(user.tenantId, user.sub, enrollmentId);
+  }
+
+  // -------------------- DRIP (liberación programada) --------------------
+
+  @Get('courses/:courseId/drip')
+  @ApiOperation({ summary: 'Lista los calendarios de drip de un curso (formador/admin).' })
+  async listDrip(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('courseId') courseId: string,
+  ) {
+    const u = requireScormEditor(user);
+    const schedules = await this.registry
+      .getLearningService()
+      .listDripSchedules(u.tenantId, courseId);
+    return { schedules };
+  }
+
+  @Post('courses/:courseId/drip')
+  @ApiOperation({ summary: 'Crea un calendario de drip para un curso (formador/admin).' })
+  async createDrip(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('courseId') courseId: string,
+    @Body(new ZodValidationPipe(createDripScheduleSchema)) dto: CreateDripScheduleDto,
+  ) {
+    const u = requireScormEditor(user);
+    try {
+      const schedule = await this.registry
+        .getLearningService()
+        .createDripSchedule(u.tenantId, { ...dto, courseId });
+      return { schedule };
+    } catch (e) {
+      if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002') {
+        throw new BadRequestException(
+          'Ya existe un calendario de drip para ese curso y audiencia.',
+        );
+      }
+      throw e;
+    }
+  }
+
+  @Put('drip/:id')
+  @ApiOperation({ summary: 'Edita un calendario de drip (formador/admin).' })
+  async updateDrip(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateDripScheduleSchema)) dto: UpdateDripScheduleDto,
+  ) {
+    const u = requireScormEditor(user);
+    const schedule = await this.registry
+      .getLearningService()
+      .updateDripSchedule(u.tenantId, id, dto);
+    return { schedule };
+  }
+
+  @Delete('drip/:id')
+  @ApiOperation({ summary: 'Borra un calendario de drip (formador/admin).' })
+  async deleteDrip(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    const u = requireScormEditor(user);
+    await this.registry.getLearningService().deleteDripSchedule(u.tenantId, id);
+    return { ok: true };
+  }
+
+  @Get('courses/:courseId/availability')
+  @ApiOperation({
+    summary:
+      'Disponibilidad (drip) de las lecciones de un curso para el alumno actual: ' +
+      'fecha de desbloqueo + si ya está disponible. Las lecciones no listadas están libres.',
+  })
+  async courseAvailability(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('courseId') courseId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry
+      .getLearningService()
+      .getCourseAvailability(user.tenantId, user.sub, courseId);
   }
 
   // -------------------- Comentarios en lecciones --------------------

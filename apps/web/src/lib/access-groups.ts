@@ -18,6 +18,7 @@ export interface AccessGroupListItem {
   kind: AccessGroupKind;
   isDefaultForApproval: boolean;
   autoGrantNewCourses: boolean;
+  linkedTierName: string | null;
   memberCount: number;
   courseCount: number | null;
   createdAt: string;
@@ -31,6 +32,7 @@ export interface AccessGroupDetail {
   kind: AccessGroupKind;
   isDefaultForApproval: boolean;
   autoGrantNewCourses: boolean;
+  linkedTierName: string | null;
   memberCount: number;
   courseIds: string[];
   members: Array<{
@@ -38,6 +40,7 @@ export interface AccessGroupDetail {
     grantedAt: string;
     name: string | null;
     email: string | null;
+    source: string;
   }>;
 }
 
@@ -67,6 +70,8 @@ export interface UpdateAccessGroupInput {
   description?: string | null;
   autoGrantNewCourses?: boolean;
   isDefaultForApproval?: boolean;
+  /** Nombre del tier vinculado, o null para desvincular. */
+  linkedTierName?: string | null;
 }
 
 const BASE = '/api/v1/modules/access-groups';
