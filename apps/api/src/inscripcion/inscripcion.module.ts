@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ModulesModule } from '../modules/modules.module';
 import { EmailVerificationService } from './email-verification.service';
+import { InscripcionAdminController } from './inscripcion-admin.controller';
 import { InscripcionController } from './inscripcion.controller';
 import { MemberDecisionService } from './member-decision.service';
 import { MemberPaymentFlagService } from './member-payment-flag.service';
@@ -27,7 +28,7 @@ import { TelegramService } from './telegram.service';
  */
 @Module({
   imports: [AuthModule, ModulesModule],
-  controllers: [InscripcionController, PaymentFlagController],
+  controllers: [InscripcionController, InscripcionAdminController, PaymentFlagController],
   providers: [
     TelegramService,
     EmailVerificationService,

@@ -424,6 +424,7 @@ function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): SidebarG
       { href: '/comunidad', label: '← Volver a la app', icon: 'home', exactMatch: true },
       { href: '/admin', label: 'Panel', icon: 'chart', exactMatch: true },
       { href: '/admin/usuarios', label: 'Usuarios y roles', icon: 'users' },
+      { href: '/admin/solicitudes-miembros', label: 'Solicitudes de inscripción', icon: 'users' },
       { href: '/admin/grupos-acceso', label: 'Grupos de acceso', icon: 'lock' },
       { href: '/admin/competencias', label: 'Competencias', icon: 'award' },
       { href: '/admin/cursos/categorias', label: 'Categorías de cursos', icon: 'book' },

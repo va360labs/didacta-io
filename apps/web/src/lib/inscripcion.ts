@@ -123,3 +123,57 @@ export function createInscripcion(input: CreateInscripcionInput): Promise<Create
 export function inscripcionErrorMessage(error: unknown, fallback: string): string {
   return error instanceof ApiHttpError ? error.message : fallback;
 }
+
+// ── Panel ADMIN de solicitudes (autenticado) ─────────────────────────────────
+
+/** Una suscripción detectada del solicitante en una cuenta de pago conectada. */
+export interface MemberSubscriptionMatch {
+  provider: string;
+  connectionName: string;
+  planName: string | null;
+  status: string;
+  unitAmount: number | null;
+  currency: string | null;
+  subscriptionId: string;
+}
+
+export interface MemberRequest {
+  userId: string;
+  name: string | null;
+  email: string;
+  telegramId: string | null;
+  telegramInGroup: boolean | null;
+  createdAt: string;
+  lookup: {
+    /** PENDING | DONE | ERROR */
+    status: string;
+    matchCount: number;
+    results: MemberSubscriptionMatch[];
+    error: string | null;
+    completedAt: string | null;
+  } | null;
+}
+
+const ADMIN_BASE = '/api/v1/inscripcion-admin';
+
+/** Lista las solicitudes PENDING con su lookup de suscripción (todas las cuentas). */
+export async function listMemberRequests(bearer: string): Promise<MemberRequest[]> {
+  const res = await apiFetch<{ requests: MemberRequest[] }>(
+    `${ADMIN_BASE}/requests`,
+    { method: 'GET' },
+    bearer,
+  );
+  return res.requests;
+}
+
+/** Re-lanza el lookup de suscripción de un solicitante en todas las cuentas conectadas. */
+export async function rerunMemberLookup(
+  bearer: string,
+  userId: string,
+): Promise<{ matches: MemberSubscriptionMatch[]; failures: Array<{ connectionName: string }> }> {
+  return apiFetch(
+    `${ADMIN_BASE}/requests/${encodeURIComponent(userId)}/rerun`,
+    { method: 'POST' },
+    bearer,
+  );
+}

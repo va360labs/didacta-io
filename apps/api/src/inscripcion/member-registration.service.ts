@@ -49,6 +49,24 @@ export interface MemberRegistrationResult {
   status: 'PENDING';
 }
 
+/** Una solicitud de inscripción PENDING con su lookup de suscripción (panel admin). */
+export interface MemberRequestView {
+  userId: string;
+  name: string | null;
+  email: string;
+  telegramId: string | null;
+  telegramInGroup: boolean | null;
+  createdAt: Date;
+  /** Resultado del lookup de suscripción (null si nunca se ejecutó). */
+  lookup: {
+    status: string;
+    matchCount: number;
+    results: unknown;
+    error: string | null;
+    completedAt: Date | null;
+  } | null;
+}
+
 /**
  * Crea la inscripción de un miembro tras superar el gate (Telegram + OTP).
  *
@@ -75,6 +93,61 @@ export class MemberRegistrationService {
     private readonly auditLog: PrismaAuditLogService,
     private readonly logger: PinoLogger,
   ) {}
+
+  /**
+   * Lista las solicitudes de inscripción PENDING del tenant (miembros que se
+   * registraron por `/inscripcion-miembros`, identificados por tener `telegramId`)
+   * junto con su lookup de suscripción. Lo consume el panel admin de solicitudes.
+   */
+  async listPendingRequests(tenantId: string): Promise<MemberRequestView[]> {
+    const users = await this.prisma.user.findMany({
+      where: { tenantId, status: 'PENDING', telegramId: { not: null } },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        telegramId: true,
+        telegramInGroup: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 300,
+    });
+    if (users.length === 0) return [];
+    const lookups = await this.prisma.memberSubscriptionLookup.findMany({
+      where: { tenantId, userId: { in: users.map((u) => u.id) } },
+    });
+    const byUser = new Map(lookups.map((l) => [l.userId, l]));
+    return users.map((u) => {
+      const l = byUser.get(u.id);
+      return {
+        userId: u.id,
+        name: u.name,
+        email: u.email,
+        telegramId: u.telegramId,
+        telegramInGroup: u.telegramInGroup,
+        createdAt: u.createdAt,
+        lookup: l
+          ? {
+              status: l.status,
+              matchCount: l.matchCount,
+              results: l.results,
+              error: l.error,
+              completedAt: l.completedAt,
+            }
+          : null,
+      };
+    });
+  }
+
+  /** Email de un usuario (para re-lanzar su lookup desde el panel). */
+  async getUserEmail(tenantId: string, userId: string): Promise<string | null> {
+    const u = await this.prisma.user.findFirst({
+      where: { tenantId, id: userId },
+      select: { email: true },
+    });
+    return u?.email ?? null;
+  }
 
   /**
    * Busca-o-crea el User PENDING por (tenant, email). Idempotente: si ya existe
