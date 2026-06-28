@@ -177,3 +177,16 @@ export async function rerunMemberLookup(
     bearer,
   );
 }
+
+/** Aprueba o rechaza una solicitud desde el panel (sin el link del email). */
+export async function decideMemberRequest(
+  bearer: string,
+  userId: string,
+  action: 'approve' | 'reject',
+): Promise<{ outcome: 'approved' | 'rejected' }> {
+  return apiFetch(
+    `${ADMIN_BASE}/requests/${encodeURIComponent(userId)}/decision`,
+    { method: 'POST', body: JSON.stringify({ action }) },
+    bearer,
+  );
+}

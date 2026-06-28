@@ -20,8 +20,12 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
 import { resolveWebBaseUrl } from '../common/resolve-web-base-url';
+import { MemberDecisionService } from './member-decision.service';
 import { MemberRegistrationService } from './member-registration.service';
 import { MemberSubscriptionLookupService } from './member-subscription-lookup.service';
+
+const decisionSchema = z.object({ action: z.enum(['approve', 'reject']) }).strict();
+type DecisionDto = z.infer<typeof decisionSchema>;
 
 const createManualSchema = z
   .object({
@@ -51,6 +55,7 @@ export class InscripcionAdminController {
   constructor(
     private readonly registration: MemberRegistrationService,
     private readonly lookup: MemberSubscriptionLookupService,
+    private readonly decision: MemberDecisionService,
   ) {}
 
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
@@ -134,5 +139,28 @@ export class InscripcionAdminController {
     if (!email) throw new NotFoundException('Solicitante no encontrado.');
     const result = await this.lookup.runAndStore(user.tenantId, userId, email);
     return { matches: result.matches, failures: result.failures };
+  }
+
+  @Post('requests/:userId/decision')
+  @ApiOperation({
+    summary:
+      'Aprueba o rechaza una solicitud desde el panel (sin necesidad del link del email). ' +
+      'Aprobar pone al usuario ACTIVE, asigna el grupo por defecto y le envía la bienvenida. ' +
+      'La asignación de tier se hace aparte con PUT /modules/payment-connections/user-tiers/:userId.',
+  })
+  async decideRequest(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Param('userId') userId: string,
+    @Body(new ZodValidationPipe(decisionSchema)) dto: DecisionDto,
+    @Req() req: FastifyRequest,
+  ) {
+    const user = this.requireAdmin(rawUser);
+    const ctx = extractClientContext(req);
+    const action = dto.action === 'approve' ? 'APPROVE' : 'REJECT';
+    const result = await this.decision.decideByAdmin(user.tenantId, userId, action, ctx);
+    if (result.outcome === 'invalid') {
+      throw new NotFoundException('Solicitante no encontrado.');
+    }
+    return { outcome: result.outcome };
   }
 }
