@@ -113,6 +113,17 @@ export default function CourseAlumnoPage() {
     void reload();
   }, [reload]);
 
+  // El title de la pestaña dentro de un curso debe reflejar la clase activa (o,
+  // en su defecto, el nombre del curso) en vez del genérico "Didacta".
+  useEffect(() => {
+    if (!course) return;
+    const active = course.modules.flatMap((m) => m.lessons).find((l) => l.id === activeLessonId);
+    document.title = active?.title ? `${active.title} · ${course.title}` : course.title;
+    return () => {
+      document.title = 'Didacta';
+    };
+  }, [course, activeLessonId]);
+
   async function handleDownloadCertificate() {
     if (!certificate) return;
     setDownloadingCert(true);
