@@ -748,10 +748,36 @@ export class PaymentConnectionsService {
   }
 
   /**
-   * Resuelve (lazy) el enlace de renovación READ-ONLY del suscriptor y lo cachea.
-   * Stripe: hosted_invoice_url de la factura abierta/impaga (necesita permiso de
-   * lectura de Facturas en la key; si no, null). WooCommerce/PayPal: null en v1.
-   * Best-effort: ante cualquier fallo devuelve null (no rompe el envío del email).
+   * Resuelve el enlace de renovación READ-ONLY a partir de la referencia cruda
+   * (connection + provider + subscription), SIN depender de la tabla materializada
+   * del dashboard. Stripe: hosted_invoice_url de la factura abierta/impaga (necesita
+   * permiso de lectura de Facturas en la key; si no, null). WooCommerce/PayPal: null
+   * en v1. Best-effort: ante cualquier fallo devuelve null (no rompe el envío del email).
+   *
+   * Lo usa tanto `resolveRenewalUrl` (por id del registro materializado) como el panel
+   * de solicitudes de inscripción (que solo tiene la referencia cruda del lookup en vivo).
+   */
+  async resolveRenewalUrlByRef(
+    tenantId: string,
+    connectionId: string,
+    provider: string,
+    subscriptionId: string,
+  ): Promise<string | null> {
+    if (provider !== 'stripe') return null;
+    try {
+      const credentials = await this.loadCredentials(tenantId, connectionId, provider);
+      const adapter = this.adapterFactory(provider, credentials);
+      if (!adapter.readOpenInvoiceUrl) return null;
+      return (await adapter.readOpenInvoiceUrl(subscriptionId)) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Resuelve (lazy) el enlace de renovación READ-ONLY del suscriptor materializado
+   * y lo cachea. Delega la resolución en vivo en `resolveRenewalUrlByRef` y, si no
+   * la consigue, cae al `renewalUrl` ya guardado. Best-effort.
    */
   async resolveRenewalUrl(tenantId: string, id: string): Promise<string | null> {
     const r = await this.prisma.modPaymentConnectionsSubscriber.findFirst({
@@ -759,21 +785,19 @@ export class PaymentConnectionsService {
     });
     if (!r) return null;
     if (r.provider !== 'stripe') return r.renewalUrl ?? null;
-    try {
-      const credentials = await this.loadCredentials(tenantId, r.connectionId, r.provider);
-      const adapter = this.adapterFactory(r.provider, credentials);
-      if (!adapter.readOpenInvoiceUrl) return r.renewalUrl ?? null;
-      const url = await adapter.readOpenInvoiceUrl(r.subscriptionId);
-      if (url && url !== r.renewalUrl) {
-        await this.prisma.modPaymentConnectionsSubscriber.update({
-          where: { id: r.id },
-          data: { renewalUrl: url },
-        });
-      }
-      return url ?? r.renewalUrl ?? null;
-    } catch {
-      return r.renewalUrl ?? null;
+    const url = await this.resolveRenewalUrlByRef(
+      tenantId,
+      r.connectionId,
+      r.provider,
+      r.subscriptionId,
+    );
+    if (url && url !== r.renewalUrl) {
+      await this.prisma.modPaymentConnectionsSubscriber.update({
+        where: { id: r.id },
+        data: { renewalUrl: url },
+      });
     }
+    return url ?? r.renewalUrl ?? null;
   }
 
   /** Plantilla del email de renovación del tenant (o la por defecto). */

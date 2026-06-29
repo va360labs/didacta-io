@@ -1,0 +1,158 @@
+'use client';
+
+/**
+ * Modal compartido para enviar el email de recordatorio de pago/renovación.
+ *
+ * Lo usan dos pantallas que envían el MISMO email con la misma plantilla del tenant:
+ *   - Dashboard de control de suscripciones (mod.payment-connections).
+ *   - Panel de solicitudes de inscripción (core).
+ *
+ * Es presentación pura: cada pantalla inyecta cómo cargar el contexto (plantilla +
+ * enlace de renovación) y cómo enviar, vía `loadContext` y `send`. Al abrir, resuelve
+ * la plantilla, sustituye las variables ({plan}, {enlace}, {importe}, {email}) y deja
+ * asunto y cuerpo EDITABLES antes de enviar.
+ */
+
+import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ApiHttpError } from '@/lib/api-client';
+import { formatAmount, type RenewalTemplate } from '@/lib/payment-connections';
+
+export interface RenewalEmailModalProps {
+  /** Email destinatario (a quién se le envía el recordatorio). */
+  to: string;
+  /** Nombre del plan/producto (para la variable {plan}). */
+  productName: string | null;
+  /** Importe en céntimos (para la variable {importe}). */
+  unitAmount: number | null;
+  /** Moneda ISO (para la variable {importe}). */
+  currency: string | null;
+  /** Carga la plantilla del tenant + el enlace de renovación (lazy). */
+  loadContext: () => Promise<{ template: RenewalTemplate; renewalUrl: string | null }>;
+  /** Envía el email ya editado. Devuelve el destinatario real para el aviso. */
+  send: (payload: RenewalTemplate) => Promise<{ to: string }>;
+  onClose: () => void;
+  onSent: (msg: string) => void;
+}
+
+export function RenewalEmailModal({
+  to,
+  productName,
+  unitAmount,
+  currency,
+  loadContext,
+  send,
+  onClose,
+  onSent,
+}: RenewalEmailModalProps) {
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [renewalUrl, setRenewalUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const { template, renewalUrl: url } = await loadContext();
+        if (!active) return;
+        const resolve = (s: string) =>
+          s
+            .replaceAll('{plan}', productName ?? 'tu plan')
+            .replaceAll('{enlace}', url ?? '(enlace no disponible)')
+            .replaceAll('{importe}', unitAmount !== null ? formatAmount(unitAmount, currency) : '')
+            .replaceAll('{email}', to);
+        setRenewalUrl(url);
+        setSubject(resolve(template.subject));
+        setBody(resolve(template.body));
+      } catch (e) {
+        if (active) setErr(e instanceof ApiHttpError ? e.message : 'No pudimos preparar el email.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [to]);
+
+  async function submit() {
+    setSending(true);
+    setErr(null);
+    try {
+      const res = await send({ subject, body });
+      onSent(`Recordatorio enviado a ${res.to}.`);
+    } catch (e) {
+      setErr(e instanceof ApiHttpError ? e.message : 'No se pudo enviar el email.');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex w-full max-w-lg flex-col gap-3 rounded-xl border border-border bg-surface p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div>
+          <h3 className="text-lg font-semibold text-text">Recordatorio de renovación</h3>
+          <p className="text-sm text-text-muted">
+            Para {to} · {productName ?? 'suscripción'}
+          </p>
+        </div>
+
+        {loading ? (
+          <Skeleton className="h-48 w-full" />
+        ) : (
+          <>
+            {!renewalUrl && (
+              <div className="rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning-700">
+                No hay enlace de renovación disponible para esta suscripción (Stripe necesita
+                permiso de lectura de Facturas, o no hay factura impaga abierta). Puedes editar el
+                cuerpo.
+              </div>
+            )}
+            <div>
+              <Label htmlFor="renew-subject">Asunto</Label>
+              <Input
+                id="renew-subject"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="renew-body">Mensaje</Label>
+              <textarea
+                id="renew-body"
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={8}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text"
+              />
+            </div>
+            {err && <p className="text-sm text-danger">{err}</p>}
+          </>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose} disabled={sending}>
+            Cancelar
+          </Button>
+          <Button onClick={() => void submit()} disabled={loading || sending || !subject || !body}>
+            {sending ? 'Enviando…' : 'Enviar'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

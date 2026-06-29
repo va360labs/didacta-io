@@ -1,12 +1,15 @@
 import { randomBytes } from 'node:crypto';
 import {
+  BadRequestException,
   Body,
+  ConflictException,
   Controller,
   ForbiddenException,
   Get,
   NotFoundException,
   Param,
   Post,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards,
@@ -14,12 +17,17 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import type { MemberSubscriptionMatch, RenewalTemplate } from '@didacta/mod-payment-connections';
 import { extractClientContext } from '../auth/client-context';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
 import { resolveWebBaseUrl } from '../common/resolve-web-base-url';
+import { renewalEmailHtml } from '../common/renewal-email-html';
+import { ModuleRegistryService } from '../modules/module-registry.service';
+import { SmtpAdapterService } from '../modules/smtp-adapter.service';
+import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
 import { MemberDecisionService } from './member-decision.service';
 import { MemberRegistrationService } from './member-registration.service';
 import { MemberSubscriptionLookupService } from './member-subscription-lookup.service';
@@ -39,6 +47,15 @@ const createManualSchema = z
   .strict();
 type CreateManualDto = z.infer<typeof createManualSchema>;
 
+/** Email de recordatorio de pago (asunto + cuerpo ya resueltos/editados por el admin). */
+const renewalEmailSchema = z
+  .object({
+    subject: z.string().trim().min(1).max(200),
+    body: z.string().trim().min(1).max(5000),
+  })
+  .strict();
+type RenewalEmailDto = z.infer<typeof renewalEmailSchema>;
+
 /**
  * Panel ADMIN de solicitudes de inscripción (autenticado, distinto del controller
  * público del flujo). Lista las solicitudes PENDING con el estado de su lookup de
@@ -56,6 +73,9 @@ export class InscripcionAdminController {
     private readonly registration: MemberRegistrationService,
     private readonly lookup: MemberSubscriptionLookupService,
     private readonly decision: MemberDecisionService,
+    private readonly registry: ModuleRegistryService,
+    private readonly smtp: SmtpAdapterService,
+    private readonly smtpResolver: TenantSmtpResolverService,
   ) {}
 
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
@@ -162,5 +182,86 @@ export class InscripcionAdminController {
       throw new NotFoundException('Solicitante no encontrado.');
     }
     return { outcome: result.outcome };
+  }
+
+  @Get('requests/:userId/renewal-context')
+  @ApiOperation({
+    summary:
+      'Prepara el envío del recordatorio de pago de una solicitud: resuelve la ' +
+      'plantilla del tenant y (Stripe) el enlace de la factura abierta de la ' +
+      'suscripción detectada indicada por `subscriptionId`.',
+  })
+  async renewalContext(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Param('userId') userId: string,
+    @Query('subscriptionId') subscriptionId: string | undefined,
+  ): Promise<{ template: RenewalTemplate; renewalUrl: string | null }> {
+    const user = this.requireAdmin(rawUser);
+    if (!subscriptionId) throw new BadRequestException('Falta subscriptionId.');
+    const match = await this.findLookupMatch(user.tenantId, userId, subscriptionId);
+    const svc = this.registry.getPaymentConnectionsService();
+    // connectionId puede faltar en lookups antiguos (persistidos antes de incluirlo):
+    // en ese caso no podemos resolver el enlace, pero el email sigue siendo enviable.
+    const renewalUrl = match.connectionId
+      ? await svc.resolveRenewalUrlByRef(
+          user.tenantId,
+          match.connectionId,
+          match.provider,
+          match.subscriptionId,
+        )
+      : null;
+    const template = await svc.getRenewalTemplate(user.tenantId);
+    return { template, renewalUrl };
+  }
+
+  @Post('requests/:userId/renewal-email')
+  @ApiOperation({
+    summary:
+      'Envía el email de recordatorio de pago al email de la solicitud, vía el SMTP ' +
+      'del tenant (asunto/cuerpo ya editados por el admin). No modifica la suscripción.',
+  })
+  async sendRenewalEmail(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Param('userId') userId: string,
+    @Body(new ZodValidationPipe(renewalEmailSchema)) dto: RenewalEmailDto,
+  ): Promise<{ ok: boolean; to: string }> {
+    const user = this.requireAdmin(rawUser);
+    const to = (await this.registration.getUserEmail(user.tenantId, userId))?.trim();
+    if (!to) throw new NotFoundException('Solicitante no encontrado o sin email.');
+    const resolved = await this.smtpResolver.resolve(user.tenantId);
+    if (!resolved) {
+      throw new ConflictException(
+        'El tenant no tiene SMTP configurado: no se puede enviar el recordatorio.',
+      );
+    }
+    const result = await this.smtp.send(resolved.config, {
+      to,
+      subject: dto.subject,
+      text: dto.body,
+      html: renewalEmailHtml(dto.body),
+    });
+    if (!result.ok) {
+      throw new ConflictException(`No se pudo enviar el email: ${result.error ?? 'error SMTP'}`);
+    }
+    return { ok: true, to };
+  }
+
+  /**
+   * Localiza, dentro del lookup persistido de una solicitud, la suscripción detectada
+   * con el `subscriptionId` indicado. 404 si la solicitud no tiene lookup o no contiene
+   * esa suscripción (evita resolver enlaces de subs ajenas a la solicitud).
+   */
+  private async findLookupMatch(
+    tenantId: string,
+    userId: string,
+    subscriptionId: string,
+  ): Promise<MemberSubscriptionMatch> {
+    const row = await this.lookup.getForUser(tenantId, userId);
+    const results = (row?.results ?? []) as unknown as MemberSubscriptionMatch[];
+    const match = results.find((m) => m.subscriptionId === subscriptionId);
+    if (!match) {
+      throw new NotFoundException('Suscripción no encontrada en el lookup de la solicitud.');
+    }
+    return match;
   }
 }

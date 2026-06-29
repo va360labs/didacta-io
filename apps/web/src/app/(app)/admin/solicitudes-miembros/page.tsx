@@ -11,7 +11,9 @@ import { ApiHttpError } from '@/lib/api-client';
 import {
   decideMemberRequest,
   listMemberRequests,
+  memberRenewalContext,
   rerunMemberLookup,
+  sendMemberRenewalEmail,
   type MemberRequest,
   type MemberSubscriptionMatch,
 } from '@/lib/inscripcion';
@@ -22,6 +24,7 @@ import {
   type PaymentTier,
 } from '@/lib/payment-connections';
 import { authStorage } from '@/lib/auth-storage';
+import { RenewalEmailModal } from '@/components/renewal-email-modal';
 
 /**
  * Panel admin de solicitudes de inscripción. Por cada solicitud PENDING muestra
@@ -37,6 +40,10 @@ export default function SolicitudesMiembrosPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [emailFor, setEmailFor] = useState<{
+    req: MemberRequest;
+    match: MemberSubscriptionMatch;
+  } | null>(null);
 
   /**
    * Tier del catálogo cuyo nombre coincide con algún plan de una suscripción
@@ -191,7 +198,10 @@ export default function SolicitudesMiembrosPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
-                <SubscriptionBlock request={r} />
+                <SubscriptionBlock
+                  request={r}
+                  onRemind={(match) => setEmailFor({ req: r, match })}
+                />
 
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="min-w-[14rem] flex-1">
@@ -232,12 +242,42 @@ export default function SolicitudesMiembrosPage() {
           ))}
         </div>
       )}
+
+      {emailFor && (
+        <RenewalEmailModal
+          to={emailFor.req.email}
+          productName={emailFor.match.planName}
+          unitAmount={emailFor.match.unitAmount}
+          currency={emailFor.match.currency}
+          loadContext={async () => {
+            const t = authStorage.getAccessToken();
+            if (!t) throw new Error('No hay sesión activa.');
+            return memberRenewalContext(t, emailFor.req.userId, emailFor.match.subscriptionId);
+          }}
+          send={async (payload) => {
+            const t = authStorage.getAccessToken();
+            if (!t) throw new Error('No hay sesión activa.');
+            return sendMemberRenewalEmail(t, emailFor.req.userId, payload);
+          }}
+          onClose={() => setEmailFor(null)}
+          onSent={(msg) => {
+            setEmailFor(null);
+            setNotice(msg);
+          }}
+        />
+      )}
     </div>
   );
 }
 
 /** Bloque de estado de suscripción de una solicitud. */
-function SubscriptionBlock({ request }: { request: MemberRequest }) {
+function SubscriptionBlock({
+  request,
+  onRemind,
+}: {
+  request: MemberRequest;
+  onRemind: (match: MemberSubscriptionMatch) => void;
+}) {
   const lookup = request.lookup;
   if (!lookup || lookup.status === 'PENDING') {
     return (
@@ -289,8 +329,14 @@ function SubscriptionBlock({ request }: { request: MemberRequest }) {
       </p>
       <ul className="flex flex-col gap-1">
         {results.map((m) => (
-          <li key={m.subscriptionId} className="text-sm text-text">
-            {describeMatch(m)}
+          <li
+            key={m.subscriptionId}
+            className="flex flex-wrap items-center justify-between gap-2 text-sm text-text"
+          >
+            <span>{describeMatch(m)}</span>
+            <Button variant="ghost" onClick={() => onRemind(m)}>
+              Enviar recordatorio
+            </Button>
           </li>
         ))}
       </ul>

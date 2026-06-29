@@ -592,6 +592,61 @@ describe('findUserSubscriptions', () => {
   });
 });
 
+describe('resolveRenewalUrlByRef', () => {
+  /** Adapter que valida en el add y, opcionalmente, resuelve la factura abierta. */
+  function invoiceAdapter(open?: (subId: string) => Promise<string | null>): StripeReadAdapter {
+    const base: StripeReadAdapter = {
+      retrieveAccount: async () => ({ id: 'acct', email: null, country: null, businessName: null }),
+      listActiveSubscriptions: async () => ({ subscribers: [], truncated: false }),
+    };
+    return open ? { ...base, readOpenInvoiceUrl: open } : base;
+  }
+
+  async function addStripeConn(svc: ReturnType<typeof buildService>) {
+    return svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName: 'Stripe ES',
+      credentials: { apiKey: VALID_KEY },
+    });
+  }
+
+  it('Stripe: devuelve el hosted_invoice_url de la factura abierta de la suscripción', async () => {
+    const open = vi.fn(async (subId: string) => `https://invoice.stripe.com/i/${subId}`);
+    const svc = buildService({ [VALID_KEY]: invoiceAdapter(open) });
+    const conn = await addStripeConn(svc);
+
+    const url = await svc.service.resolveRenewalUrlByRef(TENANT, conn.id, 'stripe', 'sub_9');
+
+    expect(url).toBe('https://invoice.stripe.com/i/sub_9');
+    expect(open).toHaveBeenCalledWith('sub_9');
+  });
+
+  it('provider no-stripe → null sin cargar credenciales ni adapter', async () => {
+    const svc = buildService();
+    expect(
+      await svc.service.resolveRenewalUrlByRef(TENANT, 'conn_x', 'paypal', 'sub_9'),
+    ).toBeNull();
+  });
+
+  it('Stripe sin readOpenInvoiceUrl en el adapter → null', async () => {
+    const svc = buildService({ [VALID_KEY]: invoiceAdapter() });
+    const conn = await addStripeConn(svc);
+    expect(await svc.service.resolveRenewalUrlByRef(TENANT, conn.id, 'stripe', 'sub_9')).toBeNull();
+  });
+
+  it('si el adapter lanza, degrada a null (best-effort, no rompe el envío)', async () => {
+    const svc = buildService({
+      [VALID_KEY]: invoiceAdapter(async () => {
+        throw new Error('stripe caído');
+      }),
+    });
+    const conn = await addStripeConn(svc);
+    expect(await svc.service.resolveRenewalUrlByRef(TENANT, conn.id, 'stripe', 'sub_9')).toBeNull();
+  });
+});
+
 /**
  * Tabla CANÓNICA de clasificación de estados. Es el contrato compartido entre la
  * copia backend (este módulo) y la copia web (apps/web/src/lib/payment-connections.ts,

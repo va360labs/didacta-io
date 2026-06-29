@@ -26,9 +26,9 @@ import {
   formatAmount,
   subscriptionsDashboardApi,
   type DashboardSubscriber,
-  type RenewalTemplate,
   type SubscribersSummary,
 } from '@/lib/payment-connections';
+import { RenewalEmailModal } from '@/components/renewal-email-modal';
 
 /** Estados de impago en los que tiene sentido enviar un recordatorio de renovación. */
 function isImpago(category: string): boolean {
@@ -342,7 +342,24 @@ export function SubscriptionsDashboard() {
 
       {emailFor && (
         <RenewalEmailModal
-          subscriber={emailFor}
+          to={emailFor.userEmail}
+          productName={emailFor.productName}
+          unitAmount={emailFor.unitAmount}
+          currency={emailFor.currency}
+          loadContext={async () => {
+            const t = authStorage.getAccessToken();
+            if (!t) throw new Error('No hay sesión activa.');
+            const [template, ru] = await Promise.all([
+              subscriptionsDashboardApi.getTemplate(t),
+              subscriptionsDashboardApi.renewalUrl(t, emailFor.id).catch(() => ({ url: null })),
+            ]);
+            return { template, renewalUrl: ru.url };
+          }}
+          send={async (payload) => {
+            const t = authStorage.getAccessToken();
+            if (!t) throw new Error('No hay sesión activa.');
+            return subscriptionsDashboardApi.sendRenewalEmail(t, emailFor.id, payload);
+          }}
           onClose={() => setEmailFor(null)}
           onSent={(msg) => {
             setEmailFor(null);
@@ -351,140 +368,5 @@ export function SubscriptionsDashboard() {
         />
       )}
     </Card>
-  );
-}
-
-/**
- * Modal para enviar el recordatorio de renovación a un suscriptor impago.
- * Al abrir, resuelve el enlace de renovación (lazy) + la plantilla del tenant,
- * sustituye las variables ({plan}, {enlace}, {importe}, {email}) y deja el asunto
- * y el cuerpo EDITABLES antes de enviar.
- */
-function RenewalEmailModal({
-  subscriber,
-  onClose,
-  onSent,
-}: {
-  subscriber: DashboardSubscriber;
-  onClose: () => void;
-  onSent: (msg: string) => void;
-}) {
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
-  const [renewalUrl, setRenewalUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    const t = authStorage.getAccessToken();
-    if (!t) return;
-    let active = true;
-    (async () => {
-      try {
-        const [tpl, ru] = await Promise.all([
-          subscriptionsDashboardApi.getTemplate(t),
-          subscriptionsDashboardApi.renewalUrl(t, subscriber.id).catch(() => ({ url: null })),
-        ]);
-        if (!active) return;
-        const resolve = (s: string) =>
-          s
-            .replaceAll('{plan}', subscriber.productName ?? 'tu plan')
-            .replaceAll('{enlace}', ru.url ?? '(enlace no disponible)')
-            .replaceAll(
-              '{importe}',
-              subscriber.unitAmount !== null
-                ? formatAmount(subscriber.unitAmount, subscriber.currency)
-                : '',
-            )
-            .replaceAll('{email}', subscriber.userEmail);
-        setRenewalUrl(ru.url);
-        setSubject(resolve(tpl.subject));
-        setBody(resolve(tpl.body));
-      } catch (e) {
-        if (active) setErr(e instanceof ApiHttpError ? e.message : 'No pudimos preparar el email.');
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [subscriber]);
-
-  async function send() {
-    const t = authStorage.getAccessToken();
-    if (!t) return;
-    setSending(true);
-    setErr(null);
-    try {
-      const payload: RenewalTemplate = { subject, body };
-      const res = await subscriptionsDashboardApi.sendRenewalEmail(t, subscriber.id, payload);
-      onSent(`Recordatorio enviado a ${res.to}.`);
-    } catch (e) {
-      setErr(e instanceof ApiHttpError ? e.message : 'No se pudo enviar el email.');
-    } finally {
-      setSending(false);
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="flex w-full max-w-lg flex-col gap-3 rounded-xl border border-border bg-surface p-5 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div>
-          <h3 className="text-lg font-semibold text-text">Recordatorio de renovación</h3>
-          <p className="text-sm text-text-muted">
-            Para {subscriber.userEmail} · {subscriber.productName ?? 'suscripción'}
-          </p>
-        </div>
-
-        {loading ? (
-          <Skeleton className="h-48 w-full" />
-        ) : (
-          <>
-            {!renewalUrl && (
-              <div className="rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning-700">
-                No hay enlace de renovación disponible para este suscriptor (Stripe necesita permiso
-                de lectura de Facturas, o no hay factura impaga abierta). Puedes editar el cuerpo.
-              </div>
-            )}
-            <div>
-              <Label htmlFor="renew-subject">Asunto</Label>
-              <Input
-                id="renew-subject"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="renew-body">Mensaje</Label>
-              <textarea
-                id="renew-body"
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={8}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text"
-              />
-            </div>
-            {err && <p className="text-sm text-danger">{err}</p>}
-          </>
-        )}
-
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose} disabled={sending}>
-            Cancelar
-          </Button>
-          <Button onClick={() => void send()} disabled={loading || sending || !subject || !body}>
-            {sending ? 'Enviando…' : 'Enviar'}
-          </Button>
-        </div>
-      </div>
-    </div>
   );
 }
