@@ -626,7 +626,13 @@ function renewalEmailHtml(body: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
   const linked = escaped
-    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')
+    .replace(/(https?:\/\/[^\s<]+)/g, (match) => {
+      // No metas la puntuación final (.,;:!?)]) dentro del href si el admin la
+      // pegó al enlace: la dejamos fuera del <a>.
+      const trail = /[.,;:!?)\]]+$/.exec(match)?.[0] ?? '';
+      const url = trail ? match.slice(0, match.length - trail.length) : match;
+      return `<a href="${url}">${url}</a>${trail}`;
+    })
     .replace(/\n/g, '<br>');
   return (
     `<!DOCTYPE html><html lang="es"><body style="font-family:'Inter',system-ui,sans-serif;color:#0D1B2A;line-height:1.6;">` +
