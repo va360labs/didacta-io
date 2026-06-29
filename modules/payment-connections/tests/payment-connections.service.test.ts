@@ -179,12 +179,18 @@ class MockPrisma {
       }
       return null;
     },
-    findMany: async (args: { where: Record<string, unknown> }) => {
+    findMany: async (args: { where?: Record<string, unknown>; distinct?: string[] }) => {
       const w = args.where ?? {};
-      const out = [...this.rows.values()].filter(
-        (r) => !w['tenantId'] || r.tenantId === w['tenantId'],
+      let out = [...this.rows.values()].filter(
+        (r) =>
+          (!w['tenantId'] || r.tenantId === w['tenantId']) &&
+          (!w['status'] || r.status === w['status']),
       );
       out.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      if (args.distinct?.includes('tenantId')) {
+        const seen = new Set<string>();
+        out = out.filter((r) => (seen.has(r.tenantId) ? false : (seen.add(r.tenantId), true)));
+      }
       return out.map((r) => ({ ...r }));
     },
     create: async (args: { data: Record<string, unknown> }) => {
@@ -782,5 +788,25 @@ describe('dashboard: syncSubscribers / listSubscribers / subscriberSummary', () 
     const svc = await setup(adapter);
     const labels = await svc.service.listPlanCatalogLabels(TENANT);
     expect(labels.sort()).toEqual(['Cohorte Vacía', 'Plan A']);
+  });
+
+  it('listTenantsWithVerifiedConnections devuelve los tenants con conexión VERIFIED (distinct)', async () => {
+    const svc = buildService();
+    await svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName: 'A',
+      credentials: { apiKey: VALID_KEY },
+    });
+    await svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName: 'B',
+      credentials: { apiKey: VALID_KEY },
+    });
+    // 2 conexiones del mismo tenant → una sola entrada (distinct).
+    expect(await svc.service.listTenantsWithVerifiedConnections()).toEqual([TENANT]);
   });
 });

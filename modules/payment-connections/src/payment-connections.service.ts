@@ -826,6 +826,21 @@ export class PaymentConnectionsService {
     return [...labels];
   }
 
+  /**
+   * Tenants con AL MENOS una conexión VERIFIED. Lo usa el scheduler periódico para
+   * saber a qué tenants sincronizar. OJO: query CROSS-TENANT (sin filtro tenantId)
+   * — solo correcta en contexto de worker (sin RLS de request); en prod el rol de
+   * la app bypasa RLS (mismo modelo que el resto de workers del host).
+   */
+  async listTenantsWithVerifiedConnections(): Promise<string[]> {
+    const rows = await this.prisma.modPaymentConnectionsConnection.findMany({
+      where: { status: 'VERIFIED' },
+      select: { tenantId: true },
+      distinct: ['tenantId'],
+    });
+    return rows.map((r) => r.tenantId);
+  }
+
   // ---------------- internos ----------------
 
   private credKeyName(provider: string, connectionId: string): string {
