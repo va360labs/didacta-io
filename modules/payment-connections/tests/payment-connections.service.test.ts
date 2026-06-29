@@ -129,6 +129,19 @@ class MockPrisma {
       for (const r of rows) m.set(r[field], (m.get(r[field]) ?? 0) + 1);
       return [...m.entries()].map(([k, v]) => ({ [field]: k, _count: { _all: v } }));
     },
+    findFirst: async (args: { where?: Record<string, unknown> }) => {
+      const out = [...this.subscribers.values()].filter((r) => matchWhere(r, args.where ?? {}));
+      return out[0] ? { ...out[0] } : null;
+    },
+    update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+      for (const r of this.subscribers.values()) {
+        if (r['id'] === args.where.id) {
+          Object.assign(r, args.data, { updatedAt: new Date() });
+          return { ...r };
+        }
+      }
+      throw new Error('subscriber not found');
+    },
   };
 
   modPaymentConnectionsSyncHistory = {
@@ -720,5 +733,43 @@ describe('dashboard: syncSubscribers / listSubscribers / subscriberSummary', () 
     const r2 = await svc.service.syncSubscribers(TENANT);
     expect(r2.markedGone).toBe(0);
     expect((await svc.service.listSubscribers(TENANT, { statusCategory: 'active' })).total).toBe(3);
+  });
+
+  it('getSubscriber + resolveRenewalUrl (Stripe) cachea el hosted_invoice_url', async () => {
+    const adapter: StripeReadAdapter = {
+      retrieveAccount: async () => ({ id: 'acct', email: null, country: null, businessName: null }),
+      listActiveSubscriptions: async () => ({
+        subscribers: [sub('sub_pd', 'pd@x.com', 'past_due')],
+        truncated: false,
+      }),
+      readOpenInvoiceUrl: async (subId) =>
+        subId === 'sub_pd' ? 'https://invoice.example/pay' : null,
+    };
+    const svc = await setup(adapter);
+    await svc.service.syncSubscribers(TENANT);
+    const { rows } = await svc.service.listSubscribers(TENANT);
+    const row = rows[0]!;
+    expect((await svc.service.getSubscriber(TENANT, row.id))?.subscriptionId).toBe('sub_pd');
+    expect(await svc.service.resolveRenewalUrl(TENANT, row.id)).toBe('https://invoice.example/pay');
+    // Quedó cacheado en la fila.
+    expect((await svc.service.getSubscriber(TENANT, row.id))?.renewalUrl).toBe(
+      'https://invoice.example/pay',
+    );
+  });
+
+  it('plantilla de renovación: default y personalizada', async () => {
+    const svc = buildService();
+    const def = await svc.service.getRenewalTemplate(TENANT);
+    expect(def.subject).toBeTruthy();
+    expect(def.body).toContain('{enlace}');
+    await svc.service.setRenewalTemplate(
+      TENANT,
+      { subject: 'Hola', body: 'Renueva {enlace}' },
+      'admin',
+    );
+    expect(await svc.service.getRenewalTemplate(TENANT)).toEqual({
+      subject: 'Hola',
+      body: 'Renueva {enlace}',
+    });
   });
 });

@@ -26,8 +26,14 @@ import {
   formatAmount,
   subscriptionsDashboardApi,
   type DashboardSubscriber,
+  type RenewalTemplate,
   type SubscribersSummary,
 } from '@/lib/payment-connections';
+
+/** Estados de impago en los que tiene sentido enviar un recordatorio de renovación. */
+function isImpago(category: string): boolean {
+  return category === 'past_due' || category === 'unpaid';
+}
 
 const PAGE_SIZE = 50;
 
@@ -71,6 +77,7 @@ export function SubscriptionsDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [emailFor, setEmailFor] = useState<DashboardSubscriber | null>(null);
 
   const load = useCallback(async () => {
     const t = authStorage.getAccessToken();
@@ -260,6 +267,7 @@ export function SubscriptionsDashboard() {
                   <th className="py-2 pr-3 font-medium">Estado</th>
                   <th className="py-2 pr-3 font-medium">Importe</th>
                   <th className="py-2 pr-3 font-medium">Próx. renovación</th>
+                  <th className="py-2 pr-3 font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -289,6 +297,15 @@ export function SubscriptionsDashboard() {
                         {r.interval ? <span className="text-text-muted">/{r.interval}</span> : ''}
                       </td>
                       <td className="py-2 pr-3 text-text-muted">{fmtDate(r.currentPeriodEnd)}</td>
+                      <td className="py-2 pr-3">
+                        {isImpago(r.statusCategory) ? (
+                          <Button variant="ghost" onClick={() => setEmailFor(r)}>
+                            Recordatorio
+                          </Button>
+                        ) : (
+                          <span className="text-text-muted">—</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -322,6 +339,152 @@ export function SubscriptionsDashboard() {
           </div>
         )}
       </CardContent>
+
+      {emailFor && (
+        <RenewalEmailModal
+          subscriber={emailFor}
+          onClose={() => setEmailFor(null)}
+          onSent={(msg) => {
+            setEmailFor(null);
+            setNotice(msg);
+          }}
+        />
+      )}
     </Card>
+  );
+}
+
+/**
+ * Modal para enviar el recordatorio de renovación a un suscriptor impago.
+ * Al abrir, resuelve el enlace de renovación (lazy) + la plantilla del tenant,
+ * sustituye las variables ({plan}, {enlace}, {importe}, {email}) y deja el asunto
+ * y el cuerpo EDITABLES antes de enviar.
+ */
+function RenewalEmailModal({
+  subscriber,
+  onClose,
+  onSent,
+}: {
+  subscriber: DashboardSubscriber;
+  onClose: () => void;
+  onSent: (msg: string) => void;
+}) {
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [renewalUrl, setRenewalUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = authStorage.getAccessToken();
+    if (!t) return;
+    let active = true;
+    (async () => {
+      try {
+        const [tpl, ru] = await Promise.all([
+          subscriptionsDashboardApi.getTemplate(t),
+          subscriptionsDashboardApi.renewalUrl(t, subscriber.id).catch(() => ({ url: null })),
+        ]);
+        if (!active) return;
+        const resolve = (s: string) =>
+          s
+            .replaceAll('{plan}', subscriber.productName ?? 'tu plan')
+            .replaceAll('{enlace}', ru.url ?? '(enlace no disponible)')
+            .replaceAll(
+              '{importe}',
+              subscriber.unitAmount !== null
+                ? formatAmount(subscriber.unitAmount, subscriber.currency)
+                : '',
+            )
+            .replaceAll('{email}', subscriber.userEmail);
+        setRenewalUrl(ru.url);
+        setSubject(resolve(tpl.subject));
+        setBody(resolve(tpl.body));
+      } catch (e) {
+        if (active) setErr(e instanceof ApiHttpError ? e.message : 'No pudimos preparar el email.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [subscriber]);
+
+  async function send() {
+    const t = authStorage.getAccessToken();
+    if (!t) return;
+    setSending(true);
+    setErr(null);
+    try {
+      const payload: RenewalTemplate = { subject, body };
+      const res = await subscriptionsDashboardApi.sendRenewalEmail(t, subscriber.id, payload);
+      onSent(`Recordatorio enviado a ${res.to}.`);
+    } catch (e) {
+      setErr(e instanceof ApiHttpError ? e.message : 'No se pudo enviar el email.');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex w-full max-w-lg flex-col gap-3 rounded-xl border border-border bg-surface p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div>
+          <h3 className="text-lg font-semibold text-text">Recordatorio de renovación</h3>
+          <p className="text-sm text-text-muted">
+            Para {subscriber.userEmail} · {subscriber.productName ?? 'suscripción'}
+          </p>
+        </div>
+
+        {loading ? (
+          <Skeleton className="h-48 w-full" />
+        ) : (
+          <>
+            {!renewalUrl && (
+              <div className="rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning-700">
+                No hay enlace de renovación disponible para este suscriptor (Stripe necesita permiso
+                de lectura de Facturas, o no hay factura impaga abierta). Puedes editar el cuerpo.
+              </div>
+            )}
+            <div>
+              <Label htmlFor="renew-subject">Asunto</Label>
+              <Input
+                id="renew-subject"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="renew-body">Mensaje</Label>
+              <textarea
+                id="renew-body"
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={8}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text"
+              />
+            </div>
+            {err && <p className="text-sm text-danger">{err}</p>}
+          </>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose} disabled={sending}>
+            Cancelar
+          </Button>
+          <Button onClick={() => void send()} disabled={loading || sending || !subject || !body}>
+            {sending ? 'Enviando…' : 'Enviar'}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

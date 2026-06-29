@@ -415,4 +415,43 @@ export const subscriptionsDashboardApi = {
       bearer,
     );
   },
+  /** Resuelve (lazy) el enlace de renovación read-only del suscriptor. */
+  async renewalUrl(bearer: string, id: string): Promise<{ url: string | null }> {
+    return apiFetch<{ url: string | null }>(
+      `${BASE}/subscriptions-dashboard/subscribers/${encodeURIComponent(id)}/renewal-url`,
+      { method: 'GET' },
+      bearer,
+    );
+  },
+  async sendRenewalEmail(
+    bearer: string,
+    id: string,
+    payload: RenewalTemplate,
+  ): Promise<{ ok: boolean; to: string }> {
+    return apiFetch<{ ok: boolean; to: string }>(
+      `${BASE}/subscriptions-dashboard/subscribers/${encodeURIComponent(id)}/renewal-email`,
+      { method: 'POST', body: JSON.stringify(payload) },
+      bearer,
+    );
+  },
+  async getTemplate(bearer: string): Promise<RenewalTemplate> {
+    return apiFetch<RenewalTemplate>(
+      `${BASE}/subscriptions-dashboard/renewal-template`,
+      { method: 'GET' },
+      bearer,
+    );
+  },
+  async putTemplate(bearer: string, template: RenewalTemplate): Promise<RenewalTemplate> {
+    return apiFetch<RenewalTemplate>(
+      `${BASE}/subscriptions-dashboard/renewal-template`,
+      { method: 'PUT', body: JSON.stringify(template) },
+      bearer,
+    );
+  },
 };
+
+/** Plantilla del email de renovación (asunto + cuerpo). */
+export interface RenewalTemplate {
+  subject: string;
+  body: string;
+}

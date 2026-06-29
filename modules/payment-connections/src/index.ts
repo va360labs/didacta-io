@@ -30,6 +30,7 @@ export {
   SUPPORTED_PROVIDERS,
   normalizeEmail,
   classifySubscriptionStatus,
+  DEFAULT_RENEWAL_TEMPLATE,
 } from './payment-connections.service.js';
 export type {
   ConfigPort,
@@ -51,6 +52,7 @@ export type {
   SubscriberListOptions,
   SubscriberRow,
   SubscriberSummary,
+  RenewalTemplate,
 } from './payment-connections.service.js';
 export { StripeReadSdkAdapter } from './stripe-reader.client.js';
 export type {

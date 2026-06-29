@@ -65,6 +65,12 @@ export interface StripeReadAdapter {
    * caller lo omite. Devuelve [] si el email no tiene suscripción en esa cuenta.
    */
   findSubscriptionsByEmail?(email: string): Promise<StripeSubscriberRecord[]>;
+  /**
+   * URL hospedada de la factura ABIERTA/impaga de una suscripción — el enlace
+   * read-only para que el cliente pague/renueve. Opcional por proveedor. Devuelve
+   * null si no hay factura abierta o el proveedor no lo soporta.
+   */
+  readOpenInvoiceUrl?(subscriptionId: string): Promise<string | null>;
 }
 
 const DEFAULT_STATUSES = ['active', 'trialing', 'past_due'];
@@ -178,6 +184,27 @@ export class StripeReadSdkAdapter implements StripeReadAdapter {
     }
     await this.fillProductNames(out);
     return out;
+  }
+
+  /**
+   * URL hospedada de la factura ABIERTA (impaga) de una suscripción: el enlace
+   * para que el cliente pague/renueve. Solo lectura (la restricted key necesita
+   * permiso de lectura de Facturas; si no lo tiene, devolvemos null en vez de
+   * romper). null si no hay factura abierta.
+   */
+  async readOpenInvoiceUrl(subscriptionId: string): Promise<string | null> {
+    if (!subscriptionId) return null;
+    try {
+      const invoices = await this.client.invoices.list({
+        subscription: subscriptionId,
+        status: 'open',
+        limit: 1,
+      });
+      return invoices.data[0]?.hosted_invoice_url ?? null;
+    } catch {
+      // Best-effort: si la key no tiene permiso de Facturas o falla, no hay enlace.
+      return null;
+    }
   }
 
   /**

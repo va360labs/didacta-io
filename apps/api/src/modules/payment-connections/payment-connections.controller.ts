@@ -1,10 +1,12 @@
 import {
+  BadRequestException,
   Body,
   ConflictException,
   Controller,
   Delete,
   ForbiddenException,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -26,6 +28,8 @@ import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import type { SessionClaims } from '../../auth/token.service';
 import { randomUUID } from 'node:crypto';
 import { AdminUsersService, type AssignableRole } from '../../admin/admin-users.service';
+import { SmtpAdapterService } from '../smtp-adapter.service';
+import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { ModuleContextFactory } from '../module-context.factory';
 
@@ -131,6 +135,15 @@ const subscribersQuerySchema = z
   .strict();
 type SubscribersQuery = z.infer<typeof subscribersQuerySchema>;
 
+/** Plantilla / email de recordatorio de renovación (asunto + cuerpo ya resueltos). */
+const renewalEmailSchema = z
+  .object({
+    subject: z.string().trim().min(1).max(200),
+    body: z.string().trim().min(1).max(5000),
+  })
+  .strict();
+type RenewalEmailDto = z.infer<typeof renewalEmailSchema>;
+
 @ApiTags('Payment Connections · Admin')
 @Controller('modules/payment-connections')
 @UseGuards(JwtAuthGuard)
@@ -140,6 +153,8 @@ export class PaymentConnectionsController {
     private readonly registry: ModuleRegistryService,
     private readonly adminUsers: AdminUsersService,
     private readonly contextFactory: ModuleContextFactory,
+    private readonly smtp: SmtpAdapterService,
+    private readonly smtpResolver: TenantSmtpResolverService,
   ) {}
 
   private assertSuperAdmin(user: SessionClaims | undefined): SessionClaims {
@@ -524,6 +539,102 @@ export class PaymentConnectionsController {
     const user = this.assertSuperAdmin(rawUser);
     return this.registry.getPaymentConnectionsService().subscriberSummary(user.tenantId);
   }
+
+  @Get('subscriptions-dashboard/subscribers/:id/renewal-url')
+  @ApiOperation({
+    summary:
+      'Resuelve (lazy) el enlace de renovación read-only del suscriptor (Stripe: factura impaga).',
+  })
+  async subscriberRenewalUrl(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Param('id') id: string,
+  ) {
+    const user = this.assertSuperAdmin(rawUser);
+    const url = await this.registry
+      .getPaymentConnectionsService()
+      .resolveRenewalUrl(user.tenantId, id);
+    return { url };
+  }
+
+  @Post('subscriptions-dashboard/subscribers/:id/renewal-email')
+  @ApiOperation({
+    summary:
+      'Envía un email de recordatorio de renovación al suscriptor (asunto/cuerpo ya editados por ' +
+      'el admin). Se manda al email del suscriptor vía el SMTP del tenant.',
+  })
+  async sendRenewalEmail(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(renewalEmailSchema)) dto: RenewalEmailDto,
+  ) {
+    const user = this.assertSuperAdmin(rawUser);
+    const sub = await this.registry.getPaymentConnectionsService().getSubscriber(user.tenantId, id);
+    if (!sub) throw new NotFoundException('Suscriptor no encontrado.');
+    const to = sub.userEmail?.trim();
+    if (!to) {
+      throw new BadRequestException('El suscriptor no tiene email para enviarle el recordatorio.');
+    }
+    const resolved = await this.smtpResolver.resolve(user.tenantId);
+    if (!resolved) {
+      throw new ConflictException(
+        'No hay SMTP configurado (ni del tenant ni global) para enviar el recordatorio.',
+      );
+    }
+    const result = await this.smtp.send(resolved.config, {
+      to,
+      subject: dto.subject,
+      text: dto.body,
+      html: renewalEmailHtml(dto.body),
+    });
+    if (!result.ok) {
+      throw new ConflictException(`No se pudo enviar el email: ${result.error ?? 'error SMTP'}`);
+    }
+    return { ok: true, to };
+  }
+
+  @Get('subscriptions-dashboard/renewal-template')
+  @ApiOperation({
+    summary: 'Plantilla editable del email de renovación del tenant (o la por defecto).',
+  })
+  async getRenewalTemplate(@CurrentUser() rawUser: SessionClaims | undefined) {
+    const user = this.assertSuperAdmin(rawUser);
+    return this.registry.getPaymentConnectionsService().getRenewalTemplate(user.tenantId);
+  }
+
+  @Put('subscriptions-dashboard/renewal-template')
+  @ApiOperation({ summary: 'Personaliza la plantilla del email de renovación del tenant.' })
+  async putRenewalTemplate(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(renewalEmailSchema)) dto: RenewalEmailDto,
+  ) {
+    const user = this.assertSuperAdmin(rawUser);
+    return this.registry
+      .getPaymentConnectionsService()
+      .setRenewalTemplate(user.tenantId, dto, user.sub);
+  }
+}
+
+/**
+ * Envuelve el cuerpo (texto plano editado por el admin) en HTML simple y seguro:
+ * escapa HTML, convierte URLs en enlaces y saltos de línea en <br>. El enlace de
+ * renovación ya viene incrustado en el texto que el admin revisó.
+ */
+function renewalEmailHtml(body: string): string {
+  const escaped = body
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+  const linked = escaped
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')
+    .replace(/\n/g, '<br>');
+  return (
+    `<!DOCTYPE html><html lang="es"><body style="font-family:'Inter',system-ui,sans-serif;color:#0D1B2A;line-height:1.6;">` +
+    `${linked}` +
+    `<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0 12px;" />` +
+    `<p style="font-size:12px;color:#999;margin:0;">Powered by Didacta.io</p>` +
+    `</body></html>`
+  );
 }
 
 /** Etiqueta de tier de respaldo cuando la suscripción no tiene nombre de producto. */

@@ -33,6 +33,8 @@ type ConnectionRow = Awaited<ReturnType<PrismaClient['modPaymentConnectionsConne
 
 /** Slug del módulo usado como `moduleName` en tenant_setting. */
 export const PAYMENT_CONNECTIONS_MODULE = 'payment-connections';
+/** Key en tenant_setting donde se guarda la plantilla del email de renovación. */
+const RENEWAL_TEMPLATE_KEY = 'renewal-template';
 /** Estados Stripe que cuentan como "suscripción activa" para reconciliar. */
 export const STRIPE_ACTIVE_STATUSES = ['active', 'trialing', 'past_due'] as const;
 /** Tope defensivo de páginas por estado al listar suscripciones. */
@@ -275,6 +277,22 @@ export interface SubscriberSummary {
   lastSyncedAt: Date | null;
   lastSyncStatus: string | null;
 }
+
+/** Plantilla editable del email de recordatorio de renovación (por tenant). */
+export interface RenewalTemplate {
+  subject: string;
+  body: string;
+}
+
+/** Plantilla por defecto si el tenant no ha personalizado ninguna. */
+export const DEFAULT_RENEWAL_TEMPLATE: RenewalTemplate = {
+  subject: 'Renueva tu suscripción',
+  body:
+    'Hola,\n\n' +
+    'Hemos visto que tu suscripción ({plan}) está pendiente de pago. ' +
+    'Puedes renovarla desde este enlace:\n\n{enlace}\n\n' +
+    'Si ya lo has resuelto, ignora este mensaje. Gracias.',
+};
 
 export class PaymentConnectionsService {
   constructor(
@@ -700,6 +718,87 @@ export class PaymentConnectionsService {
       lastSyncedAt: lastRun?.completedAt ?? null,
       lastSyncStatus: lastRun?.status ?? null,
     };
+  }
+
+  /** Un suscriptor materializado por id (del tenant), o null. */
+  async getSubscriber(tenantId: string, id: string): Promise<SubscriberRow | null> {
+    const r = await this.prisma.modPaymentConnectionsSubscriber.findFirst({
+      where: { tenantId, id },
+    });
+    if (!r) return null;
+    return {
+      id: r.id,
+      connectionId: r.connectionId,
+      provider: r.provider,
+      subscriptionId: r.subscriptionId,
+      subscriptionCustomerId: r.subscriptionCustomerId,
+      userId: r.userId,
+      userEmail: r.userEmail,
+      status: r.status,
+      statusCategory: r.statusCategory,
+      entitled: r.entitled,
+      productName: r.productName,
+      unitAmount: r.unitAmount,
+      currency: r.currency,
+      interval: r.interval,
+      currentPeriodEnd: r.currentPeriodEnd,
+      renewalUrl: r.renewalUrl,
+      lastSeenAt: r.lastSeenAt,
+    };
+  }
+
+  /**
+   * Resuelve (lazy) el enlace de renovación READ-ONLY del suscriptor y lo cachea.
+   * Stripe: hosted_invoice_url de la factura abierta/impaga (necesita permiso de
+   * lectura de Facturas en la key; si no, null). WooCommerce/PayPal: null en v1.
+   * Best-effort: ante cualquier fallo devuelve null (no rompe el envío del email).
+   */
+  async resolveRenewalUrl(tenantId: string, id: string): Promise<string | null> {
+    const r = await this.prisma.modPaymentConnectionsSubscriber.findFirst({
+      where: { tenantId, id },
+    });
+    if (!r) return null;
+    if (r.provider !== 'stripe') return r.renewalUrl ?? null;
+    try {
+      const credentials = await this.loadCredentials(tenantId, r.connectionId, r.provider);
+      const adapter = this.adapterFactory(r.provider, credentials);
+      if (!adapter.readOpenInvoiceUrl) return r.renewalUrl ?? null;
+      const url = await adapter.readOpenInvoiceUrl(r.subscriptionId);
+      if (url && url !== r.renewalUrl) {
+        await this.prisma.modPaymentConnectionsSubscriber.update({
+          where: { id: r.id },
+          data: { renewalUrl: url },
+        });
+      }
+      return url ?? r.renewalUrl ?? null;
+    } catch {
+      return r.renewalUrl ?? null;
+    }
+  }
+
+  /** Plantilla del email de renovación del tenant (o la por defecto). */
+  async getRenewalTemplate(tenantId: string): Promise<RenewalTemplate> {
+    const stored = await this.config.get<RenewalTemplate>(
+      tenantId,
+      PAYMENT_CONNECTIONS_MODULE,
+      RENEWAL_TEMPLATE_KEY,
+    );
+    if (stored && typeof stored.subject === 'string' && typeof stored.body === 'string') {
+      return stored;
+    }
+    return DEFAULT_RENEWAL_TEMPLATE;
+  }
+
+  /** Personaliza la plantilla del email de renovación del tenant. */
+  async setRenewalTemplate(
+    tenantId: string,
+    template: RenewalTemplate,
+    actorId: string | null,
+  ): Promise<RenewalTemplate> {
+    await this.config.set(tenantId, PAYMENT_CONNECTIONS_MODULE, RENEWAL_TEMPLATE_KEY, template, {
+      actorId,
+    });
+    return template;
   }
 
   // ---------------- internos ----------------
