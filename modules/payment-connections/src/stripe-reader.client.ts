@@ -71,6 +71,12 @@ export interface StripeReadAdapter {
    * null si no hay factura abierta o el proveedor no lo soporta.
    */
   readOpenInvoiceUrl?(subscriptionId: string): Promise<string | null>;
+  /**
+   * Nombres de los planes/productos del CATÁLOGO del proveedor (no de los
+   * suscriptores): permite crear tiers de planes que aún no tienen ningún
+   * suscriptor. Opcional. Devuelve [] si no se soporta o no hay permiso.
+   */
+  listPlanCatalog?(): Promise<string[]>;
 }
 
 const DEFAULT_STATUSES = ['active', 'trialing', 'past_due'];
@@ -205,6 +211,39 @@ export class StripeReadSdkAdapter implements StripeReadAdapter {
       // Best-effort: si la key no tiene permiso de Facturas o falla, no hay enlace.
       return null;
     }
+  }
+
+  /**
+   * Nombres de los productos ACTIVOS del catálogo de Stripe (parte B del sync de
+   * tiers): así aparecen como tier también los planes sin ningún suscriptor. Pide
+   * `products.list({active:true})` paginado con tope defensivo. Best-effort: si la
+   * key no tiene permiso de lectura de Productos o falla, devuelve [].
+   */
+  async listPlanCatalog(): Promise<string[]> {
+    const names: string[] = [];
+    try {
+      let startingAfter: string | undefined;
+      let pages = 0;
+      for (;;) {
+        const resp = await this.client.products.list({
+          active: true,
+          limit: 100,
+          ...(startingAfter ? { starting_after: startingAfter } : {}),
+        });
+        for (const p of resp.data) {
+          const name = p.name?.trim();
+          if (name) names.push(name);
+        }
+        pages += 1;
+        if (!resp.has_more || pages >= 20) break;
+        const last = resp.data[resp.data.length - 1];
+        if (!last) break;
+        startingAfter = last.id;
+      }
+    } catch {
+      return [];
+    }
+    return [...new Set(names)];
   }
 
   /**

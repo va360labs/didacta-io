@@ -468,6 +468,12 @@ export class PaymentConnectionsController {
       }
     }
 
+    // Parte B (D11): añade al catálogo los planes del CATÁLOGO de Stripe que aún
+    // no tienen ningún suscriptor (products.list). Best-effort.
+    for (const label of await connectionsSvc.listPlanCatalogLabels(user.tenantId)) {
+      extraCatalogLabels.add(label);
+    }
+
     const tiersSvc = this.registry.getPaymentTiersService();
     const { updated, tiersCreated, clearedUserIds } = await tiersSvc.applyDerivedTiers(
       user.tenantId,

@@ -772,4 +772,15 @@ describe('dashboard: syncSubscribers / listSubscribers / subscriberSummary', () 
       body: 'Renueva {enlace}',
     });
   });
+
+  it('listPlanCatalogLabels trae los planes del catálogo (parte B, dedup)', async () => {
+    const adapter: StripeReadAdapter = {
+      retrieveAccount: async () => ({ id: 'acct', email: null, country: null, businessName: null }),
+      listActiveSubscriptions: async () => ({ subscribers: [], truncated: false }),
+      listPlanCatalog: async () => ['Plan A', 'Cohorte Vacía', 'Plan A'],
+    };
+    const svc = await setup(adapter);
+    const labels = await svc.service.listPlanCatalogLabels(TENANT);
+    expect(labels.sort()).toEqual(['Cohorte Vacía', 'Plan A']);
+  });
 });

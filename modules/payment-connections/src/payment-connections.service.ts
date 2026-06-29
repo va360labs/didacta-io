@@ -801,6 +801,31 @@ export class PaymentConnectionsService {
     return template;
   }
 
+  /**
+   * Nombres de planes del CATÁLOGO de todas las cuentas VERIFIED (parte B del sync
+   * de tiers): incluye planes que aún NO tienen ningún suscriptor. Best-effort por
+   * conexión: una cuenta sin permiso de lectura de Productos no rompe el resto.
+   */
+  async listPlanCatalogLabels(tenantId: string): Promise<string[]> {
+    const conns = await this.listConnections(tenantId);
+    const labels = new Set<string>();
+    for (const c of conns) {
+      if (c.status !== 'VERIFIED') continue;
+      try {
+        const credentials = await this.loadCredentials(tenantId, c.id, c.provider);
+        const adapter = this.adapterFactory(c.provider, credentials);
+        if (!adapter.listPlanCatalog) continue;
+        for (const n of await adapter.listPlanCatalog()) {
+          const t = n.trim();
+          if (t) labels.add(t);
+        }
+      } catch {
+        // best-effort
+      }
+    }
+    return [...labels];
+  }
+
   // ---------------- internos ----------------
 
   private credKeyName(provider: string, connectionId: string): string {
