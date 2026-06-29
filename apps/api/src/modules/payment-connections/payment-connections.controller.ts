@@ -1,10 +1,12 @@
 import {
+  BadRequestException,
   Body,
   ConflictException,
   Controller,
   Delete,
   ForbiddenException,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -19,6 +21,7 @@ import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { normalizeEmail } from '@didacta/mod-payment-connections';
 import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
+import { renewalEmailHtml } from '../../common/renewal-email-html';
 import { extractClientContext } from '../../auth/client-context';
 import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -26,6 +29,8 @@ import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import type { SessionClaims } from '../../auth/token.service';
 import { randomUUID } from 'node:crypto';
 import { AdminUsersService, type AssignableRole } from '../../admin/admin-users.service';
+import { SmtpAdapterService } from '../smtp-adapter.service';
+import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { ModuleContextFactory } from '../module-context.factory';
 
@@ -117,6 +122,29 @@ const assignTierSchema = z
   })
   .strict();
 
+/** Filtros + paginación del listado del dashboard de control de suscripciones. */
+const subscribersQuerySchema = z
+  .object({
+    statusCategory: z.string().trim().max(40).optional(),
+    provider: z.enum(['stripe', 'paypal', 'woocommerce']).optional(),
+    connectionId: z.string().uuid().optional(),
+    onlyUnmatched: z.enum(['true', 'false']).optional(),
+    q: z.string().trim().max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(200).optional(),
+    offset: z.coerce.number().int().min(0).optional(),
+  })
+  .strict();
+type SubscribersQuery = z.infer<typeof subscribersQuerySchema>;
+
+/** Plantilla / email de recordatorio de renovación (asunto + cuerpo ya resueltos). */
+const renewalEmailSchema = z
+  .object({
+    subject: z.string().trim().min(1).max(200),
+    body: z.string().trim().min(1).max(5000),
+  })
+  .strict();
+type RenewalEmailDto = z.infer<typeof renewalEmailSchema>;
+
 @ApiTags('Payment Connections · Admin')
 @Controller('modules/payment-connections')
 @UseGuards(JwtAuthGuard)
@@ -126,6 +154,8 @@ export class PaymentConnectionsController {
     private readonly registry: ModuleRegistryService,
     private readonly adminUsers: AdminUsersService,
     private readonly contextFactory: ModuleContextFactory,
+    private readonly smtp: SmtpAdapterService,
+    private readonly smtpResolver: TenantSmtpResolverService,
   ) {}
 
   private assertSuperAdmin(user: SessionClaims | undefined): SessionClaims {
@@ -411,6 +441,10 @@ export class PaymentConnectionsController {
 
     // Conexiones reconciliadas con éxito (para acotar la detección de churn).
     const reconciledConnectionIds: string[] = [];
+    // Planes de suscriptores SIN usuario en Didacta (unmatched): alimentan el
+    // CATÁLOGO de tiers aunque aún no se pueda asignar el tier a nadie. Sin esto,
+    // el catálogo solo reflejaría los planes de los pocos usuarios ya registrados.
+    const extraCatalogLabels = new Set<string>();
     for (const c of conns) {
       if (c.status !== 'VERIFIED') continue;
       try {
@@ -426,16 +460,26 @@ export class PaymentConnectionsController {
             ref: m.subscription.subscriptionId,
           });
         }
+        for (const sub of rec.unmatched) {
+          const label = sub.productName?.trim() || tierLabelFallback(sub);
+          if (label) extraCatalogLabels.add(label);
+        }
       } catch (err) {
         errors.push({ connectionId: c.id, message: (err as Error).message });
       }
+    }
+
+    // Parte B (D11): añade al catálogo los planes del CATÁLOGO de Stripe que aún
+    // no tienen ningún suscriptor (products.list). Best-effort.
+    for (const label of await connectionsSvc.listPlanCatalogLabels(user.tenantId)) {
+      extraCatalogLabels.add(label);
     }
 
     const tiersSvc = this.registry.getPaymentTiersService();
     const { updated, tiersCreated, clearedUserIds } = await tiersSvc.applyDerivedTiers(
       user.tenantId,
       entries,
-      { reconciledConnectionIds },
+      { reconciledConnectionIds, extraCatalogLabels: [...extraCatalogLabels] },
     );
 
     // Emite el tier EFECTIVO de cada usuario afectado para que mod.access-groups
@@ -459,6 +503,121 @@ export class PaymentConnectionsController {
       matched: entries.length,
       errors,
     };
+  }
+
+  // ---------------- Dashboard de control de suscripciones ----------------
+
+  @Post('subscriptions-dashboard/sync')
+  @ApiOperation({
+    summary:
+      'Sincroniza (on-demand) los suscriptores de TODAS las cuentas VERIFIED a la tabla ' +
+      'materializada del dashboard. Síncrono: puede tardar varios segundos por cuenta.',
+  })
+  async syncSubscribersNow(@CurrentUser() rawUser: SessionClaims | undefined) {
+    const user = this.assertSuperAdmin(rawUser);
+    return this.registry.getPaymentConnectionsService().syncSubscribers(user.tenantId);
+  }
+
+  @Get('subscriptions-dashboard')
+  @ApiOperation({
+    summary: 'Lista paginada + filtrada de suscriptores materializados (todas las cuentas).',
+  })
+  async listSubscribersDashboard(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(subscribersQuerySchema)) query: SubscribersQuery,
+  ) {
+    const user = this.assertSuperAdmin(rawUser);
+    return this.registry.getPaymentConnectionsService().listSubscribers(user.tenantId, {
+      statusCategory: query.statusCategory,
+      provider: query.provider,
+      connectionId: query.connectionId,
+      onlyUnmatched: query.onlyUnmatched === 'true',
+      q: query.q,
+      limit: query.limit,
+      offset: query.offset,
+    });
+  }
+
+  @Get('subscriptions-dashboard/summary')
+  @ApiOperation({
+    summary: 'Contadores por estado/proveedor + frescura del último sync (cabecera del dashboard).',
+  })
+  async subscribersSummary(@CurrentUser() rawUser: SessionClaims | undefined) {
+    const user = this.assertSuperAdmin(rawUser);
+    return this.registry.getPaymentConnectionsService().subscriberSummary(user.tenantId);
+  }
+
+  @Get('subscriptions-dashboard/subscribers/:id/renewal-url')
+  @ApiOperation({
+    summary:
+      'Resuelve (lazy) el enlace de renovación read-only del suscriptor (Stripe: factura impaga).',
+  })
+  async subscriberRenewalUrl(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Param('id') id: string,
+  ) {
+    const user = this.assertSuperAdmin(rawUser);
+    const url = await this.registry
+      .getPaymentConnectionsService()
+      .resolveRenewalUrl(user.tenantId, id);
+    return { url };
+  }
+
+  @Post('subscriptions-dashboard/subscribers/:id/renewal-email')
+  @ApiOperation({
+    summary:
+      'Envía un email de recordatorio de renovación al suscriptor (asunto/cuerpo ya editados por ' +
+      'el admin). Se manda al email del suscriptor vía el SMTP del tenant.',
+  })
+  async sendRenewalEmail(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(renewalEmailSchema)) dto: RenewalEmailDto,
+  ) {
+    const user = this.assertSuperAdmin(rawUser);
+    const sub = await this.registry.getPaymentConnectionsService().getSubscriber(user.tenantId, id);
+    if (!sub) throw new NotFoundException('Suscriptor no encontrado.');
+    const to = sub.userEmail?.trim();
+    if (!to) {
+      throw new BadRequestException('El suscriptor no tiene email para enviarle el recordatorio.');
+    }
+    const resolved = await this.smtpResolver.resolve(user.tenantId);
+    if (!resolved) {
+      throw new ConflictException(
+        'No hay SMTP configurado (ni del tenant ni global) para enviar el recordatorio.',
+      );
+    }
+    const result = await this.smtp.send(resolved.config, {
+      to,
+      subject: dto.subject,
+      text: dto.body,
+      html: renewalEmailHtml(dto.body),
+    });
+    if (!result.ok) {
+      throw new ConflictException(`No se pudo enviar el email: ${result.error ?? 'error SMTP'}`);
+    }
+    return { ok: true, to };
+  }
+
+  @Get('subscriptions-dashboard/renewal-template')
+  @ApiOperation({
+    summary: 'Plantilla editable del email de renovación del tenant (o la por defecto).',
+  })
+  async getRenewalTemplate(@CurrentUser() rawUser: SessionClaims | undefined) {
+    const user = this.assertSuperAdmin(rawUser);
+    return this.registry.getPaymentConnectionsService().getRenewalTemplate(user.tenantId);
+  }
+
+  @Put('subscriptions-dashboard/renewal-template')
+  @ApiOperation({ summary: 'Personaliza la plantilla del email de renovación del tenant.' })
+  async putRenewalTemplate(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(renewalEmailSchema)) dto: RenewalEmailDto,
+  ) {
+    const user = this.assertSuperAdmin(rawUser);
+    return this.registry
+      .getPaymentConnectionsService()
+      .setRenewalTemplate(user.tenantId, dto, user.sub);
   }
 }
 

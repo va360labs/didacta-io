@@ -54,6 +54,65 @@ export interface StripeSubscriber {
   created: number;
 }
 
+/** Categoría normalizada del estado de una suscripción (espejo del módulo backend). */
+export type SubscriptionStatusCategory =
+  | 'active'
+  | 'past_due'
+  | 'unpaid'
+  | 'canceled'
+  | 'incomplete'
+  | 'paused'
+  | 'unknown';
+
+export interface SubscriptionStatusInfo {
+  category: SubscriptionStatusCategory;
+  /** Etiqueta legible en español (p.ej. "Dada de baja", "En impago"). */
+  label: string;
+  /** Si el estado concede acceso vigente hoy. */
+  entitled: boolean;
+}
+
+/**
+ * Clasifica el `status` crudo de una suscripción (Stripe / WooCommerce / PayPal)
+ * en categoría + etiqueta legible. Espejo de `classifySubscriptionStatus` del
+ * módulo `@didacta/mod-payment-connections` (mismo patrón que `formatAmount`):
+ * la web no puede importar el módulo backend, así que se duplica la función pura.
+ */
+export function classifySubscriptionStatus(status: string): SubscriptionStatusInfo {
+  switch ((status ?? '').toLowerCase().trim()) {
+    case 'active':
+      return { category: 'active', label: 'Activa', entitled: true };
+    case 'trialing':
+      return { category: 'active', label: 'En prueba', entitled: true };
+    case 'past_due':
+      return { category: 'past_due', label: 'Pago atrasado (impago)', entitled: true };
+    case 'unpaid':
+      return { category: 'unpaid', label: 'Impago — suspendida', entitled: false };
+    case 'on-hold':
+      // WooCommerce 'on-hold' = impago/espera de pago. El set activo de la
+      // reconciliación de tiers (WC_ACTIVE_STATUSES) la cuenta como suscrita, así
+      // que aquí también es `entitled` (con etiqueta de impago) para no contradecir
+      // al sync de tiers — mismo criterio que el past_due de Stripe.
+      return { category: 'past_due', label: 'En espera (impago)', entitled: true };
+    case 'paused':
+      return { category: 'paused', label: 'Pausada', entitled: false };
+    case 'pending-cancel':
+      return { category: 'canceled', label: 'Baja programada', entitled: true };
+    case 'canceled':
+    case 'cancelled':
+      return { category: 'canceled', label: 'Dada de baja', entitled: false };
+    case 'expired':
+      return { category: 'canceled', label: 'Expirada', entitled: false };
+    case 'incomplete':
+    case 'incomplete_expired':
+      return { category: 'incomplete', label: 'Pago no completado', entitled: false };
+    case 'pending':
+      return { category: 'incomplete', label: 'Pendiente de pago', entitled: false };
+    default:
+      return { category: 'unknown', label: status || 'Desconocido', entitled: false };
+  }
+}
+
 export interface DidactaUserLite {
   id: string;
   email: string;
@@ -271,4 +330,128 @@ export interface TierSyncResult {
   connections: number;
   matched: number;
   errors: Array<{ connectionId: string; message: string }>;
+}
+
+// ── Dashboard de control de suscripciones ─────────────────────────────────────
+
+/** Una fila de suscriptor materializado (lo que devuelve el dashboard). */
+export interface DashboardSubscriber {
+  id: string;
+  connectionId: string;
+  provider: string;
+  subscriptionId: string;
+  subscriptionCustomerId: string | null;
+  userId: string | null;
+  userEmail: string;
+  status: string;
+  statusCategory: string;
+  entitled: boolean;
+  productName: string | null;
+  unitAmount: number | null;
+  currency: string | null;
+  interval: string | null;
+  currentPeriodEnd: string | null;
+  renewalUrl: string | null;
+  lastSeenAt: string;
+}
+
+export interface SubscribersSummary {
+  total: number;
+  byCategory: Record<string, number>;
+  byProvider: Record<string, number>;
+  lastSyncedAt: string | null;
+  lastSyncStatus: string | null;
+}
+
+export interface SubscriberSyncOutcome {
+  connections: number;
+  upserted: number;
+  markedGone: number;
+  failures: Array<{ provider: string; connectionName: string; message: string }>;
+}
+
+export interface SubscribersListFilters {
+  statusCategory?: string;
+  provider?: string;
+  connectionId?: string;
+  onlyUnmatched?: boolean;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export const subscriptionsDashboardApi = {
+  /** Sincroniza on-demand (puede tardar varios segundos por cuenta). */
+  async sync(bearer: string): Promise<SubscriberSyncOutcome> {
+    return apiFetch<SubscriberSyncOutcome>(
+      `${BASE}/subscriptions-dashboard/sync`,
+      { method: 'POST' },
+      bearer,
+    );
+  },
+  async list(
+    bearer: string,
+    filters: SubscribersListFilters = {},
+  ): Promise<{ rows: DashboardSubscriber[]; total: number }> {
+    const qs = new URLSearchParams();
+    if (filters.statusCategory) qs.set('statusCategory', filters.statusCategory);
+    if (filters.provider) qs.set('provider', filters.provider);
+    if (filters.connectionId) qs.set('connectionId', filters.connectionId);
+    if (filters.onlyUnmatched) qs.set('onlyUnmatched', 'true');
+    if (filters.q) qs.set('q', filters.q);
+    if (filters.limit != null) qs.set('limit', String(filters.limit));
+    if (filters.offset != null) qs.set('offset', String(filters.offset));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return apiFetch<{ rows: DashboardSubscriber[]; total: number }>(
+      `${BASE}/subscriptions-dashboard${suffix}`,
+      { method: 'GET' },
+      bearer,
+    );
+  },
+  async summary(bearer: string): Promise<SubscribersSummary> {
+    return apiFetch<SubscribersSummary>(
+      `${BASE}/subscriptions-dashboard/summary`,
+      { method: 'GET' },
+      bearer,
+    );
+  },
+  /** Resuelve (lazy) el enlace de renovación read-only del suscriptor. */
+  async renewalUrl(bearer: string, id: string): Promise<{ url: string | null }> {
+    return apiFetch<{ url: string | null }>(
+      `${BASE}/subscriptions-dashboard/subscribers/${encodeURIComponent(id)}/renewal-url`,
+      { method: 'GET' },
+      bearer,
+    );
+  },
+  async sendRenewalEmail(
+    bearer: string,
+    id: string,
+    payload: RenewalTemplate,
+  ): Promise<{ ok: boolean; to: string }> {
+    return apiFetch<{ ok: boolean; to: string }>(
+      `${BASE}/subscriptions-dashboard/subscribers/${encodeURIComponent(id)}/renewal-email`,
+      { method: 'POST', body: JSON.stringify(payload) },
+      bearer,
+    );
+  },
+  async getTemplate(bearer: string): Promise<RenewalTemplate> {
+    return apiFetch<RenewalTemplate>(
+      `${BASE}/subscriptions-dashboard/renewal-template`,
+      { method: 'GET' },
+      bearer,
+    );
+  },
+  async putTemplate(bearer: string, template: RenewalTemplate): Promise<RenewalTemplate> {
+    return apiFetch<RenewalTemplate>(
+      `${BASE}/subscriptions-dashboard/renewal-template`,
+      { method: 'PUT', body: JSON.stringify(template) },
+      bearer,
+    );
+  },
+};
+
+/** Plantilla del email de renovación (asunto + cuerpo). */
+export interface RenewalTemplate {
+  subject: string;
+  body: string;
 }

@@ -171,6 +171,76 @@ export class MemberDecisionService {
   }
 
   /**
+   * Aprueba/rechaza una solicitud desde el PANEL admin (autenticado, sin token).
+   * Mismo efecto que `decide`: cambia el status del usuario, sella los tokens del
+   * email pendientes (para que el link del email no vuelva a decidir), asigna el
+   * grupo por defecto en aprobación y notifica al usuario (best-effort).
+   */
+  async decideByAdmin(
+    tenantId: string,
+    userId: string,
+    action: 'APPROVE' | 'REJECT',
+    ctx: ClientContext,
+  ): Promise<{ outcome: 'approved' | 'rejected' | 'invalid' }> {
+    const user = await this.prisma.user.findFirst({
+      where: { tenantId, id: userId },
+      select: { id: true, email: true, name: true },
+    });
+    if (!user) return { outcome: 'invalid' };
+
+    const newStatus = action === 'APPROVE' ? 'ACTIVE' : 'DEACTIVATED';
+    const decidedAt = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { status: newStatus, approvalDecidedAt: decidedAt },
+      });
+      await tx.memberRegistrationDecisionToken.updateMany({
+        where: { tenantId, userId, decidedAt: null },
+        data: { decidedAt },
+      });
+    });
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { name: true },
+    });
+    const tenantName = tenant?.name ?? 'Didacta';
+
+    if (action === 'APPROVE') {
+      await this.accessGroups.assignDefaultGroupOnApproval(tenantId, userId);
+      const signinUrl = `${process.env['WEB_PUBLIC_URL']?.trim() ?? ''}/signin`;
+      const { subject, text, html } = buildWelcomeEmail(user.name ?? '', signinUrl, tenantName);
+      await this.sendEmail(tenantId, user.email, subject, text, html);
+      await this.auditLog.record({
+        tenantId,
+        actorId: userId,
+        action: 'member.approved',
+        resourceType: 'user',
+        resourceId: userId,
+        metadata: { email: user.email, via: 'admin-panel' },
+        ip: ctx.ip ?? undefined,
+        userAgent: ctx.userAgent ?? undefined,
+      });
+      return { outcome: 'approved' };
+    }
+
+    const { subject, text, html } = buildRejectionEmail(user.name ?? '', tenantName);
+    await this.sendEmail(tenantId, user.email, subject, text, html);
+    await this.auditLog.record({
+      tenantId,
+      actorId: userId,
+      action: 'member.rejected',
+      resourceType: 'user',
+      resourceId: userId,
+      metadata: { email: user.email, via: 'admin-panel' },
+      ip: ctx.ip ?? undefined,
+      userAgent: ctx.userAgent ?? undefined,
+    });
+    return { outcome: 'rejected' };
+  }
+
+  /**
    * Envío best-effort del email al usuario (bienvenida o rechazo). Si el tenant
    * no tiene SMTP, falta el destinatario o el envío falla, se loguea y se sigue:
    * la decisión ya quedó persistida y no debe revertirse por un fallo de correo.

@@ -5,6 +5,7 @@ import { AuthModule } from '../../auth/auth.module';
 import { ModulesModule } from '../modules.module';
 import { PaymentConnectionsController } from './payment-connections.controller';
 import { PaymentConnectionsErrorFilter } from './payment-connections-error.filter';
+import { SubscribersSyncWorker } from './subscribers-sync.worker';
 
 /// Backend del módulo `mod.payment-connections`. Solo wiring genérico del host:
 /// el controller admin (conectar/listar/verify/desconectar/reconciliar/invitar)
@@ -17,6 +18,9 @@ import { PaymentConnectionsErrorFilter } from './payment-connections-error.filte
 @Module({
   imports: [AuthModule, forwardRef(() => ModulesModule), forwardRef(() => AdminModule)],
   controllers: [PaymentConnectionsController],
-  providers: [{ provide: APP_FILTER, useClass: PaymentConnectionsErrorFilter }],
+  providers: [
+    { provide: APP_FILTER, useClass: PaymentConnectionsErrorFilter },
+    SubscribersSyncWorker,
+  ],
 })
 export class PaymentConnectionsModule {}

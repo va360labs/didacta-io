@@ -19,7 +19,7 @@
  * en vez de servicios concretos, para mockear Stripe/DB/usuarios en unit tests.
  */
 
-import type { PrismaClient } from '@didacta/database';
+import type { Prisma, PrismaClient } from '@didacta/database';
 import {
   PaymentConnectionsError,
   PaymentConnectionAlreadyExistsError,
@@ -33,10 +33,71 @@ type ConnectionRow = Awaited<ReturnType<PrismaClient['modPaymentConnectionsConne
 
 /** Slug del módulo usado como `moduleName` en tenant_setting. */
 export const PAYMENT_CONNECTIONS_MODULE = 'payment-connections';
+/** Key en tenant_setting donde se guarda la plantilla del email de renovación. */
+const RENEWAL_TEMPLATE_KEY = 'renewal-template';
 /** Estados Stripe que cuentan como "suscripción activa" para reconciliar. */
 export const STRIPE_ACTIVE_STATUSES = ['active', 'trialing', 'past_due'] as const;
 /** Tope defensivo de páginas por estado al listar suscripciones. */
 export const DEFAULT_MAX_PAGES = 50;
+
+/** Categoría normalizada del estado de una suscripción, transversal a proveedores. */
+export type SubscriptionStatusCategory =
+  | 'active'
+  | 'past_due'
+  | 'unpaid'
+  | 'canceled'
+  | 'incomplete'
+  | 'paused'
+  | 'unknown';
+
+export interface SubscriptionStatusInfo {
+  category: SubscriptionStatusCategory;
+  /** Etiqueta legible en español (p.ej. "Dada de baja", "En impago"). */
+  label: string;
+  /** Si el estado concede acceso vigente hoy (sirve para preseleccionar el tier). */
+  entitled: boolean;
+}
+
+/**
+ * Clasifica el `status` crudo de una suscripción (Stripe / WooCommerce / PayPal)
+ * en una categoría normalizada + etiqueta legible. Permite mostrarle al aprobador
+ * "Dada de baja" o "En impago" en lugar de ocultar la suscripción cuando ya no
+ * está activa (un cancelado o un impago no es lo mismo que "sin suscripción").
+ */
+export function classifySubscriptionStatus(status: string): SubscriptionStatusInfo {
+  switch ((status ?? '').toLowerCase().trim()) {
+    case 'active':
+      return { category: 'active', label: 'Activa', entitled: true };
+    case 'trialing':
+      return { category: 'active', label: 'En prueba', entitled: true };
+    case 'past_due':
+      return { category: 'past_due', label: 'Pago atrasado (impago)', entitled: true };
+    case 'unpaid':
+      return { category: 'unpaid', label: 'Impago — suspendida', entitled: false };
+    case 'on-hold':
+      // WooCommerce 'on-hold' = impago/espera de pago. El set activo de la
+      // reconciliación de tiers (WC_ACTIVE_STATUSES) la cuenta como suscrita, así
+      // que aquí también es `entitled` (con etiqueta de impago) para no contradecir
+      // al sync de tiers — mismo criterio que el past_due de Stripe.
+      return { category: 'past_due', label: 'En espera (impago)', entitled: true };
+    case 'paused':
+      return { category: 'paused', label: 'Pausada', entitled: false };
+    case 'pending-cancel':
+      return { category: 'canceled', label: 'Baja programada', entitled: true };
+    case 'canceled':
+    case 'cancelled':
+      return { category: 'canceled', label: 'Dada de baja', entitled: false };
+    case 'expired':
+      return { category: 'canceled', label: 'Expirada', entitled: false };
+    case 'incomplete':
+    case 'incomplete_expired':
+      return { category: 'incomplete', label: 'Pago no completado', entitled: false };
+    case 'pending':
+      return { category: 'incomplete', label: 'Pendiente de pago', entitled: false };
+    default:
+      return { category: 'unknown', label: status || 'Desconocido', entitled: false };
+  }
+}
 
 /**
  * Subconjunto del contrato del `TenantConfigService` del kernel que necesita
@@ -159,6 +220,79 @@ export function normalizeEmail(value: string | null | undefined): string | null 
   const trimmed = value.trim().toLowerCase();
   return trimmed.length > 0 ? trimmed : null;
 }
+
+// ── Dashboard de control de suscripciones (tabla materializada) ───────────────
+
+/** Resultado de una corrida de `syncSubscribers`. */
+export interface SubscriberSyncResult {
+  /** Nº de conexiones VERIFIED procesadas. */
+  connections: number;
+  /** Filas de suscriptor insertadas/actualizadas. */
+  upserted: number;
+  /** Suscriptores marcados como baja por no aparecer en esta corrida (churn). */
+  markedGone: number;
+  /** Conexiones que fallaron (no tumban el resto). */
+  failures: MemberSubscriptionLookupFailure[];
+}
+
+/** Filtros + paginación del listado del dashboard. */
+export interface SubscriberListOptions {
+  statusCategory?: string;
+  provider?: string;
+  connectionId?: string;
+  /** Solo suscriptores que aún no son usuarios de Didacta. */
+  onlyUnmatched?: boolean;
+  /** Búsqueda por email (substring, normalizado). */
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** Fila de suscriptor materializado que lee el dashboard. */
+export interface SubscriberRow {
+  id: string;
+  connectionId: string;
+  provider: string;
+  subscriptionId: string;
+  subscriptionCustomerId: string | null;
+  userId: string | null;
+  userEmail: string;
+  status: string;
+  statusCategory: string;
+  entitled: boolean;
+  productName: string | null;
+  unitAmount: number | null;
+  currency: string | null;
+  interval: string | null;
+  currentPeriodEnd: Date | null;
+  renewalUrl: string | null;
+  lastSeenAt: Date;
+}
+
+/** Agregaciones de cabecera del dashboard. */
+export interface SubscriberSummary {
+  total: number;
+  byCategory: Record<string, number>;
+  byProvider: Record<string, number>;
+  lastSyncedAt: Date | null;
+  lastSyncStatus: string | null;
+}
+
+/** Plantilla editable del email de recordatorio de renovación (por tenant). */
+export interface RenewalTemplate {
+  subject: string;
+  body: string;
+}
+
+/** Plantilla por defecto si el tenant no ha personalizado ninguna. */
+export const DEFAULT_RENEWAL_TEMPLATE: RenewalTemplate = {
+  subject: 'Renueva tu suscripción',
+  body:
+    'Hola,\n\n' +
+    'Hemos visto que tu suscripción ({plan}) está pendiente de pago. ' +
+    'Puedes renovarla desde este enlace:\n\n{enlace}\n\n' +
+    'Si ya lo has resuelto, ignora este mensaje. Gracias.',
+};
 
 export class PaymentConnectionsService {
   constructor(
@@ -414,6 +548,321 @@ export class PaymentConnectionsService {
       }
     }
     return { matches, failures };
+  }
+
+  // ---------------- Dashboard de control de suscripciones ----------------
+
+  /**
+   * Materializa los suscriptores de TODAS las cuentas VERIFIED en
+   * `mod_payment_connections_subscriber` (la fuente del dashboard). Por conexión:
+   * `reconcile` (en vivo) → upsert de matched + unmatched (clave lógica
+   * tenant+connection+subscription); los que ya no aparecen se marcan baja (churn),
+   * salvo si la conexión vino truncada (no se listaron todos → no marcar bajas
+   * falsas). Registra cada corrida en SyncHistory. Best-effort por conexión.
+   */
+  async syncSubscribers(tenantId: string): Promise<SubscriberSyncResult> {
+    const conns = await this.listConnections(tenantId);
+    const verified = conns.filter((c) => c.status === 'VERIFIED');
+    let upserted = 0;
+    let markedGone = 0;
+    const failures: MemberSubscriptionLookupFailure[] = [];
+
+    for (const c of verified) {
+      const run = await this.prisma.modPaymentConnectionsSyncHistory.create({
+        data: { tenantId, connectionId: c.id, status: 'running' },
+      });
+      try {
+        const rec = await this.reconcile(tenantId, c.id);
+        const now = new Date();
+        const rows: Array<{ sub: StripeSubscriberRecord; userId: string | null }> = [
+          ...rec.matched.map((m) => ({ sub: m.subscription, userId: m.user.id as string | null })),
+          ...rec.unmatched.map((sub) => ({ sub, userId: null as string | null })),
+        ];
+        for (const { sub, userId } of rows) {
+          const info = classifySubscriptionStatus(sub.status);
+          const data = {
+            provider: c.provider,
+            subscriptionCustomerId: sub.customerId ?? null,
+            userId,
+            userEmail: normalizeEmail(sub.email) ?? sub.email?.trim() ?? '',
+            status: sub.status,
+            statusCategory: info.category,
+            entitled: info.entitled,
+            productName: sub.productName ?? null,
+            unitAmount: sub.unitAmount ?? null,
+            currency: sub.currency ?? null,
+            interval: sub.interval ?? null,
+            currentPeriodEnd: sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd * 1000) : null,
+            lastSeenAt: now,
+          };
+          await this.prisma.modPaymentConnectionsSubscriber.upsert({
+            where: {
+              tenantId_connectionId_subscriptionId: {
+                tenantId,
+                connectionId: c.id,
+                subscriptionId: sub.subscriptionId,
+              },
+            },
+            create: { tenantId, connectionId: c.id, subscriptionId: sub.subscriptionId, ...data },
+            update: data,
+          });
+          upserted += 1;
+        }
+        if (!rec.truncated) {
+          const gone = await this.prisma.modPaymentConnectionsSubscriber.updateMany({
+            where: {
+              tenantId,
+              connectionId: c.id,
+              lastSeenAt: { lt: now },
+              statusCategory: { not: 'canceled' },
+            },
+            data: { statusCategory: 'canceled', entitled: false },
+          });
+          markedGone += gone.count;
+        }
+        await this.prisma.modPaymentConnectionsSyncHistory.update({
+          where: { id: run.id },
+          data: {
+            status: 'success',
+            matchedCount: rec.matched.length,
+            unmatchedCount: rec.unmatched.length,
+            truncated: rec.truncated,
+            completedAt: new Date(),
+          },
+        });
+      } catch (err) {
+        const message = ((err as Error)?.message ?? 'error').slice(0, 500);
+        failures.push({ provider: c.provider, connectionName: c.displayName, message });
+        await this.prisma.modPaymentConnectionsSyncHistory.update({
+          where: { id: run.id },
+          data: { status: 'error', errorMessage: message, completedAt: new Date() },
+        });
+      }
+    }
+    return { connections: verified.length, upserted, markedGone, failures };
+  }
+
+  /** Lista paginada + filtrada de suscriptores materializados (para el dashboard). */
+  async listSubscribers(
+    tenantId: string,
+    opts: SubscriberListOptions = {},
+  ): Promise<{ rows: SubscriberRow[]; total: number }> {
+    const where: Prisma.ModPaymentConnectionsSubscriberWhereInput = { tenantId };
+    if (opts.statusCategory) where.statusCategory = opts.statusCategory;
+    if (opts.provider) where.provider = opts.provider;
+    if (opts.connectionId) where.connectionId = opts.connectionId;
+    if (opts.onlyUnmatched) where.userId = null;
+    const q = opts.q?.trim().toLowerCase();
+    if (q) where.userEmail = { contains: q };
+    const take = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+    const skip = Math.max(opts.offset ?? 0, 0);
+    const [found, total] = await Promise.all([
+      this.prisma.modPaymentConnectionsSubscriber.findMany({
+        where,
+        orderBy: [{ statusCategory: 'asc' }, { unitAmount: 'desc' }],
+        take,
+        skip,
+      }),
+      this.prisma.modPaymentConnectionsSubscriber.count({ where }),
+    ]);
+    const rows: SubscriberRow[] = found.map((r) => ({
+      id: r.id,
+      connectionId: r.connectionId,
+      provider: r.provider,
+      subscriptionId: r.subscriptionId,
+      subscriptionCustomerId: r.subscriptionCustomerId,
+      userId: r.userId,
+      userEmail: r.userEmail,
+      status: r.status,
+      statusCategory: r.statusCategory,
+      entitled: r.entitled,
+      productName: r.productName,
+      unitAmount: r.unitAmount,
+      currency: r.currency,
+      interval: r.interval,
+      currentPeriodEnd: r.currentPeriodEnd,
+      renewalUrl: r.renewalUrl,
+      lastSeenAt: r.lastSeenAt,
+    }));
+    return { rows, total };
+  }
+
+  /** Agregaciones para la cabecera del dashboard (contadores + frescura). */
+  async subscriberSummary(tenantId: string): Promise<SubscriberSummary> {
+    const [byCat, byProv, total, lastRun] = await Promise.all([
+      this.prisma.modPaymentConnectionsSubscriber.groupBy({
+        by: ['statusCategory'],
+        where: { tenantId },
+        _count: { _all: true },
+      }),
+      this.prisma.modPaymentConnectionsSubscriber.groupBy({
+        by: ['provider'],
+        where: { tenantId },
+        _count: { _all: true },
+      }),
+      this.prisma.modPaymentConnectionsSubscriber.count({ where: { tenantId } }),
+      this.prisma.modPaymentConnectionsSyncHistory.findFirst({
+        where: { tenantId, completedAt: { not: null } },
+        orderBy: { completedAt: 'desc' },
+        select: { completedAt: true, status: true },
+      }),
+    ]);
+    const byCategory: Record<string, number> = {};
+    for (const g of byCat) byCategory[g.statusCategory] = g._count._all;
+    const byProvider: Record<string, number> = {};
+    for (const g of byProv) byProvider[g.provider] = g._count._all;
+    return {
+      total,
+      byCategory,
+      byProvider,
+      lastSyncedAt: lastRun?.completedAt ?? null,
+      lastSyncStatus: lastRun?.status ?? null,
+    };
+  }
+
+  /** Un suscriptor materializado por id (del tenant), o null. */
+  async getSubscriber(tenantId: string, id: string): Promise<SubscriberRow | null> {
+    const r = await this.prisma.modPaymentConnectionsSubscriber.findFirst({
+      where: { tenantId, id },
+    });
+    if (!r) return null;
+    return {
+      id: r.id,
+      connectionId: r.connectionId,
+      provider: r.provider,
+      subscriptionId: r.subscriptionId,
+      subscriptionCustomerId: r.subscriptionCustomerId,
+      userId: r.userId,
+      userEmail: r.userEmail,
+      status: r.status,
+      statusCategory: r.statusCategory,
+      entitled: r.entitled,
+      productName: r.productName,
+      unitAmount: r.unitAmount,
+      currency: r.currency,
+      interval: r.interval,
+      currentPeriodEnd: r.currentPeriodEnd,
+      renewalUrl: r.renewalUrl,
+      lastSeenAt: r.lastSeenAt,
+    };
+  }
+
+  /**
+   * Resuelve el enlace de renovación READ-ONLY a partir de la referencia cruda
+   * (connection + provider + subscription), SIN depender de la tabla materializada
+   * del dashboard. Stripe: hosted_invoice_url de la factura abierta/impaga (necesita
+   * permiso de lectura de Facturas en la key; si no, null). WooCommerce/PayPal: null
+   * en v1. Best-effort: ante cualquier fallo devuelve null (no rompe el envío del email).
+   *
+   * Lo usa tanto `resolveRenewalUrl` (por id del registro materializado) como el panel
+   * de solicitudes de inscripción (que solo tiene la referencia cruda del lookup en vivo).
+   */
+  async resolveRenewalUrlByRef(
+    tenantId: string,
+    connectionId: string,
+    provider: string,
+    subscriptionId: string,
+  ): Promise<string | null> {
+    if (provider !== 'stripe') return null;
+    try {
+      const credentials = await this.loadCredentials(tenantId, connectionId, provider);
+      const adapter = this.adapterFactory(provider, credentials);
+      if (!adapter.readOpenInvoiceUrl) return null;
+      return (await adapter.readOpenInvoiceUrl(subscriptionId)) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Resuelve (lazy) el enlace de renovación READ-ONLY del suscriptor materializado
+   * y lo cachea. Delega la resolución en vivo en `resolveRenewalUrlByRef` y, si no
+   * la consigue, cae al `renewalUrl` ya guardado. Best-effort.
+   */
+  async resolveRenewalUrl(tenantId: string, id: string): Promise<string | null> {
+    const r = await this.prisma.modPaymentConnectionsSubscriber.findFirst({
+      where: { tenantId, id },
+    });
+    if (!r) return null;
+    if (r.provider !== 'stripe') return r.renewalUrl ?? null;
+    const url = await this.resolveRenewalUrlByRef(
+      tenantId,
+      r.connectionId,
+      r.provider,
+      r.subscriptionId,
+    );
+    if (url && url !== r.renewalUrl) {
+      await this.prisma.modPaymentConnectionsSubscriber.update({
+        where: { id: r.id },
+        data: { renewalUrl: url },
+      });
+    }
+    return url ?? r.renewalUrl ?? null;
+  }
+
+  /** Plantilla del email de renovación del tenant (o la por defecto). */
+  async getRenewalTemplate(tenantId: string): Promise<RenewalTemplate> {
+    const stored = await this.config.get<RenewalTemplate>(
+      tenantId,
+      PAYMENT_CONNECTIONS_MODULE,
+      RENEWAL_TEMPLATE_KEY,
+    );
+    if (stored && typeof stored.subject === 'string' && typeof stored.body === 'string') {
+      return stored;
+    }
+    return DEFAULT_RENEWAL_TEMPLATE;
+  }
+
+  /** Personaliza la plantilla del email de renovación del tenant. */
+  async setRenewalTemplate(
+    tenantId: string,
+    template: RenewalTemplate,
+    actorId: string | null,
+  ): Promise<RenewalTemplate> {
+    await this.config.set(tenantId, PAYMENT_CONNECTIONS_MODULE, RENEWAL_TEMPLATE_KEY, template, {
+      actorId,
+    });
+    return template;
+  }
+
+  /**
+   * Nombres de planes del CATÁLOGO de todas las cuentas VERIFIED (parte B del sync
+   * de tiers): incluye planes que aún NO tienen ningún suscriptor. Best-effort por
+   * conexión: una cuenta sin permiso de lectura de Productos no rompe el resto.
+   */
+  async listPlanCatalogLabels(tenantId: string): Promise<string[]> {
+    const conns = await this.listConnections(tenantId);
+    const labels = new Set<string>();
+    for (const c of conns) {
+      if (c.status !== 'VERIFIED') continue;
+      try {
+        const credentials = await this.loadCredentials(tenantId, c.id, c.provider);
+        const adapter = this.adapterFactory(c.provider, credentials);
+        if (!adapter.listPlanCatalog) continue;
+        for (const n of await adapter.listPlanCatalog()) {
+          const t = n.trim();
+          if (t) labels.add(t);
+        }
+      } catch {
+        // best-effort
+      }
+    }
+    return [...labels];
+  }
+
+  /**
+   * Tenants con AL MENOS una conexión VERIFIED. Lo usa el scheduler periódico para
+   * saber a qué tenants sincronizar. OJO: query CROSS-TENANT (sin filtro tenantId)
+   * — solo correcta en contexto de worker (sin RLS de request); en prod el rol de
+   * la app bypasa RLS (mismo modelo que el resto de workers del host).
+   */
+  async listTenantsWithVerifiedConnections(): Promise<string[]> {
+    const rows = await this.prisma.modPaymentConnectionsConnection.findMany({
+      where: { status: 'VERIFIED' },
+      select: { tenantId: true },
+      distinct: ['tenantId'],
+    });
+    return rows.map((r) => r.tenantId);
   }
 
   // ---------------- internos ----------------

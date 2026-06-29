@@ -12,6 +12,7 @@
  */
 
 import { ApiHttpError, apiFetch } from './api-client';
+import type { RenewalTemplate } from './payment-connections';
 
 // ── Tipos de respuesta (según contrato del backend) ──────────────────────────
 
@@ -174,6 +175,50 @@ export async function rerunMemberLookup(
   return apiFetch(
     `${ADMIN_BASE}/requests/${encodeURIComponent(userId)}/rerun`,
     { method: 'POST' },
+    bearer,
+  );
+}
+
+/** Aprueba o rechaza una solicitud desde el panel (sin el link del email). */
+export async function decideMemberRequest(
+  bearer: string,
+  userId: string,
+  action: 'approve' | 'reject',
+): Promise<{ outcome: 'approved' | 'rejected' }> {
+  return apiFetch(
+    `${ADMIN_BASE}/requests/${encodeURIComponent(userId)}/decision`,
+    { method: 'POST', body: JSON.stringify({ action }) },
+    bearer,
+  );
+}
+
+/**
+ * Prepara el recordatorio de pago de una suscripción detectada de la solicitud:
+ * plantilla del tenant + enlace de renovación (Stripe). Reusa el motor de email
+ * del dashboard de control de suscripciones.
+ */
+export async function memberRenewalContext(
+  bearer: string,
+  userId: string,
+  subscriptionId: string,
+): Promise<{ template: RenewalTemplate; renewalUrl: string | null }> {
+  const qs = encodeURIComponent(subscriptionId);
+  return apiFetch(
+    `${ADMIN_BASE}/requests/${encodeURIComponent(userId)}/renewal-context?subscriptionId=${qs}`,
+    { method: 'GET' },
+    bearer,
+  );
+}
+
+/** Envía el email de recordatorio de pago al email de la solicitud (SMTP del tenant). */
+export async function sendMemberRenewalEmail(
+  bearer: string,
+  userId: string,
+  payload: RenewalTemplate,
+): Promise<{ ok: boolean; to: string }> {
+  return apiFetch(
+    `${ADMIN_BASE}/requests/${encodeURIComponent(userId)}/renewal-email`,
+    { method: 'POST', body: JSON.stringify(payload) },
     bearer,
   );
 }

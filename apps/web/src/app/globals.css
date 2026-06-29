@@ -479,7 +479,9 @@ table,
   text-decoration: underline;
   text-underline-offset: 3px;
   text-decoration-thickness: 1px;
-  transition: color 120ms ease, text-decoration-thickness 120ms ease;
+  transition:
+    color 120ms ease,
+    text-decoration-thickness 120ms ease;
   word-break: break-word;
 }
 .lesson-prose a:hover {
@@ -614,15 +616,31 @@ table,
  *
  * El HTML migrado de WP envuelve el iframe en un `<div style="position:
  * relative;padding-top:56.25%">` y le da al iframe `position:absolute;
- * top:0;height:100%;width:100%`. Esos styles inline actuales mantienen el
- * 16:9 sin que tengamos que hacer nada. Cuando el sanitize del cliente
- * (SEC-FIX-01) se active y borre esos styles, el `aspect-ratio` de abajo
- * toma control y el iframe sigue siendo responsivo 16:9. */
+ * top:0;height:100%;width:100%`. Ese hack es frágil: si el wrapper pierde su
+ * altura (o el formador pega solo el iframe), el iframe `absolute` se sale del
+ * flujo y PISA el contenido de abajo. Para que eso no pueda pasar nunca,
+ * neutralizamos el posicionamiento inline y dejamos que `aspect-ratio` reserve
+ * la altura del propio iframe (flujo normal), con separación generosa arriba y
+ * abajo para que el vídeo quede bien aislado del texto que lo acompaña. */
 .lesson-prose iframe {
-  width: 100%;
+  position: static !important;
+  inset: auto !important;
+  display: block;
+  width: 100% !important;
+  height: auto !important;
   aspect-ratio: 16 / 9;
   border: 0;
   border-radius: 0.5rem;
-  margin: 1rem 0;
-  display: block;
+  margin: 1.5rem 0;
+}
+
+/* Wrapper de ratio de WP (`<div style="position:relative;padding-top:56.25%">`):
+ * con el iframe ya en flujo normal (arriba), aplanamos el padding-hack para que
+ * no deje un hueco vacío ni descuadre la altura bajo el vídeo. */
+.lesson-prose div[style*='padding-top'],
+.lesson-prose div[style*='padding-bottom'] {
+  position: static !important;
+  height: auto !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
 }

@@ -31,6 +31,8 @@ type FetchFn = typeof fetch;
 
 const RECURRING_REF_TYPES = new Set(['SUB', 'PAP']);
 const RECURRING_EVENT_CODES = new Set(['T0002', 'T0003']);
+/** Scope OAuth que concede la Transaction Search API; sin él, /reporting da 403. */
+const REPORTING_SCOPE = 'https://uri.paypal.com/services/reporting/search/read';
 const WINDOW_DAYS = 31;
 /** Cubre suscripciones activas (anuales + mensuales) sin escanear los 3 años completos. */
 const DEFAULT_LOOKBACK_MONTHS = 13;
@@ -72,7 +74,20 @@ export class PayPalReadSdkAdapter implements StripeReadAdapter {
   async listActiveSubscriptions(
     options?: ListActiveSubscriptionsOptions,
   ): Promise<StripeSubscriptionsResult> {
-    const token = (await this.getToken()).value;
+    const tok = await this.getToken();
+    const token = tok.value;
+    // El token de PayPal lista los scopes concedidos. Si la app NO tiene activo
+    // (o aún no ha propagado) "Transaction Search", el scope de reporting falta y
+    // /v1/reporting/transactions daría 403. Lo detectamos ANTES de escanear para
+    // devolver un mensaje preciso y accionable en vez de un 403 genérico.
+    const hasReportingScope = tok.scope.split(/\s+/).includes(REPORTING_SCOPE);
+    if (!hasReportingScope) {
+      throw new StripeReadKeyInvalidError(
+        'PayPal: la app no tiene activo "Transaction Search" (el token no incluye el permiso de ' +
+          'reporting/search/read). Actívalo en la REST app y espera a que PayPal lo propague — ' +
+          'tras activarlo puede tardar un rato en estar disponible; reintenta más tarde.',
+      );
+    }
     const maxPages = options?.maxPages && options.maxPages > 0 ? options.maxPages : 50;
     const byKey = new Map<string, StripeSubscriberRecord>();
     let truncated = false;
@@ -103,8 +118,13 @@ export class PayPalReadSdkAdapter implements StripeReadAdapter {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (resp.status === 401 || resp.status === 403) {
+            // El scope SÍ estaba (lo comprobamos arriba) pero reporting devuelve
+            // 403/401: típico de "Transaction Search" recién activado que aún no
+            // está habilitado del todo, o de una cuenta que no es Business.
             throw new StripeReadKeyInvalidError(
-              `PayPal reporting ${resp.status} (¿falta el permiso "Transaction Search" en la app?)`,
+              `PayPal: Transaction Search devolvió ${resp.status} aunque el permiso figura activo. ` +
+                'Suele tardar un rato en habilitarse tras activarlo (o la cuenta no es Business). ' +
+                'Reintenta más tarde.',
             );
           }
           if (!resp.ok) {
@@ -153,7 +173,7 @@ export class PayPalReadSdkAdapter implements StripeReadAdapter {
     return this.fetchFn(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   }
 
-  private async getToken(): Promise<{ value: string; appId: string | null }> {
+  private async getToken(): Promise<{ value: string; appId: string | null; scope: string }> {
     const basic = Buffer.from(`${this.creds.clientId}:${this.creds.clientSecret}`).toString(
       'base64',
     );
@@ -171,11 +191,13 @@ export class PayPalReadSdkAdapter implements StripeReadAdapter {
     if (!resp.ok) {
       throw new StripeReadApiError(`PayPal token endpoint devolvió ${resp.status}`);
     }
-    const json = (await resp.json()) as { access_token?: string; app_id?: string };
+    const json = (await resp.json()) as { access_token?: string; app_id?: string; scope?: string };
     if (!json.access_token) {
       throw new StripeReadKeyInvalidError('PayPal no devolvió access_token');
     }
-    return { value: json.access_token, appId: json.app_id ?? null };
+    // `scope` lista los permisos concedidos (separados por espacios); lo usamos
+    // para detectar si la app tiene "Transaction Search" (reporting) activo.
+    return { value: json.access_token, appId: json.app_id ?? null, scope: json.scope ?? '' };
   }
 }
 

@@ -26,6 +26,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { SubscriptionsDashboard } from './subscriptions-dashboard';
 import {
   paymentConnectionsApi,
   paymentTiersApi,
@@ -59,7 +60,10 @@ export default function PaymentConnectionsPage() {
       </header>
 
       {isSuperAdmin ? (
-        <PaymentConnectionsPanel />
+        <>
+          <SubscriptionsDashboard />
+          <PaymentConnectionsPanel />
+        </>
       ) : (
         <Card>
           <CardContent className="p-6 text-sm text-text-muted">
