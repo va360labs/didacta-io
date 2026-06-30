@@ -7,6 +7,7 @@ import { Icon } from '@/components/icon';
 import { PostReactions } from '@/components/post-reactions';
 import { parseBodyAttachments, type CommunityTag, type Post } from '@/modules/community';
 import { AuthorNameLink, CommunityAvatar } from '@/components/community-avatar';
+import { RichBody } from '@/components/rich-body';
 
 export const TAG_COLORS = ['#1E5AA8', '#18B5A8', '#FF6F61', '#2E7DCE', '#0D1B2A'];
 
@@ -116,7 +117,9 @@ export function ThreadCard({
                 {post.title}
               </h3>
               {cleanBody ? (
-                <p className="line-clamp-4 text-sm leading-relaxed text-text-muted">{cleanBody}</p>
+                <p className="line-clamp-4 whitespace-pre-line text-sm leading-relaxed text-text-muted">
+                  <RichBody body={cleanBody} />
+                </p>
               ) : null}
               {cleanBody.length > 240 ? (
                 <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand-700">

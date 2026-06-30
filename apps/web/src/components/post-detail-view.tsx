@@ -12,6 +12,7 @@ import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { cn } from '@/lib/utils';
 import { AuthorNameLink, CommunityAvatar } from '@/components/community-avatar';
+import { RichBody } from '@/components/rich-body';
 import { usePublicUsers } from '@/lib/public-users';
 import {
   communityApi,
@@ -311,7 +312,7 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
         return (
           <>
             <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-[#374151]">
-              <BodyWithMentions body={cleanBody} />
+              <RichBody body={cleanBody} />
             </p>
             {images.length > 0 && <ImageGallery images={images} />}
             {files.length > 0 && <FileList files={files} />}
@@ -537,51 +538,6 @@ function FileList({ files }: { files: AttachmentFile[] }) {
         </a>
       ))}
     </div>
-  );
-}
-
-// ── Body renderer ─────────────────────────────────────────────────────────────
-
-function BodyWithMentions({ body }: { body: string }) {
-  const parts: Array<{ type: 'text' | 'mention'; value: string }> = [];
-  const regex = /(?:^|[\s(.,;:!?[\]{}<>])@([A-Za-z0-9._-]+)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(body)) !== null) {
-    const handle = match[1];
-    if (!handle) continue;
-    const fullMatchStart = match.index;
-    const handleStart = body.indexOf(`@${handle}`, fullMatchStart);
-    if (handleStart === -1) continue;
-    if (handleStart > lastIndex) {
-      parts.push({ type: 'text', value: body.slice(lastIndex, handleStart) });
-    }
-    parts.push({ type: 'mention', value: `@${handle}` });
-    lastIndex = handleStart + handle.length + 1;
-  }
-  if (lastIndex < body.length) {
-    parts.push({ type: 'text', value: body.slice(lastIndex) });
-  }
-
-  return (
-    <>
-      {parts.map((p, i) =>
-        p.type === 'mention' ? (
-          <span
-            key={i}
-            className="rounded px-0.5 font-semibold"
-            style={{
-              background: 'var(--didacta-info-bg)',
-              color: 'var(--didacta-info-fg)',
-            }}
-          >
-            {p.value}
-          </span>
-        ) : (
-          <span key={i}>{p.value}</span>
-        ),
-      )}
-    </>
   );
 }
 
@@ -813,7 +769,7 @@ function CommentBody({
           ) : null}
         </div>
         <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-[#374151]">
-          <BodyWithMentions body={comment.body} />
+          <RichBody body={comment.body} />
         </p>
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           {EMOJIS.map((e) => {
