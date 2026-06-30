@@ -28,18 +28,19 @@ async function bootstrap(): Promise<void> {
   // convertimos a string para hacer el JSON.parse. El parseAs por
   // default es 'buffer' (no exponible en NestFastifyBodyParserOptions).
   //
-  // `bodyLimit` 4 MB: el default de Fastify es 1 MB. El uploader de logo de
-  // mod.theming acepta imágenes de hasta 2 MB que viajan como base64 dentro
-  // de un JSON (`POST /modules/theming/me/logo`); base64 infla el binario
-  // ~33% → un logo de 2 MB se transmite como ~2.7 MB de payload, muy por
-  // encima del 1 MB default. Sin este límite ampliado, Fastify rechazaba el
-  // request con 413 FST_ERR_CTP_BODY_TOO_LARGE ANTES de llegar al handler, y
-  // el upload del logo fallaba silenciosamente. 4 MB deja headroom suficiente
-  // para el peor caso (2 MB binario → ~2.79 MB base64 + overhead JSON) sin
-  // abrir la puerta a payloads JSON abusivos en el resto de endpoints.
+  // `bodyLimit` 16 MB: el default de Fastify es 1 MB. Varios uploads viajan como
+  // base64 dentro de un JSON y base64 infla el binario ~33%:
+  //   - logo de mod.theming (`POST /modules/theming/me/logo`): hasta 2 MB.
+  //   - adjuntos del compositor de comunidad (`POST /storage/upload`): hasta 10 MB
+  //     (pptx, zip, pdf…), que como base64 son ~13.4 MB + overhead JSON.
+  // Sin un límite acorde, Fastify rechaza el request con 413 FST_ERR_CTP_BODY_TOO_LARGE
+  // ANTES de llegar al handler; con el proxy delante eso se vive como un upload que
+  // se queda colgado para siempre (no como un error). 16 MB cubre el peor caso del
+  // upload de 10 MB con headroom; el resto de endpoints siguen acotados por la
+  // validación Zod de su DTO (un JSON grande a un endpoint que no lo espera se rechaza).
   app.useBodyParser(
     'application/json',
-    { bodyLimit: 4 * 1024 * 1024 },
+    { bodyLimit: 16 * 1024 * 1024 },
     (_req, body: Buffer, done: (err: Error | null, result?: unknown) => void) => {
       if (!body || body.length === 0) {
         done(null, null);

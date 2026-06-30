@@ -185,7 +185,20 @@ export class CommunityService {
       },
     });
     if (!post) throw new PostNotFoundError();
-    return post;
+    // Las reacciones de los COMMENTS tienen postId=null (solo commentId poblado),
+    // así que NO entran en `post.reactions` (relación por FK postId). Sin esto, la
+    // UI del detalle nunca recibía las reacciones de los comentarios → el contador
+    // quedaba a 0 y el toggle "no hacía nada". Las traemos aparte (solo de los
+    // comments visibles) y las fusionamos: la UI lee post + comentarios de un único
+    // array `reactions`.
+    const commentIds = post.comments.map((c) => c.id);
+    const commentReactions =
+      commentIds.length > 0
+        ? await this.prisma.modCommunityReaction.findMany({
+            where: { tenantId, commentId: { in: commentIds } },
+          })
+        : [];
+    return { ...post, reactions: [...post.reactions, ...commentReactions] };
   }
 
   async deletePost(tenantId: string, actorId: string, postId: string) {

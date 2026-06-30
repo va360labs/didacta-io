@@ -17,7 +17,13 @@ import { ModuleContextFactory } from './module-context.factory';
 
 const UPLOAD_ROLES = new Set(['super_admin', 'tenant_admin', 'formador', 'alumno']);
 
-const ALLOWED_MIME = new Set([
+/**
+ * Tipos MIME admitidos para subir: imágenes + documentos ofimáticos (Word, Excel,
+ * PowerPoint) + PDF + texto + comprimidos ZIP. Fuente ÚNICA para el Set de validación
+ * y el enum de Zod (antes estaban duplicados y se desincronizaban). Incluye las dos
+ * variantes de ZIP porque Windows reporta `application/x-zip-compressed`.
+ */
+const UPLOAD_MIME_TYPES = [
   'image/png',
   'image/jpeg',
   'image/webp',
@@ -25,9 +31,18 @@ const ALLOWED_MIME = new Set([
   'image/svg+xml',
   'application/pdf',
   'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
+  'application/vnd.ms-powerpoint', // ppt
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation', // pptx
+  'application/vnd.ms-excel', // xls
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
+  'application/zip',
+  'application/x-zip-compressed', // zip (Windows)
   'text/plain',
-]);
+  'text/csv',
+] as const;
+
+const ALLOWED_MIME = new Set<string>(UPLOAD_MIME_TYPES);
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MiB
 const MAX_BASE64_BYTES = Math.ceil(MAX_BYTES * 1.4); // ~14 MiB en base64
@@ -36,17 +51,7 @@ const uploadSchema = z.object({
   /** Archivo codificado en base64 (sin el prefijo `data:...,`). */
   data: z.string().min(1).max(MAX_BASE64_BYTES),
   filename: z.string().trim().min(1).max(200),
-  contentType: z.enum([
-    'image/png',
-    'image/jpeg',
-    'image/webp',
-    'image/gif',
-    'image/svg+xml',
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'text/plain',
-  ]),
+  contentType: z.enum(UPLOAD_MIME_TYPES),
 });
 
 type UploadDto = z.infer<typeof uploadSchema>;
@@ -94,7 +99,7 @@ export class StorageController {
       throw new ForbiddenException('Base64 inválido.');
     }
     if (buffer.length === 0 || buffer.length > MAX_BYTES) {
-      throw new ForbiddenException(`La imagen debe pesar entre 1 byte y ${MAX_BYTES} bytes.`);
+      throw new ForbiddenException(`El archivo debe pesar entre 1 byte y ${MAX_BYTES} bytes.`);
     }
 
     // Normalizamos el filename para evitar traversal y caracteres
