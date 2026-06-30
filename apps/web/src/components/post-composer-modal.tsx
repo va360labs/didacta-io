@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { EmojiPicker } from '@/components/emoji-picker';
+import { MentionTextarea } from '@/components/mention-textarea';
 import { authStorage } from '@/lib/auth-storage';
 import { uploadCommunityFile, uploadCommunityImage } from '@/lib/community-upload';
 import { buildBodyWithAttachments, communityApi, useCommunitySpaces } from '@/modules/community';
@@ -314,14 +315,14 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
             maxLength={200}
             className="w-full border-none bg-transparent text-2xl font-bold text-[#0D1B2A] placeholder:text-[#CBD5E1] focus:outline-none"
           />
-          <textarea
+          <MentionTextarea
             ref={bodyRef}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Escribe aquí el contenido…"
+            placeholder="Escribe aquí el contenido… escribe @ para mencionar"
             rows={4}
             maxLength={10000}
-            className="w-full resize-none border-none bg-transparent text-[15px] leading-relaxed text-[#374151] placeholder:text-[#CBD5E1] focus:outline-none"
+            className="min-h-0 w-full resize-none border-none bg-transparent px-0 py-0 text-[15px] leading-relaxed text-[#374151] shadow-none placeholder:text-[#CBD5E1] focus:outline-none focus-visible:border-transparent focus-visible:shadow-none focus-visible:outline-none"
           />
 
           {/* Previsualización de imágenes */}
@@ -579,7 +580,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+          accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.csv,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/csv,application/zip"
           className="hidden"
           onChange={handleFileSelect}
         />
