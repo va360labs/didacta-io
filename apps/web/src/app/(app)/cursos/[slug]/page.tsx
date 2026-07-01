@@ -37,6 +37,9 @@ export default function CourseAlumnoPage() {
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
   const [progressByLesson, setProgressByLesson] = useState<Record<string, boolean>>({});
+  // Posición de reanudación por lección (segundos) desde el backend, para
+  // arrancar el vídeo donde el alumno lo dejó. 0/ausente = desde el inicio.
+  const [resumeByLesson, setResumeByLesson] = useState<Record<string, number>>({});
   // Disponibilidad por drip: lessonId → { availableAt ISO, available }. Las
   // lecciones que NO aparecen están libres (sin gating).
   const [availability, setAvailability] = useState<
@@ -88,12 +91,16 @@ export default function CourseAlumnoPage() {
 
       if (progressList) {
         const map: Record<string, boolean> = {};
+        const resumeMap: Record<string, number> = {};
         for (const p of progressList) {
           if (p.completed) map[p.lessonId] = true;
+          if (p.resumePositionSec > 0) resumeMap[p.lessonId] = p.resumePositionSec;
         }
         setProgressByLesson(map);
+        setResumeByLesson(resumeMap);
       } else {
         setProgressByLesson({});
+        setResumeByLesson({});
       }
 
       setAvailability(avail?.drip ? avail.lessons : {});
@@ -533,7 +540,7 @@ export default function CourseAlumnoPage() {
                       .content ?? {},
                 }}
                 enrollmentId={enrollment.id}
-                initialResumePositionSec={0}
+                initialResumePositionSec={resumeByLesson[activeLesson.id] ?? 0}
                 initialCompleted={Boolean(progressByLesson[activeLesson.id])}
                 onProgress={(percent) => {
                   setEnrollment((e) => (e ? { ...e, progressPercent: percent } : e));

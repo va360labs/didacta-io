@@ -20,7 +20,11 @@ interface Props {
    * capítulos clicables que hacen seek en el vídeo; el resto, viñetas.
    */
   resources?: string;
-  /** Segundo en el que arrancar (solo aplica a `<video>` directo). */
+  /**
+   * Segundo en el que arrancar (reanudar donde lo dejó el alumno). Aplica a
+   * `<video>` directo (seek en `loadedmetadata`) y a Bunny Stream (parámetro
+   * `t` del embed). No aplica a YouTube.
+   */
   resumeAt?: number;
   /** Oculta la lista de recursos aunque `resources` traiga contenido. */
   hideResources?: boolean;
@@ -94,7 +98,14 @@ export function VideoEmbed({
         <iframe
           key={seek?.nonce ?? 'init'}
           ref={bunnyIframeRef}
-          src={bunnyEmbedUrl(bunny, { startSeconds: seek?.seconds, autoplay: seek != null })}
+          src={bunnyEmbedUrl(bunny, {
+            // Al saltar a un capítulo manda `seek`; si no, arranca en la posición
+            // de reanudación guardada (si la hay). El player de Bunny queda
+            // pausado (autoplay solo en el salto de capítulo), así que si la
+            // posición llega tarde solo re-sitúa el vídeo, sin interrumpir.
+            startSeconds: seek?.seconds ?? (resumeAt > 0 ? resumeAt : undefined),
+            autoplay: seek != null,
+          })}
           title={title}
           loading="lazy"
           className="h-full w-full"
