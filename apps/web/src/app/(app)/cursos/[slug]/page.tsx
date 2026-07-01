@@ -407,7 +407,7 @@ export default function CourseAlumnoPage() {
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-        <Card className="self-start lg:max-h-[78dvh] lg:overflow-auto p-0">
+        <Card className="min-w-0 self-start p-0 lg:max-h-[78dvh] lg:overflow-auto">
           <CardContent className="p-5">
             <h3 className="font-display text-base font-semibold text-text">Contenido</h3>
             <p className="mt-0.5 text-xs text-text-muted">
@@ -493,7 +493,7 @@ export default function CourseAlumnoPage() {
           </CardContent>
         </Card>
 
-        <main>
+        <main className="min-w-0">
           {!enrollment ? (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
