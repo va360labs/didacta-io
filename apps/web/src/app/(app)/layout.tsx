@@ -438,6 +438,7 @@ function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): SidebarG
     items: [
       { href: '/admin/comunidad/espacios', label: 'Espacios', icon: 'hash' },
       { href: '/admin/comunidad/tags', label: 'Tags', icon: 'message' },
+      { href: '/admin/avisos', label: 'Avisos', icon: 'bell' },
     ],
   };
   const facturacion: SidebarGroup = {

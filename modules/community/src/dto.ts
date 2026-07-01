@@ -5,8 +5,33 @@ export const createPostSchema = z.object({
   body: z.string().min(1).max(10_000),
   courseId: z.string().uuid().optional(),
   tags: z.array(z.string().min(1).max(40)).max(10).optional(),
+  /** Solo admins: al publicar, avisar por email + campana a TODOS los miembros. */
+  notifyAll: z.boolean().optional().default(false),
+  /** Marca el aviso como importante: ignora la baja (broadcastOptOut) del receptor. */
+  important: z.boolean().optional().default(false),
 });
 export type CreatePostDto = z.infer<typeof createPostSchema>;
+
+/** Editar una publicación (dueño o admin). Al menos un campo debe venir. */
+export const updatePostSchema = z
+  .object({
+    title: z.string().min(3).max(200).optional(),
+    body: z.string().min(1).max(10_000).optional(),
+    tags: z.array(z.string().min(1).max(40)).max(10).optional(),
+  })
+  .refine((p) => p.title !== undefined || p.body !== undefined || p.tags !== undefined, {
+    message: 'Debe enviarse al menos un campo a actualizar',
+  });
+export type UpdatePostDto = z.infer<typeof updatePostSchema>;
+
+/** Crear un aviso masivo (broadcast) a todos los miembros. Solo admins. */
+export const createBroadcastSchema = z.object({
+  subject: z.string().trim().min(3).max(200),
+  bodyText: z.string().trim().min(1).max(10_000),
+  /** Importante: ignora la baja (broadcastOptOut) de los destinatarios. */
+  important: z.boolean().optional().default(false),
+});
+export type CreateBroadcastDto = z.infer<typeof createBroadcastSchema>;
 
 /**
  * Orden del listado.

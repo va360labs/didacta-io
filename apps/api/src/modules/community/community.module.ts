@@ -3,8 +3,10 @@ import { APP_FILTER } from '@nestjs/core';
 import { AuthModule } from '../../auth/auth.module';
 import { ModulesModule } from '../modules.module';
 import { CommunityController } from './community.controller';
+import { CommunityPublicController } from './community-public.controller';
 import { CommunityErrorFilter } from './community-error.filter';
 import { CommunityDigestWorker } from './community-digest.worker';
+import { CommunityBroadcastWorker } from './community-broadcast.worker';
 import {
   CommunityDigestMetrics,
   communityDigestMetricsProviders,
@@ -18,11 +20,12 @@ import {
 /// para romper el ciclo a través de ModuleRegistryService.
 @Module({
   imports: [AuthModule, forwardRef(() => ModulesModule)],
-  controllers: [CommunityController],
+  controllers: [CommunityController, CommunityPublicController],
   providers: [
     ...communityDigestMetricsProviders,
     CommunityDigestMetrics,
     CommunityDigestWorker,
+    CommunityBroadcastWorker,
     { provide: APP_FILTER, useClass: CommunityErrorFilter },
   ],
 })

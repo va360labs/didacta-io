@@ -7,6 +7,7 @@ import type {
   CreatePostDto,
   CreateSpaceDto,
   ListPostsQueryDto,
+  UpdatePostDto,
   UpdateSpaceDto,
 } from './dto.js';
 import { flattenPostAttachments, type CommunityAttachment } from './attachments.js';
@@ -29,6 +30,13 @@ import {
  * Cota de seguridad para no traer toda la tabla; suficiente para v1.
  */
 const ATTACHMENT_POST_SCAN_LIMIT = 1000;
+
+/** Destinatario de un lote de aviso masivo. `optedOut` = dado de baja de broadcasts. */
+export interface BroadcastRecipient {
+  userId: string;
+  email: string;
+  optedOut: boolean;
+}
 
 export class CommunityService {
   constructor(
@@ -59,6 +67,39 @@ export class CommunityService {
       courseId: post.courseId,
     });
     return post;
+  }
+
+  /**
+   * Edita una publicación. Autorizado para el DUEÑO o un moderador (admin).
+   * Actualiza title/body/tags (los que vengan) y marca `editedAt` para el
+   * indicador "editado". Si cambia el body, re-sincroniza las menciones.
+   */
+  async updatePost(
+    tenantId: string,
+    actor: { id: string; canModerate: boolean },
+    postId: string,
+    patch: UpdatePostDto,
+  ) {
+    const post = await this.prisma.modCommunityPost.findFirst({
+      where: { id: postId, tenantId, deletedAt: null },
+    });
+    if (!post) throw new PostNotFoundError();
+    if (post.authorId !== actor.id && !actor.canModerate) throw new NotAuthorError();
+
+    const updated = await this.prisma.modCommunityPost.update({
+      where: { id: postId },
+      data: {
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.body !== undefined ? { body: patch.body } : {}),
+        ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
+        editedAt: new Date(),
+      },
+    });
+    if (patch.body !== undefined) {
+      await this.prisma.modCommunityMention.deleteMany({ where: { tenantId, postId } });
+      await this.persistMentions(tenantId, post.authorId, patch.body, { postId });
+    }
+    return updated;
   }
 
   /**
@@ -839,6 +880,124 @@ export class CommunityService {
           });
         });
     }
+  }
+
+  // ── Avisos masivos (broadcast) ─────────────────────────────────────────────
+
+  /**
+   * Crea un aviso masivo a TODOS los miembros ACTIVE del tenant. Calcula el
+   * total de destinatarios (para el progreso) y deja el registro en PENDING; el
+   * worker lo procesa por lotes. `postId` != null si nace de publicar un post.
+   */
+  async createBroadcast(
+    tenantId: string,
+    createdById: string,
+    input: { subject: string; bodyText: string; important?: boolean; postId?: string | null },
+  ) {
+    const total = await this.prisma.user.count({ where: { tenantId, status: 'ACTIVE' } });
+    return this.prisma.modCommunityBroadcast.create({
+      data: {
+        tenantId,
+        createdById,
+        subject: input.subject,
+        bodyText: input.bodyText,
+        important: input.important ?? false,
+        postId: input.postId ?? null,
+        status: 'PENDING',
+        total,
+      },
+    });
+  }
+
+  /** Registro de un aviso del tenant (o null). */
+  async getBroadcast(tenantId: string, id: string) {
+    return this.prisma.modCommunityBroadcast.findFirst({ where: { id, tenantId } });
+  }
+
+  /** Últimos avisos del tenant (para el panel de estado). */
+  async listBroadcasts(tenantId: string, limit = 20) {
+    return this.prisma.modCommunityBroadcast.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  /**
+   * Toma el siguiente lote de destinatarios de un aviso (usuarios ACTIVE con
+   * `id > cursor`, orden asc por id). Marca RUNNING en el primer lote y DONE
+   * cuando ya no quedan. Devuelve cada destinatario con su flag de baja para que
+   * el worker decida a quién enviar (los `important` ignoran la baja). NO avanza
+   * el cursor — eso lo hace `commitBroadcastBatch` tras enviar (resumible).
+   */
+  async claimBroadcastBatch(broadcastId: string, batchSize: number) {
+    const b = await this.prisma.modCommunityBroadcast.findUnique({ where: { id: broadcastId } });
+    if (!b || b.status === 'DONE' || b.status === 'FAILED') {
+      return { broadcast: b, recipients: [] as BroadcastRecipient[], done: true };
+    }
+    if (b.status === 'PENDING') {
+      await this.prisma.modCommunityBroadcast.update({
+        where: { id: b.id },
+        data: { status: 'RUNNING', startedAt: new Date() },
+      });
+    }
+    const users = await this.prisma.user.findMany({
+      where: {
+        tenantId: b.tenantId,
+        status: 'ACTIVE',
+        ...(b.cursorUserId ? { id: { gt: b.cursorUserId } } : {}),
+      },
+      orderBy: { id: 'asc' },
+      take: batchSize,
+      select: { id: true, email: true },
+    });
+    if (users.length === 0) {
+      await this.prisma.modCommunityBroadcast.update({
+        where: { id: b.id },
+        data: { status: 'DONE', finishedAt: new Date() },
+      });
+      return { broadcast: b, recipients: [] as BroadcastRecipient[], done: true };
+    }
+    const optedOut = await this.prisma.modCommunityUserPref.findMany({
+      where: {
+        tenantId: b.tenantId,
+        userId: { in: users.map((u) => u.id) },
+        broadcastOptOut: true,
+      },
+      select: { userId: true },
+    });
+    const optedSet = new Set(optedOut.map((o) => o.userId));
+    const recipients: BroadcastRecipient[] = users.map((u) => ({
+      userId: u.id,
+      email: u.email,
+      optedOut: optedSet.has(u.id),
+    }));
+    return { broadcast: b, recipients, done: false };
+  }
+
+  /** Suma contadores y avanza el cursor tras enviar un lote. */
+  async commitBroadcastBatch(
+    broadcastId: string,
+    delta: { sent: number; failed: number; skipped: number; lastUserId: string },
+  ) {
+    await this.prisma.modCommunityBroadcast.update({
+      where: { id: broadcastId },
+      data: {
+        sent: { increment: delta.sent },
+        failed: { increment: delta.failed },
+        skipped: { increment: delta.skipped },
+        cursorUserId: delta.lastUserId,
+      },
+    });
+  }
+
+  /** Marca (o quita) la baja de avisos masivos de un usuario. Para el unsubscribe. */
+  async setBroadcastOptOut(tenantId: string, userId: string, value: boolean) {
+    await this.prisma.modCommunityUserPref.upsert({
+      where: { tenantId_userId: { tenantId, userId } },
+      create: { tenantId, userId, broadcastOptOut: value },
+      update: { broadcastOptOut: value },
+    });
   }
 
   private async publish(
