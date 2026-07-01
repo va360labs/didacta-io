@@ -13,6 +13,7 @@ import { authStorage } from '@/lib/auth-storage';
 import { cn } from '@/lib/utils';
 import { AuthorNameLink, CommunityAvatar } from '@/components/community-avatar';
 import { RichBody } from '@/components/rich-body';
+import { PostComposerModal } from '@/components/post-composer-modal';
 import { usePublicUsers } from '@/lib/public-users';
 import {
   communityApi,
@@ -37,6 +38,7 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
   const [post, setPost] = useState<PostDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [commentBody, setCommentBody] = useState('');
   const [commentEmojiOpen, setCommentEmojiOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState<string | null>(null);
@@ -282,6 +284,11 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
               <CommunityTagChip key={t} name={t} tag={tagsByName.get(t)} />
             ))}
             <span className="text-xs text-[#94A3B8]">{relTime(post.createdAt)}</span>
+            {post.editedAt ? (
+              <span className="text-xs text-[#CBD5E1]" title="Editado">
+                · editado
+              </span>
+            ) : null}
             {post.pinnedAt ? (
               <Badge variant="warning" dot>
                 Fijado
@@ -343,6 +350,18 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
             </button>
           );
         })}
+        {isAuthor || canModerate ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setEditing(true)}
+            disabled={pending}
+            className="ml-auto text-[#64748B]"
+          >
+            Editar
+          </Button>
+        ) : null}
         {canModerate ? (
           <Button
             type="button"
@@ -350,7 +369,7 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
             size="sm"
             onClick={handleTogglePin}
             disabled={pending}
-            className="ml-auto text-[#64748B]"
+            className="text-[#64748B]"
           >
             {post.pinnedAt ? 'Desfijar' : 'Fijar'}
           </Button>
@@ -374,11 +393,7 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
             size="sm"
             onClick={handleDeletePost}
             disabled={pending}
-            className={
-              canModerate
-                ? 'text-danger-700 hover:bg-danger-50'
-                : 'ml-auto text-danger-700 hover:bg-danger-50'
-            }
+            className="text-danger-700 hover:bg-danger-50"
           >
             Eliminar post
           </Button>
@@ -480,6 +495,20 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
         onDelete={handleDeleteComment}
         onModerate={handleModerateComment}
       />
+
+      {editing ? (
+        <PostComposerModal
+          open={editing}
+          editPost={post}
+          spaceSlug={post.tags[0] ?? ''}
+          onClose={() => setEditing(false)}
+          onSuccess={() => {
+            setEditing(false);
+            void reload();
+            onChanged?.();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

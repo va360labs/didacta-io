@@ -12,6 +12,8 @@ export interface Post {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+  /** Última edición de contenido (title/body/tags). null = nunca editado. */
+  editedAt: string | null;
   deletedAt: string | null;
   /** Set por moderador. Solo aparece en respuestas si el viewer es admin. */
   hiddenAt: string | null;
@@ -69,6 +71,23 @@ export interface Reaction {
 export interface PostDetail extends Post {
   comments: Comment[];
   reactions: Reaction[];
+}
+
+/** Aviso masivo a la comunidad y su progreso de envío. */
+export interface Broadcast {
+  id: string;
+  subject: string;
+  bodyText: string;
+  postId: string | null;
+  important: boolean;
+  status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
+  total: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
 }
 
 function withAuth(): string {
@@ -130,10 +149,24 @@ export const communityApi = {
     body: string;
     tags?: string[];
     courseId?: string;
+    /** Solo admins: avisar por email + campana a todos los miembros. */
+    notifyAll?: boolean;
+    /** Marca el aviso como importante (ignora la baja del receptor). */
+    important?: boolean;
   }): Promise<Post> {
     return apiFetch<Post>(
       '/api/v1/modules/community/posts',
       { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+  async updatePost(
+    id: string,
+    input: { title?: string; body?: string; tags?: string[] },
+  ): Promise<Post> {
+    return apiFetch<Post>(
+      `/api/v1/modules/community/posts/${id}`,
+      { method: 'PATCH', body: JSON.stringify(input) },
       withAuth(),
     );
   },
@@ -256,6 +289,27 @@ export const communityApi = {
     return apiFetch<{ digestOptOut: boolean }>(
       '/api/v1/modules/community/me/preferences',
       { method: 'PUT', body: JSON.stringify(patch) },
+      withAuth(),
+    );
+  },
+
+  // ── Avisos masivos (broadcast) — solo admins ──────────────────────────────
+  async createBroadcast(input: {
+    subject: string;
+    bodyText: string;
+    important?: boolean;
+  }): Promise<Broadcast> {
+    return apiFetch<Broadcast>(
+      '/api/v1/modules/community/broadcasts',
+      { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async listBroadcasts(): Promise<Broadcast[]> {
+    return apiFetch<Broadcast[]>(
+      '/api/v1/modules/community/broadcasts',
+      { method: 'GET' },
       withAuth(),
     );
   },

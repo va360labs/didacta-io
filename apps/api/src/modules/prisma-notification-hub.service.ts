@@ -309,6 +309,12 @@ const TEMPLATES: Record<string, TemplateDef> = {
       'Tu resumen semanal de la comunidad ({{mentionsCount}} menciones · {{repliesCount}} respuestas)',
     body: 'Esta semana en la comunidad:\n\n· {{mentionsCount}} mención(es) nueva(s)\n· {{repliesCount}} respuesta(s) en hilos donde participaste\n\nEntra a Didacta y revisa /comunidad/menciones para verlas todas. Desde el resumen anterior: {{sinceIso}}.',
   },
+  // Aviso masivo (broadcast) a toda la comunidad. Passthrough: el worker compone
+  // el asunto y el cuerpo (mensaje + enlace de baja en email) y los pasa como vars.
+  'community.broadcast': {
+    subject: '{{subject}}',
+    body: '{{body}}',
+  },
 };
 
 function renderTemplate(key: string, variables: Record<string, unknown>): RenderedTemplate {

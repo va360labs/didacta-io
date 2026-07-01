@@ -27,6 +27,7 @@ export {
   type Comment,
   type Reaction,
   type PostDetail,
+  type Broadcast,
   type PostSort,
   type CommunityTag,
   type CommunityTagIcon,

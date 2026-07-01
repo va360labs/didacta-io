@@ -15,6 +15,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   addReactionSchema,
+  createBroadcastSchema,
   createCommentSchema,
   createPostSchema,
   createSpaceSchema,
@@ -22,16 +23,19 @@ import {
   listPostsQuerySchema,
   moderationActionSchema,
   NotModeratorError,
+  updatePostSchema,
   updateSpaceSchema,
   updateTagSchema,
   userPreferencesSchema,
   type AddReactionDto,
+  type CreateBroadcastDto,
   type CreateCommentDto,
   type CreatePostDto,
   type CreateSpaceDto,
   type CreateTagDto,
   type ListPostsQueryDto,
   type ModerationActionDto,
+  type UpdatePostDto,
   type UpdateSpaceDto,
   type UpdateTagDto,
   type UserPreferencesDto,
@@ -43,6 +47,7 @@ import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { SessionClaims } from '../../auth/token.service';
 import { CommunityDigestWorker } from './community-digest.worker';
+import { CommunityBroadcastWorker } from './community-broadcast.worker';
 import { ModuleRegistryService } from '../module-registry.service';
 
 const listAttachmentsQuerySchema = z.object({
@@ -58,6 +63,7 @@ export class CommunityController {
     private readonly registry: ModuleRegistryService,
     private readonly prisma: PrismaService,
     private readonly digest: CommunityDigestWorker,
+    private readonly broadcast: CommunityBroadcastWorker,
   ) {}
 
   private async authorOf(user: SessionClaims): Promise<{ id: string; displayName: string | null }> {
@@ -74,14 +80,46 @@ export class CommunityController {
   }
 
   @Post('posts')
-  @ApiOperation({ summary: 'Crear post' })
+  @ApiOperation({
+    summary: 'Crear post. Con `notifyAll` (solo admins) avisa por email + campana a todos.',
+  })
   async createPost(
     @CurrentUser() user: SessionClaims | undefined,
     @Body(new ZodValidationPipe(createPostSchema)) dto: CreatePostDto,
   ) {
     if (!user) throw new UnauthorizedException();
+    // El check "avisar a todos" solo lo pueden usar los admins.
+    if (dto.notifyAll && !canModerate(user)) throw new NotModeratorError();
     const author = await this.authorOf(user);
-    return this.registry.getCommunityService().createPost(user.tenantId, author, dto);
+    const svc = this.registry.getCommunityService();
+    const post = await svc.createPost(user.tenantId, author, dto);
+    if (dto.notifyAll) {
+      // El body puede llevar el marcador de adjuntos al final; lo recortamos.
+      const markerIdx = post.body.indexOf('<!--didacta-attachments:');
+      const cleanBody = (markerIdx === -1 ? post.body : post.body.slice(0, markerIdx)).trim();
+      const excerpt = cleanBody.slice(0, 600);
+      const b = await svc.createBroadcast(user.tenantId, user.sub, {
+        subject: post.title,
+        bodyText: `${author.displayName ?? 'Un administrador'} ha publicado en la comunidad:\n\n${excerpt}`,
+        important: dto.important,
+        postId: post.id,
+      });
+      await this.broadcast.enqueue(b.id);
+    }
+    return post;
+  }
+
+  @Patch('posts/:id')
+  @ApiOperation({ summary: 'Editar un post. El dueño o un admin (title/body/tags).' })
+  async updatePost(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updatePostSchema)) dto: UpdatePostDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry
+      .getCommunityService()
+      .updatePost(user.tenantId, { id: user.sub, canModerate: canModerate(user) }, id, dto);
   }
 
   @Get('posts')
@@ -431,6 +469,36 @@ export class CommunityController {
       })),
       total,
     };
+  }
+
+  // ── Avisos masivos (broadcast) — solo admins ───────────────────────────────
+
+  @Post('broadcasts')
+  @ApiOperation({
+    summary:
+      'Crear y encolar un aviso masivo a todos los miembros. Solo super_admin / tenant_admin.',
+  })
+  async createBroadcast(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(createBroadcastSchema)) dto: CreateBroadcastDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!canModerate(user)) throw new NotModeratorError();
+    const b = await this.registry.getCommunityService().createBroadcast(user.tenantId, user.sub, {
+      subject: dto.subject,
+      bodyText: dto.bodyText,
+      important: dto.important,
+    });
+    await this.broadcast.enqueue(b.id);
+    return b;
+  }
+
+  @Get('broadcasts')
+  @ApiOperation({ summary: 'Listar los últimos avisos masivos con su estado. Solo admins.' })
+  async listBroadcasts(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    if (!canModerate(user)) throw new NotModeratorError();
+    return this.registry.getCommunityService().listBroadcasts(user.tenantId);
   }
 }
 

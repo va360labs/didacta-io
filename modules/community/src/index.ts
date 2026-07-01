@@ -2,7 +2,7 @@ import type { DidactaModule, ModuleContext } from '@didacta/core-kernel';
 import { manifest } from './manifest.js';
 
 export { manifest };
-export { CommunityService } from './community.service.js';
+export { CommunityService, type BroadcastRecipient } from './community.service.js';
 export {
   parseBodyAttachments,
   flattenPostAttachments,
@@ -14,6 +14,7 @@ export {
 export {
   addReactionSchema,
   COMMUNITY_TAG_ICONS,
+  createBroadcastSchema,
   createCommentSchema,
   createPostSchema,
   createSpaceSchema,
@@ -21,10 +22,12 @@ export {
   listPostsQuerySchema,
   moderationActionSchema,
   postSortSchema,
+  updatePostSchema,
   updateSpaceSchema,
   updateTagSchema,
   userPreferencesSchema,
   type AddReactionDto,
+  type CreateBroadcastDto,
   type CreateCommentDto,
   type CreatePostDto,
   type CreateSpaceDto,
@@ -32,6 +35,7 @@ export {
   type ListPostsQueryDto,
   type ModerationActionDto,
   type PostSort,
+  type UpdatePostDto,
   type UpdateSpaceDto,
   type UpdateTagDto,
   type UserPreferencesDto,

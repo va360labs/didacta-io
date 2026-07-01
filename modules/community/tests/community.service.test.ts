@@ -1071,3 +1071,47 @@ describe('CommunityService — espacios', () => {
     await expect(svc.deleteSpace('t1', 'ghost')).rejects.toBeInstanceOf(SpaceNotFoundError);
   });
 });
+
+describe('CommunityService.updatePost', () => {
+  async function seedPost() {
+    const prisma = makeFakePrisma();
+    const svc = new CommunityService(prisma as never, trackingCtx([]));
+    const post = await svc.createPost(
+      't1',
+      { id: 'author-1', displayName: 'Autor' },
+      { title: 'Título original', body: 'cuerpo', tags: ['general'] },
+    );
+    return { svc, post };
+  }
+
+  it('el dueño puede editar el título y se marca editedAt', async () => {
+    const { svc, post } = await seedPost();
+    const updated = await svc.updatePost('t1', { id: 'author-1', canModerate: false }, post.id, {
+      title: 'Título editado',
+    });
+    expect(updated.title).toBe('Título editado');
+    expect(updated.editedAt).toBeInstanceOf(Date);
+  });
+
+  it('un admin (moderador) puede editar el post de otro', async () => {
+    const { svc, post } = await seedPost();
+    const updated = await svc.updatePost('t1', { id: 'admin-9', canModerate: true }, post.id, {
+      title: 'Editado por admin',
+    });
+    expect(updated.title).toBe('Editado por admin');
+  });
+
+  it('un tercero sin permisos → NotAuthorError', async () => {
+    const { svc, post } = await seedPost();
+    await expect(
+      svc.updatePost('t1', { id: 'otro', canModerate: false }, post.id, { title: 'x' }),
+    ).rejects.toBeInstanceOf(NotAuthorError);
+  });
+
+  it('post inexistente → PostNotFoundError', async () => {
+    const { svc } = await seedPost();
+    await expect(
+      svc.updatePost('t1', { id: 'author-1', canModerate: true }, 'no-existe', { title: 'x' }),
+    ).rejects.toBeInstanceOf(PostNotFoundError);
+  });
+});

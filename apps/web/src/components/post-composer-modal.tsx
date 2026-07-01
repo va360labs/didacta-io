@@ -5,7 +5,13 @@ import { EmojiPicker } from '@/components/emoji-picker';
 import { MentionTextarea } from '@/components/mention-textarea';
 import { authStorage } from '@/lib/auth-storage';
 import { uploadCommunityFile, uploadCommunityImage } from '@/lib/community-upload';
-import { buildBodyWithAttachments, communityApi, useCommunitySpaces } from '@/modules/community';
+import {
+  buildBodyWithAttachments,
+  communityApi,
+  parseBodyAttachments,
+  useCommunitySpaces,
+  type Post,
+} from '@/modules/community';
 
 function initials(name: string | null | undefined): string {
   if (!name) return '?';
@@ -36,11 +42,16 @@ interface Props {
   onClose: () => void;
   spaceSlug: string;
   onSuccess: () => void;
+  /** Si viene, el modal EDITA ese post en vez de crear uno nuevo. */
+  editPost?: Post | null;
 }
 
-export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props) {
+export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPost }: Props) {
   const session = authStorage.getSession();
   const userName = session?.user.name ?? session?.user.email ?? 'Usuario';
+  const roles = session?.user.roles ?? [];
+  const isAdmin = roles.includes('super_admin') || roles.includes('tenant_admin');
+  const isEdit = Boolean(editPost);
   const spaces = useCommunitySpaces();
 
   const [selectedSpace, setSelectedSpace] = useState(spaceSlug);
@@ -55,6 +66,9 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
   const [error, setError] = useState<string | null>(null);
   const [images, setImages] = useState<AttachmentImage[]>([]);
   const [files, setFiles] = useState<AttachmentFile[]>([]);
+  // Solo admins, solo al CREAR: avisar por email + campana a todos los miembros.
+  const [notifyAll, setNotifyAll] = useState(false);
+  const [important, setImportant] = useState(false);
 
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -62,19 +76,45 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    setTagInput('');
+    setError(null);
+    setEmojiPickerOpen(false);
+    setNotifyAll(false);
+    setImportant(false);
+    if (editPost) {
+      // Modo edición: precarga el post. El primer tag es el espacio; el resto, tags.
+      const parsed = parseBodyAttachments(editPost.body);
+      setSelectedSpace(editPost.tags[0] ?? spaceSlug);
+      setTitle(editPost.title);
+      setBody(parsed.cleanBody);
+      setTags(editPost.tags.slice(1));
+      setImages(
+        parsed.images.map((im) => ({
+          id: crypto.randomUUID(),
+          url: im.url,
+          name: im.name,
+          previewUrl: im.url,
+        })),
+      );
+      setFiles(
+        parsed.files.map((f) => ({
+          id: crypto.randomUUID(),
+          url: f.url,
+          name: f.name,
+          size: f.size ?? 0,
+        })),
+      );
+    } else {
       setSelectedSpace(spaceSlug);
       setTitle('');
       setBody('');
       setTags([]);
-      setTagInput('');
-      setError(null);
-      setEmojiPickerOpen(false);
       setImages([]);
       setFiles([]);
-      setTimeout(() => titleRef.current?.focus(), 50);
     }
-  }, [open, spaceSlug]);
+    setTimeout(() => titleRef.current?.focus(), 50);
+  }, [open, spaceSlug, editPost]);
 
   useEffect(() => {
     if (!open) return;
@@ -217,7 +257,20 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
         images.map((img) => ({ url: img.url, name: img.name })),
         files.map((f) => ({ url: f.url, name: f.name, size: f.size })),
       );
-      await communityApi.createPost({ title: title.trim(), body: finalBody, tags: allTags });
+      if (editPost) {
+        await communityApi.updatePost(editPost.id, {
+          title: title.trim(),
+          body: finalBody,
+          tags: allTags,
+        });
+      } else {
+        await communityApi.createPost({
+          title: title.trim(),
+          body: finalBody,
+          tags: allTags,
+          ...(isAdmin && notifyAll ? { notifyAll: true, important } : {}),
+        });
+      }
       onSuccess();
       onClose();
     } catch (err) {
@@ -589,21 +642,46 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
 
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-4">
-          <p className="flex items-center gap-1.5 text-xs text-[#94A3B8]">
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            Visible para toda la comunidad
-          </p>
+          {isAdmin && !isEdit ? (
+            <div className="flex flex-col gap-1">
+              <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-[#374151]">
+                <input
+                  type="checkbox"
+                  checked={notifyAll}
+                  onChange={(e) => setNotifyAll(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-[#1E5AA8]"
+                />
+                📣 Avisar a todos por email
+              </label>
+              {notifyAll ? (
+                <label className="flex cursor-pointer items-center gap-2 pl-5 text-[11px] text-[#64748B]">
+                  <input
+                    type="checkbox"
+                    checked={important}
+                    onChange={(e) => setImportant(e.target.checked)}
+                    className="h-3 w-3 accent-[#FF6F61]"
+                  />
+                  Importante (ignora las bajas)
+                </label>
+              ) : null}
+            </div>
+          ) : (
+            <p className="flex items-center gap-1.5 text-xs text-[#94A3B8]">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              Visible para toda la comunidad
+            </p>
+          )}
           <div className="flex items-center gap-3">
             {uploading && <p className="text-xs text-[#64748B]">Subiendo…</p>}
             {error && <p className="text-xs text-red-500">{error}</p>}
@@ -620,7 +698,14 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess }: Props
               disabled={!canSubmit}
               className="flex items-center gap-2 rounded-xl bg-[#0D1B2A] px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             >
-              <span>→</span> {submitting ? 'Publicando…' : 'Publicar'}
+              <span>→</span>{' '}
+              {submitting
+                ? isEdit
+                  ? 'Guardando…'
+                  : 'Publicando…'
+                : isEdit
+                  ? 'Guardar cambios'
+                  : 'Publicar'}
             </button>
           </div>
         </div>

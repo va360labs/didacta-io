@@ -589,6 +589,10 @@ model ModCommunityPost {
   authorDisplayName String?   @map("author_display_name")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
+  /// Última edición de CONTENIDO por el autor o un admin (title/body/tags), para
+  /// mostrar el indicador "editado" en la UI. Distinto de `updatedAt`, que Prisma
+  /// toca en cualquier update (pin, moderación…). null = nunca editado.
+  editedAt          DateTime? @map("edited_at")
   deletedAt         DateTime? @map("deleted_at")
 
   /// Moderación: timestamp + actor + razón. Si `hiddenAt != null`, el post
@@ -743,11 +747,45 @@ model ModCommunityUserPref {
   tenantId     String   @map("tenant_id") @db.Uuid
   userId       String   @map("user_id") @db.Uuid
   digestOptOut Boolean  @default(false) @map("digest_opt_out")
+  /// Baja de los AVISOS MASIVOS (broadcasts a toda la comunidad). Se activa desde
+  /// el enlace de baja del email. Los avisos marcados `important` la ignoran.
+  broadcastOptOut Boolean @default(false) @map("broadcast_opt_out")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@unique([tenantId, userId], map: "mod_community_user_pref_tenant_user_key")
   @@map("mod_community_user_pref")
+}
+
+/// Aviso masivo (broadcast) a TODOS los miembros ACTIVE del tenant. Un registro
+/// por envío. El worker lo procesa por lotes con ritmo controlado (rate-limit del
+/// SMTP), avanzando `cursorUserId` de forma resumible/idempotente ante reintentos.
+model ModCommunityBroadcast {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  createdById String   @map("created_by_id") @db.Uuid
+  subject     String
+  /// Cuerpo en texto plano (se envuelve en HTML seguro + footer de baja al enviar).
+  bodyText    String   @map("body_text")
+  /// Si el aviso nace de publicar un post, su id (para el enlace "ver publicación").
+  postId      String?  @map("post_id") @db.Uuid
+  /// Los avisos importantes ignoran la baja (broadcastOptOut) del destinatario.
+  important   Boolean  @default(false)
+  /// Estado del envío: PENDING → RUNNING → DONE | FAILED.
+  status      String   @default("PENDING")
+  total       Int      @default(0)
+  sent        Int      @default(0)
+  failed      Int      @default(0)
+  skipped     Int      @default(0)
+  /// Cursor de reanudación: último `user_id` procesado (orden asc por id).
+  cursorUserId String? @map("cursor_user_id") @db.Uuid
+  error       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  startedAt   DateTime? @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+
+  @@index([tenantId, createdAt])
+  @@map("mod_community_broadcast")
 }
 
 /// Espacios de comunidad administrables por el admin.
