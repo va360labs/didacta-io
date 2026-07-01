@@ -1,6 +1,5 @@
 import { randomBytes } from 'node:crypto';
 import {
-  BadRequestException,
   Body,
   ConflictException,
   Controller,
@@ -46,6 +45,13 @@ const createManualSchema = z
   })
   .strict();
 type CreateManualDto = z.infer<typeof createManualSchema>;
+
+/**
+ * Re-consulta del lookup. Opcionalmente con un email DISTINTO al de registro, para
+ * mapear la suscripción cuando el miembro se registró con un email pero pagó con otro.
+ */
+const rerunSchema = z.object({ email: z.string().trim().email().optional() }).strict();
+type RerunDto = z.infer<typeof rerunSchema>;
 
 /** Email de recordatorio de pago (asunto + cuerpo ya resueltos/editados por el admin). */
 const renewalEmailSchema = z
@@ -151,14 +157,23 @@ export class InscripcionAdminController {
 
   @Post('requests/:userId/rerun')
   @ApiOperation({
-    summary: 'Re-lanza el lookup de suscripción de un solicitante en todas las cuentas conectadas.',
+    summary:
+      'Re-lanza el lookup de suscripción del solicitante. Con `email` en el body, consulta ' +
+      'por ese email (para mapear una suscripción registrada con otro email) y lo persiste.',
   })
-  async rerun(@CurrentUser() rawUser: SessionClaims | undefined, @Param('userId') userId: string) {
+  async rerun(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Param('userId') userId: string,
+    @Body(new ZodValidationPipe(rerunSchema)) body: RerunDto,
+  ) {
     const user = this.requireAdmin(rawUser);
-    const email = await this.registration.getUserEmail(user.tenantId, userId);
-    if (!email) throw new NotFoundException('Solicitante no encontrado.');
-    const result = await this.lookup.runAndStore(user.tenantId, userId, email);
-    return { matches: result.matches, failures: result.failures };
+    const account = await this.registration.getUserEmail(user.tenantId, userId);
+    if (!account) throw new NotFoundException('Solicitante no encontrado.');
+    // Prioridad: email mapeado ahora → el que ya se usó antes (persiste el mapeo) → el de registro.
+    const existing = await this.lookup.getForUser(user.tenantId, userId);
+    const emailToUse = body.email ?? existing?.email ?? account;
+    const result = await this.lookup.runAndStore(user.tenantId, userId, emailToUse);
+    return { matches: result.matches, failures: result.failures, email: emailToUse };
   }
 
   @Post('requests/:userId/decision')
@@ -187,9 +202,9 @@ export class InscripcionAdminController {
   @Get('requests/:userId/renewal-context')
   @ApiOperation({
     summary:
-      'Prepara el envío del recordatorio de pago de una solicitud: resuelve la ' +
-      'plantilla del tenant y (Stripe) el enlace de la factura abierta de la ' +
-      'suscripción detectada indicada por `subscriptionId`.',
+      'Prepara el envío de un email a una solicitud: resuelve la plantilla del tenant y, ' +
+      'si se pasa `subscriptionId` (suscripción detectada), el enlace de renovación de Stripe. ' +
+      'Sin `subscriptionId` sirve para escribir a quien NO tiene suscripción detectada.',
   })
   async renewalContext(
     @CurrentUser() rawUser: SessionClaims | undefined,
@@ -197,19 +212,22 @@ export class InscripcionAdminController {
     @Query('subscriptionId') subscriptionId: string | undefined,
   ): Promise<{ template: RenewalTemplate; renewalUrl: string | null }> {
     const user = this.requireAdmin(rawUser);
-    if (!subscriptionId) throw new BadRequestException('Falta subscriptionId.');
-    const match = await this.findLookupMatch(user.tenantId, userId, subscriptionId);
     const svc = this.registry.getPaymentConnectionsService();
-    // connectionId puede faltar en lookups antiguos (persistidos antes de incluirlo):
-    // en ese caso no podemos resolver el enlace, pero el email sigue siendo enviable.
-    const renewalUrl = match.connectionId
-      ? await svc.resolveRenewalUrlByRef(
-          user.tenantId,
-          match.connectionId,
-          match.provider,
-          match.subscriptionId,
-        )
-      : null;
+    // Sin suscripción (subscriptionId ausente): no hay enlace de renovación, pero el
+    // email sigue siendo enviable (el admin escribe el cuerpo, p.ej. con el link de pago).
+    let renewalUrl: string | null = null;
+    if (subscriptionId) {
+      const match = await this.findLookupMatch(user.tenantId, userId, subscriptionId);
+      // connectionId puede faltar en lookups antiguos (persistidos antes de incluirlo).
+      renewalUrl = match.connectionId
+        ? await svc.resolveRenewalUrlByRef(
+            user.tenantId,
+            match.connectionId,
+            match.provider,
+            match.subscriptionId,
+          )
+        : null;
+    }
     const template = await svc.getRenewalTemplate(user.tenantId);
     return { template, renewalUrl };
   }

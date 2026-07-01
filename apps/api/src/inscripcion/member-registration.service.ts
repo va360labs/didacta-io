@@ -64,6 +64,8 @@ export interface MemberRequestView {
     results: unknown;
     error: string | null;
     completedAt: Date | null;
+    /** Email con el que se consultó (puede diferir del de registro si el admin lo mapeó). */
+    email: string | null;
   } | null;
 }
 
@@ -134,6 +136,7 @@ export class MemberRegistrationService {
               results: l.results,
               error: l.error,
               completedAt: l.completedAt,
+              email: l.email,
             }
           : null,
       };

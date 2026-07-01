@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -33,6 +32,7 @@ const MATCH = {
 function build(overrides?: {
   getUserEmail?: unknown;
   getForUser?: unknown;
+  runAndStore?: unknown;
   resolveRenewalUrlByRef?: unknown;
   getRenewalTemplate?: unknown;
   resolve?: unknown;
@@ -43,6 +43,7 @@ function build(overrides?: {
   };
   const lookup = {
     getForUser: vi.fn(overrides?.getForUser ?? (async () => ({ results: [MATCH] }))),
+    runAndStore: vi.fn(overrides?.runAndStore ?? (async () => ({ matches: [], failures: [] }))),
   };
   const paymentSvc = {
     resolveRenewalUrlByRef: vi.fn(
@@ -87,10 +88,11 @@ describe('InscripcionAdminController · renewal-context', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('sin subscriptionId → 400', async () => {
-    await expect(
-      h.controller.renewalContext(ADMIN as never, USER_ID, undefined),
-    ).rejects.toBeInstanceOf(BadRequestException);
+  it('sin subscriptionId → plantilla sin enlace (email a quien no tiene suscripción)', async () => {
+    const res = await h.controller.renewalContext(ADMIN as never, USER_ID, undefined);
+    expect(res.renewalUrl).toBeNull();
+    expect(res.template).toEqual({ subject: 'Renueva {plan}', body: 'Paga aquí: {enlace}' });
+    expect(h.paymentSvc.resolveRenewalUrlByRef).not.toHaveBeenCalled();
   });
 
   it('subscriptionId que no está en el lookup → 404', async () => {
@@ -165,5 +167,44 @@ describe('InscripcionAdminController · renewal-email', () => {
     expect(message.text).toBe(DTO.body);
     // El cuerpo se envuelve en HTML y los enlaces se vuelven <a>.
     expect(message.html).toContain('<a href="https://invoice.stripe.com/i/sub_1">');
+  });
+});
+
+describe('InscripcionAdminController · rerun (mapear suscripción por email)', () => {
+  it('usa el email del body cuando se pasa (mapeo por otro email)', async () => {
+    const h = build({ getForUser: async () => ({ email: 'registro@x.com', results: [] }) });
+    const res = await h.controller.rerun(ADMIN as never, USER_ID, { email: 'pago@x.com' });
+    expect(res.email).toBe('pago@x.com');
+    expect(h.lookup.runAndStore).toHaveBeenCalledWith(TENANT, USER_ID, 'pago@x.com');
+  });
+
+  it('sin email en el body, reusa el del lookup previo (persiste el mapeo)', async () => {
+    const h = build({ getForUser: async () => ({ email: 'pago@x.com', results: [] }) });
+    const res = await h.controller.rerun(ADMIN as never, USER_ID, {});
+    expect(res.email).toBe('pago@x.com');
+    expect(h.lookup.runAndStore).toHaveBeenCalledWith(TENANT, USER_ID, 'pago@x.com');
+  });
+
+  it('sin email ni lookup previo, usa el de registro', async () => {
+    const h = build({
+      getForUser: async () => null,
+      getUserEmail: async () => 'registro@x.com',
+    });
+    const res = await h.controller.rerun(ADMIN as never, USER_ID, {});
+    expect(res.email).toBe('registro@x.com');
+  });
+
+  it('solicitante sin email de cuenta → 404', async () => {
+    const h = build({ getUserEmail: async () => null, getForUser: async () => null });
+    await expect(h.controller.rerun(ADMIN as never, USER_ID, {})).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('rol no admin → 403', async () => {
+    const h = build();
+    await expect(h.controller.rerun(NON_ADMIN as never, USER_ID, {})).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 });
