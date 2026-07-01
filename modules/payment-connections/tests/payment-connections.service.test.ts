@@ -65,6 +65,8 @@ function matchWhere(r: Record<string, unknown>, w: Record<string, unknown>): boo
       const c = cond as Record<string, unknown>;
       if ('not' in c && v === c['not']) return false;
       if ('lt' in c && !(v instanceof Date && v < (c['lt'] as Date))) return false;
+      if ('lte' in c && !(v instanceof Date && v <= (c['lte'] as Date))) return false;
+      if ('gt' in c && !(v instanceof Date && v > (c['gt'] as Date))) return false;
       if ('contains' in c && !String(v ?? '').includes(String(c['contains']))) return false;
     } else if (v !== cond) {
       return false;
@@ -863,5 +865,75 @@ describe('dashboard: syncSubscribers / listSubscribers / subscriberSummary', () 
     });
     // 2 conexiones del mismo tenant → una sola entrada (distinct).
     expect(await svc.service.listTenantsWithVerifiedConnections()).toEqual([TENANT]);
+  });
+});
+
+describe('avisos de suscripción (digest diario + aviso 7 días)', () => {
+  const DAY = 24 * 3600 * 1000;
+  function make() {
+    const built = buildService();
+    let i = 0;
+    const add = (over: Record<string, unknown>) => {
+      i += 1;
+      built.prisma.subscribers.set(`seed-${i}`, {
+        id: `sub-${i}`,
+        tenantId: TENANT,
+        connectionId: 'conn',
+        provider: 'stripe',
+        subscriptionId: `s${i}`,
+        userEmail: `u${i}@x.com`,
+        entitled: true,
+        productName: 'Plan Pro',
+        unitAmount: 1999,
+        currency: 'eur',
+        currentPeriodEnd: null,
+        renewalWarnedPeriodEnd: null,
+        ...over,
+      });
+    };
+    return { service: built.service, add };
+  }
+
+  it('getSubscriptionDigest: cuenta activos y lista solo los de la ventana', async () => {
+    const { service, add } = make();
+    const in3 = new Date(Date.now() + 3 * DAY);
+    add({ currentPeriodEnd: in3 }); // dentro de 7d
+    add({ currentPeriodEnd: new Date(Date.now() + 20 * DAY) }); // fuera
+    add({ currentPeriodEnd: null }); // activo sin fecha (Woo/PayPal)
+    add({ entitled: false, currentPeriodEnd: in3 }); // no activo → no cuenta
+    const d = await service.getSubscriptionDigest(TENANT, 7);
+    expect(d.activeCount).toBe(3);
+    expect(d.upcoming).toHaveLength(1);
+    expect(d.upcoming[0]!.currentPeriodEnd.getTime()).toBe(in3.getTime());
+  });
+
+  it('listSubscribersToWarn: respeta ventana e idempotencia por periodo', async () => {
+    const { service, add } = make();
+    const in5 = new Date(Date.now() + 5 * DAY);
+    add({ id: 'a', currentPeriodEnd: in5 });
+    add({ id: 'b', currentPeriodEnd: in5, renewalWarnedPeriodEnd: in5 }); // ya avisado
+    add({ id: 'c', currentPeriodEnd: new Date(Date.now() + 20 * DAY) }); // fuera
+    const ids = (await service.listSubscribersToWarn(TENANT, 7)).map((x) => x.id);
+    expect(ids).toContain('a');
+    expect(ids).not.toContain('b');
+    expect(ids).not.toContain('c');
+  });
+
+  it('markRenewalWarned deja fuera al suscriptor en el siguiente barrido', async () => {
+    const { service, add } = make();
+    const in5 = new Date(Date.now() + 5 * DAY);
+    add({ id: 'x', currentPeriodEnd: in5 });
+    await service.markRenewalWarned('x', in5);
+    const ids = (await service.listSubscribersToWarn(TENANT, 7)).map((x) => x.id);
+    expect(ids).not.toContain('x');
+  });
+
+  it('cancel portal url: set + get (persistente por tenant)', async () => {
+    const { service } = make();
+    expect(await service.getCancelPortalUrl(TENANT)).toBeNull();
+    await service.setCancelPortalUrl(TENANT, 'https://billing.stripe.com/p/login/abc', null);
+    expect(await service.getCancelPortalUrl(TENANT)).toBe('https://billing.stripe.com/p/login/abc');
+    await service.setCancelPortalUrl(TENANT, null, null);
+    expect(await service.getCancelPortalUrl(TENANT)).toBeNull();
   });
 });
