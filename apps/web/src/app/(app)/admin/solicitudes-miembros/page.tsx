@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -40,10 +41,13 @@ export default function SolicitudesMiembrosPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // match null = email a un solicitante SIN suscripción detectada (sin enlace de renovación).
   const [emailFor, setEmailFor] = useState<{
     req: MemberRequest;
-    match: MemberSubscriptionMatch;
+    match: MemberSubscriptionMatch | null;
   } | null>(null);
+  // Email alternativo por solicitud, para mapear una suscripción registrada con otro email.
+  const [mapEmail, setMapEmail] = useState<Record<string, string>>({});
 
   /**
    * Tier del catálogo cuyo nombre coincide con algún plan de una suscripción
@@ -91,13 +95,13 @@ export default function SolicitudesMiembrosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function rerun(userId: string) {
+  async function rerun(userId: string, email?: string) {
     const t = authStorage.getAccessToken();
     if (!t) return;
     setBusy(`rerun:${userId}`);
     try {
       setError(null);
-      await rerunMemberLookup(t, userId);
+      await rerunMemberLookup(t, userId, email);
       await load();
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos volver a consultar.');
@@ -201,6 +205,17 @@ export default function SolicitudesMiembrosPage() {
                 <SubscriptionBlock
                   request={r}
                   onRemind={(match) => setEmailFor({ req: r, match })}
+                  onEmail={() => setEmailFor({ req: r, match: null })}
+                />
+
+                <MapSubscriptionRow
+                  request={r}
+                  value={mapEmail[r.userId] ?? ''}
+                  busy={busy === `rerun:${r.userId}`}
+                  onChange={(v) => setMapEmail((prev) => ({ ...prev, [r.userId]: v }))}
+                  onSearch={() =>
+                    void rerun(r.userId, (mapEmail[r.userId] ?? '').trim() || undefined)
+                  }
                 />
 
                 <div className="flex flex-wrap items-end gap-3">
@@ -246,13 +261,13 @@ export default function SolicitudesMiembrosPage() {
       {emailFor && (
         <RenewalEmailModal
           to={emailFor.req.email}
-          productName={emailFor.match.planName}
-          unitAmount={emailFor.match.unitAmount}
-          currency={emailFor.match.currency}
+          productName={emailFor.match?.planName ?? null}
+          unitAmount={emailFor.match?.unitAmount ?? null}
+          currency={emailFor.match?.currency ?? null}
           loadContext={async () => {
             const t = authStorage.getAccessToken();
             if (!t) throw new Error('No hay sesión activa.');
-            return memberRenewalContext(t, emailFor.req.userId, emailFor.match.subscriptionId);
+            return memberRenewalContext(t, emailFor.req.userId, emailFor.match?.subscriptionId);
           }}
           send={async (payload) => {
             const t = authStorage.getAccessToken();
@@ -270,13 +285,66 @@ export default function SolicitudesMiembrosPage() {
   );
 }
 
+/**
+ * Fila para mapear la suscripción por OTRO email, cuando el miembro se registró con
+ * un email pero pagó con otro. Re-consulta el lookup por ese email y lo persiste.
+ */
+function MapSubscriptionRow({
+  request,
+  value,
+  busy,
+  onChange,
+  onSearch,
+}: {
+  request: MemberRequest;
+  value: string;
+  busy: boolean;
+  onChange: (v: string) => void;
+  onSearch: () => void;
+}) {
+  const usedEmail = request.lookup?.email ?? null;
+  const mapped = usedEmail && usedEmail.toLowerCase() !== request.email.toLowerCase();
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg border border-dashed border-border bg-surface-2 p-3">
+      {mapped ? (
+        <p className="text-xs text-brand-700">
+          Suscripción consultada por <strong>{usedEmail}</strong> (mapeado).
+        </p>
+      ) : null}
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-[16rem] flex-1">
+          <Label htmlFor={`mapemail-${request.userId}`} className="text-xs text-text-muted">
+            ¿La suscripción está a otro email? Mapéala aquí
+          </Label>
+          <Input
+            id={`mapemail-${request.userId}`}
+            type="email"
+            placeholder="email de la suscripción…"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && value.trim()) onSearch();
+            }}
+          />
+        </div>
+        <Button variant="secondary" onClick={onSearch} disabled={busy || !value.trim()}>
+          {busy ? 'Buscando…' : 'Buscar suscripción'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /** Bloque de estado de suscripción de una solicitud. */
 function SubscriptionBlock({
   request,
   onRemind,
+  onEmail,
 }: {
   request: MemberRequest;
   onRemind: (match: MemberSubscriptionMatch) => void;
+  /** Enviar un email al solicitante SIN suscripción detectada (sin enlace de renovación). */
+  onEmail: () => void;
 }) {
   const lookup = request.lookup;
   if (!lookup || lookup.status === 'PENDING') {
@@ -300,9 +368,14 @@ function SubscriptionBlock({
   const results = lookup.results ?? [];
   if (lookup.matchCount === 0 || results.length === 0) {
     return (
-      <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text-muted">
-        Sin suscripción detectada en las cuentas de pago conectadas.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2">
+        <span className="text-sm text-text-muted">
+          Sin suscripción detectada en las cuentas de pago conectadas.
+        </span>
+        <Button variant="ghost" size="sm" onClick={onEmail}>
+          Enviar email
+        </Button>
+      </div>
     );
   }
   // ¿Alguna suscripción concede acceso hoy? Si todas son bajas/impagos, lo decimos

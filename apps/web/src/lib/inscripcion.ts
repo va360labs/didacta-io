@@ -152,6 +152,8 @@ export interface MemberRequest {
     results: MemberSubscriptionMatch[];
     error: string | null;
     completedAt: string | null;
+    /** Email con el que se consultó (puede diferir del de registro si el admin lo mapeó). */
+    email: string | null;
   } | null;
 }
 
@@ -167,14 +169,22 @@ export async function listMemberRequests(bearer: string): Promise<MemberRequest[
   return res.requests;
 }
 
-/** Re-lanza el lookup de suscripción de un solicitante en todas las cuentas conectadas. */
+/**
+ * Re-lanza el lookup de suscripción de un solicitante. Si se pasa `email`, consulta
+ * por ESE email (para mapear una suscripción registrada con otro email) y lo persiste.
+ */
 export async function rerunMemberLookup(
   bearer: string,
   userId: string,
-): Promise<{ matches: MemberSubscriptionMatch[]; failures: Array<{ connectionName: string }> }> {
+  email?: string,
+): Promise<{
+  matches: MemberSubscriptionMatch[];
+  failures: Array<{ connectionName: string }>;
+  email: string;
+}> {
   return apiFetch(
     `${ADMIN_BASE}/requests/${encodeURIComponent(userId)}/rerun`,
-    { method: 'POST' },
+    { method: 'POST', body: JSON.stringify(email ? { email } : {}) },
     bearer,
   );
 }
@@ -200,11 +210,11 @@ export async function decideMemberRequest(
 export async function memberRenewalContext(
   bearer: string,
   userId: string,
-  subscriptionId: string,
+  subscriptionId?: string,
 ): Promise<{ template: RenewalTemplate; renewalUrl: string | null }> {
-  const qs = encodeURIComponent(subscriptionId);
+  const q = subscriptionId ? `?subscriptionId=${encodeURIComponent(subscriptionId)}` : '';
   return apiFetch(
-    `${ADMIN_BASE}/requests/${encodeURIComponent(userId)}/renewal-context?subscriptionId=${qs}`,
+    `${ADMIN_BASE}/requests/${encodeURIComponent(userId)}/renewal-context${q}`,
     { method: 'GET' },
     bearer,
   );
