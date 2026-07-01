@@ -40,7 +40,43 @@ interface Props {
   onLogout: () => void;
 }
 
-export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
+export function AppSidebar(props: Props) {
+  // Rail persistente SOLO en escritorio (≥lg). En móvil el sidebar se sirve como
+  // drawer off-canvas (MobileNavDrawer), que reutiliza `SidebarContent`.
+  return (
+    <aside
+      className="sticky top-0 hidden h-dvh w-65 shrink-0 flex-col self-start overflow-hidden text-white lg:flex"
+      style={{ backgroundColor: 'var(--sidebar-bg, #0D1B2A)' }}
+    >
+      <SidebarContent {...props} showVersionBanner />
+    </aside>
+  );
+}
+
+interface SidebarContentProps extends Props {
+  /** Cierra el drawer al navegar (solo móvil). En el rail de escritorio no se pasa. */
+  onNavigate?: () => void;
+  /** Muestra un botón de cierre en la cabecera (solo en el drawer móvil). */
+  onClose?: () => void;
+  /** Renderiza el banner de nueva versión (solo en el rail de escritorio). */
+  showVersionBanner?: boolean;
+}
+
+/**
+ * Contenido interno del sidebar — compartido por el rail de escritorio
+ * (`AppSidebar`) y el drawer móvil (`MobileNavDrawer`). Se renderiza dentro de
+ * un contenedor `flex flex-col` (el `<aside>` de cada variante), por eso
+ * devuelve un fragmento: cabecera + buscador + nav (scroll) + tira de usuario.
+ */
+export function SidebarContent({
+  groups,
+  pathname,
+  session,
+  onLogout,
+  onNavigate,
+  onClose,
+  showVersionBanner,
+}: SidebarContentProps) {
   const theme = useTenantTheme();
   const logoUrl = theme?.logoUrl ?? null;
   // Nombre visible de la organización: el nombre real del tenant (editable en
@@ -59,13 +95,10 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
   const role = session.user.roles[0] ?? 'alumno';
 
   return (
-    <aside
-      className="sticky top-0 flex h-dvh w-65 shrink-0 flex-col self-start overflow-hidden text-white"
-      style={{ backgroundColor: 'var(--sidebar-bg, #0D1B2A)' }}
-    >
+    <>
       {/* ── Community header ── */}
-      <div className="border-b border-white/8 px-4 py-3.5">
-        <button type="button" className="flex w-full items-center gap-3 text-left">
+      <div className="flex items-center gap-2 border-b border-white/8 px-4 py-3.5">
+        <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -96,6 +129,16 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
             <path d="m6 9 6 6 6-6" />
           </svg>
         </button>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar menú"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white/40 transition-colors hover:bg-white/8 hover:text-white/80"
+          >
+            <Icon name="x" size={18} />
+          </button>
+        ) : null}
       </div>
 
       {/* ── Search ── */}
@@ -132,7 +175,10 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
                 section.onAdd ? (
                   <button
                     type="button"
-                    onClick={section.onAdd}
+                    onClick={() => {
+                      section.onAdd?.();
+                      onNavigate?.();
+                    }}
                     aria-label={`Añadir a ${section.label}`}
                     className="grid h-4 w-4 place-items-center rounded text-white/25 transition-colors hover:text-white/60"
                   >
@@ -150,6 +196,7 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
                 ) : section.canAddHref ? (
                   <Link
                     href={section.canAddHref as never}
+                    onClick={onNavigate}
                     aria-label={`Añadir a ${section.label}`}
                     className="grid h-4 w-4 place-items-center rounded text-white/25 transition-colors hover:text-white/60"
                   >
@@ -193,6 +240,7 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
                 <Link
                   key={item.href}
                   href={item.href as never}
+                  onClick={onNavigate}
                   className={
                     isActive
                       ? 'flex items-center gap-2.5 rounded-[10px] border border-[rgba(46,125,206,0.30)] bg-[rgba(46,125,206,0.22)] px-2.5 py-1.75 text-[13px] font-semibold text-white'
@@ -236,6 +284,7 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
         <div className="flex items-center gap-1.5">
           <Link
             href={'/cuenta' as never}
+            onClick={onNavigate}
             title="Mi perfil"
             aria-label="Mi perfil"
             className={
@@ -271,7 +320,10 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
           </Link>
           <button
             type="button"
-            onClick={onLogout}
+            onClick={() => {
+              onNavigate?.();
+              onLogout();
+            }}
             aria-label="Cerrar sesión"
             title="Cerrar sesión"
             className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-white/30 transition-colors hover:bg-white/8 hover:text-white/60"
@@ -289,8 +341,8 @@ export function AppSidebar({ groups, pathname, session, onLogout }: Props) {
           </button>
         </div>
       </div>
-      <VersionUpdateBanner />
-    </aside>
+      {showVersionBanner ? <VersionUpdateBanner /> : null}
+    </>
   );
 }
 
