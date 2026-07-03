@@ -61,10 +61,17 @@ function readAsBase64(file: File): Promise<string> {
   });
 }
 
+/** Ajustes de optimización que reenviamos al backend (auto-optimiza por defecto). */
+export interface UploadOptimizeOptions {
+  maxWidth?: number;
+  quality?: number;
+}
+
 async function callUploadEndpoint(
   base64: string,
   filename: string,
   contentType: string,
+  optimize?: UploadOptimizeOptions,
 ): Promise<string> {
   const token = authStorage.getAccessToken();
   if (!token) throw new Error('No autenticado');
@@ -75,7 +82,12 @@ async function callUploadEndpoint(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ data: base64, filename, contentType }),
+    body: JSON.stringify({
+      data: base64,
+      filename,
+      contentType,
+      ...(optimize ? { optimize: { enabled: true, ...optimize } } : {}),
+    }),
   });
 
   if (!res.ok) {
@@ -87,7 +99,10 @@ async function callUploadEndpoint(
   return result.url;
 }
 
-export async function uploadCommunityImage(file: File): Promise<string> {
+export async function uploadCommunityImage(
+  file: File,
+  optimize?: UploadOptimizeOptions,
+): Promise<string> {
   if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
     throw new Error('Tipo de imagen no admitido. Usa PNG, JPG, WebP, GIF o SVG.');
   }
@@ -95,7 +110,7 @@ export async function uploadCommunityImage(file: File): Promise<string> {
     throw new Error('La imagen supera el límite de 5 MB.');
   }
   const base64 = await readAsBase64(file);
-  return callUploadEndpoint(base64, file.name, file.type);
+  return callUploadEndpoint(base64, file.name, file.type, optimize);
 }
 
 export async function uploadCommunityFile(file: File): Promise<{ url: string; name: string }> {

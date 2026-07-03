@@ -45,7 +45,8 @@ export function AvatarUpload({
     setError(null);
     setUploading(true);
     try {
-      const url = await uploadCommunityImage(file);
+      // Los avatares se muestran pequeños: 512px basta y ahorra mucho peso.
+      const url = await uploadCommunityImage(file, { maxWidth: 512 });
       onChange(url);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No pudimos subir la imagen.');
