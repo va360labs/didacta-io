@@ -430,6 +430,9 @@ table,
   color: var(--color-text);
   font-size: 1rem;
   line-height: 1.65;
+  /* Rompe palabras/URLs largas para que el contenido de lección no desborde a lo
+   * ancho en móvil (junto con min-w-0 en la columna del reproductor). */
+  overflow-wrap: break-word;
 }
 
 .lesson-prose h1,
@@ -570,6 +573,9 @@ table,
 /* Tablas — wrappers WP (.wp-block-table > figure) y tablas standalone. */
 .lesson-prose figure {
   margin: 1.25rem 0;
+  /* Tablas anchas: scroll horizontal DENTRO del figure en vez de desbordar la
+   * página en móvil. */
+  overflow-x: auto;
 }
 .lesson-prose figure > table {
   margin: 0;

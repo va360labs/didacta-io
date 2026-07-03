@@ -111,13 +111,13 @@ export function ThreadCard({
                 <span className="text-xs text-text-subtle">{relTime(post.createdAt)}</span>
               </div>
               <h3
-                className="font-display text-lg font-semibold text-text"
+                className="font-display text-lg font-semibold wrap-break-word text-text"
                 style={{ letterSpacing: '-0.01em' }}
               >
                 {post.title}
               </h3>
               {cleanBody ? (
-                <p className="line-clamp-4 whitespace-pre-line text-sm leading-relaxed text-text-muted">
+                <p className="line-clamp-4 whitespace-pre-line wrap-break-word text-sm leading-relaxed text-text-muted">
                   <RichBody body={cleanBody} />
                 </p>
               ) : null}

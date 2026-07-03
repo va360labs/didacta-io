@@ -35,6 +35,8 @@ type ConnectionRow = Awaited<ReturnType<PrismaClient['modPaymentConnectionsConne
 export const PAYMENT_CONNECTIONS_MODULE = 'payment-connections';
 /** Key en tenant_setting donde se guarda la plantilla del email de renovación. */
 const RENEWAL_TEMPLATE_KEY = 'renewal-template';
+/** Key en tenant_setting con la URL del Customer Portal de Stripe (enlace de cancelación). */
+const CANCEL_PORTAL_URL_KEY = 'cancel-portal-url';
 /** Estados Stripe que cuentan como "suscripción activa" para reconciliar. */
 export const STRIPE_ACTIVE_STATUSES = ['active', 'trialing', 'past_due'] as const;
 /** Tope defensivo de páginas por estado al listar suscripciones. */
@@ -293,6 +295,25 @@ export const DEFAULT_RENEWAL_TEMPLATE: RenewalTemplate = {
     'Puedes renovarla desde este enlace:\n\n{enlace}\n\n' +
     'Si ya lo has resuelto, ignora este mensaje. Gracias.',
 };
+
+/** Suscripción próxima a renovarse/caducar (para el resumen diario del admin). */
+export interface UpcomingRenewal {
+  userEmail: string;
+  productName: string | null;
+  currentPeriodEnd: Date;
+  unitAmount: number | null;
+  currency: string | null;
+}
+
+/** Suscriptor a avisar de su próxima renovación (aviso 7 días antes). */
+export interface SubscriberToWarn {
+  id: string;
+  userEmail: string;
+  productName: string | null;
+  currentPeriodEnd: Date;
+  unitAmount: number | null;
+  currency: string | null;
+}
 
 export class PaymentConnectionsService {
   constructor(
@@ -823,6 +844,125 @@ export class PaymentConnectionsService {
       actorId,
     });
     return template;
+  }
+
+  /**
+   * URL del Customer Portal de Stripe del tenant. Va en el aviso de "se renovará en
+   * 7 días" para que el cliente pueda cancelar solo (las keys son read-only, no
+   * podemos generar la sesión por API). null si no está configurada.
+   */
+  async getCancelPortalUrl(tenantId: string): Promise<string | null> {
+    const v = await this.config.get<string>(
+      tenantId,
+      PAYMENT_CONNECTIONS_MODULE,
+      CANCEL_PORTAL_URL_KEY,
+    );
+    return typeof v === 'string' && v.trim() ? v.trim() : null;
+  }
+
+  async setCancelPortalUrl(
+    tenantId: string,
+    url: string | null,
+    actorId: string | null,
+  ): Promise<void> {
+    await this.config.set(tenantId, PAYMENT_CONNECTIONS_MODULE, CANCEL_PORTAL_URL_KEY, url ?? '', {
+      actorId,
+    });
+  }
+
+  /**
+   * Datos del resumen diario para el admin: nº de suscripciones activas (entitled)
+   * y las que se renuevan/caducan en los próximos `days` días (con fecha e importe).
+   * Solo las que tienen `currentPeriodEnd` (Stripe; Woo/PayPal suelen venir sin fecha).
+   */
+  async getSubscriptionDigest(
+    tenantId: string,
+    days: number,
+  ): Promise<{ activeCount: number; upcoming: UpcomingRenewal[] }> {
+    const now = new Date();
+    const until = new Date(now.getTime() + days * 24 * 3600 * 1000);
+    const [activeCount, rows] = await Promise.all([
+      this.prisma.modPaymentConnectionsSubscriber.count({ where: { tenantId, entitled: true } }),
+      this.prisma.modPaymentConnectionsSubscriber.findMany({
+        where: { tenantId, entitled: true, currentPeriodEnd: { gt: now, lte: until } },
+        orderBy: { currentPeriodEnd: 'asc' },
+        take: 500,
+        select: {
+          userEmail: true,
+          productName: true,
+          currentPeriodEnd: true,
+          unitAmount: true,
+          currency: true,
+        },
+      }),
+    ]);
+    return {
+      activeCount,
+      upcoming: rows.map((r) => ({
+        userEmail: r.userEmail,
+        productName: r.productName,
+        currentPeriodEnd: r.currentPeriodEnd as Date,
+        unitAmount: r.unitAmount,
+        currency: r.currency,
+      })),
+    };
+  }
+
+  /**
+   * Suscriptores a los que hay que avisar de que se renuevan en ≤`days` días y que
+   * AÚN no se avisaron para este periodo (idempotencia por `renewalWarnedPeriodEnd`).
+   */
+  async listSubscribersToWarn(tenantId: string, days: number): Promise<SubscriberToWarn[]> {
+    const now = new Date();
+    const until = new Date(now.getTime() + days * 24 * 3600 * 1000);
+    const rows = await this.prisma.modPaymentConnectionsSubscriber.findMany({
+      where: { tenantId, entitled: true, currentPeriodEnd: { gt: now, lte: until } },
+      take: 1000,
+      select: {
+        id: true,
+        userEmail: true,
+        productName: true,
+        currentPeriodEnd: true,
+        unitAmount: true,
+        currency: true,
+        renewalWarnedPeriodEnd: true,
+      },
+    });
+    return rows
+      .filter(
+        (r) =>
+          r.currentPeriodEnd != null &&
+          r.renewalWarnedPeriodEnd?.getTime() !== r.currentPeriodEnd.getTime(),
+      )
+      .map((r) => ({
+        id: r.id,
+        userEmail: r.userEmail,
+        productName: r.productName,
+        currentPeriodEnd: r.currentPeriodEnd as Date,
+        unitAmount: r.unitAmount,
+        currency: r.currency,
+      }));
+  }
+
+  /** Marca que ya se avisó a un suscriptor de la renovación de este periodo. */
+  async markRenewalWarned(subscriberId: string, periodEnd: Date): Promise<void> {
+    await this.prisma.modPaymentConnectionsSubscriber.update({
+      where: { id: subscriberId },
+      data: { renewalWarnedPeriodEnd: periodEnd },
+    });
+  }
+
+  /** Emails de los admins (super_admin/tenant_admin) ACTIVE — destinatarios del resumen diario. */
+  async listTenantAdminEmails(tenantId: string): Promise<string[]> {
+    const users = await this.prisma.user.findMany({
+      where: {
+        tenantId,
+        status: 'ACTIVE',
+        roles: { some: { role: { name: { in: ['super_admin', 'tenant_admin'] } } } },
+      },
+      select: { email: true },
+    });
+    return [...new Set(users.map((u) => u.email))];
   }
 
   /**

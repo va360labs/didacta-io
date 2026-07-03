@@ -448,6 +448,29 @@ export const subscriptionsDashboardApi = {
       bearer,
     );
   },
+  /** URL del Customer Portal de Stripe (enlace de cancelación de los avisos de 7 días). */
+  async getCancelPortalUrl(bearer: string): Promise<{ url: string | null }> {
+    return apiFetch<{ url: string | null }>(
+      `${BASE}/subscriptions-dashboard/cancel-portal-url`,
+      { method: 'GET' },
+      bearer,
+    );
+  },
+  async setCancelPortalUrl(bearer: string, url: string): Promise<{ url: string | null }> {
+    return apiFetch<{ url: string | null }>(
+      `${BASE}/subscriptions-dashboard/cancel-portal-url`,
+      { method: 'PUT', body: JSON.stringify({ url }) },
+      bearer,
+    );
+  },
+  /** Dispara ahora el barrido diario (resumen admin + avisos 7 días). QA/manual. */
+  async runDailyNow(bearer: string): Promise<{ ok: boolean }> {
+    return apiFetch<{ ok: boolean }>(
+      `${BASE}/subscriptions-dashboard/daily/run-now`,
+      { method: 'POST', body: '{}' },
+      bearer,
+    );
+  },
 };
 
 /** Plantilla del email de renovación (asunto + cuerpo). */

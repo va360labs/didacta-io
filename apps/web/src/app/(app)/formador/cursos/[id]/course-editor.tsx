@@ -464,6 +464,13 @@ function LessonRow({
   );
 }
 
+/** Formatea un tamaño en bytes a KB/MB legible (para el aviso de optimización). */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function MetadataEditor({
   course,
   onSaved,
@@ -483,6 +490,8 @@ function MetadataEditor({
   const [featuredVideoUrl, setFeaturedVideoUrl] = useState(course.featuredVideoUrl ?? '');
   const [externalPurchaseUrl, setExternalPurchaseUrl] = useState(course.externalPurchaseUrl ?? '');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
+  const [optimizeNote, setOptimizeNote] = useState<string | null>(null);
   const [managedCategories, setManagedCategories] = useState<CourseCategory[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -494,13 +503,37 @@ function MetadataEditor({
     if (!file) return;
     setUploadingImage(true);
     setError(null);
+    setOptimizeNote(null);
     try {
-      const result = await storageApi.uploadImage(file);
+      // El backend optimiza a WebP; 1600px basta para el hero del curso.
+      const result = await storageApi.uploadImage(file, { optimize: { maxWidth: 1600 } });
       setThumbnailUrl(result.url);
     } catch (err) {
       setError(err instanceof ApiHttpError ? err.message : 'No pudimos subir la imagen.');
     } finally {
       setUploadingImage(false);
+    }
+  }
+
+  async function handleOptimizeExisting() {
+    if (!thumbnailUrl) return;
+    setOptimizing(true);
+    setError(null);
+    setOptimizeNote(null);
+    try {
+      const res = await storageApi.optimizeExisting(thumbnailUrl, { maxWidth: 1600 });
+      if (res.optimized) {
+        setThumbnailUrl(res.url);
+        setOptimizeNote(
+          `Optimizada: ${formatBytes(res.previousSize)} → ${formatBytes(res.size)}. Pulsa «Guardar cambios» para aplicarla.`,
+        );
+      } else {
+        setOptimizeNote('La imagen ya estaba optimizada; no hacía falta reprocesarla.');
+      }
+    } catch (err) {
+      setError(err instanceof ApiHttpError ? err.message : 'No pudimos optimizar la imagen.');
+    } finally {
+      setOptimizing(false);
     }
   }
 
@@ -670,22 +703,41 @@ function MetadataEditor({
                     className="block w-full text-xs text-text-muted file:mr-3 file:rounded-md file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-brand-700"
                   />
                   {thumbnailUrl ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setThumbnailUrl('')}
-                      disabled={uploadingImage}
-                    >
-                      Quitar
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void handleOptimizeExisting()}
+                        disabled={uploadingImage || optimizing}
+                        title="Recomprimir a WebP y redimensionar para que cargue más rápido"
+                      >
+                        {optimizing ? 'Optimizando…' : 'Optimizar'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setThumbnailUrl('');
+                          setOptimizeNote(null);
+                        }}
+                        disabled={uploadingImage || optimizing}
+                      >
+                        Quitar
+                      </Button>
+                    </>
                   ) : null}
                 </div>
               </div>
               {uploadingImage ? (
                 <p className="text-xs text-text-subtle">Subiendo imagen…</p>
+              ) : optimizeNote ? (
+                <p className="text-xs text-success-700">{optimizeNote}</p>
               ) : (
-                <p className="text-xs text-text-subtle">PNG, JPG, WebP o GIF (máx. 10 MB).</p>
+                <p className="text-xs text-text-subtle">
+                  PNG, JPG, WebP o GIF (máx. 10 MB). Se optimiza automáticamente al subirla.
+                </p>
               )}
             </div>
 

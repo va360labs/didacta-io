@@ -2575,6 +2575,9 @@ model ModPaymentConnectionsSubscriber {
   currentPeriodEnd       DateTime? @map("current_period_end")
   /// Enlace de renovación read-only (Stripe hosted_invoice_url); se rellena lazy.
   renewalUrl             String?   @map("renewal_url")
+  /// `currentPeriodEnd` para el que ya se mandó el aviso de "se renovará en 7 días".
+  /// Evita reenviar el mismo aviso cada día (idempotencia por periodo).
+  renewalWarnedPeriodEnd DateTime? @map("renewal_warned_period_end")
   /// Última corrida del sync en la que se vio este suscriptor (para churn).
   lastSeenAt             DateTime  @default(now()) @map("last_seen_at")
   createdAt              DateTime  @default(now()) @map("created_at")

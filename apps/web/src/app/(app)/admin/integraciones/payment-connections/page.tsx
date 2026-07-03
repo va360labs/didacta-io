@@ -27,6 +27,7 @@ import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { SubscriptionsDashboard } from './subscriptions-dashboard';
+import { SubscriptionAlertsSettings } from './subscription-alerts-settings';
 import {
   paymentConnectionsApi,
   paymentTiersApi,
@@ -62,6 +63,7 @@ export default function PaymentConnectionsPage() {
       {isSuperAdmin ? (
         <>
           <SubscriptionsDashboard />
+          <SubscriptionAlertsSettings />
           <PaymentConnectionsPanel />
         </>
       ) : (

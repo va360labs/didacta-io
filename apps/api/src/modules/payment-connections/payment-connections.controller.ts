@@ -6,6 +6,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  HttpCode,
   NotFoundException,
   Param,
   Patch,
@@ -33,6 +34,7 @@ import { SmtpAdapterService } from '../smtp-adapter.service';
 import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { ModuleContextFactory } from '../module-context.factory';
+import { SubscriptionsDailyWorker } from './subscriptions-daily.worker';
 
 /**
  * Endpoints admin de mod.payment-connections (todos super_admin):
@@ -145,6 +147,18 @@ const renewalEmailSchema = z
   .strict();
 type RenewalEmailDto = z.infer<typeof renewalEmailSchema>;
 
+/** URL del Customer Portal de Stripe (o cadena vacía para borrarla). */
+const cancelPortalSchema = z
+  .object({
+    url: z
+      .string()
+      .trim()
+      .max(500)
+      .refine((v) => v === '' || /^https?:\/\//i.test(v), 'Debe ser una URL http(s) o vacío'),
+  })
+  .strict();
+type CancelPortalDto = z.infer<typeof cancelPortalSchema>;
+
 @ApiTags('Payment Connections · Admin')
 @Controller('modules/payment-connections')
 @UseGuards(JwtAuthGuard)
@@ -156,6 +170,7 @@ export class PaymentConnectionsController {
     private readonly contextFactory: ModuleContextFactory,
     private readonly smtp: SmtpAdapterService,
     private readonly smtpResolver: TenantSmtpResolverService,
+    private readonly dailyWorker: SubscriptionsDailyWorker,
   ) {}
 
   private assertSuperAdmin(user: SessionClaims | undefined): SessionClaims {
@@ -618,6 +633,44 @@ export class PaymentConnectionsController {
     return this.registry
       .getPaymentConnectionsService()
       .setRenewalTemplate(user.tenantId, dto, user.sub);
+  }
+
+  @Get('subscriptions-dashboard/cancel-portal-url')
+  @ApiOperation({
+    summary: 'URL del Customer Portal de Stripe (enlace de cancelación de los avisos).',
+  })
+  async getCancelPortalUrl(@CurrentUser() rawUser: SessionClaims | undefined) {
+    const user = this.assertSuperAdmin(rawUser);
+    const url = await this.registry
+      .getPaymentConnectionsService()
+      .getCancelPortalUrl(user.tenantId);
+    return { url };
+  }
+
+  @Put('subscriptions-dashboard/cancel-portal-url')
+  @ApiOperation({
+    summary: 'Configura la URL del Customer Portal de Stripe (o vacío para borrar).',
+  })
+  async putCancelPortalUrl(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(cancelPortalSchema)) dto: CancelPortalDto,
+  ) {
+    const user = this.assertSuperAdmin(rawUser);
+    await this.registry
+      .getPaymentConnectionsService()
+      .setCancelPortalUrl(user.tenantId, dto.url || null, user.sub);
+    return { url: dto.url || null };
+  }
+
+  @Post('subscriptions-dashboard/daily/run-now')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Dispara ahora el barrido diario (resumen admin + avisos 7 días). Solo QA/manual.',
+  })
+  async runDailyNow(@CurrentUser() rawUser: SessionClaims | undefined) {
+    this.assertSuperAdmin(rawUser);
+    await this.dailyWorker.triggerNow();
+    return { ok: true };
   }
 }
 

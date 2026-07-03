@@ -37,6 +37,9 @@ export default function CourseAlumnoPage() {
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
   const [progressByLesson, setProgressByLesson] = useState<Record<string, boolean>>({});
+  // Posición de reanudación por lección (segundos) desde el backend, para
+  // arrancar el vídeo donde el alumno lo dejó. 0/ausente = desde el inicio.
+  const [resumeByLesson, setResumeByLesson] = useState<Record<string, number>>({});
   // Disponibilidad por drip: lessonId → { availableAt ISO, available }. Las
   // lecciones que NO aparecen están libres (sin gating).
   const [availability, setAvailability] = useState<
@@ -88,12 +91,16 @@ export default function CourseAlumnoPage() {
 
       if (progressList) {
         const map: Record<string, boolean> = {};
+        const resumeMap: Record<string, number> = {};
         for (const p of progressList) {
           if (p.completed) map[p.lessonId] = true;
+          if (p.resumePositionSec > 0) resumeMap[p.lessonId] = p.resumePositionSec;
         }
         setProgressByLesson(map);
+        setResumeByLesson(resumeMap);
       } else {
         setProgressByLesson({});
+        setResumeByLesson({});
       }
 
       setAvailability(avail?.drip ? avail.lessons : {});
@@ -407,7 +414,7 @@ export default function CourseAlumnoPage() {
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-        <Card className="self-start lg:max-h-[78dvh] lg:overflow-auto p-0">
+        <Card className="min-w-0 self-start p-0 lg:max-h-[78dvh] lg:overflow-auto">
           <CardContent className="p-5">
             <h3 className="font-display text-base font-semibold text-text">Contenido</h3>
             <p className="mt-0.5 text-xs text-text-muted">
@@ -493,7 +500,7 @@ export default function CourseAlumnoPage() {
           </CardContent>
         </Card>
 
-        <main>
+        <main className="min-w-0">
           {!enrollment ? (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
@@ -533,7 +540,7 @@ export default function CourseAlumnoPage() {
                       .content ?? {},
                 }}
                 enrollmentId={enrollment.id}
-                initialResumePositionSec={0}
+                initialResumePositionSec={resumeByLesson[activeLesson.id] ?? 0}
                 initialCompleted={Boolean(progressByLesson[activeLesson.id])}
                 onProgress={(percent) => {
                   setEnrollment((e) => (e ? { ...e, progressPercent: percent } : e));

@@ -39,18 +39,28 @@ export function useTenantTheme(): TenantTheme | null {
  * no sabe a qué tenant pertenece el visitante.
  */
 export function TenantThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<TenantTheme | null>(() => {
-    if (typeof window === 'undefined') return null;
-    const session = authStorage.getSession();
-    if (!session) return null;
-    return themeCache.load(session.user.tenantId);
-  });
+  // IMPORTANTE: el estado inicial DEBE ser null tanto en SSR como en el primer
+  // render del cliente. Si aquí leemos la cache de localStorage, el <style> +
+  // favicon del tenant aparecen en el cliente pero NO en el HTML del servidor
+  // (que no tiene window) → hydration mismatch (React #418) que inunda la
+  // consola de los usuarios con branding cacheado. La cache se aplica DESPUÉS
+  // del mount (useEffect de abajo), donde ya no rompe la hidratación.
+  const [theme, setTheme] = useState<TenantTheme | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const session = authStorage.getSession();
     const token = authStorage.getAccessToken();
-    if (!session || !token) return;
+    if (!session) return;
+
+    // 1) Cache local primero (sincrónica, sin esperar red): reaplica el branding
+    //    del tenant de inmediato tras el mount, sin FOUC perceptible y sin
+    //    romper la hidratación (esto corre ya en el cliente montado).
+    const cached = themeCache.load(session.user.tenantId);
+    if (cached) setTheme(cached);
+
+    // 2) Refresco contra API si hay token.
+    if (!token) return;
 
     void (async () => {
       try {

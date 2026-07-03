@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { authStorage } from '@/lib/auth-storage';
 import { adminUsersApi, type UserListItem } from '@/lib/admin-users';
@@ -151,9 +152,10 @@ export default function MiembrosPage() {
               const role = primaryRole(u.roles);
               const ini = initials(u.name, u.email);
               return (
-                <div
+                <Link
                   key={u.id}
-                  className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4 transition-shadow hover:shadow-sm"
+                  href={`/u/${u.id}` as never}
+                  className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4 transition-shadow hover:border-border-strong hover:shadow-sm"
                 >
                   <div
                     className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-[11px] font-bold ${ROLE_STYLE[role] ?? 'bg-bg-subtle text-text-muted'}`}
@@ -163,7 +165,7 @@ export default function MiembrosPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-sm font-semibold text-text">
-                        {u.name ?? u.email}
+                        {u.name?.trim() || 'Miembro'}
                       </span>
                       <span
                         className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${ROLE_STYLE[role] ?? 'bg-bg-subtle text-text-muted'}`}
@@ -171,9 +173,8 @@ export default function MiembrosPage() {
                         {ROLE_LABELS[role] ?? role}
                       </span>
                     </div>
-                    <p className="truncate text-xs text-text-muted">{u.email}</p>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>

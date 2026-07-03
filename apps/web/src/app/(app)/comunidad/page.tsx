@@ -128,7 +128,7 @@ export default function ComunidadPage() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
         {/* Feed */}
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <Card>
             <CardContent className="flex flex-wrap items-center gap-2 p-3">
               {allTags.map((t) => {
@@ -242,7 +242,7 @@ export default function ComunidadPage() {
         </div>
 
         {/* Sidebar derecha */}
-        <aside className="flex flex-col gap-4">
+        <aside className="flex min-w-0 flex-col gap-4">
           <Card>
             <CardContent className="p-5">
               <h4 className="font-display text-base font-semibold text-text">Actividad</h4>
@@ -277,7 +277,9 @@ export default function ComunidadPage() {
                           className="block h-7 w-7 rounded-lg"
                           style={{ background: swatchColor, opacity: 0.18 }}
                         />
-                        <span className="flex-1 text-sm font-medium text-text">{t}</span>
+                        <span className="min-w-0 flex-1 wrap-break-word text-sm font-medium text-text">
+                          {t}
+                        </span>
                         <span className="text-xs text-text-subtle tabular-nums">
                           {posts?.filter((p) => p.tags.includes(t)).length ?? 0}
                         </span>

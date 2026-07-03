@@ -6,6 +6,7 @@ import { ModulesModule } from '../modules.module';
 import { PaymentConnectionsController } from './payment-connections.controller';
 import { PaymentConnectionsErrorFilter } from './payment-connections-error.filter';
 import { SubscribersSyncWorker } from './subscribers-sync.worker';
+import { SubscriptionsDailyWorker } from './subscriptions-daily.worker';
 
 /// Backend del módulo `mod.payment-connections`. Solo wiring genérico del host:
 /// el controller admin (conectar/listar/verify/desconectar/reconciliar/invitar)
@@ -21,6 +22,7 @@ import { SubscribersSyncWorker } from './subscribers-sync.worker';
   providers: [
     { provide: APP_FILTER, useClass: PaymentConnectionsErrorFilter },
     SubscribersSyncWorker,
+    SubscriptionsDailyWorker,
   ],
 })
 export class PaymentConnectionsModule {}

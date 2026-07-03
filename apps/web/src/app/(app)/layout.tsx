@@ -18,6 +18,8 @@ import { themeCache, requestThemeRefresh } from '@/lib/theming';
 import { isIconName } from '@/components/space-icon';
 import type { IconName } from '@/components/icon';
 import { CreateSpaceModal } from '@/components/create-space-modal';
+import { MobileNavDrawer } from '@/components/mobile-nav-drawer';
+import { MobileTabBar } from '@/components/mobile-tab-bar';
 
 /**
  * Shell de la app autenticada — sidebar persistente Didacta + main canvas.
@@ -187,6 +189,14 @@ function Shell({
 
   const [createSpaceOpen, setCreateSpaceOpen] = useState(false);
 
+  // Drawer de navegación móvil. Se cierra ante CUALQUIER cambio de ruta (tap en
+  // un item, botón atrás del navegador, navegación programática): el `onNavigate`
+  // de los links da el cierre inmediato y este efecto es la red de seguridad.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
   const rawSpaces = useCommunitySpaces();
   const espaciosGroup: SidebarGroup = {
     label: 'Espacios',
@@ -245,22 +255,52 @@ function Shell({
         onLogout={onLogout}
       />
 
+      {/* Drawer de navegación — solo móvil (<lg). Reutiliza el mismo sidebar. */}
+      <MobileNavDrawer
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+        groups={groups}
+        pathname={pathname ?? null}
+        session={session}
+        onLogout={onLogout}
+      />
+
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="sticky top-0 z-sticky flex h-14 items-center justify-end gap-2 border-b border-border-soft bg-surface/95 px-6 backdrop-blur">
+        <header className="sticky top-0 z-(--z-sticky) flex h-14 items-center gap-2 border-b border-border-soft bg-surface/95 px-4 backdrop-blur lg:px-6">
+          {/* Móvil: hamburguesa + marca. En escritorio el rail ya provee ambos. */}
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Abrir menú de navegación"
+            aria-expanded={mobileNavOpen}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text lg:hidden"
+          >
+            <Icon name="menu" size={18} />
+          </button>
+          <span className="min-w-0 flex-1 truncate text-sm font-bold text-text lg:hidden">
+            {tenantName}
+          </span>
+
+          {/* Empuja las acciones a la derecha (equivale al justify-end de escritorio). */}
+          <div className="hidden flex-1 lg:block" />
+
           <a
             href="/mensajes"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text"
             aria-label="Mensajes"
           >
             <Icon name="messages" size={18} />
           </a>
           <NotificationsBell />
-        </div>
+        </header>
 
-        <main className="flex-1 px-8 py-6">
+        <main className="flex-1 px-4 py-5 pb-24 sm:px-6 lg:px-8 lg:py-6 lg:pb-6">
           <div className="mx-auto max-w-[1280px]">{children}</div>
         </main>
       </div>
+
+      {/* Barra inferior de pestañas — solo móvil (<lg). */}
+      <MobileTabBar pathname={pathname ?? null} onOpenMenu={() => setMobileNavOpen(true)} />
     </div>
   );
 }
@@ -428,6 +468,7 @@ function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): SidebarG
       { href: '/admin/grupos-acceso', label: 'Grupos de acceso', icon: 'lock' },
       { href: '/admin/competencias', label: 'Competencias', icon: 'award' },
       { href: '/admin/cursos/categorias', label: 'Categorías de cursos', icon: 'book' },
+      { href: '/admin/cursos/imagenes', label: 'Imágenes de cursos', icon: 'image' },
       { href: '/admin/branding', label: 'Branding', icon: 'palette' },
       { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
     ],
