@@ -313,12 +313,14 @@ export default function CourseAlumnoPage() {
                 </div>
               </div>
             ) : course.thumbnailUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={course.thumbnailUrl}
-                alt={course.title}
-                className="h-full min-h-[260px] w-full object-cover"
-              />
+              <div className="aspect-video w-full overflow-hidden bg-subtle">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={course.thumbnailUrl}
+                  alt={course.title}
+                  className="h-full w-full object-contain"
+                />
+              </div>
             ) : (
               <div
                 className="relative flex min-h-[260px] items-end justify-end p-6"

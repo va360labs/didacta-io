@@ -76,29 +76,35 @@ export function CourseCard({ course, href }: Props) {
       className="group block rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
     >
       <Card interactive className="flex h-full flex-col overflow-hidden p-0">
-        {/* Cover */}
-        <div
-          className="relative flex h-[110px] items-end p-3.5"
-          style={{
-            background: cover ?? `url(${course.thumbnailUrl ?? ''}) center/cover`,
-          }}
-        >
-          {/* Book motif sutil — replica el SVG del UI kit. */}
-          {cover ? (
-            <svg
-              aria-hidden="true"
-              className="pointer-events-none absolute -bottom-2.5 -right-2.5 opacity-[0.18]"
-              width="120"
-              height="80"
-              viewBox="0 0 120 80"
-              fill="none"
-              stroke="#fff"
-              strokeWidth="2"
-            >
-              <path d="M10 60 Q60 30 110 60 L110 70 Q60 40 10 70 Z" />
-              <path d="M10 50 Q60 20 110 50" />
-            </svg>
-          ) : null}
+        {/* Cover 16:9 — la portada se muestra entera (object-contain) sobre un
+            fondo neutro, sin recortar el banner. Fallback: gradient Didacta. */}
+        <div className="relative aspect-video w-full overflow-hidden bg-subtle">
+          {course.thumbnailUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={course.thumbnailUrl}
+              alt=""
+              loading="lazy"
+              className="h-full w-full object-contain"
+            />
+          ) : (
+            <div className="flex h-full w-full items-end p-3.5" style={{ background: cover! }}>
+              {/* Book motif sutil — replica el SVG del UI kit. */}
+              <svg
+                aria-hidden="true"
+                className="pointer-events-none absolute -bottom-2.5 -right-2.5 opacity-[0.18]"
+                width="120"
+                height="80"
+                viewBox="0 0 120 80"
+                fill="none"
+                stroke="#fff"
+                strokeWidth="2"
+              >
+                <path d="M10 60 Q60 30 110 60 L110 70 Q60 40 10 70 Z" />
+                <path d="M10 50 Q60 20 110 50" />
+              </svg>
+            </div>
+          )}
         </div>
 
         {/* Body */}

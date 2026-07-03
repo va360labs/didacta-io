@@ -687,10 +687,10 @@ function MetadataEditor({
                   <img
                     src={thumbnailUrl}
                     alt="Imagen destacada"
-                    className="h-16 w-28 rounded-md border border-border object-cover"
+                    className="aspect-video w-28 rounded-md border border-border bg-subtle object-contain"
                   />
                 ) : (
-                  <div className="grid h-16 w-28 place-items-center rounded-md border border-dashed border-border-strong text-xs text-text-subtle">
+                  <div className="grid aspect-video w-28 place-items-center rounded-md border border-dashed border-border-strong text-xs text-text-subtle">
                     Sin imagen
                   </div>
                 )}
