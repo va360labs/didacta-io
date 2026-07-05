@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { AppSidebar, type SidebarGroup } from '@/components/app-sidebar';
+import { CommandPalette } from '@/components/command-palette';
 import { Icon } from '@/components/icon';
 import { LicenseProvider } from '@/components/license-provider';
 import { NotificationsBell } from '@/components/notifications-bell';
@@ -197,6 +198,23 @@ function Shell({
     setMobileNavOpen(false);
   }, [pathname]);
 
+  // Command palette (⌘K / Ctrl+K) — buscador de navegación global.
+  const [cmdOpen, setCmdOpen] = useState(false);
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCmdOpen((v) => !v);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  // Cierra el palette al navegar.
+  useEffect(() => {
+    setCmdOpen(false);
+  }, [pathname]);
+
   const rawSpaces = useCommunitySpaces();
   const espaciosGroup: SidebarGroup = {
     label: 'Espacios',
@@ -248,11 +266,13 @@ function Shell({
   return (
     <div className="flex min-h-dvh bg-bg-subtle">
       <CreateSpaceModal open={createSpaceOpen} onClose={() => setCreateSpaceOpen(false)} />
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} groups={groups} />
       <AppSidebar
         groups={groups}
         pathname={pathname ?? null}
         session={session}
         onLogout={onLogout}
+        onOpenSearch={() => setCmdOpen(true)}
       />
 
       {/* Drawer de navegación — solo móvil (<lg). Reutiliza el mismo sidebar. */}
@@ -263,6 +283,7 @@ function Shell({
         pathname={pathname ?? null}
         session={session}
         onLogout={onLogout}
+        onOpenSearch={() => setCmdOpen(true)}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">

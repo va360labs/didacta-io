@@ -11,6 +11,8 @@ interface Props {
   pathname: string | null;
   session: StoredSession;
   onLogout: () => void;
+  /** Abre el command palette (⌘K); cierra antes el drawer. */
+  onOpenSearch?: () => void;
 }
 
 /**
@@ -24,7 +26,15 @@ interface Props {
  * con `translate-x` para que la transición de entrada/salida sea fluida; cuando
  * está cerrado, `pointer-events-none` evita que capture toques por debajo.
  */
-export function MobileNavDrawer({ open, onClose, groups, pathname, session, onLogout }: Props) {
+export function MobileNavDrawer({
+  open,
+  onClose,
+  groups,
+  pathname,
+  session,
+  onLogout,
+  onOpenSearch,
+}: Props) {
   // Bloqueo de scroll del body + cierre con Escape mientras el drawer está abierto.
   useEffect(() => {
     if (!open) return;
@@ -73,6 +83,14 @@ export function MobileNavDrawer({ open, onClose, groups, pathname, session, onLo
           onLogout={onLogout}
           onNavigate={onClose}
           onClose={onClose}
+          onOpenSearch={
+            onOpenSearch
+              ? () => {
+                  onClose();
+                  onOpenSearch();
+                }
+              : undefined
+          }
         />
       </aside>
     </div>

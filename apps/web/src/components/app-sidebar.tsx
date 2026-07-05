@@ -38,6 +38,8 @@ interface Props {
   pathname: string | null;
   session: StoredSession;
   onLogout: () => void;
+  /** Abre el command palette (⌘K). Si no se pasa, el buscador no hace nada. */
+  onOpenSearch?: () => void;
 }
 
 export function AppSidebar(props: Props) {
@@ -75,6 +77,7 @@ export function SidebarContent({
   onLogout,
   onNavigate,
   onClose,
+  onOpenSearch,
   showVersionBanner,
 }: SidebarContentProps) {
   const theme = useTenantTheme();
@@ -143,7 +146,11 @@ export function SidebarContent({
 
       {/* ── Search ── */}
       <div className="border-b border-white/8 px-3 py-2.5">
-        <div className="flex items-center gap-2 rounded-lg bg-white/8 px-3 py-2 text-[13px] text-white/35">
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          className="flex w-full items-center gap-2 rounded-lg bg-white/8 px-3 py-2 text-[13px] text-white/35 transition-colors hover:bg-white/12 hover:text-white/55"
+        >
           <svg
             width="13"
             height="13"
@@ -156,11 +163,11 @@ export function SidebarContent({
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.35-4.35" />
           </svg>
-          <span className="flex-1">Buscar...</span>
+          <span className="flex-1 text-left">Buscar...</span>
           <kbd className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white/25">
             ⌘K
           </kbd>
-        </div>
+        </button>
       </div>
 
       {/* ── Nav sections ── */}
