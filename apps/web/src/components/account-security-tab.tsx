@@ -35,6 +35,11 @@ export function AccountSecurityTab() {
   // True si la contraseña actual es temporal (alta por inscripción externa):
   // el shell redirige aquí y mostramos un aviso explicando que debe cambiarla.
   const [mustChange, setMustChange] = useState(false);
+  // Estado real del MFA (desde el perfil) y si el usuario es admin. La tarjeta de
+  // MFA se ofrece SOLO a admins (super_admin/tenant_admin); para el resto de roles
+  // el segundo factor no se exige, así que no la mostramos para no confundir.
+  const [mfaEnabled, setMfaEnabled] = useState<boolean | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   async function loadSessions() {
     const token = authStorage.getAccessToken();
@@ -49,7 +54,18 @@ export function AccountSecurityTab() {
 
   useEffect(() => {
     void loadSessions();
-    setMustChange(authStorage.getSession()?.user.mustChangePassword ?? false);
+    const session = authStorage.getSession();
+    setMustChange(session?.user.mustChangePassword ?? false);
+    setIsAdmin(
+      session?.user.roles?.some((r) => r === 'super_admin' || r === 'tenant_admin') ?? false,
+    );
+    const token = authStorage.getAccessToken();
+    if (token) {
+      meApi
+        .getProfile(token)
+        .then((p) => setMfaEnabled(p.mfaEnabled))
+        .catch(() => setMfaEnabled(null));
+    }
   }, []);
 
   async function handleChangePassword(e: FormEvent) {
@@ -262,34 +278,50 @@ export function AccountSecurityTab() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="flex flex-wrap items-start gap-4 p-6">
-          <span
-            aria-hidden="true"
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-info-50 text-info-700"
-          >
-            <Icon name="shield" size={24} />
-          </span>
-          <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-display text-lg font-semibold text-text">
-                Autenticación de dos factores (MFA)
-              </h3>
-              <Badge variant="warning" dot>
-                Recomendado
-              </Badge>
+      {isAdmin && (
+        <Card>
+          <CardContent className="flex flex-wrap items-start gap-4 p-6">
+            <span
+              aria-hidden="true"
+              className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-info-50 text-info-700"
+            >
+              <Icon name="shield" size={24} />
+            </span>
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-display text-lg font-semibold text-text">
+                  Autenticación de dos factores (MFA)
+                </h3>
+                {mfaEnabled ? (
+                  <Badge variant="success" dot>
+                    Activado
+                  </Badge>
+                ) : (
+                  <Badge variant="warning" dot>
+                    Sin configurar
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm leading-relaxed text-text-muted">
+                {mfaEnabled
+                  ? 'Tu cuenta tiene un segundo factor configurado: un código temporal de tu app de autenticación además de la contraseña.'
+                  : 'Añade una capa extra contra contraseñas robadas: un código temporal de tu app TOTP (Google Authenticator, 1Password, Authy).'}
+              </p>
             </div>
-            <p className="text-sm leading-relaxed text-text-muted">
-              Obligatorio para super_admin y tenant_admin. Opcional pero muy recomendado para
-              alumnos y formadores — añade una capa extra contra contraseñas robadas.
-            </p>
-          </div>
-          <Button onClick={() => setMfaOpen(true)}>
-            <Icon name="lock" size={16} />
-            Configurar MFA
-          </Button>
-        </CardContent>
-      </Card>
+            {mfaEnabled ? (
+              <Badge variant="outline" className="gap-1.5">
+                <Icon name="check" size={14} />
+                Configurado
+              </Badge>
+            ) : (
+              <Button onClick={() => setMfaOpen(true)}>
+                <Icon name="lock" size={16} />
+                Configurar MFA
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog
         open={mfaOpen}
