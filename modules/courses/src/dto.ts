@@ -54,6 +54,8 @@ export const createLessonSchema = z.object({
   position: z.number().int().min(0).optional(),
   content: lessonContentSchema.default({}),
   durationMinutes: z.number().int().positive().optional(),
+  /** Fecha de publicación absoluta (ISO). Futura = lección bloqueada hasta esa fecha. */
+  publishAt: z.string().datetime().nullable().optional(),
 });
 export type CreateLessonDto = z.infer<typeof createLessonSchema>;
 
@@ -61,5 +63,6 @@ export const updateLessonSchema = z.object({
   title: z.string().min(1).max(160).optional(),
   content: lessonContentSchema.optional(),
   durationMinutes: z.number().int().positive().nullable().optional(),
+  publishAt: z.string().datetime().nullable().optional(),
 });
 export type UpdateLessonDto = z.infer<typeof updateLessonSchema>;

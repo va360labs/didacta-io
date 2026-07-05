@@ -42,6 +42,8 @@ export interface CourseLesson {
   position: number;
   durationMinutes: number | null;
   content?: Record<string, unknown>;
+  /** Fecha de publicación absoluta (ISO). Futura = bloqueada hasta esa fecha. */
+  publishAt?: string | null;
 }
 
 export interface CourseModule {
@@ -170,6 +172,7 @@ export const coursesApi = {
       title?: string;
       content?: Record<string, unknown>;
       durationMinutes?: number | null;
+      publishAt?: string | null;
     },
   ): Promise<CourseLesson> {
     return apiFetch<CourseLesson>(

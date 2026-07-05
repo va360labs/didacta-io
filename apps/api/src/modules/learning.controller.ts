@@ -273,6 +273,45 @@ export class LearningController {
       .getCourseAvailability(user.tenantId, user.sub, courseId);
   }
 
+  // ── Aviso de desbloqueo de lecciones programadas por fecha (publishAt) ────────
+
+  @Get('lessons/:lessonId/unlock-subscription')
+  @ApiOperation({ summary: '¿Estoy suscrito al aviso de desbloqueo de esta lección?' })
+  async getUnlockSubscription(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('lessonId') lessonId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    const subscribed = await this.registry
+      .getLearningService()
+      .isSubscribedLessonUnlock(user.sub, lessonId);
+    return { subscribed };
+  }
+
+  @Post('lessons/:lessonId/unlock-subscription')
+  @ApiOperation({ summary: 'Pedir aviso por email cuando la lección se desbloquee.' })
+  async subscribeUnlock(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('lessonId') lessonId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry
+      .getLearningService()
+      .subscribeLessonUnlock(user.tenantId, user.sub, lessonId);
+  }
+
+  @Delete('lessons/:lessonId/unlock-subscription')
+  @ApiOperation({ summary: 'Cancelar el aviso de desbloqueo de la lección.' })
+  async unsubscribeUnlock(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('lessonId') lessonId: string,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.registry
+      .getLearningService()
+      .unsubscribeLessonUnlock(user.tenantId, user.sub, lessonId);
+  }
+
   // -------------------- Comentarios en lecciones --------------------
 
   @Get('lessons/:lessonId/comments')

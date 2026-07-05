@@ -326,6 +326,7 @@ export class CoursesService {
         position,
         content: (dto.content ?? {}) as never,
         durationMinutes: dto.durationMinutes ?? null,
+        publishAt: dto.publishAt ? new Date(dto.publishAt) : null,
       },
     });
     await this.publish(tenantId, actorId, 'courses.lesson.created', {
@@ -674,6 +675,9 @@ export class CoursesService {
         ...(dto.title !== undefined ? { title: dto.title } : {}),
         ...(dto.content !== undefined ? { content: dto.content as never } : {}),
         ...(dto.durationMinutes !== undefined ? { durationMinutes: dto.durationMinutes } : {}),
+        ...(dto.publishAt !== undefined
+          ? { publishAt: dto.publishAt ? new Date(dto.publishAt) : null }
+          : {}),
       },
     });
 

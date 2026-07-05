@@ -366,6 +366,29 @@ export const learningApi = {
       bearer(),
     );
   },
+
+  // Aviso de desbloqueo de lecciones programadas por fecha (publishAt).
+  async getLessonUnlockSubscription(lessonId: string): Promise<{ subscribed: boolean }> {
+    return apiFetch<{ subscribed: boolean }>(
+      `/api/v1/modules/learning/lessons/${lessonId}/unlock-subscription`,
+      { method: 'GET' },
+      bearer(),
+    );
+  },
+  async subscribeLessonUnlock(lessonId: string): Promise<{ subscribed: boolean }> {
+    return apiFetch<{ subscribed: boolean }>(
+      `/api/v1/modules/learning/lessons/${lessonId}/unlock-subscription`,
+      { method: 'POST', body: '{}' },
+      bearer(),
+    );
+  },
+  async unsubscribeLessonUnlock(lessonId: string): Promise<{ subscribed: boolean }> {
+    return apiFetch<{ subscribed: boolean }>(
+      `/api/v1/modules/learning/lessons/${lessonId}/unlock-subscription`,
+      { method: 'DELETE' },
+      bearer(),
+    );
+  },
 };
 
 export type DripAudienceKind = 'TIER' | 'GROUP';

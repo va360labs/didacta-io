@@ -131,16 +131,33 @@ function makeFakePrisma() {
             (l) => l.courseId === where.module.courseId && l.deletedAt === null,
           ).length;
         }),
+        // Usado por assertLessonUnlocked para leer publishAt de la lección.
+        findFirst: vi.fn(async ({ where }: { where: { id?: string } }) => {
+          const l = where.id ? lessons.get(where.id) : undefined;
+          return l ? { publishAt: (l as { publishAt?: Date | null }).publishAt ?? null } : null;
+        }),
+        // Soporta la query por módulo (drip) y la nueva por courseId+publishAt.
         findMany: vi.fn(
-          async ({ where }: { where: { tenantId: string; moduleId: { in: string[] } } }) =>
-            [...lessons.values()]
-              .filter(
-                (l) =>
-                  l.tenantId === where.tenantId &&
-                  where.moduleId.in.includes(l.moduleId) &&
-                  l.deletedAt === null,
-              )
-              .sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+          async ({
+            where,
+          }: {
+            where: {
+              tenantId?: string;
+              moduleId?: { in: string[] };
+              module?: { courseId: string };
+              publishAt?: { not: null };
+            };
+          }) => {
+            let arr = [...lessons.values()].filter((l) => l.deletedAt === null);
+            if (where.tenantId) arr = arr.filter((l) => l.tenantId === where.tenantId);
+            if (where.moduleId?.in)
+              arr = arr.filter((l) => where.moduleId!.in.includes(l.moduleId));
+            if (where.module?.courseId)
+              arr = arr.filter((l) => l.courseId === where.module!.courseId);
+            if (where.publishAt)
+              arr = arr.filter((l) => (l as { publishAt?: Date | null }).publishAt != null);
+            return arr.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+          },
         ),
       },
       modLearningEnrollment: {

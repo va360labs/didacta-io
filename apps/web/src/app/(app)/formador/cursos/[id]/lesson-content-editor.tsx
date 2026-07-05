@@ -19,6 +19,14 @@ import { assessmentsApi } from '@/modules/assessments';
 import { coursesApi, type CourseLesson, type LessonType } from '@/lib/courses';
 import { scormApi, type ScormPackageMetadata } from '@/lib/scorm';
 
+/** ISO → valor de `<input type="datetime-local">` en hora LOCAL (YYYY-MM-DDTHH:mm). */
+function isoToLocalInput(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 const HELP_BY_TYPE: Record<LessonType, string> = {
   VIDEO: 'URL del vídeo (mp4, webm, m3u8). Ideal: hosteado en MinIO/Hetzner.',
   HTML: 'HTML inline que se renderiza en el player. Útil para slides o microcopy.',
@@ -75,6 +83,9 @@ export function LessonContentEditor({
   const [quizId, setQuizId] = useState(
     typeof content['quizId'] === 'string' ? content['quizId'] : '',
   );
+  const [publishAt, setPublishAt] = useState<string>(
+    lesson.publishAt ? isoToLocalInput(lesson.publishAt) : '',
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -106,6 +117,7 @@ export function LessonContentEditor({
         title,
         content: buildContent(),
         durationMinutes: duration ? Number(duration) : null,
+        publishAt: publishAt ? new Date(publishAt).toISOString() : null,
       });
       await onUpdated();
       onCancel();
@@ -256,6 +268,29 @@ export function LessonContentEditor({
       )}
 
       {lesson.type === 'SCORM' && <ScormUploader lessonId={lesson.id} />}
+
+      <div className="space-y-1.5 border-t border-border-soft pt-4">
+        <Label htmlFor={`publishAt-${lesson.id}`}>Fecha de publicación (opcional)</Label>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            id={`publishAt-${lesson.id}`}
+            type="datetime-local"
+            value={publishAt}
+            onChange={(e) => setPublishAt(e.target.value)}
+            className="w-auto"
+          />
+          {publishAt ? (
+            <Button type="button" variant="ghost" size="sm" onClick={() => setPublishAt('')}>
+              Quitar
+            </Button>
+          ) : null}
+        </div>
+        <p className="text-xs text-text-subtle">
+          Vacío = publicada ya. Con una fecha futura, la clase aparece en el listado pero bloqueada
+          hasta ese momento (igual para todos los alumnos); los alumnos podrán pedir que se les
+          avise cuando se desbloquee.
+        </p>
+      </div>
 
       <div className="flex items-start gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-text-muted">
         <Icon name="sparkles" size={14} className="mt-0.5 shrink-0 text-brand-500" />

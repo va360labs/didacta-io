@@ -1132,21 +1132,75 @@ export class LearningService {
       return { drip: false, lessons: {} };
     }
 
-    const rules = await this.getApplicableDripRules(tenantId, userId, courseId);
-    if (rules.length === 0) return { drip: false, lessons: {} };
-
-    const ordered = await this.orderedLessons(tenantId, courseId);
-    // Ancla del drip = enrolledAt (inmutable, momento real de entrada al curso).
-    // NO usamos startedAt: se materializa al primer progreso y desplazaría todo
-    // el calendario hacia delante, re-bloqueando lecciones ya disponibles.
-    const anchor = enrollment.enrolledAt;
-    const map = computeDripAvailability(ordered, rules, anchor, new Date());
-
+    const now = new Date();
     const lessons: Record<string, { availableAt: string; available: boolean }> = {};
-    for (const [lessonId, v] of map) {
-      lessons[lessonId] = { availableAt: v.availableAt.toISOString(), available: v.available };
+
+    // 1) Drip RELATIVO (tier/grupo, anclado en enrolledAt) — si hay reglas.
+    const rules = await this.getApplicableDripRules(tenantId, userId, courseId);
+    if (rules.length > 0) {
+      const ordered = await this.orderedLessons(tenantId, courseId);
+      // Ancla del drip = enrolledAt (inmutable, momento real de entrada al curso).
+      // NO usamos startedAt: se materializa al primer progreso y desplazaría todo
+      // el calendario hacia delante, re-bloqueando lecciones ya disponibles.
+      const map = computeDripAvailability(ordered, rules, enrollment.enrolledAt, now);
+      for (const [lessonId, v] of map) {
+        lessons[lessonId] = { availableAt: v.availableAt.toISOString(), available: v.available };
+      }
     }
-    return { drip: true, lessons };
+
+    // 2) Drip por FECHA ABSOLUTA (ModCoursesLesson.publishAt) — igual para todos,
+    // independiente del relativo. Si coincide con el relativo, gana la fecha de
+    // desbloqueo MÁS TARDÍA (una lección está disponible solo si lo está por AMBOS).
+    const scheduled = await this.prisma.modCoursesLesson.findMany({
+      where: { tenantId, deletedAt: null, publishAt: { not: null }, module: { courseId } },
+      select: { id: true, publishAt: true },
+    });
+    for (const l of scheduled) {
+      if (!l.publishAt) continue;
+      const availableByDate = l.publishAt <= now;
+      const prev = lessons[l.id];
+      if (prev) {
+        const prevAt = new Date(prev.availableAt);
+        const laterAt = l.publishAt > prevAt ? l.publishAt : prevAt;
+        lessons[l.id] = {
+          availableAt: laterAt.toISOString(),
+          available: prev.available && availableByDate,
+        };
+      } else {
+        lessons[l.id] = { availableAt: l.publishAt.toISOString(), available: availableByDate };
+      }
+    }
+
+    return { drip: Object.keys(lessons).length > 0, lessons };
+  }
+
+  // ── Aviso de desbloqueo de lecciones programadas por fecha (publishAt) ────────
+
+  /** El alumno pide que se le avise cuando la lección se publique. Idempotente. */
+  async subscribeLessonUnlock(tenantId: string, userId: string, lessonId: string) {
+    await this.prisma.modLearningLessonUnlockSub.upsert({
+      where: { lessonId_userId: { lessonId, userId } },
+      create: { tenantId, lessonId, userId },
+      update: {},
+    });
+    return { subscribed: true };
+  }
+
+  /** Cancela el aviso de desbloqueo. */
+  async unsubscribeLessonUnlock(tenantId: string, userId: string, lessonId: string) {
+    await this.prisma.modLearningLessonUnlockSub.deleteMany({
+      where: { tenantId, lessonId, userId },
+    });
+    return { subscribed: false };
+  }
+
+  /** ¿El alumno ya está suscrito al aviso de esta lección? */
+  async isSubscribedLessonUnlock(userId: string, lessonId: string): Promise<boolean> {
+    const sub = await this.prisma.modLearningLessonUnlockSub.findUnique({
+      where: { lessonId_userId: { lessonId, userId } },
+      select: { id: true },
+    });
+    return sub !== null;
   }
 
   /**
@@ -1193,10 +1247,20 @@ export class LearningService {
     lessonId: string,
     anchor: Date,
   ): Promise<void> {
+    const now = new Date();
+    // Fecha de publicación ABSOLUTA: si es futura, la lección está bloqueada.
+    const lesson = await this.prisma.modCoursesLesson.findFirst({
+      where: { tenantId, id: lessonId, deletedAt: null },
+      select: { publishAt: true },
+    });
+    if (lesson?.publishAt && lesson.publishAt > now) {
+      throw new LessonLockedError(lesson.publishAt);
+    }
+    // Drip RELATIVO.
     const rules = await this.getApplicableDripRules(tenantId, userId, courseId);
     if (rules.length === 0) return;
     const ordered = await this.orderedLessons(tenantId, courseId);
-    const map = computeDripAvailability(ordered, rules, anchor, new Date());
+    const map = computeDripAvailability(ordered, rules, anchor, now);
     const entry = map.get(lessonId);
     if (entry && !entry.available) throw new LessonLockedError(entry.availableAt);
   }

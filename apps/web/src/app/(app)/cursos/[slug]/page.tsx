@@ -550,17 +550,11 @@ export default function CourseAlumnoPage() {
               </CardContent>
             </Card>
           ) : activeLesson && availability[activeLesson.id]?.available === false ? (
-            <Card>
-              <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
-                <span className="text-4xl">🔒</span>
-                <h3 className="font-display text-xl font-semibold">Lección aún no disponible</h3>
-                <p className="max-w-md text-sm text-text-muted">
-                  «{activeLesson.title}» se libera{' '}
-                  {formatLockHint(availability[activeLesson.id]!.availableAt)}. Las clases de este
-                  curso se van liberando con el tiempo desde que te matriculaste.
-                </p>
-              </CardContent>
-            </Card>
+            <LockedLessonCard
+              lessonId={activeLesson.id}
+              title={activeLesson.title}
+              availableAt={availability[activeLesson.id]!.availableAt}
+            />
           ) : activeLesson ? (
             // key={activeLesson.id} fuerza re-mount del player al cambiar
             // de lección. Sin esto, el useState interno de LessonPlayer
@@ -613,6 +607,80 @@ export default function CourseAlumnoPage() {
         </main>
       </div>
     </section>
+  );
+}
+
+/**
+ * Pantalla de una lección bloqueada (drip relativo o fecha de publicación
+ * absoluta). Muestra cuándo se desbloquea y permite pedir un aviso por email
+ * al desbloquearse (BUG/MEJ-009). Gestiona su propio estado de suscripción.
+ */
+function LockedLessonCard({
+  lessonId,
+  title,
+  availableAt,
+}: {
+  lessonId: string;
+  title: string;
+  availableAt: string;
+}) {
+  const [subscribed, setSubscribed] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSubscribed(null);
+    learningApi
+      .getLessonUnlockSubscription(lessonId)
+      .then((r) => {
+        if (!cancelled) setSubscribed(r.subscribed);
+      })
+      .catch(() => {
+        if (!cancelled) setSubscribed(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lessonId]);
+
+  async function toggle() {
+    setBusy(true);
+    try {
+      const r = subscribed
+        ? await learningApi.unsubscribeLessonUnlock(lessonId)
+        : await learningApi.subscribeLessonUnlock(lessonId);
+      setSubscribed(r.subscribed);
+    } catch {
+      // Silencioso: no rompemos la pantalla de bloqueo por un fallo del aviso.
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+        <span className="text-4xl">🔒</span>
+        <h3 className="font-display text-xl font-semibold">Lección aún no disponible</h3>
+        <p className="max-w-md text-sm text-text-muted">
+          «{title}» se desbloqueará {formatLockHint(availableAt)}.
+        </p>
+        {subscribed ? (
+          <div className="flex flex-col items-center gap-1.5">
+            <Badge variant="success" dot>
+              Te avisaremos cuando se desbloquee
+            </Badge>
+            <Button variant="ghost" size="sm" onClick={() => void toggle()} disabled={busy}>
+              Cancelar aviso
+            </Button>
+          </div>
+        ) : (
+          <Button onClick={() => void toggle()} disabled={busy || subscribed === null}>
+            {busy ? 'Guardando…' : '🔔 Avísame cuando se desbloquee'}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
