@@ -113,9 +113,28 @@ export const certificateTemplatesApi = {
   },
 };
 
+export interface PublicCertificateView {
+  number: string;
+  studentName: string;
+  courseTitle: string;
+  issuedAt: string;
+  valid: boolean;
+}
+
 export const certificatesApi = {
   async listMine(): Promise<Certificate[]> {
     return apiFetch<Certificate[]>('/api/v1/modules/certificates/me', { method: 'GET' }, bearer());
+  },
+
+  /**
+   * Verificación PÚBLICA de un certificado por su id (sin sesión). Devuelve solo
+   * datos no sensibles. La usa la página pública `/verificar/[id]`.
+   */
+  async verifyPublic(id: string): Promise<PublicCertificateView> {
+    return apiFetch<PublicCertificateView>(
+      `/api/v1/modules/certificates/verify/${encodeURIComponent(id)}`,
+      { method: 'GET' },
+    );
   },
 
   async getById(id: string): Promise<Certificate> {

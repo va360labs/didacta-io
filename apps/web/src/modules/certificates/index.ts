@@ -30,4 +30,5 @@ export {
   type Certificate,
   type CertificateTemplate,
   type CertificateTemplateInput,
+  type PublicCertificateView,
 } from './client';

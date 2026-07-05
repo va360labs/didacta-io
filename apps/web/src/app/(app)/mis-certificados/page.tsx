@@ -21,6 +21,31 @@ function formatDate(iso: string): string {
   }
 }
 
+/**
+ * Abre el flujo "Add to Profile" de LinkedIn pre-rellenado con los datos del
+ * certificado. `certUrl` apunta a la página pública de verificación
+ * (`/verificar/<id>`), así la credencial en LinkedIn es verificable.
+ */
+function openLinkedIn(cert: Certificate) {
+  const issued = new Date(cert.snapshot?.issuedAt ?? cert.issuedAt);
+  const params = new URLSearchParams({
+    startTask: 'CERTIFICATION_NAME',
+    name: cert.snapshot?.courseTitle ?? 'Curso',
+    organizationName: 'VA360 Academy',
+    certId: cert.number,
+    certUrl: `${window.location.origin}/verificar/${cert.id}`,
+  });
+  if (!Number.isNaN(issued.getTime())) {
+    params.set('issueYear', String(issued.getFullYear()));
+    params.set('issueMonth', String(issued.getMonth() + 1));
+  }
+  window.open(
+    `https://www.linkedin.com/profile/add?${params.toString()}`,
+    '_blank',
+    'noopener,noreferrer',
+  );
+}
+
 export default function MisCertificadosPage() {
   const [certs, setCerts] = useState<Certificate[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -170,6 +195,9 @@ export default function MisCertificadosPage() {
                     >
                       <Icon name="award" size={16} />
                       {downloadingId === cert.id ? 'Descargando…' : 'Descargar PDF'}
+                    </Button>
+                    <Button variant="secondary" onClick={() => openLinkedIn(cert)}>
+                      Añadir a LinkedIn
                     </Button>
                     <Badge variant="premium" dot className="ml-auto">
                       Verificado
