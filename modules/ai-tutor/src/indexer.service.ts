@@ -237,7 +237,7 @@ export class AiTutorIndexerService {
       await this.prisma.$executeRawUnsafe(
         `INSERT INTO "mod_ai_tutor_chunk"
          ("id", "tenant_id", "course_id", "lesson_id", "ordinal", "content", "embedding", "tokens_count", "created_at")
-         VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7::vector, $8, NOW())`,
+         VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7::vector, $8, NOW())`,
         randomUUID(),
         tenantId,
         courseId,
