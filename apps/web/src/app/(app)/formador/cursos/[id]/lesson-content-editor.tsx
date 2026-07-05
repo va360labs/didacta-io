@@ -1,8 +1,15 @@
 'use client';
 
 import Link from 'next/link';
+import nextDynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import { Icon, type IconName } from '@/components/icon';
+
+// tiptap (~200KB) solo se baja al abrir el editor de una lección.
+const RichTextEditor = nextDynamic(
+  () => import('@/components/rich-text-editor').then((m) => m.RichTextEditor),
+  { ssr: false, loading: () => <div className="skeleton h-40 w-full rounded-md" /> },
+);
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -74,7 +81,10 @@ export function LessonContentEditor({
   function buildContent(): Record<string, unknown> {
     switch (lesson.type) {
       case 'VIDEO':
-        return { videoUrl, resources };
+        // `html`: contenido complementario opcional que el player pinta debajo
+        // del vídeo (texto enriquecido). Lo guardamos siempre (vacío incluido)
+        // para poder borrarlo desde el editor.
+        return { videoUrl, resources, html };
       case 'PDF':
         return { pdfUrl };
       case 'HTML':
@@ -179,6 +189,20 @@ export function LessonContentEditor({
               (los enlaces se vuelven clicables).
             </p>
           </div>
+
+          <div className="space-y-1.5 pt-2">
+            <Label htmlFor={`html-${lesson.id}`}>Contenido complementario (debajo del vídeo)</Label>
+            <RichTextEditor
+              value={html}
+              onChange={setHtml}
+              ariaLabel="Contenido complementario de la lección"
+              placeholder="Notas, pasos, enlaces, imágenes… se muestran debajo del vídeo."
+            />
+            <p className="text-xs text-text-subtle">
+              Texto enriquecido opcional que complementa la clase (encabezados, listas, enlaces,
+              imágenes). Se sanitiza al mostrarse al alumno. El vídeo va arriba, en su reproductor.
+            </p>
+          </div>
         </div>
       )}
 
@@ -207,8 +231,9 @@ export function LessonContentEditor({
             className="font-mono text-xs"
           />
           <p className="text-xs text-text-subtle">
-            El HTML se sanitiza en el servidor. Etiquetas seguras permitidas (p, h2-h6, ul, ol, li,
-            a, img, strong, em, code, pre).
+            El HTML se renderiza tal cual en el player. Si vas a incrustar un vídeo, usa mejor el
+            tipo «Vídeo» (mejor seguimiento de visionado y reanudación) y pon este contenido como
+            «contenido complementario» debajo del vídeo.
           </p>
         </div>
       )}

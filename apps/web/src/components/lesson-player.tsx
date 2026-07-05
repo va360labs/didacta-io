@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { QuizPlayer } from '@/components/quiz-player';
 import { VideoEmbed } from '@/components/video-embed';
 import { Badge } from '@/components/ui/badge';
@@ -8,8 +8,23 @@ import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
 import type { CourseLesson } from '@/lib/courses';
 import { learningApi } from '@/lib/learning';
+import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { parseBunny } from '@/lib/video';
 import type { WatchReport } from '@/lib/use-bunny-watch';
+
+/**
+ * Bloque de texto enriquecido de una lección (contenido HTML). MEMOIZADO a
+ * propósito y NO por estética: el player se re-renderiza cada vez que se reporta
+ * progreso (tick de presencia cada 60s en no-Bunny, o reporte de visionado cada
+ * ~20s en Bunny → onProgress → setState en la página del curso). Sin este memo,
+ * React re-commitea el `dangerouslySetInnerHTML` en CADA render aunque el HTML no
+ * cambie; si el HTML lleva un `<iframe>` embebido (vídeo), el navegador destruye y
+ * recrea ese iframe → el vídeo se corta/reinicia cada 20-60s. Con el memo, mientras
+ * el string `html` no cambie, el subárbol no se re-renderiza y el iframe sobrevive.
+ */
+const LessonRichHtml = memo(function LessonRichHtml({ html }: { html: string }) {
+  return <div className="lesson-prose" dangerouslySetInnerHTML={{ __html: html }} />;
+});
 
 interface Props {
   lesson: CourseLesson & { content: Record<string, unknown> };
@@ -210,22 +225,38 @@ function LessonContent({
     // capítulos clicables que hacen seek en el player. En Bunny, `onWatch`
     // recibe el tiempo de visionado real medido vía Player.js.
     const resources = typeof content['resources'] === 'string' ? content['resources'] : '';
+    // Contenido complementario en texto enriquecido debajo del vídeo (opcional).
+    // El vídeo SIEMPRE va por VideoEmbed (iframe con `src` estable, inmune a los
+    // re-renders por progreso), así que el complemento no necesita `<iframe>` y lo
+    // pasamos por la whitelist de DOMPurify. Va memoizado (LessonRichHtml).
+    const complementHtml =
+      typeof content['html'] === 'string' && content['html'].trim()
+        ? sanitizeRichHtml(content['html'])
+        : '';
     return (
-      <VideoEmbed
-        url={url}
-        title={lesson.title}
-        resumeAt={resumeAt}
-        resources={resources}
-        onWatch={onWatch}
-        watchEnabled={watchEnabled}
-      />
+      <div className="space-y-6">
+        <VideoEmbed
+          url={url}
+          title={lesson.title}
+          resumeAt={resumeAt}
+          resources={resources}
+          onWatch={onWatch}
+          watchEnabled={watchEnabled}
+        />
+        {complementHtml ? <LessonRichHtml html={complementHtml} /> : null}
+      </div>
     );
   }
 
   if (lesson.type === 'HTML') {
     const html = typeof content['html'] === 'string' ? content['html'] : '';
     if (!html) return <Empty hint="Esta lectura está vacía." />;
-    return <div className="lesson-prose" dangerouslySetInnerHTML={{ __html: html }} />;
+    // Se renderiza CRUDO (sin sanitizar) a propósito: las lecciones HTML legacy
+    // llevan el vídeo embebido como `<iframe>`, que la whitelist de DOMPurify
+    // eliminaría. El memo evita que el iframe se recree en cada reporte de
+    // progreso (ver LessonRichHtml). Al migrar el vídeo a tipo VIDEO, el HTML
+    // deja de necesitar iframe y puede sanitizarse.
+    return <LessonRichHtml html={html} />;
   }
 
   if (lesson.type === 'PDF') {

@@ -210,6 +210,56 @@ export async function createPublishedCourse(args: {
   return api<CourseDetail>(`/api/v1/modules/courses/${course.id}`, { bearer: args.bearer });
 }
 
+/**
+ * Como `createPublishedCourse` pero con UNA lección de tipo HTML cuyo `content.html`
+ * embebe el HTML que se pase (típicamente un `<iframe>` de vídeo). Sirve para
+ * reproducir el caso "vídeo incrustado en texto enriquecido" y verificar que el
+ * player NO recrea el iframe en cada reporte de progreso (regresión del corte de
+ * vídeo cada 20-60s).
+ */
+export async function createPublishedCourseWithHtmlLesson(args: {
+  bearer: string;
+  title: string;
+  slug: string;
+  html: string;
+}): Promise<CourseDetail> {
+  const course = await api<{ id: string }>('/api/v1/modules/courses', {
+    method: 'POST',
+    body: {
+      title: args.title,
+      slug: args.slug,
+      description: 'Curso E2E con lección HTML',
+      category: 'general',
+    },
+    bearer: args.bearer,
+  });
+
+  const moduleResp = await api<{ id: string }>(`/api/v1/modules/courses/${course.id}/modules`, {
+    method: 'POST',
+    body: { title: 'Módulo 1', orderIndex: 0 },
+    bearer: args.bearer,
+  });
+
+  await api(`/api/v1/modules/courses/modules/${moduleResp.id}/lessons`, {
+    method: 'POST',
+    body: {
+      title: 'Lección con vídeo embebido',
+      type: 'HTML',
+      orderIndex: 0,
+      content: { html: args.html },
+      durationSec: 300,
+    },
+    bearer: args.bearer,
+  });
+
+  await api(`/api/v1/modules/courses/${course.id}/publish`, {
+    method: 'POST',
+    bearer: args.bearer,
+  });
+
+  return api<CourseDetail>(`/api/v1/modules/courses/${course.id}`, { bearer: args.bearer });
+}
+
 export async function trackProgress(args: {
   bearer: string;
   enrollmentId: string;
