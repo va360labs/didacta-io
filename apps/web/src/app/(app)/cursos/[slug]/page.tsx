@@ -144,6 +144,40 @@ export default function CourseAlumnoPage() {
     }
   }
 
+  // Al completar el curso, el backend emite el certificado de forma ASÍNCRONA
+  // (event bus). Lo sondeamos unos segundos hasta que aparezca para poder pasar
+  // el botón del hero a "Descargar certificado" sin recargar la página.
+  async function pollForCertificate() {
+    if (!course) return;
+    for (let i = 0; i < 6; i++) {
+      try {
+        const certs = await certificatesApi.listMine();
+        const found = certs.find((c) => c.courseId === course.id);
+        if (found) {
+          setCertificate(found);
+          return;
+        }
+      } catch {
+        // Certificados deshabilitados para el tenant (403) u otro fallo: no
+        // insistimos con un error duro en el hero.
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+
+  // "Continuar curso": lleva a la primera lección sin completar (o a la primera)
+  // y hace scroll al reproductor. Antes el botón no tenía onClick (inerte).
+  function handleContinue() {
+    const lessons = course ? course.modules.flatMap((m) => m.lessons) : [];
+    const next = lessons.find((l) => !progressByLesson[l.id]) ?? lessons[0];
+    if (!next) return;
+    setActiveLessonId(next.id);
+    requestAnimationFrame(() => {
+      document.getElementById('curso-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
   async function handleEnrollByCode(form: FormData) {
     setPending(true);
     setError(null);
@@ -239,7 +273,9 @@ export default function CourseAlumnoPage() {
                     {downloadingCert ? 'Descargando…' : 'Descargar certificado'}
                   </Button>
                 ) : (
-                  <Button variant="primary">Continuar curso</Button>
+                  <Button variant="primary" onClick={handleContinue}>
+                    Continuar curso
+                  </Button>
                 )}
               </div>
             </div>
@@ -502,7 +538,7 @@ export default function CourseAlumnoPage() {
           </CardContent>
         </Card>
 
-        <main className="min-w-0">
+        <main id="curso-main" className="min-w-0">
           {!enrollment ? (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
@@ -547,6 +583,17 @@ export default function CourseAlumnoPage() {
                 onProgress={(percent) => {
                   setEnrollment((e) => (e ? { ...e, progressPercent: percent } : e));
                   setProgressByLesson((map) => ({ ...map, [activeLesson.id]: true }));
+                  // Si con esta lección se alcanza el umbral de completado, reflejar
+                  // COMPLETED en el acto (sin recargar) y sondear el certificado, que
+                  // el backend emite de forma asíncrona. Así el botón del hero pasa a
+                  // "Descargar certificado" solo.
+                  if (
+                    enrollment.status !== 'COMPLETED' &&
+                    percent >= enrollment.completionThreshold
+                  ) {
+                    setEnrollment((e) => (e ? { ...e, status: 'COMPLETED' } : e));
+                    void pollForCertificate();
+                  }
                 }}
               />
               <LessonComments
