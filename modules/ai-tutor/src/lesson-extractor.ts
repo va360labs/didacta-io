@@ -53,11 +53,30 @@ export function extractLessonText(input: ExtractInput): ExtractResult {
       return { text: titleLine + stripped };
     }
     case 'VIDEO': {
+      // Acumulamos todas las fuentes de texto disponibles para dar el máximo
+      // contexto al RAG: transcripción (lo ideal, cuando exista un pipeline que
+      // la genere) + descripción + contenido complementario (html debajo del
+      // vídeo) + recursos/capítulos. Sin ninguna → se salta (el vídeo por sí
+      // solo no aporta texto indexable).
+      const parts: string[] = [];
       const transcript = pickString(input.content, ['transcript', 'transcription']);
-      if (transcript) return { text: titleLine + transcript };
+      if (transcript) parts.push(transcript);
       const description = pickString(input.content, ['description', 'summary']);
-      if (description) return { text: titleLine + description };
-      return { text: '', skipReason: 'VIDEO sin transcript ni description indexable' };
+      if (description) parts.push(description);
+      const html = pickString(input.content, ['html']);
+      if (html) {
+        const stripped = stripHtmlTags(html);
+        if (stripped.trim()) parts.push(stripped);
+      }
+      const resources = pickString(input.content, ['resources']);
+      if (resources.trim()) parts.push(resources);
+      if (parts.length === 0) {
+        return {
+          text: '',
+          skipReason: 'VIDEO sin transcript/description/html/resources indexable',
+        };
+      }
+      return { text: titleLine + parts.join('\n\n') };
     }
     case 'PDF': {
       const extracted = pickString(input.content, ['extractedText', 'text']);
