@@ -78,7 +78,26 @@ export const aiTutorApi = {
       bearer(),
     );
   },
+
+  /**
+   * Re-indexa TODOS los cursos publicados del tenant (backfill). Solo admin.
+   * Útil para cursos publicados antes de configurar el proveedor de IA.
+   */
+  async reindexAll(): Promise<ReindexAllResultView> {
+    return apiFetch<ReindexAllResultView>(
+      '/api/v1/admin/ai-tutor/reindex-all',
+      { method: 'POST', body: JSON.stringify({}) },
+      bearer(),
+    );
+  },
 };
+
+export interface ReindexAllResultView {
+  total: number;
+  indexed: number;
+  failed: number;
+  results: Array<{ courseId: string; ok: boolean; error?: string }>;
+}
 
 export const aiProvidersApi = {
   async catalog(): Promise<ProviderCatalogEntry[]> {

@@ -21,6 +21,7 @@ export {
   type CitationView,
   type AskResponseView,
   type IndexCourseResultView,
+  type ReindexAllResultView,
   type ProviderCatalogEntry,
   type TenantProviderConfig,
   type UpsertProviderInput,

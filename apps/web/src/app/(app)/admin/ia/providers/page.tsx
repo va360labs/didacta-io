@@ -11,7 +11,9 @@ import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   aiProvidersApi,
+  aiTutorApi,
   type ProviderCatalogEntry,
+  type ReindexAllResultView,
   type TenantProviderConfig,
 } from '@/modules/ai-tutor';
 import { ApiHttpError } from '@/lib/api-client';
@@ -74,6 +76,8 @@ export default function AiProvidersAdminPage() {
   const [pending, setPending] = useState<Purpose | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [reindexing, setReindexing] = useState(false);
+  const [reindexResult, setReindexResult] = useState<ReindexAllResultView | null>(null);
 
   async function reload() {
     try {
@@ -152,6 +156,28 @@ export default function AiProvidersAdminPage() {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos borrar la config.');
     } finally {
       setPending(null);
+    }
+  }
+
+  async function handleReindexAll() {
+    setReindexing(true);
+    setError(null);
+    setInfo(null);
+    setReindexResult(null);
+    try {
+      const res = await aiTutorApi.reindexAll();
+      setReindexResult(res);
+      setInfo(
+        `Reindexado: ${res.indexed}/${res.total} cursos OK${res.failed ? `, ${res.failed} con error` : ''}.`,
+      );
+    } catch (e) {
+      setError(
+        e instanceof ApiHttpError
+          ? e.message
+          : 'No pudimos reindexar. ¿Está configurado el proveedor de embeddings?',
+      );
+    } finally {
+      setReindexing(false);
     }
   }
 
@@ -307,6 +333,35 @@ export default function AiProvidersAdminPage() {
           </Card>
         );
       })}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Indexación de cursos existentes</CardTitle>
+          <CardDescription>
+            Los cursos se indexan automáticamente al publicarse. Si publicaste cursos antes de
+            configurar el proveedor de embeddings (o la indexación falló), usa esto para reindexar
+            TODOS los cursos publicados de una vez. Requiere el proveedor de embeddings configurado
+            arriba.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button type="button" onClick={() => void handleReindexAll()} disabled={reindexing}>
+            {reindexing ? 'Reindexando…' : 'Reindexar todos los cursos publicados'}
+          </Button>
+          {reindexResult ? (
+            <p className="text-sm text-text-muted">
+              {reindexResult.indexed} indexados · {reindexResult.failed} con error ·{' '}
+              {reindexResult.total} total.
+              {reindexResult.failed > 0 ? (
+                <span className="text-danger-700">
+                  {' '}
+                  Revisa que el proveedor de embeddings esté activo y con cuota.
+                </span>
+              ) : null}
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
     </section>
   );
 }

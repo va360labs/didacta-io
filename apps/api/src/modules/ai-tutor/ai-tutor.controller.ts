@@ -74,4 +74,39 @@ export class AiTutorController {
     }
     return indexer.indexCourse(u.tenantId, courseId, { force: dto.force });
   }
+
+  @Post('admin/ai-tutor/reindex-all')
+  @ApiOperation({
+    summary:
+      'Re-indexa TODOS los cursos publicados del tenant (backfill). Útil para cursos que se publicaron antes de configurar el proveedor de IA o cuando la indexación automática falló. Solo admin.',
+  })
+  async reindexAll(@CurrentUser() user: SessionClaims | undefined) {
+    const u = this.requireAdmin(user);
+    const indexer = this.registry.getAiTutorIndexerServiceOrNull();
+    if (!indexer) {
+      throw new UnauthorizedException('mod.ai-tutor no está activo en este tenant.');
+    }
+    const courses = await this.registry
+      .getCoursesService()
+      .listCourses(u.tenantId, { status: 'PUBLISHED' });
+    const results: Array<{ courseId: string; ok: boolean; error?: string }> = [];
+    for (const course of courses) {
+      try {
+        await indexer.indexCourse(u.tenantId, course.id, { force: true });
+        results.push({ courseId: course.id, ok: true });
+      } catch (err) {
+        results.push({
+          courseId: course.id,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    return {
+      total: courses.length,
+      indexed: results.filter((r) => r.ok).length,
+      failed: results.filter((r) => !r.ok).length,
+      results,
+    };
+  }
 }
