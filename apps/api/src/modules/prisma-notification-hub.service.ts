@@ -315,6 +315,12 @@ const TEMPLATES: Record<string, TemplateDef> = {
     subject: '{{subject}}',
     body: '{{body}}',
   },
+  // Aviso de desbloqueo de una clase programada por fecha (MEJ-009). Lo dispara
+  // el LessonUnlockNotifierWorker cuando la lección cruza su publishAt.
+  'lesson.unlocked': {
+    subject: 'Ya está disponible: {{lessonTitle}}',
+    body: 'La clase "{{lessonTitle}}" del curso "{{courseTitle}}" ya está disponible. Entra a Didacta para verla.',
+  },
 };
 
 function renderTemplate(key: string, variables: Record<string, unknown>): RenderedTemplate {

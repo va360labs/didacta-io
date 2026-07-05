@@ -18,6 +18,7 @@ import { CoursesController } from './courses.controller';
 import { CoursesErrorFilter } from './courses-error.filter';
 import { FormadorStatsController } from './formador-stats.controller';
 import { LearningController } from './learning.controller';
+import { LessonUnlockNotifierWorker } from './lesson-unlock-notifier.worker';
 import { LearningPathsController, LearningPathsMeController } from './learning-paths.controller';
 import { LearningErrorFilter } from './learning-error.filter';
 import { ModuleAccessInterceptor } from './module-access.interceptor';
@@ -90,6 +91,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     ModuleContextFactory,
     ModuleRegistryService,
     OutboxRecoveryWorker,
+    LessonUnlockNotifierWorker,
     ScormLearningBridge,
     AccessGroupsService,
     AccessGroupsCoursesBridge,

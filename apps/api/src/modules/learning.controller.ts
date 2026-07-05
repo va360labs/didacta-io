@@ -37,6 +37,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
 import { ModuleRegistryService } from './module-registry.service';
+import { LessonUnlockNotifierWorker } from './lesson-unlock-notifier.worker';
 
 const SCORM_EDITOR_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
 const MAX_SCORM_BASE64_BYTES = 100 * 1024 * 1024 * 1.4; // 140 MiB de base64 ≈ 100 MiB binarios
@@ -103,7 +104,10 @@ function requireScormEditor(user: SessionClaims | undefined): SessionClaims {
 @Controller('modules/learning')
 @UseGuards(JwtAuthGuard)
 export class LearningController {
-  constructor(private readonly registry: ModuleRegistryService) {}
+  constructor(
+    private readonly registry: ModuleRegistryService,
+    private readonly unlockNotifier: LessonUnlockNotifierWorker,
+  ) {}
 
   @Get('me/enrollments')
   @ApiOperation({ summary: 'Listar mis matriculaciones' })
@@ -310,6 +314,19 @@ export class LearningController {
     return this.registry
       .getLearningService()
       .unsubscribeLessonUnlock(user.tenantId, user.sub, lessonId);
+  }
+
+  @Post('lesson-unlock/run-now')
+  @ApiOperation({
+    summary:
+      'Fuerza un ciclo del notificador de desbloqueo (envía los avisos pendientes de clases ya publicadas). Solo super_admin. Para QA.',
+  })
+  async runUnlockNotifier(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.includes('super_admin')) {
+      throw new ForbiddenException('Solo super_admin.');
+    }
+    return this.unlockNotifier.runNow();
   }
 
   // -------------------- Comentarios en lecciones --------------------
