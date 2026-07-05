@@ -48,107 +48,164 @@ export async function renderCertificatePdf(input: CertificateRenderInput): Promi
       doc.on('error', reject);
 
       const color = input.primaryColor ?? '#0f172a';
+      const ink = '#171717';
+      const muted = '#6b7280';
+      const faint = '#9ca3af';
       const pageWidth = doc.page.width;
       const pageHeight = doc.page.height;
+      const cx = pageWidth / 2;
+      const contentX = 90;
+      const contentW = pageWidth - contentX * 2;
+      const centered = { align: 'center' as const, width: contentW };
 
-      // Marco
+      // ── Marco elegante: banda de acento arriba + doble filete fino ──────────
+      // Banda superior de color (identidad de marca).
+      doc.rect(0, 0, pageWidth, 10).fill(color);
+      // Filete exterior fino y filete interior aún más fino (marco doble sutil).
       doc
-        .lineWidth(3)
+        .lineWidth(1.5)
         .strokeColor(color)
-        .rect(40, 40, pageWidth - 80, pageHeight - 80)
+        .rect(28, 28, pageWidth - 56, pageHeight - 56)
         .stroke();
       doc
-        .lineWidth(1)
-        .rect(50, 50, pageWidth - 100, pageHeight - 100)
+        .lineWidth(0.5)
+        .strokeColor(color)
+        .rect(36, 36, pageWidth - 72, pageHeight - 72)
         .stroke();
 
-      // Logo (si el tenant lo provee).
+      // ── Cabecera: logo del tenant o wordmark del nombre ─────────────────────
+      let cursorY = 66;
       if (input.logoData && input.logoData.length > 0) {
         try {
-          // Centrado horizontal, alto fijo de 60px, ancho proporcional auto.
-          const logoHeight = 60;
-          const x = (pageWidth - 120) / 2;
-          doc.image(input.logoData, x, 70, { fit: [120, logoHeight], align: 'center' });
+          const logoHeight = 54;
+          const logoW = 160;
+          doc.image(input.logoData, cx - logoW / 2, cursorY, {
+            fit: [logoW, logoHeight],
+            align: 'center',
+          });
+          cursorY += logoHeight + 18;
         } catch {
           // Buffer corrupto / formato no soportado por pdfkit: ignoramos sin
-          // romper la emisión. El caller debería loguear el incidente si
-          // quiere visibilidad.
+          // romper la emisión.
+          cursorY += 8;
         }
+      } else if (input.tenantName) {
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(12)
+          .fillColor(muted)
+          .text(input.tenantName.toUpperCase(), 0, cursorY, {
+            align: 'center',
+            characterSpacing: 2,
+          });
+        cursorY += 30;
+      } else {
+        cursorY += 8;
       }
 
-      // Título
-      const titleY = input.logoData && input.logoData.length > 0 ? 145 : 90;
+      // ── Título ──────────────────────────────────────────────────────────────
       doc
         .fillColor(color)
         .font('Helvetica-Bold')
-        .fontSize(48)
-        .text('Certificado', 0, titleY, { align: 'center' });
-
-      doc.moveDown(0.3);
+        .fontSize(44)
+        .text('CERTIFICADO', 0, cursorY, { align: 'center', characterSpacing: 6 });
       doc
         .font('Helvetica')
-        .fontSize(14)
-        .fillColor('#525252')
-        .text('de finalización', { align: 'center' });
+        .fontSize(12)
+        .fillColor(faint)
+        .text('DE FINALIZACIÓN', { align: 'center', characterSpacing: 4 });
 
-      // Cuerpo: alumno
-      doc.moveDown(2);
+      // ── Alumno ──────────────────────────────────────────────────────────────
+      doc.moveDown(1.6);
       doc
         .font('Helvetica')
-        .fontSize(14)
-        .fillColor('#404040')
-        .text('Se otorga a', { align: 'center' });
-      doc.moveDown(0.4);
+        .fontSize(12)
+        .fillColor(muted)
+        .text('Se otorga el presente certificado a', { align: 'center' });
+      doc.moveDown(0.5);
       doc
         .font('Helvetica-Bold')
-        .fontSize(28)
-        .fillColor(color)
+        .fontSize(30)
+        .fillColor(ink)
         .text(input.studentName, { align: 'center' });
 
-      // Cuerpo: descripción
-      doc.moveDown(1.2);
+      // Filete decorativo corto bajo el nombre.
+      const ruleY = doc.y + 6;
+      doc
+        .lineWidth(1)
+        .strokeColor(color)
+        .moveTo(cx - 60, ruleY)
+        .lineTo(cx + 60, ruleY)
+        .stroke();
+
+      // ── Cuerpo ──────────────────────────────────────────────────────────────
+      doc.y = ruleY + 16;
       doc
         .font('Helvetica')
-        .fontSize(13)
-        .fillColor('#404040')
-        .text(input.body ?? DEFAULT_BODY, 120, doc.y, {
-          align: 'center',
-          width: pageWidth - 240,
-        });
+        .fontSize(12.5)
+        .fillColor('#374151')
+        .text(input.body ?? DEFAULT_BODY, contentX, doc.y, { ...centered, lineGap: 2 });
 
-      // Curso
-      doc.moveDown(1.2);
-      doc.font('Helvetica').fontSize(13).fillColor('#525252').text('Curso', { align: 'center' });
-      doc.moveDown(0.3);
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(20)
-        .fillColor('#0a0a0a')
-        .text(input.courseTitle, { align: 'center' });
-
-      // Footer: fecha + número + firma
-      const footerY = pageHeight - 130;
+      // ── Curso ───────────────────────────────────────────────────────────────
+      doc.moveDown(1.1);
       doc
         .font('Helvetica')
         .fontSize(11)
-        .fillColor('#525252')
-        .text(`Fecha: ${input.issuedAt.toLocaleDateString('es-ES')}`, 100, footerY);
-      doc.text(`Nº ${input.number}`, 100, footerY + 16);
+        .fillColor(faint)
+        .text('CURSO', { align: 'center', characterSpacing: 3 });
+      doc.moveDown(0.25);
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(19)
+        .fillColor(color)
+        .text(input.courseTitle, contentX, doc.y, centered);
+
+      // ── Footer: fecha + verificación (izq) · firma (der) ────────────────────
+      const footerY = pageHeight - 118;
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(10.5)
+        .fillColor(ink)
+        .text('FECHA DE EMISIÓN', contentX, footerY, { characterSpacing: 1 });
+      doc
+        .font('Helvetica')
+        .fontSize(11)
+        .fillColor(muted)
+        .text(
+          input.issuedAt.toLocaleDateString('es-ES', {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric',
+          }),
+          contentX,
+          footerY + 15,
+        );
+      doc
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor(faint)
+        .text(`Certificado verificable · Nº ${input.number}`, contentX, footerY + 33);
 
       if (input.signerName) {
-        const signX = pageWidth - 280;
-        doc.text('________________________', signX, footerY - 4);
+        const signW = 220;
+        const signX = pageWidth - contentX - signW;
+        doc
+          .lineWidth(0.75)
+          .strokeColor('#d1d5db')
+          .moveTo(signX, footerY + 6)
+          .lineTo(signX + signW, footerY + 6)
+          .stroke();
         doc
           .font('Helvetica-Bold')
           .fontSize(11)
-          .fillColor('#0a0a0a')
-          .text(input.signerName, signX, footerY + 14);
+          .fillColor(ink)
+          .text(input.signerName, signX, footerY + 12, { width: signW, align: 'center' });
         if (input.signerTitle) {
           doc
             .font('Helvetica')
-            .fontSize(10)
-            .fillColor('#737373')
-            .text(input.signerTitle, signX, footerY + 30);
+            .fontSize(9.5)
+            .fillColor(faint)
+            .text(input.signerTitle, signX, footerY + 28, { width: signW, align: 'center' });
         }
       }
 
