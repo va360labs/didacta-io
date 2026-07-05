@@ -728,6 +728,9 @@ function EditProfileForm(props: {
                 onChange={(e) => p.setName(e.target.value)}
                 maxLength={120}
               />
+              <p className="text-xs text-text-subtle">
+                Aparece tal cual en tus certificados. Usa tu nombre y apellidos reales.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
