@@ -94,7 +94,11 @@ t0=$SECONDS
 printf '\n  prod-deploy → %s:%s\n\n' "$SERVER" "$REMOTE"
 
 echo "==> 1/3 Sync source + manifests"
-mapfile -t FILES < <(collect_files)
+# Compatible con bash 3.2 (macOS): `mapfile`/`readarray` sólo existe en bash 4+.
+FILES=()
+while IFS= read -r __f; do
+  [[ -n "$__f" ]] && FILES+=("$__f")
+done < <(collect_files)
 if command -v rsync >/dev/null 2>&1; then
   for d in "${SYNC_DIRS[@]}"; do
     [[ -d "$d" ]] || continue
