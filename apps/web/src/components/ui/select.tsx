@@ -56,32 +56,41 @@ export interface SelectProps {
 
 export function Select({ value = '', onValueChange, children, disabled, className, id, onChange, name, required, defaultValue }: SelectProps) {
   const [open, setOpen] = React.useState(false);
-  
-  // If using legacy onChange, render native select
-  if (onChange) {
-    // Find option children and render as native select
-    const options: React.ReactNode[] = [];
+
+  // Usage detection: la API nativa se distingue por tener hijos `<option>`
+  // (ya sea controlada con `onChange`, o no controlada con `name`/`defaultValue`
+  // dentro de un <form>). La API enhanced usa SelectTrigger/SelectContent/
+  // SelectItem, nunca `<option>`. Sin este check, un Select no controlado (sin
+  // `onChange`) caía a la rama enhanced y renderizaba los `<option>` como texto
+  // suelto dentro de un <div>: no seleccionable y sin enviar valor en el submit.
+  const hasOptionChildren = React.useMemo(() => {
+    let found = false;
     React.Children.forEach(children, (child) => {
-      if (React.isValidElement(child) && child.type === 'option') {
-        options.push(child);
-      }
+      if (React.isValidElement(child) && child.type === 'option') found = true;
     });
+    return found;
+  }, [children]);
+
+  if (onChange || hasOptionChildren) {
+    // Controlada (`onChange`) → pasamos `value`. No controlada (form nativo) →
+    // solo `defaultValue`, para no convertirla en controlada read-only.
+    const nativeValueProps = onChange
+      ? { value: value ?? defaultValue, onChange }
+      : { defaultValue };
     return (
-      <NativeSelect 
+      <NativeSelect
         id={id}
         name={name}
         required={required}
-        
-        value={value ?? defaultValue} 
-        onChange={onChange} 
         disabled={disabled}
         className={className}
+        {...nativeValueProps}
       >
         {children}
       </NativeSelect>
     );
   }
-  
+
   const handleValueChange = React.useCallback((newValue: string) => {
     onValueChange?.(newValue);
     setOpen(false);

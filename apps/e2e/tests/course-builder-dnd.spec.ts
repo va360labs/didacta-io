@@ -118,4 +118,70 @@ test.describe('Constructor de cursos del formador (UI kit Didacta)', () => {
     });
     await expect(moduleHandle).toBeVisible();
   });
+
+  test('crea una lección desde el formulario eligiendo el tipo', async ({ page }) => {
+    // Regresión: el <Select> de tipo se renderizaba como <option> sueltos dentro
+    // de un <div> (no seleccionable) cuando el form no pasaba onChange, y el
+    // submit no enviaba `type`. Aquí ejercitamos el formulario real: elegir tipo
+    // en el <select>, escribir título y pulsar "Crear".
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const stamp = Date.now();
+    const adminToken = await adminTokenForBootstrap(tenantSlug);
+    const headers = {
+      Authorization: `Bearer ${adminToken}`,
+      'Content-Type': 'application/json',
+    };
+
+    // Curso DRAFT con 1 sección vacía (sin lecciones) vía API.
+    const created = await fetch(`${API_URL}/api/v1/modules/courses`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        title: `Alta lección E2E ${stamp}`,
+        slug: `e2e-alta-leccion-${stamp}`,
+        description: 'Original',
+        category: 'Tecnología',
+      }),
+    });
+    expect(created.ok).toBe(true);
+    const course = (await created.json()) as { id: string };
+
+    await fetch(`${API_URL}/api/v1/modules/courses/${course.id}/modules`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ title: 'Sección única' }),
+    });
+
+    await page.goto('/signin');
+    await injectSession(page, {
+      accessToken: adminToken,
+      user: {
+        id: 'admin-stub',
+        email: process.env.E2E_ADMIN_EMAIL ?? 'admin@example.test',
+        name: 'Admin',
+        tenantId: 'stub',
+        tenantSlug,
+        roles: ['super_admin', 'tenant_admin'],
+        mfaEnabled: true,
+      },
+    });
+    await page.goto(`/formador/cursos/${course.id}`);
+
+    // Abrir el formulario de alta de lección.
+    await page.getByRole('button', { name: /Añadir lección/ }).click();
+
+    // El tipo debe ser un <select> nativo real y seleccionable (no <option> sueltos).
+    const typeSelect = page.locator('select[name="type"]');
+    await expect(typeSelect).toBeVisible({ timeout: 15_000 });
+    await typeSelect.selectOption('PDF');
+    await expect(typeSelect).toHaveValue('PDF');
+
+    await page.getByPlaceholder('Título de la lección').fill('Lección desde UI');
+    await page.getByRole('button', { name: 'Crear' }).click();
+
+    // La lección aparece con su título y el label del tipo elegido.
+    const lessonRow = page.locator('li').filter({ hasText: 'Lección desde UI' });
+    await expect(lessonRow).toBeVisible({ timeout: 15_000 });
+    await expect(lessonRow.getByText('PDF')).toBeVisible();
+  });
 });
