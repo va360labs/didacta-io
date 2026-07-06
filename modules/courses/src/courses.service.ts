@@ -760,6 +760,29 @@ export class CoursesService {
     return updated;
   }
 
+  /**
+   * Desarchiva un curso: ARCHIVED → DRAFT. Vuelve a estado editable (no lo
+   * expone de golpe a los alumnos); el formador lo revisa y republica con
+   * `publishCourse`. Idempotente: si no está ARCHIVED, lo devuelve sin tocar.
+   */
+  async unarchiveCourse(tenantId: string, actorId: string | null, courseId: string) {
+    const course = await this.requireCourse(tenantId, courseId);
+    if (course.status !== 'ARCHIVED') return course;
+    const updated = await this.prisma.modCoursesCourse.update({
+      where: { id: courseId },
+      data: { status: 'DRAFT' },
+    });
+    await this.publish(tenantId, actorId, 'courses.course.unarchived', { courseId });
+    await this.ctx.auditLog.record({
+      tenantId,
+      actorId,
+      action: 'course.unarchived',
+      resourceType: 'course',
+      resourceId: courseId,
+    });
+    return updated;
+  }
+
   private async requireCourse(tenantId: string, courseId: string) {
     const course = await this.prisma.modCoursesCourse.findFirst({
       where: { tenantId, id: courseId, deletedAt: null },

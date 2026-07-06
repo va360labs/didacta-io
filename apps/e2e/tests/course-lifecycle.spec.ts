@@ -84,6 +84,16 @@ test.describe('Lifecycle del curso (DRAFT → PUBLISHED → ARCHIVED)', () => {
     expect(archive.ok).toBe(true);
     const archived = (await archive.json()) as { status: string };
     expect(archived.status).toBe('ARCHIVED');
+
+    // 6. Desarchivar → vuelve a DRAFT (editable, no expuesto a alumnos).
+    const unarchive = await fetch(`${API_URL}/api/v1/modules/courses/${course.id}/unarchive`, {
+      method: 'POST',
+      headers,
+      body: '{}',
+    });
+    expect(unarchive.ok).toBe(true);
+    const unarchived = (await unarchive.json()) as { status: string };
+    expect(unarchived.status).toBe('DRAFT');
   });
 
   test('rechaza slug duplicado en mismo tenant', async () => {

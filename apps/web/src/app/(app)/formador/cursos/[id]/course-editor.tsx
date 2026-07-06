@@ -127,6 +127,10 @@ export function CourseEditor({
     await withRefresh(() => coursesApi.archive(initial.id));
   }
 
+  async function handleUnarchive() {
+    await withRefresh(() => coursesApi.unarchive(initial.id));
+  }
+
   const totalLessons = initial.modules.reduce((acc, m) => acc + m.lessons.length, 0);
   const totalMinutes = initial.modules.reduce(
     (acc, m) => acc + m.lessons.reduce((s, l) => s + (l.durationMinutes ?? 0), 0),
@@ -194,7 +198,12 @@ export function CourseEditor({
                 <Button onClick={handleArchive} variant="outline" disabled={pending}>
                   Archivar
                 </Button>
-              ) : null}
+              ) : (
+                <Button onClick={handleUnarchive} disabled={pending}>
+                  <Icon name="arrow-left" size={16} />
+                  Desarchivar
+                </Button>
+              )}
             </div>
           </div>
         </div>

@@ -283,6 +283,42 @@ describe('CoursesService', () => {
     );
   });
 
+  it('unarchiveCourse vuelve ARCHIVED → DRAFT y emite courses.course.unarchived', async () => {
+    const { prisma, courses } = makeFakePrisma();
+    const ctx = makeContext();
+    const service = new CoursesService(prisma as never, ctx);
+    const course = await service.createCourse('t-1', null, {
+      slug: 'a',
+      title: 't',
+      language: 'es-ES',
+    });
+    await service.archiveCourse('t-1', null, course.id);
+    expect(courses.get(course.id)!.status).toBe('ARCHIVED');
+
+    const restored = await service.unarchiveCourse('t-1', null, course.id);
+    expect(restored.status).toBe('DRAFT');
+    expect(ctx.eventBus.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'courses.course.unarchived' }),
+    );
+  });
+
+  it('unarchiveCourse es idempotente si el curso no está ARCHIVED', async () => {
+    const { prisma } = makeFakePrisma();
+    const ctx = makeContext();
+    const service = new CoursesService(prisma as never, ctx);
+    const course = await service.createCourse('t-1', null, {
+      slug: 'a',
+      title: 't',
+      language: 'es-ES',
+    });
+    // Está en DRAFT → unarchive no cambia estado ni emite evento.
+    const same = await service.unarchiveCourse('t-1', null, course.id);
+    expect(same.status).toBe('DRAFT');
+    expect(ctx.eventBus.publish).not.toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'courses.course.unarchived' }),
+    );
+  });
+
   it('updateCourse falla si el curso no existe', async () => {
     const { prisma } = makeFakePrisma();
     const service = new CoursesService(prisma as never, makeContext());

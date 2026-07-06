@@ -330,6 +330,18 @@ export class CoursesController {
     }
   }
 
+  @Post(':id/unarchive')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Desarchivar curso (ARCHIVED → DRAFT)' })
+  async unarchive(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException();
+    try {
+      return await this.registry.getCoursesService().unarchiveCourse(user.tenantId, user.sub, id);
+    } catch (error) {
+      throw this.translate(error);
+    }
+  }
+
   @Post('lessons/:lessonId/move')
   @HttpCode(200)
   @ApiOperation({ summary: 'Mover lección 1 puesto arriba o abajo dentro de su módulo' })

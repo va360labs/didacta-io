@@ -198,6 +198,14 @@ export const coursesApi = {
     );
   },
 
+  async unarchive(courseId: string): Promise<Course> {
+    return apiFetch<Course>(
+      `/api/v1/modules/courses/${courseId}/unarchive`,
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
+
   async moveLesson(lessonId: string, direction: 'up' | 'down'): Promise<CourseLesson> {
     return apiFetch<CourseLesson>(
       `/api/v1/modules/courses/lessons/${lessonId}/move`,
