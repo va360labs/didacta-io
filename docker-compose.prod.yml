@@ -86,6 +86,14 @@ services:
       STORAGE_ROOT: /app/data/storage
       # Next.js necesita el host externo para los enlaces.
       NEXT_PUBLIC_DEV_HOST: aula.va360.academy
+      # Rate limit: el default community son 100 req/min POR TENANT (bucket
+      # `ratelimit:<tenantId>`), compartido entre TODOS los usuarios de la
+      # academia a la vez — demasiado bajo para un tenant real multiusuario y
+      # provoca 429 en uso normal. Lo subimos a un valor efectivamente sin
+      # límite (conserva el failsafe). Overrideable por env si algún día se
+      # quiere ajustar. Ver apps/api/src/rate-limit/.
+      RATE_LIMIT_COMMUNITY_AUTH_PER_MIN: ${RATE_LIMIT_COMMUNITY_AUTH_PER_MIN:-100000}
+      RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN: ${RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN:-100000}
     volumes:
       - didacta_prod_data:/app/data
     healthcheck:
