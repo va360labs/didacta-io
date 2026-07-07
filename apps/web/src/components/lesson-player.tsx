@@ -28,10 +28,18 @@ const LessonRichHtml = memo(function LessonRichHtml({ html }: { html: string }) 
 
 interface Props {
   lesson: CourseLesson & { content: Record<string, unknown> };
-  enrollmentId: string;
-  initialResumePositionSec: number;
-  initialCompleted: boolean;
+  /** Ausente en modo `preview` (editor/admin sin matrícula): no se reporta progreso. */
+  enrollmentId?: string;
+  initialResumePositionSec?: number;
+  initialCompleted?: boolean;
   onProgress?: (progressPercent: number) => void;
+  /**
+   * Vista previa de editor/admin: renderiza el contenido de la lección tal cual lo
+   * vería el alumno, pero SIN trackear progreso ni permitir marcar completada
+   * (no hay matrícula). Los tipos que requieren backend con matrícula (QUIZ, SCORM)
+   * muestran un aviso en su lugar.
+   */
+  preview?: boolean;
 }
 
 // Cada cuánto reportamos tiempo visto al backend. Subido de 30→60s para
@@ -60,9 +68,10 @@ const LESSON_TYPE_META: Record<string, { label: string; icon: string }> = {
 export function LessonPlayer({
   lesson,
   enrollmentId,
-  initialResumePositionSec,
-  initialCompleted,
+  initialResumePositionSec = 0,
+  initialCompleted = false,
   onProgress,
+  preview = false,
 }: Props) {
   const [completed, setCompleted] = useState(initialCompleted);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +89,8 @@ export function LessonPlayer({
 
   const sendDelta = useCallback(
     async (delta: number, opts: { resumePositionSec?: number; completed?: boolean } = {}) => {
+      // Vista previa (editor sin matrícula): no hay progreso que reportar.
+      if (preview || !enrollmentId) return;
       try {
         const result = await learningApi.trackProgress({
           enrollmentId,
@@ -97,12 +108,13 @@ export function LessonPlayer({
         );
       }
     },
-    [enrollmentId, lesson.id, onProgress],
+    [enrollmentId, lesson.id, onProgress, preview],
   );
 
   useEffect(() => {
-    // Bunny mide visionado real; no sumamos tiempo de "pestaña abierta".
-    if (completed || isBunnyVideo) return;
+    // Bunny mide visionado real; no sumamos tiempo de "pestaña abierta". En
+    // preview no hay matrícula → no se trackea nada.
+    if (completed || isBunnyVideo || preview) return;
     tickRef.current = setInterval(() => {
       if (document.visibilityState === 'visible') {
         void sendDelta(TICK_SEC);
@@ -111,7 +123,7 @@ export function LessonPlayer({
     return () => {
       if (tickRef.current) clearInterval(tickRef.current);
     };
-  }, [completed, isBunnyVideo, sendDelta]);
+  }, [completed, isBunnyVideo, sendDelta, preview]);
 
   // Reporte de visionado real de Bunny: convertimos el delta (segundos
   // reproducidos) en una llamada de progreso y fijamos la posición de reanudación.
@@ -138,8 +150,9 @@ export function LessonPlayer({
   }
 
   // En lecciones QUIZ, "completada" no es manual — lo dispara el bridge
-  // en backend cuando el alumno aprueba (assessments.attempt.passed).
-  const showManualCompleteButton = lesson.type !== 'QUIZ';
+  // en backend cuando el alumno aprueba (assessments.attempt.passed). En
+  // preview no se puede completar (no hay matrícula).
+  const showManualCompleteButton = lesson.type !== 'QUIZ' && !preview;
   const meta = LESSON_TYPE_META[lesson.type] ?? { label: lesson.type, icon: '·' };
 
   return (
@@ -179,8 +192,9 @@ export function LessonPlayer({
           resumeAt={initialResumePositionSec}
           onTick={sendDelta}
           onWatch={handleWatch}
-          watchEnabled={!completed}
+          watchEnabled={!completed && !preview}
           enrollmentId={enrollmentId}
+          preview={preview}
           onQuizPassed={() => setCompleted(true)}
         />
 
@@ -205,14 +219,16 @@ function LessonContent({
   onQuizPassed,
   onWatch,
   watchEnabled,
+  preview,
 }: {
   lesson: CourseLesson & { content: Record<string, unknown> };
   resumeAt: number;
   onTick: (delta: number, opts?: { resumePositionSec?: number }) => Promise<void>;
-  enrollmentId: string;
+  enrollmentId?: string;
   onQuizPassed: () => void;
   onWatch: (report: WatchReport) => void;
   watchEnabled: boolean;
+  preview?: boolean;
 }) {
   const content = lesson.content;
 
@@ -282,6 +298,11 @@ function LessonContent({
   }
 
   if (lesson.type === 'QUIZ') {
+    if (preview || !enrollmentId) {
+      return (
+        <Empty hint="Vista previa: los cuestionarios se resuelven al matricularse en el curso." />
+      );
+    }
     const quizId = typeof content['quizId'] === 'string' ? content['quizId'] : '';
     if (!quizId) {
       return (
@@ -299,6 +320,9 @@ function LessonContent({
   }
 
   if (lesson.type === 'SCORM') {
+    if (preview) {
+      return <Empty hint="Vista previa: el contenido SCORM se ejecuta al matricularse en el curso." />;
+    }
     return <ScormFrame lessonId={lesson.id} title={lesson.title} />;
   }
 

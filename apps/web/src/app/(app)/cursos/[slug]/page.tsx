@@ -1,8 +1,10 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AiTutorPanel } from '@/components/ai-tutor-panel';
+import { CourseStatusBadge } from '@/components/course-status-badge';
+import { authStorage } from '@/lib/auth-storage';
 import { BuyCourseButton } from '@/components/buy-course-button';
 import { LessonComments } from '@/components/lesson-comments';
 import { LessonPlayer } from '@/components/lesson-player';
@@ -30,9 +32,18 @@ const LESSON_TYPE_LABEL: Record<string, string> = {
   QUIZ: 'Quiz',
 };
 
+// Roles que pueden PREVISUALIZAR un curso no publicado (sin matricularse).
+const PREVIEW_ROLES = ['super_admin', 'tenant_admin', 'formador'];
+
 export default function CourseAlumnoPage() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
+  // Editor (profesor/admin): puede abrir cursos DRAFT/ARCHIVED y ver el contenido
+  // en modo vista previa sin necesidad de publicarlos ni matricularse.
+  const isEditor = useMemo(() => {
+    const roles = authStorage.getSession()?.user.roles ?? [];
+    return roles.some((r) => PREVIEW_ROLES.includes(r));
+  }, []);
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
@@ -55,7 +66,9 @@ export default function CourseAlumnoPage() {
     if (!params?.slug) return;
     try {
       const [courseList, enrollments] = await Promise.all([
-        coursesApi.list({ status: 'PUBLISHED' }),
+        // Editores resuelven el slug entre TODOS los estados (para previsualizar
+        // DRAFT/ARCHIVED); alumnos, solo entre publicados (sin fugas de borradores).
+        coursesApi.list(isEditor ? {} : { status: 'PUBLISHED' }),
         learningApi.listMine(),
       ]);
       const matched = courseList.find((c) => c.slug === params.slug);
@@ -114,7 +127,7 @@ export default function CourseAlumnoPage() {
           : 'No pudimos cargar el curso. Prueba refrescar la página.',
       );
     }
-  }, [params?.slug]);
+  }, [params?.slug, isEditor]);
 
   useEffect(() => {
     void reload();
@@ -216,6 +229,10 @@ export default function CourseAlumnoPage() {
   const allLessons: CourseLesson[] = course.modules.flatMap((m) => m.lessons);
   const activeLesson = allLessons.find((l) => l.id === activeLessonId);
   const progressPct = enrollment?.progressPercent ?? 0;
+  // Modo vista previa: editor/admin que abre el curso sin estar matriculado. Ve el
+  // contenido (el backend le devuelve el `content` completo por ser editor) pero
+  // sin trackear progreso ni muro de compra.
+  const isPreview = isEditor && !enrollment;
 
   return (
     <section className="space-y-6">
@@ -227,6 +244,18 @@ export default function CourseAlumnoPage() {
       >
         ← Volver al catálogo
       </Button>
+
+      {isPreview ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm">
+          <Icon name="eye" size={16} className="text-brand-700" />
+          <span className="font-semibold text-brand-800">Vista previa</span>
+          <CourseStatusBadge status={course.status} />
+          <span className="text-brand-700">
+            Lo ves como editor, sin matrícula: el progreso no se guarda y los quizzes/SCORM se
+            activan al matricularse.
+          </span>
+        </div>
+      ) : null}
 
       {/* Hero — dos variantes:
           · NO inscrito: hero alto con imagen/vídeo destacado + descripción.
@@ -411,7 +440,7 @@ export default function CourseAlumnoPage() {
       {enrollment ? <UpcomingZoomBanner sessions={zoomSessions} /> : null}
       {enrollment ? <RecordedZoomSessions sessions={zoomSessions} /> : null}
 
-      {!enrollment ? (
+      {!enrollment && !isPreview ? (
         <Card>
           <CardHeader>
             <CardTitle>Empieza este curso</CardTitle>
@@ -539,7 +568,27 @@ export default function CourseAlumnoPage() {
         </Card>
 
         <main id="curso-main" className="min-w-0">
-          {!enrollment ? (
+          {isPreview ? (
+            activeLesson ? (
+              // Vista previa de editor: contenido completo, sin tracking de progreso.
+              <LessonPlayer
+                key={activeLesson.id}
+                lesson={{
+                  ...activeLesson,
+                  content:
+                    (activeLesson as CourseLesson & { content?: Record<string, unknown> })
+                      .content ?? {},
+                }}
+                preview
+              />
+            ) : (
+              <Card>
+                <CardContent className="py-12 text-center text-sm text-text-subtle">
+                  Este curso aún no tiene lecciones.
+                </CardContent>
+              </Card>
+            )
+          ) : !enrollment ? (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
                 <h3 className="font-display text-xl font-semibold">Contenido bloqueado</h3>
