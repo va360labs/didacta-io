@@ -56,6 +56,7 @@ export class NotificationRealtimePublisher {
         subject: event.subject,
         createdAt:
           event.createdAt instanceof Date ? event.createdAt.toISOString() : event.createdAt,
+        ...(event.metadata ? { metadata: event.metadata } : {}),
       });
       await this.redis.publish(channel, payload);
     } catch (err) {

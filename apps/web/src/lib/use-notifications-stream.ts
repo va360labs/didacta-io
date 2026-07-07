@@ -13,6 +13,12 @@ export interface NotificationStreamEvent {
   templateKey: string;
   subject: string | null;
   createdAt: string;
+  /**
+   * Metadatos de la notificación (p. ej. `{ postId, commentId }`). Los usa el
+   * toast para armar el deep-link "responder" sin un refetch. Puede faltar en
+   * notificaciones sin metadata relevante.
+   */
+  metadata?: Record<string, unknown>;
 }
 
 /**

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Icon, type IconName } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import { notificationLink } from '@/lib/notification-link';
 import { notificationsApi, type Notification } from '@/lib/notifications';
 
 const TEMPLATE_LABEL: Record<string, string> = {
@@ -16,6 +18,9 @@ const TEMPLATE_LABEL: Record<string, string> = {
   'assessments.attempt.passed': 'Aprobaste un quiz',
   'assessments.attempt.failed': 'No alcanzaste el umbral',
   'assessments.attempt.graded': 'Tu intento fue corregido',
+  'community.mention': 'Te mencionaron en la comunidad',
+  'community.comment.on_post': 'Nuevo comentario en tu publicación',
+  'community.reply.to_comment': 'Respondieron a tu comentario',
 };
 
 interface IconSpec {
@@ -30,6 +35,9 @@ const TEMPLATE_ICON: Record<string, IconSpec> = {
   'assessments.attempt.passed': { name: 'check', tone: 'success' },
   'assessments.attempt.failed': { name: 'trending', tone: 'warn' },
   'assessments.attempt.graded': { name: 'sparkles', tone: 'info' },
+  'community.mention': { name: 'messages', tone: 'info' },
+  'community.comment.on_post': { name: 'messages', tone: 'info' },
+  'community.reply.to_comment': { name: 'messages', tone: 'info' },
 };
 
 const TONE_STYLES: Record<IconSpec['tone'], { bg: string; fg: string }> = {
@@ -168,6 +176,30 @@ export default function NotificacionesPage() {
                 tone: 'info' as const,
               };
               const style = TONE_STYLES[spec.tone];
+              const link = notificationLink(n.templateKey, n.metadata);
+              const details = (
+                <>
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <p className="font-semibold text-text">{label}</p>
+                    {isUnread ? (
+                      <Badge variant="info" dot className="text-[10px]">
+                        Nueva
+                      </Badge>
+                    ) : null}
+                  </div>
+                  {n.body ? (
+                    <p className="mt-1 text-sm leading-relaxed text-text-muted">{n.body}</p>
+                  ) : null}
+                  <p className="mt-1.5 flex items-center gap-1.5 text-xs text-text-subtle tabular-nums">
+                    {formatRelative(n.createdAt)}
+                    {link ? (
+                      <span className="font-semibold text-[var(--didacta-info-fg)]">
+                        · {link.actionLabel}
+                      </span>
+                    ) : null}
+                  </p>
+                </>
+              );
               return (
                 <li
                   key={n.id}
@@ -185,20 +217,20 @@ export default function NotificacionesPage() {
                     <Icon name={spec.name} size={18} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-baseline gap-2">
-                      <p className="font-semibold text-text">{label}</p>
-                      {isUnread ? (
-                        <Badge variant="info" dot className="text-[10px]">
-                          Nueva
-                        </Badge>
-                      ) : null}
-                    </div>
-                    {n.body ? (
-                      <p className="mt-1 text-sm leading-relaxed text-text-muted">{n.body}</p>
-                    ) : null}
-                    <p className="mt-1.5 text-xs text-text-subtle tabular-nums">
-                      {formatRelative(n.createdAt)}
-                    </p>
+                    {link ? (
+                      <Link
+                        href={link.href}
+                        onClick={() => {
+                          // Marcar leída al navegar (fire-and-forget: ya salimos de la página).
+                          if (isUnread) void notificationsApi.markRead(n.id);
+                        }}
+                        className="block rounded-md outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[var(--didacta-info-fg)]"
+                      >
+                        {details}
+                      </Link>
+                    ) : (
+                      details
+                    )}
                   </div>
                   {isUnread ? (
                     <button

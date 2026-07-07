@@ -262,20 +262,24 @@ export class CommunityService {
   ) {
     const post = await this.prisma.modCommunityPost.findFirst({
       where: { id: postId, tenantId, deletedAt: null },
-      select: { id: true },
+      select: { id: true, authorId: true, title: true },
     });
     if (!post) throw new PostNotFoundError();
+
+    // Autor del comentario padre (si es una respuesta), para saber a quién avisar.
+    let parentAuthorId: string | null = null;
 
     // Si es una respuesta, validar el comentario padre.
     if (dto.parentCommentId) {
       const parent = await this.prisma.modCommunityComment.findFirst({
         where: { id: dto.parentCommentId, tenantId, deletedAt: null },
-        select: { id: true, postId: true, parentCommentId: true },
+        select: { id: true, postId: true, parentCommentId: true, authorId: true },
       });
       if (!parent) throw new CommentNotFoundError();
       if (parent.postId !== postId) throw new ParentCommentMismatchError();
       // 1 nivel máx: el padre no puede ser él mismo una respuesta.
       if (parent.parentCommentId !== null) throw new NestedRepliesTooDeepError();
+      parentAuthorId = parent.authorId;
     }
 
     const comment = await this.prisma.modCommunityComment.create({
@@ -288,7 +292,17 @@ export class CommunityService {
         parentCommentId: dto.parentCommentId ?? null,
       },
     });
-    await this.persistMentions(tenantId, author.id, dto.body, { commentId: comment.id });
+    const mentioned = await this.persistMentions(tenantId, author.id, dto.body, {
+      commentId: comment.id,
+    });
+    await this.notifyCommentTarget({
+      tenantId,
+      author,
+      post: { id: post.id, authorId: post.authorId, title: post.title },
+      comment: { id: comment.id, body: dto.body, parentCommentId: comment.parentCommentId },
+      parentAuthorId,
+      alreadyNotified: mentioned,
+    });
     await this.publish(tenantId, author.id, 'community.comment.created', {
       commentId: comment.id,
       postId,
@@ -296,6 +310,66 @@ export class CommunityService {
       parentCommentId: comment.parentCommentId,
     });
     return comment;
+  }
+
+  /**
+   * Avisa al destinatario de un comentario nuevo:
+   *  - Comentario raíz → autor del post ("comentaron en tu publicación").
+   *  - Respuesta       → autor del comentario padre ("respondieron a tu comentario").
+   *
+   * Reglas: nunca te notificás a vos mismo, y si el destinatario ya recibió una
+   * @mención en este mismo comentario no lo duplicamos (la mención ya lo avisó).
+   *
+   * Se envía por in-app y email; el hub respeta la matriz de preferencias del
+   * usuario (categoría COMMUNITY) y omite el canal que el usuario deshabilitó.
+   * Best-effort: un fallo de notificación no rompe la creación del comentario.
+   */
+  private async notifyCommentTarget(args: {
+    tenantId: string;
+    author: { id: string; displayName: string | null };
+    post: { id: string; authorId: string; title: string };
+    comment: { id: string; body: string; parentCommentId: string | null };
+    parentAuthorId: string | null;
+    alreadyNotified: Set<string>;
+  }): Promise<void> {
+    const isReply = args.comment.parentCommentId !== null;
+    const recipient = isReply ? args.parentAuthorId : args.post.authorId;
+    if (!recipient) return;
+    if (recipient === args.author.id) return; // no auto-notificación
+    if (args.alreadyNotified.has(recipient)) return; // ya avisado por mención
+
+    const variables = {
+      actorId: args.author.id,
+      actorName: args.author.displayName ?? 'Alguien',
+      postId: args.post.id,
+      postTitle: args.post.title,
+      commentId: args.comment.id,
+      parentCommentId: args.comment.parentCommentId,
+      excerpt: excerpt(args.comment.body),
+    };
+    const templateKey = isReply ? 'community.reply.to_comment' : 'community.comment.on_post';
+
+    for (const channel of ['in-app', 'email'] as const) {
+      await this.ctx.notificationHub
+        .send({
+          tenantId: args.tenantId,
+          channel,
+          templateKey,
+          locale: 'es-ES',
+          to: recipient,
+          category: 'COMMUNITY',
+          variables,
+        })
+        .catch((err: unknown) => {
+          this.ctx.logger.warn('mod.community: notify comment target failed', {
+            tenantId: args.tenantId,
+            recipient,
+            channel,
+            templateKey,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        });
+    }
   }
 
   async deleteComment(tenantId: string, actorId: string, commentId: string) {
@@ -812,9 +886,9 @@ export class CommunityService {
     authorId: string,
     body: string,
     target: { postId?: string; commentId?: string },
-  ): Promise<void> {
+  ): Promise<Set<string>> {
     const handles = parseMentionHandles(body);
-    if (handles.length === 0) return;
+    if (handles.length === 0) return new Set();
 
     // Buscamos los users del tenant cuyo email empieza por alguno de los
     // handles (case-insensitive). Una sola query con OR.
@@ -852,7 +926,7 @@ export class CommunityService {
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
-    if (rowsToCreate.length === 0) return;
+    if (rowsToCreate.length === 0) return new Set();
 
     await this.prisma.modCommunityMention.createMany({ data: rowsToCreate });
 
@@ -880,6 +954,10 @@ export class CommunityService {
           });
         });
     }
+
+    // Devuelve los destinatarios ya avisados por mención, para que el aviso de
+    // "comentaron/respondieron" no los duplique.
+    return new Set(rowsToCreate.map((m) => m.mentionedUserId));
   }
 
   // ── Avisos masivos (broadcast) ─────────────────────────────────────────────
@@ -1102,6 +1180,17 @@ export class CommunityService {
     });
     return { deleted: true };
   }
+}
+
+/**
+ * Recorta el body de un comentario a un extracto corto para el cuerpo de la
+ * notificación (evita meter párrafos enteros en un email/toast). Colapsa
+ * saltos de línea y añade elipsis si se truncó.
+ */
+export function excerpt(body: string, max = 140): string {
+  const oneLine = body.replace(/\s+/g, ' ').trim();
+  if (oneLine.length <= max) return oneLine;
+  return `${oneLine.slice(0, max - 1).trimEnd()}…`;
 }
 
 /**

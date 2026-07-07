@@ -31,6 +31,7 @@ export type {
   AuditLogService,
   EvidenceVaultService,
   NotificationHubService,
+  NotificationCategory,
   I18nService,
   TenantConfigService,
 } from './module/module.js';

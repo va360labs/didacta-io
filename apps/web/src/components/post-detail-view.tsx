@@ -30,11 +30,22 @@ const EMOJIS = ['👍', '❤️', '🎉', '🤔'];
 
 interface PostDetailViewProps {
   postId: string;
+  /**
+   * Si viene (p. ej. desde una notificación `?comment=`), tras cargar el post
+   * hacemos scroll a ese comentario y, si es un comentario raíz, abrimos su
+   * composer de respuesta enfocado — "ir directamente a responder".
+   */
+  focusCommentId?: string;
   onClose?: () => void;
   onChanged?: () => void;
 }
 
-export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewProps) {
+export function PostDetailView({
+  postId,
+  focusCommentId,
+  onClose,
+  onChanged,
+}: PostDetailViewProps) {
   const [post, setPost] = useState<PostDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -66,6 +77,27 @@ export function PostDetailView({ postId, onClose, onChanged }: PostDetailViewPro
     void reload({ silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId]);
+
+  // Deep-link desde notificación: al cargar el post, enfoca el comentario y —si
+  // es raíz— abre su composer de respuesta. Se aplica una sola vez.
+  const appliedFocusRef = useRef(false);
+  useEffect(() => {
+    if (!post || !focusCommentId || appliedFocusRef.current) return;
+    const target = post.comments.find((c) => c.id === focusCommentId);
+    if (!target) return;
+    appliedFocusRef.current = true;
+    if (target.parentCommentId === null) {
+      setReplyTarget(focusCommentId);
+      setReplyBody('');
+    }
+    // Esperamos un tick a que monte el composer antes de hacer scroll.
+    const t = setTimeout(() => {
+      document
+        .getElementById(`comment-${focusCommentId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    return () => clearTimeout(t);
+  }, [post, focusCommentId]);
 
   function insertCommentEmoji(emoji: string) {
     const ta = commentBodyRef.current;
@@ -677,7 +709,7 @@ function CommentThread({
   onModerate: (commentId: string, isHidden: boolean) => void;
 }) {
   return (
-    <div className="py-4">
+    <div className="py-4" id={`comment-${comment.id}`}>
       <CommentBody
         comment={comment}
         reactions={reactions}

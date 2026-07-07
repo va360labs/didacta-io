@@ -1,12 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { PostDetailView } from '@/components/post-detail-view';
 
 export default function PostDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  // `?comment=<id>` (desde una notificación) enfoca ese comentario y, si es un
+  // comentario raíz, abre su composer de respuesta directamente.
+  const focusCommentId = useSearchParams().get('comment') ?? undefined;
 
   if (!params?.id) return null;
 
@@ -20,7 +23,11 @@ export default function PostDetailPage() {
         Volver a la comunidad
       </Link>
 
-      <PostDetailView postId={params.id} onClose={() => router.push('/comunidad')} />
+      <PostDetailView
+        postId={params.id}
+        focusCommentId={focusCommentId}
+        onClose={() => router.push('/comunidad')}
+      />
     </section>
   );
 }
