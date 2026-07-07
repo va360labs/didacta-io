@@ -46,6 +46,12 @@ const WC_LOOKUP_STATUSES = [
 ];
 const PER_PAGE = 100;
 const DEFAULT_MAX_PAGES = 50;
+/**
+ * Cota de páginas del barrido por email de facturación (path B del lookup). WC no
+ * filtra /subscriptions por email, así que hay que escanear y filtrar; acotamos
+ * para que el job de fondo nunca cuelgue en tiendas con muchísimas suscripciones.
+ */
+const LOOKUP_MAX_PAGES = 20;
 /** Aborta cada request a los 10s (como Stripe) para que el job de fondo nunca cuelgue. */
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -147,29 +153,64 @@ export class WooCommerceReadSdkAdapter implements StripeReadAdapter {
   }
 
   async findSubscriptionsByEmail(email: string): Promise<StripeSubscriberRecord[]> {
+    const target = email.trim().toLowerCase();
+    // Dedup por id: una misma suscripción puede aparecer por ambos paths.
+    const byId = new Map<string, StripeSubscriberRecord>();
+    const collect = (row: WooSubscription) => {
+      const rec = mapSubscription(row);
+      if (!byId.has(rec.subscriptionId)) byId.set(rec.subscriptionId, rec);
+    };
     try {
-      // 1) email → customer_id (WC no filtra /subscriptions por email).
+      // PATH A — por email de CUENTA WP: email → customer_id → sus suscripciones.
+      // Barato y exacto para clientes registrados cuyo email de cuenta coincide.
       const custResp = await this.get(`/customers?email=${encodeURIComponent(email)}`);
       if (custResp.status === 401 || custResp.status === 403) {
         throw new StripeReadKeyInvalidError(`WooCommerce ${custResp.status} al buscar el cliente`);
       }
-      if (!custResp.ok) return [];
-      const customers = (await custResp.json()) as Array<{ id: number }>;
-      if (!customers.length) return [];
-
-      const out: StripeSubscriberRecord[] = [];
-      for (const c of customers) {
-        for (const status of WC_LOOKUP_STATUSES) {
-          const subResp = await this.get(
-            `/subscriptions?customer=${c.id}&status=${status}&per_page=${PER_PAGE}`,
-          );
-          if (subResp.status === 404) break; // plugin ausente
-          if (!subResp.ok) continue;
-          const rows = (await subResp.json()) as WooSubscription[];
-          for (const row of rows) out.push(mapSubscription(row));
+      if (custResp.ok) {
+        const customers = (await custResp.json()) as Array<{ id: number }>;
+        for (const c of customers) {
+          for (const status of WC_LOOKUP_STATUSES) {
+            const subResp = await this.get(
+              `/subscriptions?customer=${c.id}&status=${status}&per_page=${PER_PAGE}`,
+            );
+            if (subResp.status === 404) break; // plugin ausente
+            if (!subResp.ok) continue;
+            for (const row of (await subResp.json()) as WooSubscription[]) collect(row);
+          }
         }
       }
-      return out;
+
+      // PATH B — por email de FACTURACIÓN. `/customers?email=` solo mira el email
+      // de la CUENTA WP, así que NO detecta (a) compras de INVITADO (customer_id 0,
+      // sin cuenta) ni (b) suscripciones cuyo email de facturación ≠ email de la
+      // cuenta (el caso típico: el buscador de WooCommerce sí las encuentra porque
+      // busca por facturación). WC no filtra /subscriptions por email, así que
+      // escaneamos por estado y filtramos por billing.email exacto.
+      for (const status of WC_LOOKUP_STATUSES) {
+        let page = 1;
+        for (;;) {
+          const resp = await this.get(
+            `/subscriptions?status=${status}&per_page=${PER_PAGE}&page=${page}`,
+          );
+          if (resp.status === 404) break; // plugin ausente
+          if (resp.status === 401 || resp.status === 403) {
+            throw new StripeReadKeyInvalidError(
+              `WooCommerce ${resp.status} al listar suscripciones`,
+            );
+          }
+          if (!resp.ok) break;
+          const rows = (await resp.json()) as WooSubscription[];
+          for (const row of rows) {
+            if ((row.billing?.email ?? '').trim().toLowerCase() === target) collect(row);
+          }
+          const totalPages = Number(resp.headers.get('X-WP-TotalPages') ?? '1') || 1;
+          if (page >= totalPages || rows.length === 0 || page >= LOOKUP_MAX_PAGES) break;
+          page += 1;
+        }
+      }
+
+      return [...byId.values()];
     } catch (err) {
       if (err instanceof StripeReadKeyInvalidError || err instanceof StripeReadApiError) throw err;
       throw new StripeReadApiError((err as Error).message ?? 'error');
