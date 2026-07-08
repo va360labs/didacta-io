@@ -555,6 +555,26 @@ export class CoursesService {
       }
     }
 
+    // Las lecciones soft-deleted conservan su `position`, y la unique
+    // (module_id, position) NO filtra `deletedAt` → sus posiciones 0..N
+    // colisionan con las finales del reorder (era el 500 "Unique constraint
+    // failed on (module_id, position)"). Las evacuamos a negativos muy bajos
+    // antes de reordenar para liberar el rango.
+    const softDeleted = await this.prisma.modCoursesLesson.findMany({
+      where: { tenantId, moduleId, deletedAt: { not: null }, position: { gte: 0 } },
+      select: { id: true },
+    });
+    if (softDeleted.length > 0) {
+      await this.prisma.$transaction(
+        softDeleted.map((l, i) =>
+          this.prisma.modCoursesLesson.update({
+            where: { id: l.id },
+            data: { position: -(1_000_000 + i) },
+          }),
+        ),
+      );
+    }
+
     await this.prisma.$transaction(
       lessonIds.map((id, idx) =>
         this.prisma.modCoursesLesson.update({
@@ -604,6 +624,25 @@ export class CoursesService {
       if (!existingIds.has(id)) {
         throw new CourseNotFoundError(`módulo ${id} no pertenece al curso ${courseId}`);
       }
+    }
+
+    // Igual que en reorderLessons: los módulos soft-deleted conservan su
+    // `position` y la unique (course_id, position) no filtra `deletedAt`.
+    // Los evacuamos a negativos bajos para no colisionar con las posiciones
+    // finales del reorder.
+    const softDeleted = await this.prisma.modCoursesModule.findMany({
+      where: { tenantId, courseId, deletedAt: { not: null }, position: { gte: 0 } },
+      select: { id: true },
+    });
+    if (softDeleted.length > 0) {
+      await this.prisma.$transaction(
+        softDeleted.map((m, i) =>
+          this.prisma.modCoursesModule.update({
+            where: { id: m.id },
+            data: { position: -(1_000_000 + i) },
+          }),
+        ),
+      );
     }
 
     await this.prisma.$transaction(
