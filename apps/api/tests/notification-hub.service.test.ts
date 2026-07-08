@@ -25,10 +25,40 @@ interface UserRow {
   email: string;
 }
 
-function makeFakePrisma(users: UserRow[] = []) {
+interface PrefRow {
+  tenantId: string;
+  userId: string;
+  category: 'COMMUNITY' | 'LEARNING' | 'ASSESSMENTS' | 'SYSTEM';
+  channel: 'EMAIL' | 'IN_APP' | 'WEBHOOK';
+  enabled: boolean;
+}
+
+function makeFakePrisma(users: UserRow[] = [], prefs: PrefRow[] = []) {
   const rows: NotificationRow[] = [];
   let next = 1;
   return {
+    userNotificationPreference: {
+      async findUnique(args: {
+        where: {
+          tenantId_userId_category_channel: {
+            tenantId: string;
+            userId: string;
+            category: string;
+            channel: string;
+          };
+        };
+      }): Promise<{ enabled: boolean } | null> {
+        const k = args.where.tenantId_userId_category_channel;
+        const found = prefs.find(
+          (p) =>
+            p.tenantId === k.tenantId &&
+            p.userId === k.userId &&
+            p.category === k.category &&
+            p.channel === k.channel,
+        );
+        return found ? { enabled: found.enabled } : null;
+      },
+    },
     notification: {
       async create(args: { data: Partial<NotificationRow> }) {
         const row: NotificationRow = {
@@ -384,6 +414,171 @@ describe('PrismaNotificationHubService', () => {
           variables: { course: 'X' },
         }),
       ).resolves.toBeUndefined();
+      expect(prisma._rows).toHaveLength(1);
+    });
+
+    it('IN_APP publica metadata (variables) en el evento realtime', async () => {
+      const prisma = makeFakePrisma();
+      const realtime = {
+        publishInApp: vi.fn(async () => {}),
+      } as unknown as NotificationRealtimePublisher;
+      const svc = new PrismaNotificationHubService(
+        prisma as never,
+        noopLogger,
+        undefined,
+        undefined,
+        undefined,
+        realtime,
+      );
+
+      await svc.send({
+        tenantId: 't1',
+        channel: 'in-app',
+        templateKey: 'community.comment.on_post',
+        locale: 'es-ES',
+        to: 'u1',
+        variables: { postId: 'p1', commentId: 'c1', actorName: 'Ana' },
+      });
+
+      expect(realtime.publishInApp).toHaveBeenCalledWith(
+        't1',
+        'u1',
+        expect.objectContaining({
+          metadata: { postId: 'p1', commentId: 'c1', actorName: 'Ana' },
+        }),
+      );
+    });
+  });
+
+  describe('preferencias por usuario (category)', () => {
+    it('sin category → envío incondicional (comportamiento legacy)', async () => {
+      const prisma = makeFakePrisma(
+        [],
+        [
+          {
+            tenantId: 't1',
+            userId: 'u1',
+            category: 'COMMUNITY',
+            channel: 'IN_APP',
+            enabled: false,
+          },
+        ],
+      );
+      const svc = new PrismaNotificationHubService(prisma as never, noopLogger);
+
+      // Sin category, la preferencia deshabilitada se ignora.
+      await svc.send({
+        tenantId: 't1',
+        channel: 'in-app',
+        templateKey: 'community.mention',
+        locale: 'es-ES',
+        to: 'u1',
+        variables: {},
+      });
+
+      expect(prisma._rows).toHaveLength(1);
+    });
+
+    it('IN_APP con la preferencia deshabilitada → no persiste ni publica', async () => {
+      const prisma = makeFakePrisma(
+        [],
+        [
+          {
+            tenantId: 't1',
+            userId: 'u1',
+            category: 'COMMUNITY',
+            channel: 'IN_APP',
+            enabled: false,
+          },
+        ],
+      );
+      const realtime = {
+        publishInApp: vi.fn(async () => {}),
+      } as unknown as NotificationRealtimePublisher;
+      const svc = new PrismaNotificationHubService(
+        prisma as never,
+        noopLogger,
+        undefined,
+        undefined,
+        undefined,
+        realtime,
+      );
+
+      await svc.send({
+        tenantId: 't1',
+        channel: 'in-app',
+        templateKey: 'community.comment.on_post',
+        locale: 'es-ES',
+        to: 'u1',
+        variables: { postId: 'p1' },
+        category: 'COMMUNITY',
+      });
+
+      expect(prisma._rows).toHaveLength(0);
+      expect(realtime.publishInApp).not.toHaveBeenCalled();
+    });
+
+    it('sin fila de preferencia → default activado → persiste', async () => {
+      const prisma = makeFakePrisma();
+      const svc = new PrismaNotificationHubService(prisma as never, noopLogger);
+
+      await svc.send({
+        tenantId: 't1',
+        channel: 'in-app',
+        templateKey: 'community.comment.on_post',
+        locale: 'es-ES',
+        to: 'u1',
+        variables: { postId: 'p1' },
+        category: 'COMMUNITY',
+      });
+
+      expect(prisma._rows).toHaveLength(1);
+    });
+
+    it('EMAIL con la preferencia deshabilitada → no persiste ni intenta enviar', async () => {
+      const prisma = makeFakePrisma(
+        [{ id: 'u1', tenantId: 't1', email: 'a@b.com' }],
+        [{ tenantId: 't1', userId: 'u1', category: 'COMMUNITY', channel: 'EMAIL', enabled: false }],
+      );
+      const smtp = {
+        parseConfig: (raw: unknown) => raw as SmtpConfig,
+        send: vi.fn(async () => ({ ok: true, messageId: '<x>' })),
+        verify: vi.fn(),
+      } as unknown as SmtpAdapterService;
+      const tenantConfig = makeFakeTenantConfig({ 'notifications:smtp': VALID_SMTP });
+      const svc = new PrismaNotificationHubService(prisma as never, noopLogger, tenantConfig, smtp);
+
+      await svc.send({
+        tenantId: 't1',
+        channel: 'email',
+        templateKey: 'community.comment.on_post',
+        locale: 'es-ES',
+        to: 'u1',
+        variables: { postId: 'p1' },
+        category: 'COMMUNITY',
+      });
+
+      expect(prisma._rows).toHaveLength(0);
+      expect(smtp.send).not.toHaveBeenCalled();
+    });
+
+    it('otra categoría deshabilitada no afecta a COMMUNITY', async () => {
+      const prisma = makeFakePrisma(
+        [],
+        [{ tenantId: 't1', userId: 'u1', category: 'LEARNING', channel: 'IN_APP', enabled: false }],
+      );
+      const svc = new PrismaNotificationHubService(prisma as never, noopLogger);
+
+      await svc.send({
+        tenantId: 't1',
+        channel: 'in-app',
+        templateKey: 'community.comment.on_post',
+        locale: 'es-ES',
+        to: 'u1',
+        variables: {},
+        category: 'COMMUNITY',
+      });
+
       expect(prisma._rows).toHaveLength(1);
     });
   });

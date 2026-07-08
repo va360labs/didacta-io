@@ -52,7 +52,11 @@ const KNOWN_TEMPLATE_KEYS = [
   'attempt.graded',
   'admin.smtp.test',
   'community.mention',
+  'community.comment.on_post',
+  'community.reply.to_comment',
   'community.digest.weekly',
+  'community.broadcast',
+  'lesson.unlocked',
 ] as const;
 
 const upsertTemplateSchema = z.object({

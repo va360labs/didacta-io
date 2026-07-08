@@ -79,6 +79,14 @@ export interface EvidenceVaultService {
   }): Promise<{ id: string; hash: string; storageKey: string }>;
 }
 
+/**
+ * Categoría de preferencia de notificación. Debe coincidir con el enum
+ * `NotificationPreferenceCategory` de Prisma y con la matriz que el usuario
+ * edita en su cuenta. Si el caller la provee, el hub respeta la preferencia
+ * del usuario para ese (categoría, canal) antes de enviar.
+ */
+export type NotificationCategory = 'COMMUNITY' | 'LEARNING' | 'ASSESSMENTS' | 'SYSTEM';
+
 export interface NotificationHubService {
   send(notification: {
     tenantId: string;
@@ -87,6 +95,13 @@ export interface NotificationHubService {
     locale: string;
     to: string;
     variables: Record<string, unknown>;
+    /**
+     * Opcional. Si se provee, el hub consulta la matriz de preferencias del
+     * usuario (`user_notification_preference`) para (categoría, canal) y omite
+     * el envío si el usuario deshabilitó ese canal. Sin `category`, el envío es
+     * incondicional (comportamiento legacy — p. ej. avisos de sistema).
+     */
+    category?: NotificationCategory;
   }): Promise<void>;
 }
 

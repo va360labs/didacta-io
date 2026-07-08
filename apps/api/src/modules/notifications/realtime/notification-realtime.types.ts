@@ -15,6 +15,12 @@ export interface RealtimeNotificationEvent {
   templateKey: string;
   subject: string | null;
   createdAt: string | Date;
+  /**
+   * Metadatos de la notificación (las `variables` con las que se renderizó).
+   * El cliente los usa para armar el deep-link del toast sin un refetch — p.
+   * ej. `{ postId, commentId }` para llevar a "responder". Opcional y pequeño.
+   */
+  metadata?: Record<string, unknown>;
 }
 
 /**

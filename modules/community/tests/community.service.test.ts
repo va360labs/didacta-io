@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CommunityService, parseMentionHandles } from '../src/community.service.js';
+import { CommunityService, excerpt, parseMentionHandles } from '../src/community.service.js';
 import {
   CommentNotFoundError,
   NotAuthorError,
@@ -1113,5 +1113,152 @@ describe('CommunityService.updatePost', () => {
     await expect(
       svc.updatePost('t1', { id: 'author-1', canModerate: true }, 'no-existe', { title: 'x' }),
     ).rejects.toBeInstanceOf(PostNotFoundError);
+  });
+});
+
+// ── Notificaciones de comentarios y respuestas ─────────────────────────────
+interface CapturedSend {
+  channel: string;
+  templateKey: string;
+  to: string;
+  category?: string;
+  variables: Record<string, unknown>;
+}
+
+const notifyingCtx = (sends: CapturedSend[]) =>
+  ({
+    eventBus: { publish: async () => {} },
+    auditLog: { record: async () => {} },
+    notificationHub: {
+      send: async (n: CapturedSend) => {
+        sends.push(n);
+      },
+    },
+    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+  }) as never;
+
+describe('CommunityService.addComment — notificaciones', () => {
+  it('comentario raíz notifica al autor del post por in-app + email (categoría COMMUNITY)', async () => {
+    const prisma = makeFakePrisma();
+    const sends: CapturedSend[] = [];
+    const svc = new CommunityService(prisma as never, notifyingCtx(sends));
+    const post = await svc.createPost(
+      't1',
+      { id: 'author', displayName: 'Autor' },
+      { title: 'Mi post', body: 'b' },
+    );
+    await svc.addComment(
+      't1',
+      post.id,
+      { id: 'commenter', displayName: 'Coment' },
+      { body: 'buen aporte' },
+    );
+
+    const notif = sends.filter((s) => s.templateKey === 'community.comment.on_post');
+    expect(notif).toHaveLength(2);
+    expect(notif.map((s) => s.channel).sort()).toEqual(['email', 'in-app']);
+    expect(notif.every((s) => s.to === 'author')).toBe(true);
+    expect(notif.every((s) => s.category === 'COMMUNITY')).toBe(true);
+    expect(notif[0]!.variables.postId).toBe(post.id);
+    expect(notif[0]!.variables.postTitle).toBe('Mi post');
+    expect(notif[0]!.variables.actorName).toBe('Coment');
+  });
+
+  it('no notifica cuando el autor comenta su propio post', async () => {
+    const prisma = makeFakePrisma();
+    const sends: CapturedSend[] = [];
+    const svc = new CommunityService(prisma as never, notifyingCtx(sends));
+    const post = await svc.createPost(
+      't1',
+      { id: 'author', displayName: 'Autor' },
+      { title: 'P', body: 'b' },
+    );
+    await svc.addComment(
+      't1',
+      post.id,
+      { id: 'author', displayName: 'Autor' },
+      { body: 'nota propia' },
+    );
+
+    expect(sends.filter((s) => s.templateKey.startsWith('community.comment'))).toHaveLength(0);
+  });
+
+  it('respuesta notifica al autor del comentario padre con community.reply.to_comment', async () => {
+    const prisma = makeFakePrisma();
+    const sends: CapturedSend[] = [];
+    const svc = new CommunityService(prisma as never, notifyingCtx(sends));
+    const post = await svc.createPost(
+      't1',
+      { id: 'author', displayName: 'Autor' },
+      { title: 'P', body: 'b' },
+    );
+    const root = await svc.addComment(
+      't1',
+      post.id,
+      { id: 'commenter', displayName: 'Coment' },
+      { body: 'root' },
+    );
+    sends.length = 0; // descartamos los envíos del comentario raíz
+
+    await svc.addComment(
+      't1',
+      post.id,
+      { id: 'replier', displayName: 'Rep' },
+      { body: 'te respondo', parentCommentId: root.id },
+    );
+
+    const notif = sends.filter((s) => s.templateKey === 'community.reply.to_comment');
+    expect(notif).toHaveLength(2);
+    expect(notif.every((s) => s.to === 'commenter')).toBe(true);
+    expect(notif[0]!.variables.parentCommentId).toBe(root.id);
+    // Una respuesta NO dispara "comentaron en tu publicación" al autor del post.
+    expect(sends.filter((s) => s.templateKey === 'community.comment.on_post')).toHaveLength(0);
+  });
+
+  it('no duplica si el destinatario ya fue @mencionado en el mismo comentario', async () => {
+    const prisma = makeFakePrisma() as unknown as Record<string, unknown>;
+    prisma.user = {
+      async findMany() {
+        return [{ id: 'author', email: 'autor@x.com' }];
+      },
+    };
+    prisma.modCommunityMention = {
+      async createMany(args: { data: unknown[] }) {
+        return { count: args.data.length };
+      },
+    };
+    const sends: CapturedSend[] = [];
+    const svc = new CommunityService(prisma as never, notifyingCtx(sends));
+    const post = await svc.createPost(
+      't1',
+      { id: 'author', displayName: 'Autor' },
+      { title: 'P', body: 'b' },
+    );
+    await svc.addComment(
+      't1',
+      post.id,
+      { id: 'commenter', displayName: 'Coment' },
+      { body: '@autor gracias por el post' },
+    );
+
+    // La mención ya avisó al autor → no se duplica con community.comment.on_post.
+    expect(sends.filter((s) => s.templateKey === 'community.comment.on_post')).toHaveLength(0);
+    expect(sends.some((s) => s.templateKey === 'community.mention' && s.to === 'author')).toBe(
+      true,
+    );
+  });
+});
+
+describe('excerpt', () => {
+  it('deja intacto el texto corto', () => {
+    expect(excerpt('hola mundo')).toBe('hola mundo');
+  });
+  it('colapsa espacios y saltos de línea', () => {
+    expect(excerpt('hola\n\n   mundo')).toBe('hola mundo');
+  });
+  it('trunca con elipsis al máximo indicado', () => {
+    const out = excerpt('a'.repeat(200), 140);
+    expect(out.length).toBe(140);
+    expect(out.endsWith('…')).toBe(true);
   });
 });

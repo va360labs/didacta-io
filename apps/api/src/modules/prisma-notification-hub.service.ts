@@ -54,8 +54,25 @@ export class PrismaNotificationHubService implements NotificationHubService {
     locale: string;
     to: string;
     variables: Record<string, unknown>;
+    category?: 'COMMUNITY' | 'LEARNING' | 'ASSESSMENTS' | 'SYSTEM';
   }): Promise<void> {
     const channel = this.mapChannel(notification.channel);
+
+    // Respeta la preferencia del usuario cuando el caller declara la categoría.
+    // Si el usuario deshabilitó este (categoría, canal), no persistimos ni
+    // enviamos nada — el envío es opt-in por canal desde la matriz de su cuenta.
+    if (
+      notification.category &&
+      !(await this.channelEnabled(
+        notification.tenantId,
+        notification.to,
+        notification.category,
+        channel,
+      ))
+    ) {
+      return;
+    }
+
     const rendered = await this.renderForTenant(
       notification.tenantId,
       notification.templateKey,
@@ -86,6 +103,7 @@ export class PrismaNotificationHubService implements NotificationHubService {
         templateKey: notification.templateKey,
         subject: rendered.subject ?? null,
         createdAt: created.createdAt,
+        metadata: notification.variables,
       });
       return;
     }
@@ -213,6 +231,27 @@ export class PrismaNotificationHubService implements NotificationHubService {
     });
   }
 
+  /**
+   * ¿Tiene el usuario habilitado este (categoría, canal)? La matriz de
+   * preferencias es sparse: la ausencia de fila significa "activado" (default).
+   * Solo persistimos filas cuando el usuario cambia algo, así que un usuario que
+   * nunca tocó sus preferencias recibe por todos los canales.
+   */
+  private async channelEnabled(
+    tenantId: string,
+    userId: string,
+    category: 'COMMUNITY' | 'LEARNING' | 'ASSESSMENTS' | 'SYSTEM',
+    channel: 'EMAIL' | 'IN_APP' | 'WEBHOOK',
+  ): Promise<boolean> {
+    const pref = await this.prisma.userNotificationPreference.findUnique({
+      where: {
+        tenantId_userId_category_channel: { tenantId, userId, category, channel },
+      },
+      select: { enabled: true },
+    });
+    return pref?.enabled ?? true;
+  }
+
   private mapChannel(channel: 'email' | 'in-app' | 'webhook'): 'EMAIL' | 'IN_APP' | 'WEBHOOK' {
     if (channel === 'email') return 'EMAIL';
     if (channel === 'webhook') return 'WEBHOOK';
@@ -303,6 +342,17 @@ const TEMPLATES: Record<string, TemplateDef> = {
   'community.mention': {
     subject: 'Te mencionaron en la comunidad',
     body: '@{{handle}} te mencionó en un {{#commentId}}comentario{{/commentId}}{{#postId}}post{{/postId}}. Entra a la app para ver el hilo completo.',
+  },
+  // Alguien comentó en un post del que sos autor. La deep-link a "responder"
+  // la arma el frontend con postId/commentId de metadata.
+  'community.comment.on_post': {
+    subject: '{{actorName}} comentó en tu publicación',
+    body: '{{actorName}} comentó en tu publicación "{{postTitle}}":\n\n"{{excerpt}}"\n\nEntra a Didacta para responder.',
+  },
+  // Alguien respondió a un comentario tuyo dentro de un post.
+  'community.reply.to_comment': {
+    subject: '{{actorName}} respondió a tu comentario',
+    body: '{{actorName}} respondió a tu comentario en "{{postTitle}}":\n\n"{{excerpt}}"\n\nEntra a Didacta para seguir la conversación.',
   },
   'community.digest.weekly': {
     subject:

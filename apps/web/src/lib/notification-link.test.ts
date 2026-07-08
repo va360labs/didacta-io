@@ -1,0 +1,46 @@
+import { describe, expect, it } from 'vitest';
+import { notificationLink } from './notification-link';
+
+describe('notificationLink', () => {
+  it('comentario en post → hilo enfocado en el comentario con acción Responder', () => {
+    expect(
+      notificationLink('community.comment.on_post', { postId: 'p1', commentId: 'c1' }),
+    ).toEqual({ href: '/comunidad/p1?comment=c1', actionLabel: 'Responder' });
+  });
+
+  it('respuesta → enfoca el comentario padre (para seguir la conversación)', () => {
+    expect(
+      notificationLink('community.reply.to_comment', {
+        postId: 'p1',
+        commentId: 'c2',
+        parentCommentId: 'c1',
+      }),
+    ).toEqual({ href: '/comunidad/p1?comment=c1', actionLabel: 'Responder' });
+  });
+
+  it('respuesta sin parentCommentId cae al nuevo comentario', () => {
+    expect(
+      notificationLink('community.reply.to_comment', { postId: 'p1', commentId: 'c2' }),
+    ).toEqual({ href: '/comunidad/p1?comment=c2', actionLabel: 'Responder' });
+  });
+
+  it('mención → acción Ver', () => {
+    expect(notificationLink('community.mention', { postId: 'p1', commentId: 'c1' })).toEqual({
+      href: '/comunidad/p1?comment=c1',
+      actionLabel: 'Ver',
+    });
+  });
+
+  it('comentario sin postId → sin enlace (null)', () => {
+    expect(notificationLink('community.comment.on_post', {})).toBeNull();
+  });
+
+  it('templateKey no navegable → null', () => {
+    expect(notificationLink('enrollment.created', { course: 'x' })).toBeNull();
+  });
+
+  it('metadata ausente → null sin lanzar', () => {
+    expect(notificationLink('community.comment.on_post', undefined)).toBeNull();
+    expect(notificationLink('community.comment.on_post', null)).toBeNull();
+  });
+});
