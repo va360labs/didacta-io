@@ -60,7 +60,9 @@ export class CommunityService {
         tags: dto.tags ?? [],
       },
     });
-    await this.persistMentions(tenantId, author.id, dto.body, { postId: post.id });
+    await this.persistMentions(tenantId, author.id, author.displayName, dto.body, {
+      postId: post.id,
+    });
     await this.publish(tenantId, author.id, 'community.post.created', {
       postId: post.id,
       authorId: author.id,
@@ -97,7 +99,9 @@ export class CommunityService {
     });
     if (patch.body !== undefined) {
       await this.prisma.modCommunityMention.deleteMany({ where: { tenantId, postId } });
-      await this.persistMentions(tenantId, post.authorId, patch.body, { postId });
+      await this.persistMentions(tenantId, post.authorId, post.authorDisplayName, patch.body, {
+        postId,
+      });
     }
     return updated;
   }
@@ -292,7 +296,7 @@ export class CommunityService {
         parentCommentId: dto.parentCommentId ?? null,
       },
     });
-    const mentioned = await this.persistMentions(tenantId, author.id, dto.body, {
+    await this.persistMentions(tenantId, author.id, author.displayName, dto.body, {
       commentId: comment.id,
     });
     await this.notifyCommentTarget({
@@ -301,7 +305,6 @@ export class CommunityService {
       post: { id: post.id, authorId: post.authorId, title: post.title },
       comment: { id: comment.id, body: dto.body, parentCommentId: comment.parentCommentId },
       parentAuthorId,
-      alreadyNotified: mentioned,
     });
     await this.publish(tenantId, author.id, 'community.comment.created', {
       commentId: comment.id,
@@ -317,8 +320,9 @@ export class CommunityService {
    *  - Comentario raíz → autor del post ("comentaron en tu publicación").
    *  - Respuesta       → autor del comentario padre ("respondieron a tu comentario").
    *
-   * Reglas: nunca te notificás a vos mismo, y si el destinatario ya recibió una
-   * @mención en este mismo comentario no lo duplicamos (la mención ya lo avisó).
+   * Regla: nunca te notificás a vos mismo. Este aviso ("comentaron/respondieron")
+   * es el importante para el destinatario y lleva email, así que se envía SIEMPRE
+   * aunque el comentario además lo @mencione — la mención es una señal aparte.
    *
    * Se envía por in-app y email; el hub respeta la matriz de preferencias del
    * usuario (categoría COMMUNITY) y omite el canal que el usuario deshabilitó.
@@ -330,13 +334,11 @@ export class CommunityService {
     post: { id: string; authorId: string; title: string };
     comment: { id: string; body: string; parentCommentId: string | null };
     parentAuthorId: string | null;
-    alreadyNotified: Set<string>;
   }): Promise<void> {
     const isReply = args.comment.parentCommentId !== null;
     const recipient = isReply ? args.parentAuthorId : args.post.authorId;
     if (!recipient) return;
     if (recipient === args.author.id) return; // no auto-notificación
-    if (args.alreadyNotified.has(recipient)) return; // ya avisado por mención
 
     const variables = {
       actorId: args.author.id,
@@ -884,6 +886,7 @@ export class CommunityService {
   private async persistMentions(
     tenantId: string,
     authorId: string,
+    authorDisplayName: string | null,
     body: string,
     target: { postId?: string; commentId?: string },
   ): Promise<Set<string>> {
@@ -941,6 +944,7 @@ export class CommunityService {
           to: m.mentionedUserId,
           variables: {
             authorId,
+            authorName: authorDisplayName ?? 'Alguien',
             postId: m.postId,
             commentId: m.commentId,
             handle: m.mentionedHandle,

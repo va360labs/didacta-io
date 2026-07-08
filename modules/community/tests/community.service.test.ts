@@ -1215,7 +1215,7 @@ describe('CommunityService.addComment — notificaciones', () => {
     expect(sends.filter((s) => s.templateKey === 'community.comment.on_post')).toHaveLength(0);
   });
 
-  it('no duplica si el destinatario ya fue @mencionado en el mismo comentario', async () => {
+  it('el aviso de comentario se envía aunque el destinatario también fue @mencionado', async () => {
     const prisma = makeFakePrisma() as unknown as Record<string, unknown>;
     prisma.user = {
       async findMany() {
@@ -1241,11 +1241,13 @@ describe('CommunityService.addComment — notificaciones', () => {
       { body: '@autor gracias por el post' },
     );
 
-    // La mención ya avisó al autor → no se duplica con community.comment.on_post.
-    expect(sends.filter((s) => s.templateKey === 'community.comment.on_post')).toHaveLength(0);
-    expect(sends.some((s) => s.templateKey === 'community.mention' && s.to === 'author')).toBe(
-      true,
-    );
+    // Ya NO se deduplica: el autor recibe el aviso de comentario (in-app + email,
+    // el importante y con email) Y además la mención (in-app).
+    expect(sends.filter((s) => s.templateKey === 'community.comment.on_post')).toHaveLength(2);
+    const mention = sends.find((s) => s.templateKey === 'community.mention' && s.to === 'author');
+    expect(mention).toBeDefined();
+    // La mención nombra al AUTOR del comentario (no al mencionado).
+    expect(mention!.variables.authorName).toBe('Coment');
   });
 });
 
