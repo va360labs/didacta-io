@@ -341,7 +341,7 @@ const TEMPLATES: Record<string, TemplateDef> = {
   },
   'community.mention': {
     subject: 'Te mencionaron en la comunidad',
-    body: '@{{handle}} te mencionó en un {{#commentId}}comentario{{/commentId}}{{#postId}}post{{/postId}}. Entra a la app para ver el hilo completo.',
+    body: '{{authorName}} te mencionó en un {{#commentId}}comentario{{/commentId}}{{#postId}}post{{/postId}}. Entra a la app para ver el hilo completo.',
   },
   // Alguien comentó en un post del que sos autor. La deep-link a "responder"
   // la arma el frontend con postId/commentId de metadata.
@@ -388,7 +388,21 @@ function renderTemplate(key: string, variables: Record<string, unknown>): Render
 }
 
 function interpolate(text: string, variables: Record<string, unknown>): string {
-  return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, name) => {
+  const truthy = (name: string): boolean => {
+    const v = variables[name];
+    return v !== undefined && v !== null && v !== '' && v !== false;
+  };
+  // Secciones condicionales tipo Mustache: {{#var}}…{{/var}} renderiza el
+  // contenido si `var` es truthy; {{^var}}…{{/var}} si es falsy. Se resuelven
+  // ANTES que las variables simples para no dejar marcadores {{#…}} literales.
+  let out = text.replace(/\{\{#(\w+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name, content) =>
+    truthy(name) ? content : '',
+  );
+  out = out.replace(/\{\{\^(\w+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name, content) =>
+    truthy(name) ? '' : content,
+  );
+  // Variables simples {{var}}.
+  return out.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, name) => {
     const v = variables[name];
     return v === undefined || v === null ? '' : String(v);
   });

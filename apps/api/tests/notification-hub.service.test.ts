@@ -582,4 +582,39 @@ describe('PrismaNotificationHubService', () => {
       expect(prisma._rows).toHaveLength(1);
     });
   });
+
+  describe('render de plantillas (secciones condicionales tipo Mustache)', () => {
+    it('community.mention: {{#commentId}}…{{/commentId}} rinde sin dejar marcadores', async () => {
+      const prisma = makeFakePrisma();
+      const svc = new PrismaNotificationHubService(prisma as never, noopLogger);
+      await svc.send({
+        tenantId: 't1',
+        channel: 'in-app',
+        templateKey: 'community.mention',
+        locale: 'es-ES',
+        to: 'u1',
+        variables: { authorName: 'JuanjoSC', commentId: 'c1', postId: null, handle: 'valen' },
+      });
+      const [n] = prisma._rows;
+      expect(n.body).toContain('JuanjoSC te mencionó en un comentario');
+      expect(n.body).not.toContain('{{');
+    });
+
+    it('community.mention: sección de post cuando la mención es en un post', async () => {
+      const prisma = makeFakePrisma();
+      const svc = new PrismaNotificationHubService(prisma as never, noopLogger);
+      await svc.send({
+        tenantId: 't1',
+        channel: 'in-app',
+        templateKey: 'community.mention',
+        locale: 'es-ES',
+        to: 'u1',
+        variables: { authorName: 'Ana', commentId: null, postId: 'p1', handle: 'valen' },
+      });
+      const [n] = prisma._rows;
+      expect(n.body).toContain('Ana te mencionó en un post');
+      expect(n.body).not.toContain('comentario');
+      expect(n.body).not.toContain('{{');
+    });
+  });
 });
