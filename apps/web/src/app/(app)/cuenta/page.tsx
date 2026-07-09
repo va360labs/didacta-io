@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { AccountSecurityTab } from '@/components/account-security-tab';
+import { SubscriptionTab } from '@/components/subscription-tab';
 import { AvatarUpload } from '@/components/avatar-upload';
 import { CompetencyRadar } from '@/components/competency-radar';
 import { NotificationMatrix, fullMatrix } from '@/components/notification-preferences-form';
@@ -311,6 +312,7 @@ export default function CuentaPage() {
         <TabsList>
           <TabsTrigger value="datos">Datos</TabsTrigger>
           <TabsTrigger value="notificaciones">Notificaciones</TabsTrigger>
+          <TabsTrigger value="suscripcion">Suscripción</TabsTrigger>
           <TabsTrigger value="seguridad">Seguridad</TabsTrigger>
         </TabsList>
 
@@ -410,6 +412,11 @@ export default function CuentaPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── Suscripción ── */}
+        <TabsContent value="suscripcion" className="space-y-6">
+          <SubscriptionTab />
         </TabsContent>
 
         {/* ── Seguridad ── */}

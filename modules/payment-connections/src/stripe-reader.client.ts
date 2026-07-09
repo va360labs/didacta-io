@@ -77,6 +77,14 @@ export interface StripeReadAdapter {
    * suscriptor. Opcional. Devuelve [] si no se soporta o no hay permiso.
    */
   listPlanCatalog?(): Promise<string[]>;
+  /**
+   * Crea una sesión del Customer Portal para que el CLIENTE gestione su
+   * suscripción (cancelar, actualizar tarjeta, ver facturas) en el portal
+   * hospedado del proveedor. Requiere una key con permiso de portal y el portal
+   * activado en el dashboard. Opcional por proveedor: solo Stripe lo implementa
+   * (PayPal/WooCommerce no tienen equivalente). Devuelve la URL de la sesión.
+   */
+  createBillingPortalSession?(customerId: string, returnUrl: string): Promise<string>;
 }
 
 const DEFAULT_STATUSES = ['active', 'trialing', 'past_due'];
@@ -111,6 +119,23 @@ export class StripeReadSdkAdapter implements StripeReadAdapter {
         businessName:
           account.business_profile?.name ?? account.settings?.dashboard?.display_name ?? null,
       };
+    } catch (err) {
+      throw mapStripeError(err);
+    }
+  }
+
+  /**
+   * Crea una sesión del Customer Portal de Stripe pre-autenticada para el
+   * customer indicado. El cliente gestiona ahí su suscripción (cancelar,
+   * actualizar tarjeta, ver facturas) según lo activado en el dashboard.
+   */
+  async createBillingPortalSession(customerId: string, returnUrl: string): Promise<string> {
+    try {
+      const session = await this.client.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: returnUrl,
+      });
+      return session.url;
     } catch (err) {
       throw mapStripeError(err);
     }

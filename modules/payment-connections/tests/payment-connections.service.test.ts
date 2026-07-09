@@ -33,7 +33,9 @@ import {
 } from '../src/payment-connections.service.js';
 import {
   PaymentConnectionAlreadyExistsError,
+  PaymentConnectionNotFoundError,
   PaymentConnectionProviderNotSupportedError,
+  PaymentPortalUnavailableError,
   StripeReadKeyInvalidError,
 } from '../src/errors.js';
 import type { StripeReadAdapter, StripeSubscriberRecord } from '../src/stripe-reader.client.js';
@@ -865,6 +867,100 @@ describe('dashboard: syncSubscribers / listSubscribers / subscriberSummary', () 
     });
     // 2 conexiones del mismo tenant → una sola entrada (distinct).
     expect(await svc.service.listTenantsWithVerifiedConnections()).toEqual([TENANT]);
+  });
+});
+
+describe('me/subscription (self-service del usuario)', () => {
+  const BASE_SUB = {
+    tenantId: TENANT,
+    connectionId: 'conn_me',
+    provider: 'stripe',
+    subscriptionId: 'sub_me',
+    subscriptionCustomerId: 'cus_me',
+    userId: 'user_1',
+    userEmail: 'u@x.com',
+    status: 'active',
+    statusCategory: 'active',
+    entitled: true,
+    productName: 'Plan Pro',
+    unitAmount: 1999,
+    currency: 'eur',
+    interval: 'month',
+    currentPeriodEnd: new Date(),
+    renewalUrl: null,
+  };
+
+  it('getMySubscription: mapea la suscripción externa del usuario y marca manageable (Stripe + customer)', async () => {
+    const svc = buildService();
+    svc.prisma.subscribers.set('me-1', { id: 'subr_1', ...BASE_SUB });
+    const items = await svc.service.getMySubscription(TENANT, 'user_1');
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      id: 'subr_1',
+      provider: 'stripe',
+      planName: 'Plan Pro',
+      status: 'active',
+      statusLabel: 'Activa',
+      entitled: true,
+      manageable: true,
+    });
+  });
+
+  it('getMySubscription: no expone la suscripción de otro usuario (aislamiento)', async () => {
+    const svc = buildService();
+    svc.prisma.subscribers.set('me-1', { id: 'subr_1', ...BASE_SUB });
+    expect(await svc.service.getMySubscription(TENANT, 'otro_user')).toEqual([]);
+  });
+
+  it('getMySubscription: manageable=false si no es Stripe o no hay customer', async () => {
+    const svc = buildService();
+    svc.prisma.subscribers.set('me-1', {
+      id: 'subr_pp',
+      ...BASE_SUB,
+      provider: 'paypal',
+      subscriptionCustomerId: null,
+    });
+    const items = await svc.service.getMySubscription(TENANT, 'user_1');
+    expect(items[0]!.manageable).toBe(false);
+  });
+
+  it('createMyBillingPortalSession: abre el Customer Portal de la suscripción del propio usuario', async () => {
+    const portalAdapter: StripeReadAdapter = {
+      ...makeAdapter(),
+      createBillingPortalSession: async (customerId: string, returnUrl: string) =>
+        `https://billing.stripe.com/p/${customerId}?ret=${encodeURIComponent(returnUrl)}`,
+    };
+    const svc = buildService({ [VALID_KEY]: portalAdapter });
+    // La credencial de la conexión conn_me apunta a la key con adapter de portal.
+    await svc.config.set(TENANT, 'payment-connections', 'stripe:conn_me:credentials', {
+      apiKey: VALID_KEY,
+    });
+    svc.prisma.subscribers.set('me-1', { id: 'subr_1', ...BASE_SUB });
+
+    const url = await svc.service.createMyBillingPortalSession(
+      TENANT,
+      'user_1',
+      'subr_1',
+      'https://aula.test/cuenta?tab=suscripcion',
+    );
+    expect(url).toContain('cus_me');
+    expect(url).toContain(encodeURIComponent('https://aula.test/cuenta?tab=suscripcion'));
+  });
+
+  it('createMyBillingPortalSession: la suscripción de otro usuario → NotFound (no la abre)', async () => {
+    const svc = buildService();
+    svc.prisma.subscribers.set('me-1', { id: 'subr_1', ...BASE_SUB });
+    await expect(
+      svc.service.createMyBillingPortalSession(TENANT, 'otro_user', 'subr_1', 'https://x/cuenta'),
+    ).rejects.toBeInstanceOf(PaymentConnectionNotFoundError);
+  });
+
+  it('createMyBillingPortalSession: proveedor sin portal (PayPal/Woo) → PortalUnavailable', async () => {
+    const svc = buildService();
+    svc.prisma.subscribers.set('me-1', { id: 'subr_pp', ...BASE_SUB, provider: 'paypal' });
+    await expect(
+      svc.service.createMyBillingPortalSession(TENANT, 'user_1', 'subr_pp', 'https://x/cuenta'),
+    ).rejects.toBeInstanceOf(PaymentPortalUnavailableError);
   });
 });
 

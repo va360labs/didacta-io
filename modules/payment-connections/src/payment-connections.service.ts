@@ -25,6 +25,7 @@ import {
   PaymentConnectionAlreadyExistsError,
   PaymentConnectionNotFoundError,
   PaymentConnectionProviderNotSupportedError,
+  PaymentPortalUnavailableError,
   StripeReadKeyInvalidError,
 } from './errors.js';
 import type { StripeReadAdapter, StripeSubscriberRecord } from './stripe-reader.client.js';
@@ -269,6 +270,32 @@ export interface SubscriberRow {
   currentPeriodEnd: Date | null;
   renewalUrl: string | null;
   lastSeenAt: Date;
+}
+
+/**
+ * Vista de "mi suscripción" para el USUARIO final (no admin): una suscripción
+ * externa suya, leída de la tabla materializada de suscriptores (por userId).
+ * `manageable` indica si se puede abrir el Customer Portal (Stripe con customer).
+ */
+export interface MySubscriptionItem {
+  /** Id de la fila de suscriptor (se usa para dirigir el portal). */
+  id: string;
+  provider: string;
+  planName: string | null;
+  /** Estado crudo del proveedor + su etiqueta legible en español + categoría. */
+  status: string;
+  statusLabel: string;
+  statusCategory: string;
+  entitled: boolean;
+  unitAmount: number | null;
+  currency: string | null;
+  interval: string | null;
+  currentPeriodEnd: Date | null;
+  connectionId: string;
+  /** True si el usuario puede autogestionarla vía Customer Portal (Stripe + customer). */
+  manageable: boolean;
+  /** Enlace read-only a la factura abierta (fallback si no hay portal). */
+  renewalUrl: string | null;
 }
 
 /** Agregaciones de cabecera del dashboard. */
@@ -1003,6 +1030,68 @@ export class PaymentConnectionsService {
       distinct: ['tenantId'],
     });
     return rows.map((r) => r.tenantId);
+  }
+
+  // ---------------- self-service del usuario ----------------
+
+  /**
+   * Suscripción(es) externa(s) del usuario autenticado, leídas de la tabla
+   * materializada de suscriptores (por `userId`). NO llama en vivo al proveedor
+   * (usa el snapshot del sync). `manageable` = Stripe con customerId → se puede
+   * abrir el Customer Portal.
+   */
+  async getMySubscription(tenantId: string, userId: string): Promise<MySubscriptionItem[]> {
+    const rows = await this.prisma.modPaymentConnectionsSubscriber.findMany({
+      where: { tenantId, userId },
+      orderBy: { currentPeriodEnd: 'desc' },
+    });
+    return rows.map((r) => {
+      const { label } = classifySubscriptionStatus(r.status);
+      return {
+        id: r.id,
+        provider: r.provider,
+        planName: r.productName,
+        status: r.status,
+        statusLabel: label,
+        statusCategory: r.statusCategory,
+        entitled: r.entitled,
+        unitAmount: r.unitAmount,
+        currency: r.currency,
+        interval: r.interval,
+        currentPeriodEnd: r.currentPeriodEnd,
+        connectionId: r.connectionId,
+        manageable: r.provider === 'stripe' && !!r.subscriptionCustomerId,
+        renewalUrl: r.renewalUrl,
+      };
+    });
+  }
+
+  /**
+   * Crea una sesión del Customer Portal para una suscripción concreta DEL
+   * usuario. Valida que el suscriptor le pertenezca (tenant + userId), resuelve
+   * su cuenta conectada y su customerId, y delega en el adapter del proveedor.
+   * Lanza `PaymentPortalUnavailableError` si el proveedor no soporta portal o la
+   * suscripción no tiene customer. Devuelve la URL a la que redirigir.
+   */
+  async createMyBillingPortalSession(
+    tenantId: string,
+    userId: string,
+    subscriberId: string,
+    returnUrl: string,
+  ): Promise<string> {
+    const sub = await this.prisma.modPaymentConnectionsSubscriber.findFirst({
+      where: { id: subscriberId, tenantId, userId },
+    });
+    if (!sub) throw new PaymentConnectionNotFoundError(subscriberId);
+    if (sub.provider !== 'stripe' || !sub.subscriptionCustomerId) {
+      throw new PaymentPortalUnavailableError(sub.provider);
+    }
+    const credentials = await this.loadCredentials(tenantId, sub.connectionId, sub.provider);
+    const adapter = this.adapterFactory(sub.provider, credentials);
+    if (!adapter.createBillingPortalSession) {
+      throw new PaymentPortalUnavailableError(sub.provider);
+    }
+    return adapter.createBillingPortalSession(sub.subscriptionCustomerId, returnUrl);
   }
 
   // ---------------- internos ----------------

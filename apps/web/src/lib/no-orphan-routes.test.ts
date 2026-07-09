@@ -66,9 +66,9 @@ const ALLOWLIST: Record<string, { kind: AllowKind; reason: string }> = {
   '/cursos/checkout/success': { kind: 'external', reason: 'redirect de Stripe (success_url)' },
   '/cursos/checkout/cancel': { kind: 'external', reason: 'redirect de Stripe (cancel_url)' },
   '/cuenta/suscripciones': {
-    kind: 'knownGap',
+    kind: 'reachable',
     reason:
-      'mod.subscriptions: la página existe pero no hay link de entrada (el avatar solo va a /cuenta). Decisión pendiente: cablear un tab "Suscripciones" en /cuenta gated por el módulo, o retirar la página.',
+      'redirige a /cuenta?tab=suscripcion (la gestión vive en la pestaña "Suscripción" de /cuenta). La ruta se conserva como success_url/cancel_url del checkout de Stripe.',
   },
 };
 

@@ -684,6 +684,42 @@ export class PaymentConnectionsController {
     await this.dailyWorker.triggerNow();
     return { ok: true };
   }
+
+  // ── Self-service del usuario final (cualquier usuario autenticado) ──────────
+
+  @Get('me/subscription')
+  @ApiOperation({
+    summary:
+      'Suscripción(es) externa(s) del usuario autenticado, para la pestaña ' +
+      'Suscripción de /cuenta. No expone datos de otros usuarios.',
+  })
+  async getMySubscription(@CurrentUser() rawUser: SessionClaims | undefined) {
+    if (!rawUser) throw new UnauthorizedException();
+    const subscriptions = await this.registry
+      .getPaymentConnectionsService()
+      .getMySubscription(rawUser.tenantId, rawUser.sub);
+    return { subscriptions };
+  }
+
+  @Post('me/billing-portal')
+  @ApiOperation({
+    summary:
+      'Crea una sesión del Customer Portal de Stripe para que el usuario gestione ' +
+      'su propia suscripción (cancelar / actualizar tarjeta / facturas). Devuelve { url }.',
+  })
+  async openMyBillingPortal(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Req() req: FastifyRequest,
+    @Body(new ZodValidationPipe(z.object({ subscriberId: z.string().uuid() })))
+    body: { subscriberId: string },
+  ) {
+    if (!rawUser) throw new UnauthorizedException();
+    const returnUrl = `${resolveWebBaseUrl(req).replace(/\/$/, '')}/cuenta?tab=suscripcion`;
+    const url = await this.registry
+      .getPaymentConnectionsService()
+      .createMyBillingPortalSession(rawUser.tenantId, rawUser.sub, body.subscriberId, returnUrl);
+    return { url };
+  }
 }
 
 /** Etiqueta de tier de respaldo cuando la suscripción no tiene nombre de producto. */

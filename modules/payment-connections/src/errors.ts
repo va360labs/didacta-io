@@ -68,6 +68,21 @@ export class StripeReadApiError extends PaymentConnectionsError {
   }
 }
 
+/**
+ * El proveedor de la suscripción no ofrece un portal de gestión integrado
+ * (PayPal/WooCommerce) o la suscripción no tiene customer asociado. El caller
+ * debe caer al enlace de gestión del proveedor o a "contacta soporte".
+ */
+export class PaymentPortalUnavailableError extends PaymentConnectionsError {
+  constructor(provider: string) {
+    super(
+      `El proveedor "${provider}" no ofrece un portal de gestión de suscripción integrado.`,
+      'PAYMENT_CONNECTIONS_PORTAL_UNAVAILABLE',
+    );
+    this.name = 'PaymentPortalUnavailableError';
+  }
+}
+
 export class TierNotFoundError extends PaymentConnectionsError {
   constructor(id: string) {
     super(`Tier no encontrado: ${id}`, 'PAYMENT_CONNECTIONS_TIER_NOT_FOUND');
