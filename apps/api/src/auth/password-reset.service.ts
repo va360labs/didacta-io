@@ -6,6 +6,13 @@ import { PrismaTenantConfigService } from '../modules/prisma-tenant-config.servi
 import { SmtpAdapterService } from '../modules/smtp-adapter.service';
 import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  renderBrandedEmail,
+  resolveEmailBranding,
+  escapeHtml,
+  type BrandingPrisma,
+  type EmailBranding,
+} from '../common/branded-email';
 import type { ClientContext } from './client-context';
 import { PasswordService } from './password.service';
 
@@ -232,25 +239,25 @@ export class PasswordResetService {
       }
     }
 
-    // alpha.82 — branding por tenant en emails: si el tenant configuró un
-    // logo (subido al storage o URL externa), lo embebemos en el header del
-    // HTML. La lectura es best-effort: si el módulo theming no tiene fila o
-    // la query falla, seguimos sin logo (no rompe el envío).
-    const logoUrl = await this.resolveTenantLogoUrl(result.tenantId, webBaseUrl);
+    // alpha.82+ — branding por tenant en emails: nombre, logo y color de marca
+    // salen del theming del tenant (best-effort; si falla, defaults sin logo).
+    const branding = await resolveEmailBranding(
+      this.prisma as unknown as BrandingPrisma,
+      result.tenantId,
+      webBaseUrl,
+    );
 
     const { subject, html, text } = this.buildResetEmail(
       result.rawToken,
       result.userName,
       webBaseUrl,
-      result.tenantName,
-      logoUrl,
+      branding,
     );
-    const sendResult = await this.smtp.send(config, {
-      to: args.email,
-      subject,
-      text,
-      html,
-    });
+    const sendResult = await this.smtp.send(
+      config,
+      { to: args.email, subject, text, html },
+      branding.tenantName,
+    );
 
     if (!sendResult.ok) {
       this.logger.warn(
@@ -339,95 +346,48 @@ export class PasswordResetService {
   }
 
   /**
-   * Genera el subject + cuerpos del email de reset.
-   *
-   * alpha.77 — branding por tenant:
-   *   - El email se firma con el nombre del tenant ("Equipo {tenantName}")
-   *     en lugar del genérico "Equipo Didacta". Esto evita que un usuario
-   *     de "VA360 Academy" reciba un mail "de Didacta" y dude si es phishing.
-   *   - Se añade un footer discreto "Powered by Didacta.io" para mantener
-   *     atribución legal de la plataforma sin pisar el branding del tenant.
-   *   - `tenantName` cae a "Didacta" si no se pasa (compat con call sites
-   *     legacy / tests).
-   *
-   * alpha.82 — logo por tenant:
-   *   - Si `logoUrl` (absoluto) viene set, se renderiza en el header del HTML
-   *     encima del saludo. Si no, no se renderiza nada (el `tenantName` en el
-   *     texto/firma sigue identificando al tenant). El parámetro NO afecta al
-   *     cuerpo de texto plano (los clientes que no cargan imágenes igual ven
-   *     el nombre del tenant).
+   * Genera el subject + cuerpos del email de reset, envuelto en la plantilla de
+   * marca del tenant (`renderBrandedEmail`): header con logo, color de marca,
+   * botón CTA, firma con el nombre del tenant y footer "Powered by Didacta".
+   * El `branding` lo resuelve el caller con `resolveEmailBranding` (nombre +
+   * logo + color del theming del tenant), para no firmar los correos como
+   * "Didacta" y que cada academia reciba su propia identidad.
    */
   buildResetEmail(
     rawToken: string,
     userName: string | null,
     webBaseUrl: string,
-    tenantName: string = 'Didacta',
-    logoUrl: string | null = null,
+    branding: EmailBranding,
   ): { subject: string; html: string; text: string } {
     const link = `${webBaseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(
       rawToken,
     )}`;
     const greeting = userName ? `Hola ${userName},` : 'Hola,';
-    const subject = `Restablecer tu contraseña en ${tenantName}`;
-    // Header con logo del tenant, solo si está configurado y es una URL
-    // absoluta http(s). `tenantName` se usa como alt para accesibilidad y
-    // fallback cuando el cliente no carga imágenes.
-    const logoHeader =
-      logoUrl && /^https?:\/\//i.test(logoUrl)
-        ? `  <div style="margin: 0 0 24px;">
-    <img src="${logoUrl}" alt="${escapeHtmlAttr(tenantName)}" style="max-height: 48px; max-width: 200px; object-fit: contain;" />
-  </div>
-`
-        : '';
-    const text = `${greeting}
+    const subject = `Restablecer tu contraseña en ${branding.tenantName}`;
+    const bodyText = `${greeting}
 
-Recibimos una solicitud para restablecer la contraseña de tu cuenta en ${tenantName}.
+Recibimos una solicitud para restablecer la contraseña de tu cuenta en ${branding.tenantName}.
 
 Para definir una contraseña nueva, abre este enlace (válido por ${TOKEN_TTL_MINUTES} minutos):
 
 ${link}
 
-Si no fuiste tú, puedes ignorar este mensaje — tu contraseña actual sigue intacta.
-
-— Equipo ${tenantName}
-
-—
-Powered by Didacta.io`;
-    const html = `<!DOCTYPE html>
-<html lang="es"><body style="font-family: 'Inter', system-ui, sans-serif; color: #0D1B2A; line-height: 1.6;">
-${logoHeader}  <p>${greeting}</p>
-  <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en ${tenantName}.</p>
-  <p>Para definir una contraseña nueva, haz clic en el botón (válido por ${TOKEN_TTL_MINUTES} minutos):</p>
-  <p style="margin: 32px 0;">
-    <a href="${link}" style="display: inline-block; background: #1E5AA8; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
-      Restablecer contraseña
-    </a>
-  </p>
-  <p style="font-size: 14px; color: #5b6b7c;">
-    O copia este enlace en tu navegador: <br>
-    <span style="word-break: break-all;">${link}</span>
-  </p>
-  <p style="font-size: 14px; color: #5b6b7c;">
-    Si no fuiste tú, puedes ignorar este mensaje — tu contraseña actual sigue intacta.
-  </p>
-  <p style="margin-top: 32px; font-size: 12px; color: #94a3b8;">— Equipo ${tenantName}</p>
-  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0 12px;" />
-  <p style="font-size: 12px; color: #999; text-align: center; margin: 0;">
-    Powered by Didacta.io
-  </p>
-</body></html>`;
+Si no fuiste tú, puedes ignorar este mensaje — tu contraseña actual sigue intacta.`;
+    const bodyHtml = `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>
+  <p style="margin:0 0 12px;">Recibimos una solicitud para restablecer la contraseña de tu cuenta en ${escapeHtml(
+    branding.tenantName,
+  )}.</p>
+  <p style="margin:0 0 12px;">Para definir una contraseña nueva, haz clic en el botón (válido por ${TOKEN_TTL_MINUTES} minutos):</p>
+  <p style="margin:0;font-size: 14px; color: #5b6b7c;">O copia este enlace en tu navegador:<br><span style="word-break: break-all;">${escapeHtml(
+    link,
+  )}</span></p>
+  <p style="margin:12px 0 0;font-size: 14px; color: #5b6b7c;">Si no fuiste tú, puedes ignorar este mensaje — tu contraseña actual sigue intacta.</p>`;
+    const { html, text } = renderBrandedEmail(branding, {
+      title: 'Restablecer tu contraseña',
+      bodyHtml,
+      bodyText,
+      cta: { url: link, label: 'Restablecer contraseña' },
+    });
     return { subject, html, text };
   }
-}
-
-/**
- * Escapa los caracteres que romperían un atributo HTML entre comillas dobles.
- * Usado para inyectar `tenantName` como `alt` del logo sin abrir XSS.
- */
-function escapeHtmlAttr(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
 }

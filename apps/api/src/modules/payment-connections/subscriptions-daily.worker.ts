@@ -12,7 +12,14 @@ import type { SubscriberToWarn, UpcomingRenewal } from '@didacta/mod-payment-con
 import { ModuleRegistryService } from '../module-registry.service';
 import { SmtpAdapterService, type SmtpConfig } from '../smtp-adapter.service';
 import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
-import { renewalEmailHtml } from '../../common/renewal-email-html';
+import { PrismaService } from '../../prisma/prisma.service';
+import {
+  resolveEmailBranding,
+  renderBrandedEmail,
+  textToHtmlParagraphs,
+  type BrandingPrisma,
+  type EmailBranding,
+} from '../../common/branded-email';
 
 const QUEUE_NAME = 'didacta.payment-connections.daily';
 // 9:00 hora de España por defecto. Configurable por env.
@@ -48,6 +55,7 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
     private readonly registry: ModuleRegistryService,
     private readonly smtp: SmtpAdapterService,
     private readonly smtpResolver: TenantSmtpResolverService,
+    private readonly prisma: PrismaService,
     private readonly logger: PinoLogger,
   ) {}
 
@@ -112,8 +120,13 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
           this.logger.log({ tenantId }, 'subscriptions daily: tenant sin SMTP, salto');
           continue;
         }
-        await this.sendAdminDigest(service, resolved.config, tenantId);
-        await this.sendMemberWarnings(service, resolved.config, tenantId);
+        const branding = await resolveEmailBranding(
+          this.prisma as unknown as BrandingPrisma,
+          tenantId,
+          process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+        );
+        await this.sendAdminDigest(service, resolved.config, tenantId, branding);
+        await this.sendMemberWarnings(service, resolved.config, tenantId, branding);
       } catch (err) {
         this.logger.error(
           { tenantId, err: err instanceof Error ? err.message : String(err) },
@@ -127,6 +140,7 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
     service: ReturnType<ModuleRegistryService['getPaymentConnectionsService']>,
     config: SmtpConfig,
     tenantId: string,
+    branding: EmailBranding,
   ): Promise<void> {
     const [{ activeCount, upcoming }, adminEmails] = await Promise.all([
       service.getSubscriptionDigest(tenantId, WINDOW_DAYS),
@@ -138,13 +152,17 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
       ? upcoming.map((u) => `· ${describeUpcoming(u)}`).join('\n')
       : `Ninguna en los próximos ${WINDOW_DAYS} días.`;
     const subject = `Resumen de suscripciones — ${activeCount} activas, ${upcoming.length} próximas (${WINDOW_DAYS} días)`;
-    const text =
+    const bodyText =
       `Suscripciones activas: ${activeCount}\n\n` +
-      `Próximas a renovarse/caducar (${WINDOW_DAYS} días):\n${lines}\n\n` +
-      `— Didacta`;
+      `Próximas a renovarse/caducar (${WINDOW_DAYS} días):\n${lines}`;
+    const { html, text } = renderBrandedEmail(branding, {
+      title: 'Resumen de suscripciones',
+      bodyHtml: textToHtmlParagraphs(bodyText),
+      bodyText,
+    });
 
     for (const to of adminEmails) {
-      const r = await this.smtp.send(config, { to, subject, text, html: renewalEmailHtml(text) });
+      const r = await this.smtp.send(config, { to, subject, text, html }, branding.tenantName);
       if (!r.ok) {
         this.logger.warn({ tenantId, to, err: r.error }, 'subscriptions daily: digest admin falló');
       }
@@ -155,6 +173,7 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
     service: ReturnType<ModuleRegistryService['getPaymentConnectionsService']>,
     config: SmtpConfig,
     tenantId: string,
+    branding: EmailBranding,
   ): Promise<void> {
     const [toWarn, cancelUrl] = await Promise.all([
       service.listSubscribersToWarn(tenantId, WINDOW_DAYS),
@@ -162,15 +181,20 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
     ]);
     let sent = 0;
     for (const s of toWarn) {
-      const text = buildWarningBody(s, cancelUrl);
+      const bodyText = buildWarningBody(s, cancelUrl);
       const subject = 'Tu suscripción se renovará pronto';
+      const { html, text } = renderBrandedEmail(branding, {
+        title: subject,
+        bodyHtml: textToHtmlParagraphs(bodyText),
+        bodyText,
+        ...(cancelUrl ? { cta: { url: cancelUrl, label: 'Gestionar mi suscripción' } } : {}),
+      });
       try {
-        const r = await this.smtp.send(config, {
-          to: s.userEmail,
-          subject,
-          text,
-          html: renewalEmailHtml(text),
-        });
+        const r = await this.smtp.send(
+          config,
+          { to: s.userEmail, subject, text, html },
+          branding.tenantName,
+        );
         if (r.ok) {
           await service.markRenewalWarned(s.id, s.currentPeriodEnd);
           sent++;
@@ -240,8 +264,9 @@ function describeUpcoming(u: UpcomingRenewal): string {
 
 function buildWarningBody(s: SubscriberToWarn, cancelUrl: string | null): string {
   const plan = s.productName ? ` (${s.productName})` : '';
+  // Si hay portal de cancelación, el enlace va en el botón CTA (no en el cuerpo).
   const cancelLine = cancelUrl
-    ? `Si no quieres continuar, puedes cancelarla aquí antes de esa fecha:\n${cancelUrl}`
+    ? `Si no quieres continuar, puedes cancelarla antes de esa fecha con el botón de abajo.`
     : `Si no quieres continuar, responde a este correo para cancelarla antes de esa fecha.`;
   return (
     `Hola,\n\n` +
@@ -250,6 +275,6 @@ function buildWarningBody(s: SubscriberToWarn, cancelUrl: string | null): string
       s.currency,
     )}.\n\n` +
     `${cancelLine}\n\n` +
-    `Si quieres seguir, no tienes que hacer nada.\n\n— Didacta`
+    `Si quieres seguir, no tienes que hacer nada.`
   );
 }

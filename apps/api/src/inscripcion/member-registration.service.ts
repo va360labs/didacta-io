@@ -8,6 +8,7 @@ import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.servi
 import { PrismaService } from '../prisma/prisma.service';
 import { membershipToBoolean, type TelegramMembership } from './inscripcion.dto';
 import { buildDecisionEmail } from './email-templates';
+import { resolveEmailBranding, type BrandingPrisma } from '../common/branded-email';
 import { MemberDecisionService } from './member-decision.service';
 import { MemberPaymentFlagService } from './member-payment-flag.service';
 import type {
@@ -17,7 +18,6 @@ import type {
 import { MemberSubscriptionLookupService } from './member-subscription-lookup.service';
 
 const DEFAULT_ALUMNO_ROLE = 'alumno';
-const DEFAULT_TENANT_NAME = 'Didacta';
 
 /**
  * Type guard del error P2002 (violación de unique) de Prisma, SIN depender del
@@ -304,11 +304,11 @@ export class MemberRegistrationService {
       const rejectUrl = `${base}/api/v1/inscripcion/decision?token=${encodeURIComponent(rejectToken)}`;
 
       const flag = await this.paymentFlags.lookup(tenantId, input.telegramId);
-      const tenant = await this.prisma.tenant.findUnique({
-        where: { id: tenantId },
-        select: { name: true },
-      });
-      const tenantName = tenant?.name ?? DEFAULT_TENANT_NAME;
+      const branding = await resolveEmailBranding(
+        this.prisma as unknown as BrandingPrisma,
+        tenantId,
+        webBaseUrl,
+      );
 
       // El aprobador es el override (alta manual del admin) o el de la env.
       const approver = approverOverride?.trim() || process.env['MEMBER_APPROVAL_EMAIL']?.trim();
@@ -337,16 +337,15 @@ export class MemberRegistrationService {
         isDelinquent: flag?.isDelinquent ?? false,
         approveUrl,
         rejectUrl,
-        tenantName,
+        branding,
         subscriptionMatches: matches,
         subscriptionFailures: failures,
       });
-      const result = await this.smtp.send(resolved.config, {
-        to: approver,
-        subject: mail.subject,
-        text: mail.text,
-        html: mail.html,
-      });
+      const result = await this.smtp.send(
+        resolved.config,
+        { to: approver, subject: mail.subject, text: mail.text, html: mail.html },
+        branding.tenantName,
+      );
       if (!result.ok) {
         this.logger.warn(
           { tenantId, userId, error: result.error },

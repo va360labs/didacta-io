@@ -9,6 +9,13 @@ import { SmtpAdapterService } from '../modules/smtp-adapter.service';
 import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
 import { ModuleRegistryService } from '../modules/module-registry.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  renderBrandedEmail,
+  resolveEmailBranding,
+  escapeHtml,
+  type BrandingPrisma,
+  type EmailBranding,
+} from '../common/branded-email';
 import type { InscribeDto, InscribeEnrollmentResult, InscribeResult } from './inscribe.dto';
 
 const NO_CTX: ClientContext = { ip: null, userAgent: null };
@@ -214,19 +221,23 @@ export class InscribeService {
         );
         return;
       }
-      const tenant = await this.prisma.tenant.findUnique({
-        where: { id: tenantId },
-        select: { name: true },
-      });
-      const tenantName = tenant?.name ?? 'Didacta';
+      const branding = await resolveEmailBranding(
+        this.prisma as unknown as BrandingPrisma,
+        tenantId,
+        webBaseUrl,
+      );
       const { subject, text, html } = this.buildWelcomeEmail(
         email,
         name,
         tempPassword,
         webBaseUrl,
-        tenantName,
+        branding,
       );
-      const result = await this.smtp.send(resolved.config, { to: email, subject, text, html });
+      const result = await this.smtp.send(
+        resolved.config,
+        { to: email, subject, text, html },
+        branding.tenantName,
+      );
       if (!result.ok) {
         this.logger.warn(
           { tenantId, error: result.error },
@@ -243,57 +254,37 @@ export class InscribeService {
     name: string | null,
     tempPassword: string,
     webBaseUrl: string,
-    tenantName = 'Didacta',
+    branding: EmailBranding,
   ): { subject: string; text: string; html: string } {
     const loginUrl = `${webBaseUrl.replace(/\/$/, '')}/signin`;
     const greeting = name ? `Hola ${name},` : 'Hola,';
-    const subject = `Tu acceso a ${tenantName}`;
-    const text = `${greeting}
+    const subject = `Tu acceso a ${branding.tenantName}`;
+    const bodyText = `${greeting}
 
-Se ha creado tu cuenta en ${tenantName} y ya tienes acceso a tu(s) curso(s).
+Se ha creado tu cuenta en ${branding.tenantName} y ya tienes acceso a tu(s) curso(s).
 
 Entra con estas credenciales temporales:
 
   Email: ${email}
   Contraseña temporal: ${tempPassword}
 
-Inicia sesión aquí: ${loginUrl}
-
-Por seguridad, se te pedirá cambiar la contraseña la primera vez que entres.
-
-— Equipo ${tenantName}
-
-—
-Powered by Didacta.io`;
-    const html = `<!DOCTYPE html>
-<html lang="es"><body style="font-family: 'Inter', system-ui, sans-serif; color: #0D1B2A; line-height: 1.6;">
-  <p>${greeting}</p>
-  <p>Se ha creado tu cuenta en ${escapeHtml(tenantName)} y ya tienes acceso a tu(s) curso(s).</p>
-  <p>Entra con estas credenciales temporales:</p>
+Por seguridad, se te pedirá cambiar la contraseña la primera vez que entres.`;
+    const bodyHtml = `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>
+  <p style="margin:0 0 12px;">Se ha creado tu cuenta en ${escapeHtml(
+    branding.tenantName,
+  )} y ya tienes acceso a tu(s) curso(s).</p>
+  <p style="margin:0 0 8px;">Entra con estas credenciales temporales:</p>
   <table style="margin: 16px 0; font-size: 15px;">
     <tr><td style="padding: 2px 8px; color: #5b6b7c;">Email</td><td style="padding: 2px 8px;"><strong>${escapeHtml(email)}</strong></td></tr>
     <tr><td style="padding: 2px 8px; color: #5b6b7c;">Contraseña temporal</td><td style="padding: 2px 8px;"><strong>${escapeHtml(tempPassword)}</strong></td></tr>
   </table>
-  <p style="margin: 32px 0;">
-    <a href="${loginUrl}" style="display: inline-block; background: #1E5AA8; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
-      Iniciar sesión
-    </a>
-  </p>
-  <p style="font-size: 14px; color: #5b6b7c;">
-    Por seguridad, se te pedirá cambiar la contraseña la primera vez que entres.
-  </p>
-  <p style="margin-top: 32px; font-size: 12px; color: #94a3b8;">— Equipo ${escapeHtml(tenantName)}</p>
-  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0 12px;" />
-  <p style="font-size: 12px; color: #999; text-align: center; margin: 0;">Powered by Didacta.io</p>
-</body></html>`;
+  <p style="margin:0;font-size: 14px; color: #5b6b7c;">Por seguridad, se te pedirá cambiar la contraseña la primera vez que entres.</p>`;
+    const { html, text } = renderBrandedEmail(branding, {
+      title: `Tu acceso a ${branding.tenantName}`,
+      bodyHtml,
+      bodyText,
+      cta: { url: loginUrl, label: 'Iniciar sesión' },
+    });
     return { subject, text, html };
   }
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }

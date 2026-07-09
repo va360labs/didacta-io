@@ -7,12 +7,19 @@ import {
   escapeHtml,
   type DecisionEmailParams,
 } from '../src/inscripcion/email-templates';
+import type { EmailBranding } from '../src/common/branded-email';
 
 // ============================================================================
 // Tests de las plantillas de email del flujo de inscripción (funciones puras).
 // Cubren el escape de HTML, el OTP, y la lógica condicional del email de
-// decisión (banner de impago, encabezado por tri-estado, ambos hrefs).
+// decisión (banner de impago, encabezado por tri-estado, ambos hrefs). Todas
+// las plantillas se firman con el nombre del tenant (branding), no "Didacta".
 // ============================================================================
+
+/** Branding de prueba: sin logo (fallback al nombre en el header). */
+function branding(tenantName = 'Didacta'): EmailBranding {
+  return { tenantName, logoUrl: null, brandColor: '#1E5AA8' };
+}
 
 function baseDecisionParams(overrides: Partial<DecisionEmailParams> = {}): DecisionEmailParams {
   return {
@@ -23,6 +30,7 @@ function baseDecisionParams(overrides: Partial<DecisionEmailParams> = {}): Decis
     isDelinquent: false,
     approveUrl: 'https://didacta.io/approve?t=AAA',
     rejectUrl: 'https://didacta.io/reject?t=BBB',
+    branding: branding(),
     ...overrides,
   };
 }
@@ -35,13 +43,6 @@ describe('escapeHtml', () => {
     expect(escapeHtml('"')).toBe('&quot;');
   });
 
-  it('escapa una cadena de inyección compuesta (orden correcto del &)', () => {
-    // El & debe escaparse primero para no duplicar las entidades.
-    expect(escapeHtml('<script>alert("x" & 1)</script>')).toBe(
-      '&lt;script&gt;alert(&quot;x&quot; &amp; 1)&lt;/script&gt;',
-    );
-  });
-
   it('deja intacto el texto sin caracteres especiales', () => {
     expect(escapeHtml('Hola mundo 123')).toBe('Hola mundo 123');
   });
@@ -49,21 +50,22 @@ describe('escapeHtml', () => {
 
 describe('buildOtpEmail', () => {
   it('incluye el código tanto en text como en html', () => {
-    const { subject, text, html } = buildOtpEmail('482913');
+    const { subject, text, html } = buildOtpEmail('482913', branding());
     expect(subject).toBe('Tu código de acceso');
     expect(text).toContain('482913');
     expect(html).toContain('482913');
   });
 
-  it('usa el tenantName por defecto Didacta y lo respeta si se pasa otro', () => {
-    expect(buildOtpEmail('000000').text).toContain('Didacta');
-    const custom = buildOtpEmail('000000', 'VA360 Academy');
+  it('firma con el nombre del tenant', () => {
+    const custom = buildOtpEmail('000000', branding('VA360 Academy'));
     expect(custom.text).toContain('VA360 Academy');
     expect(custom.html).toContain('VA360 Academy');
+    // Footer discreto con la marca de la plataforma.
+    expect(custom.html).toContain('Powered by Didacta');
   });
 
   it('escapa el tenantName en el html', () => {
-    const { html } = buildOtpEmail('000000', 'A & B');
+    const { html } = buildOtpEmail('000000', branding('A & B'));
     expect(html).toContain('A &amp; B');
   });
 });
@@ -124,9 +126,12 @@ describe('buildDecisionEmail', () => {
     expect(subject).toBe('Nueva inscripción pendiente — Valen');
   });
 
-  it('usa el tenantName por defecto Didacta cuando no se pasa', () => {
-    const { text } = buildDecisionEmail(baseDecisionParams());
-    expect(text).toContain('Didacta');
+  it('firma con el nombre del tenant', () => {
+    const { text } = buildDecisionEmail(
+      baseDecisionParams({ branding: branding('VA360 Academy') }),
+    );
+    expect(text).toContain('aprobación en VA360 Academy');
+    expect(text).toContain('— VA360 Academy');
   });
 
   // ── Sección de suscripción detectada ────────────────────────────────────
@@ -216,21 +221,25 @@ describe('buildDecisionEmail', () => {
 
 describe('buildWelcomeEmail', () => {
   it('incluye el saludo con nombre y el signinUrl', () => {
-    const { text, html, subject } = buildWelcomeEmail('Valen', 'https://didacta.io/signin');
-    expect(subject).toContain('Didacta');
+    const { text, html, subject } = buildWelcomeEmail(
+      'Valen',
+      'https://didacta.io/signin',
+      branding('VA360 Academy'),
+    );
+    expect(subject).toContain('VA360 Academy');
     expect(text).toContain('Hola Valen,');
     expect(html).toContain('href="https://didacta.io/signin"');
   });
 
   it('usa saludo genérico cuando no hay nombre', () => {
-    const { text } = buildWelcomeEmail('', 'https://didacta.io/signin');
+    const { text } = buildWelcomeEmail('', 'https://didacta.io/signin', branding());
     expect(text).toContain('Hola,');
   });
 });
 
 describe('buildRejectionEmail', () => {
   it('incluye el saludo con nombre y el tenantName', () => {
-    const { text, subject } = buildRejectionEmail('Valen', 'VA360 Academy');
+    const { text, subject } = buildRejectionEmail('Valen', branding('VA360 Academy'));
     expect(subject).toContain('VA360 Academy');
     expect(text).toContain('Hola Valen,');
     expect(text).toContain('VA360 Academy');

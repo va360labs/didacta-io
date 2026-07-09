@@ -8,6 +8,7 @@ import { SmtpAdapterService } from '../modules/smtp-adapter.service';
 import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildRejectionEmail, buildWelcomeEmail } from './email-templates';
+import { resolveEmailBranding, type BrandingPrisma } from '../common/branded-email';
 
 /** Tokens RAW de decisión que se envían en el email del aprobador (uno por acción). */
 const DECISION_ACTIONS = ['APPROVE', 'REJECT'] as const;
@@ -130,18 +131,25 @@ export class MemberDecisionService {
       select: { email: true, name: true },
     });
     // Branding del tenant (la tabla `tenant` es global, sin RLS) para que los
-    // emails al usuario lleven el nombre de su academia y no "Didacta".
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: record.tenantId },
-      select: { name: true },
-    });
-    const tenantName = tenant?.name ?? 'Didacta';
+    // emails al usuario lleven el nombre/logo de su academia y no "Didacta".
+    const branding = await resolveEmailBranding(
+      this.prisma as unknown as BrandingPrisma,
+      record.tenantId,
+      process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+    );
 
     if (record.action === 'APPROVE') {
       await this.accessGroups.assignDefaultGroupOnApproval(record.tenantId, record.userId);
       const signinUrl = `${process.env['WEB_PUBLIC_URL']?.trim() ?? ''}/signin`;
-      const { subject, text, html } = buildWelcomeEmail(user?.name ?? '', signinUrl, tenantName);
-      await this.sendEmail(record.tenantId, user?.email ?? null, subject, text, html);
+      const { subject, text, html } = buildWelcomeEmail(user?.name ?? '', signinUrl, branding);
+      await this.sendEmail(
+        record.tenantId,
+        user?.email ?? null,
+        subject,
+        text,
+        html,
+        branding.tenantName,
+      );
       await this.auditLog.record({
         tenantId: record.tenantId,
         actorId: record.userId,
@@ -155,8 +163,15 @@ export class MemberDecisionService {
       return { outcome: 'approved' };
     }
 
-    const { subject, text, html } = buildRejectionEmail(user?.name ?? '', tenantName);
-    await this.sendEmail(record.tenantId, user?.email ?? null, subject, text, html);
+    const { subject, text, html } = buildRejectionEmail(user?.name ?? '', branding);
+    await this.sendEmail(
+      record.tenantId,
+      user?.email ?? null,
+      subject,
+      text,
+      html,
+      branding.tenantName,
+    );
     await this.auditLog.record({
       tenantId: record.tenantId,
       actorId: record.userId,
@@ -201,17 +216,17 @@ export class MemberDecisionService {
       });
     });
 
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { name: true },
-    });
-    const tenantName = tenant?.name ?? 'Didacta';
+    const branding = await resolveEmailBranding(
+      this.prisma as unknown as BrandingPrisma,
+      tenantId,
+      process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+    );
 
     if (action === 'APPROVE') {
       await this.accessGroups.assignDefaultGroupOnApproval(tenantId, userId);
       const signinUrl = `${process.env['WEB_PUBLIC_URL']?.trim() ?? ''}/signin`;
-      const { subject, text, html } = buildWelcomeEmail(user.name ?? '', signinUrl, tenantName);
-      await this.sendEmail(tenantId, user.email, subject, text, html);
+      const { subject, text, html } = buildWelcomeEmail(user.name ?? '', signinUrl, branding);
+      await this.sendEmail(tenantId, user.email, subject, text, html, branding.tenantName);
       await this.auditLog.record({
         tenantId,
         actorId: userId,
@@ -225,8 +240,8 @@ export class MemberDecisionService {
       return { outcome: 'approved' };
     }
 
-    const { subject, text, html } = buildRejectionEmail(user.name ?? '', tenantName);
-    await this.sendEmail(tenantId, user.email, subject, text, html);
+    const { subject, text, html } = buildRejectionEmail(user.name ?? '', branding);
+    await this.sendEmail(tenantId, user.email, subject, text, html, branding.tenantName);
     await this.auditLog.record({
       tenantId,
       actorId: userId,
@@ -251,6 +266,7 @@ export class MemberDecisionService {
     subject: string,
     text: string,
     html: string,
+    fromName?: string,
   ): Promise<void> {
     if (!to) {
       this.logger.warn(
@@ -268,7 +284,7 @@ export class MemberDecisionService {
         );
         return;
       }
-      const result = await this.smtp.send(resolved.config, { to, subject, text, html });
+      const result = await this.smtp.send(resolved.config, { to, subject, text, html }, fromName);
       if (!result.ok) {
         this.logger.warn(
           { tenantId, error: result.error },

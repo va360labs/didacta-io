@@ -59,6 +59,12 @@ function build(overrides?: {
     resolve: vi.fn(overrides?.resolve ?? (async () => ({ config: { host: 'smtp.x' } }))),
   };
   const smtp = { send: vi.fn(overrides?.send ?? (async () => ({ ok: true }))) };
+  const prisma = {
+    tenant: { findUnique: vi.fn(async () => ({ name: 'Academia X' })) },
+    modThemingTenantTheme: {
+      findUnique: vi.fn(async () => ({ logoUrl: null, brandHue: 213, brandSaturation: 70 })),
+    },
+  };
   const controller = new InscripcionAdminController(
     registration as never,
     lookup as never,
@@ -66,8 +72,9 @@ function build(overrides?: {
     registry as never,
     smtp as never,
     smtpResolver as never,
+    prisma as never,
   );
-  return { controller, registration, lookup, paymentSvc, smtpResolver, smtp };
+  return { controller, registration, lookup, paymentSvc, smtpResolver, smtp, prisma };
 }
 
 describe('InscripcionAdminController · renewal-context', () => {
@@ -161,12 +168,19 @@ describe('InscripcionAdminController · renewal-email', () => {
     const res = await h.controller.sendRenewalEmail(ADMIN as never, USER_ID, DTO);
     expect(res).toEqual({ ok: true, to: 'aspirante@x.com' });
     expect(h.smtp.send).toHaveBeenCalledTimes(1);
-    const [, message] = h.smtp.send.mock.calls[0] as [unknown, Record<string, string>];
+    const [, message, fromName] = h.smtp.send.mock.calls[0] as [
+      unknown,
+      Record<string, string>,
+      string,
+    ];
     expect(message.to).toBe('aspirante@x.com');
     expect(message.subject).toBe(DTO.subject);
     expect(message.text).toBe(DTO.body);
     // El cuerpo se envuelve en HTML y los enlaces se vuelven <a>.
     expect(message.html).toContain('<a href="https://invoice.stripe.com/i/sub_1">');
+    // Se envuelve en la plantilla de marca y se firma con el nombre del tenant.
+    expect(message.html).toContain('Powered by Didacta');
+    expect(fromName).toBe('Academia X');
   });
 });
 

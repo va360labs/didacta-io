@@ -304,7 +304,11 @@ describe('PrismaNotificationHubService', () => {
         expect.objectContaining({
           to: 'alumno@x.com',
           subject: expect.stringContaining('Tu certificado'),
+          // El cuerpo ahora va envuelto en la plantilla de marca (html + text).
+          html: expect.stringContaining('Powered by Didacta'),
         }),
+        // Tercer arg: fromName (nombre del tenant para el header From).
+        expect.any(String),
       );
     });
 

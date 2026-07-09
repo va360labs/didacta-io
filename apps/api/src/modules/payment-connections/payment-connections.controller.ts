@@ -23,6 +23,7 @@ import { z } from 'zod';
 import { normalizeEmail } from '@didacta/mod-payment-connections';
 import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
 import { renewalEmailHtml } from '../../common/renewal-email-html';
+import { resolveEmailBranding, type BrandingPrisma } from '../../common/branded-email';
 import { extractClientContext } from '../../auth/client-context';
 import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -34,6 +35,7 @@ import { SmtpAdapterService } from '../smtp-adapter.service';
 import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { ModuleContextFactory } from '../module-context.factory';
+import { PrismaService } from '../../prisma/prisma.service';
 import { SubscriptionsDailyWorker } from './subscriptions-daily.worker';
 
 /**
@@ -171,6 +173,7 @@ export class PaymentConnectionsController {
     private readonly smtp: SmtpAdapterService,
     private readonly smtpResolver: TenantSmtpResolverService,
     private readonly dailyWorker: SubscriptionsDailyWorker,
+    private readonly prisma: PrismaService,
   ) {}
 
   private assertSuperAdmin(user: SessionClaims | undefined): SessionClaims {
@@ -602,12 +605,21 @@ export class PaymentConnectionsController {
         'No hay SMTP configurado (ni del tenant ni global) para enviar el recordatorio.',
       );
     }
-    const result = await this.smtp.send(resolved.config, {
-      to,
-      subject: dto.subject,
-      text: dto.body,
-      html: renewalEmailHtml(dto.body),
-    });
+    const branding = await resolveEmailBranding(
+      this.prisma as unknown as BrandingPrisma,
+      user.tenantId,
+      process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+    );
+    const result = await this.smtp.send(
+      resolved.config,
+      {
+        to,
+        subject: dto.subject,
+        text: dto.body,
+        html: renewalEmailHtml(dto.body, branding, dto.subject),
+      },
+      branding.tenantName,
+    );
     if (!result.ok) {
       throw new ConflictException(`No se pudo enviar el email: ${result.error ?? 'error SMTP'}`);
     }

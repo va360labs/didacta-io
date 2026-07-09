@@ -4,22 +4,23 @@ import {
   type MemberSubscriptionLookupFailure,
 } from '@didacta/mod-payment-connections';
 import type { TelegramMembership } from './inscripcion.dto';
+import {
+  renderBrandedEmail,
+  escapeHtml,
+  escapeHtmlAttr,
+  type EmailBranding,
+} from '../common/branded-email';
+
+// Re-exportado para compatibilidad con call sites/tests que lo importaban de aquí.
+export { escapeHtml };
 
 // ============================================================================
 // Plantillas de email del flujo de inscripción de miembros (funciones PURAS,
-// sin @Injectable). Clonan el estilo del email de bienvenida de inscribe.service
-// (doctype, font Inter, color #0D1B2A, botón CTA <a> con background, footer
-// 'Powered by Didacta.io'). Todo valor dinámico pasa por escapeHtml.
+// sin @Injectable). Todas envuelven su contenido en la plantilla de marca del
+// TENANT (`renderBrandedEmail`): header con logo, color de marca, firma con el
+// nombre del tenant y footer "Powered by Didacta". Todo valor dinámico pasa por
+// escapeHtml. El branding lo resuelve el caller con `resolveEmailBranding`.
 // ============================================================================
-
-/** Escapa los caracteres con significado en HTML para evitar inyección. */
-export function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 export interface EmailContent {
   subject: string;
@@ -29,41 +30,30 @@ export interface EmailContent {
 
 // ─── OTP: código de acceso de un solo uso ────────────────────────────────────
 /** Email con el código OTP grande (no es un link). Validez de 10 minutos. */
-export function buildOtpEmail(code: string, tenantName = 'Didacta'): EmailContent {
+export function buildOtpEmail(code: string, branding: EmailBranding): EmailContent {
   const subject = 'Tu código de acceso';
-  const text = `Hola,
-
-Tu código de acceso a ${tenantName} es:
+  const bodyText = `Tu código de acceso a ${branding.tenantName} es:
 
   ${code}
 
-Introdúcelo en la pantalla de verificación para continuar.
+Introdúcelo en la pantalla de verificación para continuar. Este código caduca en 10 minutos.
 
-Este código caduca en 10 minutos. Si no has solicitado este acceso, ignora este mensaje.
-
-— Equipo ${tenantName}
-
-—
-Powered by Didacta.io`;
-  const html = `<!DOCTYPE html>
-<html lang="es"><body style="font-family: 'Inter', system-ui, sans-serif; color: #0D1B2A; line-height: 1.6;">
-  <p>Hola,</p>
-  <p>Tu código de acceso a ${escapeHtml(tenantName)} es:</p>
-  <p style="margin: 24px 0; text-align: center;">
-    <span style="display: inline-block; font-size: 34px; font-weight: 700; letter-spacing: 8px; color: #0D1B2A; background: #f1f5f9; padding: 16px 28px; border-radius: 12px;">
-      ${escapeHtml(code)}
-    </span>
+Si no has solicitado este acceso, ignora este mensaje.`;
+  const bodyHtml = `<p style="margin:0 0 12px;">Tu código de acceso a ${escapeHtml(
+    branding.tenantName,
+  )} es:</p>
+  <p style="margin:24px 0;text-align:center;">
+    <span style="display:inline-block;font-size:34px;font-weight:700;letter-spacing:8px;color:#0D1B2A;background:#f1f5f9;padding:16px 28px;border-radius:12px;">${escapeHtml(
+      code,
+    )}</span>
   </p>
-  <p style="font-size: 14px; color: #5b6b7c;">
-    Introdúcelo en la pantalla de verificación para continuar. Este código caduca en 10 minutos.
-  </p>
-  <p style="font-size: 14px; color: #5b6b7c;">
-    Si no has solicitado este acceso, ignora este mensaje.
-  </p>
-  <p style="margin-top: 32px; font-size: 12px; color: #94a3b8;">— Equipo ${escapeHtml(tenantName)}</p>
-  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0 12px;" />
-  <p style="font-size: 12px; color: #999; text-align: center; margin: 0;">Powered by Didacta.io</p>
-</body></html>`;
+  <p style="margin:0 0 8px;font-size:14px;color:#5b6b7c;">Introdúcelo en la pantalla de verificación para continuar. Este código caduca en 10 minutos.</p>
+  <p style="margin:0;font-size:14px;color:#5b6b7c;">Si no has solicitado este acceso, ignora este mensaje.</p>`;
+  const { html, text } = renderBrandedEmail(branding, {
+    title: 'Tu código de acceso',
+    bodyHtml,
+    bodyText,
+  });
   return { subject, text, html };
 }
 
@@ -76,7 +66,7 @@ export interface DecisionEmailParams {
   isDelinquent: boolean;
   approveUrl: string;
   rejectUrl: string;
-  tenantName?: string;
+  branding: EmailBranding;
   /** Suscripciones detectadas del solicitante en las cuentas de pago conectadas. */
   subscriptionMatches?: MemberSubscriptionMatch[];
   /** Conexiones que NO se pudieron consultar (caídas/credencial/timeout): el resultado puede ser incompleto. */
@@ -115,11 +105,13 @@ function describeMatch(m: MemberSubscriptionMatch): string {
 
 /**
  * Email de decisión para el aprobador: muestra los datos del solicitante, un
- * banner rojo si consta como impago, y dos botones (APROBAR / RECHAZAR).
+ * banner rojo si consta como impago, y dos botones (APROBAR / RECHAZAR). Va
+ * dentro de la plantilla de marca del tenant.
  */
 export function buildDecisionEmail(params: DecisionEmailParams): EmailContent {
-  const { name, email, telegramId, inGroup, isDelinquent, approveUrl, rejectUrl } = params;
-  const tenantName = params.tenantName ?? 'Didacta';
+  const { name, email, telegramId, inGroup, isDelinquent, approveUrl, rejectUrl, branding } =
+    params;
+  const tenantName = branding.tenantName;
   const heading = membershipHeading(inGroup);
   const matches = params.subscriptionMatches ?? [];
   const failures = params.subscriptionFailures ?? [];
@@ -149,9 +141,7 @@ export function buildDecisionEmail(params: DecisionEmailParams): EmailContent {
     subscriptionText = '\nSuscripción detectada: ninguna en las cuentas de pago conectadas.\n';
   }
   const subject = `Nueva inscripción pendiente — ${name}`;
-  const text = `Hola,
-
-Hay una nueva inscripción pendiente de tu aprobación en ${tenantName}.
+  const bodyText = `Hay una nueva inscripción pendiente de tu aprobación en ${tenantName}.
 
 Estado: ${heading}
 ${delinquentLineText}
@@ -160,12 +150,7 @@ ${delinquentLineText}
   Telegram ID: ${telegramId}
 ${subscriptionText}
 Aprobar: ${approveUrl}
-Rechazar: ${rejectUrl}
-
-— ${tenantName}
-
-—
-Powered by Didacta.io`;
+Rechazar: ${rejectUrl}`;
 
   const delinquentBanner = isDelinquent
     ? `<p style="margin: 16px 0; padding: 12px 16px; background: #fee2e2; border: 1px solid #dc2626; border-radius: 8px; color: #991b1b; font-weight: 700; font-size: 15px;">
@@ -208,10 +193,9 @@ Powered by Didacta.io`;
   </p>`;
   }
 
-  const html = `<!DOCTYPE html>
-<html lang="es"><body style="font-family: 'Inter', system-ui, sans-serif; color: #0D1B2A; line-height: 1.6;">
-  <p>Hola,</p>
-  <p>Hay una nueva inscripción pendiente de tu aprobación en ${escapeHtml(tenantName)}.</p>
+  const bodyHtml = `<p style="margin:0 0 12px;">Hay una nueva inscripción pendiente de tu aprobación en ${escapeHtml(
+    tenantName,
+  )}.</p>
   <p style="margin: 16px 0; font-size: 15px; font-weight: 600;">${escapeHtml(heading)}</p>
   ${delinquentBanner}
   <table style="margin: 16px 0; font-size: 15px;">
@@ -221,17 +205,19 @@ Powered by Didacta.io`;
   </table>
   ${subscriptionBlock}
   <p style="margin: 32px 0;">
-    <a href="${approveUrl}" style="display: inline-block; background: #16a34a; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-right: 12px;">
+    <a href="${escapeHtmlAttr(approveUrl)}" style="display: inline-block; background: #16a34a; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-right: 12px;">
       Aprobar
     </a>
-    <a href="${rejectUrl}" style="display: inline-block; background: #dc2626; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+    <a href="${escapeHtmlAttr(rejectUrl)}" style="display: inline-block; background: #dc2626; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
       Rechazar
     </a>
-  </p>
-  <p style="margin-top: 32px; font-size: 12px; color: #94a3b8;">— ${escapeHtml(tenantName)}</p>
-  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0 12px;" />
-  <p style="font-size: 12px; color: #999; text-align: center; margin: 0;">Powered by Didacta.io</p>
-</body></html>`;
+  </p>`;
+
+  const { html, text } = renderBrandedEmail(branding, {
+    title: `Nueva inscripción pendiente — ${name}`,
+    bodyHtml,
+    bodyText,
+  });
   return { subject, text, html };
 }
 
@@ -240,61 +226,45 @@ Powered by Didacta.io`;
 export function buildWelcomeEmail(
   name: string,
   signinUrl: string,
-  tenantName = 'Didacta',
+  branding: EmailBranding,
 ): EmailContent {
   const greeting = name ? `Hola ${name},` : 'Hola,';
-  const subject = `Tu inscripción en ${tenantName} ha sido aprobada`;
-  const text = `${greeting}
+  const subject = `Tu inscripción en ${branding.tenantName} ha sido aprobada`;
+  const bodyText = `${greeting}
 
-¡Buenas noticias! Tu inscripción en ${tenantName} ha sido aprobada y tu cuenta ya está activa.
-
-Entra aquí: ${signinUrl}
-
-— Equipo ${tenantName}
-
-—
-Powered by Didacta.io`;
-  const html = `<!DOCTYPE html>
-<html lang="es"><body style="font-family: 'Inter', system-ui, sans-serif; color: #0D1B2A; line-height: 1.6;">
-  <p>${escapeHtml(greeting)}</p>
-  <p>¡Buenas noticias! Tu inscripción en ${escapeHtml(tenantName)} ha sido aprobada y tu cuenta ya está activa.</p>
-  <p style="margin: 32px 0;">
-    <a href="${signinUrl}" style="display: inline-block; background: #1E5AA8; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">
-      Entrar
-    </a>
-  </p>
-  <p style="margin-top: 32px; font-size: 12px; color: #94a3b8;">— Equipo ${escapeHtml(tenantName)}</p>
-  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0 12px;" />
-  <p style="font-size: 12px; color: #999; text-align: center; margin: 0;">Powered by Didacta.io</p>
-</body></html>`;
+¡Buenas noticias! Tu inscripción en ${branding.tenantName} ha sido aprobada y tu cuenta ya está activa.`;
+  const bodyHtml = `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>
+  <p style="margin:0;">¡Buenas noticias! Tu inscripción en ${escapeHtml(
+    branding.tenantName,
+  )} ha sido aprobada y tu cuenta ya está activa.</p>`;
+  const { html, text } = renderBrandedEmail(branding, {
+    title: '¡Bienvenido!',
+    bodyHtml,
+    bodyText,
+    cta: { url: signinUrl, label: 'Entrar' },
+  });
   return { subject, text, html };
 }
 
 // ─── Rechazo: inscripción no aprobada ────────────────────────────────────────
 /** Aviso breve de que la inscripción no ha sido aprobada. */
-export function buildRejectionEmail(name: string, tenantName = 'Didacta'): EmailContent {
+export function buildRejectionEmail(name: string, branding: EmailBranding): EmailContent {
   const greeting = name ? `Hola ${name},` : 'Hola,';
-  const subject = `Sobre tu inscripción en ${tenantName}`;
-  const text = `${greeting}
+  const subject = `Sobre tu inscripción en ${branding.tenantName}`;
+  const bodyText = `${greeting}
 
-Gracias por tu interés en ${tenantName}. Tras revisar tu solicitud, no hemos podido aprobar tu inscripción en este momento.
+Gracias por tu interés en ${branding.tenantName}. Tras revisar tu solicitud, no hemos podido aprobar tu inscripción en este momento.
 
-Si crees que se trata de un error, puedes ponerte en contacto con el equipo.
-
-— Equipo ${tenantName}
-
-—
-Powered by Didacta.io`;
-  const html = `<!DOCTYPE html>
-<html lang="es"><body style="font-family: 'Inter', system-ui, sans-serif; color: #0D1B2A; line-height: 1.6;">
-  <p>${escapeHtml(greeting)}</p>
-  <p>Gracias por tu interés en ${escapeHtml(tenantName)}. Tras revisar tu solicitud, no hemos podido aprobar tu inscripción en este momento.</p>
-  <p style="font-size: 14px; color: #5b6b7c;">
-    Si crees que se trata de un error, puedes ponerte en contacto con el equipo.
-  </p>
-  <p style="margin-top: 32px; font-size: 12px; color: #94a3b8;">— Equipo ${escapeHtml(tenantName)}</p>
-  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0 12px;" />
-  <p style="font-size: 12px; color: #999; text-align: center; margin: 0;">Powered by Didacta.io</p>
-</body></html>`;
+Si crees que se trata de un error, puedes ponerte en contacto con el equipo.`;
+  const bodyHtml = `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>
+  <p style="margin:0 0 12px;">Gracias por tu interés en ${escapeHtml(
+    branding.tenantName,
+  )}. Tras revisar tu solicitud, no hemos podido aprobar tu inscripción en este momento.</p>
+  <p style="margin:0;font-size:14px;color:#5b6b7c;">Si crees que se trata de un error, puedes ponerte en contacto con el equipo.</p>`;
+  const { html, text } = renderBrandedEmail(branding, {
+    title: 'Sobre tu inscripción',
+    bodyHtml,
+    bodyText,
+  });
   return { subject, text, html };
 }

@@ -355,49 +355,53 @@ describe('PasswordResetService.reset', () => {
 });
 
 describe('PasswordResetService.buildResetEmail', () => {
-  it('construye un email con greeting nominal cuando hay name (default Didacta sin tenantName)', () => {
+  /** Branding de prueba (sin logo salvo que se indique). */
+  const branding = (tenantName = 'Didacta', logoUrl: string | null = null) => ({
+    tenantName,
+    logoUrl,
+    brandColor: '#1E5AA8',
+  });
+
+  it('construye un email con greeting nominal cuando hay name', () => {
     const { service } = makeService();
-    const out = service.buildResetEmail('abc123', 'Valentín', 'https://didacta.local');
+    const out = service.buildResetEmail('abc123', 'Valentín', 'https://didacta.local', branding());
     expect(out.subject).toBe('Restablecer tu contraseña en Didacta');
     expect(out.text).toContain('Hola Valentín');
     expect(out.html).toContain('Hola Valentín');
     expect(out.text).toContain('https://didacta.local/reset-password?token=abc123');
-    // Default sin tenantName → la firma genérica + footer.
-    expect(out.text).toContain('— Equipo Didacta');
-    expect(out.text).toContain('Powered by Didacta.io');
-    expect(out.html).toContain('Powered by Didacta.io');
+    // Firma con el nombre del tenant + footer discreto de plataforma.
+    expect(out.text).toContain('— Didacta');
+    expect(out.text).toContain('Powered by Didacta');
+    expect(out.html).toContain('Powered by Didacta');
   });
 
   it('cae a un greeting genérico cuando no hay name', () => {
     const { service } = makeService();
-    const out = service.buildResetEmail('xyz', null, 'https://x.test');
+    const out = service.buildResetEmail('xyz', null, 'https://x.test', branding());
     expect(out.text).toContain('Hola,');
     expect(out.html).toContain('Hola,');
   });
 
   it('encodeURIComponent del token raro', () => {
     const { service } = makeService();
-    const out = service.buildResetEmail('a/b+c=', null, 'https://x.test');
+    const out = service.buildResetEmail('a/b+c=', null, 'https://x.test', branding());
     expect(out.text).toContain('token=a%2Fb%2Bc%3D');
   });
 
-  // alpha.77 — branding por tenant
-  it('firma como "Equipo {tenantName}" + footer Powered by Didacta.io cuando se pasa tenantName', () => {
+  it('firma con el nombre del tenant + footer Powered by Didacta', () => {
     const { service } = makeService();
     const out = service.buildResetEmail(
       'abc',
       'Valentín',
       'https://dev.didacta.io',
-      'VA360 Academy',
+      branding('VA360 Academy'),
     );
     expect(out.subject).toBe('Restablecer tu contraseña en VA360 Academy');
-    expect(out.text).toContain('— Equipo VA360 Academy');
-    expect(out.html).toContain('— Equipo VA360 Academy');
+    expect(out.text).toContain('— VA360 Academy');
+    expect(out.html).toContain('— VA360 Academy');
     expect(out.text).toContain('cuenta en VA360 Academy');
-    // Footer discreto con marca plataforma.
-    expect(out.text).toContain('Powered by Didacta.io');
-    expect(out.html).toContain('Powered by Didacta.io');
-    expect(out.html).toContain('color: #999');
+    expect(out.text).toContain('Powered by Didacta');
+    expect(out.html).toContain('Powered by Didacta');
   });
 
   it('request() expone tenantName desde el tenant resuelto', async () => {
@@ -406,15 +410,13 @@ describe('PasswordResetService.buildResetEmail', () => {
     expect(result?.tenantName).toBe('VA360 Academy');
   });
 
-  // alpha.82 — logo por tenant en el header del email
   it('embebe el logo del tenant en el header HTML cuando se pasa logoUrl absoluto', () => {
     const { service } = makeService();
     const out = service.buildResetEmail(
       'abc',
       'Valentín',
       'https://dev.didacta.io',
-      'VA360 Academy',
-      'https://cdn.didacta.io/logo.png',
+      branding('VA360 Academy', 'https://cdn.didacta.io/logo.png'),
     );
     expect(out.html).toContain('<img src="https://cdn.didacta.io/logo.png"');
     expect(out.html).toContain('alt="VA360 Academy"');
@@ -424,9 +426,14 @@ describe('PasswordResetService.buildResetEmail', () => {
 
   it('NO renderiza img cuando logoUrl es null (fallback sin romper)', () => {
     const { service } = makeService();
-    const out = service.buildResetEmail('abc', 'Valentín', 'https://x.test', 'VA360 Academy', null);
+    const out = service.buildResetEmail(
+      'abc',
+      'Valentín',
+      'https://x.test',
+      branding('VA360 Academy', null),
+    );
     expect(out.html).not.toContain('<img');
-    expect(out.html).toContain('— Equipo VA360 Academy');
+    expect(out.html).toContain('— VA360 Academy');
   });
 
   it('NO renderiza img cuando logoUrl no es http(s) (defensa anti-inyección)', () => {
@@ -435,8 +442,7 @@ describe('PasswordResetService.buildResetEmail', () => {
       'abc',
       null,
       'https://x.test',
-      'VA360 Academy',
-      'javascript:alert(1)',
+      branding('VA360 Academy', 'javascript:alert(1)'),
     );
     expect(out.html).not.toContain('<img');
     expect(out.html).not.toContain('javascript:');
@@ -448,8 +454,7 @@ describe('PasswordResetService.buildResetEmail', () => {
       'abc',
       null,
       'https://x.test',
-      'Acme "Corp" <b>',
-      'https://cdn.test/l.png',
+      branding('Acme "Corp" <b>', 'https://cdn.test/l.png'),
     );
     expect(out.html).toContain('alt="Acme &quot;Corp&quot; &lt;b&gt;"');
   });

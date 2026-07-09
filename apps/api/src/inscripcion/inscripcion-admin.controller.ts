@@ -24,9 +24,11 @@ import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
 import { resolveWebBaseUrl } from '../common/resolve-web-base-url';
 import { renewalEmailHtml } from '../common/renewal-email-html';
+import { resolveEmailBranding, type BrandingPrisma } from '../common/branded-email';
 import { ModuleRegistryService } from '../modules/module-registry.service';
 import { SmtpAdapterService } from '../modules/smtp-adapter.service';
 import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { MemberDecisionService } from './member-decision.service';
 import { MemberRegistrationService } from './member-registration.service';
 import { MemberSubscriptionLookupService } from './member-subscription-lookup.service';
@@ -82,6 +84,7 @@ export class InscripcionAdminController {
     private readonly registry: ModuleRegistryService,
     private readonly smtp: SmtpAdapterService,
     private readonly smtpResolver: TenantSmtpResolverService,
+    private readonly prisma: PrismaService,
   ) {}
 
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
@@ -252,12 +255,21 @@ export class InscripcionAdminController {
         'El tenant no tiene SMTP configurado: no se puede enviar el recordatorio.',
       );
     }
-    const result = await this.smtp.send(resolved.config, {
-      to,
-      subject: dto.subject,
-      text: dto.body,
-      html: renewalEmailHtml(dto.body),
-    });
+    const branding = await resolveEmailBranding(
+      this.prisma as unknown as BrandingPrisma,
+      user.tenantId,
+      process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+    );
+    const result = await this.smtp.send(
+      resolved.config,
+      {
+        to,
+        subject: dto.subject,
+        text: dto.body,
+        html: renewalEmailHtml(dto.body, branding, dto.subject),
+      },
+      branding.tenantName,
+    );
     if (!result.ok) {
       throw new ConflictException(`No se pudo enviar el email: ${result.error ?? 'error SMTP'}`);
     }

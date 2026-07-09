@@ -19,6 +19,12 @@ import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { ModuleContextFactory } from '../modules/module-context.factory';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
+import {
+  resolveEmailBranding,
+  renderBrandedEmail,
+  textToHtmlParagraphs,
+  type BrandingPrisma,
+} from '../common/branded-email';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
@@ -204,14 +210,26 @@ export class AdminSmtpController {
       select: { slug: true, name: true },
     });
 
-    const result = await smtp.send(resolved.config, {
-      to: body.toEmail,
-      subject: 'Prueba de SMTP — Didacta',
-      text:
-        `Si recibiste este correo, la configuración SMTP de tu tenant en Didacta funciona correctamente.\n\n` +
-        `Tenant: ${tenant?.slug ?? '(desconocido)'} (${tenant?.name ?? ''})\n` +
-        `Fecha: ${new Date().toISOString()}`,
+    const branding = await resolveEmailBranding(
+      this.prisma as unknown as BrandingPrisma,
+      claims.tenantId,
+      process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+    );
+    const subject = `Prueba de SMTP — ${branding.tenantName}`;
+    const bodyText =
+      `Si recibiste este correo, la configuración SMTP de ${branding.tenantName} funciona correctamente.\n\n` +
+      `Tenant: ${tenant?.slug ?? '(desconocido)'}\n` +
+      `Fecha: ${new Date().toISOString()}`;
+    const { html, text } = renderBrandedEmail(branding, {
+      title: 'Prueba de SMTP',
+      bodyHtml: textToHtmlParagraphs(bodyText),
+      bodyText,
     });
+    const result = await smtp.send(
+      resolved.config,
+      { to: body.toEmail, subject, text, html },
+      branding.tenantName,
+    );
 
     if (!result.ok) {
       // El error real del MTA (auth failed, host inválido, etc.) viaja en

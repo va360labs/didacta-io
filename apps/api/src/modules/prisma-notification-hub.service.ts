@@ -5,6 +5,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationRealtimePublisher } from './notifications/realtime/notification-realtime.publisher';
 import { SmtpAdapterService, type SmtpConfig } from './smtp-adapter.service';
 import { TenantSmtpResolverService } from './tenant-smtp-resolver.service';
+import {
+  resolveEmailBranding,
+  renderBrandedEmail,
+  textToHtmlParagraphs,
+  type BrandingPrisma,
+  type EmailBranding,
+} from '../common/branded-email';
 
 /**
  * Implementación real del NotificationHub: persiste cada notificación en
@@ -73,12 +80,23 @@ export class PrismaNotificationHubService implements NotificationHubService {
       return;
     }
 
+    // Branding del tenant: el nombre queda disponible como {{tenantName}} en las
+    // plantillas (para no firmar como "Didacta") y el logo/color se usan en el
+    // email HTML. Best-effort: nunca rompe el envío.
+    const webBaseUrl = process.env['WEB_PUBLIC_URL']?.trim() ?? '';
+    const branding = await resolveEmailBranding(
+      this.prisma as unknown as BrandingPrisma,
+      notification.tenantId,
+      webBaseUrl,
+    );
+    const renderVars = { tenantName: branding.tenantName, ...notification.variables };
+
     const rendered = await this.renderForTenant(
       notification.tenantId,
       notification.templateKey,
       channel,
       notification.locale,
-      notification.variables,
+      renderVars,
     );
 
     const created = await this.prisma.notification.create({
@@ -115,6 +133,8 @@ export class PrismaNotificationHubService implements NotificationHubService {
         userId: notification.to,
         subject: rendered.subject ?? '(sin asunto)',
         body: rendered.body,
+        branding,
+        webBaseUrl,
       });
       return;
     }
@@ -133,6 +153,8 @@ export class PrismaNotificationHubService implements NotificationHubService {
     userId: string;
     subject: string;
     body: string;
+    branding: EmailBranding;
+    webBaseUrl: string;
   }): Promise<void> {
     if (!this.tenantConfig || !this.smtp) {
       // El hub se construyó en modo legacy (sin TenantConfig) — log y skip.
@@ -191,11 +213,23 @@ export class PrismaNotificationHubService implements NotificationHubService {
       return;
     }
 
-    const result = await this.smtp.send(config, {
-      to: recipientEmail,
-      subject: args.subject,
-      text: args.body,
+    // Envuelve el cuerpo renderizado en la plantilla de marca del tenant
+    // (logo, color, firma con el nombre del tenant, footer "Powered by Didacta").
+    const { html, text } = renderBrandedEmail(args.branding, {
+      title: args.subject,
+      bodyHtml: textToHtmlParagraphs(args.body),
+      bodyText: args.body,
+      cta: args.webBaseUrl
+        ? { url: args.webBaseUrl, label: `Entrar a ${args.branding.tenantName}` }
+        : undefined,
+      footerNote: `Recibiste este correo como miembro de ${args.branding.tenantName}.`,
     });
+
+    const result = await this.smtp.send(
+      config,
+      { to: recipientEmail, subject: args.subject, text, html },
+      args.branding.tenantName,
+    );
 
     if (result.ok) {
       await this.prisma.notification.update({
@@ -336,28 +370,28 @@ const TEMPLATES: Record<string, TemplateDef> = {
     body: 'Tu intento del quiz "{{quiz}}" fue corregido manualmente. Resultado: {{scorePercent}}% ({{result}}).',
   },
   'admin.smtp.test': {
-    subject: 'Prueba de SMTP — Didacta',
-    body: 'Si recibiste este correo, la configuración SMTP de tu tenant en Didacta funciona correctamente.\n\nTenant: {{tenantSlug}}\nFecha: {{timestamp}}',
+    subject: 'Prueba de SMTP — {{tenantName}}',
+    body: 'Si recibiste este correo, la configuración SMTP de {{tenantName}} funciona correctamente.\n\nTenant: {{tenantSlug}}\nFecha: {{timestamp}}',
   },
   'community.mention': {
     subject: 'Te mencionaron en la comunidad',
-    body: '{{authorName}} te mencionó en un {{#commentId}}comentario{{/commentId}}{{#postId}}post{{/postId}}. Entra a la app para ver el hilo completo.',
+    body: '{{authorName}} te mencionó en un {{#commentId}}comentario{{/commentId}}{{#postId}}post{{/postId}}.',
   },
   // Alguien comentó en un post del que sos autor. La deep-link a "responder"
   // la arma el frontend con postId/commentId de metadata.
   'community.comment.on_post': {
     subject: '{{actorName}} comentó en tu publicación',
-    body: '{{actorName}} comentó en tu publicación "{{postTitle}}":\n\n"{{excerpt}}"\n\nEntra a Didacta para responder.',
+    body: '{{actorName}} comentó en tu publicación "{{postTitle}}":\n\n"{{excerpt}}"',
   },
   // Alguien respondió a un comentario tuyo dentro de un post.
   'community.reply.to_comment': {
     subject: '{{actorName}} respondió a tu comentario',
-    body: '{{actorName}} respondió a tu comentario en "{{postTitle}}":\n\n"{{excerpt}}"\n\nEntra a Didacta para seguir la conversación.',
+    body: '{{actorName}} respondió a tu comentario en "{{postTitle}}":\n\n"{{excerpt}}"',
   },
   'community.digest.weekly': {
     subject:
       'Tu resumen semanal de la comunidad ({{mentionsCount}} menciones · {{repliesCount}} respuestas)',
-    body: 'Esta semana en la comunidad:\n\n· {{mentionsCount}} mención(es) nueva(s)\n· {{repliesCount}} respuesta(s) en hilos donde participaste\n\nEntra a Didacta y revisa /comunidad/menciones para verlas todas. Desde el resumen anterior: {{sinceIso}}.',
+    body: 'Esta semana en la comunidad:\n\n· {{mentionsCount}} mención(es) nueva(s)\n· {{repliesCount}} respuesta(s) en hilos donde participaste\n\nRevísalas todas en tu sección de menciones. Desde el resumen anterior: {{sinceIso}}.',
   },
   // Aviso masivo (broadcast) a toda la comunidad. Passthrough: el worker compone
   // el asunto y el cuerpo (mensaje + enlace de baja en email) y los pasa como vars.
@@ -369,7 +403,7 @@ const TEMPLATES: Record<string, TemplateDef> = {
   // el LessonUnlockNotifierWorker cuando la lección cruza su publishAt.
   'lesson.unlocked': {
     subject: 'Ya está disponible: {{lessonTitle}}',
-    body: 'La clase "{{lessonTitle}}" del curso "{{courseTitle}}" ya está disponible. Entra a Didacta para verla.',
+    body: 'La clase "{{lessonTitle}}" del curso "{{courseTitle}}" ya está disponible.',
   },
 };
 

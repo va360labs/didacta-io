@@ -83,6 +83,31 @@ describe('SmtpAdapterService', () => {
       expect(closeMock).toHaveBeenCalled();
     });
 
+    it('con fromName arma el From como { name, address } (firma con el tenant)', async () => {
+      sendMailMock.mockResolvedValue({ messageId: '<abc@x>' });
+      await svc.send(
+        svc.parseConfig(VALID),
+        { to: 'a@b.com', subject: 's', text: 't' },
+        'Academia X',
+      );
+      expect(sendMailMock).toHaveBeenCalledWith(
+        expect.objectContaining({ from: { name: 'Academia X', address: VALID.from } }),
+      );
+    });
+
+    it('sanea el fromName (evita inyección de headers con CRLF/comillas)', async () => {
+      sendMailMock.mockResolvedValue({ messageId: '<abc@x>' });
+      await svc.send(
+        svc.parseConfig(VALID),
+        { to: 'a@b.com', subject: 's', text: 't' },
+        'Mal\r\nBcc: victim@x.com "raro"',
+      );
+      const arg = sendMailMock.mock.calls[0][0] as { from: { name: string; address: string } };
+      expect(arg.from.name).not.toContain('\n');
+      expect(arg.from.name).not.toContain('\r');
+      expect(arg.from.name).not.toContain('"');
+    });
+
     it('devuelve ok=false si el transporter rechaza', async () => {
       sendMailMock.mockRejectedValue(new Error('connection refused'));
       const result = await svc.send(svc.parseConfig(VALID), {

@@ -7,6 +7,7 @@ import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.servi
 import { PrismaService } from '../prisma/prisma.service';
 import type { ClientContext } from '../auth/client-context';
 import { buildOtpEmail } from './email-templates';
+import { resolveEmailBranding, type BrandingPrisma } from '../common/branded-email';
 
 /** TTL del código OTP: 10 minutos. */
 const CODE_TTL_MINUTES = 10;
@@ -149,12 +150,6 @@ export class EmailVerificationService {
    * lanza. NUNCA loguea el código en claro.
    */
   private async sendCodeEmail(tenantId: string, email: string, code: string): Promise<void> {
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { name: true },
-    });
-    const tenantName = tenant?.name ?? 'Didacta';
-
     const resolved = await this.smtpResolver.resolve(tenantId);
     if (!resolved) {
       this.logger.warn(
@@ -164,13 +159,17 @@ export class EmailVerificationService {
       return;
     }
 
-    const { subject, text, html } = buildOtpEmail(code, tenantName);
-    const sendResult = await this.smtp.send(resolved.config, {
-      to: email,
-      subject,
-      text,
-      html,
-    });
+    const branding = await resolveEmailBranding(
+      this.prisma as unknown as BrandingPrisma,
+      tenantId,
+      process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+    );
+    const { subject, text, html } = buildOtpEmail(code, branding);
+    const sendResult = await this.smtp.send(
+      resolved.config,
+      { to: email, subject, text, html },
+      branding.tenantName,
+    );
 
     if (!sendResult.ok) {
       this.logger.warn(
