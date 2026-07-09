@@ -67,19 +67,16 @@ export function SubscriptionTab() {
       return;
     }
     void (async () => {
-      // Ambas fuentes son best-effort e independientes: si un módulo no está
-      // activo (403/404), esa fuente queda vacía sin romper la pestaña.
+      // Dos fuentes best-effort e INDEPENDIENTES. Si una falla (módulo no
+      // configurado, 403/404/500…), esa fuente queda vacía sin romper la
+      // pestaña: para los usuarios con pago externo la fuente principal es
+      // `mySubscriptionApi`, no las suscripciones a cursos in-platform.
       const [inPlatform, ext] = await Promise.allSettled([
         subscriptionsApi.listMine(token),
         mySubscriptionApi.get(token),
       ]);
       if (inPlatform.status === 'fulfilled') {
         setSubs(inPlatform.value.subscriptions);
-      } else if (
-        !(inPlatform.reason instanceof ApiHttpError) ||
-        (inPlatform.reason.status !== 403 && inPlatform.reason.status !== 404)
-      ) {
-        setError('No se pudieron cargar tus suscripciones.');
       }
       if (ext.status === 'fulfilled') {
         setExternal(ext.value.subscriptions);

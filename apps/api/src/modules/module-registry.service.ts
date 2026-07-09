@@ -659,6 +659,17 @@ export class ModuleRegistryService implements OnModuleInit {
     return this.subscriptions;
   }
 
+  /**
+   * Como `getSubscriptionsService` pero devuelve null en vez de lanzar cuando el
+   * módulo no está inicializado (p. ej. un despliegue que usa pagos EXTERNOS vía
+   * mod.payment-connections y no tiene el Stripe propio de Didacta configurado).
+   * Lo usan los endpoints read-only del alumno para degradar a "sin suscripciones"
+   * en lugar de responder 500.
+   */
+  getSubscriptionsServiceOrNull(): SubscriptionsService | null {
+    return this.subscriptions ?? null;
+  }
+
   getSubscriptionsStripeAdapter(): SubscriptionsStripeAdapter {
     if (!this.subscriptionsStripeAdapter) {
       throw new Error(

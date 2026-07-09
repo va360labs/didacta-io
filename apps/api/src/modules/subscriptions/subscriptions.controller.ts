@@ -89,7 +89,12 @@ export class SubscriptionsController {
   @ApiOperation({ summary: 'Lista las suscripciones del alumno autenticado.' })
   async listMine(@CurrentUser() user: SessionClaims | undefined): Promise<object> {
     if (!user) throw new UnauthorizedException();
-    const subs = await this.registry.getSubscriptionsService().listMine(user.tenantId, user.sub);
+    // Tolerante: si mod.subscriptions no está inicializado en este despliegue
+    // (usa pagos externos vía mod.payment-connections), el alumno simplemente no
+    // tiene suscripciones a cursos → [] en vez de 500.
+    const svc = this.registry.getSubscriptionsServiceOrNull();
+    if (!svc) return { subscriptions: [] };
+    const subs = await svc.listMine(user.tenantId, user.sub);
     return { subscriptions: subs };
   }
 
