@@ -32,3 +32,45 @@ export interface InscribeResult {
   userCreated: boolean;
   enrollments: InscribeEnrollmentResult[];
 }
+
+/**
+ * Payload de `POST /api/v1/inscribe/revoke`. Lo envía el sistema de ventas
+ * externo cuando un pedido se reembolsa o cancela: da de baja la matrícula que
+ * creó la API para ese comprador.
+ */
+export const revokeSchema = z.object({
+  email: z.string().email().max(320),
+  /** UUID(s) del/los curso(s) a dar de baja. 1..50 por llamada. */
+  courseIds: z.array(z.string().uuid()).min(1).max(50),
+  /** Referencia del pedido/reembolso en el sistema externo (trazabilidad). */
+  externalRef: z.string().trim().min(1).max(200).optional(),
+  /** Motivo libre (p. ej. "refund", "chargeback"). Va al audit log. */
+  reason: z.string().trim().min(1).max(200).optional(),
+});
+
+export type RevokeDto = z.infer<typeof revokeSchema>;
+
+/** Resultado por curso de una baja. */
+export interface RevokeEnrollmentResult {
+  courseId: string;
+  /** REVOKED = se canceló · NOT_ENROLLED = no había matrícula viva por API. */
+  status: 'REVOKED' | 'NOT_ENROLLED';
+}
+
+export interface RevokeResult {
+  /** False si el email no corresponde a ningún usuario del tenant. */
+  userFound: boolean;
+  userId: string | null;
+  revoked: RevokeEnrollmentResult[];
+}
+
+/** Curso tal y como lo ve la integración externa (para mapear producto → curso). */
+export interface ApiCourseSummary {
+  id: string;
+  title: string;
+  slug: string;
+  /** DRAFT | PUBLISHED | ARCHIVED. Solo los PUBLISHED admiten matrícula. */
+  status: string;
+  category: string | null;
+  publishedAt: string | null;
+}

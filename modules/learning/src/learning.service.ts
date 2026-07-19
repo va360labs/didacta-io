@@ -307,6 +307,34 @@ export class LearningService {
     await this.publish(tenantId, userId, 'learning.enrollment.cancelled', { courseId, userId });
   }
 
+  /**
+   * Cancela la matrícula creada por la API externa (`POST /api/v1/inscribe`)
+   * cuando el sistema de ventas notifica un reembolso/cancelación del pedido.
+   *
+   * SOLO toca enrollments con `source = 'API'`, igual que `unenrollFromGroup` y
+   * `unenrollFromSubscription`: si el alumno tiene además acceso por grupo,
+   * suscripción o compra directa, ese acceso NO se revoca aquí.
+   *
+   * Idempotente: devuelve cuántos enrollments se cancelaron (0 = no había
+   * matrícula viva por API, p. ej. reintento del webhook de reembolso).
+   */
+  async unenrollFromApi(tenantId: string, userId: string, courseId: string): Promise<number> {
+    const { count } = await this.prisma.modLearningEnrollment.updateMany({
+      where: {
+        tenantId,
+        userId,
+        courseId,
+        status: { in: ['ACTIVE', 'PAUSED'] },
+        source: 'API',
+      },
+      data: { status: 'CANCELLED', cancelledAt: new Date() },
+    });
+    if (count > 0) {
+      await this.publish(tenantId, userId, 'learning.enrollment.cancelled', { courseId, userId });
+    }
+    return count;
+  }
+
   async listInvitationsForCourse(tenantId: string, courseId: string) {
     return this.prisma.modLearningInvitation.findMany({
       where: { tenantId, courseId, revokedAt: null },

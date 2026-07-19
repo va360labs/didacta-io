@@ -3,11 +3,12 @@
 import { apiFetch } from './api-client';
 
 /** Scopes que el admin puede otorgar. Debe coincidir con ALLOWED_API_KEY_SCOPES del backend. */
-export const API_KEY_SCOPES = ['enrollments:write'] as const;
+export const API_KEY_SCOPES = ['enrollments:write', 'courses:read'] as const;
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
 
 export const API_KEY_SCOPE_LABELS: Record<ApiKeyScope, string> = {
-  'enrollments:write': 'Inscribir alumnos (POST /inscribe)',
+  'enrollments:write': 'Inscribir y dar de baja alumnos (POST /inscribe, /inscribe/revoke)',
+  'courses:read': 'Listar cursos para mapear productos (GET /inscribe/courses)',
 };
 
 export interface TenantApiKey {

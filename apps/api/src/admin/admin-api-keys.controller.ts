@@ -27,7 +27,7 @@ import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
  * acotado evita que el panel cree claves con permisos arbitrarios. Hoy el
  * único caso de uso es la inscripción externa (`POST /api/v1/inscribe`).
  */
-export const ALLOWED_API_KEY_SCOPES = ['enrollments:write'] as const;
+export const ALLOWED_API_KEY_SCOPES = ['enrollments:write', 'courses:read'] as const;
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(100),

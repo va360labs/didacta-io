@@ -10,7 +10,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ApiHttpError } from '@/lib/api-client';
 import {
   adminApiKeysApi,
+  API_KEY_SCOPES,
   API_KEY_SCOPE_LABELS,
+  type ApiKeyScope,
   type CreatedApiKey,
   type TenantApiKey,
 } from '@/lib/admin-api-keys';
@@ -56,7 +58,9 @@ export default function ApiKeysPage() {
     try {
       const created = await adminApiKeysApi.create(token, {
         name: name.trim(),
-        scopes: ['enrollments:write'],
+        // La integración externa necesita ambos: inscribir/dar de baja y listar
+        // cursos para mapear su producto → curso.
+        scopes: [...API_KEY_SCOPES],
         ...(expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {}),
       });
       setCreatedKey(created);
@@ -148,7 +152,14 @@ export default function ApiKeysPage() {
           <CardHeader>
             <CardTitle className="text-base">Nueva clave API</CardTitle>
             <CardDescription>
-              Permiso: <strong>{API_KEY_SCOPE_LABELS['enrollments:write']}</strong>.
+              Permisos que se otorgan:{' '}
+              {API_KEY_SCOPES.map((s, i) => (
+                <span key={s}>
+                  {i > 0 ? ' · ' : ''}
+                  <strong>{API_KEY_SCOPE_LABELS[s]}</strong>
+                </span>
+              ))}
+              .
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -224,7 +235,7 @@ export default function ApiKeysPage() {
                       </div>
                       <p className="mt-1 text-xs text-text-subtle">
                         {k.scopes
-                          .map((s) => API_KEY_SCOPE_LABELS[s as 'enrollments:write'] ?? s)
+                          .map((s) => API_KEY_SCOPE_LABELS[s as ApiKeyScope] ?? s)
                           .join(', ')}
                       </p>
                       <p className="mt-0.5 text-xs text-text-subtle">

@@ -4,6 +4,8 @@ import {
   createPublishedCourse,
   createTenantApiKey,
   inscribeViaApi,
+  listCoursesViaApi,
+  revokeViaApi,
   signup,
 } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
@@ -66,6 +68,93 @@ test.describe('Inscripción externa por API', () => {
       status: 'ACTIVE',
       alreadyEnrolled: true,
     });
+  });
+
+  test('reembolso: la baja revoca la matrícula y es idempotente', async () => {
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const stamp = Date.now();
+    const adminToken = await adminTokenForBootstrap(tenantSlug);
+
+    const course = await createPublishedCourse({
+      bearer: adminToken,
+      title: `Revoke API E2E ${stamp}`,
+      slug: `revoke-api-e2e-${stamp}`,
+    });
+    const apiKey = await createTenantApiKey({
+      bearer: adminToken,
+      name: `E2E revoke ${stamp}`,
+      scopes: ['enrollments:write', 'courses:read'],
+    });
+    const buyerEmail = `e2e-revoke-${stamp}@example.test`;
+
+    await inscribeViaApi({
+      apiKey: apiKey.token,
+      email: buyerEmail,
+      name: 'Comprador Reembolsado',
+      courseIds: [course.id],
+    });
+
+    // 1) Reembolso → se revoca la matrícula creada por API.
+    const first = await revokeViaApi({
+      apiKey: apiKey.token,
+      email: buyerEmail,
+      courseIds: [course.id],
+      externalRef: `wc_refund_${stamp}`,
+      reason: 'refund',
+    });
+    expect(first.userFound).toBe(true);
+    expect(first.revoked).toEqual([{ courseId: course.id, status: 'REVOKED' }]);
+
+    // 2) Reintento del webhook de reembolso → idempotente, ya no hay matrícula viva.
+    const second = await revokeViaApi({
+      apiKey: apiKey.token,
+      email: buyerEmail,
+      courseIds: [course.id],
+    });
+    expect(second.revoked).toEqual([{ courseId: course.id, status: 'NOT_ENROLLED' }]);
+
+    // 3) Email desconocido → no 404, userFound=false.
+    const unknown = await revokeViaApi({
+      apiKey: apiKey.token,
+      email: `no-existe-${stamp}@example.test`,
+      courseIds: [course.id],
+    });
+    expect(unknown.userFound).toBe(false);
+    expect(unknown.revoked).toEqual([{ courseId: course.id, status: 'NOT_ENROLLED' }]);
+  });
+
+  test('catálogo: /inscribe/courses lista los cursos con estado y exige scope courses:read', async () => {
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const stamp = Date.now();
+    const adminToken = await adminTokenForBootstrap(tenantSlug);
+
+    const course = await createPublishedCourse({
+      bearer: adminToken,
+      title: `Catalogo API E2E ${stamp}`,
+      slug: `catalogo-api-e2e-${stamp}`,
+    });
+
+    // Key CON courses:read → ve el curso con su estado.
+    const fullKey = await createTenantApiKey({
+      bearer: adminToken,
+      name: `E2E catalogo ${stamp}`,
+      scopes: ['enrollments:write', 'courses:read'],
+    });
+    const listed = await listCoursesViaApi({ apiKey: fullKey.token });
+    expect(listed.status).toBe(200);
+    const found = listed.courses.find((c) => c.id === course.id);
+    expect(found).toBeDefined();
+    expect(found).toMatchObject({ id: course.id, status: 'PUBLISHED' });
+    expect(found?.publishedAt).toBeTruthy();
+
+    // Key SIN courses:read → 403 (el scope se exige de verdad).
+    const limitedKey = await createTenantApiKey({
+      bearer: adminToken,
+      name: `E2E catalogo limitado ${stamp}`,
+      scopes: ['enrollments:write'],
+    });
+    const denied = await listCoursesViaApi({ apiKey: limitedKey.token });
+    expect(denied.status).toBe(403);
   });
 
   test('la ficha de curso ya no ofrece "Matricularme"', async ({ page }) => {

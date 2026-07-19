@@ -65,7 +65,7 @@ export class PasswordResetService {
   async request(
     args: { email: string; tenantSlug?: string; resolvedTenantId?: string },
     ctx: ClientContext = NO_CLIENT_CONTEXT,
-    opts: { allowPending?: boolean } = {},
+    opts: { allowPending?: boolean; ttlMinutes?: number } = {},
   ): Promise<{
     rawToken: string;
     userId: string;
@@ -93,7 +93,11 @@ export class PasswordResetService {
 
     const rawToken = randomBytes(TOKEN_RAW_BYTES).toString('hex');
     const tokenHash = this.hashToken(rawToken);
-    const expiresAt = new Date(Date.now() + TOKEN_TTL_MINUTES * 60_000);
+    // TTL configurable: el reset normal usa 60 min, pero el enlace de "define tu
+    // contraseña" que sale del alta por API (`POST /inscribe`) necesita días —
+    // el comprador puede abrir el email mucho después de la compra.
+    const ttlMinutes = opts.ttlMinutes && opts.ttlMinutes > 0 ? opts.ttlMinutes : TOKEN_TTL_MINUTES;
+    const expiresAt = new Date(Date.now() + ttlMinutes * 60_000);
 
     await this.prisma.passwordResetToken.create({
       data: {

@@ -16,18 +16,36 @@ import {
   type BrandingPrisma,
   type EmailBranding,
 } from '../common/branded-email';
-import type { InscribeDto, InscribeEnrollmentResult, InscribeResult } from './inscribe.dto';
+import { PasswordResetService } from '../auth/password-reset.service';
+import type {
+  ApiCourseSummary,
+  InscribeDto,
+  InscribeEnrollmentResult,
+  InscribeResult,
+  RevokeDto,
+  RevokeEnrollmentResult,
+  RevokeResult,
+} from './inscribe.dto';
 
 const NO_CTX: ClientContext = { ip: null, userAgent: null };
 const DEFAULT_ALUMNO_ROLE = 'alumno';
+/**
+ * TTL del enlace "define tu contraseña" del alta por API: 7 días. El reset
+ * normal usa 60 min, pero aquí el comprador puede abrir el email de la compra
+ * bastante después, y un enlace caducado genera soporte.
+ */
+const SET_PASSWORD_TTL_MINUTES = 7 * 24 * 60;
 
 /**
  * Orquesta la inscripción programática de un comprador externo:
- *  1. Busca-o-crea el usuario por email dentro del tenant (ACTIVO + contraseña
- *     temporal + `mustChangePassword=true` si es nuevo).
+ *  1. Busca-o-crea el usuario por email dentro del tenant (ACTIVO + rol
+ *     `alumno`). Al nuevo NO se le manda contraseña temporal: recibe un enlace
+ *     mágico de "define tu contraseña" (un solo login → directo al onboarding).
  *  2. Lo matricula en cada curso (reusa `mod.learning`, idempotente).
- *  3. Si el usuario es nuevo, le envía un email de bienvenida con sus
- *     credenciales temporales (best-effort).
+ *  3. `revoke()` da de baja la matrícula creada por API cuando el sistema de
+ *     ventas notifica un reembolso/cancelación.
+ *  4. `listCourses()` expone el catálogo (con estado) para que el integrador
+ *     mapee producto externo → curso.
  *
  * Es CORE del host (no un módulo): conecta auth + enrollment para una compra
  * que ocurre fuera de Didacta. Ver PRD "Inscripción externa por API".
@@ -41,6 +59,7 @@ export class InscribeService {
     private readonly registry: ModuleRegistryService,
     private readonly smtpResolver: TenantSmtpResolverService,
     private readonly smtp: SmtpAdapterService,
+    private readonly passwordReset: PasswordResetService,
     private readonly logger: PinoLogger,
   ) {}
 
@@ -51,12 +70,7 @@ export class InscribeService {
     webBaseUrl: string,
     ctx: ClientContext = NO_CTX,
   ): Promise<InscribeResult> {
-    const { userId, created, tempPassword } = await this.findOrCreateUser(
-      tenantId,
-      actorId,
-      dto,
-      ctx,
-    );
+    const { userId, created } = await this.findOrCreateUser(tenantId, actorId, dto, ctx);
 
     const learning = this.registry.getLearningService();
     const enrollments: InscribeEnrollmentResult[] = [];
@@ -85,13 +99,104 @@ export class InscribeService {
       userAgent: ctx.userAgent ?? undefined,
     });
 
-    if (created && tempPassword) {
+    if (created) {
       // Best-effort: si falla el envío, el usuario igual queda creado y
-      // matriculado; el admin puede reenviar credenciales / reset.
-      await this.sendWelcomeEmail(tenantId, dto.email, dto.name ?? null, tempPassword, webBaseUrl);
+      // matriculado; siempre puede entrar por "¿olvidaste tu contraseña?".
+      await this.sendWelcomeEmail(tenantId, dto.email, dto.name ?? null, webBaseUrl, ctx);
     }
 
     return { userId, userCreated: created, enrollments };
+  }
+
+  /**
+   * Da de baja la matrícula creada por la API para un comprador, cuando el
+   * sistema de ventas notifica reembolso/cancelación del pedido.
+   *
+   * Idempotente y tolerante: si el email no existe en el tenant devuelve
+   * `userFound: false` (no 404) y si un curso no tenía matrícula viva por API
+   * lo reporta como `NOT_ENROLLED`. SOLO cancela enrollments `source = 'API'`:
+   * el acceso por grupo/suscripción/compra directa NO se toca.
+   */
+  async revoke(
+    tenantId: string,
+    actorId: string,
+    dto: RevokeDto,
+    ctx: ClientContext = NO_CTX,
+  ): Promise<RevokeResult> {
+    const user = await this.prisma.user.findUnique({
+      where: { tenantId_email: { tenantId, email: dto.email } },
+      select: { id: true },
+    });
+
+    if (!user) {
+      await this.auditLog.record({
+        tenantId,
+        actorId,
+        action: 'enrollment.revoke.api',
+        resourceType: 'user',
+        resourceId: dto.email,
+        metadata: {
+          email: dto.email,
+          userFound: false,
+          externalRef: dto.externalRef ?? null,
+          reason: dto.reason ?? null,
+        },
+        ip: ctx.ip ?? undefined,
+        userAgent: ctx.userAgent ?? undefined,
+      });
+      return {
+        userFound: false,
+        userId: null,
+        revoked: dto.courseIds.map((courseId) => ({
+          courseId,
+          status: 'NOT_ENROLLED' as const,
+        })),
+      };
+    }
+
+    const learning = this.registry.getLearningService();
+    const revoked: RevokeEnrollmentResult[] = [];
+    for (const courseId of dto.courseIds) {
+      const count = await learning.unenrollFromApi(tenantId, user.id, courseId);
+      revoked.push({ courseId, status: count > 0 ? 'REVOKED' : 'NOT_ENROLLED' });
+    }
+
+    await this.auditLog.record({
+      tenantId,
+      actorId,
+      action: 'enrollment.revoke.api',
+      resourceType: 'user',
+      resourceId: user.id,
+      metadata: {
+        email: dto.email,
+        userFound: true,
+        externalRef: dto.externalRef ?? null,
+        reason: dto.reason ?? null,
+        revoked,
+      },
+      ip: ctx.ip ?? undefined,
+      userAgent: ctx.userAgent ?? undefined,
+    });
+
+    return { userFound: true, userId: user.id, revoked };
+  }
+
+  /**
+   * Catálogo de cursos del tenant para que el integrador externo mapee su
+   * producto → curso. Incluye los NO publicados (con su `status`) para que se
+   * vea por qué un curso aún no admite matrícula: sólo los `PUBLISHED` la
+   * aceptan en `POST /inscribe`.
+   */
+  async listCourses(tenantId: string): Promise<ApiCourseSummary[]> {
+    const courses = await this.registry.getCoursesService().listCourses(tenantId);
+    return courses.map((c) => ({
+      id: c.id,
+      title: c.title,
+      slug: c.slug,
+      status: c.status,
+      category: c.category ?? null,
+      publishedAt: c.publishedAt ? new Date(c.publishedAt).toISOString() : null,
+    }));
   }
 
   private async enrollOne(
@@ -138,17 +243,20 @@ export class InscribeService {
   }
 
   /**
-   * Busca el usuario por (tenant, email). Si no existe, lo crea ACTIVO con una
-   * contraseña temporal aleatoria, rol `alumno` y `mustChangePassword=true`.
-   * Devuelve la contraseña temporal SOLO cuando crea el usuario (para enviarla
-   * por email — nunca se persiste en claro).
+   * Busca el usuario por (tenant, email). Si no existe, lo crea ACTIVO con rol
+   * `alumno` y una contraseña aleatoria INUTILIZABLE (nadie la conoce): el
+   * comprador define la suya con el enlace mágico del email de bienvenida.
+   *
+   * `mustChangePassword` queda en false a propósito: como el usuario elige su
+   * contraseña en el propio enlace, forzar además la pantalla de cambio le
+   * obligaría a un segundo login antes del onboarding.
    */
   private async findOrCreateUser(
     tenantId: string,
     actorId: string,
     dto: InscribeDto,
     ctx: ClientContext,
-  ): Promise<{ userId: string; created: boolean; tempPassword?: string }> {
+  ): Promise<{ userId: string; created: boolean }> {
     const existing = await this.prisma.user.findUnique({
       where: { tenantId_email: { tenantId, email: dto.email } },
       select: { id: true },
@@ -157,8 +265,7 @@ export class InscribeService {
       return { userId: existing.id, created: false };
     }
 
-    const tempPassword = this.generateTempPassword();
-    const passwordHash = await this.passwords.hash(tempPassword);
+    const passwordHash = await this.passwords.hash(this.generateTempPassword());
     const role = await this.prisma.role.findUnique({ where: { name: DEFAULT_ALUMNO_ROLE } });
 
     const user = await this.prisma.$transaction(async (tx) => {
@@ -169,7 +276,7 @@ export class InscribeService {
           name: dto.name ?? null,
           status: 'ACTIVE',
           passwordHash,
-          mustChangePassword: true,
+          mustChangePassword: false,
           ...(dto.locale ? { locale: dto.locale } : {}),
         },
       });
@@ -197,20 +304,27 @@ export class InscribeService {
       userAgent: ctx.userAgent ?? undefined,
     });
 
-    return { userId: user.id, created: true, tempPassword };
+    return { userId: user.id, created: true };
   }
 
-  /** Contraseña temporal aleatoria (~22 chars base64url). El usuario la cambia al entrar. */
+  /** Contraseña aleatoria inutilizable (~22 chars). Nadie la conoce: el comprador
+   * define la suya con el enlace mágico. */
   private generateTempPassword(): string {
     return randomBytes(16).toString('base64url');
   }
 
+  /**
+   * Email de bienvenida con enlace mágico "Define tu contraseña" (TTL 7 días).
+   * Reusa el motor de tokens del reset de contraseña, así que el enlace es de un
+   * solo uso y hasheado en BD. Best-effort: si no hay SMTP o falla el envío, se
+   * loguea y se sigue (el comprador puede usar "¿olvidaste tu contraseña?").
+   */
   private async sendWelcomeEmail(
     tenantId: string,
     email: string,
     name: string | null,
-    tempPassword: string,
     webBaseUrl: string,
+    ctx: ClientContext,
   ): Promise<void> {
     try {
       const resolved = await this.smtpResolver.resolve(tenantId);
@@ -221,18 +335,28 @@ export class InscribeService {
         );
         return;
       }
+
+      // Token de "define tu contraseña" con TTL largo (compra → puede abrirlo días después).
+      const issued = await this.passwordReset.request({ email, resolvedTenantId: tenantId }, ctx, {
+        ttlMinutes: SET_PASSWORD_TTL_MINUTES,
+      });
+      if (!issued) {
+        this.logger.warn(
+          { tenantId },
+          'inscribe: no se pudo emitir el token de define-contraseña — email no enviado',
+        );
+        return;
+      }
+      const setPasswordUrl = `${webBaseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(
+        issued.rawToken,
+      )}`;
+
       const branding = await resolveEmailBranding(
         this.prisma as unknown as BrandingPrisma,
         tenantId,
         webBaseUrl,
       );
-      const { subject, text, html } = this.buildWelcomeEmail(
-        email,
-        name,
-        tempPassword,
-        webBaseUrl,
-        branding,
-      );
+      const { subject, text, html } = this.buildWelcomeEmail(email, name, setPasswordUrl, branding);
       const result = await this.smtp.send(
         resolved.config,
         { to: email, subject, text, html },
@@ -249,41 +373,41 @@ export class InscribeService {
     }
   }
 
+  /**
+   * Email de bienvenida del alta por API: en vez de una contraseña temporal,
+   * lleva un enlace mágico para que el comprador DEFINA su contraseña. Así entra
+   * una sola vez y aterriza directo en el onboarding.
+   */
   buildWelcomeEmail(
     email: string,
     name: string | null,
-    tempPassword: string,
-    webBaseUrl: string,
+    setPasswordUrl: string,
     branding: EmailBranding,
   ): { subject: string; text: string; html: string } {
-    const loginUrl = `${webBaseUrl.replace(/\/$/, '')}/signin`;
     const greeting = name ? `Hola ${name},` : 'Hola,';
     const subject = `Tu acceso a ${branding.tenantName}`;
     const bodyText = `${greeting}
 
 Se ha creado tu cuenta en ${branding.tenantName} y ya tienes acceso a tu(s) curso(s).
 
-Entra con estas credenciales temporales:
+Define tu contraseña con este enlace (válido 7 días) y entra:
 
-  Email: ${email}
-  Contraseña temporal: ${tempPassword}
+${setPasswordUrl}
 
-Por seguridad, se te pedirá cambiar la contraseña la primera vez que entres.`;
+Tu usuario es ${email}. Si el enlace caduca, usa "¿Olvidaste tu contraseña?" en la pantalla de acceso.`;
     const bodyHtml = `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>
   <p style="margin:0 0 12px;">Se ha creado tu cuenta en ${escapeHtml(
     branding.tenantName,
   )} y ya tienes acceso a tu(s) curso(s).</p>
-  <p style="margin:0 0 8px;">Entra con estas credenciales temporales:</p>
-  <table style="margin: 16px 0; font-size: 15px;">
-    <tr><td style="padding: 2px 8px; color: #5b6b7c;">Email</td><td style="padding: 2px 8px;"><strong>${escapeHtml(email)}</strong></td></tr>
-    <tr><td style="padding: 2px 8px; color: #5b6b7c;">Contraseña temporal</td><td style="padding: 2px 8px;"><strong>${escapeHtml(tempPassword)}</strong></td></tr>
-  </table>
-  <p style="margin:0;font-size: 14px; color: #5b6b7c;">Por seguridad, se te pedirá cambiar la contraseña la primera vez que entres.</p>`;
+  <p style="margin:0 0 12px;">Solo te queda <strong>definir tu contraseña</strong> con el botón de abajo (el enlace vale 7 días).</p>
+  <p style="margin:0;font-size: 14px; color: #5b6b7c;">Tu usuario es <strong>${escapeHtml(
+    email,
+  )}</strong>. Si el enlace caduca, usa «¿Olvidaste tu contraseña?» en la pantalla de acceso.</p>`;
     const { html, text } = renderBrandedEmail(branding, {
       title: `Tu acceso a ${branding.tenantName}`,
       bodyHtml,
       bodyText,
-      cta: { url: loginUrl, label: 'Iniciar sesión' },
+      cta: { url: setPasswordUrl, label: 'Define tu contraseña' },
     });
     return { subject, text, html };
   }

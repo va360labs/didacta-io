@@ -560,6 +560,66 @@ export async function inscribeViaApi(args: {
   return body as InscribeResponse;
 }
 
+export interface RevokeResponse {
+  userFound: boolean;
+  userId: string | null;
+  revoked: Array<{ courseId: string; status: 'REVOKED' | 'NOT_ENROLLED' }>;
+}
+
+/** Baja por reembolso/cancelación: `POST /api/v1/inscribe/revoke` con API key. */
+export async function revokeViaApi(args: {
+  apiKey: string;
+  email: string;
+  courseIds: string[];
+  externalRef?: string;
+  reason?: string;
+}): Promise<RevokeResponse> {
+  const res = await fetch(`${API_URL}/api/v1/inscribe/revoke`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `ApiKey ${args.apiKey}`,
+    },
+    body: JSON.stringify({
+      email: args.email,
+      courseIds: args.courseIds,
+      ...(args.externalRef ? { externalRef: args.externalRef } : {}),
+      ...(args.reason ? { reason: args.reason } : {}),
+    }),
+  });
+  const text = await res.text();
+  const body = text ? (JSON.parse(text) as unknown) : null;
+  if (!res.ok) {
+    const message =
+      body && typeof body === 'object' && 'message' in body
+        ? String((body as { message: unknown }).message)
+        : res.statusText;
+    throw new Error(`POST /inscribe/revoke -> ${res.status}: ${message}`);
+  }
+  return body as RevokeResponse;
+}
+
+export interface ApiCourseSummary {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  category: string | null;
+  publishedAt: string | null;
+}
+
+/** Catálogo para mapear producto externo → curso: `GET /api/v1/inscribe/courses`. */
+export async function listCoursesViaApi(args: {
+  apiKey: string;
+}): Promise<{ courses: ApiCourseSummary[]; status: number }> {
+  const res = await fetch(`${API_URL}/api/v1/inscribe/courses`, {
+    headers: { Authorization: `ApiKey ${args.apiKey}` },
+  });
+  const text = await res.text();
+  const body = text ? (JSON.parse(text) as { courses?: ApiCourseSummary[] }) : null;
+  return { courses: body?.courses ?? [], status: res.status };
+}
+
 export async function adminTokenForBootstrap(tenantSlug: string): Promise<string> {
   const adminSeedEmail = process.env.E2E_ADMIN_EMAIL;
   const adminSeedPassword = process.env.E2E_ADMIN_PASSWORD;
