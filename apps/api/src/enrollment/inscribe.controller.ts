@@ -36,9 +36,12 @@ export class InscribeController {
       'key del tenant con scope `enrollments:write` en el header `Authorization: ApiKey lmsk_…`.',
   })
   @ApiBody({
+    description:
+      'Hay que indicar al menos `courseIds` o `accessGroupIds`. El grupo de acceso es la vía ' +
+      'recomendada para packs/membresías: otorga (y al dar de baja revoca) todos sus cursos.',
     schema: {
       type: 'object',
-      required: ['email', 'courseIds'],
+      required: ['email'],
       properties: {
         email: { type: 'string', format: 'email', example: 'ana@ejemplo.com' },
         name: { type: 'string', example: 'Ana Pérez' },
@@ -46,6 +49,11 @@ export class InscribeController {
           type: 'array',
           items: { type: 'string', format: 'uuid' },
           example: ['3f4b2c10-1a2b-4c3d-9e8f-0a1b2c3d4e5f'],
+        },
+        accessGroupIds: {
+          type: 'array',
+          items: { type: 'string', format: 'uuid' },
+          description: 'Grupo(s) de permisos que dan visibilidad a uno o varios cursos.',
         },
         locale: { type: 'string', example: 'es-ES' },
         externalRef: { type: 'string', example: 'order_12345' },
@@ -188,5 +196,41 @@ export class InscribeController {
     if (!user) throw new UnauthorizedException();
     const courses = await this.service.listCourses(user.tenantId);
     return { courses };
+  }
+
+  @Get('access-groups')
+  @RequireApiScopes('courses:read')
+  @ApiOperation({
+    summary: 'Listar los grupos de acceso del tenant (para mapear pack/membresía → grupo)',
+    description:
+      'Devuelve los grupos de permisos con su `kind` y cuántos cursos otorgan. Se usan en ' +
+      '`accessGroupIds` de /inscribe y /inscribe/revoke. Requiere scope `courses:read`.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Grupos de acceso del tenant.',
+    schema: {
+      type: 'object',
+      properties: {
+        accessGroups: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              name: { type: 'string' },
+              kind: { type: 'string', enum: ['ALL_COURSES', 'COURSE', 'MULTI_COURSE'] },
+              courseCount: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'La API key no tiene el scope `courses:read`.' })
+  async listAccessGroups(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    const accessGroups = await this.service.listAccessGroups(user.tenantId);
+    return { accessGroups };
   }
 }

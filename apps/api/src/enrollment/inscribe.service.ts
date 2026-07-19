@@ -17,13 +17,17 @@ import {
   type EmailBranding,
 } from '../common/branded-email';
 import { PasswordResetService } from '../auth/password-reset.service';
+import { AccessGroupsService } from '../modules/access-groups/access-groups.service';
 import type {
+  ApiAccessGroupSummary,
   ApiCourseSummary,
   InscribeDto,
   InscribeEnrollmentResult,
+  InscribeGroupResult,
   InscribeResult,
   RevokeDto,
   RevokeEnrollmentResult,
+  RevokeGroupResult,
   RevokeResult,
 } from './inscribe.dto';
 
@@ -60,6 +64,7 @@ export class InscribeService {
     private readonly smtpResolver: TenantSmtpResolverService,
     private readonly smtp: SmtpAdapterService,
     private readonly passwordReset: PasswordResetService,
+    private readonly accessGroups: AccessGroupsService,
     private readonly logger: PinoLogger,
   ) {}
 
@@ -74,8 +79,28 @@ export class InscribeService {
 
     const learning = this.registry.getLearningService();
     const enrollments: InscribeEnrollmentResult[] = [];
-    for (const courseId of dto.courseIds) {
+    for (const courseId of dto.courseIds ?? []) {
       enrollments.push(await this.enrollOne(tenantId, userId, courseId, learning));
+    }
+
+    // Grupos de acceso: es lo que da visibilidad de uno o varios cursos. Asignar
+    // el grupo crea los grants + matrículas de todos sus cursos (y la baja los
+    // revoca por refcount). Un grupo inválido no rompe el resto de la llamada.
+    const accessGroups: InscribeGroupResult[] = [];
+    for (const groupId of dto.accessGroupIds ?? []) {
+      try {
+        const res = await this.accessGroups.assignMembers(tenantId, groupId, [userId]);
+        accessGroups.push({
+          groupId,
+          status: res.added > 0 ? 'ASSIGNED' : 'ALREADY_MEMBER',
+        });
+      } catch (err) {
+        accessGroups.push({
+          groupId,
+          status: 'FAILED',
+          error: (err as Error).message?.slice(0, 200) ?? 'error',
+        });
+      }
     }
 
     await this.auditLog.record({
@@ -88,12 +113,14 @@ export class InscribeService {
         email: dto.email,
         userCreated: created,
         externalRef: dto.externalRef ?? null,
-        courseIds: dto.courseIds,
+        courseIds: dto.courseIds ?? [],
+        accessGroupIds: dto.accessGroupIds ?? [],
         enrollments: enrollments.map((e) => ({
           courseId: e.courseId,
           status: e.status,
           alreadyEnrolled: e.alreadyEnrolled,
         })),
+        accessGroups,
       },
       ip: ctx.ip ?? undefined,
       userAgent: ctx.userAgent ?? undefined,
@@ -105,7 +132,7 @@ export class InscribeService {
       await this.sendWelcomeEmail(tenantId, dto.email, dto.name ?? null, webBaseUrl, ctx);
     }
 
-    return { userId, userCreated: created, enrollments };
+    return { userId, userCreated: created, enrollments, accessGroups };
   }
 
   /**
@@ -147,18 +174,38 @@ export class InscribeService {
       return {
         userFound: false,
         userId: null,
-        revoked: dto.courseIds.map((courseId) => ({
+        revoked: (dto.courseIds ?? []).map((courseId) => ({
           courseId,
           status: 'NOT_ENROLLED' as const,
+        })),
+        accessGroups: (dto.accessGroupIds ?? []).map((groupId) => ({
+          groupId,
+          status: 'NOT_MEMBER' as const,
         })),
       };
     }
 
     const learning = this.registry.getLearningService();
     const revoked: RevokeEnrollmentResult[] = [];
-    for (const courseId of dto.courseIds) {
+    for (const courseId of dto.courseIds ?? []) {
       const count = await learning.unenrollFromApi(tenantId, user.id, courseId);
       revoked.push({ courseId, status: count > 0 ? 'REVOKED' : 'NOT_ENROLLED' });
+    }
+
+    // Retirar el grupo revoca sus grants y desmatricula POR REFCOUNT: si otro
+    // grupo sigue otorgando el mismo curso, el alumno conserva el acceso.
+    const accessGroups: RevokeGroupResult[] = [];
+    for (const groupId of dto.accessGroupIds ?? []) {
+      try {
+        const res = await this.accessGroups.revokeMember(tenantId, groupId, user.id);
+        accessGroups.push({ groupId, status: res.revoked ? 'REVOKED' : 'NOT_MEMBER' });
+      } catch (err) {
+        accessGroups.push({
+          groupId,
+          status: 'FAILED',
+          error: (err as Error).message?.slice(0, 200) ?? 'error',
+        });
+      }
     }
 
     await this.auditLog.record({
@@ -173,12 +220,27 @@ export class InscribeService {
         externalRef: dto.externalRef ?? null,
         reason: dto.reason ?? null,
         revoked,
+        accessGroups,
       },
       ip: ctx.ip ?? undefined,
       userAgent: ctx.userAgent ?? undefined,
     });
 
-    return { userFound: true, userId: user.id, revoked };
+    return { userFound: true, userId: user.id, revoked, accessGroups };
+  }
+
+  /**
+   * Grupos de acceso del tenant, para que el integrador mapee su producto
+   * (pack / membresía) → grupo. `courseCount` indica cuántos cursos otorga.
+   */
+  async listAccessGroups(tenantId: string): Promise<ApiAccessGroupSummary[]> {
+    const { groups } = await this.accessGroups.listGroups(tenantId, 1, 50);
+    return groups.map((g) => ({
+      id: g.id,
+      name: g.name,
+      kind: g.kind,
+      courseCount: g.courseCount ?? 0,
+    }));
   }
 
   /**

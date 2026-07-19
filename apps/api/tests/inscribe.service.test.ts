@@ -32,6 +32,10 @@ function makeHarness(opts: {
   unenrollCount?: number;
   courses?: Array<Record<string, unknown>>;
   resetToken?: string | null;
+  groupAdded?: number;
+  groupRevoked?: boolean;
+  groupThrows?: boolean;
+  groups?: Array<Record<string, unknown>>;
 }) {
   const txUser = { create: vi.fn().mockResolvedValue({ id: 'new-user' }) };
   const txUserRole = { create: vi.fn().mockResolvedValue({}) };
@@ -96,6 +100,21 @@ function makeHarness(opts: {
   } as never;
   const logger = { warn: vi.fn(), log: vi.fn(), error: vi.fn(), debug: vi.fn() } as never;
 
+  const accessGroupsSvc = {
+    assignMembers: vi.fn(async () => {
+      if (opts.groupThrows) throw new Error('Grupo de acceso no encontrado');
+      return { assigned: 1, added: opts.groupAdded ?? 1 };
+    }),
+    revokeMember: vi.fn(async () => {
+      if (opts.groupThrows) throw new Error('Grupo de acceso no encontrado');
+      return { revoked: opts.groupRevoked ?? true };
+    }),
+    listGroups: vi.fn(async () => ({
+      groups: opts.groups ?? [],
+      total: (opts.groups ?? []).length,
+    })),
+  };
+
   const service = new InscribeService(
     prisma,
     passwords,
@@ -104,6 +123,7 @@ function makeHarness(opts: {
     smtpResolver,
     smtp as never,
     passwordReset,
+    accessGroupsSvc as never,
     logger,
   );
   return {
@@ -114,6 +134,7 @@ function makeHarness(opts: {
     coursesService,
     smtp,
     passwordReset,
+    accessGroupsSvc,
     txUser,
     txUserRole,
   };
@@ -293,6 +314,107 @@ describe('InscribeService.revoke (reembolso / cancelación)', () => {
     expect(res).toMatchObject({ userFound: false, userId: null });
     expect(res.revoked).toEqual([{ courseId: COURSE_A, status: 'NOT_ENROLLED' }]);
     expect(h.learning.unenrollFromApi).not.toHaveBeenCalled();
+  });
+});
+
+describe('InscribeService — grupos de acceso (permisos que dan visibilidad a los cursos)', () => {
+  const GROUP_A = '33333333-3333-3333-3333-333333333333';
+
+  it('el alta asigna el grupo de acceso (que otorga sus cursos) además de matricular', async () => {
+    const h = makeHarness({ existingUser: { id: 'u-1' }, groupAdded: 1 });
+
+    const res = await h.service.inscribe(
+      TENANT_ID,
+      ACTOR_ID,
+      { email: 'ana@x.com', courseIds: [COURSE_A], accessGroupIds: [GROUP_A] },
+      WEB_BASE_URL,
+    );
+
+    expect(h.accessGroupsSvc.assignMembers).toHaveBeenCalledWith(TENANT_ID, GROUP_A, ['u-1']);
+    expect(res.accessGroups).toEqual([{ groupId: GROUP_A, status: 'ASSIGNED' }]);
+    expect(res.enrollments[0]).toMatchObject({ courseId: COURSE_A, status: 'ACTIVE' });
+  });
+
+  it('alta SOLO con grupo (sin courseIds): el grupo es quien da el acceso', async () => {
+    const h = makeHarness({ existingUser: { id: 'u-1' } });
+
+    const res = await h.service.inscribe(
+      TENANT_ID,
+      ACTOR_ID,
+      { email: 'ana@x.com', accessGroupIds: [GROUP_A] },
+      WEB_BASE_URL,
+    );
+
+    expect(res.enrollments).toEqual([]);
+    expect(res.accessGroups).toEqual([{ groupId: GROUP_A, status: 'ASSIGNED' }]);
+  });
+
+  it('si ya era miembro del grupo lo reporta como ALREADY_MEMBER (idempotente)', async () => {
+    const h = makeHarness({ existingUser: { id: 'u-1' }, groupAdded: 0 });
+
+    const res = await h.service.inscribe(
+      TENANT_ID,
+      ACTOR_ID,
+      { email: 'ana@x.com', accessGroupIds: [GROUP_A] },
+      WEB_BASE_URL,
+    );
+
+    expect(res.accessGroups).toEqual([{ groupId: GROUP_A, status: 'ALREADY_MEMBER' }]);
+  });
+
+  it('un grupo inválido se reporta FAILED sin romper la matrícula de los cursos', async () => {
+    const h = makeHarness({ existingUser: { id: 'u-1' }, groupThrows: true });
+
+    const res = await h.service.inscribe(
+      TENANT_ID,
+      ACTOR_ID,
+      { email: 'ana@x.com', courseIds: [COURSE_A], accessGroupIds: [GROUP_A] },
+      WEB_BASE_URL,
+    );
+
+    expect(res.enrollments[0]).toMatchObject({ courseId: COURSE_A, status: 'ACTIVE' });
+    expect(res.accessGroups[0]).toMatchObject({ groupId: GROUP_A, status: 'FAILED' });
+    expect(res.accessGroups[0]?.error).toContain('no encontrado');
+  });
+
+  it('la baja retira el grupo (revoca grants y desmatricula por refcount)', async () => {
+    const h = makeHarness({ existingUser: { id: 'u-1' }, groupRevoked: true });
+
+    const res = await h.service.revoke(TENANT_ID, ACTOR_ID, {
+      email: 'ana@x.com',
+      accessGroupIds: [GROUP_A],
+      reason: 'refund',
+    });
+
+    expect(h.accessGroupsSvc.revokeMember).toHaveBeenCalledWith(TENANT_ID, GROUP_A, 'u-1');
+    expect(res.accessGroups).toEqual([{ groupId: GROUP_A, status: 'REVOKED' }]);
+  });
+
+  it('baja idempotente: si ya no era miembro → NOT_MEMBER', async () => {
+    const h = makeHarness({ existingUser: { id: 'u-1' }, groupRevoked: false });
+
+    const res = await h.service.revoke(TENANT_ID, ACTOR_ID, {
+      email: 'ana@x.com',
+      accessGroupIds: [GROUP_A],
+    });
+
+    expect(res.accessGroups).toEqual([{ groupId: GROUP_A, status: 'NOT_MEMBER' }]);
+  });
+
+  it('listAccessGroups mapea id, nombre, kind y nº de cursos que otorga', async () => {
+    const h = makeHarness({
+      groups: [
+        { id: GROUP_A, name: 'Pack Marketing', kind: 'MULTI_COURSE', courseCount: 3 },
+        { id: 'g2', name: 'Todo el catálogo', kind: 'ALL_COURSES', courseCount: null },
+      ],
+    });
+
+    const groups = await h.service.listAccessGroups(TENANT_ID);
+
+    expect(groups).toEqual([
+      { id: GROUP_A, name: 'Pack Marketing', kind: 'MULTI_COURSE', courseCount: 3 },
+      { id: 'g2', name: 'Todo el catálogo', kind: 'ALL_COURSES', courseCount: 0 },
+    ]);
   });
 });
 
