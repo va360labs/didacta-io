@@ -1,5 +1,6 @@
 import {
   classifySubscriptionStatus,
+  type MemberPurchaseMatch,
   type MemberSubscriptionMatch,
   type MemberSubscriptionLookupFailure,
 } from '@didacta/mod-payment-connections';
@@ -71,6 +72,30 @@ export interface DecisionEmailParams {
   subscriptionMatches?: MemberSubscriptionMatch[];
   /** Conexiones que NO se pudieron consultar (caídas/credencial/timeout): el resultado puede ser incompleto. */
   subscriptionFailures?: MemberSubscriptionLookupFailure[];
+  /**
+   * Compras PUNTUALES (pedidos) del solicitante. Es lo que justifica a quien
+   * adquirió un "acceso lifetime" y por eso NO aparece con suscripción vigente.
+   */
+  purchases?: MemberPurchaseMatch[];
+}
+
+/** Fecha corta legible de un pedido (o vacío si el proveedor no la dio). */
+function purchaseDate(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('es-ES');
+}
+
+/** Describe un pedido en una línea: nº · fecha · estado · importe — productos. */
+function describePurchase(p: MemberPurchaseMatch): string {
+  const parts = [
+    p.orderNumber ? `#${p.orderNumber}` : `#${p.orderId}`,
+    purchaseDate(p.createdAt),
+    p.status,
+    formatMatchAmount(p.total, p.currency).replace(/^ — /, ''),
+  ].filter((x) => x && x.length > 0);
+  const head = parts.join(' · ');
+  return p.products.length ? `${head} — ${p.products.join(', ')}` : head;
 }
 
 /** Texto del estado de pertenencia al grupo según el tri-estado. */
@@ -140,6 +165,16 @@ export function buildDecisionEmail(params: DecisionEmailParams): EmailContent {
   } else {
     subscriptionText = '\nSuscripción detectada: ninguna en las cuentas de pago conectadas.\n';
   }
+  // Compras puntuales: quien compró un "lifetime" no tiene suscripción viva, así
+  // que sin este bloque el aprobador vería "sin suscripción" y rechazaría a un
+  // cliente legítimo. Solo se muestra si hay algo que mostrar.
+  const purchases = params.purchases ?? [];
+  const purchasesText = purchases.length
+    ? `\nCompras detectadas (${purchases.length}):\n${purchases
+        .map((p) => `  • ${describePurchase(p)}`)
+        .join('\n')}\n`
+    : '';
+
   const subject = `Nueva inscripción pendiente — ${name}`;
   const bodyText = `Hay una nueva inscripción pendiente de tu aprobación en ${tenantName}.
 
@@ -148,7 +183,7 @@ ${delinquentLineText}
   Nombre: ${name}
   Email: ${email}
   Telegram ID: ${telegramId}
-${subscriptionText}
+${subscriptionText}${purchasesText}
 Aprobar: ${approveUrl}
 Rechazar: ${rejectUrl}`;
 
@@ -193,6 +228,15 @@ Rechazar: ${rejectUrl}`;
   </p>`;
   }
 
+  const purchasesBlock = purchases.length
+    ? `<div style="margin: 16px 0; padding: 12px 16px; background: #eff6ff; border: 1px solid #3b82f6; border-radius: 8px;">
+    <p style="margin: 0 0 8px; font-weight: 700; color: #1e40af; font-size: 15px;">Compras detectadas (${purchases.length})</p>
+    <ul style="margin: 0; padding-left: 18px; color: #1e40af; font-size: 14px;">
+      ${purchases.map((p) => `<li>${escapeHtml(describePurchase(p))}</li>`).join('\n      ')}
+    </ul>
+  </div>`
+    : '';
+
   const bodyHtml = `<p style="margin:0 0 12px;">Hay una nueva inscripción pendiente de tu aprobación en ${escapeHtml(
     tenantName,
   )}.</p>
@@ -204,6 +248,7 @@ Rechazar: ${rejectUrl}`;
     <tr><td style="padding: 2px 8px; color: #5b6b7c;">Telegram ID</td><td style="padding: 2px 8px;"><strong>${escapeHtml(telegramId)}</strong></td></tr>
   </table>
   ${subscriptionBlock}
+  ${purchasesBlock}
   <p style="margin: 32px 0;">
     <a href="${escapeHtmlAttr(approveUrl)}" style="display: inline-block; background: #16a34a; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-right: 12px;">
       Aprobar

@@ -596,6 +596,124 @@ describe('findUserSubscriptions', () => {
   });
 });
 
+/**
+ * Compras PUNTUALES: el caso de los "accesos lifetime" vendidos en su día, que
+ * no dejan ninguna suscripción viva. Sin esto el aprobador ve "sin suscripción"
+ * y rechaza a un cliente que sí pagó.
+ */
+describe('findUserPurchases', () => {
+  const FLAKY_KEY = 'rk_test_flaky_p';
+  const ORDER = {
+    orderId: '8801',
+    orderNumber: '8801',
+    status: 'completed',
+    total: 99_700,
+    currency: 'EUR',
+    createdAt: '2023-04-11T09:15:00Z',
+    products: ['VA360 Lifetime'],
+  };
+
+  /** Adapter con (o sin) findPurchasesByEmail; valida en el add. */
+  function purchaseAdapter(find?: (email: string) => Promise<(typeof ORDER)[]>): StripeReadAdapter {
+    const base: StripeReadAdapter = {
+      retrieveAccount: async () => ({ id: 'acct', email: null, country: null, businessName: null }),
+      listActiveSubscriptions: async () => ({ subscribers: [], truncated: false }),
+    };
+    return find ? { ...base, findPurchasesByEmail: find } : base;
+  }
+
+  async function addConn(svc: ReturnType<typeof buildService>, displayName: string, key: string) {
+    return svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName,
+      credentials: { apiKey: key },
+    });
+  }
+
+  it('agrega las compras de una conexión VERIFIED con el email normalizado', async () => {
+    const find = vi.fn(async (_email: string) => [ORDER]);
+    const svc = buildService({ [VALID_KEY]: purchaseAdapter(find) });
+    const row = await addConn(svc, 'Woo VA360', VALID_KEY);
+
+    const { purchases, failures } = await svc.service.findUserPurchases(TENANT, ' BUYER@x.com ');
+
+    expect(failures).toEqual([]);
+    expect(purchases).toHaveLength(1);
+    expect(purchases[0]).toMatchObject({
+      connectionId: row.id,
+      connectionName: 'Woo VA360',
+      orderId: '8801',
+      status: 'completed',
+      total: 99_700,
+      products: ['VA360 Lifetime'],
+    });
+    expect(find).toHaveBeenCalledWith('buyer@x.com');
+  });
+
+  it('ordena las compras de más reciente a más antigua', async () => {
+    const OLD = { ...ORDER, orderId: '7000', createdAt: '2021-01-02T00:00:00Z' };
+    const svc = buildService({ [VALID_KEY]: purchaseAdapter(async () => [OLD, ORDER]) });
+    await addConn(svc, 'Woo', VALID_KEY);
+
+    const { purchases } = await svc.service.findUserPurchases(TENANT, 'buyer@x.com');
+
+    expect(purchases.map((p) => p.orderId)).toEqual(['8801', '7000']);
+  });
+
+  it('salta los proveedores sin findPurchasesByEmail (Stripe/PayPal) sin registrar fallo', async () => {
+    const svc = buildService({ [VALID_KEY]: purchaseAdapter() });
+    await addConn(svc, 'Stripe ES', VALID_KEY);
+
+    await expect(svc.service.findUserPurchases(TENANT, 'buyer@x.com')).resolves.toEqual({
+      purchases: [],
+      failures: [],
+    });
+  });
+
+  it('salta las conexiones que no están VERIFIED', async () => {
+    const find = vi.fn(async () => [ORDER]);
+    const svc = buildService({ [VALID_KEY]: purchaseAdapter(find) });
+    const row = await addConn(svc, 'Woo', VALID_KEY);
+    svc.prisma.rows.get(row.id)!.status = 'PENDING';
+
+    const { purchases } = await svc.service.findUserPurchases(TENANT, 'buyer@x.com');
+
+    expect(purchases).toEqual([]);
+    expect(find).not.toHaveBeenCalled();
+  });
+
+  it('una tienda caída no tumba el lookup: registra el fallo y sigue', async () => {
+    const svc = buildService({
+      [VALID_KEY]: purchaseAdapter(async () => [ORDER]),
+      [FLAKY_KEY]: purchaseAdapter(async () => {
+        throw new Error('tienda caída');
+      }),
+    });
+    await addConn(svc, 'Buena', VALID_KEY);
+    await addConn(svc, 'Caída', FLAKY_KEY);
+
+    const { purchases, failures } = await svc.service.findUserPurchases(TENANT, 'buyer@x.com');
+
+    expect(purchases).toHaveLength(1);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]!.message).toContain('tienda caída');
+  });
+
+  it('email vacío → vacío sin consultar ninguna cuenta', async () => {
+    const find = vi.fn(async () => [ORDER]);
+    const svc = buildService({ [VALID_KEY]: purchaseAdapter(find) });
+    await addConn(svc, 'Woo', VALID_KEY);
+
+    await expect(svc.service.findUserPurchases(TENANT, '   ')).resolves.toEqual({
+      purchases: [],
+      failures: [],
+    });
+    expect(find).not.toHaveBeenCalled();
+  });
+});
+
 describe('resolveRenewalUrlByRef', () => {
   /** Adapter que valida en el add y, opcionalmente, resuelve la factura abierta. */
   function invoiceAdapter(open?: (subId: string) => Promise<string | null>): StripeReadAdapter {

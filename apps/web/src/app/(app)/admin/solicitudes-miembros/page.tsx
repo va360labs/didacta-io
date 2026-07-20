@@ -16,6 +16,7 @@ import {
   rerunMemberLookup,
   sendMemberRenewalEmail,
   type MemberRequest,
+  type MemberPurchaseMatch,
   type MemberSubscriptionMatch,
 } from '@/lib/inscripcion';
 import {
@@ -207,6 +208,8 @@ export default function SolicitudesMiembrosPage() {
                   onRemind={(match) => setEmailFor({ req: r, match })}
                   onEmail={() => setEmailFor({ req: r, match: null })}
                 />
+
+                <PurchasesBlock request={r} />
 
                 <MapSubscriptionRow
                   request={r}
@@ -415,6 +418,46 @@ function SubscriptionBlock({
       </ul>
     </div>
   );
+}
+
+/**
+ * Compras PUNTUALES (pedidos) del solicitante. Quien compró un "acceso lifetime"
+ * no tiene suscripción viva: sin este bloque el bloque de arriba diría "sin
+ * suscripción" y se rechazaría a un cliente que sí pagó. Solo se pinta si hay
+ * compras (para no añadir ruido a las solicitudes normales).
+ */
+function PurchasesBlock({ request }: { request: MemberRequest }) {
+  const purchases = request.lookup?.purchases ?? [];
+  if (purchases.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2">
+      <p className="mb-1 text-sm font-medium text-brand-700">
+        Compras detectadas ({purchases.length})
+      </p>
+      <ul className="flex flex-col gap-1">
+        {purchases.map((p) => (
+          <li key={`${p.connectionId}:${p.orderId}`} className="text-sm text-text">
+            {describePurchase(p)}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Describe un pedido en una línea: nº · fecha · estado · importe — productos. */
+function describePurchase(p: MemberPurchaseMatch): string {
+  const date = p.createdAt ? new Date(p.createdAt) : null;
+  const head = [
+    p.orderNumber ? `#${p.orderNumber}` : `#${p.orderId}`,
+    date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString('es-ES') : '',
+    p.status,
+    p.total !== null ? formatAmount(p.total, p.currency) : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const products = p.products.length ? ` — ${p.products.join(', ')}` : '';
+  return `${head}${products} (${p.connectionName})`;
 }
 
 function describeMatch(m: MemberSubscriptionMatch): string {

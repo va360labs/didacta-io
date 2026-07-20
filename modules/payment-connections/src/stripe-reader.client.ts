@@ -39,6 +39,26 @@ export interface StripeSubscriberRecord {
   created: number;
 }
 
+/**
+ * Una COMPRA PUNTUAL (pedido) leída del proveedor. Complementa a las
+ * suscripciones: quien compró un "acceso lifetime" no tiene suscripción viva,
+ * pero sí un pedido con los productos que adquirió — que es justo lo que el
+ * aprobador necesita ver al decidir una solicitud de inscripción.
+ */
+export interface PurchaseRecord {
+  orderId: string;
+  orderNumber: string | null;
+  /** Estado crudo del proveedor (completed, processing, refunded, cancelled…). */
+  status: string;
+  /** Importe total en la unidad MENOR (céntimos), como el resto del módulo. */
+  total: number | null;
+  currency: string | null;
+  /** ISO 8601 de creación del pedido, si el proveedor lo da. */
+  createdAt: string | null;
+  /** Nombres de los productos comprados (líneas del pedido). */
+  products: string[];
+}
+
 export interface ListActiveSubscriptionsOptions {
   /** Estados Stripe que cuentan como "activa". Default: active, trialing, past_due. */
   statuses?: string[];
@@ -65,6 +85,13 @@ export interface StripeReadAdapter {
    * caller lo omite. Devuelve [] si el email no tiene suscripción en esa cuenta.
    */
   findSubscriptionsByEmail?(email: string): Promise<StripeSubscriberRecord[]>;
+  /**
+   * Compras PUNTUALES (pedidos) de un email: el caso de los accesos "lifetime"
+   * vendidos en su día, que no dejan suscripción viva. Opcional por proveedor:
+   * hoy lo implementa WooCommerce (Stripe/PayPal, fase 2). Devuelve [] si el
+   * email no tiene pedidos en esa cuenta.
+   */
+  findPurchasesByEmail?(email: string): Promise<PurchaseRecord[]>;
   /**
    * URL hospedada de la factura ABIERTA/impaga de una suscripción — el enlace
    * read-only para que el cliente pague/renueve. Opcional por proveedor. Devuelve

@@ -138,6 +138,24 @@ export interface MemberSubscriptionMatch {
   subscriptionId: string;
 }
 
+/**
+ * Una compra PUNTUAL (pedido) del solicitante. Es lo que justifica a quien
+ * adquirió un "acceso lifetime" y por eso no tiene ninguna suscripción viva.
+ */
+export interface MemberPurchaseMatch {
+  provider: string;
+  connectionId: string;
+  connectionName: string;
+  orderId: string;
+  orderNumber: string | null;
+  status: string;
+  /** Importe en la unidad MENOR de la moneda (céntimos). */
+  total: number | null;
+  currency: string | null;
+  createdAt: string | null;
+  products: string[];
+}
+
 export interface MemberRequest {
   userId: string;
   name: string | null;
@@ -150,6 +168,9 @@ export interface MemberRequest {
     status: string;
     matchCount: number;
     results: MemberSubscriptionMatch[];
+    /** Compras puntuales detectadas (0 en lookups anteriores a esta función). */
+    purchaseCount: number;
+    purchases: MemberPurchaseMatch[];
     error: string | null;
     completedAt: string | null;
     /** Email con el que se consultó (puede diferir del de registro si el admin lo mapeó). */
