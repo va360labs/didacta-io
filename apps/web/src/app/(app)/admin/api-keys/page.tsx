@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -98,6 +99,14 @@ export default function ApiKeysPage() {
             Claves para que sistemas externos (p.ej. tu página de ventas) inscriban alumnos vía{' '}
             <code>POST /api/v1/inscribe</code>. Consulta la documentación técnica en{' '}
             <code>/api/docs</code>.
+          </p>
+          <p className="mt-2 text-sm">
+            <Link
+              href="/admin/integraciones/api"
+              className="font-semibold text-brand-700 hover:underline"
+            >
+              → Integración API: tus grupos y cursos reales + payloads listos para copiar
+            </Link>
           </p>
         </div>
         {!creating ? <Button onClick={() => setCreating(true)}>Crear clave</Button> : null}

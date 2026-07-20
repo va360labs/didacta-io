@@ -63,6 +63,10 @@ const ALLOWLIST: Record<string, { kind: AllowKind; reason: string }> = {
     reason: 'redirige a /comunidad (stub histórico, referenciado en layout)',
   },
   '/notificaciones': { kind: 'reachable', reason: 'icono de campana (notifications-bell)' },
+  '/admin/integraciones/api': {
+    kind: 'reachable',
+    reason: 'enlace "Integración API" en /admin/api-keys (documentación en vivo para integradores)',
+  },
   '/cursos/checkout/success': { kind: 'external', reason: 'redirect de Stripe (success_url)' },
   '/cursos/checkout/cancel': { kind: 'external', reason: 'redirect de Stripe (cancel_url)' },
   '/cuenta/suscripciones': {
