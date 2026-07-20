@@ -12,6 +12,7 @@ import { resolveEmailBranding, type BrandingPrisma } from '../common/branded-ema
 import { MemberDecisionService } from './member-decision.service';
 import { MemberPaymentFlagService } from './member-payment-flag.service';
 import type {
+  MemberPurchaseMatch,
   MemberSubscriptionMatch,
   MemberSubscriptionLookupFailure,
 } from '@didacta/mod-payment-connections';
@@ -62,6 +63,9 @@ export interface MemberRequestView {
     status: string;
     matchCount: number;
     results: unknown;
+    /** Nº de compras puntuales (pedidos) detectadas: identifica los "lifetime". */
+    purchaseCount: number;
+    purchases: unknown;
     error: string | null;
     completedAt: Date | null;
     /** Email con el que se consultó (puede diferir del de registro si el admin lo mapeó). */
@@ -134,6 +138,8 @@ export class MemberRegistrationService {
               status: l.status,
               matchCount: l.matchCount,
               results: l.results,
+              purchaseCount: l.purchaseCount,
+              purchases: l.purchases,
               error: l.error,
               completedAt: l.completedAt,
               email: l.email,
@@ -263,12 +269,17 @@ export class MemberRegistrationService {
     webBaseUrl: string,
     ctx: ClientContext,
     approverOverride?: string,
-  ): Promise<{ matches: MemberSubscriptionMatch[]; failures: MemberSubscriptionLookupFailure[] }> {
-    const { matches, failures } = await this.subscriptionLookup
+  ): Promise<{
+    matches: MemberSubscriptionMatch[];
+    failures: MemberSubscriptionLookupFailure[];
+    purchases: MemberPurchaseMatch[];
+  }> {
+    const { matches, failures, purchases } = await this.subscriptionLookup
       .runAndStore(tenantId, userId, input.email)
       .catch(() => ({
         matches: [] as MemberSubscriptionMatch[],
         failures: [] as MemberSubscriptionLookupFailure[],
+        purchases: [] as MemberPurchaseMatch[],
       }));
     await this.notifyApprover(
       tenantId,
@@ -278,9 +289,10 @@ export class MemberRegistrationService {
       ctx,
       matches,
       failures,
+      purchases,
       approverOverride,
     );
-    return { matches, failures };
+    return { matches, failures, purchases };
   }
 
   private async notifyApprover(
@@ -291,6 +303,7 @@ export class MemberRegistrationService {
     ctx: ClientContext,
     matches: MemberSubscriptionMatch[],
     failures: MemberSubscriptionLookupFailure[],
+    purchases: MemberPurchaseMatch[],
     approverOverride?: string,
   ): Promise<void> {
     try {
@@ -340,6 +353,7 @@ export class MemberRegistrationService {
         branding,
         subscriptionMatches: matches,
         subscriptionFailures: failures,
+        purchases,
       });
       const result = await this.smtp.send(
         resolved.config,

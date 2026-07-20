@@ -1,8 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
-import type { MemberSubscriptionLookupResult } from '@didacta/mod-payment-connections';
+import type {
+  MemberPurchaseMatch,
+  MemberSubscriptionLookupResult,
+} from '@didacta/mod-payment-connections';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModuleRegistryService } from '../modules/module-registry.service';
+
+/**
+ * Resultado del lookup de un miembro: suscripciones + COMPRAS PUNTUALES. Las
+ * compras son las que justifican a quien adquirió un "acceso lifetime" y por
+ * tanto no aparece con ninguna suscripción viva.
+ */
+export type MemberLookupResult = MemberSubscriptionLookupResult & {
+  purchases: MemberPurchaseMatch[];
+};
 
 /**
  * Lookup automático de la suscripción de un miembro al registrarse.
@@ -38,11 +50,7 @@ export class MemberSubscriptionLookupService {
    * inscripción para, en background, buscar la suscripción y luego notificar al
    * aprobador con ella. Best-effort: nunca lanza (devuelve resultado vacío ante fallo).
    */
-  async runAndStore(
-    tenantId: string,
-    userId: string,
-    email: string,
-  ): Promise<MemberSubscriptionLookupResult> {
+  async runAndStore(tenantId: string, userId: string, email: string): Promise<MemberLookupResult> {
     await this.prisma.memberSubscriptionLookup
       .upsert({
         where: { tenantId_userId: { tenantId, userId } },
@@ -67,15 +75,18 @@ export class MemberSubscriptionLookupService {
     await this.kickoff(tenantId, userId, email);
   }
 
-  private async run(
-    tenantId: string,
-    userId: string,
-    email: string,
-  ): Promise<MemberSubscriptionLookupResult> {
+  private async run(tenantId: string, userId: string, email: string): Promise<MemberLookupResult> {
     try {
-      const { matches, failures } = await this.registry
-        .getPaymentConnectionsService()
-        .findUserSubscriptions(tenantId, email);
+      const payments = this.registry.getPaymentConnectionsService();
+      const { matches, failures } = await payments.findUserSubscriptions(tenantId, email);
+      // Compras PUNTUALES (pedidos): quien compró un "acceso lifetime" no tiene
+      // suscripción viva, así que sin esto el aprobador vería "sin suscripción" y
+      // no sabría que sí pagó. Best-effort: un fallo aquí no invalida el lookup
+      // de suscripciones, que es el criterio principal.
+      const purchaseResult = await payments
+        .findUserPurchases(tenantId, email)
+        .catch(() => ({ purchases: [], failures: [] }));
+      const purchases = purchaseResult.purchases;
       // Si alguna conexión VERIFIED falló y NO encontramos nada, el lookup no es
       // concluyente → ERROR (para no afirmar "sin suscripción" sin base). Si hubo
       // matches, es DONE aunque alguna cuenta fallara (resultado parcial pero útil).
@@ -96,6 +107,8 @@ export class MemberSubscriptionLookupService {
             status,
             results: matches as never,
             matchCount: matches.length,
+            purchases: purchases as never,
+            purchaseCount: purchases.length,
             error: partialError,
             completedAt: new Date(),
           },
@@ -103,12 +116,14 @@ export class MemberSubscriptionLookupService {
             status,
             results: matches as never,
             matchCount: matches.length,
+            purchases: purchases as never,
+            purchaseCount: purchases.length,
             error: partialError,
             completedAt: new Date(),
           },
         })
         .catch(() => {});
-      return { matches, failures };
+      return { matches, failures, purchases };
     } catch (err) {
       const message = ((err as Error).message ?? 'error').slice(0, 500);
       this.logger.warn({ err, tenantId, userId }, 'member-lookup: falló el lookup de suscripción');
@@ -133,7 +148,11 @@ export class MemberSubscriptionLookupService {
         });
       // Fallo total (p.ej. el módulo no está inicializado): lo señalamos como un
       // fallo genérico para que el email NO afirme "sin suscripción".
-      return { matches: [], failures: [{ provider: '*', connectionName: 'todas', message }] };
+      return {
+        matches: [],
+        failures: [{ provider: '*', connectionName: 'todas', message }],
+        purchases: [],
+      };
     }
   }
 }

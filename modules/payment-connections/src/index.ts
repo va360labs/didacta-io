@@ -46,6 +46,8 @@ export type {
   MemberSubscriptionMatch,
   MemberSubscriptionLookupFailure,
   MemberSubscriptionLookupResult,
+  MemberPurchaseMatch,
+  MemberPurchaseLookupResult,
   SubscriptionStatusCategory,
   SubscriptionStatusInfo,
   SubscriberSyncResult,
@@ -64,6 +66,7 @@ export type {
   StripeSubscriberRecord,
   StripeSubscriptionsResult,
   ListActiveSubscriptionsOptions,
+  PurchaseRecord,
 } from './stripe-reader.client.js';
 export { PayPalReadSdkAdapter } from './paypal-reader.client.js';
 export type { PayPalReaderCredentials } from './paypal-reader.client.js';

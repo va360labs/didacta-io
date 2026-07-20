@@ -219,6 +219,68 @@ describe('buildDecisionEmail', () => {
   });
 });
 
+/**
+ * Compras PUNTUALES en el email de decisión. Quien compró un "acceso lifetime"
+ * no tiene suscripción viva: sin este bloque el aprobador solo leería "sin
+ * suscripción detectada" y rechazaría a un cliente que sí pagó.
+ */
+describe('buildDecisionEmail · compras puntuales', () => {
+  const PURCHASE = {
+    provider: 'woocommerce',
+    connectionId: 'conn-1',
+    connectionName: 'Woo VA360',
+    orderId: '8801',
+    orderNumber: '8801',
+    status: 'completed',
+    total: 99_700,
+    currency: 'EUR',
+    createdAt: '2023-04-11T09:15:00Z',
+    products: ['VA360 Lifetime'],
+  };
+
+  it('lista las compras con nº, estado, importe y productos en text y html', () => {
+    const { text, html } = buildDecisionEmail(baseDecisionParams({ purchases: [PURCHASE] }));
+    for (const body of [text, html]) {
+      expect(body).toContain('Compras detectadas (1)');
+      expect(body).toContain('#8801');
+      expect(body).toContain('completed');
+      expect(body).toContain('997.00 EUR');
+      expect(body).toContain('VA360 Lifetime');
+    }
+  });
+
+  it('convive con "sin suscripción detectada" (es justo el caso lifetime)', () => {
+    const { text } = buildDecisionEmail(
+      baseDecisionParams({ subscriptionMatches: [], purchases: [PURCHASE] }),
+    );
+    expect(text).toContain('Suscripción detectada: ninguna');
+    expect(text).toContain('VA360 Lifetime');
+  });
+
+  it('sin compras no añade el bloque (no mete ruido en las solicitudes normales)', () => {
+    const { text, html } = buildDecisionEmail(baseDecisionParams({ purchases: [] }));
+    expect(text).not.toContain('Compras detectadas');
+    expect(html).not.toContain('Compras detectadas');
+  });
+
+  it('escapa el nombre del producto en el HTML', () => {
+    const { html } = buildDecisionEmail(
+      baseDecisionParams({ purchases: [{ ...PURCHASE, products: ['Curso <b>X</b>'] }] }),
+    );
+    expect(html).toContain('Curso &lt;b&gt;X&lt;/b&gt;');
+    expect(html).not.toContain('Curso <b>X</b>');
+  });
+
+  it('un pedido sin fecha ni importe no rompe la línea', () => {
+    const { text } = buildDecisionEmail(
+      baseDecisionParams({
+        purchases: [{ ...PURCHASE, createdAt: null, total: null, currency: null, products: [] }],
+      }),
+    );
+    expect(text).toContain('#8801 · completed');
+  });
+});
+
 describe('buildWelcomeEmail', () => {
   it('incluye el saludo con nombre y el signinUrl', () => {
     const { text, html, subject } = buildWelcomeEmail(

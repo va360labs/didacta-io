@@ -50,12 +50,23 @@ function fakeFetch(handlers: {
   customers?: (email: string) => FakeResp;
   subsByStatus?: (status: string, page: number) => FakeResp;
   subsByCustomer?: (customer: string, status: string) => FakeResp;
+  ordersByCustomer?: (customer: string, page: number) => FakeResp;
+  ordersBySearch?: (search: string, page: number) => FakeResp;
 }): typeof fetch {
   const fn = async (input: string | URL): Promise<Response> => {
     const url = new URL(input.toString());
     const qs = url.searchParams;
     if (url.pathname.endsWith('/customers')) {
       return (handlers.customers?.(qs.get('email') ?? '') ?? resp(200, [])) as unknown as Response;
+    }
+    if (url.pathname.endsWith('/orders')) {
+      const page = Number(qs.get('page') ?? '1');
+      if (qs.get('customer')) {
+        return (handlers.ordersByCustomer?.(qs.get('customer')!, page) ??
+          resp(200, [])) as unknown as Response;
+      }
+      return (handlers.ordersBySearch?.(qs.get('search') ?? '', page) ??
+        resp(200, [])) as unknown as Response;
     }
     if (url.pathname.endsWith('/subscriptions')) {
       if (qs.get('customer')) {
@@ -133,5 +144,114 @@ describe('WooCommerceReadSdkAdapter · findSubscriptionsByEmail', () => {
 
     const subs = await adapter.findSubscriptionsByEmail('nadie@x.com');
     expect(subs).toEqual([]);
+  });
+});
+
+/**
+ * Compras PUNTUALES. Son las que justifican a quien compró un "acceso lifetime":
+ * no dejan suscripción viva, así que sin esto el aprobador ve "sin suscripción"
+ * y rechaza a un cliente que sí pagó.
+ */
+const EMAIL = 'lifetime@passmail.net';
+
+/** Pedido de invitado (customer_id 0) con el email buscado en facturación. */
+const ORDER_GUEST = {
+  id: 8801,
+  number: '8801',
+  status: 'completed',
+  currency: 'EUR',
+  total: '997.00',
+  date_created_gmt: '2023-04-11T09:15:00',
+  billing: { email: EMAIL },
+  line_items: [{ name: 'VA360 Lifetime' }, { name: 'Bonus: plantillas' }],
+};
+
+describe('WooCommerceReadSdkAdapter · findPurchasesByEmail', () => {
+  it('devuelve los pedidos del cliente registrado (path A) con importe en céntimos', async () => {
+    const fetchFn = fakeFetch({
+      customers: (email) => (email === EMAIL ? resp(200, [{ id: 42 }]) : resp(200, [])),
+      ordersByCustomer: (customer, page) =>
+        customer === '42' && page === 1 ? resp(200, [ORDER_GUEST], 1) : resp(200, [], 1),
+    });
+    const adapter = new WooCommerceReadSdkAdapter(CREDS, fetchFn);
+
+    const purchases = await adapter.findPurchasesByEmail(EMAIL);
+    expect(purchases).toHaveLength(1);
+    expect(purchases[0]).toMatchObject({
+      orderId: '8801',
+      orderNumber: '8801',
+      status: 'completed',
+      total: 99_700,
+      currency: 'EUR',
+      createdAt: '2023-04-11T09:15:00Z',
+      products: ['VA360 Lifetime', 'Bonus: plantillas'],
+    });
+  });
+
+  it('encuentra la compra de INVITADO por billing.email (path B) sin cuenta WP', async () => {
+    const fetchFn = fakeFetch({
+      customers: () => resp(200, []),
+      ordersBySearch: (search, page) =>
+        search === EMAIL && page === 1 ? resp(200, [ORDER_GUEST], 1) : resp(200, [], 1),
+    });
+    const adapter = new WooCommerceReadSdkAdapter(CREDS, fetchFn);
+
+    const purchases = await adapter.findPurchasesByEmail(EMAIL);
+    expect(purchases.map((p) => p.orderId)).toEqual(['8801']);
+  });
+
+  it('`search` es difuso: descarta las filas cuyo billing.email no es exacto', async () => {
+    const OTHER = { ...ORDER_GUEST, id: 9999, billing: { email: 'otro@x.com' } };
+    const fetchFn = fakeFetch({
+      customers: () => resp(200, []),
+      ordersBySearch: (_s, page) =>
+        page === 1 ? resp(200, [OTHER, ORDER_GUEST], 1) : resp(200, []),
+    });
+    const adapter = new WooCommerceReadSdkAdapter(CREDS, fetchFn);
+
+    const purchases = await adapter.findPurchasesByEmail(EMAIL);
+    expect(purchases.map((p) => p.orderId)).toEqual(['8801']);
+  });
+
+  it('dedup: el mismo pedido por ambos paths sale una sola vez', async () => {
+    const fetchFn = fakeFetch({
+      customers: () => resp(200, [{ id: 42 }]),
+      ordersByCustomer: (_c, page) => (page === 1 ? resp(200, [ORDER_GUEST], 1) : resp(200, [], 1)),
+      ordersBySearch: (_s, page) => (page === 1 ? resp(200, [ORDER_GUEST], 1) : resp(200, [], 1)),
+    });
+    const adapter = new WooCommerceReadSdkAdapter(CREDS, fetchFn);
+
+    const purchases = await adapter.findPurchasesByEmail(EMAIL);
+    expect(purchases).toHaveLength(1);
+  });
+
+  it('incluye TODOS los estados (un reembolsado también le interesa al aprobador)', async () => {
+    const REFUNDED = { ...ORDER_GUEST, id: 8802, number: '8802', status: 'refunded' };
+    const fetchFn = fakeFetch({
+      customers: () => resp(200, []),
+      ordersBySearch: (_s, page) =>
+        page === 1 ? resp(200, [ORDER_GUEST, REFUNDED], 1) : resp(200, [], 1),
+    });
+    const adapter = new WooCommerceReadSdkAdapter(CREDS, fetchFn);
+
+    const purchases = await adapter.findPurchasesByEmail(EMAIL);
+    expect(purchases.map((p) => p.status).sort()).toEqual(['completed', 'refunded']);
+  });
+
+  it('pagina hasta agotar X-WP-TotalPages', async () => {
+    const p2 = { ...ORDER_GUEST, id: 8803, number: '8803' };
+    const fetchFn = fakeFetch({
+      customers: () => resp(200, []),
+      ordersBySearch: (_s, page) => (page === 1 ? resp(200, [ORDER_GUEST], 2) : resp(200, [p2], 2)),
+    });
+    const adapter = new WooCommerceReadSdkAdapter(CREDS, fetchFn);
+
+    const purchases = await adapter.findPurchasesByEmail(EMAIL);
+    expect(purchases.map((p) => p.orderId).sort()).toEqual(['8801', '8803']);
+  });
+
+  it('sin pedidos → vacío (no revienta el lookup)', async () => {
+    const adapter = new WooCommerceReadSdkAdapter(CREDS, fakeFetch({}));
+    await expect(adapter.findPurchasesByEmail('nadie@x.com')).resolves.toEqual([]);
   });
 });

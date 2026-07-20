@@ -15,6 +15,7 @@
 import { StripeReadApiError, StripeReadKeyInvalidError } from './errors.js';
 import type {
   ListActiveSubscriptionsOptions,
+  PurchaseRecord,
   StripeAccountInfo,
   StripeReadAdapter,
   StripeSubscriberRecord,
@@ -217,12 +218,109 @@ export class WooCommerceReadSdkAdapter implements StripeReadAdapter {
     }
   }
 
+  /**
+   * Compras PUNTUALES (pedidos) de un email — el caso de los accesos "lifetime"
+   * que no dejan suscripción viva.
+   *
+   * Dos vías, como el lookup de suscripciones, pero MÁS BARATAS: `/orders` sí
+   * acepta `search` de forma nativa, así que no hay que escanear la tienda entera.
+   *   PATH A — email → customer_id → sus pedidos (cliente registrado).
+   *   PATH B — `?search=<email>` para compras de INVITADO o con email de
+   *            facturación distinto. `search` es difuso, así que filtramos por
+   *            `billing.email` exacto antes de aceptar la fila.
+   * Se piden TODOS los estados (`status=any`): un pedido reembolsado o cancelado
+   * también le interesa al aprobador, no se oculta.
+   */
+  async findPurchasesByEmail(email: string): Promise<PurchaseRecord[]> {
+    const target = email.trim().toLowerCase();
+    const byId = new Map<string, PurchaseRecord>();
+    const collect = (row: WooOrder) => {
+      const rec = mapOrder(row);
+      if (!byId.has(rec.orderId)) byId.set(rec.orderId, rec);
+    };
+
+    /** Pagina una query de /orders acumulando resultados. `strict` filtra por email. */
+    const drain = async (query: string, strict: boolean): Promise<void> => {
+      let page = 1;
+      for (;;) {
+        const resp = await this.get(
+          `/orders?${query}&status=any&per_page=${PER_PAGE}&page=${page}`,
+        );
+        if (resp.status === 401 || resp.status === 403) {
+          throw new StripeReadKeyInvalidError(`WooCommerce ${resp.status} al listar pedidos`);
+        }
+        if (!resp.ok) break;
+        const rows = (await resp.json()) as WooOrder[];
+        for (const row of rows) {
+          if (strict && (row.billing?.email ?? '').trim().toLowerCase() !== target) continue;
+          collect(row);
+        }
+        const totalPages = Number(resp.headers.get('X-WP-TotalPages') ?? '1') || 1;
+        if (page >= totalPages || rows.length === 0 || page >= LOOKUP_MAX_PAGES) break;
+        page += 1;
+      }
+    };
+
+    try {
+      // PATH A — cliente registrado con ese email de cuenta.
+      const custResp = await this.get(`/customers?email=${encodeURIComponent(email)}`);
+      if (custResp.status === 401 || custResp.status === 403) {
+        throw new StripeReadKeyInvalidError(`WooCommerce ${custResp.status} al buscar el cliente`);
+      }
+      if (custResp.ok) {
+        const customers = (await custResp.json()) as Array<{ id: number }>;
+        for (const c of customers) {
+          await drain(`customer=${c.id}`, false);
+        }
+      }
+
+      // PATH B — invitado o email de facturación distinto del de la cuenta.
+      await drain(`search=${encodeURIComponent(email)}`, true);
+
+      return [...byId.values()];
+    } catch (err) {
+      if (err instanceof StripeReadKeyInvalidError || err instanceof StripeReadApiError) throw err;
+      throw new StripeReadApiError((err as Error).message ?? 'error');
+    }
+  }
+
   private get(path: string): Promise<Response> {
     return this.fetchFn(`${this.base}${path}`, {
       headers: { Authorization: this.authHeader, Accept: 'application/json' },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   }
+}
+
+/** Pedido de WooCommerce (subconjunto que consumimos de /wp-json/wc/v3/orders). */
+interface WooOrder {
+  id: number;
+  number?: string;
+  status?: string;
+  currency?: string;
+  total?: string;
+  date_created?: string;
+  date_created_gmt?: string;
+  billing?: { email?: string };
+  line_items?: Array<{ name?: string }>;
+}
+
+function mapOrder(row: WooOrder): PurchaseRecord {
+  const total = row.total != null ? Math.round(parseFloat(row.total) * 100) : null;
+  // WC da `date_created_gmt` sin sufijo Z; lo normalizamos a ISO con zona.
+  const gmt = row.date_created_gmt ? `${row.date_created_gmt}Z` : null;
+  const created = gmt ?? row.date_created ?? null;
+  return {
+    orderId: String(row.id),
+    orderNumber: row.number ?? null,
+    status: row.status ?? 'unknown',
+    total: total != null && !Number.isNaN(total) ? total : null,
+    currency: row.currency ?? null,
+    createdAt: created,
+    products: (row.line_items ?? [])
+      .map((li) => (li.name ?? '').trim())
+      .filter((n) => n.length > 0),
+  };
 }
 
 interface WooSubscription {

@@ -1980,6 +1980,12 @@ model MemberSubscriptionLookup {
   results     Json     @default("[]")
   /// Nº de suscripciones encontradas (cache para listar sin parsear el JSON).
   matchCount  Int      @default(0) @map("match_count")
+  /// Array JSON de MemberPurchaseMatch: COMPRAS PUNTUALES (pedidos WooCommerce)
+  /// del email. Delata a quien compró un "acceso lifetime" y por tanto no tiene
+  /// ninguna suscripción viva que mostrar al aprobador.
+  purchases   Json     @default("[]")
+  /// Nº de pedidos encontrados (cache, mismo criterio que matchCount).
+  purchaseCount Int    @default(0) @map("purchase_count")
   error       String?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")

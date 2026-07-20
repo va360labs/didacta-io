@@ -140,7 +140,7 @@ export class InscripcionAdminController {
       ctx,
       { skipAutoNotify: true },
     );
-    const { matches, failures } = await this.registration.lookupThenNotify(
+    const { matches, failures, purchases } = await this.registration.lookupThenNotify(
       user.tenantId,
       userId,
       input,
@@ -154,6 +154,8 @@ export class InscripcionAdminController {
       matchCount: matches.length,
       matches,
       failures,
+      purchaseCount: purchases.length,
+      purchases,
       approverEmail: dto.approverEmail ?? null,
     };
   }

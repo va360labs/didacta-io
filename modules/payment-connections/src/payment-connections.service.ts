@@ -200,6 +200,32 @@ export interface MemberSubscriptionMatch {
   subscriptionId: string;
 }
 
+/**
+ * Una COMPRA PUNTUAL encontrada para un email (hoy: pedidos de WooCommerce).
+ * Es lo que delata a quien compró un "acceso lifetime" y no tiene suscripción.
+ */
+export interface MemberPurchaseMatch {
+  provider: string;
+  connectionId: string;
+  connectionName: string;
+  orderId: string;
+  orderNumber: string | null;
+  /** Estado crudo del pedido (completed, processing, refunded, cancelled…). */
+  status: string;
+  /** Total en unidad MENOR (céntimos). */
+  total: number | null;
+  currency: string | null;
+  createdAt: string | null;
+  products: string[];
+}
+
+/** Resultado del lookup de compras. Mismo criterio que el de suscripciones:
+ *  `purchases: []` + `failures: []` = no compró · `+ failures` = no verificable. */
+export interface MemberPurchaseLookupResult {
+  purchases: MemberPurchaseMatch[];
+  failures: MemberSubscriptionLookupFailure[];
+}
+
 /** Una conexión que NO se pudo consultar durante el lookup (caída, credencial inválida, timeout…). */
 export interface MemberSubscriptionLookupFailure {
   provider: string;
@@ -556,6 +582,56 @@ export class PaymentConnectionsService {
    * (Stripe + PayPal + WooCommerce). Best-effort por conexión: si una falla, se
    * registra y se sigue con las demás. Lo usa el job de inscripción de miembros.
    */
+  /**
+   * Compras PUNTUALES de un email en las cuentas conectadas (hoy: WooCommerce).
+   *
+   * Complementa a `findUserSubscriptions`: quien compró un "acceso lifetime" no
+   * tiene suscripción viva, pero sí pedidos con los productos que adquirió — que
+   * es lo que el aprobador necesita para decidir su solicitud de inscripción.
+   * Misma tolerancia: una cuenta caída se registra en `failures` en vez de
+   * devolver un "sin compras" falso.
+   */
+  async findUserPurchases(tenantId: string, email: string): Promise<MemberPurchaseLookupResult> {
+    const norm = normalizeEmail(email);
+    if (!norm) return { purchases: [], failures: [] };
+    const conns = await this.listConnections(tenantId);
+    const purchases: MemberPurchaseMatch[] = [];
+    const failures: MemberSubscriptionLookupFailure[] = [];
+    for (const c of conns) {
+      if (c.status !== 'VERIFIED') continue;
+      try {
+        const credentials = await this.loadCredentials(tenantId, c.id, c.provider);
+        const adapter = this.adapterFactory(c.provider, credentials);
+        // Opcional por proveedor: hoy solo WooCommerce lo implementa.
+        if (!adapter.findPurchasesByEmail) continue;
+        const orders = await adapter.findPurchasesByEmail(norm);
+        for (const o of orders) {
+          purchases.push({
+            provider: c.provider,
+            connectionId: c.id,
+            connectionName: c.displayName,
+            orderId: o.orderId,
+            orderNumber: o.orderNumber,
+            status: o.status,
+            total: o.total,
+            currency: o.currency,
+            createdAt: o.createdAt,
+            products: o.products,
+          });
+        }
+      } catch (err) {
+        failures.push({
+          provider: c.provider,
+          connectionName: c.displayName,
+          message: ((err as Error)?.message ?? 'error').slice(0, 300),
+        });
+      }
+    }
+    // Más recientes primero: al aprobador le importa la última compra.
+    purchases.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+    return { purchases, failures };
+  }
+
   async findUserSubscriptions(
     tenantId: string,
     email: string,
