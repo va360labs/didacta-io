@@ -250,7 +250,9 @@ export class MembershipService {
       courses = rows.map((c) => ({
         id: c.id,
         title: c.title,
-        description: c.description,
+        // Las descripciones migradas (LearnDash) traen HTML: en la página de
+        // venta solo queremos texto plano corto, nunca marcado crudo.
+        description: stripHtmlToExcerpt(c.description),
         thumbnailUrl: c.thumbnailUrl,
         estimatedMinutes: c.estimatedMinutes,
         amountCents: priceByCourse.get(c.id) ?? null,
@@ -469,6 +471,75 @@ function configData(input: MembershipConfigInput) {
       : {}),
     ...(input.testimonialRole !== undefined ? { testimonialRole: input.testimonialRole } : {}),
   };
+}
+
+/** Longitud máxima del extracto de descripción en la página de venta. */
+const EXCERPT_MAX_CHARS = 220;
+
+/**
+ * HTML → extracto de texto plano. Quita etiquetas, decodifica las entidades
+ * habituales, colapsa espacios y corta en ~220 chars respetando palabras.
+ * Devuelve null si no queda nada (para que la UI no pinte un párrafo vacío).
+ */
+/** Entidades HTML con nombre habituales en contenido migrado (WordPress/LearnDash). */
+const NAMED_ENTITIES: Record<string, string> = {
+  nbsp: ' ',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  rsquo: "'",
+  lsquo: "'",
+  rdquo: '"',
+  ldquo: '"',
+  ndash: '—',
+  mdash: '—',
+  hellip: '…',
+  aacute: 'á',
+  eacute: 'é',
+  iacute: 'í',
+  oacute: 'ó',
+  uacute: 'ú',
+  ntilde: 'ñ',
+  uuml: 'ü',
+  Aacute: 'Á',
+  Eacute: 'É',
+  Iacute: 'Í',
+  Oacute: 'Ó',
+  Uacute: 'Ú',
+  Ntilde: 'Ñ',
+  iexcl: '¡',
+  iquest: '¿',
+  euro: '€',
+};
+
+export function stripHtmlToExcerpt(html: string | null): string | null {
+  if (!html) return null;
+  const text = html
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    // Entidades numéricas (&#233; / &#x2019;) → carácter real.
+    .replace(/&#(\d+);/g, (_, code: string) => safeFromCodePoint(parseInt(code, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => safeFromCodePoint(parseInt(code, 16)))
+    // Entidades con nombre conocidas; las desconocidas se quedan tal cual.
+    .replace(/&([a-zA-Z]+);/g, (match, name: string) => NAMED_ENTITIES[name] ?? match)
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return null;
+  if (text.length <= EXCERPT_MAX_CHARS) return text;
+  const cut = text.slice(0, EXCERPT_MAX_CHARS);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${cut.slice(0, lastSpace > 120 ? lastSpace : EXCERPT_MAX_CHARS).trimEnd()}…`;
+}
+
+function safeFromCodePoint(code: number): string {
+  if (!Number.isFinite(code) || code < 32 || code > 0x10ffff) return ' ';
+  try {
+    return String.fromCodePoint(code);
+  } catch {
+    return ' ';
+  }
 }
 
 function parseCoursePrices(value: unknown): Array<{ courseId: string; amountCents: number }> {

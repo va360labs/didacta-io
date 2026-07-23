@@ -428,6 +428,30 @@ describe('MembershipService · página pública', () => {
     expect(page.testimonial).toEqual({ quote: 'Genial', author: 'Cliente Real', role: null });
   });
 
+  it('las descripciones con HTML (migradas de LearnDash) llegan como texto plano', async () => {
+    ctx.prisma.courses[0]!.description =
+      '<p><strong>N8N</strong> es la herramienta de automatizaci&oacute;n <em>fair-code</em> m&aacute;s potente&nbsp;&amp; flexible.</p><script>alert(1)</script>';
+    await ctx.service.updateConfig(TENANT, { active: true });
+    const page = await ctx.service.getPublicPage(TENANT);
+    const desc = page.courses.find((c) => c.id === 'c1')?.description ?? '';
+    expect(desc).not.toContain('<');
+    expect(desc).not.toContain('&nbsp;');
+    expect(desc).not.toContain('alert');
+    expect(desc).toContain('N8N es la herramienta');
+    expect(desc).toContain('& flexible');
+  });
+
+  it('descripción larga se corta en extracto con elipsis; vacía queda en null', async () => {
+    ctx.prisma.courses[0]!.description = `<p>${'palabra '.repeat(60)}</p>`;
+    ctx.prisma.courses[2]!.description = '<p>&nbsp;</p>';
+    await ctx.service.updateConfig(TENANT, { active: true });
+    const page = await ctx.service.getPublicPage(TENANT);
+    const larga = page.courses.find((c) => c.id === 'c1')?.description ?? '';
+    expect(larga.length).toBeLessThanOrEqual(230);
+    expect(larga.endsWith('…')).toBe(true);
+    expect(page.courses.find((c) => c.id === 'c3')?.description).toBeNull();
+  });
+
   it('solo lista planes ACTIVOS', async () => {
     await ctx.service.updateConfig(TENANT, { active: true });
     await ctx.service.createPlan(TENANT, { name: 'On', intervalMonths: 1, amountCents: 1000 });

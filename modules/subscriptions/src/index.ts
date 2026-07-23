@@ -22,7 +22,12 @@ export type {
   StartSubscriptionInput,
   StartSubscriptionResult,
 } from './subscriptions.service.js';
-export { MembershipService, MEMBERSHIP_EVENT, PLAN_INTERVALS } from './membership.service.js';
+export {
+  MembershipService,
+  MEMBERSHIP_EVENT,
+  PLAN_INTERVALS,
+  stripHtmlToExcerpt,
+} from './membership.service.js';
 export type {
   PlanInput,
   MembershipConfigInput,

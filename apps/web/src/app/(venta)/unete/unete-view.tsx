@@ -2,9 +2,11 @@
 
 /**
  * Vista de /unete — réplica del diseño de referencia (checkout 9x):
- * tarjeta de compra con selector de planes (precio tachado, trial), "Qué
- * incluye" con el catálogo real y su precio individual, testimonial opcional
- * y resumen del pedido. El pago ocurre en Stripe Checkout (redirect).
+ * tarjeta de compra sticky con selector de planes (precio tachado, trial),
+ * "Qué incluye" como PARRILLA visual de tarjetas de curso (portada, chip de
+ * precio, duración), banner de ahorro, testimonial opcional y resumen.
+ * El pago ocurre en Stripe Checkout (redirect). Cero datos inventados: todo
+ * sale de la API real del tenant.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -22,6 +24,7 @@ import {
   intervalSuffix,
   nextPaymentDate,
   startMembershipCheckout,
+  type MembershipCourse,
   type MembershipPage,
 } from '@/lib/membership';
 
@@ -138,214 +141,165 @@ export function UneteView() {
     selected?.compareAtCents && selected.compareAtCents > selected.amountCents
       ? selected.compareAtCents - selected.amountCents
       : null;
+  const catalogSavings =
+    page.standaloneTotalCents !== null &&
+    selected &&
+    page.standaloneTotalCents > selected.amountCents
+      ? page.standaloneTotalCents - selected.amountCents
+      : null;
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)]">
-      {/* ── Columna izquierda: tarjeta de compra + qué incluye ── */}
-      <div className="flex flex-col gap-8">
-        {status === 'cancel' && (
-          <div className="rounded-xl border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning-700">
-            Pago cancelado. Puedes retomarlo cuando quieras — tu selección sigue aquí.
-          </div>
-        )}
-
-        <section className="overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">
-          {/* Cabecera oscura tintada al brand con decoración sutil */}
-          <div
-            className="relative px-6 py-10 text-center"
-            style={{
-              background:
-                'linear-gradient(160deg, hsl(var(--brand-h) 45% 14%), hsl(var(--brand-h) 55% 22%))',
-            }}
-          >
-            <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-20">
-              <div className="absolute left-6 top-4 h-10 w-10 rounded-full border border-white/40" />
-              <div className="absolute right-10 top-8 h-8 w-8 rounded-full border border-white/40" />
-              <div className="absolute bottom-4 left-1/4 h-6 w-6 rounded-full border border-white/40" />
-              <div className="absolute bottom-8 right-1/4 h-12 w-12 rounded-full border border-white/40" />
+    <div className="flex flex-col gap-12">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,29rem)_minmax(0,1fr)]">
+        {/* ── Columna izquierda: tarjeta de compra (sticky en desktop) ── */}
+        <div className="flex flex-col gap-4 lg:sticky lg:top-6 lg:self-start">
+          {status === 'cancel' && (
+            <div className="rounded-xl border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning-700">
+              Pago cancelado. Puedes retomarlo cuando quieras — tu selección sigue aquí.
             </div>
-            {tenant?.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={tenant.logoUrl}
-                alt={tenant?.name ?? ''}
-                className="mx-auto mb-4 h-10 w-auto rounded-lg bg-white/90 p-1"
-              />
-            ) : null}
-            <h1 className="relative text-2xl font-bold text-white">{page.headline}</h1>
-          </div>
+          )}
 
-          <div className="flex flex-col gap-5 p-6">
-            {page.subheadline ? (
-              <p className="text-sm text-text-muted">{page.subheadline}</p>
-            ) : null}
+          <section className="overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">
+            {/* Cabecera oscura tintada al brand con decoración sutil */}
+            <div
+              className="relative px-6 py-10 text-center"
+              style={{
+                background:
+                  'linear-gradient(160deg, hsl(var(--brand-h) 45% 14%), hsl(var(--brand-h) 55% 22%))',
+              }}
+            >
+              <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-20">
+                <div className="absolute left-6 top-4 h-10 w-10 rounded-full border border-white/40" />
+                <div className="absolute right-10 top-8 h-8 w-8 rounded-full border border-white/40" />
+                <div className="absolute bottom-4 left-1/4 h-6 w-6 rounded-full border border-white/40" />
+                <div className="absolute bottom-8 right-1/4 h-12 w-12 rounded-full border border-white/40" />
+              </div>
+              {tenant?.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={tenant.logoUrl}
+                  alt={tenant?.name ?? ''}
+                  className="mx-auto mb-4 h-10 w-auto rounded-lg bg-white/90 p-1"
+                />
+              ) : null}
+              <h1 className="relative text-2xl font-bold text-white">{page.headline}</h1>
+            </div>
 
-            {/* Selector de planes */}
-            {page.plans.length === 0 ? (
-              <p className="rounded-xl border border-border bg-surface-2 px-4 py-3 text-sm text-text-muted">
-                Aún no hay planes disponibles.
-              </p>
-            ) : (
-              <div role="radiogroup" aria-label="Planes" className="flex flex-col gap-2">
-                {page.plans.map((plan) => {
-                  const isSelected = plan.id === selectedId;
-                  return (
-                    <button
-                      key={plan.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={isSelected}
-                      onClick={() => setSelectedId(plan.id)}
-                      className={
-                        isSelected
-                          ? 'flex items-center gap-3 rounded-xl border-2 border-brand-500 bg-brand-50 px-4 py-3 text-left'
-                          : 'flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-left hover:border-border-strong'
-                      }
-                    >
-                      <span
-                        aria-hidden="true"
+            <div className="flex flex-col gap-5 p-6">
+              {page.subheadline ? (
+                <p className="text-sm text-text-muted">{page.subheadline}</p>
+              ) : null}
+
+              {/* Selector de planes */}
+              {page.plans.length === 0 ? (
+                <p className="rounded-xl border border-border bg-surface-2 px-4 py-3 text-sm text-text-muted">
+                  Aún no hay planes disponibles.
+                </p>
+              ) : (
+                <div role="radiogroup" aria-label="Planes" className="flex flex-col gap-2">
+                  {page.plans.map((plan) => {
+                    const isSelected = plan.id === selectedId;
+                    return (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        onClick={() => setSelectedId(plan.id)}
                         className={
                           isSelected
-                            ? 'grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-brand-600 bg-brand-600'
-                            : 'h-5 w-5 shrink-0 rounded-full border-2 border-border-strong'
+                            ? 'flex items-center gap-3 rounded-xl border-2 border-brand-500 bg-brand-50 px-4 py-3 text-left transition'
+                            : 'flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-left transition hover:border-border-strong'
                         }
                       >
-                        {isSelected ? <span className="h-2 w-2 rounded-full bg-white" /> : null}
-                      </span>
-                      <span className="flex flex-col">
-                        <span className="text-base">
-                          {plan.compareAtCents && plan.compareAtCents > plan.amountCents ? (
-                            <span className="mr-2 text-sm text-text-subtle line-through">
-                              {formatCents(plan.compareAtCents, plan.currency)}
+                        <span
+                          aria-hidden="true"
+                          className={
+                            isSelected
+                              ? 'grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-brand-600 bg-brand-600'
+                              : 'h-5 w-5 shrink-0 rounded-full border-2 border-border-strong'
+                          }
+                        >
+                          {isSelected ? <span className="h-2 w-2 rounded-full bg-white" /> : null}
+                        </span>
+                        <span className="flex flex-col">
+                          <span className="text-base">
+                            {plan.compareAtCents && plan.compareAtCents > plan.amountCents ? (
+                              <span className="mr-2 text-sm text-text-subtle line-through">
+                                {formatCents(plan.compareAtCents, plan.currency)}
+                              </span>
+                            ) : null}
+                            <strong>{formatCents(plan.amountCents, plan.currency)}</strong>
+                            <span className="ml-1 text-sm text-text-muted">
+                              {intervalSuffix(plan.intervalMonths)}
                             </span>
-                          ) : null}
-                          <strong>{formatCents(plan.amountCents, plan.currency)}</strong>
-                          <span className="ml-1 text-sm text-text-muted">
-                            {intervalSuffix(plan.intervalMonths)}
+                          </span>
+                          <span className="text-xs text-text-muted">
+                            {intervalDescription(plan.intervalMonths)}
+                            {plan.trialDays > 0 ? ` · ${plan.trialDays} días de prueba gratis` : ''}
                           </span>
                         </span>
-                        <span className="text-xs text-text-muted">
-                          {intervalDescription(plan.intervalMonths)}
-                          {plan.trialDays > 0 ? ` · ${plan.trialDays} días de prueba gratis` : ''}
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Total de hoy */}
-            {selected ? (
-              <div className="flex flex-col gap-1 border-t border-border pt-4">
-                <div className="flex items-baseline justify-between">
-                  <span className="font-semibold">Total hoy</span>
-                  <span className="text-lg font-bold">
-                    {trialDays > 0
-                      ? formatCents(0, selected.currency)
-                      : formatCents(selected.amountCents, selected.currency)}
-                  </span>
+                      </button>
+                    );
+                  })}
                 </div>
-                <p className="text-xs text-text-muted">
-                  {trialDays > 0
-                    ? `${trialDays} días de prueba gratis. Primer cargo de ${formatCents(
-                        selected.amountCents,
-                        selected.currency,
-                      )} el ${nextDateLabel(new Date(Date.now() + trialDays * 86_400_000))}.`
-                    : `Impuestos incluidos. Próximo pago: ${nextDate ? nextDateLabel(nextDate) : '—'}.`}
-                </p>
-                <p className="text-xs text-text-subtle">
-                  ¿Tienes un cupón? Podrás aplicarlo en la pantalla de pago.
-                </p>
-              </div>
-            ) : null}
+              )}
 
-            {payError && (
-              <p className="rounded-lg border border-danger-500/40 bg-danger-50 px-3 py-2 text-sm text-danger-700">
-                {payError}
-              </p>
-            )}
-
-            <Button
-              size="lg"
-              className="w-full"
-              disabled={!selected || paying}
-              onClick={() => void checkout()}
-            >
-              <Icon name="lock" className="mr-2 h-4 w-4" />
-              {paying ? 'Abriendo pago seguro…' : 'Continuar al pago seguro'}
-            </Button>
-            <p className="text-center text-xs text-text-subtle">
-              Pago procesado por Stripe · Cancela cuando quieras desde tu cuenta
-            </p>
-          </div>
-        </section>
-
-        {/* ── Qué incluye ── */}
-        {page.courses.length > 0 && (
-          <section className="flex flex-col gap-4">
-            <h2 className="text-lg font-bold">Qué incluye</h2>
-            <ul className="flex flex-col gap-4">
-              {page.courses.map((course) => (
-                <li key={course.id} className="flex items-start gap-3">
-                  {course.thumbnailUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={course.thumbnailUrl}
-                      alt=""
-                      className="h-11 w-11 shrink-0 rounded-xl object-cover"
-                    />
-                  ) : (
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-100 text-brand-700">
-                      <Icon name="play" className="h-5 w-5" />
+              {/* Total de hoy */}
+              {selected ? (
+                <div className="flex flex-col gap-1 border-t border-border pt-4">
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-semibold">Total hoy</span>
+                    <span className="text-lg font-bold">
+                      {trialDays > 0
+                        ? formatCents(0, selected.currency)
+                        : formatCents(selected.amountCents, selected.currency)}
                     </span>
-                  )}
-                  <div className="min-w-0">
-                    <p className="font-semibold">
-                      {course.title}
-                      {course.amountCents !== null ? (
-                        <span className="ml-2 text-sm font-normal text-text-muted">
-                          (por separado: {formatCents(course.amountCents)})
-                        </span>
-                      ) : null}
-                    </p>
-                    {course.description ? (
-                      <p className="line-clamp-2 text-sm text-text-muted">{course.description}</p>
-                    ) : null}
                   </div>
-                </li>
-              ))}
-            </ul>
-            {page.standaloneTotalCents !== null && selected ? (
-              <p className="rounded-xl border border-success/30 bg-success/5 px-4 py-3 text-sm text-success-700">
-                Comprados por separado costarían{' '}
-                <strong>{formatCents(page.standaloneTotalCents)}</strong>. Con la membresía, todo
-                por <strong>{formatCents(selected.amountCents, selected.currency)}</strong>
-                {intervalSuffix(selected.intervalMonths)}.
+                  {savings ? (
+                    <div className="flex items-baseline justify-between text-sm">
+                      <span className="text-text-muted">Ahorro sobre el precio original</span>
+                      <span className="font-semibold text-success-700">
+                        −{formatCents(savings, selected.currency)}
+                      </span>
+                    </div>
+                  ) : null}
+                  <p className="text-xs text-text-muted">
+                    {trialDays > 0
+                      ? `${trialDays} días de prueba gratis. Primer cargo de ${formatCents(
+                          selected.amountCents,
+                          selected.currency,
+                        )} el ${nextDateLabel(new Date(Date.now() + trialDays * 86_400_000))}.`
+                      : `Impuestos incluidos. Próximo pago: ${nextDate ? nextDateLabel(nextDate) : '—'}.`}
+                  </p>
+                  <p className="text-xs text-text-subtle">
+                    ¿Tienes un cupón? Podrás aplicarlo en la pantalla de pago.
+                  </p>
+                </div>
+              ) : null}
+
+              {payError && (
+                <p className="rounded-lg border border-danger-500/40 bg-danger-50 px-3 py-2 text-sm text-danger-700">
+                  {payError}
+                </p>
+              )}
+
+              <Button
+                size="lg"
+                className="w-full"
+                disabled={!selected || paying}
+                onClick={() => void checkout()}
+              >
+                <Icon name="lock" className="mr-2 h-4 w-4" />
+                {paying ? 'Abriendo pago seguro…' : 'Continuar al pago seguro'}
+              </Button>
+              <p className="text-center text-xs text-text-subtle">
+                Pago procesado por Stripe · Cancela cuando quieras desde tu cuenta
               </p>
-            ) : null}
+            </div>
           </section>
-        )}
 
-        {/* ── Testimonial (solo si el admin lo configuró) ── */}
-        {page.testimonial && (
-          <section className="border-t border-border pt-6">
-            <p aria-hidden="true" className="text-4xl leading-none text-text-subtle">
-              &ldquo;
-            </p>
-            <blockquote className="text-sm text-text">{page.testimonial.quote}</blockquote>
-            <p className="mt-3 text-sm font-semibold">{page.testimonial.author}</p>
-            {page.testimonial.role ? (
-              <p className="text-xs text-text-muted">{page.testimonial.role}</p>
-            ) : null}
-          </section>
-        )}
-      </div>
-
-      {/* ── Columna derecha: cuenta + resumen ── */}
-      <div className="flex flex-col gap-6 lg:pl-8">
-        <section className="flex flex-col gap-2">
-          <h2 className="text-lg font-bold">Tu cuenta</h2>
+          {/* Cuenta actual (si hay sesión) */}
           {session ? (
             <div className="flex items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-100 font-semibold text-brand-700">
@@ -357,73 +311,139 @@ export function UneteView() {
                 ) : null}
                 <p className="truncate text-sm text-text-muted">{session.user.email}</p>
               </div>
+              <span className="text-xs text-text-subtle">Comprarás con esta cuenta</span>
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-surface px-4 py-3">
-              <p className="text-sm text-text-muted">
-                Introducirás tu email en el pago y crearemos tu cuenta automáticamente.
-              </p>
+              <p className="text-sm text-text-muted">Tu cuenta se crea automáticamente al pagar.</p>
               <Link href="/signin" className="text-sm font-semibold text-brand-700 hover:underline">
                 ¿Ya tienes cuenta? Inicia sesión
               </Link>
             </div>
           )}
-        </section>
+        </div>
 
-        {selected ? (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-lg font-bold">Resumen</h2>
-            <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
-              <div className="flex items-baseline justify-between text-sm">
-                <span className="text-text-muted">
-                  {intervalDescription(selected.intervalMonths)}
-                </span>
-                <span className="font-semibold">
-                  {formatCents(selected.amountCents, selected.currency)}
-                  {intervalSuffix(selected.intervalMonths)}
+        {/* ── Columna derecha: qué incluye (parrilla visual) ── */}
+        <div className="flex flex-col gap-5">
+          {page.courses.length > 0 && (
+            <>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-xl font-bold">Qué incluye</h2>
+                <span className="text-sm text-text-muted">
+                  {page.courses.length} cursos · acceso completo
                 </span>
               </div>
-              {savings ? (
-                <div className="flex items-baseline justify-between text-sm">
-                  <span className="text-text-muted">Ahorro sobre el precio original</span>
-                  <span className="font-semibold text-success-700">
-                    −{formatCents(savings, selected.currency)}
-                  </span>
-                </div>
-              ) : null}
-              {trialDays > 0 ? (
-                <div className="flex items-baseline justify-between text-sm">
-                  <span className="text-text-muted">Prueba gratis</span>
-                  <span className="font-semibold">{trialDays} días</span>
-                </div>
-              ) : null}
-              <div className="flex items-baseline justify-between border-t border-border pt-3">
-                <span className="font-semibold">Total hoy</span>
-                <span className="text-lg font-bold">
-                  {trialDays > 0
-                    ? formatCents(0, selected.currency)
-                    : formatCents(selected.amountCents, selected.currency)}
-                </span>
-              </div>
-              <ul className="flex flex-col gap-1.5 border-t border-border pt-3 text-xs text-text-muted">
-                <li className="flex items-center gap-2">
-                  <Icon name="check" className="h-3.5 w-3.5 text-success-600" />
-                  Acceso inmediato a todo el contenido
-                </li>
-                <li className="flex items-center gap-2">
-                  <Icon name="check" className="h-3.5 w-3.5 text-success-600" />
-                  Cancela cuando quieras, sin permanencia
-                </li>
-                <li className="flex items-center gap-2">
-                  <Icon name="lock" className="h-3.5 w-3.5 text-text-subtle" />
-                  Pago cifrado y procesado por Stripe
-                </li>
+
+              <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {page.courses.map((course) => (
+                  <CourseCard key={course.id} course={course} />
+                ))}
               </ul>
-            </div>
-          </section>
-        ) : null}
+
+              {page.standaloneTotalCents !== null && selected ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-success/30 bg-success/5 px-5 py-4">
+                  <div>
+                    <p className="text-sm text-text-muted">Comprados por separado</p>
+                    <p className="text-lg font-bold text-text-subtle line-through">
+                      {formatCents(page.standaloneTotalCents)}
+                    </p>
+                  </div>
+                  <Icon name="arrow-right" className="h-5 w-5 text-success-600" />
+                  <div>
+                    <p className="text-sm text-text-muted">Con la membresía</p>
+                    <p className="text-lg font-bold text-success-700">
+                      {formatCents(selected.amountCents, selected.currency)}
+                      {intervalSuffix(selected.intervalMonths)}
+                    </p>
+                  </div>
+                  {catalogSavings ? (
+                    <span className="rounded-full bg-success-100 px-3 py-1 text-sm font-semibold text-success-700">
+                      Ahorras {formatCents(catalogSavings)}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </>
+          )}
+
+          {/* Testimonial (solo si el admin lo configuró) */}
+          {page.testimonial && (
+            <figure className="rounded-2xl border border-border bg-surface p-6">
+              <p aria-hidden="true" className="text-4xl leading-none text-brand-300">
+                &ldquo;
+              </p>
+              <blockquote className="text-[0.9375rem] leading-relaxed text-text">
+                {page.testimonial.quote}
+              </blockquote>
+              <figcaption className="mt-4">
+                <p className="text-sm font-semibold">{page.testimonial.author}</p>
+                {page.testimonial.role ? (
+                  <p className="text-xs text-text-muted">{page.testimonial.role}</p>
+                ) : null}
+              </figcaption>
+            </figure>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Tarjeta visual de curso: portada 16:9 (con zoom sutil al hover), chip de
+ * precio individual sobre la imagen, título y extracto (el API ya sirve texto
+ * plano), y pie con duración + "Incluido".
+ */
+function CourseCard({ course }: { course: MembershipCourse }) {
+  return (
+    <li className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
+      <div className="relative aspect-video w-full overflow-hidden bg-brand-100">
+        {course.thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={course.thumbnailUrl}
+            alt=""
+            loading="lazy"
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div
+            className="grid h-full w-full place-items-center"
+            style={{
+              background:
+                'linear-gradient(150deg, hsl(var(--brand-h) 60% 30%), hsl(var(--brand-h) 50% 18%))',
+            }}
+          >
+            <Icon name="play" className="h-9 w-9 text-white/80" />
+          </div>
+        )}
+        {course.amountCents !== null ? (
+          <span className="absolute right-2 top-2 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-text shadow-sm">
+            {formatCents(course.amountCents)}
+          </span>
+        ) : null}
+      </div>
+      <div className="flex flex-1 flex-col gap-1.5 p-4">
+        <h3 className="line-clamp-2 font-semibold leading-snug">{course.title}</h3>
+        {course.description ? (
+          <p className="line-clamp-2 text-sm text-text-muted">{course.description}</p>
+        ) : null}
+        <div className="mt-auto flex items-center justify-between pt-2 text-xs text-text-muted">
+          {course.estimatedMinutes ? (
+            <span className="flex items-center gap-1">
+              <Icon name="clock" className="h-3.5 w-3.5" />
+              {durationLabel(course.estimatedMinutes)}
+            </span>
+          ) : (
+            <span />
+          )}
+          <span className="flex items-center gap-1 font-semibold text-success-700">
+            <Icon name="check" className="h-3.5 w-3.5" />
+            Incluido
+          </span>
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -455,4 +475,12 @@ function ReturnCard({
 
 function nextDateLabel(d: Date): string {
   return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+/** 150 → "2 h 30 min"; 45 → "45 min". */
+function durationLabel(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} min`;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
