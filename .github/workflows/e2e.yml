@@ -46,6 +46,9 @@ jobs:
       # bootea. En CI usamos un valor determinístico — no es secreto real.
       TENANT_SETTINGS_ENC_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
       NODE_ENV: production
+      # El registro público está cerrado por defecto (ver auth.service). Los
+      # specs E2E lo usan para fabricar usuarios de prueba → se reabre solo aquí.
+      AUTH_SIGNUP_ENABLED: 'true'
       PORT: 4000
       WEB_PORT: 3000
       API_INTERNAL_URL: http://localhost:4000

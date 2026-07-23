@@ -1,37 +1,12 @@
-import Link from 'next/link';
-import { SignUpForm } from './signup-form';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { redirect } from 'next/navigation';
 
-export const metadata = {
-  title: 'Crear cuenta',
-};
-
+/**
+ * El registro público está CERRADO: todas las altas entran por inscripción
+ * (Telegram/manual), por la API de inscripción (n8n/Woo) o por invitación de
+ * admin. La ruta se mantiene solo para que los enlaces antiguos a /signup no
+ * den 404: redirigen al login. El endpoint del API está igualmente cerrado
+ * (AUTH_SIGNUP_ENABLED, apagado por defecto).
+ */
 export default function SignUpPage() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-2xl">Únete a tu organización</CardTitle>
-        <CardDescription>
-          Si tienes un código de invitación, complétalo en el campo de la organización. Si no, pide
-          ayuda al admin de tu equipo.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <SignUpForm />
-      </CardContent>
-      <CardFooter className="text-sm text-text-muted">
-        <span>¿Ya tienes cuenta?</span>
-        <Link href="/signin" className="ml-2 font-semibold text-brand-700 hover:underline">
-          Inicia sesión
-        </Link>
-      </CardFooter>
-    </Card>
-  );
+  redirect('/signin');
 }

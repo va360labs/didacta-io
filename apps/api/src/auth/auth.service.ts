@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { ClientContext } from './client-context';
@@ -22,6 +27,21 @@ export class AmbiguousTenantError extends UnauthorizedException {
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
 const NO_CLIENT_CONTEXT: ClientContext = { ip: null, userAgent: null };
+
+/** Rol por defecto de un alta por signup (mismo que inscripción de miembros). */
+const DEFAULT_SIGNUP_ROLE = 'alumno';
+
+/**
+ * El registro público está CERRADO por defecto: todas las altas reales entran
+ * por inscripción (Telegram/manual), por la API de inscripción (n8n/Woo) o por
+ * la invitación de admin — y todas asignan rol. El signup abierto creaba
+ * usuarios ACTIVE sin rol (JWT roles:[] → 403 en storage y compañía).
+ * `AUTH_SIGNUP_ENABLED=true` lo reabre en stacks de dev/E2E que lo usan para
+ * fabricar usuarios de prueba.
+ */
+function isSignupEnabled(): boolean {
+  return process.env['AUTH_SIGNUP_ENABLED'] === 'true';
+}
 
 /**
  * Aviso opcional emitido al cliente cuando la política MFA tenant-wide está
@@ -82,6 +102,11 @@ export class AuthService {
     ctx: ClientContext = NO_CLIENT_CONTEXT,
     resolvedTenantId?: string,
   ): Promise<AuthResult> {
+    if (!isSignupEnabled()) {
+      throw new ForbiddenException(
+        'El registro público está deshabilitado. Pide acceso a tu organización.',
+      );
+    }
     const tenant = await this.resolveTenantForRequest({
       explicitSlug: dto.tenantSlug,
       resolvedTenantId,
@@ -101,21 +126,33 @@ export class AuthService {
     }
 
     const passwordHash = await this.passwords.hash(dto.password);
-    const user = await this.prisma.user.create({
-      data: {
-        tenantId: tenant.id,
-        email: dto.email,
-        name: dto.name ?? null,
-        passwordHash,
-        status: 'ACTIVE',
-      },
-      include: {
-        roles: { include: { role: true } },
-        tenant: true,
-      },
+    // Rol por defecto en el alta: sin él, el usuario quedaba ACTIVE con JWT
+    // roles:[] y 403 en todo lo que exige rol (causa raíz del bug de usuarios
+    // sin rol). Mismo rol y mismo patrón que la inscripción de miembros.
+    const defaultRole = await this.prisma.role.findUnique({
+      where: { name: DEFAULT_SIGNUP_ROLE },
+    });
+    const user = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          tenantId: tenant.id,
+          email: dto.email,
+          name: dto.name ?? null,
+          passwordHash,
+          status: 'ACTIVE',
+        },
+        include: {
+          roles: { include: { role: true } },
+          tenant: true,
+        },
+      });
+      if (defaultRole) {
+        await tx.userRole.create({ data: { userId: created.id, roleId: defaultRole.id } });
+      }
+      return created;
     });
 
-    const roles = user.roles.map((r: { role: { name: string } }) => r.role.name);
+    const roles = defaultRole ? [defaultRole.name] : [];
     const mfaRequired = this.shouldRequireMfa(roles, user.mfaEnabled);
 
     // En signup el usuario se acaba de crear sin MFA. Si la política
