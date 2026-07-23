@@ -86,6 +86,9 @@ interface CourseRow {
   description: string | null;
   thumbnailUrl: string | null;
   estimatedMinutes: number | null;
+  category: string | null;
+  createdById: string | null;
+  modules: Array<{ title: string }>;
   status: string;
   publishedAt: Date | null;
   deletedAt: Date | null;
@@ -201,6 +204,17 @@ class MockPrisma {
   modCoursesCourse = {
     findMany: async (args: { where: Record<string, unknown> }) =>
       this.courses.filter((c) => matches(c as never, args.where)),
+  };
+
+  users: Array<{ id: string; tenantId: string; name: string | null; status: string }> = [];
+
+  user = {
+    count: async (args: { where: Record<string, unknown> }) =>
+      this.users.filter((u) => matches(u as never, args.where)).length,
+    findMany: async (args: { where: { tenantId: string; id: { in: string[] } } }) =>
+      this.users.filter(
+        (u) => u.tenantId === args.where.tenantId && args.where.id.in.includes(u.id),
+      ),
   };
 }
 
@@ -369,6 +383,9 @@ describe('MembershipService · página pública', () => {
         description: 'desc',
         thumbnailUrl: null,
         estimatedMinutes: 120,
+        category: 'IA',
+        createdById: 'prof_1',
+        modules: [{ title: 'Módulo 1' }, { title: 'Módulo 2' }],
         status: 'PUBLISHED',
         publishedAt: new Date(),
         deletedAt: null,
@@ -380,6 +397,9 @@ describe('MembershipService · página pública', () => {
         description: null,
         thumbnailUrl: null,
         estimatedMinutes: null,
+        category: null,
+        createdById: null,
+        modules: [],
         status: 'DRAFT',
         publishedAt: null,
         deletedAt: null,
@@ -390,11 +410,19 @@ describe('MembershipService · página pública', () => {
         title: 'Curso n8n',
         description: null,
         thumbnailUrl: null,
-        estimatedMinutes: null,
+        estimatedMinutes: 60,
+        category: 'Automatización',
+        createdById: null,
+        modules: [{ title: 'Intro' }],
         status: 'PUBLISHED',
         publishedAt: new Date(),
         deletedAt: null,
       },
+    ];
+    ctx.prisma.users = [
+      { id: 'prof_1', tenantId: TENANT, name: 'Profe Real', status: 'ACTIVE' },
+      { id: 'al_1', tenantId: TENANT, name: 'Alumno Uno', status: 'ACTIVE' },
+      { id: 'al_2', tenantId: TENANT, name: 'Alumno Dos', status: 'PENDING' },
     ];
   });
 
@@ -416,6 +444,26 @@ describe('MembershipService · página pública', () => {
     expect(page.courses.map((c) => c.id).sort()).toEqual(['c1', 'c3']);
     expect(page.courses.find((c) => c.id === 'c1')?.amountCents).toBe(19_900);
     expect(page.standaloneTotalCents).toBe(29_800);
+  });
+
+  it('expone categoría, módulos y profesor REALES de cada curso', async () => {
+    await ctx.service.updateConfig(TENANT, { active: true });
+    const page = await ctx.service.getPublicPage(TENANT);
+    const c1 = page.courses.find((c) => c.id === 'c1')!;
+    expect(c1.category).toBe('IA');
+    expect(c1.moduleCount).toBe(2);
+    expect(c1.moduleTitles).toEqual(['Módulo 1', 'Módulo 2']);
+    expect(c1.teacherName).toBe('Profe Real');
+    const c3 = page.courses.find((c) => c.id === 'c3')!;
+    expect(c3.teacherName).toBeNull();
+  });
+
+  it('los tiles usan datos reales: alumnos ACTIVE y suma de minutos del catálogo', async () => {
+    await ctx.service.updateConfig(TENANT, { active: true });
+    const page = await ctx.service.getPublicPage(TENANT);
+    // prof_1 + al_1 son ACTIVE; al_2 es PENDING y no cuenta.
+    expect(page.stats.activeMembers).toBe(2);
+    expect(page.stats.totalMinutes).toBe(180);
   });
 
   it('testimonial solo si hay cita Y autor (prohibido inventar personas)', async () => {

@@ -39,7 +39,18 @@ export interface MembershipCourse {
   description: string | null;
   thumbnailUrl: string | null;
   estimatedMinutes: number | null;
+  /** Categoría/tema del curso (chips de filtrado), o null. */
+  category: string | null;
+  moduleCount: number;
+  moduleTitles: string[];
+  teacherName: string | null;
   amountCents: number | null;
+}
+
+/** Tiles con datos REALES del tenant (nada inventado). */
+export interface MembershipStats {
+  activeMembers: number;
+  totalMinutes: number;
 }
 
 export interface MembershipPage {
@@ -48,6 +59,7 @@ export interface MembershipPage {
   plans: MembershipPlan[];
   courses: MembershipCourse[];
   standaloneTotalCents: number | null;
+  stats: MembershipStats;
   testimonial: { quote: string; author: string; role: string | null } | null;
 }
 

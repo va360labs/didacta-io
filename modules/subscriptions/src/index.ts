@@ -33,6 +33,7 @@ export type {
   MembershipConfigInput,
   MembershipCourseView,
   MembershipPublicPage,
+  MembershipPublicStats,
   UserProvisioner,
 } from './membership.service.js';
 export { SubscriptionsStripeSdkAdapter } from './stripe-subscriptions.client.js';

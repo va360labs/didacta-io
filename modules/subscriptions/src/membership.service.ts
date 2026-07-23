@@ -78,8 +78,24 @@ export interface MembershipCourseView {
   description: string | null;
   thumbnailUrl: string | null;
   estimatedMinutes: number | null;
+  /** Categoría/tema del curso (para los chips de filtrado), o null. */
+  category: string | null;
+  /** Nº de módulos (secciones) del curso. */
+  moduleCount: number;
+  /** Títulos de los primeros módulos (chips del detalle expandible). */
+  moduleTitles: string[];
+  /** Nombre del creador del curso ("Impartido por"), o null. */
+  teacherName: string | null;
   /** Precio individual de referencia (céntimos) configurado por el admin, o null. */
   amountCents: number | null;
+}
+
+/** Datos agregados REALES del tenant para los tiles de la página de venta. */
+export interface MembershipPublicStats {
+  /** Usuarios ACTIVE del tenant (alumnos con acceso). */
+  activeMembers: number;
+  /** Suma de estimatedMinutes de los cursos publicados (0 si ninguno lo define). */
+  totalMinutes: number;
 }
 
 export interface MembershipPublicPage {
@@ -98,6 +114,7 @@ export interface MembershipPublicPage {
   courses: MembershipCourseView[];
   /** Suma de los precios individuales configurados (céntimos), o null si no hay. */
   standaloneTotalCents: number | null;
+  stats: MembershipPublicStats;
   testimonial: { quote: string; author: string; role: string | null } | null;
 }
 
@@ -245,8 +262,27 @@ export class MembershipService {
           description: true,
           thumbnailUrl: true,
           estimatedMinutes: true,
+          category: true,
+          createdById: true,
+          modules: {
+            where: { deletedAt: null },
+            orderBy: { position: 'asc' },
+            select: { title: true },
+          },
         },
       });
+      // "Impartido por": nombre real del creador del curso (lectura del core
+      // `user` filtrada por tenant; null si no se puede resolver).
+      const creatorIds = [
+        ...new Set(rows.map((c) => c.createdById).filter((x): x is string => !!x)),
+      ];
+      const creators = creatorIds.length
+        ? await this.prisma.user.findMany({
+            where: { tenantId, id: { in: creatorIds } },
+            select: { id: true, name: true },
+          })
+        : [];
+      const nameById = new Map(creators.map((u) => [u.id, u.name]));
       courses = rows.map((c) => ({
         id: c.id,
         title: c.title,
@@ -255,9 +291,24 @@ export class MembershipService {
         description: stripHtmlToExcerpt(c.description),
         thumbnailUrl: c.thumbnailUrl,
         estimatedMinutes: c.estimatedMinutes,
+        category: c.category,
+        moduleCount: c.modules.length,
+        moduleTitles: c.modules.slice(0, 4).map((m) => m.title),
+        teacherName: (c.createdById ? nameById.get(c.createdById) : null) ?? null,
         amountCents: priceByCourse.get(c.id) ?? null,
       }));
     }
+
+    // Tiles con datos REALES (nada inventado): alumnos con acceso y horas del
+    // catálogo. Si un dato no existe (p.ej. sin estimatedMinutes), la UI no
+    // pinta ese tile.
+    const activeMembers = await this.prisma.user.count({
+      where: { tenantId, status: 'ACTIVE', deletedAt: null },
+    });
+    const stats: MembershipPublicStats = {
+      activeMembers,
+      totalMinutes: courses.reduce((sum, c) => sum + (c.estimatedMinutes ?? 0), 0),
+    };
 
     const priced = courses.filter((c) => c.amountCents !== null);
     const standaloneTotalCents = priced.length
@@ -288,6 +339,7 @@ export class MembershipService {
       })),
       courses,
       standaloneTotalCents,
+      stats,
       testimonial,
     };
   }

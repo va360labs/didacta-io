@@ -24,7 +24,9 @@ export default function VentaLayout({ children }: { children: ReactNode }) {
           style={{ backgroundColor: 'hsl(174 70% 80%)' }}
         />
       </div>
-      <div className="relative z-10 mx-auto w-full max-w-6xl px-4 py-8 md:py-12">{children}</div>
+      <div className="relative z-10 mx-auto w-full max-w-[1340px] px-4 py-8 md:py-12">
+        {children}
+      </div>
     </main>
   );
 }
