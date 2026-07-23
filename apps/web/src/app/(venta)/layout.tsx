@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
  */
 export default function VentaLayout({ children }: { children: ReactNode }) {
   return (
-    <main className="relative min-h-dvh overflow-hidden bg-bg">
+    <main className="relative min-h-dvh overflow-x-clip bg-bg">
       {/* Decoración de fondo tintada al brand, como el resto de públicas. */}
       <div
         aria-hidden="true"
