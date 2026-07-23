@@ -76,3 +76,27 @@ export class StripeApiError extends SubscriptionsError {
     this.name = 'StripeApiError';
   }
 }
+
+export class MembershipPlanNotFoundError extends SubscriptionsError {
+  constructor(planId: string) {
+    super(`Plan de membresía no encontrado o inactivo: ${planId}`, 'MEMBERSHIP_PLAN_NOT_FOUND');
+    this.name = 'MembershipPlanNotFoundError';
+  }
+}
+
+export class MembershipPageInactiveError extends SubscriptionsError {
+  constructor() {
+    super(
+      'La página de membresía no está activada. El admin puede activarla en Administración → Membresía.',
+      'MEMBERSHIP_PAGE_INACTIVE',
+    );
+    this.name = 'MembershipPageInactiveError';
+  }
+}
+
+export class MembershipConfigIncompleteError extends SubscriptionsError {
+  constructor(detail: string) {
+    super(`Membresía mal configurada: ${detail}`, 'MEMBERSHIP_CONFIG_INCOMPLETE');
+    this.name = 'MembershipConfigIncompleteError';
+  }
+}

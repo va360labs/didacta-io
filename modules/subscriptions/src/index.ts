@@ -22,10 +22,19 @@ export type {
   StartSubscriptionInput,
   StartSubscriptionResult,
 } from './subscriptions.service.js';
+export { MembershipService, MEMBERSHIP_EVENT, PLAN_INTERVALS } from './membership.service.js';
+export type {
+  PlanInput,
+  MembershipConfigInput,
+  MembershipCourseView,
+  MembershipPublicPage,
+  UserProvisioner,
+} from './membership.service.js';
 export { SubscriptionsStripeSdkAdapter } from './stripe-subscriptions.client.js';
 export type {
   SubscriptionsStripeAdapter,
   CreateSubscriptionCheckoutParams,
+  CreateRecurringPriceParams,
   StripeSubscriptionCheckoutResult,
   StripePriceResult,
   StripeSubscriptionView,
@@ -39,6 +48,9 @@ export {
   WebhookSignatureInvalidError,
   StripeConfigMissingError,
   StripeApiError,
+  MembershipPlanNotFoundError,
+  MembershipPageInactiveError,
+  MembershipConfigIncompleteError,
 } from './errors.js';
 
 export function buildSubscriptionsModule(_service: SubscriptionsService): DidactaModule {
