@@ -7,6 +7,10 @@ import { SubscriptionsWebhookController } from './subscriptions-webhook.controll
 import { SubscriptionsErrorFilter } from './subscriptions-error.filter';
 import { SubscriptionsLearningBridge } from './subscriptions-learning.bridge';
 import { SubscriptionsGraceExpirationWorker } from './subscriptions-grace-expiration.worker';
+import { MembershipPublicController } from './membership-public.controller';
+import { MembershipAdminController } from './membership-admin.controller';
+import { MembershipProvisioningService } from './membership-provisioning.service';
+import { MembershipAccessGroupsBridge } from './membership-access-groups.bridge';
 
 /// Backend del módulo `mod.subscriptions`. Encapsula los controllers
 /// alumno + webhook idempotente, el filter, el bridge cross-module hacia
@@ -19,10 +23,19 @@ import { SubscriptionsGraceExpirationWorker } from './subscriptions-grace-expira
 /// Convención sub-módulo (ADR-011): forwardRef recíproco con ModulesModule.
 @Module({
   imports: [AuthModule, forwardRef(() => ModulesModule)],
-  controllers: [SubscriptionsController, SubscriptionsWebhookController],
+  controllers: [
+    SubscriptionsController,
+    SubscriptionsWebhookController,
+    // Membresía (página pública /unete): venta de "acceso a todo" por
+    // suscripción con planes parametrizables.
+    MembershipPublicController,
+    MembershipAdminController,
+  ],
   providers: [
     SubscriptionsLearningBridge,
     SubscriptionsGraceExpirationWorker,
+    MembershipProvisioningService,
+    MembershipAccessGroupsBridge,
     { provide: APP_FILTER, useClass: SubscriptionsErrorFilter },
   ],
 })

@@ -222,6 +222,7 @@ export class SubscriptionsService {
       await this.publisher.publish(tenantId, userId, EVENT.CANCELED, {
         subscriptionId: sub.id,
         courseId: sub.courseId,
+        planId: sub.planId,
         userId: sub.userId,
         immediate: true,
       });
@@ -252,6 +253,7 @@ export class SubscriptionsService {
       await this.publisher.publish(tenantId, userId, EVENT.CANCELED, {
         subscriptionId: sub.id,
         courseId: sub.courseId,
+        planId: sub.planId,
         userId: sub.userId,
         immediate: true,
       });
@@ -365,6 +367,7 @@ export class SubscriptionsService {
       await this.publisher.publish(sub.tenantId, null, EVENT.UNPAID, {
         subscriptionId: sub.id,
         courseId: sub.courseId,
+        planId: sub.planId,
         userId: sub.userId,
       });
     }
@@ -407,6 +410,7 @@ export class SubscriptionsService {
       await this.publisher.publish(sub.tenantId, sub.userId, EVENT.ACTIVATED, {
         subscriptionId: sub.id,
         courseId: sub.courseId,
+        planId: sub.planId,
         userId: sub.userId,
         currentPeriodEnd: updated.currentPeriodEnd,
       });
@@ -440,6 +444,7 @@ export class SubscriptionsService {
       await this.publisher.publish(sub.tenantId, sub.userId, EVENT.ACTIVATED, {
         subscriptionId: sub.id,
         courseId: sub.courseId,
+        planId: sub.planId,
         userId: sub.userId,
         currentPeriodEnd: data['currentPeriodEnd'],
         recovery: true,
@@ -465,6 +470,7 @@ export class SubscriptionsService {
     await this.publisher.publish(sub.tenantId, sub.userId, EVENT.CANCELED, {
       subscriptionId: sub.id,
       courseId: sub.courseId,
+      planId: sub.planId,
       userId: sub.userId,
       immediate: true,
     });
@@ -490,6 +496,7 @@ export class SubscriptionsService {
       await this.publisher.publish(sub.tenantId, sub.userId, EVENT.ACTIVATED, {
         subscriptionId: sub.id,
         courseId: sub.courseId,
+        planId: sub.planId,
         userId: sub.userId,
         recovery: true,
       });
@@ -529,6 +536,7 @@ export class SubscriptionsService {
     await this.publisher.publish(sub.tenantId, sub.userId, EVENT.PAST_DUE, {
       subscriptionId: sub.id,
       courseId: sub.courseId,
+      planId: sub.planId,
       userId: sub.userId,
       gracePeriodEndsAt: graceEnd,
     });

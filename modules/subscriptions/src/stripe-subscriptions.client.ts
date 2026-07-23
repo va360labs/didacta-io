@@ -25,6 +25,22 @@ export interface SubscriptionsStripeAdapter {
   retrievePrice(priceId: string): Promise<StripePriceResult>;
   cancelSubscription(subscriptionId: string, atPeriodEnd: boolean): Promise<StripeSubscriptionView>;
   constructWebhookEvent(rawBody: string | Buffer, signatureHeader: string): Stripe.Event;
+  /** Crea un Product de Stripe (membresía). Devuelve su id (prod_...). */
+  createProduct(name: string, metadata: Record<string, string>): Promise<string>;
+  /**
+   * Crea un Price recurring para un product. `intervalMonths` 1|3|12 se mapea
+   * a interval month/year + interval_count. Los prices de Stripe son
+   * inmutables: para cambiar el importe se crea uno nuevo.
+   */
+  createRecurringPrice(params: CreateRecurringPriceParams): Promise<string>;
+}
+
+export interface CreateRecurringPriceParams {
+  productId: string;
+  amountCents: number;
+  currency: string;
+  intervalMonths: number;
+  metadata: Record<string, string>;
 }
 
 export interface CreateSubscriptionCheckoutParams {
@@ -32,12 +48,13 @@ export interface CreateSubscriptionCheckoutParams {
   successUrl: string;
   cancelUrl: string;
   customerEmail?: string;
-  metadata: {
-    tenantId: string;
-    userId: string;
-    courseId: string;
-    subscriptionLocalId: string;
-  };
+  /** Días de prueba gratis (subscription_data.trial_period_days). 0/undefined = sin trial. */
+  trialDays?: number;
+  /** Permite introducir códigos promocionales de Stripe en el checkout. */
+  allowPromotionCodes?: boolean;
+  /** client_reference_id de la session (id local si existe). */
+  clientReferenceId?: string;
+  metadata: Record<string, string>;
 }
 
 export interface StripeSubscriptionCheckoutResult {
@@ -89,6 +106,7 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
     p: CreateSubscriptionCheckoutParams,
   ): Promise<StripeSubscriptionCheckoutResult> {
     try {
+      const trialDays = p.trialDays && p.trialDays > 0 ? p.trialDays : undefined;
       const session = await this.client.checkout.sessions.create({
         mode: 'subscription',
         payment_method_types: ['card'],
@@ -96,9 +114,13 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
         success_url: p.successUrl,
         cancel_url: p.cancelUrl,
         customer_email: p.customerEmail,
-        client_reference_id: p.metadata.subscriptionLocalId,
+        client_reference_id: p.clientReferenceId ?? p.metadata['subscriptionLocalId'],
+        ...(p.allowPromotionCodes ? { allow_promotion_codes: true } : {}),
         metadata: { ...p.metadata },
-        subscription_data: { metadata: { ...p.metadata } },
+        subscription_data: {
+          metadata: { ...p.metadata },
+          ...(trialDays ? { trial_period_days: trialDays } : {}),
+        },
       });
       if (!session.url) {
         throw new StripeApiError('Stripe devolvió session sin URL hosted');
@@ -106,6 +128,34 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
       return { id: session.id, url: session.url };
     } catch (err) {
       if (err instanceof StripeApiError) throw err;
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async createProduct(name: string, metadata: Record<string, string>): Promise<string> {
+    try {
+      const product = await this.client.products.create({ name, metadata });
+      return product.id;
+    } catch (err) {
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async createRecurringPrice(p: CreateRecurringPriceParams): Promise<string> {
+    try {
+      // Stripe no tiene interval 'quarter': trimestral = month × 3. Anual usa
+      // year × 1 (más legible en el dashboard que month × 12).
+      const interval = p.intervalMonths === 12 ? 'year' : 'month';
+      const intervalCount = p.intervalMonths === 12 ? 1 : p.intervalMonths;
+      const price = await this.client.prices.create({
+        product: p.productId,
+        unit_amount: p.amountCents,
+        currency: p.currency,
+        recurring: { interval, interval_count: intervalCount },
+        metadata: p.metadata,
+      });
+      return price.id;
+    } catch (err) {
       throw new StripeApiError((err as Error).message);
     }
   }

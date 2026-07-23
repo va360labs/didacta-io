@@ -2367,8 +2367,12 @@ model ModSubscriptionsSubscription {
   id                   String             @id @default(uuid()) @db.Uuid
   tenantId             String             @map("tenant_id") @db.Uuid
   userId               String             @map("user_id") @db.Uuid
-  /// ID lógico del curso. Sin FK cross-module.
-  courseId             String             @map("course_id") @db.Uuid
+  /// ID lógico del curso. Sin FK cross-module. NULL en suscripciones de
+  /// MEMBRESÍA (acceso a todo vía grupo), que llevan `planId` en su lugar.
+  courseId             String?            @map("course_id") @db.Uuid
+  /// Plan de membresía (ModSubscriptionsPlan) si la sub es de membresía.
+  /// FK conceptual dentro del mismo módulo (sin FK real, patrón courseId).
+  planId               String?            @map("plan_id") @db.Uuid
   /// Stripe Subscription ID (sub_...). Único globalmente — vacío durante el
   /// breve hueco entre creación local en PENDING y respuesta de Stripe.
   stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
@@ -2408,8 +2412,77 @@ model ModSubscriptionsSubscription {
   @@index([tenantId, userId])
   @@index([tenantId, status])
   @@index([tenantId, courseId])
+  @@index([tenantId, planId])
   @@index([gracePeriodEndsAt])
   @@map("mod_subscriptions_subscription")
+}
+
+/// Plan de MEMBRESÍA vendible en la página pública de compra (/unete).
+///
+/// El admin lo parametriza (precio, periodicidad, trial, precio tachado) sin
+/// tocar Stripe: el Product/Price de Stripe se crea PEREZOSAMENTE en el primer
+/// checkout y se rota cuando cambia el precio (los prices de Stripe son
+/// inmutables → `stripePriceId` se limpia al editar importe/periodicidad).
+model ModSubscriptionsPlan {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  /// Nombre visible: "Mensual", "Anual"…
+  name            String
+  /// Periodicidad en meses: 1 (mensual) | 3 (trimestral) | 12 (anual).
+  intervalMonths  Int      @map("interval_months")
+  /// Precio del periodo en céntimos.
+  amountCents     Int      @map("amount_cents")
+  currency        String   @default("eur")
+  /// Precio "antes" tachado en céntimos (marketing). NULL = sin tachado.
+  compareAtCents  Int?     @map("compare_at_cents")
+  /// Días de prueba gratis del checkout (0 = sin trial).
+  trialDays       Int      @default(0) @map("trial_days")
+  active          Boolean  @default(true)
+  /// Preseleccionado en la página pública (máx. 1 con isFeatured por tenant
+  /// a nivel de app; sin constraint DB).
+  isFeatured      Boolean  @default(false) @map("is_featured")
+  sortOrder       Int      @default(0) @map("sort_order")
+  /// Stripe Product compartido por los planes del tenant (se crea una vez).
+  stripeProductId String?  @map("stripe_product_id")
+  /// Stripe Price recurring vigente para este plan. NULL = pendiente de sync.
+  stripePriceId   String?  @map("stripe_price_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, name])
+  @@index([tenantId, active, sortOrder])
+  @@map("mod_subscriptions_plan")
+}
+
+/// Configuración (1 fila por tenant) de la página pública de membresía.
+///
+/// Todo lo que se pinta en /unete sale de aquí + de los planes + del catálogo
+/// real de cursos. El testimonial es opcional y el bloque NO se muestra si
+/// está vacío (prohibido inventar personas — regla del proyecto).
+model ModSubscriptionsMembershipConfig {
+  tenantId          String   @id @map("tenant_id") @db.Uuid
+  /// Página pública activa. En false, /unete devuelve "no disponible".
+  active            Boolean  @default(false)
+  /// Título grande de la tarjeta ("Hazte miembro Pro").
+  headline          String   @default("Hazte miembro")
+  /// Subtítulo bajo el título (qué desbloquea la membresía).
+  subheadline       String?
+  /// Grupo de acceso (mod.access-groups) que se concede al activarse la
+  /// membresía. ID lógico sin FK cross-module.
+  accessGroupId     String?  @map("access_group_id") @db.Uuid
+  /// Mostrar el catálogo de cursos publicados en "Qué incluye".
+  showCourses       Boolean  @default(true) @map("show_courses")
+  /// Precios individuales de referencia por curso (lo que costarían por
+  /// separado, p.ej. en va360.academy): [{ courseId, amountCents }].
+  coursePrices      Json     @default("[]") @map("course_prices")
+  /// Testimonial opcional (los 3 campos o nada).
+  testimonialQuote  String?  @map("testimonial_quote")
+  testimonialAuthor String?  @map("testimonial_author")
+  testimonialRole   String?  @map("testimonial_role")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("mod_subscriptions_membership_config")
 }
 
 /// Una factura emitida por Stripe asociada a una suscripción.

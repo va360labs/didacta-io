@@ -17,6 +17,7 @@ import {
   type StripeAdapter,
 } from '@didacta/mod-billing';
 import {
+  MembershipService,
   SubscriptionsService,
   SubscriptionsStripeSdkAdapter,
   buildSubscriptionsModule,
@@ -97,6 +98,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private billing?: BillingService;
   private stripeAdapter?: StripeAdapter;
   private subscriptions?: SubscriptionsService;
+  private membership?: MembershipService;
   private subscriptionsStripeAdapter?: SubscriptionsStripeAdapter;
   private paymentConnections?: PaymentConnectionsService;
   private paymentTiers?: PaymentTiersService;
@@ -310,6 +312,27 @@ export class ModuleRegistryService implements OnModuleInit {
     // permite múltiples endpoints firmados con secrets distintos.
     const subscriptionsWebhookSecret =
       process.env['SUBSCRIPTIONS_WEBHOOK_SECRET'] ?? stripeWebhookSecret;
+    // Publisher compartido por SubscriptionsService y MembershipService.
+    // Se construye SIEMPRE (no depende de Stripe): la membresía necesita
+    // publicar aunque el checkout esté deshabilitado por falta de key.
+    const subsEventBus = this.factory.getEventBus();
+    const subsPublisher: SubscriptionsEventPublisher = {
+      publish: async (tenantId, actorId, name, payload) => {
+        const subId = (payload as { subscriptionId?: string }).subscriptionId;
+        await subsEventBus.publish({
+          name,
+          version: 1,
+          data: payload as never,
+          metadata: {
+            tenantId,
+            userId: actorId ?? undefined,
+            timestamp: new Date().toISOString(),
+            traceId: cryptoRandom(),
+            idempotencyKey: subId ? `${name}:${subId}` : `${name}:${cryptoRandom()}`,
+          },
+        });
+      },
+    };
     if (stripeKey && subscriptionsWebhookSecret) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const StripeCtor = require('stripe').default ?? require('stripe');
@@ -330,25 +353,6 @@ export class ModuleRegistryService implements OnModuleInit {
         cancelUrl: (courseId) => `${subsCancelBase}?course=${courseId}&status=cancel`,
       };
 
-      const eventBus = this.factory.getEventBus();
-      const subsPublisher: SubscriptionsEventPublisher = {
-        publish: async (tenantId, actorId, name, payload) => {
-          const subId = (payload as { subscriptionId?: string }).subscriptionId;
-          await eventBus.publish({
-            name,
-            version: 1,
-            data: payload as never,
-            metadata: {
-              tenantId,
-              userId: actorId ?? undefined,
-              timestamp: new Date().toISOString(),
-              traceId: cryptoRandom(),
-              idempotencyKey: subId ? `${name}:${subId}` : `${name}:${cryptoRandom()}`,
-            },
-          });
-        },
-      };
-
       const gracePeriodDays = Number(
         process.env['SUBSCRIPTIONS_GRACE_PERIOD_DAYS'] ?? DEFAULT_GRACE_PERIOD_DAYS,
       );
@@ -367,6 +371,15 @@ export class ModuleRegistryService implements OnModuleInit {
         'STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET ausentes — mod.subscriptions sin service. Endpoints /modules/subscriptions devolverán 503.',
       );
     }
+
+    // Membresía (página pública /unete): config y planes funcionan SIN Stripe
+    // (el admin puede dejarlo todo listo antes de configurar la key); el
+    // checkout lanza StripeConfigMissingError → 503 si falta el adapter.
+    this.membership = new MembershipService(
+      prisma,
+      this.subscriptionsStripeAdapter ?? null,
+      subsPublisher,
+    );
 
     const subscriptionsModuleOrNull = this.subscriptions
       ? buildSubscriptionsModule(this.subscriptions)
@@ -668,6 +681,17 @@ export class ModuleRegistryService implements OnModuleInit {
    */
   getSubscriptionsServiceOrNull(): SubscriptionsService | null {
     return this.subscriptions ?? null;
+  }
+
+  /**
+   * Membresía (página pública /unete). SIEMPRE inicializado tras el boot:
+   * config y planes no requieren Stripe; el checkout falla con 503 si falta.
+   */
+  getMembershipService(): MembershipService {
+    if (!this.membership) {
+      throw new Error('MembershipService no está inicializado (boot incompleto).');
+    }
+    return this.membership;
   }
 
   getSubscriptionsStripeAdapter(): SubscriptionsStripeAdapter {

@@ -27,7 +27,9 @@ import { ModuleRegistryService } from '../module-registry.service';
 
 interface SubscriptionEventPayload {
   subscriptionId: string;
-  courseId: string;
+  /** NULL en suscripciones de MEMBRESÍA (las gestiona MembershipAccessGroupsBridge). */
+  courseId: string | null;
+  planId?: string | null;
   userId: string;
   recovery?: boolean;
   immediate?: boolean;
@@ -71,6 +73,9 @@ export class SubscriptionsLearningBridge implements OnModuleInit {
   async onActivated(event: DomainEvent<SubscriptionEventPayload>): Promise<void> {
     const { courseId, userId, subscriptionId } = event.data;
     const tenantId = event.metadata.tenantId;
+    // Suscripción de MEMBRESÍA (sin curso): el entitlement es un grupo de
+    // acceso y lo gestiona MembershipAccessGroupsBridge. Nada que enrolar aquí.
+    if (!courseId) return;
     try {
       await this.registry.getLearningService().enrollFromSubscription(tenantId, userId, courseId);
       this.logger.log(
@@ -104,6 +109,7 @@ export class SubscriptionsLearningBridge implements OnModuleInit {
   async onUnpaid(event: DomainEvent<SubscriptionEventPayload>): Promise<void> {
     const { courseId, userId, subscriptionId } = event.data;
     const tenantId = event.metadata.tenantId;
+    if (!courseId) return; // membresía → MembershipAccessGroupsBridge
     try {
       await this.registry.getLearningService().pauseEnrollment(tenantId, userId, courseId);
       this.logger.log(
@@ -122,6 +128,7 @@ export class SubscriptionsLearningBridge implements OnModuleInit {
   async onCanceled(event: DomainEvent<SubscriptionEventPayload>): Promise<void> {
     const { courseId, userId, subscriptionId, immediate } = event.data;
     const tenantId = event.metadata.tenantId;
+    if (!courseId) return; // membresía → MembershipAccessGroupsBridge
     if (!immediate) {
       // Cancelación at-period-end: no tocamos enrollment todavía. Stripe nos
       // mandará subscription.deleted al cierre del periodo y entonces sí.

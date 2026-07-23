@@ -9,8 +9,12 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { WebhookSignatureInvalidError } from '@didacta/mod-subscriptions';
+import type Stripe from 'stripe';
 import type { FastifyRequest } from 'fastify';
+import { extractClientContext } from '../../auth/client-context';
+import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
 import { ModuleRegistryService } from '../module-registry.service';
+import { MembershipProvisioningService } from './membership-provisioning.service';
 
 /**
  * Endpoint público de webhooks de Stripe específico de mod.subscriptions.
@@ -23,7 +27,10 @@ import { ModuleRegistryService } from '../module-registry.service';
 @ApiTags('Webhooks · Subscriptions')
 @Controller('modules/subscriptions')
 export class SubscriptionsWebhookController {
-  constructor(private readonly registry: ModuleRegistryService) {}
+  constructor(
+    private readonly registry: ModuleRegistryService,
+    private readonly provisioning: MembershipProvisioningService,
+  ) {}
 
   @Post('webhook')
   @HttpCode(200)
@@ -56,6 +63,23 @@ export class SubscriptionsWebhookController {
     }
 
     await subs.handleWebhookEvent(event, parsedBody);
+
+    // Fulfillment de MEMBRESÍA: el checkout completado materializa al
+    // comprador (find-or-create user + bienvenida con enlace mágico) y crea la
+    // suscripción local. Idempotente por stripeSubscriptionId — un retry de
+    // Stripe no duplica user ni sub. Va DESPUÉS de handleWebhookEvent (que
+    // persiste el evento para auditoría) y es independiente de su dedupe.
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const ctx = extractClientContext(req);
+      const webBaseUrl = resolveWebBaseUrl(req);
+      await this.registry
+        .getMembershipService()
+        .fulfillMembershipCheckout(session, ({ tenantId, email, name }) =>
+          this.provisioning.provision({ tenantId, email, name, webBaseUrl, ctx }),
+        );
+    }
+
     return { received: true, type: event.type, id: event.id };
   }
 }
