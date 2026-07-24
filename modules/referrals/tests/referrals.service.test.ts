@@ -232,7 +232,13 @@ class MockPrisma {
         if (idIn && !idIn.includes(c['id'] as string)) return false;
         if (!idIn && w['id'] && c['id'] !== w['id']) return false;
         if (w['tenantId'] && c['tenantId'] !== w['tenantId']) return false;
-        if (w['status'] && c['status'] !== w['status']) return false;
+        const status = w['status'];
+        if (status) {
+          const statusIn =
+            typeof status === 'object' ? ((status as Row)['in'] as string[]) : undefined;
+          if (statusIn ? !statusIn.includes(c['status'] as string) : c['status'] !== status)
+            return false;
+        }
         return true;
       });
       for (const t of targets) Object.assign(t, data as Row);
@@ -778,6 +784,74 @@ describe('recordPayout', () => {
         createdByUserId: 'admin-1',
       }),
     ).rejects.toBeInstanceOf(ReferralsPayoutValidationError);
+  });
+});
+
+describe('revokeCommissionByInvoice (reembolso)', () => {
+  async function seedPending(prisma: MockPrisma, service: ReferralsService) {
+    await seedAttribution(prisma, service);
+    const r = await service.accrueCommission({
+      tenantId: TENANT,
+      subscriptionId: 'sub-local-1',
+      stripeInvoiceId: 'in_refund',
+      amountCents: 990,
+      currency: 'eur',
+    });
+    return (r as { commissionId: string }).commissionId;
+  }
+
+  it('revoca una PENDING por reembolso y emite el evento', async () => {
+    const { prisma, service, events } = build();
+    const commissionId = await seedPending(prisma, service);
+    const result = await service.revokeCommissionByInvoice(
+      TENANT,
+      'in_refund',
+      'Reembolso del cobro en Stripe',
+    );
+    expect(result).toMatchObject({ revoked: true, commissionId });
+    expect(prisma.commissions[0]!['status']).toBe('REVOKED');
+    expect(prisma.commissions[0]!['revokeReason']).toBe('Reembolso del cobro en Stripe');
+    expect(events.some((e) => e.name === 'referrals.commission.revoked')).toBe(true);
+  });
+
+  it('revoca también una APPROVED, pero nunca una PAID (clawback manual)', async () => {
+    const { prisma, service } = build();
+    const commissionId = await seedPending(prisma, service);
+    await service.approveCommissionNow(TENANT, commissionId);
+    const approved = await service.revokeCommissionByInvoice(TENANT, 'in_refund', 'refund');
+    expect(approved).toMatchObject({ revoked: true });
+
+    // Reconstruimos con una comisión PAID: el reembolso no la toca.
+    const paid = build();
+    const paidId = await seedPending(paid.prisma, paid.service);
+    await paid.service.approveCommissionNow(TENANT, paidId);
+    await paid.service.recordPayout(TENANT, {
+      referrerUserId: 'referrer-1',
+      commissionIds: [paidId],
+      externalReference: 'transf',
+      createdByUserId: 'admin-1',
+    });
+    const blocked = await paid.service.revokeCommissionByInvoice(TENANT, 'in_refund', 'refund');
+    expect(blocked).toMatchObject({ revoked: false, reason: 'already_paid' });
+    expect(paid.prisma.commissions[0]!['status']).toBe('PAID');
+  });
+
+  it('invoice desconocida o de otro tenant → not_found; doble reembolso → already_revoked', async () => {
+    const { prisma, service } = build();
+    await seedPending(prisma, service);
+    expect(await service.revokeCommissionByInvoice(TENANT, 'in_nope', 'r')).toMatchObject({
+      revoked: false,
+      reason: 'not_found',
+    });
+    expect(await service.revokeCommissionByInvoice('otro-tenant', 'in_refund', 'r')).toMatchObject({
+      revoked: false,
+      reason: 'not_found',
+    });
+    await service.revokeCommissionByInvoice(TENANT, 'in_refund', 'r');
+    expect(await service.revokeCommissionByInvoice(TENANT, 'in_refund', 'r')).toMatchObject({
+      revoked: false,
+      reason: 'already_revoked',
+    });
   });
 });
 

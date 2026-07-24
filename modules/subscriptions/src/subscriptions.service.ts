@@ -87,6 +87,7 @@ const EVENT = {
   CANCELED: 'subscriptions.subscription.canceled',
   INVOICE_PAID: 'subscriptions.invoice.paid',
   INVOICE_FAILED: 'subscriptions.invoice.payment_failed',
+  INVOICE_REFUNDED: 'subscriptions.invoice.refunded',
 } as const;
 
 /**
@@ -322,6 +323,9 @@ export class SubscriptionsService {
           break;
         case 'invoice.payment_failed':
           await this.onInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+          break;
+        case 'charge.refunded':
+          await this.onChargeRefunded(event.data.object as Stripe.Charge);
           break;
         default:
           // Otros eventos (invoice.created, etc.) los persistimos para audit
@@ -585,6 +589,30 @@ export class SubscriptionsService {
       stripeInvoiceId: invoice.id,
       amount: invoice.amount_paid,
       currency: invoice.currency,
+    });
+  }
+
+  /**
+   * Reembolso (total o parcial) de un cargo. Publicamos el evento de dominio
+   * para que los consumidores reaccionen (p.ej. mod.referrals revoca la
+   * comisión devengada por esa invoice). NO tocamos el estado de la sub ni de
+   * la invoice local: el ciclo de vida de la suscripción lo gobiernan los
+   * eventos de subscription/invoice de Stripe, no el refund.
+   */
+  private async onChargeRefunded(charge: Stripe.Charge): Promise<void> {
+    const stripeInvoiceId =
+      typeof charge.invoice === 'string' ? charge.invoice : (charge.invoice?.id ?? null);
+    if (!stripeInvoiceId) return;
+    const invoice = await this.prisma.modSubscriptionsInvoice.findUnique({
+      where: { stripeInvoiceId },
+    });
+    if (!invoice) return;
+
+    await this.publisher.publish(invoice.tenantId, null, EVENT.INVOICE_REFUNDED, {
+      subscriptionId: invoice.subscriptionId,
+      stripeInvoiceId,
+      amountRefunded: charge.amount_refunded,
+      currency: charge.currency,
     });
   }
 

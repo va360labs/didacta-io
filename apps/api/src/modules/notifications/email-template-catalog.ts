@@ -142,6 +142,15 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
     subject: 'Ya está disponible: {{lessonTitle}}',
     body: 'La clase "{{lessonTitle}}" del curso "{{courseTitle}}" ya está disponible.',
   },
+  // Programa de referidos (mod.referrals): comisión devengada y liquidación.
+  'referrals.commission.earned': {
+    subject: '¡Has ganado una comisión de {{amount}}!',
+    body: 'Tu recomendación ha dado fruto: has ganado {{amount}} por el pago de {{baseAmount}} de una persona que entró con tu enlace.\n\nLa comisión queda pendiente durante el periodo de garantía; puedes seguirla en tu área de Referidos.',
+  },
+  'referrals.payout.recorded': {
+    subject: 'Te hemos liquidado {{amount}}',
+    body: 'Hemos registrado el pago de tus comisiones aprobadas: {{amount}}.\n\nReferencia del pago: {{reference}}. Tienes el detalle en tu área de Referidos.',
+  },
 };
 
 /** Metadatos de los templates del hub para la UI (nombre humano, trigger, vars). */
@@ -293,6 +302,28 @@ const HUB_TEMPLATE_META: Record<
     variables: [
       { name: 'lessonTitle', description: 'Título de la clase' },
       { name: 'courseTitle', description: 'Título del curso' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'referrals.commission.earned': {
+    name: 'Comisión de referido ganada',
+    description: 'Cuando un pago de un referido genera una comisión para el miembro.',
+    category: 'billing',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'amount', description: 'Importe de la comisión (ej. «2,97 €»)' },
+      { name: 'baseAmount', description: 'Importe del cobro que la originó' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'referrals.payout.recorded': {
+    name: 'Liquidación de referidos pagada',
+    description: 'Cuando el admin registra la liquidación de comisiones aprobadas.',
+    category: 'billing',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'amount', description: 'Total liquidado (ej. «45,00 €»)' },
+      { name: 'reference', description: 'Referencia externa del pago' },
       { name: 'tenantName', description: 'Nombre de la plataforma' },
     ],
   },

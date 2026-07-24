@@ -33,6 +33,13 @@ interface InvoicePaidPayload {
   currency: string;
 }
 
+interface InvoiceRefundedPayload {
+  subscriptionId: string;
+  stripeInvoiceId: string;
+  amountRefunded: number;
+  currency: string;
+}
+
 @Injectable()
 export class ReferralsSubscriptionsBridge implements OnModuleInit {
   constructor(
@@ -54,6 +61,12 @@ export class ReferralsSubscriptionsBridge implements OnModuleInit {
       'subscriptions.invoice.paid',
       async (event: DomainEvent<InvoicePaidPayload>) => {
         await this.onInvoicePaid(event);
+      },
+    );
+    eventBus.subscribe<InvoiceRefundedPayload>(
+      'subscriptions.invoice.refunded',
+      async (event: DomainEvent<InvoiceRefundedPayload>) => {
+        await this.onInvoiceRefunded(event);
       },
     );
 
@@ -98,6 +111,40 @@ export class ReferralsSubscriptionsBridge implements OnModuleInit {
       this.logger.error(
         { tenantId, err: err instanceof Error ? err.message : String(err) },
         'referrals: fallo al atribuir (la membresía NO se ve afectada)',
+      );
+    }
+  }
+
+  private async onInvoiceRefunded(event: DomainEvent<InvoiceRefundedPayload>): Promise<void> {
+    const tenantId = event.metadata.tenantId;
+    try {
+      const result = await this.registry
+        .getReferralsService()
+        .revokeCommissionByInvoice(
+          tenantId,
+          event.data.stripeInvoiceId,
+          'Reembolso del cobro en Stripe',
+        );
+      if (result.revoked) {
+        this.logger.log(
+          {
+            tenantId,
+            commissionId: result.commissionId,
+            stripeInvoiceId: event.data.stripeInvoiceId,
+          },
+          'referrals: comisión revocada por reembolso',
+        );
+      } else if (result.reason === 'already_paid') {
+        // Clawback de una comisión ya liquidada = decisión manual del operador.
+        this.logger.warn(
+          { tenantId, stripeInvoiceId: event.data.stripeInvoiceId },
+          'referrals: reembolso de una invoice cuya comisión ya está PAGADA — revisar clawback manual',
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        { tenantId, err: err instanceof Error ? err.message : String(err) },
+        'referrals: fallo al revocar por reembolso',
       );
     }
   }

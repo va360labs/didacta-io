@@ -25,6 +25,10 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'referrals.commission.revoked',
     'referrals.payout.recorded',
   ],
-  eventsConsumed: ['subscriptions.membership.activated', 'subscriptions.invoice.paid'],
+  eventsConsumed: [
+    'subscriptions.membership.activated',
+    'subscriptions.invoice.paid',
+    'subscriptions.invoice.refunded',
+  ],
   apiNamespace: '/modules/referrals',
 });

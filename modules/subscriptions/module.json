@@ -18,7 +18,8 @@
     { "name": "subscriptions.subscription.unpaid" },
     { "name": "subscriptions.subscription.canceled" },
     { "name": "subscriptions.invoice.paid" },
-    { "name": "subscriptions.invoice.payment_failed" }
+    { "name": "subscriptions.invoice.payment_failed" },
+    { "name": "subscriptions.invoice.refunded" }
   ],
   "hooks": [],
   "apiNamespace": "/modules/subscriptions",

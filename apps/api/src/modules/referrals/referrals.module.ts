@@ -5,6 +5,7 @@ import { ModulesModule } from '../modules.module';
 import { ReferralsController } from './referrals.controller';
 import { ReferralsErrorFilter } from './referrals-error.filter';
 import { ReferralsSubscriptionsBridge } from './referrals-subscriptions.bridge';
+import { ReferralsNotificationsBridge } from './referrals-notifications.bridge';
 import { ReferralsApprovalWorker } from './referrals-approval.worker';
 
 /// Backend del módulo `mod.referrals`. Encapsula el controller (miembro +
@@ -18,6 +19,7 @@ import { ReferralsApprovalWorker } from './referrals-approval.worker';
   controllers: [ReferralsController],
   providers: [
     ReferralsSubscriptionsBridge,
+    ReferralsNotificationsBridge,
     ReferralsApprovalWorker,
     { provide: APP_FILTER, useClass: ReferralsErrorFilter },
   ],

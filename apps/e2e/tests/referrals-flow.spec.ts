@@ -328,4 +328,105 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
       page.getByTestId('referrals-referrers-card').getByText(code, { exact: true }),
     ).toBeVisible();
   });
+
+  test('un reembolso (charge.refunded) revoca la comisión pendiente', async () => {
+    test.setTimeout(120_000);
+    const stamp = Date.now();
+    const adminToken = await adminTokenForBootstrap(TENANT_SLUG);
+
+    // Reusa la config del programa y el plan del test anterior no — plan propio
+    // para no depender del orden más allá de la config global del tenant.
+    const plan = await api<{ id: string }>('/membership/admin/plans', {
+      method: 'POST',
+      bearer: adminToken,
+      body: { name: `Plan Refund E2E ${stamp}`, intervalMonths: 1, amountCents: 990, trialDays: 0 },
+    });
+    expect(plan.status, 'crear plan').toBe(201);
+
+    const referrer = await signup({
+      tenantSlug: TENANT_SLUG,
+      email: `e2e-refunder-${stamp}@example.test`,
+      password: 'E2eTestPassword123!',
+      name: 'Referidor Refund E2E',
+    });
+    const referrerToken = referrer.tokens.accessToken;
+    const tenantId = referrer.user.tenantId;
+    const me = await api<{ code: string }>('/modules/referrals/me', { bearer: referrerToken });
+    expect(me.status).toBe(200);
+    const code = me.body.code;
+
+    const stats = async (): Promise<MemberStats> =>
+      (await api<MemberStats>('/modules/referrals/me/stats', { bearer: referrerToken })).body;
+
+    // Alta atribuida + cobro → comisión PENDING de 297.
+    const stripeSubId = `sub_e2e_refund_${stamp}`;
+    await sendStripeWebhook({
+      id: `evt_e2e_refund_${stamp}_checkout`,
+      object: 'event',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: `cs_e2e_refund_${stamp}`,
+          object: 'checkout.session',
+          metadata: { membership: '1', tenantId, planId: plan.body.id, referralCode: code },
+          subscription: stripeSubId,
+          customer: `cus_e2e_refund_${stamp}`,
+          customer_email: null,
+          customer_details: { email: `e2e-refund-buyer-${stamp}@example.test`, name: 'Buyer' },
+        },
+      },
+    });
+    await expect.poll(async () => (await stats()).referrals, { timeout: 20_000 }).toBe(1);
+    const invoiceId = `in_e2e_refund_${stamp}`;
+    await sendStripeWebhook({
+      id: `evt_e2e_refund_${stamp}_paid`,
+      object: 'event',
+      type: 'invoice.paid',
+      data: {
+        object: {
+          id: invoiceId,
+          object: 'invoice',
+          subscription: stripeSubId,
+          amount_paid: 990,
+          amount_due: 990,
+          currency: 'eur',
+          billing_reason: 'subscription_cycle',
+          period_start: Math.floor(Date.now() / 1000),
+          period_end: Math.floor(Date.now() / 1000) + 86400 * 30,
+          hosted_invoice_url: null,
+          attempt_count: 1,
+          next_payment_attempt: null,
+        },
+      },
+    });
+    await expect
+      .poll(async () => (await stats()).totals.pendingCents, { timeout: 20_000 })
+      .toBe(297);
+
+    // Reembolso del cargo → la comisión PENDING queda revocada automáticamente.
+    const whRefund = await sendStripeWebhook({
+      id: `evt_e2e_refund_${stamp}_refunded`,
+      object: 'event',
+      type: 'charge.refunded',
+      data: {
+        object: {
+          id: `ch_e2e_refund_${stamp}`,
+          object: 'charge',
+          invoice: invoiceId,
+          amount_refunded: 990,
+          currency: 'eur',
+          refunded: true,
+        },
+      },
+    });
+    expect(whRefund.status, 'webhook charge.refunded').toBe(200);
+    await expect.poll(async () => (await stats()).totals.pendingCents, { timeout: 20_000 }).toBe(0);
+    const commissions = await api<{
+      commissions: Array<{ status: string; revokeReason?: string }>;
+    }>('/modules/referrals/admin/commissions?status=REVOKED', { bearer: adminToken });
+    expect(
+      commissions.body.commissions.some((c) => c.revokeReason === 'Reembolso del cobro en Stripe'),
+      'comisión revocada con motivo de reembolso',
+    ).toBe(true);
+  });
 });

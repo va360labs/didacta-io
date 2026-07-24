@@ -54,8 +54,15 @@ Emitidos (declarados en manifest): `referrals.referral.attributed`,
 `referrals.commission.revoked`, `referrals.payout.recorded`.
 
 Consumidos (vía bridge del host): `subscriptions.membership.activated`
-(atribución, con `attribution.referralCode` en el payload) y
-`subscriptions.invoice.paid` (devengo).
+(atribución, con `attribution.referralCode` en el payload),
+`subscriptions.invoice.paid` (devengo) y `subscriptions.invoice.refunded`
+(revocación automática de la comisión PENDING/APPROVED; una PAID no se toca
+— clawback manual del operador, queda señalado en logs).
+
+Además, `referrals.commission.created` y `referrals.payout.recorded` disparan
+notificaciones in-app + email al referidor vía NotificationHub (plantillas
+`referrals.commission.earned` / `referrals.payout.recorded`, personalizables
+en /admin/emails).
 
 ## Configuración
 

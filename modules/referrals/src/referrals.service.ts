@@ -472,6 +472,7 @@ export class ReferralsService {
           referralId: referral.id,
           referrerUserId: referral.referrerUserId,
           amountCents,
+          baseAmountCents: input.amountCents,
           currency: input.currency,
           sourceInvoiceId: input.stripeInvoiceId,
         },
@@ -580,6 +581,44 @@ export class ReferralsService {
     });
   }
 
+  /**
+   * Revocación AUTOMÁTICA por reembolso del cobro origen (evento
+   * `subscriptions.invoice.refunded`). No lanza: el bridge loguea el
+   * resultado. Una comisión ya PAGADA no se toca (clawback = decisión
+   * manual del operador); el caso queda señalado para revisión.
+   */
+  async revokeCommissionByInvoice(
+    tenantId: string,
+    stripeInvoiceId: string,
+    reason: string,
+  ): Promise<
+    | { revoked: true; commissionId: string }
+    | { revoked: false; reason: 'not_found' | 'already_revoked' | 'already_paid' }
+  > {
+    const commission = await this.prisma.modReferralsCommission.findUnique({
+      where: { stripeInvoiceId },
+    });
+    if (!commission || commission.tenantId !== tenantId) {
+      return { revoked: false, reason: 'not_found' };
+    }
+    if (commission.status === 'REVOKED') return { revoked: false, reason: 'already_revoked' };
+    if (commission.status === 'PAID') return { revoked: false, reason: 'already_paid' };
+
+    // Optimista: solo revoca si sigue PENDING/APPROVED (carrera con payout).
+    const updated = await this.prisma.modReferralsCommission.updateMany({
+      where: { id: commission.id, status: { in: ['PENDING', 'APPROVED'] } },
+      data: { status: 'REVOKED', revokedAt: new Date(), revokeReason: reason },
+    });
+    if (updated.count === 0) return { revoked: false, reason: 'already_paid' };
+
+    await this.publisher.publish(tenantId, null, REFERRALS_EVENT.COMMISSION_REVOKED, {
+      commissionId: commission.id,
+      referrerUserId: commission.referrerUserId,
+      reason,
+    });
+    return { revoked: true, commissionId: commission.id };
+  }
+
   // ---------------- Liquidación ----------------
 
   /**
@@ -668,6 +707,7 @@ export class ReferralsService {
       totalCents,
       currency,
       commissionCount: input.commissionIds.length,
+      externalReference: input.externalReference.trim(),
     });
     return { payoutId, totalCents, currency, count: input.commissionIds.length };
   }
