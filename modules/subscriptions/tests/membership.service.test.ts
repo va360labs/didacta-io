@@ -573,8 +573,12 @@ describe('MembershipService · checkout', () => {
     });
     expect(first.url).toContain('price_1');
     expect(ctx.stripe.createProduct).toHaveBeenCalledTimes(1);
+    // El product es único por tenant y compartido entre planes: su nombre NO
+    // debe referenciar un plan concreto (si no, el checkout de "Anual" mostraría
+    // el nombre del primer plan que lo creó). El plan va en el nickname del price.
+    expect(ctx.stripe.createProduct).toHaveBeenCalledWith('Membresía', expect.any(Object));
     expect(ctx.stripe.createRecurringPrice).toHaveBeenCalledWith(
-      expect.objectContaining({ amountCents: 99_900, intervalMonths: 12 }),
+      expect.objectContaining({ amountCents: 99_900, intervalMonths: 12, nickname: 'Anual' }),
     );
     const checkoutArgs = ctx.stripe.createCheckoutSession.mock.calls[0]![0];
     expect(checkoutArgs).toMatchObject({

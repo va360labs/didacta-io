@@ -405,7 +405,12 @@ export class MembershipService {
       });
       productId =
         sibling?.stripeProductId ??
-        (await this.stripe.createProduct(`Membresía — ${plan.name}`, {
+        // Nombre GENÉRICO: el product es único por tenant y lo comparten TODOS
+        // los planes (Mensual/Trimestral/Anual), así que NO puede referenciar un
+        // plan concreto o el checkout mostraría el nombre del primer plan que lo
+        // creó. La periodicidad ya la muestra el price ("399 €/año"); el plan
+        // concreto va en el `nickname` del price (visible solo en el dashboard).
+        (await this.stripe.createProduct('Membresía', {
           tenantId: plan.tenantId,
           didacta: 'membership',
         }));
@@ -416,6 +421,7 @@ export class MembershipService {
       amountCents: plan.amountCents,
       currency: plan.currency,
       intervalMonths: plan.intervalMonths,
+      nickname: plan.name,
       metadata: { tenantId: plan.tenantId, planId: plan.id },
     });
 

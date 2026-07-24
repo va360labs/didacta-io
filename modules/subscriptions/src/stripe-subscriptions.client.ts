@@ -40,6 +40,8 @@ export interface CreateRecurringPriceParams {
   amountCents: number;
   currency: string;
   intervalMonths: number;
+  /** Etiqueta interna del price (nombre del plan). Solo visible en el dashboard. */
+  nickname?: string;
   metadata: Record<string, string>;
 }
 
@@ -152,6 +154,7 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
         unit_amount: p.amountCents,
         currency: p.currency,
         recurring: { interval, interval_count: intervalCount },
+        ...(p.nickname ? { nickname: p.nickname } : {}),
         metadata: p.metadata,
       });
       return price.id;
