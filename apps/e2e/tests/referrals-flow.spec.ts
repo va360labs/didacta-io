@@ -295,6 +295,10 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
     // El importe pagado (2,97 €) aparece en el tile "Pagado hasta hoy", en la
     // comisión y en la liquidación — basta con que sea visible.
     await expect(page.getByText('2,97').first()).toBeVisible();
+    // Botón promo dorado de la cabecera: solo con el programa activo y con
+    // el % REAL de la config (30% en este spec).
+    await expect(page.getByTestId('referrals-promo-button')).toBeVisible();
+    await expect(page.getByTestId('referrals-promo-button')).toHaveText('Plan de Referidos 30%');
 
     // ── 8. UI del admin: /admin/referidos con config y ranking ──
     const adminSession = await (async () => {

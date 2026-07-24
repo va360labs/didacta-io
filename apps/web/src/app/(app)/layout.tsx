@@ -7,6 +7,7 @@ import { CommandPalette } from '@/components/command-palette';
 import { Icon } from '@/components/icon';
 import { LicenseProvider } from '@/components/license-provider';
 import { NotificationsBell } from '@/components/notifications-bell';
+import { ReferralsPromoButton } from '@/components/referrals-promo-button';
 import { NotificationsProvider } from '@/components/notifications-provider';
 import { NotificationsToaster } from '@/components/notifications-toaster';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
@@ -307,6 +308,9 @@ function Shell({
 
             {/* Empuja las acciones a la derecha (equivale al justify-end de escritorio). */}
             <div className="hidden flex-1 lg:block" />
+
+            {/* Promo del programa de referidos — solo si está activo (el % es real). */}
+            <ReferralsPromoButton />
 
             <a
               href="/mensajes"
