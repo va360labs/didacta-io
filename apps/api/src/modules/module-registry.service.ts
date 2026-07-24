@@ -328,7 +328,15 @@ export class ModuleRegistryService implements OnModuleInit {
             userId: actorId ?? undefined,
             timestamp: new Date().toISOString(),
             traceId: cryptoRandom(),
-            idempotencyKey: subId ? `${name}:${subId}` : `${name}:${cryptoRandom()}`,
+            // Clave ÚNICA POR OCURRENCIA (no `${name}:${subId}` a secas): el
+            // outbox dedupea PARA SIEMPRE por (tenantId, idempotencyKey), y una
+            // sub transiciona el mismo estado varias veces en su vida (activated
+            // tras payNow y MESES después tras un recovery; unpaid en dos
+            // impagos distintos). Con la clave estable, la 2ª ocurrencia se
+            // tragaba y el bridge no re-concedía/re-revocaba el acceso. El
+            // dedupe real de reintentos de Stripe ya ocurre ANTES, en
+            // handleWebhookEvent (PK stripe_event_id).
+            idempotencyKey: `${name}:${subId ?? 'x'}:${cryptoRandom()}`,
           },
         });
       },

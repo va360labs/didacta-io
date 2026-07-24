@@ -95,7 +95,47 @@ export class SubscriptionsController {
     const svc = this.registry.getSubscriptionsServiceOrNull();
     if (!svc) return { subscriptions: [] };
     const subs = await svc.listMine(user.tenantId, user.sub);
-    return { subscriptions: subs };
+
+    // Las filas de MEMBRESÍA (courseId null + planId) se enriquecen con el
+    // nombre real del plan para que /cuenta muestre "VA360.pro Anual" y no un
+    // UUID. Las de curso se enriquecen con el título del curso.
+    const planIds = [...new Set(subs.map((s) => s.planId).filter((x): x is string => !!x))];
+    const courseIds = [...new Set(subs.map((s) => s.courseId).filter((x): x is string => !!x))];
+    const [plans, courses] = await Promise.all([
+      planIds.length
+        ? this.prisma.modSubscriptionsPlan.findMany({
+            where: { tenantId: user.tenantId, id: { in: planIds } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([]),
+      courseIds.length
+        ? this.prisma.modCoursesCourse.findMany({
+            where: { tenantId: user.tenantId, id: { in: courseIds } },
+            select: { id: true, title: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    const planName = new Map(plans.map((p) => [p.id, p.name]));
+    const courseTitle = new Map(courses.map((c) => [c.id, c.title]));
+    return {
+      subscriptions: subs.map((s) => ({
+        ...s,
+        planName: s.planId ? (planName.get(s.planId) ?? null) : null,
+        courseTitle: s.courseId ? (courseTitle.get(s.courseId) ?? null) : null,
+      })),
+    };
+  }
+
+  @Post('me/membership/pay-now')
+  @ApiOperation({
+    summary:
+      'Termina el periodo de prueba de la membresía AHORA: Stripe cobra el primer periodo ' +
+      'inmediatamente y, si el cargo entra, la sub pasa a ACTIVE y se desbloquea todo el contenido.',
+  })
+  async membershipPayNow(@CurrentUser() user: SessionClaims | undefined): Promise<object> {
+    if (!user) throw new UnauthorizedException();
+    const updated = await this.registry.getMembershipService().payNow(user.tenantId, user.sub);
+    return { subscription: updated };
   }
 
   @Get('me/:id/invoices')

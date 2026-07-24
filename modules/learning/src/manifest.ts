@@ -23,9 +23,12 @@ export const manifest: ModuleManifest = parseModuleManifest({
     // (mod.payment-connections) y de la membresía de grupos (mod.access-groups)
     // para resolver a qué alumno aplica un calendario de drip. Solo lectura,
     // filtrada por tenant_id. Si el módulo no está activo, no hay drip de ese tipo.
+    // mod.subscriptions: lectura del estado TRIALING de la membresía + su
+    // trialLessonLimit para el gate de contenido del periodo de prueba.
     optionalModules: [
       { name: 'mod.payment-connections', version: '^1.0.0' },
       { name: 'mod.access-groups', version: '^1.0.0' },
+      { name: 'mod.subscriptions', version: '^1.0.0' },
     ],
   },
   eventsEmitted: [

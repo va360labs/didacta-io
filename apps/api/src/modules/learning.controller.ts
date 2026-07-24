@@ -484,13 +484,16 @@ export class LearningController {
   }
 
   @Post('enrollments')
-  @ApiOperation({ summary: 'Enrollar a un usuario por admin' })
+  @ApiOperation({ summary: 'Enrollar a un usuario por admin (formador/admin)' })
   async enrollAdmin(
     @CurrentUser() user: SessionClaims | undefined,
     @Body(new ZodValidationPipe(enrollByAdminSchema)) dto: EnrollByAdminDto,
   ) {
-    if (!user) throw new UnauthorizedException();
-    return this.registry.getLearningService().enrollByAdmin(user.tenantId, user.sub, dto);
+    // Matricular a OTRO usuario es una acción administrativa: sin este check,
+    // cualquier alumno podía matricular a cualquiera (y a sí mismo con source
+    // 'ADMIN', indistinguible de una matrícula legítima del staff).
+    const u = requireScormEditor(user);
+    return this.registry.getLearningService().enrollByAdmin(u.tenantId, u.sub, dto);
   }
 
   @Post('enrollments/me')
@@ -619,6 +622,25 @@ export class LearningController {
     @Param('lessonId') lessonId: string,
   ) {
     if (!user) throw new UnauthorizedException();
+    const learning = this.registry.getLearningService();
+    // La metadata del paquete incluye la signed URL del entry: para un ALUMNO
+    // exige matrícula viva (un revocado/ex-trial no puede seguir reproduciendo
+    // el SCORM pidiendo el paquete directo). Los editores previsualizan sin
+    // matrícula, como en el resto del contenido.
+    const isEditor = user.roles.some((r) => SCORM_EDITOR_ROLES.has(r));
+    if (!isEditor) {
+      const enrolled = await learning.hasActiveEnrollmentForLesson(
+        user.tenantId,
+        user.sub,
+        lessonId,
+      );
+      if (!enrolled) {
+        throw new ForbiddenException('Necesitas una matrícula activa para ver esta lección.');
+      }
+      // DRIP/TRIAL: una lección bloqueada tampoco se reproduce vía paquete
+      // directo (attempt/commit ya estaban gateados; esto también).
+      await learning.assertLessonAccessible(user.tenantId, user.sub, lessonId);
+    }
     return this.registry.getScormService().getPackage(user.tenantId, lessonId);
   }
 

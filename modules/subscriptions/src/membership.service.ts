@@ -26,6 +26,7 @@ import type { PrismaClient } from '@didacta/database';
 import type Stripe from 'stripe';
 import {
   MembershipConfigIncompleteError,
+  MembershipNotTrialingError,
   MembershipPageInactiveError,
   MembershipPlanNotFoundError,
   StripeApiError,
@@ -65,6 +66,8 @@ export interface MembershipConfigInput {
   subheadline?: string | null;
   accessGroupId?: string | null;
   showCourses?: boolean;
+  /** Lecciones visibles por curso durante el trial (0 = sin límite). */
+  trialLessonLimit?: number;
   coursePrices?: Array<{ courseId: string; amountCents: number }>;
   testimonialQuote?: string | null;
   testimonialAuthor?: string | null;
@@ -116,6 +119,8 @@ export interface MembershipPublicPage {
   standaloneTotalCents: number | null;
   stats: MembershipPublicStats;
   testimonial: { quote: string; author: string; role: string | null } | null;
+  /** Lecciones visibles por curso durante la prueba (0 = acceso completo). */
+  trialLessonLimit: number;
 }
 
 /**
@@ -355,6 +360,9 @@ export class MembershipService {
       standaloneTotalCents,
       stats,
       testimonial,
+      // Transparencia: la página de venta anuncia cuántas clases por curso se
+      // ven durante la prueba (0 = acceso completo también en trial).
+      trialLessonLimit: config.trialLessonLimit,
     };
   }
 
@@ -484,6 +492,11 @@ export class MembershipService {
       name: session.customer_details?.name ?? null,
     });
 
+    // Trial: si el plan tiene días de prueba, la sub nace TRIALING (con
+    // acceso, pero mod.learning limita el contenido a trialLessonLimit). El
+    // fin estimado es now + trialDays; Stripe (customer.subscription.updated)
+    // converge el valor real después. Sin trial → ACTIVE directo.
+    const trialing = plan.trialDays > 0;
     const sub = await this.prisma.modSubscriptionsSubscription.create({
       data: {
         tenantId,
@@ -494,10 +507,8 @@ export class MembershipService {
         stripeCustomerId:
           typeof session.customer === 'string' ? session.customer : (session.customer?.id ?? ''),
         stripePriceId: plan.stripePriceId ?? '',
-        // El checkout completado implica pago OK (o trial iniciado) → ACTIVE.
-        // Los eventos customer.subscription.updated posteriores ajustan estado
-        // y currentPeriodEnd (mapStripeStatus trata trialing como ACTIVE).
-        status: 'ACTIVE',
+        status: trialing ? 'TRIALING' : 'ACTIVE',
+        trialEndsAt: trialing ? new Date(Date.now() + plan.trialDays * 24 * 60 * 60 * 1000) : null,
         unitAmount: plan.amountCents,
         currency: plan.currency,
         interval: intervalLabel(plan.intervalMonths),
@@ -513,7 +524,70 @@ export class MembershipService {
 
     return { subscriptionId: sub.id, userId, userCreated: created };
   }
+
+  // ---------------- Pagar ahora (terminar el trial y cobrar ya) ----------------
+
+  /**
+   * Termina el periodo de prueba de la membresía del usuario AHORA: Stripe
+   * cobra el primer periodo inmediatamente (`trial_end: 'now'`) y, si el cargo
+   * entra, la sub pasa a ACTIVE y el gate de contenido de trial se apaga.
+   *
+   * Es el CTA "Pagar ahora y desbloquear todo" del candado de trial y de la
+   * pestaña Suscripción de la cuenta.
+   */
+  async payNow(tenantId: string, userId: string): Promise<MembershipSubscriptionRow> {
+    if (!this.stripe) throw new StripeConfigMissingError('secretKey');
+    const sub = await this.prisma.modSubscriptionsSubscription.findFirst({
+      where: { tenantId, userId, planId: { not: null }, status: 'TRIALING' },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!sub || !sub.stripeSubscriptionId) throw new MembershipNotTrialingError();
+
+    const view = await this.stripe.endTrialNow(sub.stripeSubscriptionId);
+
+    // Desbloqueo SOLO con evidencia de cobro: status active + invoice PAGADA
+    // (Stripe puede devolver 'active' con la invoice aún cobrándose, y un
+    // cargo fallido no debe apagar el gate de trial ni regalar grace). Si no
+    // hay evidencia, la fila se queda TRIALING y son los webhooks quienes
+    // resuelven: invoice.paid → ACTIVE, invoice.payment_failed → UNPAID
+    // directo (sin gracia, la fila sigue TRIALING).
+    const paid = view.status === 'active' && view.latestInvoicePaid;
+    const updated = await this.prisma.modSubscriptionsSubscription.update({
+      where: { id: sub.id },
+      data: paid
+        ? {
+            status: 'ACTIVE',
+            trialEndsAt: null,
+            currentPeriodEnd: view.currentPeriodEnd
+              ? new Date(view.currentPeriodEnd * 1000)
+              : sub.currentPeriodEnd,
+          }
+        : {
+            currentPeriodEnd: view.currentPeriodEnd
+              ? new Date(view.currentPeriodEnd * 1000)
+              : sub.currentPeriodEnd,
+          },
+    });
+
+    if (paid) {
+      // Re-anuncio idempotente del entitlement (el bridge de grupos absorbe
+      // el duplicado); deja rastro del fin de trial pagado.
+      await this.publisher.publish(tenantId, userId, 'subscriptions.subscription.activated', {
+        subscriptionId: sub.id,
+        courseId: null,
+        planId: sub.planId,
+        userId,
+        trialEndedEarly: true,
+      });
+    }
+
+    return updated;
+  }
 }
+
+type MembershipSubscriptionRow = Awaited<
+  ReturnType<PrismaClient['modSubscriptionsSubscription']['create']>
+>;
 
 /** 'month' | 'quarter' | 'year' para la columna interval (texto libre). */
 function intervalLabel(intervalMonths: number): string {
@@ -529,6 +603,7 @@ function configData(input: MembershipConfigInput) {
     ...(input.subheadline !== undefined ? { subheadline: input.subheadline } : {}),
     ...(input.accessGroupId !== undefined ? { accessGroupId: input.accessGroupId } : {}),
     ...(input.showCourses !== undefined ? { showCourses: input.showCourses } : {}),
+    ...(input.trialLessonLimit !== undefined ? { trialLessonLimit: input.trialLessonLimit } : {}),
     ...(input.coursePrices !== undefined ? { coursePrices: input.coursePrices as never } : {}),
     ...(input.testimonialQuote !== undefined ? { testimonialQuote: input.testimonialQuote } : {}),
     ...(input.testimonialAuthor !== undefined

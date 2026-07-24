@@ -79,6 +79,8 @@ export default function MembresiaAdminPage() {
   const [subheadline, setSubheadline] = useState('');
   const [accessGroupId, setAccessGroupId] = useState('');
   const [showCourses, setShowCourses] = useState(true);
+  // Drip del trial: nº de lecciones visibles por curso durante la prueba ('' = 0 = sin límite).
+  const [trialLessonLimit, setTrialLessonLimit] = useState('5');
   const [active, setActive] = useState(false);
   const [priceByCourse, setPriceByCourse] = useState<Record<string, string>>({});
   const [tQuote, setTQuote] = useState('');
@@ -121,6 +123,7 @@ export default function MembresiaAdminPage() {
     setSubheadline(cfg.subheadline ?? '');
     setAccessGroupId(cfg.accessGroupId ?? '');
     setShowCourses(cfg.showCourses);
+    setTrialLessonLimit(String(cfg.trialLessonLimit ?? 5));
     setActive(cfg.active);
     setTQuote(cfg.testimonialQuote ?? '');
     setTAuthor(cfg.testimonialAuthor ?? '');
@@ -213,6 +216,14 @@ export default function MembresiaAdminPage() {
   async function saveConfig() {
     const t = token();
     if (!t) return;
+    // Límite del trial: exigir un número explícito — un campo vacío NO debe
+    // guardarse en silencio como 0 (= sin límite, justo lo contrario de lo que
+    // el admin probablemente quería).
+    const parsedTrialLimit = Number.parseInt(trialLessonLimit, 10);
+    if (!Number.isFinite(parsedTrialLimit) || parsedTrialLimit < 0 || parsedTrialLimit > 1000) {
+      setError('Indica cuántas clases se ven durante la prueba (0 a 1000; 0 = sin límite).');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -225,6 +236,7 @@ export default function MembresiaAdminPage() {
         subheadline: subheadline.trim() || null,
         accessGroupId: accessGroupId || null,
         showCourses,
+        trialLessonLimit: parsedTrialLimit,
         coursePrices,
         testimonialQuote: tQuote.trim() || null,
         testimonialAuthor: tAuthor.trim() || null,
@@ -468,6 +480,28 @@ export default function MembresiaAdminPage() {
           <div className="flex items-center gap-3">
             <Switch id="cfg-courses" checked={showCourses} onCheckedChange={setShowCourses} />
             <Label htmlFor="cfg-courses">Mostrar el catálogo de cursos en la página</Label>
+          </div>
+
+          <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface-2 p-4">
+            <Label htmlFor="cfg-trial-limit">
+              Clases visibles por curso durante el periodo de prueba
+            </Label>
+            <div className="flex items-center gap-3">
+              <Input
+                id="cfg-trial-limit"
+                type="number"
+                min={0}
+                max={1000}
+                className="w-28"
+                value={trialLessonLimit}
+                onChange={(e) => setTrialLessonLimit(e.target.value)}
+              />
+              <p className="text-sm text-text-muted">
+                Mientras la suscripción está en prueba, cada curso muestra solo sus primeras N
+                clases; el resto aparece bloqueado con la opción de pagar ya. 0 = sin límite (acceso
+                completo también durante la prueba).
+              </p>
+            </div>
           </div>
 
           {showCourses && (

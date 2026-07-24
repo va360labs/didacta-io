@@ -22,6 +22,7 @@ import { coursesApi, type CourseDetail, type CourseLesson } from '@/lib/courses'
 import { formatDuration } from '@/lib/format';
 import { learningApi, type Enrollment } from '@/lib/learning';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
+import { subscriptionsApi } from '@/modules/subscriptions';
 import { zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
 
 const LESSON_TYPE_LABEL: Record<string, string> = {
@@ -51,11 +52,14 @@ export default function CourseAlumnoPage() {
   // Posición de reanudación por lección (segundos) desde el backend, para
   // arrancar el vídeo donde el alumno lo dejó. 0/ausente = desde el inicio.
   const [resumeByLesson, setResumeByLesson] = useState<Record<string, number>>({});
-  // Disponibilidad por drip: lessonId → { availableAt ISO, available }. Las
-  // lecciones que NO aparecen están libres (sin gating).
+  // Disponibilidad por drip/trial: lessonId → { availableAt ISO|null, available,
+  // reason? }. Las lecciones que NO aparecen están libres (sin gating).
+  // reason 'TRIAL' = bloqueada por el periodo de prueba (se desbloquea pagando).
   const [availability, setAvailability] = useState<
-    Record<string, { availableAt: string; available: boolean }>
+    Record<string, { availableAt: string | null; available: boolean; reason?: 'DRIP' | 'TRIAL' }>
   >({});
+  // Límite de lecciones del trial de la membresía para este curso (si aplica).
+  const [trialInfo, setTrialInfo] = useState<{ lessonLimit: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [certificate, setCertificate] = useState<Certificate | null>(null);
@@ -117,6 +121,7 @@ export default function CourseAlumnoPage() {
       }
 
       setAvailability(avail?.drip ? avail.lessons : {});
+      setTrialInfo(avail?.trial ?? null);
 
       setCertificate(certsList?.find((c) => c.courseId === detail.id) ?? null);
       setZoomSessions(zoomList ?? []);
@@ -494,9 +499,14 @@ export default function CourseAlumnoPage() {
                 // Liberación por MÓDULO: si TODAS las lecciones están bloqueadas y
                 // comparten la misma fecha, mostramos un único candado en la
                 // cabecera ("el módulo se libera el…") en vez de N candados iguales.
+                // Los locks de TRIAL (sin fecha — se desbloquean pagando) quedan
+                // fuera del hint de módulo: llevan su propio badge por lección.
                 const modLocks = m.lessons
                   .map((l) => availability[l.id])
-                  .filter((x): x is { availableAt: string; available: boolean } => !!x);
+                  .filter(
+                    (x): x is { availableAt: string; available: boolean; reason?: 'DRIP' } =>
+                      !!x && x.reason !== 'TRIAL' && x.availableAt !== null,
+                  );
                 const moduleHint =
                   m.lessons.length >= 2 &&
                   modLocks.length === m.lessons.length &&
@@ -546,7 +556,11 @@ export default function CourseAlumnoPage() {
                               >
                                 {l.title}
                               </span>
-                              {locked ? (
+                              {locked && lock.reason === 'TRIAL' ? (
+                                <Badge variant="warning" className="shrink-0 text-[10px]">
+                                  🔒 tras la prueba
+                                </Badge>
+                              ) : locked && lock.availableAt ? (
                                 <Badge variant="warning" className="shrink-0 text-[10px]">
                                   🔒 {formatLockHint(lock.availableAt)}
                                 </Badge>
@@ -598,11 +612,19 @@ export default function CourseAlumnoPage() {
                 </p>
               </CardContent>
             </Card>
+          ) : activeLesson &&
+            availability[activeLesson.id]?.available === false &&
+            availability[activeLesson.id]?.reason === 'TRIAL' ? (
+            <TrialLockedLessonCard
+              title={activeLesson.title}
+              lessonLimit={trialInfo?.lessonLimit ?? null}
+              onUnlocked={() => reload()}
+            />
           ) : activeLesson && availability[activeLesson.id]?.available === false ? (
             <LockedLessonCard
               lessonId={activeLesson.id}
               title={activeLesson.title}
-              availableAt={availability[activeLesson.id]!.availableAt}
+              availableAt={availability[activeLesson.id]!.availableAt ?? new Date().toISOString()}
             />
           ) : activeLesson ? (
             // key={activeLesson.id} fuerza re-mount del player al cambiar
@@ -656,6 +678,85 @@ export default function CourseAlumnoPage() {
         </main>
       </div>
     </section>
+  );
+}
+
+/**
+ * Pantalla de una lección bloqueada por el PERIODO DE PRUEBA de la membresía:
+ * el desbloqueo no es por fecha sino por pago. CTA principal = terminar el
+ * trial y cobrar YA (subscriptionsApi.membershipPayNow); al confirmarse, se
+ * recarga el curso y el contenido llega desbloqueado del backend.
+ */
+function TrialLockedLessonCard({
+  title,
+  lessonLimit,
+  onUnlocked,
+}: {
+  title: string;
+  lessonLimit: number | null;
+  onUnlocked: () => Promise<void> | void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function payNow() {
+    if (
+      !window.confirm(
+        '¿Terminar tu periodo de prueba y pagar ahora? Se cobrará el primer periodo inmediatamente y tendrás acceso completo al contenido de tu membresía.',
+      )
+    )
+      return;
+    setBusy(true);
+    setError(null);
+    try {
+      const token = authStorage.getAccessToken();
+      if (!token) {
+        setError('Tu sesión expiró. Inicia sesión y vuelve a intentarlo.');
+        return;
+      }
+      const res = await subscriptionsApi.membershipPayNow(token);
+      if (res.subscription.status === 'ACTIVE') {
+        await onUnlocked();
+        return;
+      }
+      setError(
+        'No se pudo completar el cobro con tu tarjeta. Stripe lo reintentará automáticamente; si el problema persiste, contacta con tu academia.',
+      );
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No se pudo procesar el pago.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+        <span className="text-4xl">🔒</span>
+        <h3 className="font-display text-xl font-semibold">
+          Disponible cuando pase el periodo de prueba
+        </h3>
+        <p className="max-w-md text-sm text-text-muted">
+          «{title}» forma parte del contenido completo de tu membresía.
+          {lessonLimit
+            ? ` Durante la prueba puedes ver las primeras ${lessonLimit} ${
+                lessonLimit === 1 ? 'clase' : 'clases'
+              } de cada curso.`
+            : ''}{' '}
+          Al terminar tu prueba (o pagando ahora) se desbloquea el contenido de la membresía.
+        </p>
+        {error ? <p className="max-w-md text-sm text-danger-700">{error}</p> : null}
+        <Button size="lg" onClick={() => void payNow()} disabled={busy}>
+          {busy ? 'Procesando pago…' : 'Pagar ahora y desbloquear'}
+        </Button>
+        <a
+          href="/cuenta?tab=suscripcion"
+          className="text-xs font-semibold text-brand-700 underline"
+        >
+          Gestionar mi suscripción
+        </a>
+      </CardContent>
+    </Card>
   );
 }
 

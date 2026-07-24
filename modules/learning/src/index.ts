@@ -54,6 +54,7 @@ export {
   InvitationInvalidError,
   CourseNotPublishedError,
   LessonLockedError,
+  TrialContentLockedError,
   ScormLessonTypeMismatchError,
   ScormPackageInvalidError,
   ScormPackageNotFoundError,

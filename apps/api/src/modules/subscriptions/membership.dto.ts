@@ -46,6 +46,8 @@ export const membershipConfigSchema = z
     subheadline: z.string().trim().max(300).nullable(),
     accessGroupId: z.string().uuid().nullable(),
     showCourses: z.boolean(),
+    /** Lecciones visibles por curso durante el trial (0 = sin límite). */
+    trialLessonLimit: z.number().int().min(0).max(1000),
     coursePrices: z
       .array(
         z.object({

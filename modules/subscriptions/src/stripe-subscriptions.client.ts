@@ -30,6 +30,14 @@ export interface SubscriptionsStripeAdapter {
   /** Renombra un Product existente (al renombrar el plan en el admin). */
   updateProduct(productId: string, name: string): Promise<void>;
   /**
+   * Termina el trial de una suscripción AHORA (`trial_end: 'now'`): Stripe
+   * factura y cobra el primer periodo inmediatamente. Devuelve la vista
+   * resultante + si la invoice generada quedó realmente PAGADA — el status
+   * 'active' por sí solo NO es evidencia de cobro (Stripe puede devolver
+   * active con la invoice aún en curso).
+   */
+  endTrialNow(subscriptionId: string): Promise<EndTrialNowResult>;
+  /**
    * Crea un Price recurring para un product. `intervalMonths` 1|3|12 se mapea
    * a interval month/year + interval_count. Los prices de Stripe son
    * inmutables: para cambiar el importe se crea uno nuevo.
@@ -82,6 +90,12 @@ export interface StripeSubscriptionView {
   cancelAtPeriodEnd: boolean;
   currentPeriodEnd: number | null;
   canceledAt: number | null;
+}
+
+/** Resultado de endTrialNow: vista de la sub + evidencia de cobro real. */
+export interface EndTrialNowResult extends StripeSubscriptionView {
+  /** true solo si la latest_invoice quedó en status 'paid' (0 € por cupón cuenta). */
+  latestInvoicePaid: boolean;
 }
 
 /**
@@ -148,6 +162,27 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
   async updateProduct(productId: string, name: string): Promise<void> {
     try {
       await this.client.products.update(productId, { name });
+    } catch (err) {
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async endTrialNow(subscriptionId: string): Promise<EndTrialNowResult> {
+    try {
+      const sub = await this.client.subscriptions.update(subscriptionId, {
+        trial_end: 'now',
+        expand: ['latest_invoice'],
+      });
+      const invoice =
+        sub.latest_invoice && typeof sub.latest_invoice !== 'string' ? sub.latest_invoice : null;
+      return {
+        id: sub.id,
+        status: sub.status,
+        cancelAtPeriodEnd: sub.cancel_at_period_end,
+        currentPeriodEnd: sub.current_period_end ?? null,
+        canceledAt: sub.canceled_at ?? null,
+        latestInvoicePaid: invoice?.status === 'paid',
+      };
     } catch (err) {
       throw new StripeApiError((err as Error).message);
     }

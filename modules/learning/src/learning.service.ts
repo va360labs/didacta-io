@@ -7,6 +7,7 @@ import {
   EnrollmentNotFoundError,
   InvitationInvalidError,
   LessonLockedError,
+  TrialContentLockedError,
 } from './errors.js';
 import {
   computeDripAvailability,
@@ -52,15 +53,26 @@ export interface UpdateDripScheduleInput {
   isActive?: boolean;
 }
 
-/** Disponibilidad de las lecciones de un curso para un alumno (drip). */
+/** Disponibilidad de las lecciones de un curso para un alumno (drip + trial). */
 export interface CourseDripAvailability {
-  /** ¿El curso tiene drip aplicable a este alumno? */
+  /** ¿El curso tiene algún gating aplicable a este alumno (drip o trial)? */
   drip: boolean;
   /**
-   * Por cada lección bajo drip: fecha ISO de desbloqueo y si ya está disponible.
+   * Por cada lección bloqueada o programada: fecha ISO de desbloqueo (null si
+   * el desbloqueo no es por fecha sino por PAGO — reason TRIAL), si ya está
+   * disponible y el motivo. Sin `reason` = drip por calendario (compat).
    * Las lecciones que no aparecen están disponibles (sin gating).
    */
-  lessons: Record<string, { availableAt: string; available: boolean }>;
+  lessons: Record<
+    string,
+    { availableAt: string | null; available: boolean; reason?: 'DRIP' | 'TRIAL' }
+  >;
+  /**
+   * Presente cuando la membresía del alumno está EN PRUEBA y limita este curso:
+   * nº de lecciones (orden global) visibles hasta que pague. La UI lo usa para
+   * el candado "Disponible cuando pase el periodo de prueba" + CTA de pago.
+   */
+  trial?: { lessonLimit: number };
 }
 
 const TOKEN_BYTES = 24;
@@ -159,13 +171,28 @@ export class LearningService {
    * `AlreadyEnrolledError`, que el bridge captura como no-op.
    */
   async enrollFromPurchase(tenantId: string, userId: string, courseId: string) {
-    return this.createEnrollment({
-      tenantId,
-      actorId: null,
-      userId,
-      courseId,
-      source: 'PURCHASE',
-    });
+    try {
+      return await this.createEnrollment({
+        tenantId,
+        actorId: null,
+        userId,
+        courseId,
+        source: 'PURCHASE',
+      });
+    } catch (err) {
+      // Ya matriculado (p.ej. por el GRUPO de la membresía): la COMPRA sella
+      // la procedencia igualmente — el alumno pagó este curso y eso lo exime,
+      // entre otras cosas, del límite de contenido del trial. Sin este upgrade,
+      // el bridge hacía no-op y el enrollment seguía como GROUP. Se re-lanza
+      // para conservar la semántica idempotente del caller (no-op esperado).
+      if (err instanceof AlreadyEnrolledError) {
+        await this.prisma.modLearningEnrollment.updateMany({
+          where: { tenantId, userId, courseId, status: { in: ['ACTIVE', 'COMPLETED'] } },
+          data: { source: 'PURCHASE' },
+        });
+      }
+      throw err;
+    }
   }
 
   /**
@@ -196,13 +223,26 @@ export class LearningService {
    * el caller (`InscribeService`) captura como no-op.
    */
   async enrollFromApi(tenantId: string, userId: string, courseId: string) {
-    return this.createEnrollment({
-      tenantId,
-      actorId: userId,
-      userId,
-      courseId,
-      source: 'API',
-    });
+    try {
+      return await this.createEnrollment({
+        tenantId,
+        actorId: userId,
+        userId,
+        courseId,
+        source: 'API',
+      });
+    } catch (err) {
+      // Mismo criterio que enrollFromPurchase: una venta externa (Woo, página
+      // de ventas) sobre un alumno ya matriculado por grupo sella el source.
+      // Se re-lanza para conservar la semántica idempotente del caller.
+      if (err instanceof AlreadyEnrolledError) {
+        await this.prisma.modLearningEnrollment.updateMany({
+          where: { tenantId, userId, courseId, status: { in: ['ACTIVE', 'COMPLETED'] } },
+          data: { source: 'API' },
+        });
+      }
+      throw err;
+    }
   }
 
   /**
@@ -355,7 +395,7 @@ export class LearningService {
     });
     if (!enrollment) throw new EnrollmentNotFoundError();
 
-    // DRIP: no permitir registrar progreso en una lección aún no liberada.
+    // DRIP/TRIAL: no permitir registrar progreso en una lección aún no liberada.
     // Ancla = enrolledAt (mismo criterio que getCourseAvailability; estable).
     await this.assertLessonUnlocked(
       tenantId,
@@ -363,6 +403,7 @@ export class LearningService {
       enrollment.courseId,
       dto.lessonId,
       enrollment.enrolledAt,
+      enrollment.source,
     );
 
     const updated = await this.prisma.modLearningProgress.upsert({
@@ -1130,6 +1171,30 @@ export class LearningService {
   }
 
   /**
+   * Como hasActiveEnrollment pero resolviendo el curso desde una LECCIÓN. Lo
+   * usa el host para gatear la entrega del paquete SCORM (signed URL) a
+   * alumnos: sin matrícula viva no hay contenido. Devuelve false si la lección
+   * no existe (negar por defecto; el 404 real lo da el service de SCORM).
+   */
+  async hasActiveEnrollmentForLesson(
+    tenantId: string,
+    userId: string,
+    lessonId: string,
+  ): Promise<boolean> {
+    const lesson = await this.prisma.modCoursesLesson.findFirst({
+      where: { tenantId, id: lessonId, deletedAt: null },
+      select: { moduleId: true },
+    });
+    if (!lesson) return false;
+    const mod = await this.prisma.modCoursesModule.findFirst({
+      where: { tenantId, id: lesson.moduleId },
+      select: { courseId: true },
+    });
+    if (!mod) return false;
+    return this.hasActiveEnrollment(tenantId, userId, mod.courseId);
+  }
+
+  /**
    * ¿El usuario tiene una matrícula viva (ACTIVE/COMPLETED) en el curso? Lo usa
    * el host para gatear la entrega del CONTENIDO del curso a los alumnos (un
    * no-matriculado no debe recibir el cuerpo de las lecciones).
@@ -1153,7 +1218,7 @@ export class LearningService {
   ): Promise<CourseDripAvailability> {
     const enrollment = await this.prisma.modLearningEnrollment.findUnique({
       where: { tenantId_userId_courseId: { tenantId, userId, courseId } },
-      select: { status: true, enrolledAt: true },
+      select: { status: true, enrolledAt: true, source: true },
     });
     // Solo aplica drip sobre una matrícula viva (no CANCELLED/PAUSED).
     if (!enrollment || (enrollment.status !== 'ACTIVE' && enrollment.status !== 'COMPLETED')) {
@@ -1161,7 +1226,7 @@ export class LearningService {
     }
 
     const now = new Date();
-    const lessons: Record<string, { availableAt: string; available: boolean }> = {};
+    const lessons: CourseDripAvailability['lessons'] = {};
 
     // 1) Drip RELATIVO (tier/grupo, anclado en enrolledAt) — si hay reglas.
     const rules = await this.getApplicableDripRules(tenantId, userId, courseId);
@@ -1187,7 +1252,7 @@ export class LearningService {
       if (!l.publishAt) continue;
       const availableByDate = l.publishAt <= now;
       const prev = lessons[l.id];
-      if (prev) {
+      if (prev && prev.availableAt) {
         const prevAt = new Date(prev.availableAt);
         const laterAt = l.publishAt > prevAt ? l.publishAt : prevAt;
         lessons[l.id] = {
@@ -1199,7 +1264,109 @@ export class LearningService {
       }
     }
 
-    return { drip: Object.keys(lessons).length > 0, lessons };
+    // 3) LÍMITE DEL PERIODO DE PRUEBA de la membresía: si el acceso al curso
+    // viene del grupo de la membresía y la sub está TRIALING, solo las N
+    // primeras lecciones (orden global) están disponibles. El desbloqueo no es
+    // por fecha sino por PAGO → availableAt null + reason TRIAL. Prevalece
+    // sobre el drip (una lección fuera del límite queda bloqueada aunque el
+    // calendario la libere).
+    const trialLimit = await this.getMembershipTrialLimit(
+      tenantId,
+      userId,
+      courseId,
+      enrollment.source,
+    );
+    let trial: CourseDripAvailability['trial'];
+    if (trialLimit !== null) {
+      trial = { lessonLimit: trialLimit };
+      const ordered = await this.orderedLessons(tenantId, courseId);
+      for (const l of ordered) {
+        if (l.lessonIndex < trialLimit) continue;
+        lessons[l.lessonId] = {
+          availableAt: lessons[l.lessonId]?.availableAt ?? null,
+          available: false,
+          reason: 'TRIAL',
+        };
+      }
+    }
+
+    return { drip: Object.keys(lessons).length > 0, lessons, ...(trial ? { trial } : {}) };
+  }
+
+  /**
+   * Fuentes de matrícula que EXIMEN del límite de trial: evidencian un acceso
+   * PROPIO al curso, independiente de la membresía (compra directa, pago por
+   * suscripción del curso, alta por API de ventas, código o invitación).
+   * 'GROUP' y 'ADMIN' NO eximen: GROUP es precisamente la membresía, y ADMIN
+   * es el source de la automatrícula (enrollSelf) — si eximiera, bastaría
+   * cancelar la matrícula y re-automatricularse para saltarse el gate.
+   */
+  private static readonly TRIAL_EXEMPT_SOURCES = new Set([
+    'PURCHASE',
+    'SUBSCRIPTION',
+    'API',
+    'CODE',
+    'INVITATION_LINK',
+    'IMPORT',
+  ]);
+
+  /**
+   * Límite de lecciones del PERIODO DE PRUEBA de la membresía para este curso,
+   * o null si no aplica. Aplica solo cuando TODO se cumple:
+   *   1. El tenant tiene membresía configurada (accessGroupId) con límite > 0.
+   *   2. El usuario tiene una suscripción de MEMBRESÍA (planId) en TRIALING.
+   *   3. Hay un grant VIVO del grupo de la membresía sobre este curso — el
+   *      acceso viene de la membresía en prueba. Se decide por el GRANT (que
+   *      persiste aunque el alumno cancele/re-cree su enrollment), no por el
+   *      source del enrollment (manipulable vía enrollSelf).
+   *   4. Ningún OTRO grupo concede el curso y el enrollment no procede de una
+   *      fuente de pago propia (TRIAL_EXEMPT_SOURCES).
+   *
+   * Lectura cross-module first-party (ADR-016): mod_subscriptions_* y
+   * mod_access_groups_* solo lectura, filtradas por tenant, declaradas en el
+   * manifest (optionalModules).
+   */
+  private async getMembershipTrialLimit(
+    tenantId: string,
+    userId: string,
+    courseId: string,
+    enrollmentSource: string,
+  ): Promise<number | null> {
+    if (LearningService.TRIAL_EXEMPT_SOURCES.has(enrollmentSource)) return null;
+
+    const config = await this.prisma.modSubscriptionsMembershipConfig.findUnique({
+      where: { tenantId },
+      select: { accessGroupId: true, trialLessonLimit: true },
+    });
+    if (!config?.accessGroupId || config.trialLessonLimit <= 0) return null;
+
+    const trialing = await this.prisma.modSubscriptionsSubscription.findFirst({
+      where: { tenantId, userId, planId: { not: null }, status: 'TRIALING' },
+      select: { id: true },
+    });
+    if (!trialing) return null;
+
+    // ¿El acceso a ESTE curso viene del grupo de la membresía? (grant vivo)
+    const membershipGrant = await this.prisma.modAccessGroupGrant.findFirst({
+      where: { tenantId, userId, courseId, groupId: config.accessGroupId, revokedAt: null },
+      select: { id: true },
+    });
+    if (!membershipGrant) return null;
+
+    // ¿Algún grant vivo de OTRO grupo cubre este curso? → acceso completo.
+    const otherGrant = await this.prisma.modAccessGroupGrant.findFirst({
+      where: {
+        tenantId,
+        userId,
+        courseId,
+        revokedAt: null,
+        NOT: { groupId: config.accessGroupId },
+      },
+      select: { id: true },
+    });
+    if (otherGrant) return null;
+
+    return config.trialLessonLimit;
   }
 
   // ── Aviso de desbloqueo de lecciones programadas por fecha (publishAt) ────────
@@ -1250,7 +1417,7 @@ export class LearningService {
     if (!mod) return;
     const enrollment = await this.prisma.modLearningEnrollment.findUnique({
       where: { tenantId_userId_courseId: { tenantId, userId, courseId: mod.courseId } },
-      select: { status: true, enrolledAt: true },
+      select: { status: true, enrolledAt: true, source: true },
     });
     if (!enrollment || (enrollment.status !== 'ACTIVE' && enrollment.status !== 'COMPLETED'))
       return;
@@ -1260,13 +1427,15 @@ export class LearningService {
       mod.courseId,
       lessonId,
       enrollment.enrolledAt,
+      enrollment.source,
     );
   }
 
   /**
-   * ¿Puede el alumno acceder a esta lección ahora? True si no hay drip aplicable
-   * o si la lección ya está liberada. Lo usa `trackProgress` para bloquear el
-   * registro de progreso en lecciones aún no disponibles.
+   * ¿Puede el alumno acceder a esta lección ahora? True si no hay gating
+   * aplicable o si la lección ya está liberada. Lo usa `trackProgress` para
+   * bloquear el registro de progreso en lecciones aún no disponibles, y los
+   * endpoints SCORM vía assertLessonAccessible.
    */
   private async assertLessonUnlocked(
     tenantId: string,
@@ -1274,6 +1443,7 @@ export class LearningService {
     courseId: string,
     lessonId: string,
     anchor: Date,
+    enrollmentSource: string,
   ): Promise<void> {
     const now = new Date();
     // Fecha de publicación ABSOLUTA: si es futura, la lección está bloqueada.
@@ -1284,10 +1454,29 @@ export class LearningService {
     if (lesson?.publishAt && lesson.publishAt > now) {
       throw new LessonLockedError(lesson.publishAt);
     }
+
+    // LÍMITE DE TRIAL de la membresía: gate duro server-side. Prevalece sobre
+    // el drip — fuera del límite la lección queda bloqueada hasta PAGAR, no
+    // hasta una fecha.
+    const trialLimit = await this.getMembershipTrialLimit(
+      tenantId,
+      userId,
+      courseId,
+      enrollmentSource,
+    );
+    let ordered: OrderedLesson[] | null = null;
+    if (trialLimit !== null) {
+      ordered = await this.orderedLessons(tenantId, courseId);
+      const trialEntry = ordered.find((l) => l.lessonId === lessonId);
+      if (trialEntry && trialEntry.lessonIndex >= trialLimit) {
+        throw new TrialContentLockedError();
+      }
+    }
+
     // Drip RELATIVO.
     const rules = await this.getApplicableDripRules(tenantId, userId, courseId);
     if (rules.length === 0) return;
-    const ordered = await this.orderedLessons(tenantId, courseId);
+    ordered ??= await this.orderedLessons(tenantId, courseId);
     const map = computeDripAvailability(ordered, rules, anchor, now);
     const entry = map.get(lessonId);
     if (entry && !entry.available) throw new LessonLockedError(entry.availableAt);

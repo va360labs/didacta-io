@@ -123,13 +123,13 @@ export class SubscriptionsService {
       throw new SubscriptionPriceNotRecurringError(input.stripePriceId);
     }
 
-    // Una sub ACTIVE/PAST_DUE/PENDING por (tenant,user,course) máximo.
+    // Una sub PENDING/TRIALING/ACTIVE/PAST_DUE por (tenant,user,course) máximo.
     const existing = await this.prisma.modSubscriptionsSubscription.findFirst({
       where: {
         tenantId: input.tenantId,
         userId: input.userId,
         courseId: input.courseId,
-        status: { in: ['PENDING', 'ACTIVE', 'PAST_DUE'] },
+        status: { in: ['PENDING', 'TRIALING', 'ACTIVE', 'PAST_DUE'] },
       },
     });
     if (existing) {
@@ -403,10 +403,13 @@ export class SubscriptionsService {
         currentPeriodEnd: stripeSub.current_period_end
           ? new Date(stripeSub.current_period_end * 1000)
           : null,
+        trialEndsAt: stripeSub.trial_end ? new Date(stripeSub.trial_end * 1000) : null,
       },
     });
 
-    if (status === 'ACTIVE') {
+    // TRIALING también activa la entrega (el alumno tiene acceso durante la
+    // prueba; el LÍMITE de contenido lo aplica mod.learning por su cuenta).
+    if (status === 'ACTIVE' || status === 'TRIALING') {
       await this.publisher.publish(sub.tenantId, sub.userId, EVENT.ACTIVATED, {
         subscriptionId: sub.id,
         courseId: sub.courseId,
@@ -423,7 +426,29 @@ export class SubscriptionsService {
     });
     if (!sub) return;
 
-    const newStatus = mapStripeStatus(stripeSub.status);
+    let newStatus = mapStripeStatus(stripeSub.status);
+
+    // ⚠️ ORDEN REAL DE STRIPE al terminar un trial: la sub transiciona
+    // trialing→active ANTES de intentar el primer cobro (la invoice de ciclo
+    // se finaliza y cobra después). Si aceptáramos ese ACTIVE a ciegas, el
+    // trial impagado escaparía del gate de contenido y ganaría a la vez el
+    // grace period del dunning normal — acceso completo sin haber pagado.
+    // Regla: una fila TRIALING solo sale de TRIALING vía `updated` si hay
+    // EVIDENCIA DE PAGO (invoice local PAID con importe > 0). Las transiciones
+    // legítimas las hacen onInvoicePaid (cobro OK → ACTIVE) y payNow; el
+    // impago la resuelve onInvoicePaymentFailed (TRIALING → UNPAID directo).
+    // CANCELED sí pasa siempre (cancelar durante la prueba es legítimo).
+    if (
+      sub.status === 'TRIALING' &&
+      (newStatus === 'ACTIVE' || newStatus === 'PAST_DUE' || newStatus === 'UNPAID')
+    ) {
+      const paidInvoice = await this.prisma.modSubscriptionsInvoice.findFirst({
+        where: { subscriptionId: sub.id, status: 'PAID', amount: { gt: 0 } },
+        select: { id: true },
+      });
+      if (!paidInvoice) newStatus = 'TRIALING';
+    }
+
     const data: Record<string, unknown> = {
       status: newStatus,
       cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
@@ -431,8 +456,18 @@ export class SubscriptionsService {
         ? new Date(stripeSub.current_period_end * 1000)
         : null,
     };
+    if (newStatus === 'TRIALING') {
+      // Conservamos trialEndsAt existente si Stripe ya lo puso a null (trial
+      // técnicamente terminado pero aún sin evidencia de cobro).
+      data['trialEndsAt'] = stripeSub.trial_end
+        ? new Date(stripeSub.trial_end * 1000)
+        : sub.trialEndsAt;
+    } else {
+      data['trialEndsAt'] = stripeSub.trial_end ? new Date(stripeSub.trial_end * 1000) : null;
+    }
     if (newStatus === 'ACTIVE') {
       data['gracePeriodEndsAt'] = null;
+      data['trialEndsAt'] = null;
     }
     await this.prisma.modSubscriptionsSubscription.update({
       where: { id: sub.id },
@@ -448,6 +483,33 @@ export class SubscriptionsService {
         userId: sub.userId,
         currentPeriodEnd: data['currentPeriodEnd'],
         recovery: true,
+      });
+    }
+
+    // Endurecimiento de transiciones: si Stripe mueve la sub a UNPAID/CANCELED
+    // directamente vía `updated` (sin pasar por invoice.payment_failed ni
+    // `deleted`), los bridges deben enterarse igual o el acceso quedaría
+    // concedido con la sub muerta. El outbox dedupe por idempotencyKey
+    // (`evento:subId`) absorbe el caso de doble publicación con el cron/deleted.
+    if (sub.status !== newStatus && newStatus === 'UNPAID') {
+      await this.publisher.publish(sub.tenantId, sub.userId, EVENT.UNPAID, {
+        subscriptionId: sub.id,
+        courseId: sub.courseId,
+        planId: sub.planId,
+        userId: sub.userId,
+      });
+    }
+    if (sub.status !== newStatus && newStatus === 'CANCELED') {
+      await this.prisma.modSubscriptionsSubscription.update({
+        where: { id: sub.id },
+        data: { canceledAt: new Date(), canceledReason: sub.canceledReason ?? 'stripe_updated' },
+      });
+      await this.publisher.publish(sub.tenantId, sub.userId, EVENT.CANCELED, {
+        subscriptionId: sub.id,
+        courseId: sub.courseId,
+        planId: sub.planId,
+        userId: sub.userId,
+        immediate: true,
       });
     }
   }
@@ -491,7 +553,7 @@ export class SubscriptionsService {
     if (sub.status === 'PAST_DUE' || sub.status === 'UNPAID') {
       await this.prisma.modSubscriptionsSubscription.update({
         where: { id: sub.id },
-        data: { status: 'ACTIVE', gracePeriodEndsAt: null },
+        data: { status: 'ACTIVE', gracePeriodEndsAt: null, trialEndsAt: null },
       });
       await this.publisher.publish(sub.tenantId, sub.userId, EVENT.ACTIVATED, {
         subscriptionId: sub.id,
@@ -499,6 +561,22 @@ export class SubscriptionsService {
         planId: sub.planId,
         userId: sub.userId,
         recovery: true,
+      });
+    }
+
+    // Fin de trial pagado: la invoice de CICLO cobrada cierra la prueba y la
+    // sub pasa a ACTIVE (el gate de contenido de trial se apaga solo al leer
+    // el status). Cuenta también un ciclo a 0 € (cupón del 100%) — lo que NO
+    // cuenta es la invoice inicial del alta (`subscription_create`), que en un
+    // trial siempre es 0 € y no demuestra pago. Sin evento: el acceso ya
+    // estaba concedido.
+    if (
+      sub.status === 'TRIALING' &&
+      (invoice.amount_paid > 0 || invoice.billing_reason !== 'subscription_create')
+    ) {
+      await this.prisma.modSubscriptionsSubscription.update({
+        where: { id: sub.id },
+        data: { status: 'ACTIVE', trialEndsAt: null },
       });
     }
 
@@ -520,6 +598,34 @@ export class SubscriptionsService {
     if (!sub) return;
 
     await this.upsertInvoice(sub.id, sub.tenantId, invoice, 'OPEN');
+
+    // FIN DE TRIAL SIN PAGO: si el PRIMER cobro real (el que cierra la prueba)
+    // falla, el acceso se pierde YA — sin grace period. La gracia existe para
+    // clientes que ya pagaron alguna vez; un trial que nunca pagó no la tiene.
+    // Si un reintento de Stripe cobra después, invoice.paid hace el recovery
+    // (UNPAID → ACTIVE) y el bridge re-concede el acceso automáticamente.
+    if (sub.status === 'TRIALING') {
+      await this.prisma.modSubscriptionsSubscription.update({
+        where: { id: sub.id },
+        data: { status: 'UNPAID', trialEndsAt: null },
+      });
+      await this.publisher.publish(sub.tenantId, sub.userId, EVENT.UNPAID, {
+        subscriptionId: sub.id,
+        courseId: sub.courseId,
+        planId: sub.planId,
+        userId: sub.userId,
+        trialExpired: true,
+      });
+      await this.publisher.publish(sub.tenantId, sub.userId, EVENT.INVOICE_FAILED, {
+        subscriptionId: sub.id,
+        stripeInvoiceId: invoice.id,
+        attemptCount: invoice.attempt_count,
+        nextPaymentAttempt: invoice.next_payment_attempt
+          ? new Date(invoice.next_payment_attempt * 1000)
+          : null,
+      });
+      return;
+    }
 
     // Solo iniciamos grace si NO había uno ya — sino el alumno podría
     // re-iniciar grace tras cada reintento de Stripe.
@@ -598,11 +704,16 @@ export class SubscriptionsService {
  *   confirmaron primer pago. Los tratamos como PENDING y CANCELED respectivamente.
  * - `paused` no debería llegar (no usamos pause API), pero por si acaso → PAST_DUE.
  */
-function mapStripeStatus(s: string): 'PENDING' | 'ACTIVE' | 'PAST_DUE' | 'UNPAID' | 'CANCELED' {
+function mapStripeStatus(
+  s: string,
+): 'PENDING' | 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'UNPAID' | 'CANCELED' {
   switch (s) {
     case 'active':
-    case 'trialing':
       return 'ACTIVE';
+    case 'trialing':
+      // Estado propio: el gate de contenido de la membresía (trialLessonLimit)
+      // y la UI de cuenta distinguen "en prueba" de "activa".
+      return 'TRIALING';
     case 'past_due':
       return 'PAST_DUE';
     case 'unpaid':

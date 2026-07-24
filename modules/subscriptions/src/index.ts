@@ -57,6 +57,7 @@ export {
   MembershipPlanNotFoundError,
   MembershipPageInactiveError,
   MembershipConfigIncompleteError,
+  MembershipNotTrialingError,
 } from './errors.js';
 
 export function buildSubscriptionsModule(_service: SubscriptionsService): DidactaModule {

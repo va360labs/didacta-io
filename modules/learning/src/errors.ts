@@ -47,6 +47,20 @@ export class LessonLockedError extends LearningError {
   }
 }
 
+/**
+ * La lección queda fuera del límite de contenido del PERIODO DE PRUEBA de la
+ * membresía (trialLessonLimit): se desbloquea al pagar (fin del trial), no en
+ * una fecha. Distinta de LessonLockedError (drip por calendario).
+ */
+export class TrialContentLockedError extends LearningError {
+  constructor() {
+    super(
+      'TRIAL_CONTENT_LOCKED',
+      'Esta lección estará disponible cuando termine tu periodo de prueba. Puedes pagar ahora para desbloquearla ya.',
+    );
+  }
+}
+
 export class ScormPackageInvalidError extends LearningError {
   constructor(reason: string) {
     super('SCORM_PACKAGE_INVALID', `Paquete SCORM inválido: ${reason}`);

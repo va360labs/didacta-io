@@ -61,6 +61,8 @@ export interface MembershipPage {
   standaloneTotalCents: number | null;
   stats: MembershipStats;
   testimonial: { quote: string; author: string; role: string | null } | null;
+  /** Lecciones visibles por curso durante la prueba (0 = acceso completo). */
+  trialLessonLimit: number;
 }
 
 export interface MembershipConfig {
@@ -70,6 +72,8 @@ export interface MembershipConfig {
   subheadline: string | null;
   accessGroupId: string | null;
   showCourses: boolean;
+  /** Lecciones visibles por curso durante el trial (0 = sin límite). */
+  trialLessonLimit: number;
   coursePrices: Array<{ courseId: string; amountCents: number }>;
   testimonialQuote: string | null;
   testimonialAuthor: string | null;
@@ -82,6 +86,7 @@ export interface MembershipConfigInput {
   subheadline?: string | null;
   accessGroupId?: string | null;
   showCourses?: boolean;
+  trialLessonLimit?: number;
   coursePrices?: Array<{ courseId: string; amountCents: number }>;
   testimonialQuote?: string | null;
   testimonialAuthor?: string | null;

@@ -2334,6 +2334,11 @@ model ModBillingWebhookEvent {
 enum SubscriptionStatus {
   /// Sesión Checkout creada, esperando que Stripe nos confirme la suscripción.
   PENDING
+  /// Periodo de prueba en curso (Stripe `trialing`). Tiene acceso, pero la
+  /// membresía puede limitar el contenido (trialLessonLimit). Si el primer
+  /// cobro al terminar la prueba falla, pasa DIRECTO a UNPAID (sin grace:
+  /// la gracia es para quien ya pagó alguna vez, no para un trial impagado).
+  TRIALING
   /// Suscripción activa — invoice del periodo actual pagado.
   ACTIVE
   /// Invoice del periodo actual falló. Estamos en grace period: el alumno
@@ -2404,6 +2409,10 @@ model ModSubscriptionsSubscription {
   canceledAt           DateTime?          @map("canceled_at")
   /// Causa de cancelación para auditoría: 'user_request' | 'unpaid_grace_expired' | 'admin'.
   canceledReason       String?            @map("canceled_reason")
+  /// Fin estimado del periodo de prueba (solo status TRIALING). Se calcula en
+  /// el fulfillment (now + plan.trialDays); Stripe es la fuente de verdad y
+  /// los webhooks posteriores convergen el estado real.
+  trialEndsAt          DateTime?          @map("trial_ends_at")
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
 
@@ -2472,6 +2481,11 @@ model ModSubscriptionsMembershipConfig {
   accessGroupId     String?  @map("access_group_id") @db.Uuid
   /// Mostrar el catálogo de cursos publicados en "Qué incluye".
   showCourses       Boolean  @default(true) @map("show_courses")
+  /// DRIP del periodo de prueba: nº de lecciones (en orden global del curso)
+  /// visibles POR CURSO mientras la membresía está TRIALING. 0 = sin límite
+  /// (el trial ve todo). Solo afecta a cursos cuyo único acceso viene del
+  /// grupo de la membresía — una compra directa nunca se limita.
+  trialLessonLimit  Int      @default(5) @map("trial_lesson_limit")
   /// Precios individuales de referencia por curso (lo que costarían por
   /// separado, p.ej. en va360.academy): [{ courseId, amountCents }].
   coursePrices      Json     @default("[]") @map("course_prices")

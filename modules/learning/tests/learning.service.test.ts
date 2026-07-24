@@ -304,6 +304,10 @@ function makeFakePrisma() {
       modLearningDripSchedule: {
         findMany: vi.fn(async () => [] as unknown[]),
       },
+      // Sin config de membresía → el gate de trial es no-op en estos tests.
+      modSubscriptionsMembershipConfig: {
+        findUnique: vi.fn(async () => null),
+      },
       modLearningProgress: {
         count: vi.fn(async ({ where }: { where: { enrollmentId: string; completed: boolean } }) => {
           return [...progress.values()].filter(

@@ -55,6 +55,10 @@ function build(opts: {
             }
           : null,
     },
+    // Gate de trial de la membresía: sin config → no aplica (estos tests son de drip puro).
+    modSubscriptionsMembershipConfig: {
+      findUnique: async () => null,
+    },
     modAccessGroupMember: {
       findMany: async () => (opts.memberGroupIds ?? []).map((groupId) => ({ groupId })),
     },

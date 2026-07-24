@@ -41,14 +41,16 @@ import type {
 
 // ---------- Mocks ----------
 
-type SubStatus = 'PENDING' | 'ACTIVE' | 'PAST_DUE' | 'UNPAID' | 'CANCELED';
+type SubStatus = 'PENDING' | 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'UNPAID' | 'CANCELED';
 type InvoiceStatus = 'OPEN' | 'PAID' | 'UNCOLLECTIBLE' | 'VOID';
 
 interface SubRow {
   id: string;
   tenantId: string;
   userId: string;
-  courseId: string;
+  courseId: string | null;
+  /** Plan de membresía — null en subs por curso. */
+  planId?: string | null;
   stripeSubscriptionId: string | null;
   stripeCustomerId: string;
   stripePriceId: string;
@@ -61,6 +63,7 @@ interface SubRow {
   gracePeriodEndsAt: Date | null;
   canceledAt: Date | null;
   canceledReason: string | null;
+  trialEndsAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -114,15 +117,21 @@ class MockPrisma {
         } else if (typeof statusFilter === 'string') {
           statusOk = s.status === statusFilter;
         }
-        if (tenantOk && idOk && userOk && courseOk && statusOk) return s;
+        // Copia: Prisma devuelve snapshots — si devolviéramos la referencia
+        // viva, un update posterior mutaría lo que el service ya leyó y las
+        // comparaciones old-status vs new-status quedarían siempre iguales.
+        if (tenantOk && idOk && userOk && courseOk && statusOk) return { ...s };
       }
       return null;
     },
     findUnique: async (args: { where: { id?: string; stripeSubscriptionId?: string } }) => {
-      if (args.where.id) return this.subs.get(args.where.id) ?? null;
+      if (args.where.id) {
+        const row = this.subs.get(args.where.id);
+        return row ? { ...row } : null;
+      }
       if (args.where.stripeSubscriptionId) {
         for (const s of this.subs.values()) {
-          if (s.stripeSubscriptionId === args.where.stripeSubscriptionId) return s;
+          if (s.stripeSubscriptionId === args.where.stripeSubscriptionId) return { ...s };
         }
       }
       return null;
@@ -180,6 +189,18 @@ class MockPrisma {
       return [...this.invoices.values()].filter(
         (i) => i.tenantId === args.where.tenantId && i.subscriptionId === args.where.subscriptionId,
       );
+    },
+    // Evidencia de pago del trial: { subscriptionId, status: 'PAID', amount: { gt: 0 } }.
+    findFirst: async (args: {
+      where: { subscriptionId?: string; status?: InvoiceStatus; amount?: { gt?: number } };
+    }) => {
+      for (const i of this.invoices.values()) {
+        if (args.where.subscriptionId && i.subscriptionId !== args.where.subscriptionId) continue;
+        if (args.where.status && i.status !== args.where.status) continue;
+        if (args.where.amount?.gt !== undefined && !(i.amount > args.where.amount.gt)) continue;
+        return { ...i };
+      }
+      return null;
     },
     create: async (args: { data: Omit<InvoiceRow, 'id' | 'createdAt' | 'updatedAt'> }) => {
       this.invSeq += 1;
@@ -291,6 +312,37 @@ class StripeStub implements SubscriptionsStripeAdapter {
 
   constructWebhookEvent(): Stripe.Event {
     throw new Error('not used in unit tests');
+  }
+
+  async createProduct(): Promise<string> {
+    throw new Error('not used in unit tests');
+  }
+
+  async updateProduct(): Promise<void> {
+    throw new Error('not used in unit tests');
+  }
+
+  async createRecurringPrice(): Promise<string> {
+    throw new Error('not used in unit tests');
+  }
+
+  endTrialNowCalls: string[] = [];
+  endTrialNowResult: (StripeSubscriptionView & { latestInvoicePaid: boolean }) | null = null;
+
+  async endTrialNow(
+    subscriptionId: string,
+  ): Promise<StripeSubscriptionView & { latestInvoicePaid: boolean }> {
+    this.endTrialNowCalls.push(subscriptionId);
+    return (
+      this.endTrialNowResult ?? {
+        id: subscriptionId,
+        status: 'active',
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd: Math.floor(Date.now() / 1000) + 86400 * 30,
+        canceledAt: null,
+        latestInvoicePaid: true,
+      }
+    );
   }
 }
 
@@ -697,6 +749,243 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
     expect(publisher.events.some((e) => e.name === 'subscriptions.subscription.canceled')).toBe(
       true,
     );
+  });
+});
+
+// ---------- Periodo de PRUEBA (TRIALING) ----------
+
+/** Fila base de una suscripción de MEMBRESÍA en trial (courseId null + planId). */
+function seedTrialingMembership(prisma: MockPrisma, over: Partial<SubRow> = {}): SubRow {
+  const row: SubRow = {
+    id: 's_trial',
+    tenantId: 't',
+    userId: 'u',
+    courseId: null,
+    planId: 'plan_1',
+    stripeSubscriptionId: 'sub_stripe_1',
+    stripeCustomerId: 'cus_x',
+    stripePriceId: 'price_recurring',
+    status: 'TRIALING',
+    unitAmount: 3990,
+    currency: 'eur',
+    interval: 'month',
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: false,
+    gracePeriodEndsAt: null,
+    canceledAt: null,
+    canceledReason: null,
+    trialEndsAt: new Date(Date.now() + 86400 * 1000),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...over,
+  };
+  prisma.subs.set(row.id, row);
+  return row;
+}
+
+describe('SubscriptionsService — periodo de prueba (TRIALING)', () => {
+  it('customer.subscription.updated con status trialing → TRIALING + sincroniza trialEndsAt', async () => {
+    const { service, prisma } = buildSystem();
+    seedTrialingMembership(prisma, { status: 'PENDING', trialEndsAt: null });
+    const trialEnd = Math.floor(Date.now() / 1000) + 86400;
+    const event = {
+      id: 'evt_t1',
+      type: 'customer.subscription.updated',
+      data: { object: makeStripeSub({ status: 'trialing', trial_end: trialEnd }) },
+    } as unknown as Stripe.Event;
+    await service.handleWebhookEvent(event, {});
+    const sub = prisma.subs.get('s_trial')!;
+    expect(sub.status).toBe('TRIALING');
+    expect(sub.trialEndsAt?.getTime()).toBe(trialEnd * 1000);
+  });
+
+  it('ORDEN REAL de Stripe: updated(active) SIN invoice pagada NO saca la sub de TRIALING (el gate sigue encendido)', async () => {
+    // Al terminar el trial, Stripe manda updated(active) ANTES de intentar el
+    // cobro. Aceptarlo a ciegas apagaría el gate de contenido y regalaría el
+    // grace del dunning a quien nunca pagó.
+    const { service, prisma } = buildSystem();
+    seedTrialingMembership(prisma);
+    await service.handleWebhookEvent(
+      {
+        id: 'evt_o1',
+        type: 'customer.subscription.updated',
+        data: { object: makeStripeSub({ status: 'active', trial_end: null }) },
+      } as unknown as Stripe.Event,
+      {},
+    );
+    const sub = prisma.subs.get('s_trial')!;
+    expect(sub.status).toBe('TRIALING');
+    // Conserva el trialEndsAt previo (informativo) aunque Stripe ya lo nulló.
+    expect(sub.trialEndsAt).not.toBeNull();
+  });
+
+  it('ORDEN REAL: updated(active) tras invoice PAID > 0 SÍ pasa a ACTIVE', async () => {
+    const { service, prisma } = buildSystem();
+    const row = seedTrialingMembership(prisma);
+    prisma.invoices.set('inv_paid', {
+      id: 'inv_paid',
+      tenantId: 't',
+      subscriptionId: row.id,
+      stripeInvoiceId: 'in_x',
+      status: 'PAID',
+      amount: 3990,
+      currency: 'eur',
+      hostedInvoiceUrl: null,
+      paidAt: new Date(),
+      periodStart: new Date(),
+      periodEnd: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await service.handleWebhookEvent(
+      {
+        id: 'evt_o2',
+        type: 'customer.subscription.updated',
+        data: { object: makeStripeSub({ status: 'active', trial_end: null }) },
+      } as unknown as Stripe.Event,
+      {},
+    );
+    expect(prisma.subs.get('s_trial')!.status).toBe('ACTIVE');
+    expect(prisma.subs.get('s_trial')!.trialEndsAt).toBeNull();
+  });
+
+  it('cancelar DURANTE el trial sí transiciona: updated(canceled) desde TRIALING → CANCELED + evento', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    seedTrialingMembership(prisma);
+    await service.handleWebhookEvent(
+      {
+        id: 'evt_o3',
+        type: 'customer.subscription.updated',
+        data: { object: makeStripeSub({ status: 'canceled' }) },
+      } as unknown as Stripe.Event,
+      {},
+    );
+    expect(prisma.subs.get('s_trial')!.status).toBe('CANCELED');
+    const canceled = publisher.events.find(
+      (e) => e.name === 'subscriptions.subscription.canceled' && e.payload['immediate'] === true,
+    );
+    expect(canceled).toBeTruthy();
+  });
+
+  it('FIN DE TRIAL SIN PAGO: invoice.payment_failed con sub TRIALING → UNPAID directo, SIN grace, emite unpaid', async () => {
+    const { service, prisma, publisher } = buildSystem({ gracePeriodDays: 3 });
+    seedTrialingMembership(prisma);
+    const event = {
+      id: 'evt_t2',
+      type: 'invoice.payment_failed',
+      data: { object: makeStripeInvoice() },
+    } as unknown as Stripe.Event;
+    await service.handleWebhookEvent(event, {});
+    const sub = prisma.subs.get('s_trial')!;
+    // Pierde el acceso YA: nada de PAST_DUE ni 3 días de gracia — la gracia es
+    // para quien ya pagó alguna vez, no para un trial que nunca pagó.
+    expect(sub.status).toBe('UNPAID');
+    expect(sub.gracePeriodEndsAt).toBeNull();
+    expect(sub.trialEndsAt).toBeNull();
+    const unpaid = publisher.events.find((e) => e.name === 'subscriptions.subscription.unpaid');
+    expect(unpaid).toBeTruthy();
+    expect(unpaid!.payload['planId']).toBe('plan_1');
+    expect(unpaid!.payload['trialExpired']).toBe(true);
+    // No se emitió past_due (no hay dunning con gracia para el trial).
+    expect(publisher.events.some((e) => e.name === 'subscriptions.subscription.past_due')).toBe(
+      false,
+    );
+  });
+
+  it('FIN DE TRIAL PAGADO: invoice.paid con sub TRIALING → ACTIVE y limpia trialEndsAt', async () => {
+    const { service, prisma } = buildSystem();
+    seedTrialingMembership(prisma);
+    const event = {
+      id: 'evt_t3',
+      type: 'invoice.paid',
+      data: { object: makeStripeInvoice({ amount_paid: 3990 }) },
+    } as unknown as Stripe.Event;
+    await service.handleWebhookEvent(event, {});
+    const sub = prisma.subs.get('s_trial')!;
+    expect(sub.status).toBe('ACTIVE');
+    expect(sub.trialEndsAt).toBeNull();
+  });
+
+  it('recovery tras impago del trial: invoice.paid con sub UNPAID → ACTIVE + activated recovery (re-concede acceso)', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    seedTrialingMembership(prisma, { status: 'UNPAID', trialEndsAt: null });
+    const event = {
+      id: 'evt_t4',
+      type: 'invoice.paid',
+      data: { object: makeStripeInvoice({ amount_paid: 3990 }) },
+    } as unknown as Stripe.Event;
+    await service.handleWebhookEvent(event, {});
+    expect(prisma.subs.get('s_trial')!.status).toBe('ACTIVE');
+    const ev = publisher.events.find(
+      (e) => e.name === 'subscriptions.subscription.activated' && e.payload['recovery'] === true,
+    );
+    expect(ev).toBeTruthy();
+    expect(ev!.payload['planId']).toBe('plan_1');
+  });
+
+  it('endurecimiento: updated a unpaid/canceled desde ACTIVE publica los eventos de revocación', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    seedTrialingMembership(prisma, { status: 'ACTIVE', trialEndsAt: null });
+    await service.handleWebhookEvent(
+      {
+        id: 'evt_t5',
+        type: 'customer.subscription.updated',
+        data: { object: makeStripeSub({ status: 'unpaid' }) },
+      } as unknown as Stripe.Event,
+      {},
+    );
+    const unpaid = publisher.events.find((e) => e.name === 'subscriptions.subscription.unpaid');
+    expect(unpaid).toBeTruthy();
+    expect(unpaid!.payload['planId']).toBe('plan_1');
+    expect(prisma.subs.get('s_trial')!.status).toBe('UNPAID');
+
+    seedTrialingMembership(prisma, {
+      id: 's_trial2',
+      stripeSubscriptionId: 'sub_stripe_2',
+      status: 'ACTIVE',
+      trialEndsAt: null,
+    });
+    await service.handleWebhookEvent(
+      {
+        id: 'evt_t6',
+        type: 'customer.subscription.updated',
+        data: { object: makeStripeSub({ id: 'sub_stripe_2', status: 'canceled' }) },
+      } as unknown as Stripe.Event,
+      {},
+    );
+    const canceled = publisher.events.find(
+      (e) => e.name === 'subscriptions.subscription.canceled' && e.payload['immediate'] === true,
+    );
+    expect(canceled).toBeTruthy();
+    expect(prisma.subs.get('s_trial2')!.status).toBe('CANCELED');
+  });
+
+  it('updated a unpaid desde TRIALING sin pago NO transiciona (lo resuelve invoice.payment_failed → UNPAID directo)', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    seedTrialingMembership(prisma);
+    await service.handleWebhookEvent(
+      {
+        id: 'evt_t7',
+        type: 'customer.subscription.updated',
+        data: { object: makeStripeSub({ status: 'unpaid' }) },
+      } as unknown as Stripe.Event,
+      {},
+    );
+    expect(prisma.subs.get('s_trial')!.status).toBe('TRIALING');
+    expect(publisher.events.some((e) => e.name === 'subscriptions.subscription.unpaid')).toBe(
+      false,
+    );
+    // …y cuando llega el invoice.payment_failed, ahí sí: UNPAID sin gracia.
+    await service.handleWebhookEvent(
+      {
+        id: 'evt_t8',
+        type: 'invoice.payment_failed',
+        data: { object: makeStripeInvoice() },
+      } as unknown as Stripe.Event,
+      {},
+    );
+    expect(prisma.subs.get('s_trial')!.status).toBe('UNPAID');
+    expect(publisher.events.some((e) => e.name === 'subscriptions.subscription.unpaid')).toBe(true);
   });
 });
 

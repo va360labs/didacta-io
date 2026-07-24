@@ -97,11 +97,13 @@ export function SubscriptionTab() {
     }
   }
 
-  async function cancelSub(subId: string, immediate: boolean) {
+  async function cancelSub(sub: SubscriptionRow, immediate: boolean) {
     const token = authStorage.getAccessToken();
     if (!token) return;
+    const subId = sub.id;
+    const what = sub.planId ? 'a los cursos de la membresía' : 'al curso';
     const message = immediate
-      ? '¿Cancelar la suscripción AHORA? Perderás acceso al curso inmediatamente.'
+      ? `¿Cancelar la suscripción AHORA? Perderás acceso ${what} inmediatamente.`
       : '¿Cancelar al final del periodo actual? Mantendrás acceso hasta esa fecha.';
     if (!window.confirm(message)) return;
     setBusyId(subId);
@@ -109,12 +111,59 @@ export function SubscriptionTab() {
     setActionSuccess(null);
     try {
       const res = await subscriptionsApi.cancel(token, subId, immediate);
-      setSubs((prev) => prev.map((s) => (s.id === subId ? res.subscription : s)));
+      // Conservar planName/courseTitle: la respuesta trae la fila sin enriquecer.
+      setSubs((prev) =>
+        prev.map((s) =>
+          s.id === subId
+            ? { ...res.subscription, planName: s.planName, courseTitle: s.courseTitle }
+            : s,
+        ),
+      );
       setActionSuccess(
         immediate ? 'Suscripción cancelada.' : 'Cancelación al final del periodo aplicada.',
       );
     } catch (e) {
       setActionError(e instanceof ApiHttpError ? e.message : 'No se pudo cancelar la suscripción.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  /** CTA "Pagar ahora": termina el trial de la membresía y cobra ya. */
+  async function payNow(subId: string) {
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    if (
+      !window.confirm(
+        '¿Terminar tu periodo de prueba y pagar ahora? Se cobrará el primer periodo inmediatamente y tendrás acceso completo a todo el contenido.',
+      )
+    )
+      return;
+    setBusyId(subId);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const res = await subscriptionsApi.membershipPayNow(token);
+      // La respuesta del módulo trae la fila cruda: conservamos el
+      // enriquecimiento (planName/courseTitle) que puso el listado.
+      setSubs((prev) =>
+        prev.map((s) =>
+          s.id === res.subscription.id
+            ? { ...res.subscription, planName: s.planName, courseTitle: s.courseTitle }
+            : s,
+        ),
+      );
+      if (res.subscription.status === 'ACTIVE') {
+        setActionSuccess(
+          '¡Pago realizado! Tu membresía está activa y todo el contenido desbloqueado.',
+        );
+      } else {
+        setActionError(
+          'No se pudo completar el cobro con tu tarjeta. Stripe lo reintentará automáticamente; si el problema persiste, contacta con tu academia.',
+        );
+      }
+    } catch (e) {
+      setActionError(e instanceof ApiHttpError ? e.message : 'No se pudo procesar el pago.');
     } finally {
       setBusyId(null);
     }
@@ -215,72 +264,104 @@ export function SubscriptionTab() {
         />
       ))}
 
-      {subs.map((sub) => (
-        <Card key={sub.id}>
-          <CardHeader>
-            <CardTitle className="flex flex-wrap items-center gap-2">
-              <Icon name="book" size={18} />
-              <span className="font-mono text-sm">curso {sub.courseId.slice(0, 8)}…</span>
-              <SubStatusBadge status={sub.status} />
-            </CardTitle>
-            <CardDescription>
-              {formatAmount(sub.unitAmount, sub.currency)} / {formatInterval(sub.interval)}
-              {sub.currentPeriodEnd ? (
-                <>
-                  {' · '}
-                  Próximo cobro: {new Date(sub.currentPeriodEnd).toLocaleDateString('es-ES')}
-                </>
-              ) : null}
-              {sub.cancelAtPeriodEnd ? (
-                <>
-                  {' · '}
-                  <span className="font-semibold text-warning-800">
-                    Cancelación programada al final del periodo
-                  </span>
-                </>
-              ) : null}
-              {sub.gracePeriodEndsAt && sub.status === 'PAST_DUE' ? (
-                <>
-                  {' · '}
-                  <span className="font-semibold text-warning-800">
-                    Reintentando cobro hasta{' '}
-                    {new Date(sub.gracePeriodEndsAt).toLocaleDateString('es-ES')}
-                  </span>
-                </>
-              ) : null}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {sub.status !== 'CANCELED' && !sub.cancelAtPeriodEnd ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => cancelSub(sub.id, false)}
-                  disabled={busyId === sub.id}
-                >
-                  {busyId === sub.id ? 'Cancelando…' : 'Cancelar al final del periodo'}
+      {subs.map((sub) => {
+        const isMembership = sub.planId !== null;
+        const title = isMembership
+          ? (sub.planName ?? 'Membresía')
+          : (sub.courseTitle ?? `curso ${(sub.courseId ?? '').slice(0, 8)}…`);
+        return (
+          <Card key={sub.id}>
+            <CardHeader>
+              <CardTitle className="flex flex-wrap items-center gap-2">
+                <Icon name={isMembership ? 'sparkles' : 'book'} size={18} />
+                <span>{title}</span>
+                <SubStatusBadge status={sub.status} />
+              </CardTitle>
+              <CardDescription>
+                {formatAmount(sub.unitAmount, sub.currency)} / {formatInterval(sub.interval)}
+                {sub.status === 'TRIALING' && sub.trialEndsAt ? (
+                  <>
+                    {' · '}
+                    <span className="font-semibold text-brand-700">
+                      {sub.cancelAtPeriodEnd
+                        ? `Prueba gratis hasta el ${new Date(sub.trialEndsAt).toLocaleDateString('es-ES')} — no se te cobrará (cancelación programada)`
+                        : `Prueba gratis hasta el ${new Date(sub.trialEndsAt).toLocaleDateString('es-ES')} — después se cobra el primer periodo`}
+                    </span>
+                  </>
+                ) : sub.currentPeriodEnd ? (
+                  <>
+                    {' · '}
+                    Próximo cobro: {new Date(sub.currentPeriodEnd).toLocaleDateString('es-ES')}
+                  </>
+                ) : null}
+                {sub.cancelAtPeriodEnd ? (
+                  <>
+                    {' · '}
+                    <span className="font-semibold text-warning-800">
+                      Cancelación programada al final del periodo
+                    </span>
+                  </>
+                ) : null}
+                {sub.gracePeriodEndsAt && sub.status === 'PAST_DUE' ? (
+                  <>
+                    {' · '}
+                    <span className="font-semibold text-warning-800">
+                      Reintentando cobro hasta{' '}
+                      {new Date(sub.gracePeriodEndsAt).toLocaleDateString('es-ES')}
+                    </span>
+                  </>
+                ) : null}
+                {sub.status === 'UNPAID' ? (
+                  <>
+                    {' · '}
+                    <span className="font-semibold text-danger-700">
+                      Acceso suspendido por impago
+                    </span>
+                  </>
+                ) : null}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {isMembership && sub.status === 'TRIALING' && !sub.cancelAtPeriodEnd ? (
+                  <Button
+                    type="button"
+                    onClick={() => void payNow(sub.id)}
+                    disabled={busyId === sub.id}
+                  >
+                    {busyId === sub.id ? 'Procesando…' : 'Pagar ahora y activar'}
+                  </Button>
+                ) : null}
+                {sub.status !== 'CANCELED' && !sub.cancelAtPeriodEnd ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => cancelSub(sub, false)}
+                    disabled={busyId === sub.id}
+                  >
+                    {busyId === sub.id ? 'Cancelando…' : 'Cancelar al final del periodo'}
+                  </Button>
+                ) : null}
+                {sub.status !== 'CANCELED' ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => cancelSub(sub, true)}
+                    disabled={busyId === sub.id}
+                  >
+                    {busyId === sub.id ? 'Cancelando…' : 'Cancelar ahora'}
+                  </Button>
+                ) : null}
+                <Button type="button" variant="ghost" onClick={() => void loadInvoices(sub.id)}>
+                  Ver facturas
                 </Button>
-              ) : null}
-              {sub.status !== 'CANCELED' ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => cancelSub(sub.id, true)}
-                  disabled={busyId === sub.id}
-                >
-                  {busyId === sub.id ? 'Cancelando…' : 'Cancelar ahora'}
-                </Button>
-              ) : null}
-              <Button type="button" variant="ghost" onClick={() => void loadInvoices(sub.id)}>
-                Ver facturas
-              </Button>
-            </div>
+              </div>
 
-            {invoicesById[sub.id] ? <InvoicesList invoices={invoicesById[sub.id]!} /> : null}
-          </CardContent>
-        </Card>
-      ))}
+              {invoicesById[sub.id] ? <InvoicesList invoices={invoicesById[sub.id]!} /> : null}
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }
@@ -353,6 +434,7 @@ function ExternalSubCard({
 function SubStatusBadge({ status }: { status: SubscriptionStatus }) {
   const map: Record<SubscriptionStatus, { label: string; className: string }> = {
     PENDING: { label: 'Pendiente', className: 'border-border-strong text-text-muted' },
+    TRIALING: { label: 'En prueba', className: 'bg-brand-600 text-white' },
     ACTIVE: { label: 'Activa', className: 'bg-success-600 text-white' },
     PAST_DUE: { label: 'Pago pendiente', className: 'bg-warning-600 text-white' },
     UNPAID: { label: 'Impagada', className: 'bg-danger-600 text-white' },

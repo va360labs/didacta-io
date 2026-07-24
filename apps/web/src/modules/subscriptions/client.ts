@@ -13,14 +13,27 @@
 
 import { apiFetch } from '@/lib/api-client';
 
-export type SubscriptionStatus = 'PENDING' | 'ACTIVE' | 'PAST_DUE' | 'UNPAID' | 'CANCELED';
+export type SubscriptionStatus =
+  | 'PENDING'
+  | 'TRIALING'
+  | 'ACTIVE'
+  | 'PAST_DUE'
+  | 'UNPAID'
+  | 'CANCELED';
 export type InvoiceStatus = 'OPEN' | 'PAID' | 'UNCOLLECTIBLE' | 'VOID';
 
 export interface SubscriptionRow {
   id: string;
   tenantId: string;
   userId: string;
-  courseId: string;
+  /** null en suscripciones de MEMBRESÍA (acceso a todo vía grupo). */
+  courseId: string | null;
+  /** Plan de membresía (solo filas de membresía). */
+  planId: string | null;
+  /** Nombre real del plan ("VA360.pro Anual") — lo resuelve el backend. */
+  planName?: string | null;
+  /** Título real del curso (filas por curso) — lo resuelve el backend. */
+  courseTitle?: string | null;
   stripeSubscriptionId: string | null;
   stripeCustomerId: string;
   stripePriceId: string;
@@ -33,6 +46,8 @@ export interface SubscriptionRow {
   gracePeriodEndsAt: string | null;
   canceledAt: string | null;
   canceledReason: string | null;
+  /** Fin del periodo de prueba (solo status TRIALING). */
+  trialEndsAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -98,6 +113,18 @@ export const subscriptionsApi = {
     return apiFetch<{ subscription: SubscriptionRow }>(
       `${BASE}/me/${encodeURIComponent(subscriptionId)}/cancel`,
       { method: 'POST', body: JSON.stringify({ immediate }) },
+      bearer,
+    );
+  },
+
+  /**
+   * Termina el periodo de prueba de la MEMBRESÍA ya: Stripe cobra el primer
+   * periodo y (si el cargo entra) se desbloquea todo el contenido.
+   */
+  async membershipPayNow(bearer: string): Promise<{ subscription: SubscriptionRow }> {
+    return apiFetch<{ subscription: SubscriptionRow }>(
+      `${BASE}/me/membership/pay-now`,
+      { method: 'POST', body: JSON.stringify({}) },
       bearer,
     );
   },

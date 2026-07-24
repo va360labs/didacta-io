@@ -346,6 +346,12 @@ export function UneteView() {
                       )} el ${nextDateLabel(firstChargeDate)}.`
                     : `Impuestos incluidos. Primer cargo hoy.`}
                 </p>
+                {trialDays > 0 && page.trialLessonLimit > 0 ? (
+                  <p className="mt-1.5 text-[13px] leading-5 text-text-muted">
+                    Durante la prueba ves las primeras {page.trialLessonLimit} clases de cada curso;
+                    al pagar se desbloquea todo.
+                  </p>
+                ) : null}
                 <p className="mt-1.5 text-[13px] text-text-muted">
                   ¿Tienes un cupón? Podrás aplicarlo en la pantalla de pago.
                 </p>

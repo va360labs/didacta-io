@@ -18,6 +18,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type Stripe from 'stripe';
 import { MembershipService } from '../src/membership.service.js';
 import {
+  MembershipNotTrialingError,
   MembershipPageInactiveError,
   MembershipPlanNotFoundError,
   StripeConfigMissingError,
@@ -77,6 +78,8 @@ interface SubRow {
   unitAmount: number;
   currency: string;
   interval: string;
+  trialEndsAt?: Date | null;
+  currentPeriodEnd?: Date | null;
 }
 
 interface CourseRow {
@@ -171,6 +174,7 @@ class MockPrisma {
         subheadline: null,
         accessGroupId: null,
         showCourses: true,
+        trialLessonLimit: 5,
         coursePrices: [],
         testimonialQuote: null,
         testimonialAuthor: null,
@@ -191,12 +195,35 @@ class MockPrisma {
             (s) => s.stripeSubscriptionId === args.where.stripeSubscriptionId,
           ) ?? null)
         : null,
+    findFirst: async (args: { where: Record<string, unknown> }) => {
+      // Soporta el filtro de payNow: { tenantId, userId, planId: { not: null }, status }.
+      const { planId, ...rest } = args.where;
+      for (const s of this.subs.values()) {
+        if (!matches(s as never, rest)) continue;
+        if (
+          planId &&
+          typeof planId === 'object' &&
+          'not' in (planId as object) &&
+          (planId as { not: unknown }).not === null &&
+          (s as { planId?: string | null }).planId == null
+        )
+          continue;
+        return { ...s };
+      }
+      return null;
+    },
     count: async (args: { where: Record<string, unknown> }) =>
       [...this.subs.values()].filter((s) => matches(s as never, args.where)).length,
     create: async (args: { data: Record<string, unknown> }) => {
       this.seq += 1;
       const row = { id: `sub_${this.seq}`, ...(args.data as object) } as SubRow;
       this.subs.set(row.id, row);
+      return { ...row };
+    },
+    update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+      const row = this.subs.get(args.where.id);
+      if (!row) throw new Error('sub not found');
+      Object.assign(row, args.data, { updatedAt: new Date() });
       return { ...row };
     },
   };
@@ -232,6 +259,14 @@ function stubStripe() {
     id: 'cs_test_1',
     url: `https://checkout.stripe.test/${p.priceId}`,
   }));
+  const endTrialNow = vi.fn(async (subscriptionId: string) => ({
+    id: subscriptionId,
+    status: 'active',
+    cancelAtPeriodEnd: false,
+    currentPeriodEnd: Math.floor(Date.now() / 1000) + 86400 * 30,
+    canceledAt: null,
+    latestInvoicePaid: true,
+  }));
   const adapter: SubscriptionsStripeAdapter = {
     createCheckoutSession,
     retrievePrice: async () => {
@@ -246,8 +281,16 @@ function stubStripe() {
     createProduct,
     updateProduct,
     createRecurringPrice,
+    endTrialNow,
   };
-  return { adapter, createProduct, updateProduct, createRecurringPrice, createCheckoutSession };
+  return {
+    adapter,
+    createProduct,
+    updateProduct,
+    createRecurringPrice,
+    createCheckoutSession,
+    endTrialNow,
+  };
 }
 
 function stubPublisher() {
@@ -705,5 +748,101 @@ describe('MembershipService · fulfillment (webhook)', () => {
       provision,
     );
     expect(provision).toHaveBeenCalledWith(expect.objectContaining({ email: 'buyer@x.com' }));
+  });
+
+  it('plan CON trialDays → la sub nace TRIALING con trialEndsAt ≈ now + trialDays', async () => {
+    const plan = await ctx.service.createPlan(TENANT, {
+      name: 'Anual con prueba',
+      intervalMonths: 12,
+      amountCents: 39_900,
+      trialDays: 7,
+    });
+    const provision = vi.fn(async () => ({ userId: 'user_t', created: true }));
+    await ctx.service.fulfillMembershipCheckout(
+      membershipSession({
+        metadata: { membership: '1', tenantId: TENANT, planId: plan.id } as never,
+        subscription: 'sub_stripe_trial' as never,
+      }),
+      provision,
+    );
+    const sub = [...ctx.prisma.subs.values()].find(
+      (s) => s.stripeSubscriptionId === 'sub_stripe_trial',
+    )!;
+    expect(sub.status).toBe('TRIALING');
+    const expected = Date.now() + 7 * 86_400_000;
+    expect(Math.abs((sub.trialEndsAt as Date).getTime() - expected)).toBeLessThan(60_000);
+  });
+});
+
+describe('MembershipService · payNow (terminar el trial y cobrar ya)', () => {
+  let ctx: ReturnType<typeof build>;
+  let planId: string;
+
+  beforeEach(async () => {
+    ctx = build();
+    await ctx.service.updateConfig(TENANT, { active: true });
+    const plan = await ctx.service.createPlan(TENANT, {
+      name: 'Mensual',
+      intervalMonths: 1,
+      amountCents: 3_990,
+      trialDays: 7,
+    });
+    planId = plan.id;
+    // Membresía en trial materializada por el fulfillment.
+    await ctx.service.fulfillMembershipCheckout(
+      membershipSession({ metadata: { membership: '1', tenantId: TENANT, planId } as never }),
+      async () => ({ userId: 'user_1', created: true }),
+    );
+    ctx.pub.events.length = 0; // limpiar el activated del fulfillment
+  });
+
+  it('cargo OK → trial_end now en Stripe, sub ACTIVE, trialEndsAt null y re-anuncia activated', async () => {
+    const updated = await ctx.service.payNow(TENANT, 'user_1');
+    expect(ctx.stripe.endTrialNow).toHaveBeenCalledWith('sub_stripe_1');
+    expect(updated.status).toBe('ACTIVE');
+    expect(updated.trialEndsAt).toBeNull();
+    const ev = ctx.pub.events.find((e) => e.name === 'subscriptions.subscription.activated');
+    expect(ev).toBeTruthy();
+    expect(ev!.payload).toMatchObject({ planId, userId: 'user_1', trialEndedEarly: true });
+  });
+
+  it('cargo FALLIDO (past_due) → la sub SIGUE en TRIALING (gate encendido), sin evento activated', async () => {
+    // Sin evidencia de cobro no se desbloquea nada: los webhooks resuelven
+    // (invoice.paid → ACTIVE; invoice.payment_failed → UNPAID sin gracia).
+    ctx.stripe.endTrialNow.mockResolvedValueOnce({
+      id: 'sub_stripe_1',
+      status: 'past_due',
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: null,
+      canceledAt: null,
+      latestInvoicePaid: false,
+    });
+    const updated = await ctx.service.payNow(TENANT, 'user_1');
+    expect(updated.status).toBe('TRIALING');
+    expect(ctx.pub.events.some((e) => e.name === 'subscriptions.subscription.activated')).toBe(
+      false,
+    );
+  });
+
+  it("Stripe devuelve 'active' pero la invoice NO está pagada → sigue TRIALING (sin desbloqueo optimista)", async () => {
+    ctx.stripe.endTrialNow.mockResolvedValueOnce({
+      id: 'sub_stripe_1',
+      status: 'active',
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: Math.floor(Date.now() / 1000) + 86400 * 30,
+      canceledAt: null,
+      latestInvoicePaid: false,
+    });
+    const updated = await ctx.service.payNow(TENANT, 'user_1');
+    expect(updated.status).toBe('TRIALING');
+    expect(ctx.pub.events.some((e) => e.name === 'subscriptions.subscription.activated')).toBe(
+      false,
+    );
+  });
+
+  it('sin membresía TRIALING → MembershipNotTrialingError', async () => {
+    await expect(ctx.service.payNow(TENANT, 'user_sin_trial')).rejects.toBeInstanceOf(
+      MembershipNotTrialingError,
+    );
   });
 });

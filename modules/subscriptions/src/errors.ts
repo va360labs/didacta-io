@@ -100,3 +100,11 @@ export class MembershipConfigIncompleteError extends SubscriptionsError {
     this.name = 'MembershipConfigIncompleteError';
   }
 }
+
+/** "Pagar ahora" sin una membresía en periodo de prueba que terminar. */
+export class MembershipNotTrialingError extends SubscriptionsError {
+  constructor() {
+    super('No tienes una membresía en periodo de prueba que activar.', 'MEMBERSHIP_NOT_TRIALING');
+    this.name = 'MembershipNotTrialingError';
+  }
+}

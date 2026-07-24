@@ -19,6 +19,8 @@ const STATUS_BY_CODE: Record<string, number> = {
   MEMBERSHIP_PLAN_NOT_FOUND: HttpStatus.NOT_FOUND,
   MEMBERSHIP_PAGE_INACTIVE: HttpStatus.NOT_FOUND,
   MEMBERSHIP_CONFIG_INCOMPLETE: HttpStatus.UNPROCESSABLE_ENTITY,
+  // "Pagar ahora" sin membresía en trial que activar.
+  MEMBERSHIP_NOT_TRIALING: HttpStatus.CONFLICT,
 };
 
 @Catch(SubscriptionsError)

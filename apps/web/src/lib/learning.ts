@@ -421,10 +421,19 @@ export interface UpdateDripInput {
   isActive?: boolean;
 }
 
-/** Disponibilidad por lección (drip). Lecciones no listadas = libres. */
+/**
+ * Disponibilidad por lección (drip + trial). Lecciones no listadas = libres.
+ * reason 'TRIAL' = bloqueada por el periodo de prueba de la membresía: se
+ * desbloquea PAGANDO (availableAt null), no en una fecha.
+ */
 export interface CourseAvailability {
   drip: boolean;
-  lessons: Record<string, { availableAt: string; available: boolean }>;
+  lessons: Record<
+    string,
+    { availableAt: string | null; available: boolean; reason?: 'DRIP' | 'TRIAL' }
+  >;
+  /** Presente si la membresía en prueba limita este curso a N lecciones. */
+  trial?: { lessonLimit: number };
 }
 
 /** Progreso de una lección concreta dentro del detalle de un alumno (vista formador). */
