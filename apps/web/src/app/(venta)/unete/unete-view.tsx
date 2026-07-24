@@ -30,6 +30,7 @@ import {
   type MembershipCourse,
   type MembershipPage,
 } from '@/lib/membership';
+import { getStoredReferralCode, referralsApi, storeReferralCode } from '@/lib/referrals';
 
 /** Paleta rotativa (por hash del nombre) para los pills de categoría. */
 const CATEGORY_STYLES = [
@@ -92,6 +93,21 @@ export function UneteView() {
 
   const session = useMemo(() => authStorage.getSession(), []);
 
+  // Captura del enlace de referido (?ref=CODE): persiste el código (last-click,
+  // TTL de la ventana configurada) y registra el clic. Best-effort: un código
+  // inválido o el programa apagado no afectan en nada a la página de venta.
+  useEffect(() => {
+    const ref = params.get('ref')?.trim().toLowerCase();
+    if (!ref || !/^[a-z0-9]{3,32}$/.test(ref)) return;
+    storeReferralCode(ref);
+    referralsApi
+      .track(ref)
+      .then(({ attributionWindowDays }) => storeReferralCode(ref, attributionWindowDays))
+      .catch(() => {
+        // Silencioso: el clic es métrica, nunca UX.
+      });
+  }, [params]);
+
   useEffect(() => {
     let cancelled = false;
     getMembershipPage()
@@ -118,7 +134,11 @@ export function UneteView() {
     setPaying(true);
     setPayError(null);
     try {
-      const { url } = await startMembershipCheckout(selected.id, session?.user.email);
+      const { url } = await startMembershipCheckout(
+        selected.id,
+        session?.user.email,
+        getStoredReferralCode() ?? undefined,
+      );
       window.location.assign(url);
     } catch {
       setPayError('No se pudo iniciar el pago. Inténtalo de nuevo en unos segundos.');

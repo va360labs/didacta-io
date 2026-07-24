@@ -13,6 +13,16 @@ export const membershipCheckoutSchema = z.object({
    * en el propio checkout (session.customer_details.email del webhook).
    */
   email: z.string().email().max(200).optional(),
+  /**
+   * Código de atribución OPCIONAL (programa de referidos, ?ref= de /unete).
+   * Opaco para la membresía: viaja en la metadata de Stripe y lo interpreta
+   * mod.referrals en el fulfillment. Formato del generador de códigos.
+   */
+  referralCode: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9]{3,32}$/i)
+    .optional(),
 });
 export type MembershipCheckoutDto = z.infer<typeof membershipCheckoutSchema>;
 

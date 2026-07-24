@@ -48,6 +48,7 @@ export class MembershipPublicController {
       tenantId,
       planId: dto.planId,
       email: dto.email,
+      referralCode: dto.referralCode,
       successUrl: `${base}/unete?status=success`,
       cancelUrl: `${base}/unete?status=cancel`,
     });

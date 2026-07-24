@@ -380,6 +380,12 @@ export class MembershipService {
     email?: string;
     successUrl: string;
     cancelUrl: string;
+    /**
+     * Código de atribución opcional (p.ej. programa de referidos). Viaja
+     * opaco en la metadata de la session/subscription de Stripe y vuelve en
+     * el payload del evento de activación — este módulo NO lo interpreta.
+     */
+    referralCode?: string;
   }): Promise<{ url: string; sessionId: string }> {
     if (!this.stripe) throw new StripeConfigMissingError('secretKey');
     const config = await this.getConfig(args.tenantId);
@@ -404,6 +410,7 @@ export class MembershipService {
         tenantId: args.tenantId,
         membership: '1',
         planId: plan.id,
+        ...(args.referralCode ? { referralCode: args.referralCode } : {}),
       },
     });
     return { url: session.url, sessionId: session.id };
@@ -515,11 +522,17 @@ export class MembershipService {
       },
     });
 
+    // Atribución opaca (p.ej. referidos): si el checkout llevó referralCode,
+    // vuelve en el payload para que el consumidor interesado (bridge del host)
+    // la interprete. Este módulo no conoce su semántica.
+    const referralCode = meta['referralCode']?.trim();
     await this.publisher.publish(tenantId, userId, MEMBERSHIP_EVENT.ACTIVATED, {
       subscriptionId: sub.id,
       planId: plan.id,
       userId,
       userCreated: created,
+      stripeSubscriptionId,
+      attribution: referralCode ? { referralCode } : null,
     });
 
     return { subscriptionId: sub.id, userId, userCreated: created };

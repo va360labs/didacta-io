@@ -113,10 +113,15 @@ export async function getMembershipPage(): Promise<MembershipPage> {
 export async function startMembershipCheckout(
   planId: string,
   email?: string,
+  referralCode?: string,
 ): Promise<{ url: string }> {
   return apiFetch<{ url: string }>(`${PUBLIC_BASE}/checkout`, {
     method: 'POST',
-    body: JSON.stringify(email ? { planId, email } : { planId }),
+    body: JSON.stringify({
+      planId,
+      ...(email ? { email } : {}),
+      ...(referralCode ? { referralCode } : {}),
+    }),
   });
 }
 

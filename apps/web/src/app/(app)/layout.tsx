@@ -424,6 +424,7 @@ function buildGroups({
       { href: '/miembros', label: 'Miembros', icon: 'users' },
       { href: '/leaderboard', label: 'Leaderboard', icon: 'trophy' },
       { href: '/mensajes', label: 'Mensajes', icon: 'messages' },
+      { href: '/referidos', label: 'Referidos', icon: 'sparkles' },
     ],
   };
 
@@ -513,7 +514,10 @@ function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): SidebarG
   const facturacion: SidebarGroup = {
     label: 'Facturación',
     icon: 'shield',
-    items: [{ href: '/admin/impagos', label: 'Impagos', icon: 'shield' }],
+    items: [
+      { href: '/admin/impagos', label: 'Impagos', icon: 'shield' },
+      { href: '/admin/referidos', label: 'Referidos', icon: 'sparkles' },
+    ],
   };
   const seguridad: SidebarGroup = {
     label: 'Seguridad',

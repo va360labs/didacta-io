@@ -3254,3 +3254,175 @@ model ModLearningCourseCompetency {
   @@index([competencyId])
   @@map("mod_learning_course_competency")
 }
+
+// ============================================================================
+// mod.referrals — Programa de referidos de la membresía
+// ============================================================================
+
+enum ReferralCommissionStatus {
+  /// Devengada al cobrarse una invoice; en periodo de garantía.
+  PENDING
+  /// Garantía vencida sin incidencias (worker) o aprobación manual del admin.
+  APPROVED
+  /// Incluida en una liquidación (ModReferralsPayout).
+  PAID
+  /// Anulada por el admin (reembolso, fraude…). Motivo en `revokeReason`.
+  REVOKED
+}
+
+/// Configuración (1 fila por tenant) del programa de referidos.
+model ModReferralsConfig {
+  tenantId                String   @id @map("tenant_id") @db.Uuid
+  /// Programa activo. En false: /referidos avisa y no se registran clics
+  /// ni atribuciones nuevas (las comisiones existentes no se tocan).
+  active                  Boolean  @default(false)
+  /// Comisión en puntos básicos (bps) sobre el importe cobrado: 3000 = 30 %.
+  /// Enteros para evitar redondeos flotantes (patrón amountCents).
+  commissionBps           Int      @default(3000) @map("commission_bps")
+  /// Ámbito del devengo: FIRST_PAYMENT = solo el primer cobro de la sub
+  /// referida; RECURRING = todos los cobros dentro de `recurringMonths`.
+  scope                   String   @default("RECURRING") @map("scope")
+  /// Meses de comisión recurrente desde la atribución. NULL = ilimitado.
+  /// Solo aplica con scope RECURRING.
+  recurringMonths         Int?     @map("recurring_months")
+  /// Ventana de atribución client-side del enlace (?ref=) en días.
+  attributionWindowDays   Int      @default(30) @map("attribution_window_days")
+  /// Días de garantía antes de PENDING → APPROVED (cubre reembolsos).
+  guaranteeDays           Int      @default(14) @map("guarantee_days")
+  /// Mínimo de liquidación en céntimos. 0 = sin mínimo.
+  minPayoutCents          Int      @default(5000) @map("min_payout_cents")
+  /// Exigir membresía activa (ACTIVE/TRIALING) del referidor al DEVENGAR.
+  requireActiveMembership Boolean  @default(true) @map("require_active_membership")
+  /// Copy editable del área del miembro (/referidos). Sin datos inventados:
+  /// lo escribe el operador; vacío = solo la UI funcional.
+  memberCopy              String?  @map("member_copy")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@map("mod_referrals_config")
+}
+
+/// Código de referido de un usuario (1 por usuario y tenant, creado on-demand).
+model ModReferralsCode {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  /// ID lógico del usuario (tabla core `user`, sin FK cross-module).
+  userId    String   @map("user_id") @db.Uuid
+  /// Slug corto que viaja en /unete?ref=CODE. Único por tenant.
+  code      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  clicks ModReferralsClick[]
+
+  @@unique([tenantId, userId])
+  @@unique([tenantId, code])
+  @@map("mod_referrals_code")
+}
+
+/// Clic registrado al aterrizar en /unete?ref=CODE. Dedupe por
+/// (código, día, hash de IP) — el mismo visitante el mismo día cuenta una vez.
+model ModReferralsClick {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  codeId    String   @map("code_id") @db.Uuid
+  /// Día UTC (YYYY-MM-DD) del clic, parte de la clave de dedupe.
+  day       String
+  /// SHA-256 truncado de la IP (no guardamos la IP en claro).
+  ipHash    String   @map("ip_hash")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  code ModReferralsCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+
+  @@unique([codeId, day, ipHash])
+  @@index([tenantId, codeId])
+  @@map("mod_referrals_click")
+}
+
+/// Atribución: un usuario referido que completó el checkout de la membresía
+/// con un código válido. Un usuario solo puede ser atribuido UNA vez por
+/// tenant (first-touch en el alta); idempotente por suscripción de Stripe.
+model ModReferralsReferral {
+  id                   String   @id @default(uuid()) @db.Uuid
+  tenantId             String   @map("tenant_id") @db.Uuid
+  /// Usuario que refirió (dueño del código). ID lógico sin FK.
+  referrerUserId       String   @map("referrer_user_id") @db.Uuid
+  /// Usuario referido (comprador). ID lógico sin FK.
+  referredUserId       String   @map("referred_user_id") @db.Uuid
+  /// Código usado (se conserva aunque el código se regenere).
+  code                 String
+  /// Suscripción de Stripe que materializó la atribución (idempotencia).
+  stripeSubscriptionId String   @unique @map("stripe_subscription_id")
+  /// ID lógico de la suscripción local de mod.subscriptions (sin FK
+  /// cross-module — lectura permitida por ADR-016, escritura nunca).
+  subscriptionId       String   @map("subscription_id") @db.Uuid
+  /// Plan comprado (ID lógico, para métricas).
+  planId               String?  @map("plan_id") @db.Uuid
+  /// Momento de la atribución — ancla del ámbito recurringMonths.
+  attributedAt         DateTime @default(now()) @map("attributed_at")
+
+  commissions ModReferralsCommission[]
+
+  @@unique([tenantId, referredUserId])
+  @@index([tenantId, referrerUserId])
+  @@map("mod_referrals_referral")
+}
+
+/// Comisión devengada por un cobro real (invoice.paid > 0) de una suscripción
+/// atribuida. Una invoice de Stripe genera como mucho UNA comisión.
+model ModReferralsCommission {
+  id              String                   @id @default(uuid()) @db.Uuid
+  tenantId        String                   @map("tenant_id") @db.Uuid
+  referralId      String                   @map("referral_id") @db.Uuid
+  /// Redundante con referral.referrerUserId para consultas de saldo directas.
+  referrerUserId  String                   @map("referrer_user_id") @db.Uuid
+  /// Invoice de Stripe que originó la comisión (idempotencia).
+  stripeInvoiceId String                   @unique @map("stripe_invoice_id")
+  /// Importe cobrado base en céntimos (el amount de la invoice).
+  baseAmountCents Int                      @map("base_amount_cents")
+  /// Comisión resultante en céntimos: round(base × bps / 10000).
+  amountCents     Int                      @map("amount_cents")
+  currency        String                   @default("eur")
+  /// Bps aplicados en el momento del devengo (la config puede cambiar luego).
+  commissionBps   Int                      @map("commission_bps")
+  status          ReferralCommissionStatus @default(PENDING)
+  /// PENDING → APPROVED cuando vence (createdAt + guaranteeDays). El worker
+  /// la aprueba al pasar; el admin puede revocar antes.
+  approveAfter    DateTime                 @map("approve_after")
+  approvedAt      DateTime?                @map("approved_at")
+  revokedAt       DateTime?                @map("revoked_at")
+  /// Motivo obligatorio de la revocación (auditoría + visible al miembro).
+  revokeReason    String?                  @map("revoke_reason")
+  /// Liquidación que la pagó (NULL hasta PAID).
+  payoutId        String?                  @map("payout_id") @db.Uuid
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
+
+  referral ModReferralsReferral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  payout   ModReferralsPayout?  @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, referrerUserId, status])
+  @@index([tenantId, status])
+  @@index([status, approveAfter])
+  @@map("mod_referrals_commission")
+}
+
+/// Liquidación manual: lote de comisiones APPROVED marcadas PAID por el admin
+/// con una referencia externa (transferencia, PayPal, Bizum…). v1 sin Stripe
+/// Connect: el pago real ocurre fuera; aquí queda la trazabilidad.
+model ModReferralsPayout {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  referrerUserId    String   @map("referrer_user_id") @db.Uuid
+  totalCents        Int      @map("total_cents")
+  currency          String   @default("eur")
+  /// Referencia externa obligatoria del pago real.
+  externalReference String   @map("external_reference")
+  /// Admin que registró la liquidación (ID lógico).
+  createdByUserId   String   @map("created_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  commissions ModReferralsCommission[]
+
+  @@index([tenantId, referrerUserId])
+  @@map("mod_referrals_payout")
+}

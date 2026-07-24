@@ -27,6 +27,11 @@ import {
   type SubscriptionsStripeAdapter,
 } from '@didacta/mod-subscriptions';
 import {
+  buildReferralsModule,
+  ReferralsService,
+  type ReferralsEventPublisher,
+} from '@didacta/mod-referrals';
+import {
   PaymentConnectionsService,
   PaymentTiersService,
   StripeReadSdkAdapter,
@@ -102,6 +107,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private subscriptionsStripeAdapter?: SubscriptionsStripeAdapter;
   private paymentConnections?: PaymentConnectionsService;
   private paymentTiers?: PaymentTiersService;
+  private referrals?: ReferralsService;
 
   constructor(
     private readonly factory: ModuleContextFactory,
@@ -393,6 +399,48 @@ export class ModuleRegistryService implements OnModuleInit {
       ? buildSubscriptionsModule(this.subscriptions)
       : null;
 
+    // mod.referrals: programa de referidos de la membresía. No depende de
+    // Stripe (consume eventos de mod.subscriptions vía bridge); siempre se
+    // inicializa — el gate real es config.active per-tenant.
+    const referralsEventBus = this.factory.getEventBus();
+    const referralsPublisher: ReferralsEventPublisher = {
+      publish: async (tenantId, actorId, name, payload) => {
+        const entityId =
+          (payload as { commissionId?: string }).commissionId ??
+          (payload as { referralId?: string }).referralId ??
+          (payload as { payoutId?: string }).payoutId;
+        await referralsEventBus.publish({
+          name,
+          version: 1,
+          data: payload as never,
+          metadata: {
+            tenantId,
+            userId: actorId ?? undefined,
+            timestamp: new Date().toISOString(),
+            traceId: cryptoRandom(),
+            // Por ocurrencia (mismo criterio que subscriptions): el outbox
+            // dedupea para siempre y una entidad puede re-emitir estados.
+            idempotencyKey: `${name}:${entityId ?? 'x'}:${cryptoRandom()}`,
+          },
+        });
+      },
+    };
+    const referralsPrisma = this.factory.getPrisma();
+    this.referrals = new ReferralsService(
+      prisma,
+      referralsPublisher,
+      // Lookup de email para el anti-auto-referido: el módulo no lee `user`,
+      // lo resuelve el host (misma razón que UserProvisioner en membresía).
+      async (tenantId, userId) => {
+        const user = await referralsPrisma.user.findFirst({
+          where: { id: userId, tenantId },
+          select: { email: true },
+        });
+        return user?.email ?? null;
+      },
+    );
+    const referralsModule = buildReferralsModule(this.referrals);
+
     // mod.payment-connections: agregador read-only multi-cuenta. NO se gatea por
     // env (las API keys son per-conexión, cifradas en tenant_setting vía el
     // config service). El SDK de Stripe se carga perezosamente la primera vez
@@ -469,6 +517,7 @@ export class ModuleRegistryService implements OnModuleInit {
       ...(billingModuleOrNull ? [billingModuleOrNull] : []),
       ...(subscriptionsModuleOrNull ? [subscriptionsModuleOrNull] : []),
       paymentConnectionsModule,
+      referralsModule,
     ]);
 
     await this.persistManifests();
@@ -723,6 +772,14 @@ export class ModuleRegistryService implements OnModuleInit {
       throw new Error('mod.payment-connections (tiers) no está inicializado');
     }
     return this.paymentTiers;
+  }
+
+  /** Programa de referidos. SIEMPRE inicializado tras el boot (sin gate de env). */
+  getReferralsService(): ReferralsService {
+    if (!this.referrals) {
+      throw new Error('mod.referrals no está inicializado (boot incompleto).');
+    }
+    return this.referrals;
   }
 
   async recoverOutbox(): Promise<{ processed: number; failed: number }> {
