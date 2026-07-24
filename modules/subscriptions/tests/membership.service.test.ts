@@ -224,6 +224,7 @@ function stubStripe() {
   let productSeq = 0;
   let priceSeq = 0;
   const createProduct = vi.fn(async () => `prod_${++productSeq}`);
+  const updateProduct = vi.fn(async () => {});
   const createRecurringPrice = vi.fn(
     async (_p: CreateRecurringPriceParams) => `price_${++priceSeq}`,
   );
@@ -243,9 +244,10 @@ function stubStripe() {
       throw new Error('no usado');
     },
     createProduct,
+    updateProduct,
     createRecurringPrice,
   };
-  return { adapter, createProduct, createRecurringPrice, createCheckoutSession };
+  return { adapter, createProduct, updateProduct, createRecurringPrice, createCheckoutSession };
 }
 
 function stubPublisher() {
@@ -573,10 +575,9 @@ describe('MembershipService · checkout', () => {
     });
     expect(first.url).toContain('price_1');
     expect(ctx.stripe.createProduct).toHaveBeenCalledTimes(1);
-    // El product es único por tenant y compartido entre planes: su nombre NO
-    // debe referenciar un plan concreto (si no, el checkout de "Anual" mostraría
-    // el nombre del primer plan que lo creó). El plan va en el nickname del price.
-    expect(ctx.stripe.createProduct).toHaveBeenCalledWith('Membresía', expect.any(Object));
+    // Un Product POR PLAN, nombrado con el nombre del plan: es lo que ve el
+    // comprador en el checkout ("VA360.pro Anual"), no un nombre compartido.
+    expect(ctx.stripe.createProduct).toHaveBeenCalledWith('Anual', expect.any(Object));
     expect(ctx.stripe.createRecurringPrice).toHaveBeenCalledWith(
       expect.objectContaining({ amountCents: 99_900, intervalMonths: 12, nickname: 'Anual' }),
     );
@@ -598,6 +599,28 @@ describe('MembershipService · checkout', () => {
     expect(ctx.stripe.createProduct).toHaveBeenCalledTimes(1);
     expect(ctx.stripe.createRecurringPrice).toHaveBeenCalledTimes(1);
     expect(ctx.prisma.plans.get(plan.id)?.stripePriceId).toBe('price_1');
+  });
+
+  it('renombrar el plan renombra su Product en Stripe', async () => {
+    const plan = await ctx.service.createPlan(TENANT, {
+      name: 'VA360.pro Anual',
+      intervalMonths: 12,
+      amountCents: 39_900,
+    });
+    // Primer checkout materializa el Product (prod_1) y el Price.
+    await ctx.service.startMembershipCheckout({
+      tenantId: TENANT,
+      planId: plan.id,
+      successUrl: 'https://x/s',
+      cancelUrl: 'https://x/c',
+    });
+    await ctx.service.updatePlan(TENANT, plan.id, { name: 'VA360.pro Anual (2027)' });
+    expect(ctx.stripe.updateProduct).toHaveBeenCalledWith('prod_1', 'VA360.pro Anual (2027)');
+
+    // Cambiar solo el importe NO toca el nombre del Product.
+    ctx.stripe.updateProduct.mockClear();
+    await ctx.service.updatePlan(TENANT, plan.id, { amountCents: 42_000 });
+    expect(ctx.stripe.updateProduct).not.toHaveBeenCalled();
   });
 });
 

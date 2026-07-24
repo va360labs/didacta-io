@@ -175,8 +175,9 @@ export class MembershipService {
       (input.amountCents !== undefined && input.amountCents !== plan.amountCents) ||
       (input.currency !== undefined && input.currency !== plan.currency) ||
       (input.intervalMonths !== undefined && input.intervalMonths !== plan.intervalMonths);
+    const nameChanged = input.name !== undefined && input.name !== plan.name;
 
-    return this.prisma.modSubscriptionsPlan.update({
+    const updated = await this.prisma.modSubscriptionsPlan.update({
       where: { id: plan.id },
       data: {
         ...(input.name !== undefined ? { name: input.name } : {}),
@@ -191,6 +192,19 @@ export class MembershipService {
         ...(priceChanged ? { stripePriceId: null } : {}),
       },
     });
+
+    // Renombrar el plan renombra su Product en Stripe (es el nombre que ve el
+    // comprador en el checkout). Best-effort: si Stripe falla o no hay clave, el
+    // nombre se resincroniza en el próximo checkout que recree el price/product.
+    if (nameChanged && this.stripe && updated.stripeProductId) {
+      try {
+        await this.stripe.updateProduct(updated.stripeProductId, updated.name);
+      } catch {
+        /* no bloquea la edición del plan */
+      }
+    }
+
+    return updated;
   }
 
   async deletePlan(tenantId: string, planId: string): Promise<void> {
@@ -398,22 +412,15 @@ export class MembershipService {
 
     let productId = plan.stripeProductId;
     if (!productId) {
-      // Reusar el product de otro plan del tenant si ya existe.
-      const sibling = await this.prisma.modSubscriptionsPlan.findFirst({
-        where: { tenantId: plan.tenantId, stripeProductId: { not: null } },
-        select: { stripeProductId: true },
+      // Un Product de Stripe POR PLAN, nombrado con el nombre del plan: así el
+      // checkout muestra "VA360.pro Anual" (el nombre que ve el comprador es el
+      // del Product de su price). El nombre lo controla el admin desde el nombre
+      // del plan; renombrarlo lo resincroniza en Stripe (ver updatePlan).
+      productId = await this.stripe.createProduct(plan.name, {
+        tenantId: plan.tenantId,
+        planId: plan.id,
+        didacta: 'membership',
       });
-      productId =
-        sibling?.stripeProductId ??
-        // Nombre GENÉRICO: el product es único por tenant y lo comparten TODOS
-        // los planes (Mensual/Trimestral/Anual), así que NO puede referenciar un
-        // plan concreto o el checkout mostraría el nombre del primer plan que lo
-        // creó. La periodicidad ya la muestra el price ("399 €/año"); el plan
-        // concreto va en el `nickname` del price (visible solo en el dashboard).
-        (await this.stripe.createProduct('Membresía', {
-          tenantId: plan.tenantId,
-          didacta: 'membership',
-        }));
     }
 
     const priceId = await this.stripe.createRecurringPrice({

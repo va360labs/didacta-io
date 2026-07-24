@@ -27,6 +27,8 @@ export interface SubscriptionsStripeAdapter {
   constructWebhookEvent(rawBody: string | Buffer, signatureHeader: string): Stripe.Event;
   /** Crea un Product de Stripe (membresía). Devuelve su id (prod_...). */
   createProduct(name: string, metadata: Record<string, string>): Promise<string>;
+  /** Renombra un Product existente (al renombrar el plan en el admin). */
+  updateProduct(productId: string, name: string): Promise<void>;
   /**
    * Crea un Price recurring para un product. `intervalMonths` 1|3|12 se mapea
    * a interval month/year + interval_count. Los prices de Stripe son
@@ -138,6 +140,14 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
     try {
       const product = await this.client.products.create({ name, metadata });
       return product.id;
+    } catch (err) {
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async updateProduct(productId: string, name: string): Promise<void> {
+    try {
+      await this.client.products.update(productId, { name });
     } catch (err) {
       throw new StripeApiError((err as Error).message);
     }
