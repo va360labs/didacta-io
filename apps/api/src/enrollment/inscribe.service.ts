@@ -13,9 +13,16 @@ import {
   renderBrandedEmail,
   resolveEmailBranding,
   escapeHtml,
+  textToHtmlParagraphs,
   type BrandingPrisma,
   type EmailBranding,
 } from '../common/branded-email';
+import {
+  applyEmailOverride,
+  fetchEmailOverride,
+  type RawEmailOverride,
+  type TemplateOverridePrisma,
+} from '../modules/notifications/email-template-catalog';
 import { PasswordResetService } from '../auth/password-reset.service';
 import { AccessGroupsService } from '../modules/access-groups/access-groups.service';
 import type {
@@ -418,7 +425,18 @@ export class InscribeService {
         tenantId,
         webBaseUrl,
       );
-      const { subject, text, html } = this.buildWelcomeEmail(email, name, setPasswordUrl, branding);
+      const override = await fetchEmailOverride(
+        this.prisma as unknown as TemplateOverridePrisma,
+        tenantId,
+        'enrollment.welcome',
+      );
+      const { subject, text, html } = this.buildWelcomeEmail(
+        email,
+        name,
+        setPasswordUrl,
+        branding,
+        override,
+      );
       const result = await this.smtp.send(
         resolved.config,
         { to: email, subject, text, html },
@@ -445,8 +463,30 @@ export class InscribeService {
     name: string | null,
     setPasswordUrl: string,
     branding: EmailBranding,
+    override?: RawEmailOverride | null,
   ): { subject: string; text: string; html: string } {
     const greeting = name ? `Hola ${name},` : 'Hola,';
+
+    if (override) {
+      // Texto editado por el tenant; el botón «Define tu contraseña» con el
+      // enlace mágico es estructural y se añade siempre.
+      const vars = {
+        greeting,
+        name: name ?? '',
+        email,
+        tenantName: branding.tenantName,
+        setPasswordUrl,
+      };
+      const applied = applyEmailOverride(override, vars, `Tu acceso a ${branding.tenantName}`);
+      const { html, text } = renderBrandedEmail(branding, {
+        title: applied.subject,
+        bodyHtml: textToHtmlParagraphs(applied.bodyText),
+        bodyText: applied.bodyText,
+        cta: { url: setPasswordUrl, label: 'Define tu contraseña' },
+      });
+      return { subject: applied.subject, text, html };
+    }
+
     const subject = `Tu acceso a ${branding.tenantName}`;
     const bodyText = `${greeting}
 

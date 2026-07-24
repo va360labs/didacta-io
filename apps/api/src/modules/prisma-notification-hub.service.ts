@@ -12,6 +12,7 @@ import {
   type BrandingPrisma,
   type EmailBranding,
 } from '../common/branded-email';
+import { HUB_TEMPLATE_DEFAULTS, interpolate } from './notifications/email-template-catalog';
 
 /**
  * Implementación real del NotificationHub: persiste cada notificación en
@@ -339,76 +340,11 @@ interface RenderedTemplate {
   body: string;
 }
 
-interface TemplateDef {
-  subject: string | null;
-  body: string;
-}
-
-const TEMPLATES: Record<string, TemplateDef> = {
-  'enrollment.created': {
-    subject: 'Te matriculaste en {{course}}',
-    body: 'Acabas de matricularte en el curso "{{course}}". ¡A aprender! Puedes continuar desde tu panel.',
-  },
-  'course.completed': {
-    subject: '¡Curso completado!',
-    body: 'Felicitaciones, completaste el curso "{{course}}". Tu certificado se está generando y estará disponible en tu sección de certificados.',
-  },
-  'certificate.issued': {
-    subject: 'Tu certificado de "{{course}}" está listo',
-    body: 'Ya puedes descargar el certificado número {{number}} desde Mis certificados.',
-  },
-  'attempt.passed': {
-    subject: 'Aprobaste el quiz de "{{course}}"',
-    body: 'Tu intento del quiz "{{quiz}}" obtuvo {{scorePercent}}% — ¡aprobaste!',
-  },
-  'attempt.failed': {
-    subject: 'Resultado de quiz: no aprobado',
-    body: 'Tu intento del quiz "{{quiz}}" obtuvo {{scorePercent}}%, por debajo del umbral del {{passThreshold}}%. Puedes reintentarlo si el quiz lo permite.',
-  },
-  'attempt.graded': {
-    subject: 'El formador corrigió tu quiz',
-    body: 'Tu intento del quiz "{{quiz}}" fue corregido manualmente. Resultado: {{scorePercent}}% ({{result}}).',
-  },
-  'admin.smtp.test': {
-    subject: 'Prueba de SMTP — {{tenantName}}',
-    body: 'Si recibiste este correo, la configuración SMTP de {{tenantName}} funciona correctamente.\n\nTenant: {{tenantSlug}}\nFecha: {{timestamp}}',
-  },
-  'community.mention': {
-    subject: 'Te mencionaron en la comunidad',
-    body: '{{authorName}} te mencionó en un {{#commentId}}comentario{{/commentId}}{{#postId}}post{{/postId}}.',
-  },
-  // Alguien comentó en un post del que sos autor. La deep-link a "responder"
-  // la arma el frontend con postId/commentId de metadata.
-  'community.comment.on_post': {
-    subject: '{{actorName}} comentó en tu publicación',
-    body: '{{actorName}} comentó en tu publicación "{{postTitle}}":\n\n"{{excerpt}}"',
-  },
-  // Alguien respondió a un comentario tuyo dentro de un post.
-  'community.reply.to_comment': {
-    subject: '{{actorName}} respondió a tu comentario',
-    body: '{{actorName}} respondió a tu comentario en "{{postTitle}}":\n\n"{{excerpt}}"',
-  },
-  'community.digest.weekly': {
-    subject:
-      'Tu resumen semanal de la comunidad ({{mentionsCount}} menciones · {{repliesCount}} respuestas)',
-    body: 'Esta semana en la comunidad:\n\n· {{mentionsCount}} mención(es) nueva(s)\n· {{repliesCount}} respuesta(s) en hilos donde participaste\n\nRevísalas todas en tu sección de menciones. Desde el resumen anterior: {{sinceIso}}.',
-  },
-  // Aviso masivo (broadcast) a toda la comunidad. Passthrough: el worker compone
-  // el asunto y el cuerpo (mensaje + enlace de baja en email) y los pasa como vars.
-  'community.broadcast': {
-    subject: '{{subject}}',
-    body: '{{body}}',
-  },
-  // Aviso de desbloqueo de una clase programada por fecha (MEJ-009). Lo dispara
-  // el LessonUnlockNotifierWorker cuando la lección cruza su publishAt.
-  'lesson.unlocked': {
-    subject: 'Ya está disponible: {{lessonTitle}}',
-    body: 'La clase "{{lessonTitle}}" del curso "{{courseTitle}}" ya está disponible.',
-  },
-};
-
+// Los defaults hardcoded del producto y la interpolación viven en el catálogo
+// compartido (email-template-catalog.ts) desde alpha.83: los emails
+// transaccionales usan la misma tabla de overrides y la misma sintaxis.
 function renderTemplate(key: string, variables: Record<string, unknown>): RenderedTemplate {
-  const template = TEMPLATES[key];
+  const template = HUB_TEMPLATE_DEFAULTS[key];
   if (!template) {
     return {
       subject: key,
@@ -419,25 +355,4 @@ function renderTemplate(key: string, variables: Record<string, unknown>): Render
     subject: template.subject ? interpolate(template.subject, variables) : null,
     body: interpolate(template.body, variables),
   };
-}
-
-function interpolate(text: string, variables: Record<string, unknown>): string {
-  const truthy = (name: string): boolean => {
-    const v = variables[name];
-    return v !== undefined && v !== null && v !== '' && v !== false;
-  };
-  // Secciones condicionales tipo Mustache: {{#var}}…{{/var}} renderiza el
-  // contenido si `var` es truthy; {{^var}}…{{/var}} si es falsy. Se resuelven
-  // ANTES que las variables simples para no dejar marcadores {{#…}} literales.
-  let out = text.replace(/\{\{#(\w+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name, content) =>
-    truthy(name) ? content : '',
-  );
-  out = out.replace(/\{\{\^(\w+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name, content) =>
-    truthy(name) ? '' : content,
-  );
-  // Variables simples {{var}}.
-  return out.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, name) => {
-    const v = variables[name];
-    return v === undefined || v === null ? '' : String(v);
-  });
 }

@@ -9,6 +9,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { membershipToBoolean, type TelegramMembership } from './inscripcion.dto';
 import { buildDecisionEmail } from './email-templates';
 import { resolveEmailBranding, type BrandingPrisma } from '../common/branded-email';
+import {
+  fetchEmailOverride,
+  type TemplateOverridePrisma,
+} from '../modules/notifications/email-template-catalog';
 import { MemberDecisionService } from './member-decision.service';
 import { MemberPaymentFlagService } from './member-payment-flag.service';
 import type {
@@ -342,19 +346,27 @@ export class MemberRegistrationService {
         return;
       }
 
-      const mail = buildDecisionEmail({
-        name: input.name,
-        email: input.email,
-        telegramId: input.telegramId,
-        inGroup: input.inGroup,
-        isDelinquent: flag?.isDelinquent ?? false,
-        approveUrl,
-        rejectUrl,
-        branding,
-        subscriptionMatches: matches,
-        subscriptionFailures: failures,
-        purchases,
-      });
+      const override = await fetchEmailOverride(
+        this.prisma as unknown as TemplateOverridePrisma,
+        tenantId,
+        'inscripcion.approval_request',
+      );
+      const mail = buildDecisionEmail(
+        {
+          name: input.name,
+          email: input.email,
+          telegramId: input.telegramId,
+          inGroup: input.inGroup,
+          isDelinquent: flag?.isDelinquent ?? false,
+          approveUrl,
+          rejectUrl,
+          branding,
+          subscriptionMatches: matches,
+          subscriptionFailures: failures,
+          purchases,
+        },
+        override,
+      );
       const result = await this.smtp.send(
         resolved.config,
         { to: approver, subject: mail.subject, text: mail.text, html: mail.html },

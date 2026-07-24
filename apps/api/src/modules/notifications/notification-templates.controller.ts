@@ -18,6 +18,11 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import type { SessionClaims } from '../../auth/token.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  allKnownTemplateKeys,
+  buildEmailTemplateCatalog,
+  type EmailTemplateCatalogEntry,
+} from './email-template-catalog';
 
 // Forma serializable del modelo Prisma. Lo declaramos explícito para
 // evitar que el typecheck infiera un tipo que referencia paths internos
@@ -35,29 +40,6 @@ interface NotificationTemplateRow {
 }
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
-
-/**
- * Lista de templates conocidos por el producto. Lo expone el endpoint
- * /list-keys para que la UI admin presente el universo completo en lugar
- * de sólo los que tienen override en el tenant. Si en el futuro un módulo
- * registra nuevos templates, su key se debe sumar acá. Mantenido en
- * sincronía con el `TEMPLATES` hardcoded de `prisma-notification-hub.service.ts`.
- */
-const KNOWN_TEMPLATE_KEYS = [
-  'enrollment.created',
-  'course.completed',
-  'certificate.issued',
-  'attempt.passed',
-  'attempt.failed',
-  'attempt.graded',
-  'admin.smtp.test',
-  'community.mention',
-  'community.comment.on_post',
-  'community.reply.to_comment',
-  'community.digest.weekly',
-  'community.broadcast',
-  'lesson.unlocked',
-] as const;
 
 const upsertTemplateSchema = z.object({
   channel: z.enum(['EMAIL', 'IN_APP', 'WEBHOOK']),
@@ -89,7 +71,17 @@ export class NotificationTemplatesController {
   @ApiOperation({ summary: 'Lista de templates conocidos del producto.' })
   listKeys(@CurrentUser() user: SessionClaims | undefined) {
     this.requireAdmin(user);
-    return KNOWN_TEMPLATE_KEYS;
+    return allKnownTemplateKeys();
+  }
+
+  @Get('catalog')
+  @ApiOperation({
+    summary:
+      'Catálogo completo de emails/notificaciones del producto: nombre, trigger, default, variables y nota estructural. Para la UI /admin/emails.',
+  })
+  catalog(@CurrentUser() user: SessionClaims | undefined): EmailTemplateCatalogEntry[] {
+    this.requireAdmin(user);
+    return buildEmailTemplateCatalog();
   }
 
   @Get()

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { adminTokenForBootstrap, API_URL } from '../helpers/api';
+import { adminTokenForBootstrap, API_URL, signin } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
 /**
@@ -43,19 +43,14 @@ test.describe('Admin SMTP settings — UI + contrato admin-smtp', () => {
       headers: apiHeaders,
     }).catch(() => {});
 
-    // Obtenemos `tenantId` real desde la sesión del admin (lo necesita
-    // `injectSession`). Vía /auth/signin o /me; reutilizamos `signin` por
-    // ahorrar redondeos.
-    const meRes = await fetch(`${API_URL}/api/v1/me`, {
-      headers: { Authorization: `Bearer ${bearer}` },
+    // Obtenemos el user real desde el signin (no existe GET /api/v1/me; el
+    // perfil vive en /me/profile pero el signin ya trae todo lo necesario).
+    const session = await signin({
+      tenantSlug,
+      email: adminEmail,
+      password: process.env.E2E_ADMIN_PASSWORD!,
     });
-    expect(meRes.ok, '/api/v1/me devuelve 200').toBe(true);
-    const me = (await meRes.json()) as {
-      id: string;
-      email: string;
-      tenantId: string;
-      roles: string[];
-    };
+    const me = session.user;
 
     // Sesión inyectada en el browser para saltar el login UI.
     await page.goto('/signin');
@@ -69,14 +64,18 @@ test.describe('Admin SMTP settings — UI + contrato admin-smtp', () => {
         tenantSlug,
         roles: me.roles,
         mfaEnabled: true,
+        // Salta el gate de onboarding (el seed deja onboardingCompletedAt=null).
+        onboardingCompletedAt: new Date().toISOString(),
       },
     });
 
-    // Navegamos a /admin/configuracion (tab Notificaciones es el default).
+    // Navegamos a /admin/configuracion. Para super_admin el tab inicial es
+    // "General", así que clicamos el tab "Notificaciones" explícitamente.
     await page.goto('/admin/configuracion');
     await expect(page.getByRole('heading', { name: 'Configuración del tenant' })).toBeVisible({
       timeout: 15_000,
     });
+    await page.getByRole('tab', { name: 'Notificaciones' }).click();
 
     // Card SMTP visible. Esperamos el banner — primera carga puede ser
     // "fallback" si el host tiene env globales, o "none" si no.
@@ -114,16 +113,17 @@ test.describe('Admin SMTP settings — UI + contrato admin-smtp', () => {
     // Click Enviar en el modal — el backend va a fallar porque
     // smtp.example.test no resuelve / no acepta TLS / etc. → 400 con
     // mensaje del MTA. El componente lo muestra textual en el toast.
-    await page.getByRole('button', { name: 'Enviar' }).click();
-    const toast = page.getByTestId('smtp-toast');
-    await expect(toast).toBeVisible({ timeout: 30_000 });
-    const toastText = (await toast.textContent()) ?? '';
+    await page.getByRole('button', { name: 'Enviar', exact: true }).click();
     // El mensaje incluye "SMTP falló:" (formato del controlador admin-smtp).
     // Si el MTA respondió con un error diferente igualmente esperamos que
     // NO sea el genérico "No pudimos enviar…" — eso sería un fallback que
-    // significa que el backend no devolvió mensaje útil.
-    expect(toastText.toLowerCase()).toMatch(
+    // significa que el backend no devolvió mensaje útil. Ojo: justo antes el
+    // toast muestra "Configuración guardada…", así que la aserción reintenta
+    // hasta que lo sustituye el resultado del test de envío.
+    const toast = page.getByTestId('smtp-toast');
+    await expect(toast).toHaveText(
       /smtp|host|connection|enotfound|getaddrinfo|timeout|certificate|tls/i,
+      { timeout: 30_000 },
     );
 
     // Cleanup: borrar las dos rows. Lo hacemos por API para evitar tener

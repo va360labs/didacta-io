@@ -15,6 +15,33 @@ export interface NotificationTemplateOverride {
   updatedAt: string;
 }
 
+export type EmailTemplateCategory =
+  | 'account'
+  | 'members'
+  | 'billing'
+  | 'community'
+  | 'learning'
+  | 'system';
+
+export interface EmailTemplateVariable {
+  name: string;
+  description: string;
+}
+
+/** Entrada del catálogo de emails del producto (GET /templates/catalog). */
+export interface EmailTemplateCatalogEntry {
+  key: string;
+  name: string;
+  description: string;
+  category: EmailTemplateCategory;
+  source: 'transactional' | 'hub';
+  channels: Array<'EMAIL' | 'IN_APP'>;
+  defaultSubject: string | null;
+  defaultBody: string;
+  variables: EmailTemplateVariable[];
+  structuralNote?: string;
+}
+
 function withAuth(): string {
   const token = authStorage.getAccessToken();
   if (!token) throw new ApiHttpError({ message: 'Sesión expirada', status: 401 });
@@ -25,6 +52,14 @@ export const adminNotificationsApi = {
   async listKnownKeys(): Promise<string[]> {
     return apiFetch<string[]>(
       '/api/v1/admin/notifications/templates/keys',
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
+  async getCatalog(): Promise<EmailTemplateCatalogEntry[]> {
+    return apiFetch<EmailTemplateCatalogEntry[]>(
+      '/api/v1/admin/notifications/templates/catalog',
       { method: 'GET' },
       withAuth(),
     );

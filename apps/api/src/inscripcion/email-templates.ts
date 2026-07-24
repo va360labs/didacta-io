@@ -7,10 +7,15 @@ import {
 import type { TelegramMembership } from './inscripcion.dto';
 import {
   renderBrandedEmail,
+  textToHtmlParagraphs,
   escapeHtml,
   escapeHtmlAttr,
   type EmailBranding,
 } from '../common/branded-email';
+import {
+  applyEmailOverride,
+  type RawEmailOverride,
+} from '../modules/notifications/email-template-catalog';
 
 // Re-exportado para compatibilidad con call sites/tests que lo importaban de aquí.
 export { escapeHtml };
@@ -21,6 +26,12 @@ export { escapeHtml };
 // TENANT (`renderBrandedEmail`): header con logo, color de marca, firma con el
 // nombre del tenant y footer "Powered by Didacta". Todo valor dinámico pasa por
 // escapeHtml. El branding lo resuelve el caller con `resolveEmailBranding`.
+//
+// alpha.83 — cada builder acepta un `override` opcional (subject/body editados
+// por el tenant en /admin/emails, SIN interpolar; lo trae el caller con
+// `fetchEmailOverride`). Con override, el texto del admin reemplaza el copy
+// editable y las partes ESTRUCTURALES (código OTP, bloques de datos, botones)
+// se mantienen: un override nunca puede romper el email.
 // ============================================================================
 
 export interface EmailContent {
@@ -31,7 +42,33 @@ export interface EmailContent {
 
 // ─── OTP: código de acceso de un solo uso ────────────────────────────────────
 /** Email con el código OTP grande (no es un link). Validez de 10 minutos. */
-export function buildOtpEmail(code: string, branding: EmailBranding): EmailContent {
+export function buildOtpEmail(
+  code: string,
+  branding: EmailBranding,
+  override?: RawEmailOverride | null,
+): EmailContent {
+  const codeBlockHtml = `<p style="margin:24px 0;text-align:center;">
+    <span style="display:inline-block;font-size:34px;font-weight:700;letter-spacing:8px;color:#0D1B2A;background:#f1f5f9;padding:16px 28px;border-radius:12px;">${escapeHtml(
+      code,
+    )}</span>
+  </p>`;
+
+  if (override) {
+    const vars = { code, tenantName: branding.tenantName, ttlMinutes: 10 };
+    const applied = applyEmailOverride(override, vars, 'Tu código de acceso');
+    // El código en grande es estructural: se muestra siempre. En el texto plano
+    // solo lo añadimos si el admin no lo incluyó ya con {{code}}.
+    const textWithCode = applied.bodyText.includes(code)
+      ? applied.bodyText
+      : `${applied.bodyText}\n\nCódigo: ${code}`;
+    const { html, text } = renderBrandedEmail(branding, {
+      title: applied.subject,
+      bodyHtml: `${textToHtmlParagraphs(applied.bodyText)}${codeBlockHtml}`,
+      bodyText: textWithCode,
+    });
+    return { subject: applied.subject, text, html };
+  }
+
   const subject = 'Tu código de acceso';
   const bodyText = `Tu código de acceso a ${branding.tenantName} es:
 
@@ -43,11 +80,7 @@ Si no has solicitado este acceso, ignora este mensaje.`;
   const bodyHtml = `<p style="margin:0 0 12px;">Tu código de acceso a ${escapeHtml(
     branding.tenantName,
   )} es:</p>
-  <p style="margin:24px 0;text-align:center;">
-    <span style="display:inline-block;font-size:34px;font-weight:700;letter-spacing:8px;color:#0D1B2A;background:#f1f5f9;padding:16px 28px;border-radius:12px;">${escapeHtml(
-      code,
-    )}</span>
-  </p>
+  ${codeBlockHtml}
   <p style="margin:0 0 8px;font-size:14px;color:#5b6b7c;">Introdúcelo en la pantalla de verificación para continuar. Este código caduca en 10 minutos.</p>
   <p style="margin:0;font-size:14px;color:#5b6b7c;">Si no has solicitado este acceso, ignora este mensaje.</p>`;
   const { html, text } = renderBrandedEmail(branding, {
@@ -133,7 +166,10 @@ function describeMatch(m: MemberSubscriptionMatch): string {
  * banner rojo si consta como impago, y dos botones (APROBAR / RECHAZAR). Va
  * dentro de la plantilla de marca del tenant.
  */
-export function buildDecisionEmail(params: DecisionEmailParams): EmailContent {
+export function buildDecisionEmail(
+  params: DecisionEmailParams,
+  override?: RawEmailOverride | null,
+): EmailContent {
   const { name, email, telegramId, inGroup, isDelinquent, approveUrl, rejectUrl, branding } =
     params;
   const tenantName = branding.tenantName;
@@ -175,8 +211,16 @@ export function buildDecisionEmail(params: DecisionEmailParams): EmailContent {
         .join('\n')}\n`
     : '';
 
-  const subject = `Nueva inscripción pendiente — ${name}`;
-  const bodyText = `Hay una nueva inscripción pendiente de tu aprobación en ${tenantName}.
+  // alpha.83 — subject e intro editables per-tenant; el resto (estado, datos,
+  // suscripciones, compras y botones de decisión) es estructural.
+  const overrideVars = { name, email, telegramId, tenantName };
+  const applied = override
+    ? applyEmailOverride(override, overrideVars, `Nueva inscripción pendiente — ${name}`)
+    : null;
+  const subject = applied?.subject ?? `Nueva inscripción pendiente — ${name}`;
+  const introText =
+    applied?.bodyText ?? `Hay una nueva inscripción pendiente de tu aprobación en ${tenantName}.`;
+  const bodyText = `${introText}
 
 Estado: ${heading}
 ${delinquentLineText}
@@ -237,9 +281,12 @@ Rechazar: ${rejectUrl}`;
   </div>`
     : '';
 
-  const bodyHtml = `<p style="margin:0 0 12px;">Hay una nueva inscripción pendiente de tu aprobación en ${escapeHtml(
-    tenantName,
-  )}.</p>
+  const introHtml = applied
+    ? textToHtmlParagraphs(applied.bodyText)
+    : `<p style="margin:0 0 12px;">Hay una nueva inscripción pendiente de tu aprobación en ${escapeHtml(
+        tenantName,
+      )}.</p>`;
+  const bodyHtml = `${introHtml}
   <p style="margin: 16px 0; font-size: 15px; font-weight: 600;">${escapeHtml(heading)}</p>
   ${delinquentBanner}
   <table style="margin: 16px 0; font-size: 15px;">
@@ -259,7 +306,7 @@ Rechazar: ${rejectUrl}`;
   </p>`;
 
   const { html, text } = renderBrandedEmail(branding, {
-    title: `Nueva inscripción pendiente — ${name}`,
+    title: subject,
     bodyHtml,
     bodyText,
   });
@@ -272,8 +319,26 @@ export function buildWelcomeEmail(
   name: string,
   signinUrl: string,
   branding: EmailBranding,
+  override?: RawEmailOverride | null,
 ): EmailContent {
   const greeting = name ? `Hola ${name},` : 'Hola,';
+
+  if (override) {
+    const vars = { greeting, name, tenantName: branding.tenantName, signinUrl };
+    const applied = applyEmailOverride(
+      override,
+      vars,
+      `Tu inscripción en ${branding.tenantName} ha sido aprobada`,
+    );
+    const { html, text } = renderBrandedEmail(branding, {
+      title: applied.subject,
+      bodyHtml: textToHtmlParagraphs(applied.bodyText),
+      bodyText: applied.bodyText,
+      cta: { url: signinUrl, label: 'Entrar' },
+    });
+    return { subject: applied.subject, text, html };
+  }
+
   const subject = `Tu inscripción en ${branding.tenantName} ha sido aprobada`;
   const bodyText = `${greeting}
 
@@ -293,8 +358,28 @@ export function buildWelcomeEmail(
 
 // ─── Rechazo: inscripción no aprobada ────────────────────────────────────────
 /** Aviso breve de que la inscripción no ha sido aprobada. */
-export function buildRejectionEmail(name: string, branding: EmailBranding): EmailContent {
+export function buildRejectionEmail(
+  name: string,
+  branding: EmailBranding,
+  override?: RawEmailOverride | null,
+): EmailContent {
   const greeting = name ? `Hola ${name},` : 'Hola,';
+
+  if (override) {
+    const vars = { greeting, name, tenantName: branding.tenantName };
+    const applied = applyEmailOverride(
+      override,
+      vars,
+      `Sobre tu inscripción en ${branding.tenantName}`,
+    );
+    const { html, text } = renderBrandedEmail(branding, {
+      title: applied.subject,
+      bodyHtml: textToHtmlParagraphs(applied.bodyText),
+      bodyText: applied.bodyText,
+    });
+    return { subject: applied.subject, text, html };
+  }
+
   const subject = `Sobre tu inscripción en ${branding.tenantName}`;
   const bodyText = `${greeting}
 

@@ -10,9 +10,16 @@ import {
   renderBrandedEmail,
   resolveEmailBranding,
   escapeHtml,
+  textToHtmlParagraphs,
   type BrandingPrisma,
   type EmailBranding,
 } from '../common/branded-email';
+import {
+  applyEmailOverride,
+  fetchEmailOverride,
+  type RawEmailOverride,
+  type TemplateOverridePrisma,
+} from '../modules/notifications/email-template-catalog';
 import type { ClientContext } from './client-context';
 import { PasswordService } from './password.service';
 
@@ -251,11 +258,18 @@ export class PasswordResetService {
       webBaseUrl,
     );
 
+    // alpha.83 — subject/cuerpo personalizables per-tenant desde /admin/emails.
+    const override = await fetchEmailOverride(
+      this.prisma as unknown as TemplateOverridePrisma,
+      result.tenantId,
+      'auth.password_reset',
+    );
     const { subject, html, text } = this.buildResetEmail(
       result.rawToken,
       result.userName,
       webBaseUrl,
       branding,
+      override,
     );
     const sendResult = await this.smtp.send(
       config,
@@ -362,11 +376,37 @@ export class PasswordResetService {
     userName: string | null,
     webBaseUrl: string,
     branding: EmailBranding,
+    override?: RawEmailOverride | null,
   ): { subject: string; html: string; text: string } {
     const link = `${webBaseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(
       rawToken,
     )}`;
     const greeting = userName ? `Hola ${userName},` : 'Hola,';
+
+    if (override) {
+      // Texto editado por el tenant; el botón CTA con el enlace seguro es
+      // estructural y se añade siempre (el override no puede romper el reset).
+      const vars = {
+        greeting,
+        userName: userName ?? '',
+        tenantName: branding.tenantName,
+        resetUrl: link,
+        ttlMinutes: TOKEN_TTL_MINUTES,
+      };
+      const applied = applyEmailOverride(
+        override,
+        vars,
+        `Restablecer tu contraseña en ${branding.tenantName}`,
+      );
+      const { html, text } = renderBrandedEmail(branding, {
+        title: applied.subject,
+        bodyHtml: textToHtmlParagraphs(applied.bodyText),
+        bodyText: applied.bodyText,
+        cta: { url: link, label: 'Restablecer contraseña' },
+      });
+      return { subject: applied.subject, html, text };
+    }
+
     const subject = `Restablecer tu contraseña en ${branding.tenantName}`;
     const bodyText = `${greeting}
 

@@ -8,6 +8,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { ClientContext } from '../auth/client-context';
 import { buildOtpEmail } from './email-templates';
 import { resolveEmailBranding, type BrandingPrisma } from '../common/branded-email';
+import {
+  fetchEmailOverride,
+  type TemplateOverridePrisma,
+} from '../modules/notifications/email-template-catalog';
 
 /** TTL del código OTP: 10 minutos. */
 const CODE_TTL_MINUTES = 10;
@@ -164,7 +168,12 @@ export class EmailVerificationService {
       tenantId,
       process.env['WEB_PUBLIC_URL']?.trim() ?? '',
     );
-    const { subject, text, html } = buildOtpEmail(code, branding);
+    const override = await fetchEmailOverride(
+      this.prisma as unknown as TemplateOverridePrisma,
+      tenantId,
+      'inscripcion.otp_code',
+    );
+    const { subject, text, html } = buildOtpEmail(code, branding, override);
     const sendResult = await this.smtp.send(
       resolved.config,
       { to: email, subject, text, html },

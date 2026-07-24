@@ -7,8 +7,14 @@ import { PasswordResetService } from '../../auth/password-reset.service';
 import {
   resolveEmailBranding,
   renderBrandedEmail,
+  textToHtmlParagraphs,
   type BrandingPrisma,
 } from '../../common/branded-email';
+import {
+  applyEmailOverride,
+  fetchEmailOverride,
+  type TemplateOverridePrisma,
+} from '../notifications/email-template-catalog';
 import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SmtpAdapterService } from '../smtp-adapter.service';
@@ -133,7 +139,36 @@ export class MembershipProvisioningService {
         webBaseUrl,
       );
       const greeting = name ? `Hola ${name},` : 'Hola,';
-      const bodyText = `${greeting}
+
+      // alpha.83 — subject/cuerpo personalizables per-tenant; el botón «Definir
+      // mi contraseña» y la nota con la URL de acceso son estructurales.
+      const override = await fetchEmailOverride(
+        this.prisma as unknown as TemplateOverridePrisma,
+        tenantId,
+        'membership.welcome',
+      );
+
+      let subject = `Tu membresía en ${branding.tenantName}`;
+      let bodyText: string;
+      let bodyHtml: string;
+      if (override) {
+        const applied = applyEmailOverride(
+          override,
+          {
+            greeting,
+            name: name ?? '',
+            email,
+            tenantName: branding.tenantName,
+            setPasswordUrl,
+            signinUrl: `${base}/signin`,
+          },
+          subject,
+        );
+        subject = applied.subject;
+        bodyText = applied.bodyText;
+        bodyHtml = textToHtmlParagraphs(applied.bodyText);
+      } else {
+        bodyText = `${greeting}
 
 ¡Tu membresía en ${branding.tenantName} está activa! Ya tienes acceso a todos los cursos incluidos.
 
@@ -141,11 +176,13 @@ Para entrar, define tu contraseña con este enlace (válido 7 días):
 ${setPasswordUrl}
 
 Después podrás iniciar sesión siempre desde ${base}/signin con tu email (${email}).`;
-      const bodyHtml = `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>
+        bodyHtml = `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>
   <p style="margin:0 0 12px;">¡Tu membresía en <strong>${escapeHtml(branding.tenantName)}</strong> está activa! Ya tienes acceso a todos los cursos incluidos.</p>
   <p style="margin:0 0 12px;">Para entrar, define tu contraseña (el enlace es válido 7 días):</p>`;
+      }
+
       const { html, text } = renderBrandedEmail(branding, {
-        title: `Tu membresía en ${branding.tenantName}`,
+        title: subject,
         bodyHtml,
         bodyText,
         cta: { label: 'Definir mi contraseña', url: setPasswordUrl },
@@ -153,7 +190,7 @@ Después podrás iniciar sesión siempre desde ${base}/signin con tu email (${em
       });
       const result = await this.smtp.send(
         resolved.config,
-        { to: email, subject: `Tu membresía en ${branding.tenantName}`, text, html },
+        { to: email, subject, text, html },
         branding.tenantName,
       );
       if (!result.ok) {

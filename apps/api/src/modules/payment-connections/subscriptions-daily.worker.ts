@@ -20,6 +20,11 @@ import {
   type BrandingPrisma,
   type EmailBranding,
 } from '../../common/branded-email';
+import {
+  applyEmailOverride,
+  fetchEmailOverride,
+  type TemplateOverridePrisma,
+} from '../notifications/email-template-catalog';
 
 const QUEUE_NAME = 'didacta.payment-connections.daily';
 // 9:00 hora de España por defecto. Configurable por env.
@@ -151,12 +156,36 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
     const lines = upcoming.length
       ? upcoming.map((u) => `· ${describeUpcoming(u)}`).join('\n')
       : `Ninguna en los próximos ${WINDOW_DAYS} días.`;
-    const subject = `Resumen de suscripciones — ${activeCount} activas, ${upcoming.length} próximas (${WINDOW_DAYS} días)`;
-    const bodyText =
+
+    // alpha.83 — subject/cuerpo personalizables per-tenant desde /admin/emails.
+    const override = await fetchEmailOverride(
+      this.prisma as unknown as TemplateOverridePrisma,
+      tenantId,
+      'subscriptions.admin_digest',
+    );
+    let subject = `Resumen de suscripciones — ${activeCount} activas, ${upcoming.length} próximas (${WINDOW_DAYS} días)`;
+    let bodyText =
       `Suscripciones activas: ${activeCount}\n\n` +
       `Próximas a renovarse/caducar (${WINDOW_DAYS} días):\n${lines}`;
+    let title = 'Resumen de suscripciones';
+    if (override) {
+      const applied = applyEmailOverride(
+        override,
+        {
+          activeCount,
+          upcomingCount: upcoming.length,
+          windowDays: WINDOW_DAYS,
+          upcomingList: lines,
+          tenantName: branding.tenantName,
+        },
+        subject,
+      );
+      subject = applied.subject;
+      bodyText = applied.bodyText;
+      title = applied.subject;
+    }
     const { html, text } = renderBrandedEmail(branding, {
-      title: 'Resumen de suscripciones',
+      title,
       bodyHtml: textToHtmlParagraphs(bodyText),
       bodyText,
     });
@@ -179,10 +208,36 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
       service.listSubscribersToWarn(tenantId, WINDOW_DAYS),
       service.getCancelPortalUrl(tenantId),
     ]);
+    // alpha.83 — override per-tenant del aviso (un fetch por tenant, no por email).
+    const override = toWarn.length
+      ? await fetchEmailOverride(
+          this.prisma as unknown as TemplateOverridePrisma,
+          tenantId,
+          'subscriptions.renewal_warning',
+        )
+      : null;
     let sent = 0;
     for (const s of toWarn) {
-      const bodyText = buildWarningBody(s, cancelUrl);
-      const subject = 'Tu suscripción se renovará pronto';
+      let subject = 'Tu suscripción se renovará pronto';
+      let bodyText = buildWarningBody(s, cancelUrl);
+      if (override) {
+        const applied = applyEmailOverride(
+          override,
+          {
+            plan: s.productName ?? '',
+            renewalDate: fmtDate(s.currentPeriodEnd),
+            amount:
+              s.unitAmount != null
+                ? `${(s.unitAmount / 100).toFixed(2)} ${(s.currency ?? 'eur').toUpperCase()}`
+                : '',
+            cancelUrl: cancelUrl ?? '',
+            tenantName: branding.tenantName,
+          },
+          subject,
+        );
+        subject = applied.subject;
+        bodyText = applied.bodyText;
+      }
       const { html, text } = renderBrandedEmail(branding, {
         title: subject,
         bodyHtml: textToHtmlParagraphs(bodyText),

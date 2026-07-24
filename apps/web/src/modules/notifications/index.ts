@@ -1,31 +1,25 @@
 /// Extension point del módulo `mod.notifications`.
 ///
-/// Hoy solo declara el tab "Plantillas" (override del copy de
-/// notificaciones). El tab "Notificaciones · SMTP" sigue viviendo en el
-/// core porque SMTP es infraestructura compartida (auth/password reset,
-/// billing, etc. también lo usan). Migrar SMTP a su propio
-/// `/admin/email` o equivalente queda como follow-up — ADR-011 lo
-/// menciona como excepción aceptable mientras varios consumidores
-/// dependan de la misma infraestructura.
+/// alpha.83 — el tab "Plantillas" de /admin/configuracion se consolidó en la
+/// sección dedicada `/admin/emails` (regla #5: un solo camino al mismo
+/// destino), que ahora cubre el catálogo COMPLETO de emails del producto
+/// (transaccionales + hub). El tab "Notificaciones · SMTP" sigue viviendo en
+/// el core porque SMTP es infraestructura compartida (auth/password reset,
+/// billing, etc. también lo usan).
 
 import type { ModuleWebExtension } from '@/lib/module-registry';
-import { NotificationTemplatesTab } from './admin-templates-card';
 
 export const notificationsExtension: ModuleWebExtension = {
   name: 'mod.notifications',
-  adminConfigTabs: [
-    {
-      key: 'plantillas',
-      label: 'Plantillas',
-      description: 'Override del copy de las notificaciones por canal e idioma.',
-      Component: NotificationTemplatesTab,
-    },
-  ],
+  adminConfigTabs: [],
 };
 
 export {
   adminNotificationsApi,
+  type EmailTemplateCatalogEntry,
+  type EmailTemplateCategory,
+  type EmailTemplateVariable,
   type NotificationChannel,
   type NotificationTemplateOverride,
 } from './admin-client';
-export { NotificationTemplatesTab } from './admin-templates-card';
+export { EmailTemplatesManager, NotificationTemplatesTab } from './admin-templates-card';

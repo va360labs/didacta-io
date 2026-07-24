@@ -9,6 +9,10 @@ import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.servi
 import { PrismaService } from '../prisma/prisma.service';
 import { buildRejectionEmail, buildWelcomeEmail } from './email-templates';
 import { resolveEmailBranding, type BrandingPrisma } from '../common/branded-email';
+import {
+  fetchEmailOverride,
+  type TemplateOverridePrisma,
+} from '../modules/notifications/email-template-catalog';
 
 /** Tokens RAW de decisión que se envían en el email del aprobador (uno por acción). */
 const DECISION_ACTIONS = ['APPROVE', 'REJECT'] as const;
@@ -141,7 +145,17 @@ export class MemberDecisionService {
     if (record.action === 'APPROVE') {
       await this.accessGroups.assignDefaultGroupOnApproval(record.tenantId, record.userId);
       const signinUrl = `${process.env['WEB_PUBLIC_URL']?.trim() ?? ''}/signin`;
-      const { subject, text, html } = buildWelcomeEmail(user?.name ?? '', signinUrl, branding);
+      const welcomeOverride = await fetchEmailOverride(
+        this.prisma as unknown as TemplateOverridePrisma,
+        record.tenantId,
+        'inscripcion.welcome_approved',
+      );
+      const { subject, text, html } = buildWelcomeEmail(
+        user?.name ?? '',
+        signinUrl,
+        branding,
+        welcomeOverride,
+      );
       await this.sendEmail(
         record.tenantId,
         user?.email ?? null,
@@ -163,7 +177,16 @@ export class MemberDecisionService {
       return { outcome: 'approved' };
     }
 
-    const { subject, text, html } = buildRejectionEmail(user?.name ?? '', branding);
+    const rejectionOverride = await fetchEmailOverride(
+      this.prisma as unknown as TemplateOverridePrisma,
+      record.tenantId,
+      'inscripcion.rejection',
+    );
+    const { subject, text, html } = buildRejectionEmail(
+      user?.name ?? '',
+      branding,
+      rejectionOverride,
+    );
     await this.sendEmail(
       record.tenantId,
       user?.email ?? null,
@@ -225,7 +248,17 @@ export class MemberDecisionService {
     if (action === 'APPROVE') {
       await this.accessGroups.assignDefaultGroupOnApproval(tenantId, userId);
       const signinUrl = `${process.env['WEB_PUBLIC_URL']?.trim() ?? ''}/signin`;
-      const { subject, text, html } = buildWelcomeEmail(user.name ?? '', signinUrl, branding);
+      const welcomeOverride = await fetchEmailOverride(
+        this.prisma as unknown as TemplateOverridePrisma,
+        tenantId,
+        'inscripcion.welcome_approved',
+      );
+      const { subject, text, html } = buildWelcomeEmail(
+        user.name ?? '',
+        signinUrl,
+        branding,
+        welcomeOverride,
+      );
       await this.sendEmail(tenantId, user.email, subject, text, html, branding.tenantName);
       await this.auditLog.record({
         tenantId,
@@ -240,7 +273,16 @@ export class MemberDecisionService {
       return { outcome: 'approved' };
     }
 
-    const { subject, text, html } = buildRejectionEmail(user.name ?? '', branding);
+    const rejectionOverride = await fetchEmailOverride(
+      this.prisma as unknown as TemplateOverridePrisma,
+      tenantId,
+      'inscripcion.rejection',
+    );
+    const { subject, text, html } = buildRejectionEmail(
+      user.name ?? '',
+      branding,
+      rejectionOverride,
+    );
     await this.sendEmail(tenantId, user.email, subject, text, html, branding.tenantName);
     await this.auditLog.record({
       tenantId,
