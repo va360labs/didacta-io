@@ -35,6 +35,9 @@ export const zoomLiveExtension: ModuleWebExtension = {
 /// desde `@/modules/zoom-live` — nunca desde `./client` o paths internos.
 export { zoomLiveApi } from './client';
 export type {
+  AttendanceConfidence,
+  AttendanceReport,
+  AttendanceRow,
   SessionStatus,
   ZoomSession,
   ZoomSessionRegistration,

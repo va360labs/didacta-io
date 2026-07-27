@@ -38,6 +38,39 @@ export interface ZoomSessionRegistration {
   registeredAt: string;
 }
 
+/** De dónde sale el `attended` de una fila (ADR-018). */
+export type AttendanceConfidence = 'ZOOM' | 'PROXY' | 'MANUAL' | 'NONE';
+
+export interface AttendanceRow {
+  /** NULL para participantes de Zoom que no casan con ningún miembro. */
+  userId: string | null;
+  name: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  registered: boolean;
+  registeredAt: string | null;
+  attended: boolean;
+  confidence: AttendanceConfidence;
+  minutes: number;
+  clickedJoinAt: string | null;
+  joinedAt: string | null;
+  leftAt: string | null;
+  manualPresent: boolean | null;
+  zoomName: string | null;
+  zoomEmail: string | null;
+}
+
+export interface AttendanceReport {
+  sessionId: string;
+  status: SessionStatus;
+  syncedAt: string | null;
+  syncError: string | null;
+  canSync: boolean;
+  registeredCount: number;
+  attendedCount: number;
+  rows: AttendanceRow[];
+}
+
 export type WebhookEventResult = 'OK' | 'IGNORED' | 'ERROR';
 
 export interface ZoomWebhookEventItem {
@@ -102,6 +135,50 @@ export const zoomLiveApi = {
     return apiFetch<{ unregistered: boolean }>(
       `/api/v1/modules/zoom-live/sessions/${id}/unregister`,
       { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
+
+  /**
+   * Sella la entrada del usuario y devuelve el `joinUrl` (ADR-018). La UI la
+   * dispara al pulsar "Unirme" sin esperar la respuesta: la pestaña de Zoom se
+   * abre nativamente y aquí solo queda constancia de que entró.
+   */
+  async join(id: string): Promise<{ joinUrl: string }> {
+    return apiFetch<{ joinUrl: string }>(
+      `/api/v1/modules/zoom-live/sessions/${id}/join`,
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
+
+  /** Informe de asistencia (solo formador/admin). */
+  async getAttendance(id: string): Promise<AttendanceReport> {
+    return apiFetch<AttendanceReport>(
+      `/api/v1/modules/zoom-live/sessions/${id}/attendance`,
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
+  /** Fuerza la reconciliación contra Zoom (solo formador/admin). */
+  async syncAttendance(id: string): Promise<AttendanceReport> {
+    return apiFetch<AttendanceReport>(
+      `/api/v1/modules/zoom-live/sessions/${id}/attendance/sync`,
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
+
+  /** Override manual de asistencia. `present: null` lo quita. */
+  async setManualAttendance(
+    id: string,
+    userId: string,
+    present: boolean | null,
+  ): Promise<AttendanceReport> {
+    return apiFetch<AttendanceReport>(
+      `/api/v1/modules/zoom-live/sessions/${id}/attendance/${userId}`,
+      { method: 'PUT', body: JSON.stringify({ present }) },
       withAuth(),
     );
   },

@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 import type { ModuleContext } from '@didacta/core-kernel';
 import type { PrismaClient } from '@didacta/database';
 import {
+  type AttendanceConfidence,
+  type AttendanceReport,
+  type AttendanceView,
   type CreateSessionDto,
   type ListWebhookEventsQuery,
   type PaginatedWebhookEvents,
@@ -11,11 +14,14 @@ import {
   type UpdateSessionDto,
   type SessionStatus,
   type WebhookEventView,
+  type ZoomParticipantRecord,
   type ZoomWebhookEvent,
 } from './dto.js';
 import {
+  AttendanceNotAvailableError,
   CourseNotInTenantError,
   LessonNotInCourseError,
+  NotRegisteredError,
   SessionAlreadyEndedError,
   SessionNotFoundError,
   SessionNotOpenForRegistrationError,
@@ -283,6 +289,248 @@ export class ZoomLiveService {
     });
   }
 
+  // ------------------- asistencia (ADR-018) -------------------
+
+  /**
+   * Registra que el usuario pulsó "Unirme" y devuelve el `joinUrl`. Es el
+   * proxy de entrada: la única fuente de asistencia atribuible al 100% a un
+   * `userId`, porque ocurre dentro de Didacta y no depende de con qué
+   * identidad entre luego en Zoom.
+   *
+   * Solo sella el PRIMER click: interesa cuándo entró, no cuántas veces
+   * pulsó. Idempotente y sin efectos si repite.
+   */
+  async markJoinClick(
+    tenantId: string,
+    userId: string,
+    sessionId: string,
+    isStaff = false,
+  ): Promise<{ joinUrl: string }> {
+    const session = await this.prisma.modZoomSession.findFirst({
+      where: { tenantId, id: sessionId },
+    });
+    if (!session) throw new SessionNotFoundError(sessionId);
+    if (session.status === 'CANCELLED') throw new SessionNotOpenForRegistrationError();
+
+    // Mismo gating que el `joinUrl` del detalle (ADR-017): sin inscripción no
+    // hay enlace, y el servidor es quien lo decide.
+    if (!isStaff) {
+      const registered = await this.prisma.modZoomSessionRegistration.findUnique({
+        where: { mod_zoom_session_registration_unique: { sessionId, userId } },
+      });
+      if (!registered) throw new NotRegisteredError();
+    }
+    if (!session.joinUrl) {
+      throw new AttendanceNotAvailableError('Esta clase todavía no tiene enlace de Zoom.');
+    }
+
+    const existing = await this.prisma.modZoomSessionAttendance.findFirst({
+      where: { tenantId, sessionId, userId },
+    });
+    try {
+      if (!existing) {
+        await this.prisma.modZoomSessionAttendance.create({
+          data: {
+            id: randomUUID(),
+            tenantId,
+            sessionId,
+            userId,
+            clickedJoinAt: new Date(),
+          },
+        });
+      } else if (!existing.clickedJoinAt) {
+        await this.prisma.modZoomSessionAttendance.update({
+          where: { id: existing.id },
+          data: { clickedJoinAt: new Date() },
+        });
+      }
+    } catch (e) {
+      // Doble click concurrente: la unique (session_id, user_id) gana. El
+      // enlace se sirve igual — perder el sello sería peor que servirlo.
+      if ((e as { code?: string }).code !== 'P2002') throw e;
+    }
+
+    return { joinUrl: session.joinUrl };
+  }
+
+  /** Informe de asistencia de una sesión (solo staff — el controller gatea). */
+  async getAttendance(tenantId: string, sessionId: string): Promise<AttendanceReport> {
+    const session = await this.prisma.modZoomSession.findFirst({
+      where: { tenantId, id: sessionId },
+    });
+    if (!session) throw new SessionNotFoundError(sessionId);
+    return this.buildAttendanceReport(tenantId, session);
+  }
+
+  /**
+   * Reconcilia la asistencia contra Zoom: pide los participantes del meeting
+   * terminado y los casa con miembros del tenant **por email**. Los que no
+   * casan se conservan con su identidad de Zoom para que el formador los
+   * concilie a mano.
+   *
+   * Idempotente: se puede repetir sin duplicar filas ni perder los overrides
+   * manuales. Nunca lanza por un fallo de Zoom — deja el motivo en
+   * `syncError` para que el formador vea qué falta (típicamente el scope
+   * `report:read:admin`) en vez de un 502 opaco.
+   */
+  async syncAttendance(tenantId: string, sessionId: string): Promise<AttendanceReport> {
+    const session = await this.prisma.modZoomSession.findFirst({
+      where: { tenantId, id: sessionId },
+    });
+    if (!session) throw new SessionNotFoundError(sessionId);
+    if (session.status === 'CANCELLED') {
+      throw new AttendanceNotAvailableError('La clase fue cancelada: no hay asistencia que leer.');
+    }
+    if (session.status === 'SCHEDULED') {
+      throw new AttendanceNotAvailableError('La clase todavía no ha empezado.');
+    }
+    const meetingRef = session.zoomMeetingUuid ?? session.zoomMeetingId;
+    if (!meetingRef) {
+      throw new AttendanceNotAvailableError('Esta clase no tiene un meeting de Zoom asociado.');
+    }
+
+    let participants: ZoomParticipantRecord[];
+    let source: 'REPORT' | 'PAST_MEETING';
+    try {
+      const api = await this.clientFor(tenantId);
+      const result = await api.getPastMeetingParticipants(meetingRef);
+      participants = result.participants;
+      source = result.source;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.ctx.logger.warn('mod.zoom-live: fallo leyendo participantes de Zoom', {
+        tenantId,
+        sessionId,
+        meetingRef,
+        error: message,
+      });
+      await this.prisma.modZoomSession.update({
+        where: { id: sessionId },
+        data: { attendanceSyncError: message.slice(0, 500) },
+      });
+      const fresh = await this.prisma.modZoomSession.findFirst({
+        where: { tenantId, id: sessionId },
+      });
+      return this.buildAttendanceReport(tenantId, fresh ?? session);
+    }
+
+    const aggregated = aggregateParticipants(participants);
+    const matched = await this.matchParticipantsToUsers(tenantId, aggregated);
+
+    for (const entry of aggregated) {
+      const userId = matched.get(entry.key) ?? null;
+      const data = {
+        zoomEmail: entry.email,
+        zoomName: entry.name,
+        zoomParticipantId: entry.participantId,
+        present: true,
+        // El fallback `past_meetings` no reporta duración: 0 minutos con
+        // present=true significa "entró, no sabemos cuánto".
+        minutes: source === 'REPORT' ? entry.minutes : 0,
+        joinedAt: entry.joinedAt,
+        leftAt: entry.leftAt,
+      };
+
+      const existing = userId
+        ? await this.prisma.modZoomSessionAttendance.findFirst({
+            where: { tenantId, sessionId, userId },
+          })
+        : await this.findUnmatchedAttendance(tenantId, sessionId, entry);
+
+      if (existing) {
+        await this.prisma.modZoomSessionAttendance.update({
+          where: { id: existing.id },
+          data,
+        });
+      } else {
+        await this.prisma.modZoomSessionAttendance.create({
+          data: { id: randomUUID(), tenantId, sessionId, userId, ...data },
+        });
+      }
+    }
+
+    await this.prisma.modZoomSession.update({
+      where: { id: sessionId },
+      data: { attendanceSyncedAt: new Date(), attendanceSyncError: null },
+    });
+
+    await this.publish(tenantId, null, 'zoom.session.attendance_synced', {
+      sessionId,
+      participants: aggregated.length,
+      source,
+    });
+
+    const fresh = await this.prisma.modZoomSession.findFirst({
+      where: { tenantId, id: sessionId },
+    });
+    return this.buildAttendanceReport(tenantId, fresh ?? session);
+  }
+
+  /**
+   * Override manual del formador. `present = null` lo quita y devuelve la
+   * fila al cálculo automático — nunca destruimos la evidencia original.
+   */
+  async setManualAttendance(
+    tenantId: string,
+    sessionId: string,
+    userId: string,
+    present: boolean | null,
+  ): Promise<AttendanceReport> {
+    const session = await this.prisma.modZoomSession.findFirst({
+      where: { tenantId, id: sessionId },
+    });
+    if (!session) throw new SessionNotFoundError(sessionId);
+
+    const existing = await this.prisma.modZoomSessionAttendance.findFirst({
+      where: { tenantId, sessionId, userId },
+    });
+    if (existing) {
+      await this.prisma.modZoomSessionAttendance.update({
+        where: { id: existing.id },
+        data: { manualPresent: present },
+      });
+    } else {
+      await this.prisma.modZoomSessionAttendance.create({
+        data: { id: randomUUID(), tenantId, sessionId, userId, manualPresent: present },
+      });
+    }
+
+    return this.buildAttendanceReport(tenantId, session);
+  }
+
+  /**
+   * Sesiones que ya deberían tener asistencia pero no se han reconciliado.
+   * Lo usa el worker: sesiones STARTED/ENDED cuya hora de fin (+ margen) ya
+   * pasó, dentro de una ventana de 48h para no reintentar eternamente una
+   * cuenta sin los scopes necesarios.
+   */
+  async listSessionsPendingAttendanceSync(
+    now: Date,
+    limit = 50,
+  ): Promise<{ id: string; tenantId: string }[]> {
+    const rows = await this.prisma.modZoomSession.findMany({
+      where: {
+        status: { in: ['STARTED', 'ENDED'] },
+        attendanceSyncedAt: null,
+        startTime: {
+          gte: new Date(now.getTime() - 48 * 60 * 60 * 1000),
+          lte: new Date(now.getTime() - GRACE_MINUTES * 60 * 1000),
+        },
+      },
+      orderBy: { startTime: 'asc' },
+      take: limit,
+    });
+
+    // El fin real (`startTime + duración + margen`) no es expresable en el
+    // where de Prisma; filtramos aquí sobre un conjunto ya acotado.
+    return rows
+      .filter((r) => {
+        const endsAt = r.startTime.getTime() + (r.durationMinutes + GRACE_MINUTES) * 60 * 1000;
+        return endsAt <= now.getTime();
+      })
+      .map((r) => ({ id: r.id, tenantId: r.tenantId }));
+  }
+
   async create(
     tenantId: string,
     actorId: string | null,
@@ -497,6 +745,7 @@ export class ZoomLiveService {
     }
 
     const meetingId = event.payload?.object?.id ? String(event.payload.object.id) : null;
+    const meetingUuid = event.payload?.object?.uuid ?? null;
     const session = meetingId
       ? await this.prisma.modZoomSession.findFirst({
           where: { zoomMeetingId: meetingId },
@@ -528,7 +777,13 @@ export class ZoomLiveService {
       try {
         await this.prisma.modZoomSession.update({
           where: { id: session.id },
-          data: { status: nextStatus },
+          data: {
+            status: nextStatus,
+            // Guardamos el UUID de la ocurrencia: es la clave con la que se
+            // le piden los participantes a Zoom (ADR-018), y el id numérico
+            // solo sirve para la última instancia de un recurrente.
+            ...(meetingUuid ? { zoomMeetingUuid: meetingUuid } : {}),
+          },
         });
         await this.publish(
           session.tenantId,
@@ -650,6 +905,182 @@ export class ZoomLiveService {
   // ------------------- helpers -------------------
 
   /**
+   * Une inscripciones y asistencia en un solo informe. Las filas son la
+   * UNIÓN de ambas: un inscrito que no apareció sale con `attended: false`, y
+   * un asistente que nunca se inscribió (entró por un enlace reenviado) sale
+   * con `registered: false`. Ninguno de los dos debe desaparecer.
+   */
+  private async buildAttendanceReport(
+    tenantId: string,
+    session: {
+      id: string;
+      status: string;
+      attendanceSyncedAt: Date | null;
+      attendanceSyncError: string | null;
+      zoomMeetingId: string | null;
+      zoomMeetingUuid: string | null;
+    },
+  ): Promise<AttendanceReport> {
+    const sessionId = session.id;
+    const [registrations, attendances] = await Promise.all([
+      this.prisma.modZoomSessionRegistration.findMany({
+        where: { tenantId, sessionId },
+        orderBy: { registeredAt: 'asc' },
+      }),
+      this.prisma.modZoomSessionAttendance.findMany({
+        where: { tenantId, sessionId },
+      }),
+    ]);
+
+    const userIds = [
+      ...new Set([
+        ...registrations.map((r) => r.userId),
+        ...attendances.map((a) => a.userId).filter((id): id is string => Boolean(id)),
+      ]),
+    ];
+    const users = userIds.length
+      ? await this.prisma.user.findMany({
+          where: { tenantId, id: { in: userIds } },
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        })
+      : [];
+    const userById = new Map(users.map((u) => [u.id, u]));
+    const registeredAtByUser = new Map(registrations.map((r) => [r.userId, r.registeredAt]));
+    const attendanceByUser = new Map(
+      attendances.filter((a) => a.userId).map((a) => [a.userId as string, a]),
+    );
+
+    const synced = session.attendanceSyncedAt !== null;
+    const rows: AttendanceView[] = [];
+
+    // 1. Miembros: todos los inscritos + los que asistieron sin inscribirse.
+    const memberIds = [
+      ...new Set([...registrations.map((r) => r.userId), ...attendanceByUser.keys()]),
+    ];
+    for (const userId of memberIds) {
+      const att = attendanceByUser.get(userId);
+      const user = userById.get(userId);
+      const registeredAt = registeredAtByUser.get(userId) ?? null;
+      rows.push({
+        userId,
+        name: user?.name ?? null,
+        email: user?.email ?? null,
+        avatarUrl: user?.avatarUrl ?? null,
+        registered: registeredAt !== null,
+        registeredAt: registeredAt ? registeredAt.toISOString() : null,
+        attended: computeAttended(att ?? null, synced),
+        confidence: computeConfidence(att ?? null, synced),
+        minutes: att?.minutes ?? 0,
+        clickedJoinAt: att?.clickedJoinAt ? att.clickedJoinAt.toISOString() : null,
+        joinedAt: att?.joinedAt ? att.joinedAt.toISOString() : null,
+        leftAt: att?.leftAt ? att.leftAt.toISOString() : null,
+        manualPresent: att?.manualPresent ?? null,
+        zoomName: att?.zoomName ?? null,
+        zoomEmail: att?.zoomEmail ?? null,
+      });
+    }
+
+    // 2. Participantes de Zoom sin casar: se muestran para que el formador los
+    //    reconozca, pero no cuentan como asistencia de ningún miembro.
+    for (const att of attendances.filter((a) => !a.userId)) {
+      rows.push({
+        userId: null,
+        name: null,
+        email: null,
+        avatarUrl: null,
+        registered: false,
+        registeredAt: null,
+        attended: computeAttended(att, synced),
+        confidence: computeConfidence(att, synced),
+        minutes: att.minutes,
+        clickedJoinAt: null,
+        joinedAt: att.joinedAt ? att.joinedAt.toISOString() : null,
+        leftAt: att.leftAt ? att.leftAt.toISOString() : null,
+        manualPresent: att.manualPresent,
+        zoomName: att.zoomName,
+        zoomEmail: att.zoomEmail,
+      });
+    }
+
+    // Orden: asistentes primero (más minutos arriba), luego ausentes, y al
+    // final los que no casan con ningún miembro.
+    rows.sort((a, b) => {
+      if (!a.userId !== !b.userId) return a.userId ? -1 : 1;
+      if (a.attended !== b.attended) return a.attended ? -1 : 1;
+      if (b.minutes !== a.minutes) return b.minutes - a.minutes;
+      return (a.name ?? a.email ?? a.zoomName ?? '').localeCompare(
+        b.name ?? b.email ?? b.zoomName ?? '',
+      );
+    });
+
+    return {
+      sessionId,
+      status: session.status as SessionStatus,
+      syncedAt: session.attendanceSyncedAt ? session.attendanceSyncedAt.toISOString() : null,
+      syncError: session.attendanceSyncError,
+      canSync:
+        (session.status === 'STARTED' || session.status === 'ENDED') &&
+        Boolean(session.zoomMeetingUuid ?? session.zoomMeetingId),
+      registeredCount: registrations.length,
+      attendedCount: rows.filter((r) => r.attended).length,
+      rows,
+    };
+  }
+
+  /**
+   * Casa participantes de Zoom con miembros del tenant por email. Zoom
+   * devuelve el email tal cual lo tenga la cuenta, así que comparamos en
+   * minúsculas; consultamos ambas variantes porque no asumimos cómo están
+   * normalizados los emails en `user`.
+   */
+  private async matchParticipantsToUsers(
+    tenantId: string,
+    entries: AggregatedParticipant[],
+  ): Promise<Map<string, string>> {
+    const emails = entries.map((e) => e.email).filter((e): e is string => Boolean(e));
+    if (emails.length === 0) return new Map();
+
+    const variants = [...new Set(emails.flatMap((e) => [e, e.toLowerCase()]))];
+    const users = await this.prisma.user.findMany({
+      where: { tenantId, email: { in: variants } },
+      select: { id: true, email: true },
+    });
+    const userByEmail = new Map(users.map((u) => [u.email.toLowerCase(), u.id]));
+
+    const out = new Map<string, string>();
+    for (const entry of entries) {
+      if (!entry.email) continue;
+      const userId = userByEmail.get(entry.email.toLowerCase());
+      if (userId) out.set(entry.key, userId);
+    }
+    return out;
+  }
+
+  /**
+   * Busca la fila de un participante sin casar para no duplicarla al
+   * re-sincronizar. La clave es el `participantId` de Zoom; si no vino,
+   * caemos al email y luego al nombre.
+   */
+  private async findUnmatchedAttendance(
+    tenantId: string,
+    sessionId: string,
+    entry: AggregatedParticipant,
+  ): Promise<{ id: string } | null> {
+    const rows = await this.prisma.modZoomSessionAttendance.findMany({
+      where: { tenantId, sessionId, userId: null },
+    });
+    return (
+      rows.find((r) =>
+        entry.participantId
+          ? r.zoomParticipantId === entry.participantId
+          : entry.email
+            ? r.zoomEmail === entry.email
+            : r.zoomName === entry.name,
+      ) ?? null
+    );
+  }
+
+  /**
    * Set de sessionIds (dentro de `candidateIds`) en los que el viewer
    * está inscrito. Sin viewer devuelve set vacío (viewer anónimo/sistema).
    */
@@ -738,6 +1169,104 @@ export class ZoomLiveService {
       updatedAt: row.updatedAt.toISOString(),
     };
   }
+}
+
+/**
+ * Margen tras el fin teórico de la clase antes de pedirle los participantes a
+ * Zoom: el meeting puede alargarse y el informe tarda un poco en cuajar.
+ */
+const GRACE_MINUTES = 15;
+
+interface AggregatedParticipant {
+  /** Clave de agregación (email, o id de participante, o nombre). */
+  key: string;
+  participantId: string | null;
+  name: string | null;
+  email: string | null;
+  minutes: number;
+  joinedAt: Date | null;
+  leftAt: Date | null;
+}
+
+/**
+ * Agrupa las entradas de Zoom por persona. Zoom emite una entrada por tramo
+ * de conexión: quien se cae y vuelve aparece varias veces y hay que sumar sus
+ * minutos, o un alumno con mala línea parecería no haber asistido.
+ *
+ * Los minutos se calculan de `leave - join` cuando hay ambos timestamps (es
+ * lo que un humano llamaría "tiempo en clase") y solo caemos a `duration`
+ * —que Zoom reporta en segundos— si falta alguno.
+ */
+function aggregateParticipants(participants: ZoomParticipantRecord[]): AggregatedParticipant[] {
+  const byKey = new Map<string, AggregatedParticipant>();
+
+  for (const p of participants) {
+    const key = (p.email ?? p.participantId ?? p.name ?? '').toLowerCase();
+    if (!key) continue; // entrada sin ninguna identidad: no hay nada que casar
+
+    const join = p.joinTime ? new Date(p.joinTime) : null;
+    const leave = p.leaveTime ? new Date(p.leaveTime) : null;
+    const validJoin = join && !Number.isNaN(join.getTime()) ? join : null;
+    const validLeave = leave && !Number.isNaN(leave.getTime()) ? leave : null;
+
+    let minutes = 0;
+    if (validJoin && validLeave && validLeave > validJoin) {
+      minutes = Math.round((validLeave.getTime() - validJoin.getTime()) / 60_000);
+    } else if (p.durationSeconds !== null) {
+      minutes = Math.round(p.durationSeconds / 60);
+    }
+
+    const prev = byKey.get(key);
+    if (!prev) {
+      byKey.set(key, {
+        key,
+        participantId: p.participantId,
+        name: p.name,
+        email: p.email,
+        minutes,
+        joinedAt: validJoin,
+        leftAt: validLeave,
+      });
+      continue;
+    }
+
+    prev.minutes += minutes;
+    prev.participantId ??= p.participantId;
+    prev.name ??= p.name;
+    prev.email ??= p.email;
+    if (validJoin && (!prev.joinedAt || validJoin < prev.joinedAt)) prev.joinedAt = validJoin;
+    if (validLeave && (!prev.leftAt || validLeave > prev.leftAt)) prev.leftAt = validLeave;
+  }
+
+  return [...byKey.values()];
+}
+
+/** Fila de asistencia mínima que necesitan los cálculos derivados. */
+interface AttendanceFacts {
+  present: boolean;
+  clickedJoinAt: Date | null;
+  manualPresent: boolean | null;
+}
+
+/**
+ * ¿Asistió? El override manual manda. Si no, vale lo que diga Zoom; y solo
+ * mientras la sesión NO se ha reconciliado aceptamos el click como evidencia
+ * — una vez Zoom ha hablado, un click sin presencia significa que abrió el
+ * enlace y no entró.
+ */
+function computeAttended(att: AttendanceFacts | null, synced: boolean): boolean {
+  if (!att) return false;
+  if (att.manualPresent !== null) return att.manualPresent;
+  if (att.present) return true;
+  return !synced && att.clickedJoinAt !== null;
+}
+
+/** De dónde sale el `attended` que acabamos de calcular. */
+function computeConfidence(att: AttendanceFacts | null, synced: boolean): AttendanceConfidence {
+  if (att?.manualPresent != null) return 'MANUAL';
+  if (synced) return 'ZOOM';
+  if (att?.clickedJoinAt) return 'PROXY';
+  return 'NONE';
 }
 
 function toWebhookEventView(row: {

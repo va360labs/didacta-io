@@ -4,8 +4,8 @@ export const manifest: ModuleManifest = parseModuleManifest({
   name: 'mod.zoom-live',
   displayName: 'Aula virtual (Zoom)',
   description:
-    'Clases en directo con Zoom: sesiones asociadas opcionalmente a un curso, inscripción por sesión con enlace compartible (/clase/[id]) y joinUrl/grabación gateados a inscritos (ADR-017). Integración Server-to-Server real con credenciales per-tenant; stub determinístico sin credenciales.',
-  version: '0.2.0',
+    'Clases en directo con Zoom: sesiones asociadas opcionalmente a un curso, inscripción por sesión con enlace compartible (/clase/[id]) y joinUrl/grabación gateados a inscritos (ADR-017). Asistencia real por proxy de entrada + reconciliación con la Report API de Zoom (ADR-018). Integración Server-to-Server real con credenciales per-tenant; stub determinístico sin credenciales.',
+  version: '0.3.0',
   author: 'VA360 LABS',
   license: 'Proprietary',
   category: 'live',
@@ -25,6 +25,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'zoom.session.recording_ready',
     'zoom.session.registration.created',
     'zoom.session.registration.cancelled',
+    'zoom.session.attendance_synced',
   ],
   eventsConsumed: [],
   apiNamespace: '/modules/zoom-live',

@@ -50,6 +50,29 @@ export class SessionNotOpenForRegistrationError extends ZoomLiveError {
   }
 }
 
+/**
+ * Lanzado al pedir el enlace de entrada (`POST .../join`) sin estar inscrito
+ * ni ser staff. Es el mismo gating que oculta el `joinUrl` (ADR-017), pero
+ * aquí sí queremos un error explícito en vez de un NULL silencioso: el
+ * usuario ha pulsado un botón y merece saber por qué no pasa.
+ */
+export class NotRegisteredError extends ZoomLiveError {
+  constructor() {
+    super('ZOOM_NOT_REGISTERED', 'Tienes que inscribirte antes de entrar a la clase.');
+  }
+}
+
+/**
+ * Lanzado al pedir la reconciliación de asistencia de una sesión que todavía
+ * no puede tenerla (no ha empezado, o fue cancelada, o no tiene meeting en
+ * Zoom con el que reconciliar).
+ */
+export class AttendanceNotAvailableError extends ZoomLiveError {
+  constructor(reason: string) {
+    super('ZOOM_ATTENDANCE_NOT_AVAILABLE', reason);
+  }
+}
+
 export class ZoomApiError extends ZoomLiveError {
   constructor(reason: string) {
     super('ZOOM_API_ERROR', `Error hablando con Zoom: ${reason}`);

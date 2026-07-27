@@ -21,9 +21,10 @@ import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import {
   zoomLiveApi,
+  type AttendanceReport,
+  type AttendanceRow,
   type SessionStatus,
   type ZoomSession,
-  type ZoomSessionRegistration,
 } from '@/modules/zoom-live';
 
 const STATUS_VARIANT: Record<SessionStatus, 'success' | 'warning' | 'muted' | 'danger'> = {
@@ -132,6 +133,18 @@ export default function ClasePage() {
     } finally {
       setPending(false);
     }
+  }
+
+  /**
+   * Sella la entrada antes de irse a Zoom (ADR-018). No esperamos la
+   * respuesta: el `<a target="_blank">` abre Zoom nativamente (sin bloqueos de
+   * popup) y esta pestaña sigue viva, así que la petición termina igual. Si
+   * falla, se pierde una evidencia débil — la fuerte la da la reconciliación
+   * con Zoom, no este click.
+   */
+  function handleJoinClick() {
+    if (!session) return;
+    void zoomLiveApi.join(session.id).catch(() => undefined);
   }
 
   async function handleCopyLink() {
@@ -251,7 +264,7 @@ export default function ClasePage() {
 
             {isOpen && session.isRegistered && session.joinUrl ? (
               <Button asChild>
-                <Link href={session.joinUrl as never} target="_blank">
+                <Link href={session.joinUrl as never} target="_blank" onClick={handleJoinClick}>
                   <Icon name="video" size={15} />
                   {session.status === 'STARTED' ? 'Unirme ahora' : 'Unirme a la clase'}
                 </Link>
@@ -302,34 +315,48 @@ export default function ClasePage() {
       </Card>
 
       {isStaff ? (
-        <RegistrationsRoster sessionId={session.id} refreshKey={session.registeredCount} />
+        <AttendancePanel sessionId={session.id} refreshKey={session.registeredCount} />
       ) : null}
     </section>
   );
 }
 
-/** Roster de inscritos — solo staff (el endpoint además lo gatea por rol). */
-function RegistrationsRoster({
+/**
+ * Etiqueta honesta de la evidencia (ADR-018): un click en "Unirme" no es lo
+ * mismo que una confirmación de Zoom, y el formador tiene que poder
+ * distinguirlo de un vistazo antes de dar una asistencia por buena.
+ */
+const CONFIDENCE_LABEL: Record<AttendanceRow['confidence'], string> = {
+  ZOOM: 'Confirmado por Zoom',
+  PROXY: 'Abrió el enlace desde Didacta (sin confirmar por Zoom)',
+  MANUAL: 'Marcado a mano por un formador',
+  NONE: 'Sin evidencia',
+};
+
+/** Panel de asistencia — solo staff (el endpoint además lo gatea por rol). */
+function AttendancePanel({
   sessionId,
   refreshKey,
 }: {
   sessionId: string;
-  /** Cambia con registeredCount: re-carga el roster tras register/unregister. */
+  /** Cambia con registeredCount: re-carga el panel tras register/unregister. */
   refreshKey: number;
 }) {
-  const [rows, setRows] = useState<ZoomSessionRegistration[] | null>(null);
+  const [report, setReport] = useState<AttendanceReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     zoomLiveApi
-      .listRegistrations(sessionId)
+      .getAttendance(sessionId)
       .then((r) => {
-        if (!cancelled) setRows(r);
+        if (!cancelled) setReport(r);
       })
       .catch((e) => {
         if (!cancelled) {
-          setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los inscritos.');
+          setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar la asistencia.');
         }
       });
     return () => {
@@ -337,23 +364,98 @@ function RegistrationsRoster({
     };
   }, [sessionId, refreshKey]);
 
+  async function handleSync() {
+    setSyncing(true);
+    setError(null);
+    try {
+      setReport(await zoomLiveApi.syncAttendance(sessionId));
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No pudimos sincronizar con Zoom.');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function handleToggle(row: AttendanceRow) {
+    if (!row.userId) return;
+    // Ciclo: automático → presente → ausente → automático. Volver al
+    // automático es importante: un error de marcado no debe ser permanente.
+    const next = row.manualPresent === null ? true : row.manualPresent ? false : null;
+    setPendingUserId(row.userId);
+    setError(null);
+    try {
+      setReport(await zoomLiveApi.setManualAttendance(sessionId, row.userId, next));
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar la marca.');
+    } finally {
+      setPendingUserId(null);
+    }
+  }
+
   return (
     <Card>
       <CardContent className="space-y-3 p-6">
-        <h2 className="font-display text-base font-bold text-text">
-          <Icon name="users" size={16} className="mr-1.5 inline-block align-[-3px]" />
-          Miembros inscritos
-        </h2>
-        {error ? (
-          <p className="text-sm text-danger-700">{error}</p>
-        ) : rows === null ? (
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="font-display text-base font-bold text-text">
+              <Icon name="users" size={16} className="mr-1.5 inline-block align-[-3px]" />
+              Asistencia
+            </h2>
+            {report ? (
+              <p className="text-xs text-text-subtle">
+                {report.attendedCount} de {report.registeredCount}{' '}
+                {report.registeredCount === 1 ? 'inscrito' : 'inscritos'}
+                {report.syncedAt
+                  ? ` · sincronizado con Zoom el ${new Date(report.syncedAt).toLocaleString(
+                      'es-ES',
+                      { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' },
+                    )}`
+                  : ' · sin sincronizar con Zoom'}
+              </p>
+            ) : null}
+          </div>
+          {report?.canSync ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={handleSync}
+              disabled={syncing}
+            >
+              <Icon name="download-cloud" size={14} />
+              {syncing ? 'Sincronizando…' : 'Sincronizar con Zoom'}
+            </Button>
+          ) : null}
+        </div>
+
+        {error ? <p className="text-sm text-danger-700">{error}</p> : null}
+
+        {report?.syncError ? (
+          <div className="rounded-lg border border-warning-200 bg-warning-50 p-3 text-xs text-warning-800">
+            Zoom no devolvió los participantes: {report.syncError}
+          </div>
+        ) : null}
+
+        {report && !report.syncedAt && report.rows.some((r) => r.confidence === 'PROXY') ? (
+          <p className="text-xs text-text-subtle">
+            Todavía no hemos podido confirmar la asistencia con Zoom. Lo que ves abajo es quién
+            abrió el enlace desde Didacta.
+          </p>
+        ) : null}
+
+        {report === null && !error ? (
           <div className="skeleton h-16 w-full" />
-        ) : rows.length === 0 ? (
-          <p className="text-sm text-text-muted">Todavía no hay inscritos.</p>
-        ) : (
+        ) : report && report.rows.length === 0 ? (
+          <p className="text-sm text-text-muted">Todavía no hay inscritos ni asistentes.</p>
+        ) : report ? (
           <ul className="divide-y divide-border">
-            {rows.map((r) => (
-              <li key={r.userId} className="flex items-center gap-3 py-2.5">
+            {report.rows.map((r, i) => (
+              <li
+                // Las filas sin `userId` (participantes de Zoom sin casar) no
+                // tienen identificador estable en el payload: el índice sirve.
+                key={r.userId ?? `zoom:${i}`}
+                className="flex items-center gap-3 py-2.5"
+              >
                 {r.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -363,23 +465,62 @@ function RegistrationsRoster({
                   />
                 ) : (
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-bg-subtle text-xs font-semibold text-text-muted">
-                    {(r.name ?? r.email).slice(0, 2).toUpperCase()}
+                    {(r.name ?? r.email ?? r.zoomName ?? r.zoomEmail ?? '??')
+                      .slice(0, 2)
+                      .toUpperCase()}
                   </span>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-text">{r.name ?? r.email}</p>
-                  {r.name ? <p className="truncate text-xs text-text-muted">{r.email}</p> : null}
+                  <p className="truncate text-sm font-medium text-text">
+                    {r.name ?? r.email ?? r.zoomName ?? r.zoomEmail}
+                  </p>
+                  <p className="truncate text-xs text-text-muted">
+                    {r.userId ? (
+                      <>
+                        {r.email}
+                        {!r.registered ? ' · asistió sin inscribirse' : ''}
+                      </>
+                    ) : (
+                      'Participante de Zoom sin identificar'
+                    )}
+                  </p>
                 </div>
-                <span className="shrink-0 text-xs tabular-nums text-text-subtle">
-                  {new Date(r.registeredAt).toLocaleDateString('es-ES', {
-                    day: '2-digit',
-                    month: 'short',
-                  })}
-                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  {r.minutes > 0 ? (
+                    <span className="text-xs tabular-nums text-text-subtle">{r.minutes} min</span>
+                  ) : null}
+                  <span title={CONFIDENCE_LABEL[r.confidence]}>
+                    <Badge variant={r.attended ? 'success' : 'muted'} dot>
+                      {r.attended ? 'Asistió' : 'No asistió'}
+                    </Badge>
+                  </span>
+                  {r.userId ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => void handleToggle(r)}
+                      disabled={pendingUserId === r.userId}
+                      title={
+                        r.manualPresent === null
+                          ? 'Marcar como presente'
+                          : r.manualPresent
+                            ? 'Marcar como ausente'
+                            : 'Volver al cálculo automático'
+                      }
+                    >
+                      {r.manualPresent === null
+                        ? 'Marcar'
+                        : r.manualPresent
+                          ? 'Presente'
+                          : 'Ausente'}
+                    </Button>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );

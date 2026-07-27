@@ -10,6 +10,7 @@
  * a `https://api.zoom.us/v2/users/{email}/meetings`.
  */
 
+import type { ZoomParticipantRecord, ZoomParticipantsResult } from './dto.js';
 import { ZoomApiError } from './errors.js';
 
 export interface ZoomMeetingCreateInput {
@@ -41,6 +42,19 @@ export interface ZoomApiClient {
    * de verdad — útil para validar credenciales antes de operar.
    */
   testCredentials(): Promise<{ accountId: string }>;
+
+  /**
+   * Participantes de un meeting ya terminado (ADR-018). Acepta el UUID de la
+   * ocurrencia (preferido) o el id numérico, en cuyo caso Zoom devuelve la
+   * última instancia.
+   *
+   * Intenta primero la Report API (`/report/meetings/{id}/participants`), que
+   * trae tiempos y duración pero exige el scope `report:read:admin` y plan
+   * Pro+. Si Zoom la rechaza, cae a `/past_meetings/{uuid}/participants`
+   * (scope `meeting:read:admin`, cualquier plan): dice QUIÉN entró pero no
+   * cuánto tiempo. El resultado indica cuál de las dos respondió.
+   */
+  getPastMeetingParticipants(meetingIdOrUuid: string): Promise<ZoomParticipantsResult>;
 }
 
 /**
@@ -67,6 +81,15 @@ export class StubZoomApiClient implements ZoomApiClient {
 
   async testCredentials(): Promise<{ accountId: string }> {
     return { accountId: 'stub-account' };
+  }
+
+  /**
+   * Lista vacía a propósito: inventar asistentes pondría nombres falsos en el
+   * roster del formador. Sin credenciales reales, la única evidencia de
+   * asistencia es el click en "Unirme" (`clickedJoinAt`).
+   */
+  async getPastMeetingParticipants(): Promise<ZoomParticipantsResult> {
+    return { participants: [], source: 'REPORT' };
   }
 }
 
@@ -210,7 +233,56 @@ export class RealZoomApiClient implements ZoomApiClient {
     return { accountId: this.creds.accountId };
   }
 
+  async getPastMeetingParticipants(meetingIdOrUuid: string): Promise<ZoomParticipantsResult> {
+    const id = encodeZoomMeetingId(meetingIdOrUuid);
+    try {
+      return {
+        participants: await this.paginateParticipants(`/report/meetings/${id}/participants`),
+        source: 'REPORT',
+      };
+    } catch (reportError) {
+      // La Report API exige `report:read:admin` y plan Pro+. En cuentas que no
+      // la tienen, `past_meetings` sigue diciendo quiénes entraron (sin
+      // duración), que es la mitad de la respuesta y mejor que ninguna.
+      try {
+        return {
+          participants: await this.paginateParticipants(`/past_meetings/${id}/participants`),
+          source: 'PAST_MEETING',
+        };
+      } catch {
+        // Propagamos el error de la Report API: es el camino preferido y su
+        // mensaje ("Invalid access token, does not contain scopes...") es el
+        // que le dice al admin qué le falta configurar.
+        throw reportError;
+      }
+    }
+  }
+
   // ---- internals ----
+
+  /**
+   * Recorre las páginas de un endpoint de participantes. Zoom pagina con
+   * `next_page_token` (cadena vacía cuando no hay más). Cortamos a 20 páginas
+   * (6.000 participantes) como red de seguridad contra un token que no avanza.
+   */
+  private async paginateParticipants(path: string): Promise<ZoomParticipantRecord[]> {
+    const out: ZoomParticipantRecord[] = [];
+    let token = '';
+    for (let page = 0; page < 20; page++) {
+      const qs = `?page_size=300${token ? `&next_page_token=${encodeURIComponent(token)}` : ''}`;
+      const res = await this.zoomFetch(`${path}${qs}`, { method: 'GET' });
+      const json = (await res.json()) as {
+        participants?: unknown[];
+        next_page_token?: string;
+      };
+      for (const raw of json.participants ?? []) {
+        out.push(toParticipantRecord(raw));
+      }
+      token = json.next_page_token ?? '';
+      if (!token) break;
+    }
+    return out;
+  }
 
   private async getAccessToken(): Promise<string> {
     if (this.cachedToken && Date.now() < this.cachedToken.expiresAt) {
@@ -271,6 +343,44 @@ export class RealZoomApiClient implements ZoomApiClient {
     }
     return res;
   }
+}
+
+/**
+ * Codifica el identificador de meeting para meterlo en el path.
+ *
+ * Gotcha de Zoom: si el UUID empieza por `/` o contiene `//`, hay que
+ * **doble-encodearlo** o la API responde 404. Con los ids numéricos y los
+ * UUID "normales" basta un encode simple.
+ */
+export function encodeZoomMeetingId(meetingIdOrUuid: string): string {
+  const once = encodeURIComponent(meetingIdOrUuid);
+  const needsDouble = meetingIdOrUuid.startsWith('/') || meetingIdOrUuid.includes('//');
+  return needsDouble ? encodeURIComponent(once) : once;
+}
+
+/** Normaliza una entrada de participante de cualquiera de los dos endpoints. */
+function toParticipantRecord(raw: unknown): ZoomParticipantRecord {
+  const p = (raw ?? {}) as {
+    id?: unknown;
+    user_id?: unknown;
+    name?: unknown;
+    user_email?: unknown;
+    email?: unknown;
+    join_time?: unknown;
+    leave_time?: unknown;
+    duration?: unknown;
+  };
+  const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  return {
+    // `user_id` identifica la sesión del participante dentro del meeting;
+    // `id` es el usuario Zoom (vacío para invitados). Preferimos el primero.
+    participantId: str(p.user_id) ?? str(p.id),
+    name: str(p.name),
+    email: str(p.user_email) ?? str(p.email),
+    joinTime: str(p.join_time),
+    leaveTime: str(p.leave_time),
+    durationSeconds: typeof p.duration === 'number' && p.duration >= 0 ? p.duration : null,
+  };
 }
 
 /**

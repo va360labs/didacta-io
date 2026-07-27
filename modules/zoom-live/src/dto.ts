@@ -56,6 +56,9 @@ export type UpdateSessionDto = z.infer<typeof updateSessionSchema>;
  *
  * Otros eventos (`meeting.participant_joined`, etc.) se persisten como
  * `IGNORED` y no provocan cambios; los dejamos en la tabla por trazabilidad.
+ * La asistencia NO se construye con esos eventos sino reconciliando contra
+ * la Report API al terminar la sesión (ADR-018): un `participant_joined`
+ * perdido dejaría el registro incompleto para siempre.
  */
 export const webhookEventSchema = z.object({
   /**
@@ -148,6 +151,82 @@ export interface RegistrationView {
   email: string;
   avatarUrl: string | null;
   registeredAt: string;
+}
+
+/**
+ * De dónde sale el valor de `attended` (ADR-018). Se expone siempre para no
+ * presentar nunca una evidencia débil como si fuera confirmación de Zoom:
+ *  - `ZOOM`: la sesión se reconcilió contra Zoom; `attended` es lo que Zoom dice.
+ *  - `PROXY`: solo sabemos que pulsó "Unirme" en Didacta.
+ *  - `MANUAL`: un formador lo marcó a mano (pisa todo lo demás).
+ *  - `NONE`: no hay ninguna evidencia.
+ */
+export type AttendanceConfidence = 'ZOOM' | 'PROXY' | 'MANUAL' | 'NONE';
+
+/** Fila del informe de asistencia (solo staff). */
+export interface AttendanceView {
+  /** NULL para participantes de Zoom que no casan con ningún miembro. */
+  userId: string | null;
+  name: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  /** ¿Estaba inscrito a la clase? Un asistente puede no haberse inscrito. */
+  registered: boolean;
+  registeredAt: string | null;
+  /** La respuesta a "¿asistió?". Derivada, nunca almacenada. */
+  attended: boolean;
+  confidence: AttendanceConfidence;
+  /** Minutos dentro de la sala. 0 si Zoom no reporta duración. */
+  minutes: number;
+  clickedJoinAt: string | null;
+  joinedAt: string | null;
+  leftAt: string | null;
+  /** Override del formador (null = sin tocar). */
+  manualPresent: boolean | null;
+  /** Identidad tal cual la reportó Zoom (útil en filas sin `userId`). */
+  zoomName: string | null;
+  zoomEmail: string | null;
+}
+
+export interface AttendanceReport {
+  sessionId: string;
+  status: SessionStatus;
+  /** ISO de la última reconciliación con Zoom. NULL = nunca. */
+  syncedAt: string | null;
+  /** Motivo del último fallo del pull (típicamente falta de scope). */
+  syncError: string | null;
+  /** ¿Tiene sentido ofrecer el botón "Sincronizar con Zoom"? */
+  canSync: boolean;
+  registeredCount: number;
+  attendedCount: number;
+  rows: AttendanceView[];
+}
+
+export const setManualAttendanceSchema = z.object({
+  /** true = presente, false = ausente, null = quitar el override. */
+  present: z.boolean().nullable(),
+});
+export type SetManualAttendanceDto = z.infer<typeof setManualAttendanceSchema>;
+
+/** Un participante tal y como lo devuelve la API de Zoom. */
+export interface ZoomParticipantRecord {
+  /** `user_id` del participante dentro del meeting. */
+  participantId: string | null;
+  name: string | null;
+  email: string | null;
+  joinTime: string | null;
+  leaveTime: string | null;
+  /** Zoom lo reporta en segundos; NULL en el fallback `past_meetings`. */
+  durationSeconds: number | null;
+}
+
+export interface ZoomParticipantsResult {
+  participants: ZoomParticipantRecord[];
+  /**
+   * `REPORT` = Report API (con tiempos y duración).
+   * `PAST_MEETING` = fallback sin duración: sabemos QUIÉN entró, no cuánto.
+   */
+  source: 'REPORT' | 'PAST_MEETING';
 }
 
 /**
