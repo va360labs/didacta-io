@@ -98,6 +98,9 @@ importers:
       '@didacta/mod-learning':
         specifier: workspace:*
         version: link:../../modules/learning
+      '@didacta/mod-messaging':
+        specifier: workspace:*
+        version: link:../../modules/messaging
       '@didacta/mod-payment-connections':
         specifier: workspace:*
         version: link:../../modules/payment-connections
@@ -621,6 +624,25 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
+
+  modules/messaging:
+    dependencies:
+      '@didacta/core-kernel':
+        specifier: workspace:*
+        version: link:../../packages/core-kernel
+      '@didacta/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.17
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
         version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
 
   modules/migrator-learndash:
@@ -4854,7 +4876,7 @@ packages:
   git-raw-commits@4.0.0:
     resolution: {integrity: sha512-ICsMM1Wk8xSGMowkOmPrzo2Fgmfo4bMHLNX6ytHjajRJUqvHOw/TFapQ+QG75c3X/tTDDhOSRPGC52dDbNM8FQ==}
     engines: {node: '>=16'}
-    deprecated: This package is no longer maintained. For the JavaScript API, please use @conventional-changelog/git-client instead.
+    deprecated: Deprecated and no longer maintained. Use @conventional-changelog/git-client instead.
     hasBin: true
 
   glob-parent@5.1.2:

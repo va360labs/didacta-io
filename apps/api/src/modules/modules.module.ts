@@ -12,6 +12,7 @@ import { AuditController } from './audit.controller';
 import { BillingModule } from './billing/billing.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { ReferralsModule } from './referrals/referrals.module';
+import { MessagingModule } from './messaging/messaging.module';
 import { PaymentConnectionsModule } from './payment-connections/payment-connections.module';
 import { CertificatesModule } from './certificates/certificates.module';
 import { CommunityModule } from './community/community.module';
@@ -59,6 +60,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     forwardRef(() => BillingModule),
     forwardRef(() => SubscriptionsModule),
     forwardRef(() => ReferralsModule),
+    forwardRef(() => MessagingModule),
     forwardRef(() => PaymentConnectionsModule),
     forwardRef(() => CommunityModule),
     forwardRef(() => CertificatesModule),

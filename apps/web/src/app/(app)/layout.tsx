@@ -10,6 +10,8 @@ import { NotificationsBell } from '@/components/notifications-bell';
 import { ReferralsPromoButton } from '@/components/referrals-promo-button';
 import { NotificationsProvider } from '@/components/notifications-provider';
 import { NotificationsToaster } from '@/components/notifications-toaster';
+import { MessagingProvider } from '@/components/messaging-provider';
+import { MessagesHeaderLink } from '@/components/messages-header-link';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
 import { meApi } from '@/lib/me';
 import { formatTenantName } from '@/lib/tenant-name';
@@ -268,69 +270,65 @@ function Shell({
 
   return (
     <NotificationsProvider>
-      <div className="flex min-h-dvh bg-bg-subtle">
-        <CreateSpaceModal open={createSpaceOpen} onClose={() => setCreateSpaceOpen(false)} />
-        <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} groups={groups} />
-        <AppSidebar
-          groups={groups}
-          pathname={pathname ?? null}
-          session={session}
-          onLogout={onLogout}
-          onOpenSearch={() => setCmdOpen(true)}
-        />
+      <MessagingProvider>
+        <div className="flex min-h-dvh bg-bg-subtle">
+          <CreateSpaceModal open={createSpaceOpen} onClose={() => setCreateSpaceOpen(false)} />
+          <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} groups={groups} />
+          <AppSidebar
+            groups={groups}
+            pathname={pathname ?? null}
+            session={session}
+            onLogout={onLogout}
+            onOpenSearch={() => setCmdOpen(true)}
+          />
 
-        {/* Drawer de navegación — solo móvil (<lg). Reutiliza el mismo sidebar. */}
-        <MobileNavDrawer
-          open={mobileNavOpen}
-          onClose={() => setMobileNavOpen(false)}
-          groups={groups}
-          pathname={pathname ?? null}
-          session={session}
-          onLogout={onLogout}
-          onOpenSearch={() => setCmdOpen(true)}
-        />
+          {/* Drawer de navegación — solo móvil (<lg). Reutiliza el mismo sidebar. */}
+          <MobileNavDrawer
+            open={mobileNavOpen}
+            onClose={() => setMobileNavOpen(false)}
+            groups={groups}
+            pathname={pathname ?? null}
+            session={session}
+            onLogout={onLogout}
+            onOpenSearch={() => setCmdOpen(true)}
+          />
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-(--z-sticky) flex h-14 items-center gap-2 border-b border-border-soft bg-surface/95 px-4 backdrop-blur lg:px-6">
-            {/* Móvil: hamburguesa + marca. En escritorio el rail ya provee ambos. */}
-            <button
-              type="button"
-              onClick={() => setMobileNavOpen(true)}
-              aria-label="Abrir menú de navegación"
-              aria-expanded={mobileNavOpen}
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text lg:hidden"
-            >
-              <Icon name="menu" size={18} />
-            </button>
-            <span className="min-w-0 flex-1 truncate text-sm font-bold text-text lg:hidden">
-              {tenantName}
-            </span>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <header className="sticky top-0 z-(--z-sticky) flex h-14 items-center gap-2 border-b border-border-soft bg-surface/95 px-4 backdrop-blur lg:px-6">
+              {/* Móvil: hamburguesa + marca. En escritorio el rail ya provee ambos. */}
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen(true)}
+                aria-label="Abrir menú de navegación"
+                aria-expanded={mobileNavOpen}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text lg:hidden"
+              >
+                <Icon name="menu" size={18} />
+              </button>
+              <span className="min-w-0 flex-1 truncate text-sm font-bold text-text lg:hidden">
+                {tenantName}
+              </span>
 
-            {/* Empuja las acciones a la derecha (equivale al justify-end de escritorio). */}
-            <div className="hidden flex-1 lg:block" />
+              {/* Empuja las acciones a la derecha (equivale al justify-end de escritorio). */}
+              <div className="hidden flex-1 lg:block" />
 
-            {/* Promo del programa de referidos — solo si está activo (el % es real). */}
-            <ReferralsPromoButton />
+              {/* Promo del programa de referidos — solo si está activo (el % es real). */}
+              <ReferralsPromoButton />
 
-            <a
-              href="/mensajes"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text"
-              aria-label="Mensajes"
-            >
-              <Icon name="messages" size={18} />
-            </a>
-            <NotificationsBell />
-          </header>
+              <MessagesHeaderLink />
+              <NotificationsBell />
+            </header>
 
-          <main className="flex-1 px-4 py-5 pb-24 sm:px-6 lg:px-8 lg:py-6 lg:pb-6">
-            <div className="mx-auto max-w-[1280px]">{children}</div>
-          </main>
+            <main className="flex-1 px-4 py-5 pb-24 sm:px-6 lg:px-8 lg:py-6 lg:pb-6">
+              <div className="mx-auto max-w-[1280px]">{children}</div>
+            </main>
+          </div>
+
+          {/* Barra inferior de pestañas — solo móvil (<lg). */}
+          <MobileTabBar pathname={pathname ?? null} onOpenMenu={() => setMobileNavOpen(true)} />
         </div>
-
-        {/* Barra inferior de pestañas — solo móvil (<lg). */}
-        <MobileTabBar pathname={pathname ?? null} onOpenMenu={() => setMobileNavOpen(true)} />
-      </div>
-      <NotificationsToaster />
+        <NotificationsToaster />
+      </MessagingProvider>
     </NotificationsProvider>
   );
 }

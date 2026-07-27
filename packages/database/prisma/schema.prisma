@@ -3429,3 +3429,111 @@ model ModReferralsPayout {
   @@index([tenantId, referrerUserId])
   @@map("mod_referrals_payout")
 }
+
+// ============================================================================
+// mod.messaging — Mensajería: salas de espacios, DMs y canal alumno↔profesores
+// ============================================================================
+//
+// Tres tipos de conversación (MessagingConversationType):
+//   - SPACE: sala de chat 1:1 con un espacio de mod.community (spaceId lógico,
+//     sin FK cross-module — ADR-016, dependencia declarada en el manifest).
+//     Acceso abierto a todos los miembros del tenant (igual que el espacio).
+//   - DM: directo entre dos miembros. dmKey = `<userIdMenor>:<userIdMayor>`
+//     garantiza una sola conversación por par (unique por tenant).
+//   - FACULTY: canal privado de UN alumno (studentId) con el equipo docente.
+//     Los profesores participan POR ROL (formador/tenant_admin/super_admin),
+//     resuelto en query — no hay filas de participante para el staff hasta
+//     que abren el canal (lastReadAt).
+//
+// Los participantes materializan lastReadAt (no-leídos). En SPACE la fila se
+// crea lazy al abrir la sala: sin fila → unread 0 (no castigamos al que nunca
+// entró con miles de pendientes).
+
+enum MessagingConversationType {
+  SPACE
+  DM
+  FACULTY
+}
+
+/// TEXT en v1; IMAGE/AUDIO/VIDEO_NOTE llegan con US-M4 (media enriquecida).
+enum MessagingMessageKind {
+  TEXT
+  IMAGE
+  AUDIO
+  VIDEO_NOTE
+}
+
+model ModMessagingConversation {
+  id       String                    @id @default(uuid()) @db.Uuid
+  tenantId String                    @map("tenant_id") @db.Uuid
+  type     MessagingConversationType
+
+  /// SPACE: id lógico del espacio de mod_community_space (sin FK cross-module).
+  spaceId String? @map("space_id") @db.Uuid
+
+  /// FACULTY: alumno dueño del canal (ID lógico de user, sin FK al core).
+  studentId String? @map("student_id") @db.Uuid
+
+  /// DM: clave canónica `<userIdMenor>:<userIdMayor>` (orden lexicográfico)
+  /// para unicidad e idempotencia del get-or-create.
+  dmKey String? @map("dm_key")
+
+  /// Denormalizado para ordenar la lista sin agregar sobre message.
+  lastMessageAt DateTime? @map("last_message_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  participants ModMessagingParticipant[]
+  messages     ModMessagingMessage[]
+
+  @@unique([tenantId, dmKey])
+  @@unique([tenantId, spaceId])
+  @@unique([tenantId, studentId])
+  @@index([tenantId, type, lastMessageAt])
+  @@map("mod_messaging_conversation")
+}
+
+model ModMessagingParticipant {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  /// ID lógico de user (sin FK al core).
+  userId         String    @map("user_id") @db.Uuid
+  /// Marca de lectura: los no-leídos son mensajes con createdAt > lastReadAt
+  /// de otros autores. Null = nunca leyó (DM/FACULTY: todo cuenta).
+  lastReadAt     DateTime? @map("last_read_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  conversation ModMessagingConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([tenantId, userId])
+  @@map("mod_messaging_participant")
+}
+
+model ModMessagingMessage {
+  id             String               @id @default(uuid()) @db.Uuid
+  tenantId       String               @map("tenant_id") @db.Uuid
+  conversationId String               @map("conversation_id") @db.Uuid
+  /// ID lógico de user (sin FK al core).
+  authorId       String               @map("author_id") @db.Uuid
+  /// Snapshot del nombre al enviar (patrón community.authorDisplayName):
+  /// evita N+1 al pintar y sobrevive a renombres/bajas.
+  authorDisplayName String?           @map("author_display_name")
+  kind           MessagingMessageKind @default(TEXT)
+  /// Texto del mensaje (1..4000). En mensajes de media (US-M4) será el caption.
+  body           String
+  /// Clave S3 del adjunto (US-M4). Null en TEXT.
+  mediaKey       String?              @map("media_key")
+  /// Duración de audio/vídeo en ms (US-M4).
+  durationMs     Int?                 @map("duration_ms")
+  /// Soft delete: "Mensaje eliminado" (US-M5). El body se conserva para auditoría.
+  deletedAt      DateTime?            @map("deleted_at")
+  createdAt      DateTime             @default(now()) @map("created_at")
+
+  conversation ModMessagingConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, conversationId, createdAt])
+  @@map("mod_messaging_message")
+}

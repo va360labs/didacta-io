@@ -32,6 +32,12 @@ import {
   type ReferralsEventPublisher,
 } from '@didacta/mod-referrals';
 import {
+  buildMessagingModule,
+  MessagingService,
+  MESSAGING_STAFF_ROLES,
+  type MessagingEventPublisher,
+} from '@didacta/mod-messaging';
+import {
   PaymentConnectionsService,
   PaymentTiersService,
   StripeReadSdkAdapter,
@@ -108,6 +114,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private paymentConnections?: PaymentConnectionsService;
   private paymentTiers?: PaymentTiersService;
   private referrals?: ReferralsService;
+  private messaging?: MessagingService;
 
   constructor(
     private readonly factory: ModuleContextFactory,
@@ -441,6 +448,76 @@ export class ModuleRegistryService implements OnModuleInit {
     );
     const referralsModule = buildReferralsModule(this.referrals);
 
+    // mod.messaging: salas por espacio, DMs y canal alumno↔profesores.
+    // El módulo es puro: los ports (espacios de community, usuarios, staff)
+    // los implementa el host aquí; el realtime lo publica el controller.
+    const messagingEventBus = this.factory.getEventBus();
+    const messagingPublisher: MessagingEventPublisher = {
+      publish: async (tenantId, actorId, name, payload) => {
+        const entityId =
+          (payload as { messageId?: string }).messageId ??
+          (payload as { conversationId?: string }).conversationId;
+        await messagingEventBus.publish({
+          name,
+          version: 1,
+          data: payload as never,
+          metadata: {
+            tenantId,
+            userId: actorId ?? undefined,
+            timestamp: new Date().toISOString(),
+            traceId: cryptoRandom(),
+            // Por ocurrencia: el outbox dedupea por (tenantId, idempotencyKey)
+            // para siempre y una entidad puede re-emitir estados.
+            idempotencyKey: `${name}:${entityId ?? 'x'}:${cryptoRandom()}`,
+          },
+        });
+      },
+    };
+    const messagingPrisma = this.factory.getPrisma();
+    this.messaging = new MessagingService(
+      prisma,
+      messagingPublisher,
+      // Espacios de mod.community vía su service público (ADR-016, vía A).
+      async (tenantId) => {
+        if (!this.community) return [];
+        const spaces = await this.community.listSpaces(tenantId);
+        return spaces.map((s) => ({
+          id: s.id,
+          slug: s.slug,
+          title: s.title,
+          icon: s.icon,
+          color: s.color,
+          sortOrder: s.sortOrder,
+        }));
+      },
+      // Nombre+avatar de usuarios del tenant: el módulo no lee `user`.
+      async (tenantId, ids) => {
+        if (ids.length === 0) return [];
+        const users = await messagingPrisma.user.findMany({
+          where: { id: { in: ids }, tenantId, deletedAt: null },
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        });
+        return users.map((u) => ({
+          id: u.id,
+          name: u.name ?? u.email ?? null,
+          avatarUrl: u.avatarUrl,
+        }));
+      },
+      // IDs del staff (formador/admins) para el canal de profesores.
+      async (tenantId) => {
+        const rows = await messagingPrisma.user.findMany({
+          where: {
+            tenantId,
+            deletedAt: null,
+            roles: { some: { role: { name: { in: [...MESSAGING_STAFF_ROLES] } } } },
+          },
+          select: { id: true },
+        });
+        return rows.map((r) => r.id);
+      },
+    );
+    const messagingModule = buildMessagingModule(this.messaging);
+
     // mod.payment-connections: agregador read-only multi-cuenta. NO se gatea por
     // env (las API keys son per-conexión, cifradas en tenant_setting vía el
     // config service). El SDK de Stripe se carga perezosamente la primera vez
@@ -518,6 +595,7 @@ export class ModuleRegistryService implements OnModuleInit {
       ...(subscriptionsModuleOrNull ? [subscriptionsModuleOrNull] : []),
       paymentConnectionsModule,
       referralsModule,
+      messagingModule,
     ]);
 
     await this.persistManifests();
@@ -780,6 +858,13 @@ export class ModuleRegistryService implements OnModuleInit {
       throw new Error('mod.referrals no está inicializado (boot incompleto).');
     }
     return this.referrals;
+  }
+
+  getMessagingService(): MessagingService {
+    if (!this.messaging) {
+      throw new Error('mod.messaging no está inicializado (boot incompleto).');
+    }
+    return this.messaging;
   }
 
   async recoverOutbox(): Promise<{ processed: number; failed: number }> {
