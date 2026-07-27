@@ -117,9 +117,9 @@ export function ThreadCard({
                 {post.title}
               </h3>
               {cleanBody ? (
-                <p className="line-clamp-4 whitespace-pre-line wrap-break-word text-sm leading-relaxed text-text-muted">
+                <div className="line-clamp-4 wrap-break-word text-sm leading-relaxed text-text-muted">
                   <RichBody body={cleanBody} />
-                </p>
+                </div>
               ) : null}
               {cleanBody.length > 240 ? (
                 <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand-700">

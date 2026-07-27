@@ -382,9 +382,10 @@ export function PostDetailView({
         const { cleanBody, images, files } = parseBodyAttachments(post.body);
         return (
           <>
-            <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-[#374151]">
+            {/* div, no p: RichBody emite bloques (títulos, listas, párrafos). */}
+            <div className="mt-3 text-[15px] leading-relaxed text-[#374151]">
               <RichBody body={cleanBody} />
-            </p>
+            </div>
             {images.length > 0 && <ImageGallery images={images} />}
             {files.length > 0 && <FileList files={files} />}
           </>
@@ -874,9 +875,9 @@ function CommentBody({
             </Badge>
           ) : null}
         </div>
-        <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-[#374151]">
+        <div className="mt-1.5 text-sm leading-relaxed text-[#374151]">
           <RichBody body={comment.body} />
-        </p>
+        </div>
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           {EMOJIS.map((e) => {
             const m = mine.has(e);
