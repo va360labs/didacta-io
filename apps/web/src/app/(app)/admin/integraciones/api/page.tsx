@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { authStorage } from '@/lib/auth-storage';
 import { accessGroupsApi, type AccessGroupListItem } from '@/lib/access-groups';
 import { coursesApi, type Course } from '@/lib/courses';
+import { communityApi, type CommunitySpace } from '@/modules/community';
 
 const ENDPOINTS: Array<{ method: string; path: string; scope: string; what: string }> = [
   {
@@ -45,6 +46,12 @@ const ENDPOINTS: Array<{ method: string; path: string; scope: string; what: stri
     path: '/api/v1/inscribe/courses',
     scope: 'courses:read',
     what: 'Catálogo con estado (solo los PUBLISHED admiten matrícula).',
+  },
+  {
+    method: 'POST',
+    path: '/api/v1/community-api/posts',
+    scope: 'community:post',
+    what: 'Publica en la comunidad como el admin dueño de la key.',
   },
 ];
 
@@ -80,6 +87,7 @@ function UuidCell({ id }: { id: string }) {
 export default function IntegracionApiPage() {
   const [groups, setGroups] = useState<AccessGroupListItem[] | null>(null);
   const [courses, setCourses] = useState<Course[] | null>(null);
+  const [spaces, setSpaces] = useState<CommunitySpace[]>([]);
   const [pickedGroups, setPickedGroups] = useState<string[]>([]);
   const [pickedCourses, setPickedCourses] = useState<string[]>([]);
   const [baseUrl, setBaseUrl] = useState('https://aula.va360.academy');
@@ -104,6 +112,11 @@ export default function IntegracionApiPage() {
         setCourses(await coursesApi.list());
       } catch {
         setCourses([]);
+      }
+      try {
+        setSpaces(await communityApi.listSpaces());
+      } catch {
+        setSpaces([]);
       }
     })();
   }, []);
@@ -139,6 +152,22 @@ export default function IntegracionApiPage() {
   );
 
   const nothingPicked = pickedGroups.length === 0 && pickedCourses.length === 0;
+
+  const communityCurl = useMemo(() => {
+    const tag = spaces[0]?.slug ?? 'general';
+    const body = JSON.stringify({
+      title: 'Novedades de la semana',
+      body: 'Esta semana hemos publicado…',
+      tags: [tag],
+      notifyAll: false,
+    });
+    return (
+      `curl -X POST ${baseUrl}/api/v1/community-api/posts \\\n` +
+      `  -H "Authorization: ApiKey lmsk_TU_CLAVE" \\\n` +
+      `  -H "Content-Type: application/json" \\\n` +
+      `  -d '${body}'`
+    );
+  }, [baseUrl, spaces]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -389,6 +418,109 @@ export default function IntegracionApiPage() {
               {curl}
             </pre>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Publicar en la comunidad ── */}
+      <Card data-testid="community-api-docs">
+        <CardHeader>
+          <CardTitle className="text-base">Publicar en la comunidad</CardTitle>
+          <CardDescription>
+            <code className="rounded bg-surface-2 px-1 font-mono text-xs">
+              POST /api/v1/community-api/posts
+            </code>{' '}
+            crea un post en el feed <strong>firmado por el admin dueño de la key</strong> — cada
+            admin usa su propia clave (scope{' '}
+            <code className="rounded bg-surface-2 px-1 font-mono text-xs">community:post</code>) y
+            no hay tokens que renovar. Lo publicado por API se audita en{' '}
+            <Link
+              href="/admin/comunidad/publicaciones-api"
+              className="font-semibold text-brand-700 hover:underline"
+            >
+              Comunidad → Publicaciones API
+            </Link>
+            .
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border text-left text-xs text-text-subtle">
+                <tr>
+                  <th className="py-2 pr-3">Campo</th>
+                  <th className="py-2 pr-3">Tipo</th>
+                  <th className="py-2">Notas</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-soft text-text-muted">
+                <tr>
+                  <td className="py-2 pr-3 font-mono text-xs">title</td>
+                  <td className="py-2 pr-3">string · obligatorio</td>
+                  <td className="py-2">3–200 caracteres.</td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-3 font-mono text-xs">body</td>
+                  <td className="py-2 pr-3">string · obligatorio</td>
+                  <td className="py-2">1–10.000 caracteres; se renderiza como un post normal.</td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-3 font-mono text-xs">tags</td>
+                  <td className="py-2 pr-3">string[] · opcional</td>
+                  <td className="py-2">
+                    Máx. 10. Usa el tag de un espacio para publicar en ese espacio
+                    {spaces.length > 0 ? (
+                      <>
+                        {' '}
+                        — los tuyos:{' '}
+                        {spaces.map((s) => (
+                          <code
+                            key={s.id}
+                            className="mr-1 rounded bg-surface-2 px-1 font-mono text-xs"
+                          >
+                            {s.slug}
+                          </code>
+                        ))}
+                      </>
+                    ) : null}
+                    .
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-3 font-mono text-xs">notifyAll</td>
+                  <td className="py-2 pr-3">boolean · opcional</td>
+                  <td className="py-2">
+                    Además de publicar, avisa por email + campana a TODOS los miembros.
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-3 font-mono text-xs">important</td>
+                  <td className="py-2 pr-3">boolean · opcional</td>
+                  <td className="py-2">Con notifyAll: ignora la baja de avisos del receptor.</td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-3 font-mono text-xs">courseId</td>
+                  <td className="py-2 pr-3">uuid · opcional</td>
+                  <td className="py-2">Liga el post a un curso.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="label-uppercase text-xs text-text-subtle">cURL de prueba</span>
+              <CopyButton value={communityCurl} />
+            </div>
+            <pre className="overflow-x-auto rounded-lg bg-surface-2 p-3 font-mono text-xs">
+              {communityCurl}
+            </pre>
+          </div>
+
+          <p className="text-xs text-text-subtle">
+            La key debe pertenecer a un admin (super_admin / tenant_admin): si el dueño deja de ser
+            admin, la key deja de poder publicar. Respuesta: el post creado con su{' '}
+            <code className="rounded bg-surface-2 px-1 font-mono">id</code>.
+          </p>
         </CardContent>
       </Card>
     </div>

@@ -48,6 +48,8 @@ export class CommunityService {
     tenantId: string,
     author: { id: string; displayName: string | null },
     dto: CreatePostDto,
+    /** Origen: 'web' (UI, default) o 'api' (integración con API key). */
+    source: 'web' | 'api' = 'web',
   ) {
     const post = await this.prisma.modCommunityPost.create({
       data: {
@@ -58,6 +60,7 @@ export class CommunityService {
         body: dto.body,
         courseId: dto.courseId ?? null,
         tags: dto.tags ?? [],
+        source,
       },
     });
     await this.persistMentions(tenantId, author.id, author.displayName, dto.body, {
@@ -149,6 +152,7 @@ export class CommunityService {
         ...(query.courseId !== undefined ? { courseId: query.courseId } : {}),
         ...(query.authorId !== undefined ? { authorId: query.authorId } : {}),
         ...(query.tag !== undefined ? { tags: { has: query.tag } } : {}),
+        ...(query.source !== undefined ? { source: query.source } : {}),
       },
       orderBy,
       take: query.limit,

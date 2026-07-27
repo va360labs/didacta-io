@@ -10,6 +10,8 @@ export interface Post {
   title: string;
   body: string;
   tags: string[];
+  /** Origen de la publicación: 'web' (UI) o 'api' (POST /community-api/posts). */
+  source: 'web' | 'api';
   createdAt: string;
   updatedAt: string;
   /** Última edición de contenido (title/body/tags). null = nunca editado. */
@@ -120,6 +122,8 @@ export const communityApi = {
       sort?: PostSort;
       limit?: number;
       authorId?: string;
+      /** Filtra por origen: 'api' = publicado vía POST /community-api/posts. */
+      source?: 'web' | 'api';
     } = {},
   ): Promise<Post[]> {
     const params = new URLSearchParams();
@@ -128,6 +132,7 @@ export const communityApi = {
     if (opts.sort) params.set('sort', opts.sort);
     if (opts.limit) params.set('limit', String(opts.limit));
     if (opts.authorId) params.set('authorId', opts.authorId);
+    if (opts.source) params.set('source', opts.source);
     const path = `/api/v1/modules/community/posts${params.toString() ? `?${params}` : ''}`;
     return apiFetch<Post[]>(path, { method: 'GET' }, withAuth());
   },

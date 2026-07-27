@@ -4,6 +4,7 @@ import { AuthModule } from '../../auth/auth.module';
 import { ModulesModule } from '../modules.module';
 import { CommunityController } from './community.controller';
 import { CommunityPublicController } from './community-public.controller';
+import { CommunityApiController } from './community-api.controller';
 import { CommunityErrorFilter } from './community-error.filter';
 import { CommunityDigestWorker } from './community-digest.worker';
 import { CommunityBroadcastWorker } from './community-broadcast.worker';
@@ -20,7 +21,7 @@ import {
 /// para romper el ciclo a través de ModuleRegistryService.
 @Module({
   imports: [AuthModule, forwardRef(() => ModulesModule)],
-  controllers: [CommunityController, CommunityPublicController],
+  controllers: [CommunityController, CommunityPublicController, CommunityApiController],
   providers: [
     ...communityDigestMetricsProviders,
     CommunityDigestMetrics,

@@ -587,6 +587,9 @@ model ModCommunityPost {
   /// Snapshot del nombre del autor al crear el post (denormalizado para
   /// listados rápidos sin necesidad de join cross-module a IAM).
   authorDisplayName String?   @map("author_display_name")
+  /// Origen de la publicación: 'web' (UI) o 'api' (POST /community-api/posts
+  /// con API key). Permite auditar en el admin lo publicado por integración.
+  source            String    @default("web")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
   /// Última edición de CONTENIDO por el autor o un admin (title/body/tags), para

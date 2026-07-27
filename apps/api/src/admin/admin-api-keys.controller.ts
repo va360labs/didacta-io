@@ -24,10 +24,15 @@ import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 
 /**
  * Scopes que el admin puede otorgar a una API key desde el panel. Mantener
- * acotado evita que el panel cree claves con permisos arbitrarios. Hoy el
- * único caso de uso es la inscripción externa (`POST /api/v1/inscribe`).
+ * acotado evita que el panel cree claves con permisos arbitrarios. Casos de
+ * uso: inscripción externa (`POST /api/v1/inscribe`) y publicación en la
+ * comunidad (`POST /api/v1/community-api/posts`).
  */
-export const ALLOWED_API_KEY_SCOPES = ['enrollments:write', 'courses:read'] as const;
+export const ALLOWED_API_KEY_SCOPES = [
+  'enrollments:write',
+  'courses:read',
+  'community:post',
+] as const;
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(100),

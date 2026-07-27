@@ -513,6 +513,7 @@ function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): SidebarG
       { href: '/admin/comunidad/espacios', label: 'Espacios', icon: 'hash' },
       { href: '/admin/comunidad/tags', label: 'Tags', icon: 'message' },
       { href: '/admin/avisos', label: 'Avisos', icon: 'bell' },
+      { href: '/admin/comunidad/publicaciones-api', label: 'Publicaciones API', icon: 'code' },
     ],
   };
   const facturacion: SidebarGroup = {

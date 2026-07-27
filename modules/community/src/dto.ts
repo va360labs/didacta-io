@@ -53,6 +53,8 @@ export const listPostsQuerySchema = z.object({
   courseId: z.string().uuid().optional(),
   authorId: z.string().uuid().optional(),
   tag: z.string().min(1).max(40).optional(),
+  /** Filtra por origen de publicación: 'web' (UI) o 'api' (integraciones). */
+  source: z.enum(['web', 'api']).optional(),
   sort: postSortSchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
 });
