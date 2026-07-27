@@ -452,9 +452,25 @@ export class ZoomLiveService {
           data,
         });
       } else {
-        await this.prisma.modZoomSessionAttendance.create({
-          data: { id: randomUUID(), tenantId, sessionId, userId, ...data },
-        });
+        try {
+          await this.prisma.modZoomSessionAttendance.create({
+            data: { id: randomUUID(), tenantId, sessionId, userId, ...data },
+          });
+        } catch (e) {
+          // El worker y el botón manual pueden reconciliar la misma sesión a
+          // la vez: la unique (session_id, user_id) decide quién inserta y el
+          // perdedor actualiza la fila del ganador. Sin esto, el formador
+          // vería un 500 por una carrera que no le importa.
+          if ((e as { code?: string }).code !== 'P2002' || !userId) throw e;
+          const winner = await this.prisma.modZoomSessionAttendance.findFirst({
+            where: { tenantId, sessionId, userId },
+          });
+          if (!winner) throw e;
+          await this.prisma.modZoomSessionAttendance.update({
+            where: { id: winner.id },
+            data,
+          });
+        }
       }
     }
 
@@ -499,9 +515,23 @@ export class ZoomLiveService {
         data: { manualPresent: present },
       });
     } else {
-      await this.prisma.modZoomSessionAttendance.create({
-        data: { id: randomUUID(), tenantId, sessionId, userId, manualPresent: present },
-      });
+      try {
+        await this.prisma.modZoomSessionAttendance.create({
+          data: { id: randomUUID(), tenantId, sessionId, userId, manualPresent: present },
+        });
+      } catch (e) {
+        // Carrera con una reconciliación en curso: la unique decide y aquí
+        // solo hay que aplicar el override sobre la fila que ganó.
+        if ((e as { code?: string }).code !== 'P2002') throw e;
+        const winner = await this.prisma.modZoomSessionAttendance.findFirst({
+          where: { tenantId, sessionId, userId },
+        });
+        if (!winner) throw e;
+        await this.prisma.modZoomSessionAttendance.update({
+          where: { id: winner.id },
+          data: { manualPresent: present },
+        });
+      }
     }
 
     return this.buildAttendanceReport(tenantId, session);
