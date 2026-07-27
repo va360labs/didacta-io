@@ -384,6 +384,15 @@ export class ZoomLiveService {
     if (session.status === 'SCHEDULED') {
       throw new AttendanceNotAvailableError('La clase todavía no ha empezado.');
     }
+    // Una clase en curso no se reconcilia: el pull sellaría `syncedAt` con
+    // datos parciales y el worker dejaría de mirarla, congelando la
+    // asistencia a mitad de clase. STARTED solo se admite cuando su hora de
+    // fin ya pasó (caso real: el webhook `meeting.ended` nunca llegó).
+    if (session.status === 'STARTED' && !hasFinished(session, new Date())) {
+      throw new AttendanceNotAvailableError(
+        'La clase sigue en curso: la asistencia se cierra cuando termine.',
+      );
+    }
     const meetingRef = session.zoomMeetingUuid ?? session.zoomMeetingId;
     if (!meetingRef) {
       throw new AttendanceNotAvailableError('Esta clase no tiene un meeting de Zoom asociado.');
@@ -523,12 +532,7 @@ export class ZoomLiveService {
 
     // El fin real (`startTime + duración + margen`) no es expresable en el
     // where de Prisma; filtramos aquí sobre un conjunto ya acotado.
-    return rows
-      .filter((r) => {
-        const endsAt = r.startTime.getTime() + (r.durationMinutes + GRACE_MINUTES) * 60 * 1000;
-        return endsAt <= now.getTime();
-      })
-      .map((r) => ({ id: r.id, tenantId: r.tenantId }));
+    return rows.filter((r) => hasFinished(r, now)).map((r) => ({ id: r.id, tenantId: r.tenantId }));
   }
 
   async create(
@@ -915,6 +919,8 @@ export class ZoomLiveService {
     session: {
       id: string;
       status: string;
+      startTime: Date;
+      durationMinutes: number;
       attendanceSyncedAt: Date | null;
       attendanceSyncError: string | null;
       zoomMeetingId: string | null;
@@ -1019,7 +1025,8 @@ export class ZoomLiveService {
       syncedAt: session.attendanceSyncedAt ? session.attendanceSyncedAt.toISOString() : null,
       syncError: session.attendanceSyncError,
       canSync:
-        (session.status === 'STARTED' || session.status === 'ENDED') &&
+        (session.status === 'ENDED' ||
+          (session.status === 'STARTED' && hasFinished(session, new Date()))) &&
         Boolean(session.zoomMeetingUuid ?? session.zoomMeetingId),
       registeredCount: registrations.length,
       attendedCount: rows.filter((r) => r.attended).length,
@@ -1176,6 +1183,17 @@ export class ZoomLiveService {
  * Zoom: el meeting puede alargarse y el informe tarda un poco en cuajar.
  */
 const GRACE_MINUTES = 15;
+
+/**
+ * ¿Ya pasó la hora de fin teórica (+ margen) de la sesión? Es lo que decide
+ * si tiene sentido pedirle los participantes a Zoom: hacerlo antes devolvería
+ * una foto parcial que además sellaría la sesión como reconciliada.
+ */
+function hasFinished(session: { startTime: Date; durationMinutes: number }, now: Date): boolean {
+  const endsAt =
+    session.startTime.getTime() + (session.durationMinutes + GRACE_MINUTES) * 60 * 1000;
+  return endsAt <= now.getTime();
+}
 
 interface AggregatedParticipant {
   /** Clave de agregación (email, o id de participante, o nombre). */

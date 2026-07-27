@@ -1282,6 +1282,35 @@ describe('ZoomLiveService · asistencia (ADR-018)', () => {
     );
   });
 
+  it('no reconcilia una clase EN CURSO: sellaría syncedAt con datos parciales', async () => {
+    const prisma = makeFakePrisma([], makeUsers());
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, fakeApi([]) as never);
+
+    // Empieza dentro de 5 min y dura una hora: cuando el webhook la pone
+    // STARTED, todavía no ha terminado.
+    const inFive = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    const session = await service.create(TENANT, ACTOR, {
+      topic: 'En curso ahora',
+      startTime: inFive,
+      durationMinutes: 60,
+      hostEmail: 'host@example.com',
+      timezone: 'UTC',
+    });
+    await service.handleWebhookEvent({
+      event_id: 'evt-att-en-curso',
+      event: 'meeting.started',
+      payload: { object: { id: session.zoomMeetingId! } },
+    });
+
+    await expect(service.syncAttendance(TENANT, session.id)).rejects.toThrow(
+      AttendanceNotAvailableError,
+    );
+    // Y la UI no ofrece el botón mientras tanto.
+    expect((await service.getAttendance(TENANT, session.id)).canSync).toBe(false);
+    expect(prisma._sessions[0]!.attendanceSyncedAt).toBeNull();
+  });
+
   it('el worker solo recoge sesiones cuya hora de fin ya pasó y sin sincronizar', async () => {
     const prisma = makeFakePrisma();
     const ctx = makeCtx();
