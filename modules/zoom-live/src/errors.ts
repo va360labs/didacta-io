@@ -39,6 +39,17 @@ export class LessonNotInCourseError extends ZoomLiveError {
   }
 }
 
+/**
+ * Lanzado al intentar inscribirse a una sesión que ya no admite
+ * inscripciones (CANCELLED o ENDED). Las inscripciones solo están
+ * abiertas mientras la sesión está SCHEDULED o STARTED.
+ */
+export class SessionNotOpenForRegistrationError extends ZoomLiveError {
+  constructor() {
+    super('ZOOM_SESSION_NOT_OPEN_FOR_REGISTRATION', 'La sesión ya no admite inscripciones.');
+  }
+}
+
 export class ZoomApiError extends ZoomLiveError {
   constructor(reason: string) {
     super('ZOOM_API_ERROR', `Error hablando con Zoom: ${reason}`);

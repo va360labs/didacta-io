@@ -5,6 +5,7 @@ import { AiModule } from '../../ai/ai.module';
 import { ModulesModule } from '../modules.module';
 import { ZoomLiveController } from './zoom-live.controller';
 import { ZoomLiveErrorFilter } from './zoom-live-error.filter';
+import { ZoomLiveNotificationsBridge } from './zoom-live-notifications.bridge';
 import { ZoomWebhookController } from './zoom-webhook.controller';
 
 /// Backend del módulo `mod.zoom-live`. Encapsula sus controllers + el
@@ -25,6 +26,6 @@ import { ZoomWebhookController } from './zoom-webhook.controller';
 @Module({
   imports: [AuthModule, AiModule, forwardRef(() => ModulesModule)],
   controllers: [ZoomLiveController, ZoomWebhookController],
-  providers: [{ provide: APP_FILTER, useClass: ZoomLiveErrorFilter }],
+  providers: [ZoomLiveNotificationsBridge, { provide: APP_FILTER, useClass: ZoomLiveErrorFilter }],
 })
 export class ZoomLiveModule {}

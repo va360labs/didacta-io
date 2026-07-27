@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AiTutorPanel } from '@/components/ai-tutor-panel';
@@ -941,6 +942,7 @@ function UpcomingZoomBanner({ sessions }: { sessions: ZoomSession[] }) {
             ) : (
               <Badge variant="info">Próxima sesión</Badge>
             )}
+            {next.isRegistered ? <Badge variant="success">Inscrito</Badge> : null}
           </div>
           <p
             className="text-sm tabular-nums text-text-muted"
@@ -973,7 +975,13 @@ function UpcomingZoomBanner({ sessions }: { sessions: ZoomSession[] }) {
               {isLive ? 'Unirme ahora' : 'Unirme'}
             </a>
           </Button>
-        ) : null}
+        ) : (
+          // Sin joinUrl = no inscrito (gating server-side, ADR-017): el CTA
+          // lleva a la página de la clase, donde puede inscribirse.
+          <Button asChild size="sm">
+            <Link href={`/clase/${next.id}`}>Inscribirme</Link>
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

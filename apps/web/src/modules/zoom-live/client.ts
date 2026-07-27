@@ -17,13 +17,25 @@ export interface ZoomSession {
   timezone: string;
   hostEmail: string;
   zoomMeetingId: string | null;
+  /** NULL salvo que estés inscrito o seas staff (gating server-side, ADR-017). */
   joinUrl: string | null;
   /** Solo presente para host/admin. */
   startUrl?: string | null;
+  /** Mismo gating que joinUrl. */
   recordingUrl: string | null;
   recordingDurationMinutes: number | null;
+  registeredCount: number;
+  isRegistered: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ZoomSessionRegistration {
+  userId: string;
+  name: string | null;
+  email: string;
+  avatarUrl: string | null;
+  registeredAt: string;
 }
 
 export type WebhookEventResult = 'OK' | 'IGNORED' | 'ERROR';
@@ -54,15 +66,50 @@ function withAuth(): string {
 
 export const zoomLiveApi = {
   async list(
-    opts: { courseId?: string; lessonId?: string; status?: SessionStatus } = {},
+    opts: {
+      courseId?: string;
+      lessonId?: string;
+      status?: SessionStatus;
+      /** ISO 8601 con offset — rango por startTime (calendario). */
+      from?: string;
+      to?: string;
+    } = {},
   ): Promise<ZoomSession[]> {
     const params = new URLSearchParams();
     if (opts.courseId) params.set('courseId', opts.courseId);
     if (opts.lessonId) params.set('lessonId', opts.lessonId);
     if (opts.status) params.set('status', opts.status);
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
     const qs = params.toString();
     return apiFetch<ZoomSession[]>(
       `/api/v1/modules/zoom-live/sessions${qs ? `?${qs}` : ''}`,
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
+  /** Inscripción a la sesión. Devuelve la vista ya con joinUrl visible. */
+  async register(id: string): Promise<ZoomSession> {
+    return apiFetch<ZoomSession>(
+      `/api/v1/modules/zoom-live/sessions/${id}/register`,
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
+
+  async unregister(id: string): Promise<{ unregistered: boolean }> {
+    return apiFetch<{ unregistered: boolean }>(
+      `/api/v1/modules/zoom-live/sessions/${id}/unregister`,
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
+
+  /** Roster de inscritos (solo formador/admin). */
+  async listRegistrations(id: string): Promise<ZoomSessionRegistration[]> {
+    return apiFetch<ZoomSessionRegistration[]>(
+      `/api/v1/modules/zoom-live/sessions/${id}/registrations`,
       { method: 'GET' },
       withAuth(),
     );

@@ -12,8 +12,10 @@ export {
   type CreateSessionDto,
   type ListWebhookEventsQuery,
   type PaginatedWebhookEvents,
+  type RegistrationView,
   type SessionStatus,
   type SessionView,
+  type SessionViewer,
   type UpdateSessionDto,
   type WebhookEventView,
   type ZoomWebhookEvent,
@@ -24,6 +26,7 @@ export {
   LessonNotInCourseError,
   SessionAlreadyEndedError,
   SessionNotFoundError,
+  SessionNotOpenForRegistrationError,
   ZoomApiError,
   ZoomLiveError,
 } from './errors.js';

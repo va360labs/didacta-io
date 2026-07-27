@@ -1535,10 +1535,30 @@ model ModZoomSession {
   createdAt                DateTime @default(now()) @map("created_at")
   updatedAt                DateTime @updatedAt @map("updated_at")
 
+  registrations ModZoomSessionRegistration[]
+
   @@index([tenantId, startTime(sort: Desc)], map: "mod_zoom_session_tenant_idx")
   @@index([courseId], map: "mod_zoom_session_course_idx")
   @@index([lessonId], map: "mod_zoom_session_lesson_idx")
   @@map("mod_zoom_session")
+}
+
+/// Inscripción de un miembro a una sesión en directo. El `joinUrl` (y la
+/// grabación) SOLO se sirven a usuarios con fila aquí o con rol staff —
+/// el gating es server-side (ADR-017). Sin FK a `user` (tabla core);
+/// FK intra-módulo a la sesión con CASCADE.
+model ModZoomSessionRegistration {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  sessionId    String   @map("session_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  registeredAt DateTime @default(now()) @map("registered_at")
+
+  session ModZoomSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId], name: "mod_zoom_session_registration_unique", map: "mod_zoom_session_registration_unique")
+  @@index([tenantId, userId], map: "mod_zoom_session_registration_tenant_user_idx")
+  @@map("mod_zoom_session_registration")
 }
 
 /// Registro de eventos webhook recibidos de Zoom para idempotencia.

@@ -151,6 +151,18 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
     subject: 'Te hemos liquidado {{amount}}',
     body: 'Hemos registrado el pago de tus comisiones aprobadas: {{amount}}.\n\nReferencia del pago: {{reference}}. Tienes el detalle en tu área de Referidos.',
   },
+  // Clases en directo (mod.zoom-live, ADR-017): confirmación de inscripción y
+  // aviso de cancelación a inscritos. El enlace de la clase viaja en
+  // {{classUrl}} — el joinUrl de Zoom NUNCA va por email: se ve en /clase/[id]
+  // solo estando inscrito.
+  'zoom.class.registration.confirmed': {
+    subject: 'Inscripción confirmada: {{topic}}',
+    body: 'Te has inscrito a la clase en directo "{{topic}}" ({{startsAt}}).{{#classUrl}}\n\nCuando llegue el momento podrás unirte desde la página de la clase:\n{{classUrl}}{{/classUrl}}',
+  },
+  'zoom.class.cancelled': {
+    subject: 'Clase cancelada: {{topic}}',
+    body: 'La clase en directo "{{topic}}" prevista para el {{startsAt}} ha sido cancelada.\n\nSi se reprograma, la verás de nuevo en el calendario.',
+  },
 };
 
 /** Metadatos de los templates del hub para la UI (nombre humano, trigger, vars). */
@@ -324,6 +336,29 @@ const HUB_TEMPLATE_META: Record<
     variables: [
       { name: 'amount', description: 'Total liquidado (ej. «45,00 €»)' },
       { name: 'reference', description: 'Referencia externa del pago' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'zoom.class.registration.confirmed': {
+    name: 'Inscripción a clase en directo confirmada',
+    description: 'Cuando un miembro se inscribe a una clase en directo (aula virtual Zoom).',
+    category: 'learning',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'topic', description: 'Título de la clase' },
+      { name: 'startsAt', description: 'Fecha y hora de inicio formateadas' },
+      { name: 'classUrl', description: 'Enlace a la página de la clase (/clase/…)' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'zoom.class.cancelled': {
+    name: 'Clase en directo cancelada',
+    description: 'Cuando se cancela una clase en directo, avisa a cada miembro inscrito.',
+    category: 'learning',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'topic', description: 'Título de la clase' },
+      { name: 'startsAt', description: 'Fecha y hora que tenía la clase' },
       { name: 'tenantName', description: 'Nombre de la plataforma' },
     ],
   },

@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  NotFoundException,
   Param,
   Post,
   Put,
@@ -34,7 +35,27 @@ const listQuerySchema = z.object({
   courseId: z.string().uuid().optional(),
   lessonId: z.string().uuid().optional(),
   status: sessionStatusSchema.optional(),
+  /** Rango por startTime (lo usa el calendario para pedir un mes). */
+  from: z.string().datetime({ offset: true }).optional(),
+  to: z.string().datetime({ offset: true }).optional(),
 });
+
+function viewerOf(user: SessionClaims): { userId: string; isStaff: boolean } {
+  return { userId: user.sub, isStaff: user.roles.some((r) => ADMIN_ROLES.has(r)) };
+}
+
+const uuidSchema = z.string().uuid();
+
+/**
+ * `/clase/<id>` es una URL compartible públicamente: un id malformado debe
+ * responder 404 (la web muestra "Clase no encontrada"), no un 500 de Prisma
+ * (P2023) al comparar contra una columna @db.Uuid.
+ */
+function ensureSessionId(id: string): void {
+  if (!uuidSchema.safeParse(id).success) {
+    throw new NotFoundException('Sesión no encontrada.');
+  }
+}
 
 @ApiTags('Modules · Zoom Live')
 @ApiBearerAuth()
@@ -44,26 +65,79 @@ export class ZoomLiveController {
   constructor(private readonly registry: ModuleRegistryService) {}
 
   @Get('sessions')
-  @ApiOperation({ summary: 'Listar sesiones síncronas del tenant (lectura: cualquier rol).' })
+  @ApiOperation({
+    summary:
+      'Listar sesiones síncronas del tenant (lectura: cualquier rol). `joinUrl`/`recordingUrl` solo se sirven si el viewer está inscrito o es staff (ADR-017).',
+  })
   async list(
     @CurrentUser() user: SessionClaims | undefined,
     @Query(new ZodValidationPipe(listQuerySchema)) q: z.infer<typeof listQuerySchema>,
   ) {
     if (!user) throw new UnauthorizedException();
-    return this.registry.getZoomLiveService().list(user.tenantId, q);
+    const { from, to, ...rest } = q;
+    return this.registry.getZoomLiveService().list(
+      user.tenantId,
+      {
+        ...rest,
+        ...(from ? { from: new Date(from) } : {}),
+        ...(to ? { to: new Date(to) } : {}),
+      },
+      viewerOf(user),
+    );
   }
 
   @Get('sessions/:id')
   @ApiOperation({
     summary:
-      'Detalle de una sesión. Si el usuario es host o admin, incluye `startUrl`. Alumnos solo ven `joinUrl`.',
+      'Detalle de una sesión. Host/admin ven `startUrl` y siempre `joinUrl`; los demás solo ven `joinUrl`/`recordingUrl` si están inscritos (ADR-017).',
   })
   async get(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
     if (!user) throw new UnauthorizedException();
-    const isHostOrAdmin = user.roles.some((r) => ADMIN_ROLES.has(r));
-    return isHostOrAdmin
-      ? this.registry.getZoomLiveService().getForHost(user.tenantId, id)
-      : this.registry.getZoomLiveService().get(user.tenantId, id);
+    ensureSessionId(id);
+    const viewer = viewerOf(user);
+    return viewer.isStaff
+      ? this.registry.getZoomLiveService().getForHost(user.tenantId, id, viewer)
+      : this.registry.getZoomLiveService().get(user.tenantId, id, viewer);
+  }
+
+  @Post('sessions/:id/register')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Inscribirse a una sesión (cualquier usuario autenticado del tenant). Idempotente. Devuelve la vista con `joinUrl` ya visible. 409 si la sesión está ENDED/CANCELLED.',
+  })
+  async register(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException();
+    ensureSessionId(id);
+    const viewer = viewerOf(user);
+    const view = await this.registry.getZoomLiveService().register(user.tenantId, user.sub, id);
+    // El staff que se inscribe no debe perder `startUrl` en la respuesta
+    // (la página /clase reemplaza su estado con este payload).
+    return viewer.isStaff
+      ? this.registry.getZoomLiveService().getForHost(user.tenantId, id, viewer)
+      : view;
+  }
+
+  @Post('sessions/:id/unregister')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Cancelar la inscripción propia a una sesión. Idempotente.' })
+  async unregister(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException();
+    ensureSessionId(id);
+    return this.registry.getZoomLiveService().unregister(user.tenantId, user.sub, id);
+  }
+
+  @Get('sessions/:id/registrations')
+  @ApiOperation({
+    summary: 'Roster de miembros inscritos con nombre/email/avatar (solo formador o admin).',
+  })
+  async listRegistrations(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
+      throw new UnauthorizedException('Solo formadores y admins pueden ver los inscritos.');
+    }
+    ensureSessionId(id);
+    return this.registry.getZoomLiveService().listRegistrations(user.tenantId, id);
   }
 
   @Post('sessions')
@@ -93,6 +167,7 @@ export class ZoomLiveController {
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
       throw new UnauthorizedException('Solo formadores y admins pueden modificar sesiones.');
     }
+    ensureSessionId(id);
     return this.registry.getZoomLiveService().update(user.tenantId, user.sub, id, dto);
   }
 
@@ -104,6 +179,7 @@ export class ZoomLiveController {
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
       throw new UnauthorizedException('Solo formadores y admins pueden cancelar sesiones.');
     }
+    ensureSessionId(id);
     await this.registry.getZoomLiveService().cancel(user.tenantId, user.sub, id);
     return { cancelled: true };
   }

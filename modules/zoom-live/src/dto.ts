@@ -108,15 +108,46 @@ export interface SessionView {
   timezone: string;
   hostEmail: string;
   zoomMeetingId: string | null;
+  /**
+   * ADR-017: NULL salvo que el viewer esté inscrito a la sesión o sea
+   * staff (host/admin). El gating es server-side — la UI nunca es la
+   * única barrera.
+   */
   joinUrl: string | null;
   /** Solo se devuelve al host/admin. Para alumnos, undefined. */
   startUrl?: string | null;
-  /** URL de grabación (Zoom share_url). NULL hasta que llega el webhook. */
+  /**
+   * URL de grabación (Zoom share_url). NULL hasta que llega el webhook —
+   * y NULL también para viewers no inscritos (mismo gating que joinUrl).
+   */
   recordingUrl: string | null;
   /** Duración del meeting reportada en `recording.completed` (minutos). */
   recordingDurationMinutes: number | null;
+  /** Nº de miembros inscritos a la sesión. */
+  registeredCount: number;
+  /** ¿El viewer actual está inscrito? false cuando no hay viewer. */
+  isRegistered: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Identidad del usuario que consulta sesiones. Decide el gating de
+ * `joinUrl`/`recordingUrl` (inscrito o staff) y el flag `isRegistered`.
+ */
+export interface SessionViewer {
+  userId: string;
+  /** true para super_admin / tenant_admin / formador. */
+  isStaff: boolean;
+}
+
+/** Fila del roster de inscritos (solo staff). */
+export interface RegistrationView {
+  userId: string;
+  name: string | null;
+  email: string;
+  avatarUrl: string | null;
+  registeredAt: string;
 }
 
 /**

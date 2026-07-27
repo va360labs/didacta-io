@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { eventsApi, type CommunityEvent } from '@/lib/events';
+import { zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
 
 const MONTH_NAMES = [
   'Enero',
@@ -38,6 +40,54 @@ function formatEventTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 }
 
+/**
+ * Item unificado del calendario: agrega los eventos de comunidad
+ * (mod.events) y las clases en directo (mod.zoom-live) sin acoplar los
+ * módulos entre sí — la agregación vive solo en esta vista (ADR-017).
+ */
+interface CalendarItem {
+  key: string;
+  kind: 'evento' | 'clase';
+  id: string;
+  title: string;
+  startAt: string;
+  endAt: string | null;
+  location: string | null;
+  isRegistered: boolean;
+  /** Solo las clases tienen página de detalle propia. */
+  href: string | null;
+}
+
+function toItems(events: CommunityEvent[], sessions: ZoomSession[]): CalendarItem[] {
+  const fromEvents: CalendarItem[] = events.map((e) => ({
+    key: `evento-${e.id}`,
+    kind: 'evento',
+    id: e.id,
+    title: e.title,
+    startAt: e.startAt,
+    endAt: e.endAt,
+    location: e.location,
+    isRegistered: e.isRegistered,
+    href: null,
+  }));
+  const fromSessions: CalendarItem[] = sessions
+    .filter((s) => s.status !== 'CANCELLED')
+    .map((s) => ({
+      key: `clase-${s.id}`,
+      kind: 'clase',
+      id: s.id,
+      title: s.topic,
+      startAt: s.startTime,
+      endAt: new Date(new Date(s.startTime).getTime() + s.durationMinutes * 60_000).toISOString(),
+      location: null,
+      isRegistered: s.isRegistered,
+      href: `/clase/${s.id}`,
+    }));
+  return [...fromEvents, ...fromSessions].sort(
+    (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
+  );
+}
+
 type View = 'Mes' | 'Lista';
 
 export default function CalendarioPage() {
@@ -45,32 +95,33 @@ export default function CalendarioPage() {
   const [view, setView] = useState<View>('Mes');
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
-  const [events, setEvents] = useState<CommunityEvent[]>([]);
+  const [items, setItems] = useState<CalendarItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    const from = toDateStr(year, month, 1);
-    const to = toDateStr(year, month, getDaysInMonth(year, month));
-    eventsApi
-      .list({ from: `${from}T00:00:00Z`, to: `${to}T23:59:59Z` })
-      .then((data) => {
-        if (!cancelled) setEvents(data);
-      })
-      .catch(() => {});
+    // Límites del mes en hora LOCAL del navegador (no UTC): la grilla agrupa
+    // por día local, así que pedir el rango en UTC dejaría fuera las citas
+    // de madrugada en los bordes del mes (p.ej. 1 de agosto 00:30 local).
+    const from = new Date(year, month, 1).toISOString();
+    const to = new Date(year, month, getDaysInMonth(year, month), 23, 59, 59, 999).toISOString();
+    // Ambas fuentes en paralelo; si una falla, la otra se muestra igual.
+    Promise.all([
+      eventsApi.list({ from, to }).catch(() => [] as CommunityEvent[]),
+      zoomLiveApi.list({ from, to }).catch(() => [] as ZoomSession[]),
+    ]).then(([events, sessions]) => {
+      if (!cancelled) setItems(toItems(events, sessions));
+    });
     return () => {
       cancelled = true;
     };
   }, [year, month]);
 
-  const eventsByDay = new Map<string, CommunityEvent[]>();
-  for (const e of events) {
-    const d = toDateStr(
-      new Date(e.startAt).getFullYear(),
-      new Date(e.startAt).getMonth(),
-      new Date(e.startAt).getDate(),
-    );
-    if (!eventsByDay.has(d)) eventsByDay.set(d, []);
-    eventsByDay.get(d)!.push(e);
+  const itemsByDay = new Map<string, CalendarItem[]>();
+  for (const item of items) {
+    const d = new Date(item.startAt);
+    const key = toDateStr(d.getFullYear(), d.getMonth(), d.getDate());
+    if (!itemsByDay.has(key)) itemsByDay.set(key, []);
+    itemsByDay.get(key)!.push(item);
   }
 
   const daysInMonth = getDaysInMonth(year, month);
@@ -104,7 +155,7 @@ export default function CalendarioPage() {
 
   const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
 
-  const upcomingEvents = events.filter((e) => new Date(e.startAt) >= today).slice(0, 5);
+  const upcomingItems = items.filter((i) => new Date(i.startAt) >= today).slice(0, 5);
 
   return (
     <div className="flex gap-6">
@@ -168,7 +219,7 @@ export default function CalendarioPage() {
               {cells.map((cell, i) => {
                 const isToday = cell.currentMonth && isCurrentMonth && cell.day === today.getDate();
                 const dateKey = cell.currentMonth ? toDateStr(year, month, cell.day) : '';
-                const dayEvents = dateKey ? (eventsByDay.get(dateKey) ?? []) : [];
+                const dayItems = dateKey ? (itemsByDay.get(dateKey) ?? []) : [];
                 return (
                   <div
                     key={i}
@@ -187,17 +238,29 @@ export default function CalendarioPage() {
                     >
                       {cell.day}
                     </span>
-                    {dayEvents.slice(0, 2).map((e) => (
-                      <div
-                        key={e.id}
-                        className="mt-0.5 truncate rounded bg-(--didacta-trust)/10 px-1 py-0.5 text-[9px] font-medium text-(--didacta-trust)"
-                      >
-                        {formatEventTime(e.startAt)} {e.title}
-                      </div>
-                    ))}
-                    {dayEvents.length > 2 && (
+                    {dayItems.slice(0, 2).map((item) => {
+                      const pill = (
+                        <div
+                          className={`mt-0.5 truncate rounded px-1 py-0.5 text-[9px] font-medium ${
+                            item.kind === 'clase'
+                              ? 'bg-(--didacta-growth)/10 text-(--didacta-growth)'
+                              : 'bg-(--didacta-trust)/10 text-(--didacta-trust)'
+                          }`}
+                        >
+                          {formatEventTime(item.startAt)} {item.title}
+                        </div>
+                      );
+                      return item.href ? (
+                        <Link key={item.key} href={item.href as never} className="block">
+                          {pill}
+                        </Link>
+                      ) : (
+                        <div key={item.key}>{pill}</div>
+                      );
+                    })}
+                    {dayItems.length > 2 && (
                       <div className="mt-0.5 text-[9px] text-text-muted">
-                        +{dayEvents.length - 2} más
+                        +{dayItems.length - 2} más
                       </div>
                     )}
                   </div>
@@ -207,38 +270,63 @@ export default function CalendarioPage() {
           </div>
         ) : (
           <div className="rounded-xl border border-border bg-surface divide-y divide-border">
-            {events.length === 0 ? (
+            {items.length === 0 ? (
               <div className="p-12 text-center">
-                <p className="text-base font-semibold text-text">No hay eventos programados</p>
+                <p className="text-base font-semibold text-text">
+                  No hay eventos ni clases programados
+                </p>
                 <p className="mt-1 text-sm text-text-muted">
-                  Los próximos eventos aparecerán aquí cuando estén disponibles.
+                  Los próximos eventos y clases en directo aparecerán aquí cuando estén disponibles.
                 </p>
               </div>
             ) : (
-              events.map((e) => (
-                <div key={e.id} className="flex items-center gap-4 px-5 py-4">
-                  <div className="grid w-12 shrink-0 place-items-center text-center">
-                    <span className="text-[11px] font-semibold uppercase text-text-muted">
-                      {MONTH_NAMES[new Date(e.startAt).getMonth()]?.slice(0, 3)}
+              items.map((item) => {
+                const row = (
+                  <div className="flex items-center gap-4 px-5 py-4">
+                    <div className="grid w-12 shrink-0 place-items-center text-center">
+                      <span className="text-[11px] font-semibold uppercase text-text-muted">
+                        {MONTH_NAMES[new Date(item.startAt).getMonth()]?.slice(0, 3)}
+                      </span>
+                      <span className="text-xl font-bold text-text leading-none">
+                        {new Date(item.startAt).getDate()}
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-text">{item.title}</p>
+                      <p className="text-xs text-text-muted">
+                        {formatEventTime(item.startAt)}
+                        {item.endAt ? ` – ${formatEventTime(item.endAt)}` : ''}
+                        {item.location && ` · ${item.location}`}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        item.kind === 'clase'
+                          ? 'bg-(--didacta-growth)/10 text-(--didacta-growth)'
+                          : 'bg-(--didacta-trust)/10 text-(--didacta-trust)'
+                      }`}
+                    >
+                      {item.kind === 'clase' ? 'Clase en directo' : 'Evento'}
                     </span>
-                    <span className="text-xl font-bold text-text leading-none">
-                      {new Date(e.startAt).getDate()}
-                    </span>
+                    {item.isRegistered && (
+                      <span className="shrink-0 rounded-full bg-(--didacta-growth)/10 px-2 py-0.5 text-[10px] font-semibold text-(--didacta-growth)">
+                        Inscrito
+                      </span>
+                    )}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-text">{e.title}</p>
-                    <p className="text-xs text-text-muted">
-                      {formatEventTime(e.startAt)} – {formatEventTime(e.endAt)}
-                      {e.location && ` · ${e.location}`}
-                    </p>
-                  </div>
-                  {e.isRegistered && (
-                    <span className="shrink-0 rounded-full bg-(--didacta-growth)/10 px-2 py-0.5 text-[10px] font-semibold text-(--didacta-growth)">
-                      Inscrito
-                    </span>
-                  )}
-                </div>
-              ))
+                );
+                return item.href ? (
+                  <Link
+                    key={item.key}
+                    href={item.href as never}
+                    className="block transition-colors hover:bg-bg-subtle"
+                  >
+                    {row}
+                  </Link>
+                ) : (
+                  <div key={item.key}>{row}</div>
+                );
+              })
             )}
           </div>
         )}
@@ -247,26 +335,43 @@ export default function CalendarioPage() {
       <aside className="hidden w-60 shrink-0 space-y-4 xl:block">
         <div className="rounded-xl border border-border bg-surface p-4">
           <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.08em] text-text-muted">
-            Próximos eventos
+            Próximas citas
           </p>
-          {upcomingEvents.length === 0 ? (
-            <p className="text-sm text-text-muted">Sin eventos próximos.</p>
+          {upcomingItems.length === 0 ? (
+            <p className="text-sm text-text-muted">Sin eventos ni clases próximos.</p>
           ) : (
             <ul className="space-y-2">
-              {upcomingEvents.map((e) => (
-                <li key={e.id} className="flex gap-2">
-                  <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-(--didacta-trust)" />
-                  <div>
-                    <p className="text-xs font-medium text-text leading-tight">{e.title}</p>
-                    <p className="text-[10px] text-text-muted">
-                      {new Date(e.startAt).toLocaleDateString('es-ES', {
-                        day: 'numeric',
-                        month: 'short',
-                      })}
-                    </p>
-                  </div>
-                </li>
-              ))}
+              {upcomingItems.map((item) => {
+                const inner = (
+                  <>
+                    <span
+                      className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${
+                        item.kind === 'clase' ? 'bg-(--didacta-growth)' : 'bg-(--didacta-trust)'
+                      }`}
+                    />
+                    <div>
+                      <p className="text-xs font-medium text-text leading-tight">{item.title}</p>
+                      <p className="text-[10px] text-text-muted">
+                        {new Date(item.startAt).toLocaleDateString('es-ES', {
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                      </p>
+                    </div>
+                  </>
+                );
+                return (
+                  <li key={item.key}>
+                    {item.href ? (
+                      <Link href={item.href as never} className="flex gap-2">
+                        {inner}
+                      </Link>
+                    ) : (
+                      <span className="flex gap-2">{inner}</span>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

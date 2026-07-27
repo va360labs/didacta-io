@@ -5,7 +5,9 @@ import {
   type CreateSessionDto,
   type ListWebhookEventsQuery,
   type PaginatedWebhookEvents,
+  type RegistrationView,
   type SessionView,
+  type SessionViewer,
   type UpdateSessionDto,
   type SessionStatus,
   type WebhookEventView,
@@ -16,6 +18,7 @@ import {
   LessonNotInCourseError,
   SessionAlreadyEndedError,
   SessionNotFoundError,
+  SessionNotOpenForRegistrationError,
 } from './errors.js';
 import { buildZoomApiClient, StubZoomApiClient, type ZoomApiClient } from './zoom-api-client.js';
 
@@ -52,9 +55,22 @@ export class ZoomLiveService {
     return buildZoomApiClient(creds);
   }
 
+  /**
+   * Lista sesiones del tenant. `viewer` decide el gating (ADR-017): sin
+   * viewer, o con viewer no-staff y no inscrito, `joinUrl` y
+   * `recordingUrl` se serializan como NULL. `from`/`to` acotan por
+   * `startTime` (los usa el calendario para pedir un mes concreto).
+   */
   async list(
     tenantId: string,
-    opts: { courseId?: string; lessonId?: string; status?: SessionStatus } = {},
+    opts: {
+      courseId?: string;
+      lessonId?: string;
+      status?: SessionStatus;
+      from?: Date;
+      to?: Date;
+    } = {},
+    viewer?: SessionViewer,
   ): Promise<SessionView[]> {
     const rows = await this.prisma.modZoomSession.findMany({
       where: {
@@ -62,18 +78,48 @@ export class ZoomLiveService {
         ...(opts.courseId ? { courseId: opts.courseId } : {}),
         ...(opts.lessonId ? { lessonId: opts.lessonId } : {}),
         ...(opts.status ? { status: opts.status } : {}),
+        ...(opts.from || opts.to
+          ? {
+              startTime: {
+                ...(opts.from ? { gte: opts.from } : {}),
+                ...(opts.to ? { lte: opts.to } : {}),
+              },
+            }
+          : {}),
       },
       orderBy: { startTime: 'desc' },
+      include: { _count: { select: { registrations: true } } },
     });
-    return rows.map((r) => this.toView(r, { includeStartUrl: false }));
+
+    const mineSet = await this.registeredSessionIds(
+      tenantId,
+      viewer,
+      rows.map((r) => r.id),
+    );
+
+    return rows.map((r) =>
+      this.toView(r, {
+        includeStartUrl: false,
+        includeJoinUrl: (viewer?.isStaff ?? false) || mineSet.has(r.id),
+        registeredCount: r._count.registrations,
+        isRegistered: mineSet.has(r.id),
+      }),
+    );
   }
 
-  async get(tenantId: string, sessionId: string): Promise<SessionView> {
+  async get(tenantId: string, sessionId: string, viewer?: SessionViewer): Promise<SessionView> {
     const row = await this.prisma.modZoomSession.findFirst({
       where: { tenantId, id: sessionId },
+      include: { _count: { select: { registrations: true } } },
     });
     if (!row) throw new SessionNotFoundError(sessionId);
-    return this.toView(row, { includeStartUrl: false });
+    const mineSet = await this.registeredSessionIds(tenantId, viewer, [sessionId]);
+    return this.toView(row, {
+      includeStartUrl: false,
+      includeJoinUrl: (viewer?.isStaff ?? false) || mineSet.has(sessionId),
+      registeredCount: row._count.registrations,
+      isRegistered: mineSet.has(sessionId),
+    });
   }
 
   /**
@@ -81,12 +127,160 @@ export class ZoomLiveService {
    * separación a nivel de método obliga al controller a decidir
    * explícitamente quién puede ver la URL de inicio.
    */
-  async getForHost(tenantId: string, sessionId: string): Promise<SessionView> {
+  async getForHost(
+    tenantId: string,
+    sessionId: string,
+    viewer?: SessionViewer,
+  ): Promise<SessionView> {
     const row = await this.prisma.modZoomSession.findFirst({
       where: { tenantId, id: sessionId },
+      include: { _count: { select: { registrations: true } } },
     });
     if (!row) throw new SessionNotFoundError(sessionId);
-    return this.toView(row, { includeStartUrl: true });
+    const mineSet = await this.registeredSessionIds(tenantId, viewer, [sessionId]);
+    return this.toView(row, {
+      includeStartUrl: true,
+      includeJoinUrl: true,
+      registeredCount: row._count.registrations,
+      isRegistered: mineSet.has(sessionId),
+    });
+  }
+
+  /**
+   * Inscribe a un miembro en una sesión. Idempotente: repetir la
+   * inscripción no duplica fila ni re-emite el evento. Solo se admite
+   * mientras la sesión está SCHEDULED o STARTED.
+   */
+  async register(tenantId: string, userId: string, sessionId: string): Promise<SessionView> {
+    const session = await this.prisma.modZoomSession.findFirst({
+      where: { tenantId, id: sessionId },
+    });
+    if (!session) throw new SessionNotFoundError(sessionId);
+    if (session.status === 'ENDED' || session.status === 'CANCELLED') {
+      throw new SessionNotOpenForRegistrationError();
+    }
+
+    const existing = await this.prisma.modZoomSessionRegistration.findUnique({
+      where: { mod_zoom_session_registration_unique: { sessionId, userId } },
+    });
+    if (!existing) {
+      let createdNow = false;
+      try {
+        await this.prisma.modZoomSessionRegistration.create({
+          data: { id: randomUUID(), tenantId, sessionId, userId },
+        });
+        createdNow = true;
+      } catch (e) {
+        // Carrera entre dos inscripciones concurrentes del mismo user:
+        // la unique (session_id, user_id) gana y tratamos el segundo
+        // intento como idempotente (sin re-emitir el evento).
+        if ((e as { code?: string }).code !== 'P2002') throw e;
+      }
+
+      if (createdNow) {
+        // Cierre de la carrera register↔cancel: si la sesión pasó a
+        // CANCELLED/ENDED mientras insertábamos (y por tanto el snapshot
+        // de inscritos del cancel() no nos incluyó), deshacemos la fila y
+        // rechazamos — el usuario no queda inscrito a una clase muerta ni
+        // recibe confirmación sin su aviso de cancelación.
+        const fresh = await this.prisma.modZoomSession.findFirst({
+          where: { tenantId, id: sessionId },
+          select: { status: true },
+        });
+        if (!fresh || fresh.status === 'ENDED' || fresh.status === 'CANCELLED') {
+          await this.prisma.modZoomSessionRegistration.deleteMany({
+            where: { tenantId, sessionId, userId },
+          });
+          throw new SessionNotOpenForRegistrationError();
+        }
+
+        try {
+          await this.publish(tenantId, userId, 'zoom.session.registration.created', {
+            sessionId,
+            userId,
+            topic: session.topic,
+            startTime: session.startTime.toISOString(),
+            timezone: session.timezone,
+            courseId: session.courseId,
+          });
+        } catch (e) {
+          // Best-effort: la inscripción ya está persistida y un retry del
+          // usuario no re-publicaría (path idempotente). Mejor inscribir
+          // sin email de confirmación que fallar la inscripción.
+          this.ctx.logger.warn('mod.zoom-live: fallo publicando registration.created', {
+            tenantId,
+            sessionId,
+            userId,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+    }
+
+    return this.get(tenantId, sessionId, { userId, isStaff: false });
+  }
+
+  /**
+   * Baja de una inscripción. Idempotente: si no había fila devuelve
+   * `unregistered: false` sin error.
+   */
+  async unregister(
+    tenantId: string,
+    userId: string,
+    sessionId: string,
+  ): Promise<{ unregistered: boolean }> {
+    const session = await this.prisma.modZoomSession.findFirst({
+      where: { tenantId, id: sessionId },
+      select: { id: true },
+    });
+    if (!session) throw new SessionNotFoundError(sessionId);
+
+    const deleted = await this.prisma.modZoomSessionRegistration.deleteMany({
+      where: { tenantId, sessionId, userId },
+    });
+    if (deleted.count === 0) return { unregistered: false };
+
+    await this.publish(tenantId, userId, 'zoom.session.registration.cancelled', {
+      sessionId,
+      userId,
+    });
+    return { unregistered: true };
+  }
+
+  /**
+   * Roster de inscritos con identidad (solo staff — el controller gatea).
+   * Lee la tabla core `user` (no es tabla de otro módulo) filtrando por
+   * `tenantId` para resolver nombre/email/avatar.
+   */
+  async listRegistrations(tenantId: string, sessionId: string): Promise<RegistrationView[]> {
+    const session = await this.prisma.modZoomSession.findFirst({
+      where: { tenantId, id: sessionId },
+      select: { id: true },
+    });
+    if (!session) throw new SessionNotFoundError(sessionId);
+
+    const rows = await this.prisma.modZoomSessionRegistration.findMany({
+      where: { tenantId, sessionId },
+      orderBy: { registeredAt: 'asc' },
+    });
+    if (rows.length === 0) return [];
+
+    const users = await this.prisma.user.findMany({
+      where: { tenantId, id: { in: rows.map((r) => r.userId) } },
+      select: { id: true, name: true, email: true, avatarUrl: true },
+    });
+    const byId = new Map(users.map((u) => [u.id, u]));
+
+    return rows.map((r) => {
+      const u = byId.get(r.userId);
+      return {
+        userId: r.userId,
+        name: u?.name ?? null,
+        email: u?.email ?? '',
+        avatarUrl: u?.avatarUrl ?? null,
+        registeredAt: r.registeredAt.toISOString(),
+      };
+    });
   }
 
   async create(
@@ -156,7 +350,12 @@ export class ZoomLiveService {
       sessionId: created.id,
       meetingId: meeting.meetingId,
     });
-    return this.toView(created, { includeStartUrl: true });
+    return this.toView(created, {
+      includeStartUrl: true,
+      includeJoinUrl: true,
+      registeredCount: 0,
+      isRegistered: false,
+    });
   }
 
   async update(
@@ -192,10 +391,16 @@ export class ZoomLiveService {
         ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
         ...(dto.description !== undefined ? { description: dto.description } : {}),
       },
+      include: { _count: { select: { registrations: true } } },
     });
 
     await this.publish(tenantId, actorId, 'zoom.session.updated', { sessionId });
-    return this.toView(updated, { includeStartUrl: true });
+    return this.toView(updated, {
+      includeStartUrl: true,
+      includeJoinUrl: true,
+      registeredCount: updated._count.registrations,
+      isRegistered: false,
+    });
   }
 
   /**
@@ -212,15 +417,47 @@ export class ZoomLiveService {
 
     if (existing.zoomMeetingId) {
       const api = await this.clientFor(tenantId);
-      await api.deleteMeeting(existing.zoomMeetingId);
+      try {
+        await api.deleteMeeting(existing.zoomMeetingId);
+      } catch (e) {
+        // Best-effort: si Zoom falla (404 por cancelación concurrente, caída
+        // puntual…), cancelamos igualmente en Didacta — la BD es la fuente
+        // de verdad y el meeting tiene waiting_room como red de seguridad.
+        this.ctx.logger.warn('mod.zoom-live: deleteMeeting falló al cancelar; se cancela igual', {
+          tenantId,
+          sessionId,
+          meetingId: existing.zoomMeetingId,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
     }
 
-    await this.prisma.modZoomSession.update({
-      where: { id: sessionId },
+    // Transición atómica: solo el request cuyo updateMany transiciona la fila
+    // publica el evento. Sin esto, dos DELETE concurrentes (doble click del
+    // admin) publicarían dos veces y el bridge duplicaría los avisos de
+    // cancelación a todos los inscritos.
+    const { count } = await this.prisma.modZoomSession.updateMany({
+      where: { id: sessionId, tenantId, status: { notIn: ['CANCELLED', 'ENDED'] } },
       data: { status: 'CANCELLED' },
     });
+    if (count === 0) return; // otro request ganó la carrera — idempotente
 
-    await this.publish(tenantId, actorId, 'zoom.session.cancelled', { sessionId });
+    // Los inscritos van en el payload para que el bridge de notificaciones
+    // pueda avisarles de la cancelación sin re-consultar el módulo. Se leen
+    // DESPUÉS de ganar la transición para incluir a cualquier inscripción
+    // que se colara justo antes del cambio de estado.
+    const registrations = await this.prisma.modZoomSessionRegistration.findMany({
+      where: { tenantId, sessionId },
+      select: { userId: true },
+    });
+
+    await this.publish(tenantId, actorId, 'zoom.session.cancelled', {
+      sessionId,
+      topic: existing.topic,
+      startTime: existing.startTime.toISOString(),
+      timezone: existing.timezone,
+      registeredUserIds: registrations.map((r) => r.userId),
+    });
   }
 
   /**
@@ -274,6 +511,11 @@ export class ZoomLiveService {
     if (!session) {
       // Sin sesión local no hay nada que actualizar; persistimos el evento
       // como IGNORED para trazabilidad.
+      result = 'IGNORED';
+    } else if (session.status === 'CANCELLED' && nextStatus) {
+      // Una sesión cancelada no se resucita: un meeting.started reentregado
+      // (o el host arrancando un meeting borrado a medias) la dejaría
+      // STARTED y reabriría inscripciones. Trazabilidad sin efecto.
       result = 'IGNORED';
     } else if (nextStatus) {
       try {
@@ -400,6 +642,23 @@ export class ZoomLiveService {
 
   // ------------------- helpers -------------------
 
+  /**
+   * Set de sessionIds (dentro de `candidateIds`) en los que el viewer
+   * está inscrito. Sin viewer devuelve set vacío (viewer anónimo/sistema).
+   */
+  private async registeredSessionIds(
+    tenantId: string,
+    viewer: SessionViewer | undefined,
+    candidateIds: string[],
+  ): Promise<Set<string>> {
+    if (!viewer || candidateIds.length === 0) return new Set();
+    const rows = await this.prisma.modZoomSessionRegistration.findMany({
+      where: { tenantId, userId: viewer.userId, sessionId: { in: candidateIds } },
+      select: { sessionId: true },
+    });
+    return new Set(rows.map((r) => r.sessionId));
+  }
+
   private async publish(
     tenantId: string,
     actorId: string | null,
@@ -441,7 +700,13 @@ export class ZoomLiveService {
       createdAt: Date;
       updatedAt: Date;
     },
-    opts: { includeStartUrl: boolean },
+    opts: {
+      includeStartUrl: boolean;
+      /** ADR-017: false → joinUrl y recordingUrl se serializan como NULL. */
+      includeJoinUrl: boolean;
+      registeredCount: number;
+      isRegistered: boolean;
+    },
   ): SessionView {
     return {
       id: row.id,
@@ -456,10 +721,12 @@ export class ZoomLiveService {
       timezone: row.timezone,
       hostEmail: row.hostEmail,
       zoomMeetingId: row.zoomMeetingId,
-      joinUrl: row.joinUrl,
+      joinUrl: opts.includeJoinUrl ? row.joinUrl : null,
       ...(opts.includeStartUrl ? { startUrl: row.startUrl } : {}),
-      recordingUrl: row.recordingUrl,
+      recordingUrl: opts.includeJoinUrl ? row.recordingUrl : null,
       recordingDurationMinutes: row.recordingDurationMinutes,
+      registeredCount: opts.registeredCount,
+      isRegistered: opts.isRegistered,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };

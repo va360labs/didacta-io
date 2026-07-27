@@ -11,7 +11,7 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
  *   2. Construimos un payload `meeting.started` y lo firmamos con
  *      `ZOOM_WEBHOOK_SECRET` siguiendo el algoritmo de Zoom
  *      (HMAC-SHA256 sobre `v0:{timestamp}:{rawBody}`).
- *   3. POST al endpoint público `/webhooks/zoom` (sin auth bearer).
+ *   3. POST al endpoint público `/api/v1/webhooks/zoom` (sin auth bearer).
  *   4. Verificamos `result=OK`.
  *   5. GET de la sesión confirma `status=STARTED`.
  *   6. Re-POST del mismo `event_id` → `result=DUPLICATE` (idempotencia).
@@ -81,7 +81,7 @@ test.describe('mod.zoom-live · webhook HMAC (G5.3)', () => {
     const { signature, timestamp } = signZoomWebhook(secret, startedBody);
 
     // 3. POST al webhook público.
-    const hookRes = await fetch(`${API_URL}/webhooks/zoom`, {
+    const hookRes = await fetch(`${API_URL}/api/v1/webhooks/zoom`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -104,7 +104,7 @@ test.describe('mod.zoom-live · webhook HMAC (G5.3)', () => {
     expect(detail.status).toBe('STARTED');
 
     // 5. Idempotencia: el mismo event_id retorna DUPLICATE sin re-aplicar.
-    const dupRes = await fetch(`${API_URL}/webhooks/zoom`, {
+    const dupRes = await fetch(`${API_URL}/api/v1/webhooks/zoom`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -123,7 +123,7 @@ test.describe('mod.zoom-live · webhook HMAC (G5.3)', () => {
       event: 'meeting.ended',
       payload: { object: { id: session.zoomMeetingId } },
     });
-    const fakeRes = await fetch(`${API_URL}/webhooks/zoom`, {
+    const fakeRes = await fetch(`${API_URL}/api/v1/webhooks/zoom`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

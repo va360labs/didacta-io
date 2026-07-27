@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ZoomLiveService } from '../src/zoom-live.service.js';
-import { SessionNotFoundError, SessionAlreadyEndedError } from '../src/errors.js';
+import {
+  SessionNotFoundError,
+  SessionAlreadyEndedError,
+  SessionNotOpenForRegistrationError,
+} from '../src/errors.js';
 import { StubZoomApiClient } from '../src/zoom-api-client.js';
 
 interface SessionRow {
@@ -36,34 +40,71 @@ interface WebhookEventRow {
   errorMessage: string | null;
 }
 
-function makeFakePrisma(courses: { id: string; tenantId: string }[] = []) {
+interface RegistrationRow {
+  id: string;
+  tenantId: string;
+  sessionId: string;
+  userId: string;
+  registeredAt: Date;
+}
+
+interface FakeUser {
+  id: string;
+  tenantId: string;
+  name: string | null;
+  email: string;
+  avatarUrl: string | null;
+}
+
+function makeFakePrisma(courses: { id: string; tenantId: string }[] = [], users: FakeUser[] = []) {
   const sessions: SessionRow[] = [];
   const webhookEvents: WebhookEventRow[] = [];
+  const registrations: RegistrationRow[] = [];
+
+  // Simula el `include: { _count: { select: { registrations: true } } }` que
+  // usa el service real. Lo adjuntamos siempre: es inocuo para los callers
+  // que no lo piden.
+  const withCount = (row: SessionRow) => ({
+    ...row,
+    _count: { registrations: registrations.filter((r) => r.sessionId === row.id).length },
+  });
 
   return {
     _sessions: sessions,
     _webhookEvents: webhookEvents,
+    _registrations: registrations,
     modZoomSession: {
       async findMany(args: {
-        where: { tenantId: string; courseId?: string; status?: string };
+        where: {
+          tenantId: string;
+          courseId?: string;
+          status?: string;
+          startTime?: { gte?: Date; lte?: Date };
+        };
         orderBy?: unknown;
       }) {
         return sessions
           .filter((s) => s.tenantId === args.where.tenantId)
           .filter((s) => (args.where.courseId ? s.courseId === args.where.courseId : true))
           .filter((s) => (args.where.status ? s.status === args.where.status : true))
-          .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
+          .filter((s) =>
+            args.where.startTime?.gte ? s.startTime >= args.where.startTime.gte : true,
+          )
+          .filter((s) =>
+            args.where.startTime?.lte ? s.startTime <= args.where.startTime.lte : true,
+          )
+          .sort((a, b) => b.startTime.getTime() - a.startTime.getTime())
+          .map(withCount);
       },
       async findFirst(args: { where: { tenantId?: string; id?: string; zoomMeetingId?: string } }) {
-        return (
-          sessions.find((s) => {
-            if (args.where.tenantId && s.tenantId !== args.where.tenantId) return false;
-            if (args.where.id && s.id !== args.where.id) return false;
-            if (args.where.zoomMeetingId && s.zoomMeetingId !== args.where.zoomMeetingId)
-              return false;
-            return true;
-          }) ?? null
-        );
+        const found = sessions.find((s) => {
+          if (args.where.tenantId && s.tenantId !== args.where.tenantId) return false;
+          if (args.where.id && s.id !== args.where.id) return false;
+          if (args.where.zoomMeetingId && s.zoomMeetingId !== args.where.zoomMeetingId)
+            return false;
+          return true;
+        });
+        return found ? withCount(found) : null;
       },
       async create(args: {
         data: Partial<SessionRow> & Pick<SessionRow, 'id' | 'tenantId' | 'topic'>;
@@ -93,7 +134,85 @@ function makeFakePrisma(courses: { id: string; tenantId: string }[] = []) {
         const idx = sessions.findIndex((s) => s.id === args.where.id);
         if (idx === -1) throw new Error('not found');
         sessions[idx] = { ...sessions[idx]!, ...args.data, updatedAt: new Date() };
-        return sessions[idx]!;
+        return withCount(sessions[idx]!);
+      },
+      async updateMany(args: {
+        where: { id: string; tenantId?: string; status?: { notIn: string[] } };
+        data: Partial<SessionRow>;
+      }) {
+        let count = 0;
+        for (let i = 0; i < sessions.length; i++) {
+          const s = sessions[i]!;
+          if (s.id !== args.where.id) continue;
+          if (args.where.tenantId && s.tenantId !== args.where.tenantId) continue;
+          if (args.where.status?.notIn && args.where.status.notIn.includes(s.status)) continue;
+          sessions[i] = { ...s, ...args.data, updatedAt: new Date() };
+          count++;
+        }
+        return { count };
+      },
+    },
+    modZoomSessionRegistration: {
+      async findUnique(args: {
+        where: { mod_zoom_session_registration_unique: { sessionId: string; userId: string } };
+      }) {
+        const { sessionId, userId } = args.where.mod_zoom_session_registration_unique;
+        return registrations.find((r) => r.sessionId === sessionId && r.userId === userId) ?? null;
+      },
+      async findMany(args: {
+        where: {
+          tenantId: string;
+          userId?: string;
+          sessionId?: string | { in: string[] };
+        };
+        select?: unknown;
+        orderBy?: unknown;
+      }) {
+        return registrations
+          .filter((r) => r.tenantId === args.where.tenantId)
+          .filter((r) => (args.where.userId ? r.userId === args.where.userId : true))
+          .filter((r) => {
+            const sid = args.where.sessionId;
+            if (!sid) return true;
+            if (typeof sid === 'string') return r.sessionId === sid;
+            return sid.in.includes(r.sessionId);
+          })
+          .sort((a, b) => a.registeredAt.getTime() - b.registeredAt.getTime());
+      },
+      async create(args: { data: Omit<RegistrationRow, 'registeredAt'> }) {
+        const dup = registrations.some(
+          (r) => r.sessionId === args.data.sessionId && r.userId === args.data.userId,
+        );
+        if (dup) {
+          throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+        }
+        const row: RegistrationRow = { ...args.data, registeredAt: new Date() };
+        registrations.push(row);
+        return row;
+      },
+      async deleteMany(args: { where: { tenantId: string; sessionId: string; userId: string } }) {
+        const before = registrations.length;
+        for (let i = registrations.length - 1; i >= 0; i--) {
+          const r = registrations[i]!;
+          if (
+            r.tenantId === args.where.tenantId &&
+            r.sessionId === args.where.sessionId &&
+            r.userId === args.where.userId
+          ) {
+            registrations.splice(i, 1);
+          }
+        }
+        return { count: before - registrations.length };
+      },
+    },
+    user: {
+      async findMany(args: {
+        where: { tenantId: string; id: { in: string[] } };
+        select?: unknown;
+      }) {
+        return users
+          .filter((u) => u.tenantId === args.where.tenantId)
+          .filter((u) => args.where.id.in.includes(u.id));
       },
     },
     modCoursesCourse: {
@@ -411,7 +530,8 @@ describe('ZoomLiveService.handleWebhookEvent', () => {
 
     expect(out.result).toBe('OK');
     expect(out.sessionId).toBe(created.id);
-    const after = await service.get(TENANT, created.id);
+    // getForHost: la vista staff no gatea recordingUrl (ADR-017).
+    const after = await service.getForHost(TENANT, created.id);
     expect(after.recordingUrl).toBe('https://zoom.us/rec/share/abc-XYZ');
     expect(after.recordingDurationMinutes).toBe(47);
     // No cambia el status: meeting.ended ya pudo haberlo dejado en ENDED.
@@ -438,9 +558,241 @@ describe('ZoomLiveService.handleWebhookEvent', () => {
     });
 
     expect(out.result).toBe('IGNORED');
-    const after = await service.get(TENANT, created.id);
+    const after = await service.getForHost(TENANT, created.id);
     expect(after.recordingUrl).toBeNull();
     expect(after.recordingDurationMinutes).toBeNull();
+  });
+});
+
+describe('ZoomLiveService · inscripciones y gating (ADR-017)', () => {
+  const ALUMNO = 'alumno-1';
+
+  async function makeSession(service: ZoomLiveService) {
+    return service.create(TENANT, ACTOR, {
+      topic: 'Clase en directo',
+      startTime: '2026-08-01T10:00:00+02:00',
+      durationMinutes: 60,
+      hostEmail: 'host@x.com',
+      timezone: 'Europe/Madrid',
+    });
+  }
+
+  it('register crea la inscripción, emite el evento y desbloquea joinUrl', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await makeSession(service);
+
+    const view = await service.register(TENANT, ALUMNO, created.id);
+
+    expect(view.isRegistered).toBe(true);
+    expect(view.registeredCount).toBe(1);
+    expect(view.joinUrl).toMatch(/^https:\/\/stub-zoom/);
+    const regEvents = ctx.events.filter((e) => e.name === 'zoom.session.registration.created');
+    expect(regEvents).toHaveLength(1);
+    expect(regEvents[0]!.data).toMatchObject({ sessionId: created.id, userId: ALUMNO });
+  });
+
+  it('register es idempotente: no duplica fila ni re-emite el evento', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await makeSession(service);
+
+    await service.register(TENANT, ALUMNO, created.id);
+    const second = await service.register(TENANT, ALUMNO, created.id);
+
+    expect(second.registeredCount).toBe(1);
+    expect(ctx.events.filter((e) => e.name === 'zoom.session.registration.created')).toHaveLength(
+      1,
+    );
+  });
+
+  it('register rechaza sesiones ENDED y CANCELLED', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await makeSession(service);
+    await prisma.modZoomSession.update({ where: { id: created.id }, data: { status: 'ENDED' } });
+    await expect(service.register(TENANT, ALUMNO, created.id)).rejects.toBeInstanceOf(
+      SessionNotOpenForRegistrationError,
+    );
+
+    const otra = await makeSession(service);
+    await service.cancel(TENANT, ACTOR, otra.id);
+    await expect(service.register(TENANT, ALUMNO, otra.id)).rejects.toBeInstanceOf(
+      SessionNotOpenForRegistrationError,
+    );
+  });
+
+  it('gating: sin inscripción, joinUrl y recordingUrl van NULL; staff sí los ve', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await makeSession(service);
+    await prisma.modZoomSession.update({
+      where: { id: created.id },
+      data: { recordingUrl: 'https://zoom.us/rec/share/xyz' },
+    });
+
+    // Alumno NO inscrito.
+    const alumnoView = await service.get(TENANT, created.id, { userId: 'otro', isStaff: false });
+    expect(alumnoView.joinUrl).toBeNull();
+    expect(alumnoView.recordingUrl).toBeNull();
+    expect(alumnoView.isRegistered).toBe(false);
+
+    // Sin viewer (llamada interna) tampoco expone.
+    const anon = await service.get(TENANT, created.id);
+    expect(anon.joinUrl).toBeNull();
+
+    // Staff ve todo.
+    const staffView = await service.get(TENANT, created.id, { userId: ACTOR, isStaff: true });
+    expect(staffView.joinUrl).toMatch(/^https:\/\/stub-zoom/);
+    expect(staffView.recordingUrl).toBe('https://zoom.us/rec/share/xyz');
+
+    // También en list().
+    const [inList] = await service.list(TENANT, {}, { userId: 'otro', isStaff: false });
+    expect(inList!.joinUrl).toBeNull();
+  });
+
+  it('gating: el inscrito ve joinUrl y recordingUrl en get y list', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await makeSession(service);
+    await service.register(TENANT, ALUMNO, created.id);
+    await prisma.modZoomSession.update({
+      where: { id: created.id },
+      data: { recordingUrl: 'https://zoom.us/rec/share/xyz' },
+    });
+
+    const view = await service.get(TENANT, created.id, { userId: ALUMNO, isStaff: false });
+    expect(view.joinUrl).toMatch(/^https:\/\/stub-zoom/);
+    expect(view.recordingUrl).toBe('https://zoom.us/rec/share/xyz');
+    expect(view.isRegistered).toBe(true);
+
+    const [inList] = await service.list(TENANT, {}, { userId: ALUMNO, isStaff: false });
+    expect(inList!.joinUrl).toMatch(/^https:\/\/stub-zoom/);
+    expect(inList!.isRegistered).toBe(true);
+  });
+
+  it('unregister borra la inscripción, re-gatea joinUrl y es idempotente', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await makeSession(service);
+    await service.register(TENANT, ALUMNO, created.id);
+
+    const first = await service.unregister(TENANT, ALUMNO, created.id);
+    expect(first.unregistered).toBe(true);
+    const view = await service.get(TENANT, created.id, { userId: ALUMNO, isStaff: false });
+    expect(view.isRegistered).toBe(false);
+    expect(view.joinUrl).toBeNull();
+    expect(view.registeredCount).toBe(0);
+
+    const second = await service.unregister(TENANT, ALUMNO, created.id);
+    expect(second.unregistered).toBe(false);
+    expect(ctx.events.filter((e) => e.name === 'zoom.session.registration.cancelled')).toHaveLength(
+      1,
+    );
+  });
+
+  it('listRegistrations devuelve el roster con nombre/email del user core', async () => {
+    const prisma = makeFakePrisma(
+      [],
+      [
+        { id: 'u-1', tenantId: TENANT, name: 'Uno', email: 'uno@x.com', avatarUrl: null },
+        { id: 'u-2', tenantId: TENANT, name: null, email: 'dos@x.com', avatarUrl: 'https://a/2' },
+      ],
+    );
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await makeSession(service);
+    await service.register(TENANT, 'u-1', created.id);
+    await service.register(TENANT, 'u-2', created.id);
+
+    const roster = await service.listRegistrations(TENANT, created.id);
+    expect(roster).toHaveLength(2);
+    expect(roster[0]).toMatchObject({ userId: 'u-1', name: 'Uno', email: 'uno@x.com' });
+    expect(roster[1]).toMatchObject({ userId: 'u-2', name: null, email: 'dos@x.com' });
+
+    await expect(service.listRegistrations(TENANT, 'no-existe')).rejects.toBeInstanceOf(
+      SessionNotFoundError,
+    );
+  });
+
+  it('dos cancel() concurrentes publican zoom.session.cancelled UNA sola vez', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await makeSession(service);
+    await service.register(TENANT, ALUMNO, created.id);
+
+    // Doble click del admin: ambos requests leen SCHEDULED antes de que
+    // ninguno escriba. Solo el que gana el updateMany atómico publica.
+    await Promise.all([
+      service.cancel(TENANT, ACTOR, created.id),
+      service.cancel(TENANT, ACTOR, created.id),
+    ]);
+
+    expect(ctx.events.filter((e) => e.name === 'zoom.session.cancelled')).toHaveLength(1);
+    const after = await service.get(TENANT, created.id);
+    expect(after.status).toBe('CANCELLED');
+  });
+
+  it('register aísla por tenant: no se puede inscribir a una sesión de otro tenant', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await makeSession(service);
+
+    await expect(service.register('tenant-otro', ALUMNO, created.id)).rejects.toBeInstanceOf(
+      SessionNotFoundError,
+    );
+    await expect(service.listRegistrations('tenant-otro', created.id)).rejects.toBeInstanceOf(
+      SessionNotFoundError,
+    );
+    await expect(service.unregister('tenant-otro', ALUMNO, created.id)).rejects.toBeInstanceOf(
+      SessionNotFoundError,
+    );
+  });
+
+  it('meeting.started reentregado NO resucita una sesión CANCELLED', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await makeSession(service);
+    await service.cancel(TENANT, ACTOR, created.id);
+
+    const out = await service.handleWebhookEvent({
+      event_id: 'evt-started-tras-cancel',
+      event: 'meeting.started',
+      payload: { object: { id: created.zoomMeetingId! } },
+    });
+
+    expect(out.result).toBe('IGNORED');
+    const after = await service.get(TENANT, created.id);
+    expect(after.status).toBe('CANCELLED');
+    expect(ctx.events.map((e) => e.name)).not.toContain('zoom.session.started');
+  });
+
+  it('cancel incluye registeredUserIds en el evento para el bridge de avisos', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await makeSession(service);
+    await service.register(TENANT, 'u-1', created.id);
+    await service.register(TENANT, 'u-2', created.id);
+
+    await service.cancel(TENANT, ACTOR, created.id);
+
+    const cancelled = ctx.events.find((e) => e.name === 'zoom.session.cancelled');
+    expect(cancelled).toBeDefined();
+    expect(cancelled!.data).toMatchObject({ sessionId: created.id, topic: 'Clase en directo' });
+    expect((cancelled!.data as { registeredUserIds: string[] }).registeredUserIds.sort()).toEqual([
+      'u-1',
+      'u-2',
+    ]);
   });
 });
 

@@ -48,6 +48,17 @@ export default function AulaVirtualPage() {
   const [sessions, setSessions] = useState<ZoomSession[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  async function handleCopyLink(id: string) {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/clase/${id}`);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId((prev) => (prev === id ? null : prev)), 2000);
+    } catch {
+      // Clipboard no disponible: sin feedback, sin romper.
+    }
+  }
 
   async function reload() {
     try {
@@ -78,8 +89,9 @@ export default function AulaVirtualPage() {
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight">Aula virtual</h1>
           <p className="mt-1 max-w-3xl text-text-muted">
-            Sesiones síncronas de tu organización. La integración con Zoom S2S llega en la próxima
-            iteración — por ahora se usan stubs `stub-zoom.didacta.dev` para validar el flujo.
+            Clases en directo de tu organización. Cada sesión se crea en Zoom con las credenciales
+            S2S del tenant (Admin → Configuración → Aula virtual); comparte el enlace de inscripción
+            para que los miembros se apunten — solo los inscritos ven el link de Zoom.
           </p>
         </div>
         <Button type="button" onClick={() => setShowForm((v) => !v)}>
@@ -158,7 +170,8 @@ export default function AulaVirtualPage() {
                   </div>
                   <p className="text-sm text-text-muted">
                     <span className="tabular-nums">{formatStart(s.startTime, s.timezone)}</span> ·{' '}
-                    {s.durationMinutes} min · host {s.hostEmail}
+                    {s.durationMinutes} min · host {s.hostEmail} ·{' '}
+                    {s.registeredCount === 1 ? '1 inscrito' : `${s.registeredCount} inscritos`}
                   </p>
                   {s.description ? (
                     <p className="line-clamp-2 text-xs text-text-subtle">{s.description}</p>
@@ -180,6 +193,23 @@ export default function AulaVirtualPage() {
                       </Link>
                     </Button>
                   ) : null}
+                  {s.status !== 'CANCELLED' ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleCopyLink(s.id)}
+                    >
+                      <Icon name="link" size={13} />
+                      {copiedId === s.id ? 'Copiado' : 'Copiar enlace'}
+                    </Button>
+                  ) : null}
+                  <Button asChild size="sm" variant="ghost">
+                    <Link href={`/clase/${s.id}`}>
+                      <Icon name="users" size={13} />
+                      Ver clase
+                    </Link>
+                  </Button>
                   {s.status === 'SCHEDULED' ? (
                     <Button
                       type="button"

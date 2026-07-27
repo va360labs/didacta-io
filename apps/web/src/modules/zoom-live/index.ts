@@ -37,6 +37,7 @@ export { zoomLiveApi } from './client';
 export type {
   SessionStatus,
   ZoomSession,
+  ZoomSessionRegistration,
   WebhookEventResult,
   ZoomWebhookEventItem,
   PaginatedWebhookEvents,
