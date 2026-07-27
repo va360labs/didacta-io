@@ -21,8 +21,14 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
  * Si no está set, el test queda skip-en-el-acto.
  */
 
+/**
+ * Firma como lo hace Zoom de verdad: `x-zm-request-timestamp` en SEGUNDOS
+ * (10 dígitos). Firmar en ms —como hacía este helper— ocultaba que el
+ * verificador comparaba segundos contra `Date.now()` y rechazaba todos los
+ * webhooks reales.
+ */
 function signZoomWebhook(secret: string, body: string): { signature: string; timestamp: string } {
-  const timestamp = String(Date.now());
+  const timestamp = String(Math.floor(Date.now() / 1000));
   const digest = createHmac('sha256', secret).update(`v0:${timestamp}:${body}`).digest('hex');
   return { signature: `v0=${digest}`, timestamp };
 }

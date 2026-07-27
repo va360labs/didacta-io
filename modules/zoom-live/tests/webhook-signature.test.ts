@@ -57,6 +57,38 @@ describe('verifyZoomSignature', () => {
     expect(ok).toBe(false);
   });
 
+  // Formato REAL de Zoom: `x-zm-request-timestamp` va en SEGUNDOS (10
+  // dígitos). Antes se comparaba tal cual contra Date.now() (ms), lo que daba
+  // un drift de ~56 años y devolvía 401 a TODOS los webhooks reales —
+  // invisible en los tests porque estos firmaban con ms.
+  it('acepta el timestamp en segundos que envía Zoom de verdad', () => {
+    const body = JSON.stringify({ event: 'meeting.started' });
+    const seconds = Math.floor(NOW / 1000);
+    const { signature, timestamp } = signed({ body, timestamp: seconds });
+    const ok = verifyZoomSignature({
+      signatureHeader: signature,
+      timestampHeader: timestamp,
+      rawBody: body,
+      secret: SECRET,
+      now: () => NOW,
+    });
+    expect(ok).toBe(true);
+  });
+
+  it('rechaza drift > 5 min también cuando el timestamp viene en segundos', () => {
+    const body = '{}';
+    const seconds = Math.floor(NOW / 1000) - 6 * 60;
+    const { signature, timestamp } = signed({ body, timestamp: seconds });
+    const ok = verifyZoomSignature({
+      signatureHeader: signature,
+      timestampHeader: timestamp,
+      rawBody: body,
+      secret: SECRET,
+      now: () => NOW,
+    });
+    expect(ok).toBe(false);
+  });
+
   it('rechaza si el timestamp tiene drift mayor a 5 minutos', () => {
     const body = '{}';
     const { signature, timestamp } = signed({ body, timestamp: NOW - 6 * 60 * 1000 });
