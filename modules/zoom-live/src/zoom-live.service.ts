@@ -378,7 +378,14 @@ export class ZoomLiveService {
         ...(dto.topic !== undefined ? { topic: dto.topic } : {}),
         ...(dto.startTime !== undefined ? { startTime: dto.startTime } : {}),
         ...(dto.durationMinutes !== undefined ? { durationMinutes: dto.durationMinutes } : {}),
-        ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
+        // La timezone viaja SIEMPRE que cambie la hora, aunque el dto no la
+        // traiga: Zoom interpreta las cifras de `start_time` en la timezone
+        // del meeting, así que omitirla desplazaría la clase.
+        ...(dto.timezone !== undefined
+          ? { timezone: dto.timezone }
+          : dto.startTime !== undefined
+            ? { timezone: existing.timezone }
+            : {}),
       });
     }
 

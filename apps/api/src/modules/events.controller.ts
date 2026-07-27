@@ -43,9 +43,14 @@ export class EventsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('limit') limitStr?: string,
+    @Query('order') order?: string,
   ) {
     if (!user) throw new UnauthorizedException();
     const limit = Math.min(100, Math.max(1, parseInt(limitStr ?? '50', 10) || 50));
+    // `desc` sirve para consultar el pasado reciente: con `asc` el tope de
+    // `limit` devuelve los eventos MÁS ANTIGUOS del rango y esconde los de
+    // la semana pasada (el calendario pide el histórico en desc).
+    const sortOrder: 'asc' | 'desc' = order === 'desc' ? 'desc' : 'asc';
 
     const now = new Date();
     const startFrom = from ? new Date(from) : now;
@@ -66,7 +71,7 @@ export class EventsController {
           select: { id: true },
         },
       },
-      orderBy: { startAt: 'asc' },
+      orderBy: { startAt: sortOrder },
       take: limit,
     });
 

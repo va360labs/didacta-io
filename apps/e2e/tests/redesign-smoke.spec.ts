@@ -80,15 +80,15 @@ test.describe('Redesign smoke — páginas principales', () => {
     await expect(page.getByText('Agenda · Calendario')).toBeVisible();
     // Cabeceras de días L M X J V S D
     await expect(page.getByText('L').first()).toBeVisible();
-    // Toggle a lista
-    await page.getByRole('button', { name: 'Lista' }).click();
-    await expect(page.getByText('No hay eventos programados')).toBeVisible();
+    // Toggle a la agenda (pasadas / en curso / próximas)
+    await page.getByRole('button', { name: 'Agenda', exact: true }).click();
+    await expect(page.getByText('No hay eventos ni clases programados')).toBeVisible();
     // Volver a mes
     await page.getByRole('button', { name: 'Mes' }).click();
     // Navegar mes anterior
-    await page.getByRole('button', { name: '←' }).click();
+    await page.getByRole('button', { name: 'Mes anterior' }).click();
     // Navegar mes siguiente
-    await page.getByRole('button', { name: '→' }).click();
+    await page.getByRole('button', { name: 'Mes siguiente' }).click();
     // El heading del mes debe ser visible
     await expect(page.locator('h2').filter({ hasText: /\d{4}/ })).toBeVisible();
   });

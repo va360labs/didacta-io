@@ -20,6 +20,12 @@ export interface ListEventsQuery {
   from?: string;
   to?: string;
   limit?: number;
+  /**
+   * Orden por fecha de inicio. `desc` es imprescindible al consultar el
+   * pasado: con `asc` el tope de `limit` devuelve los eventos más antiguos
+   * del rango y esconde los recientes.
+   */
+  order?: 'asc' | 'desc';
 }
 
 function withAuth(): string {
@@ -35,6 +41,7 @@ export const eventsApi = {
     if (query.from) usp.set('from', query.from);
     if (query.to) usp.set('to', query.to);
     if (query.limit) usp.set('limit', String(query.limit));
+    if (query.order) usp.set('order', query.order);
     const qs = usp.toString();
     return apiFetch<CommunityEvent[]>(
       `/api/v1/modules/events${qs ? `?${qs}` : ''}`,

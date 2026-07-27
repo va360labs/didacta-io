@@ -14,6 +14,12 @@ import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { coursesApi, type Course, type CourseDetail } from '@/lib/courses';
 import { zoomLiveApi, type SessionStatus, type ZoomSession } from '@/modules/zoom-live';
+import {
+  COMMON_TIMEZONES,
+  isValidTimeZone,
+  timeZoneLabel,
+  wallTimeToIso,
+} from '@/modules/zoom-live/wall-time';
 
 const STATUS_VARIANT: Record<SessionStatus, 'success' | 'warning' | 'muted' | 'danger'> = {
   SCHEDULED: 'warning',
@@ -248,6 +254,13 @@ function CreateSessionForm({
   const defaultEmail = session?.user.email ?? '';
   const tzGuess =
     typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC';
+  const [timezone, setTimezone] = useState(tzGuess);
+  // La zona del navegador va primero si no está ya en la lista, para que el
+  // formador nunca tenga que buscar la suya.
+  const tzOptions =
+    COMMON_TIMEZONES.includes(tzGuess) || !isValidTimeZone(tzGuess)
+      ? COMMON_TIMEZONES
+      : [tzGuess, ...COMMON_TIMEZONES];
 
   // Carga inicial de cursos publicados del tenant para el select.
   useEffect(() => {
@@ -303,14 +316,16 @@ function CreateSessionForm({
     setPending(true);
     setError(null);
     try {
-      // datetime-local da `2026-05-15T10:00`; convertimos a ISO con offset local.
-      const localDate = new Date(startTimeRaw);
+      // `datetime-local` da `2026-05-15T10:00` SIN zona. Se interpreta en la
+      // zona ELEGIDA para la clase, no en la del navegador: si no, un
+      // formador conectado desde otra zona programaría a otra hora.
+      const tz = String(form.get('timezone') ?? tzGuess);
       await zoomLiveApi.create({
         topic: String(form.get('topic') ?? ''),
-        startTime: localDate.toISOString(),
+        startTime: wallTimeToIso(startTimeRaw, tz),
         durationMinutes: Number(form.get('durationMinutes') ?? 60),
         hostEmail: String(form.get('hostEmail') ?? defaultEmail),
-        timezone: String(form.get('timezone') ?? tzGuess),
+        timezone: tz,
         description: form.get('description') ? String(form.get('description')) : undefined,
         courseId: form.get('courseId') ? String(form.get('courseId')) : undefined,
         lessonId: form.get('lessonId') ? String(form.get('lessonId')) : undefined,
@@ -397,8 +412,23 @@ function CreateSessionForm({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="timezone">Timezone (IANA)</Label>
-              <Input id="timezone" name="timezone" defaultValue={tzGuess} required />
+              <Label htmlFor="timezone">Zona horaria</Label>
+              <Select
+                id="timezone"
+                name="timezone"
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                required
+              >
+                {tzOptions.map((tz) => (
+                  <option key={tz} value={tz}>
+                    {timeZoneLabel(tz)}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-text-subtle">
+                La hora que escribas se interpreta en esta zona, no en la de tu ordenador.
+              </p>
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">

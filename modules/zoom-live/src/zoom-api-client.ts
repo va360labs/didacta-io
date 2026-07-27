@@ -95,6 +95,52 @@ export interface ZoomS2SCredentials {
  * Token rotation: si recibimos 401 Invalid token, limpiamos el cache y
  * reintentamos UNA vez antes de propagar el error.
  */
+/**
+ * Convierte un instante ISO (UTC/con offset) a la hora de pared de `timeZone`
+ * en el formato `yyyy-MM-ddTHH:mm:ss` **sin sufijo Z**, que es lo que espera
+ * Zoom cuando se envía junto al campo `timezone`.
+ *
+ * Por qué: si se manda `start_time` con `Z` Y ADEMÁS `timezone`, Zoom ignora
+ * la Z y trata las cifras como hora local de esa zona. Verificado contra la
+ * API real (2026-07-27): enviar `10:00:00.000Z` + `Europe/Madrid` deja el
+ * meeting a las 08:00Z — dos horas antes de lo que ve el alumno en Didacta.
+ *
+ * Si `timeZone` falta o es inválida caemos a UTC en ambos lados: preferimos
+ * un instante correcto con la zona "equivocada" a mover la clase de hora.
+ */
+export function toZoomWallTime(isoInstant: string, timeZone: string | undefined): string {
+  const date = new Date(isoInstant);
+  if (Number.isNaN(date.getTime())) return isoInstant;
+
+  const zone = timeZone && timeZone.trim() ? timeZone.trim() : 'UTC';
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      // h23 evita el "24:00" que h12/hour12:false produce a medianoche en
+      // algunas versiones de ICU.
+      hourCycle: 'h23',
+    }).formatToParts(date);
+  } catch {
+    // Timezone IANA inválida: no rompemos la creación de la clase.
+    return date
+      .toISOString()
+      .replace(/\.\d{3}Z$/, '')
+      .replace(/Z$/, '');
+  }
+
+  const get = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((p) => p.type === type)?.value ?? '00';
+
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`;
+}
+
 export class RealZoomApiClient implements ZoomApiClient {
   private cachedToken?: { token: string; expiresAt: number };
 
@@ -104,7 +150,7 @@ export class RealZoomApiClient implements ZoomApiClient {
     const body = {
       topic: input.topic,
       type: 2, // scheduled
-      start_time: input.startTime,
+      start_time: toZoomWallTime(input.startTime, input.timezone),
       duration: input.durationMinutes,
       timezone: input.timezone,
       agenda: input.description ?? undefined,
@@ -139,7 +185,12 @@ export class RealZoomApiClient implements ZoomApiClient {
   async updateMeeting(meetingId: string, patch: Partial<ZoomMeetingCreateInput>): Promise<void> {
     const body: Record<string, unknown> = {};
     if (patch.topic !== undefined) body['topic'] = patch.topic;
-    if (patch.startTime !== undefined) body['start_time'] = patch.startTime;
+    if (patch.startTime !== undefined) {
+      // El caller debe mandar `timezone` siempre que cambie `startTime`
+      // (ver ZoomLiveService.update): sin ella Zoom aplicaría la timezone
+      // que ya tuviera el meeting a nuestras cifras y movería la clase.
+      body['start_time'] = toZoomWallTime(patch.startTime, patch.timezone);
+    }
     if (patch.durationMinutes !== undefined) body['duration'] = patch.durationMinutes;
     if (patch.timezone !== undefined) body['timezone'] = patch.timezone;
     if (patch.description !== undefined) body['agenda'] = patch.description;
