@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Icon } from '@/components/icon';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
+import { postPath } from '@/lib/post-link';
 import { communityApi } from '@/modules/community';
 
 interface Mention {
@@ -94,9 +95,11 @@ export default function MisMencionesPage() {
       ) : (
         <ul className="divide-y divide-border-soft rounded-lg border border-border-soft">
           {mentions.map((m) => {
-            const target = m.commentId
-              ? `/comunidad/${m.postId ?? ''}#comment-${m.commentId}`
-              : `/comunidad/${m.postId ?? ''}`;
+            // URL canónica del post; `?comment=` enfoca el comentario en el
+            // modal (el hash #comment- anterior no lo interpretaba nadie).
+            const target = m.postId
+              ? postPath(m.postId, { commentId: m.commentId ?? undefined })
+              : null;
             return (
               <li
                 key={m.id}
@@ -120,7 +123,7 @@ export default function MisMencionesPage() {
                     {relTime(m.createdAt)}
                   </p>
                 </div>
-                {m.postId ? (
+                {target ? (
                   <Link
                     href={target as never}
                     className="text-xs font-semibold text-brand-600 hover:underline"

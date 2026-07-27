@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { consumeIntendedPath } from '@/lib/post-login-redirect';
 
 interface VerifyResponse {
   verified: boolean;
@@ -33,7 +34,8 @@ export function MfaVerifyForm() {
         access,
       );
       authStorage.saveTokens(response.tokens.accessToken, response.tokens.refreshToken);
-      router.push('/');
+      // Deep link pendiente de antes del login (enlace compartido) → volvemos ahí.
+      router.push(consumeIntendedPath() ?? '/');
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'Código incorrecto');
     } finally {

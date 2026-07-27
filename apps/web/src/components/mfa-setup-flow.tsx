@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { consumeIntendedPath } from '@/lib/post-login-redirect';
 
 interface SetupResponse {
   otpauthUrl: string;
@@ -77,7 +78,9 @@ export function MfaSetupFlow({ onDone }: { onDone?: () => void }) {
       );
       authStorage.saveTokens(response.tokens.accessToken, response.tokens.refreshToken);
       if (onDone) onDone();
-      else router.push('/');
+      // Rama de login (sin onDone): cierra el circuito del deep link pendiente,
+      // igual que mfa-verify-form. En el modal del perfil no aplica.
+      else router.push(consumeIntendedPath() ?? '/');
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No se pudo confirmar el código');
     } finally {

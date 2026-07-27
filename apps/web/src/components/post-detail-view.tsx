@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { MentionTextarea } from '@/components/mention-textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { postShareUrl } from '@/lib/post-link';
 import { cn } from '@/lib/utils';
 import { AuthorNameLink, CommunityAvatar } from '@/components/community-avatar';
 import { RichBody } from '@/components/rich-body';
@@ -50,6 +51,7 @@ export function PostDetailView({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [commentBody, setCommentBody] = useState('');
   const [commentEmojiOpen, setCommentEmojiOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState<string | null>(null);
@@ -213,6 +215,36 @@ export function PostDetailView({
         setPending(false);
       }
     }
+  }
+
+  async function handleCopyLink() {
+    if (!post) return;
+    const url = postShareUrl(post.id);
+    let copied = true;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // Contextos sin Clipboard API (http plano, permisos): textarea + execCommand.
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        copied = document.execCommand('copy');
+        ta.remove();
+      } catch {
+        copied = false;
+      }
+    }
+    if (!copied) {
+      // Sin confirmación falsa: dejamos el enlace a la vista para copiarlo a mano.
+      setError(`No pudimos copiar el enlace. Copialo manualmente: ${url}`);
+      return;
+    }
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
   }
 
   async function handleDeletePost() {
@@ -382,6 +414,19 @@ export function PostDetailView({
             </button>
           );
         })}
+        {/* Enlace directo compartible del post — visible para todos. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => void handleCopyLink()}
+          title="Copiar enlace directo"
+          aria-label="Copiar enlace directo"
+          className="ml-auto text-[#64748B]"
+        >
+          <Icon name={linkCopied ? 'check' : 'link'} size={14} />
+          {linkCopied ? 'Enlace copiado' : 'Copiar enlace'}
+        </Button>
         {isAuthor || canModerate ? (
           <Button
             type="button"
@@ -389,7 +434,7 @@ export function PostDetailView({
             size="sm"
             onClick={() => setEditing(true)}
             disabled={pending}
-            className="ml-auto text-[#64748B]"
+            className="text-[#64748B]"
           >
             Editar
           </Button>

@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog } from '@/components/ui/dialog';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { usePostModalRoute } from '@/lib/use-post-modal-route';
 import { SpaceIcon } from '@/components/space-icon';
 import {
   communityApi,
@@ -38,7 +39,11 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
   const [composerOpen, setComposerOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [sort, setSort] = useState<PostSort>('recent');
-  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  // Abrir un post muestra su URL canónica compartible (/comunidad/<id>) sin
+  // desmontar el feed del espacio; al cerrar se restaura /espacios/<space>.
+  const { selectedPostId, openPost, closePost } = usePostModalRoute({
+    fallbackPath: `/espacios/${space}`,
+  });
 
   const viewerUserId = useMemo(() => authStorage.getSession()?.user.id ?? null, []);
   const tagsByName = useCommunityTags();
@@ -173,7 +178,7 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
                 viewerUserId={viewerUserId}
                 tagsByName={tagsByName}
                 authorAvatarUrl={authorAvatars.get(p.authorId)?.avatarUrl ?? null}
-                onOpen={() => setSelectedPostId(p.id)}
+                onOpen={() => openPost(p.id)}
                 onTagClick={() => {}}
                 onReactionToggle={(emoji) => void handleReactPost(p.id, emoji)}
               />
@@ -215,7 +220,7 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
       <Dialog
         open={selectedPostId !== null}
         onOpenChange={(open) => {
-          if (!open) setSelectedPostId(null);
+          if (!open) closePost();
         }}
         ariaLabel="Detalle de la publicación"
         maxWidthClass="max-w-5xl"
@@ -224,7 +229,7 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
         {selectedPostId ? (
           <PostDetailView
             postId={selectedPostId}
-            onClose={() => setSelectedPostId(null)}
+            onClose={closePost}
             onChanged={() => void reload({ sort })}
           />
         ) : null}

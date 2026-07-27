@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { consumeIntendedPath } from '@/lib/post-login-redirect';
 import { invalidateCommunitySpacesCache } from '@/modules/community';
 import { buildOidcStartUrl, buildWpSsoTryUrl, fetchOidcStatus, fetchWpSsoStatus } from '@/lib/sso';
 import { useTenantContext } from '@/lib/tenant-context';
@@ -119,12 +120,16 @@ export function SignInForm() {
       // post-login, así que pedimos que recoja el branding (logo) ahora mismo.
       requestThemeRefresh();
       if (response.mfaRequired) {
+        // El destino pendiente (deep link) NO se consume acá: lo consumirá el
+        // form de verificación MFA al completar el segundo factor.
         router.push(response.user.mfaEnabled ? '/mfa/verify' : '/mfa/setup');
       } else if (response.user.onboardingCompletedAt === null) {
-        // Usuario que aún no completó el onboarding de primera vez.
+        // Ídem: el onboarding lo consume al terminar.
         router.push('/onboarding');
       } else {
-        router.push('/');
+        // Deep link guardado antes del redirect a /signin (p. ej. enlace
+        // compartido de un post de la comunidad) → volvemos ahí.
+        router.push(consumeIntendedPath() ?? '/');
       }
     } catch (e) {
       if (e instanceof ApiHttpError) {

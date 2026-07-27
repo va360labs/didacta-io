@@ -9,6 +9,9 @@
  * En server-side (RSC, server actions) llamamos directo a la API por loopback.
  */
 
+// Lib hoja sin dependencias — no acopla el cliente HTTP a nada más.
+import { rememberIntendedPath } from './post-login-redirect';
+
 const API_URL =
   typeof window === 'undefined' ? (process.env.API_INTERNAL_URL ?? 'http://localhost:4000') : '';
 
@@ -71,6 +74,9 @@ function clearAuthAndRedirect(): void {
     /* almacenamiento no disponible */
   }
   if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/signin')) {
+    // Sesión expirada a mitad de navegación: recordamos dónde estaba el usuario
+    // para devolverlo ahí tras re-autenticarse.
+    rememberIntendedPath(window.location.pathname + window.location.search);
     window.location.assign('/signin');
   }
 }

@@ -6,6 +6,8 @@
  * Devuelve `null` cuando la notificación no tiene una acción de navegación
  * asociada (p. ej. avisos de sistema) — el consumidor la muestra sin enlace.
  */
+import { postPath } from './post-link';
+
 export interface NotificationLink {
   href: string;
   actionLabel: string;
@@ -28,7 +30,7 @@ export function notificationLink(
       if (!postId) return null;
       const commentId = str(meta.commentId);
       return {
-        href: commentId ? `/comunidad/${postId}?comment=${commentId}` : `/comunidad/${postId}`,
+        href: postPath(postId, { commentId: commentId ?? undefined }),
         actionLabel: 'Responder',
       };
     }
@@ -38,7 +40,7 @@ export function notificationLink(
       if (!postId) return null;
       const focusId = str(meta.parentCommentId) ?? str(meta.commentId);
       return {
-        href: focusId ? `/comunidad/${postId}?comment=${focusId}` : `/comunidad/${postId}`,
+        href: postPath(postId, { commentId: focusId ?? undefined }),
         actionLabel: 'Responder',
       };
     }
@@ -46,7 +48,7 @@ export function notificationLink(
       if (!postId) return null;
       const commentId = str(meta.commentId);
       return {
-        href: commentId ? `/comunidad/${postId}?comment=${commentId}` : `/comunidad/${postId}`,
+        href: postPath(postId, { commentId: commentId ?? undefined }),
         actionLabel: 'Ver',
       };
     }

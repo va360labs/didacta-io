@@ -19,6 +19,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { authStorage } from '@/lib/auth-storage';
+import { consumeIntendedPath } from '@/lib/post-login-redirect';
 
 export function OidcCallbackHandler() {
   const router = useRouter();
@@ -65,7 +66,10 @@ export function OidcCallbackHandler() {
       window.history.replaceState(null, '', '/auth/callback');
     }
 
-    router.replace('/');
+    // Deep link pendiente (enlace compartido que forzó el login SSO/WP-SSO):
+    // el roundtrip por el IdP ocurre en la misma pestaña, así que el valor
+    // guardado en sessionStorage sobrevive y volvemos a la ruta original.
+    router.replace(consumeIntendedPath() ?? '/');
   }, [params, router]);
 
   if (errorMessage) {

@@ -13,6 +13,7 @@ import { NotificationsToaster } from '@/components/notifications-toaster';
 import { MessagingProvider } from '@/components/messaging-provider';
 import { MessagesHeaderLink } from '@/components/messages-header-link';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
+import { clearIntendedPath, rememberIntendedPath } from '@/lib/post-login-redirect';
 import { meApi } from '@/lib/me';
 import { formatTenantName } from '@/lib/tenant-name';
 import { useTenantContext } from '@/lib/tenant-context';
@@ -52,6 +53,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     const current = authStorage.getSession();
     if (!current) {
+      // Deep link (p. ej. enlace compartido de un post): guardamos la ruta que
+      // intentaba abrir para volver a ella al completar el login.
+      rememberIntendedPath(window.location.pathname + window.location.search);
       router.replace('/signin');
       return;
     }
@@ -60,6 +64,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     // seguridad limpia la sesión y redirige a /signin → el nuevo login ya viene
     // sin el flag, así que no hay bucle.
     if (current.user.mustChangePassword && pathname !== ACCOUNT_PATH) {
+      // El gate desvía la navegación: re-guardamos el destino pedido para que
+      // sobreviva al ciclo cambio-de-contraseña → re-login y se abra al final.
+      rememberIntendedPath(window.location.pathname + window.location.search);
       router.replace(CHANGE_PASSWORD_REDIRECT);
       return;
     }
@@ -70,6 +77,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     // backfill), de modo que también se gatea a quienes NO entran por primera
     // vez. Solo se libera al completar el onboarding (timestamp truthy).
     if (!current.user.onboardingCompletedAt) {
+      // Ídem: el asistente de onboarding consume este destino al terminar.
+      // Cubre también el login SSO/WP-SSO, cuya sesión no trae el flag y pasa
+      // SIEMPRE por este gate antes de llegar al deep link.
+      rememberIntendedPath(window.location.pathname + window.location.search);
       router.replace('/onboarding');
       return;
     }
@@ -93,6 +104,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   function logout() {
     const tenantId = session?.user.tenantId;
     authStorage.clear();
+    // Un destino pendiente huérfano no debe redirigir al próximo login de esta
+    // pestaña (posiblemente otro usuario) al post que miraba el anterior.
+    clearIntendedPath();
     // Evita que el cache en memoria de espacios de un tenant se filtre al
     // siguiente login (navegación SPA sin recargar).
     invalidateCommunitySpacesCache();

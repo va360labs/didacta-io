@@ -148,7 +148,10 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
     await expect
       .poll(async () => (await stats()).clicks, { timeout: 20_000 })
       .toBeGreaterThanOrEqual(1);
-    const stored = await page.evaluate(() => window.localStorage.getItem('didacta.referral'));
+    // Forma string: el tsconfig de e2e no incluye lib DOM (lib=['ES2023']).
+    const stored = await page.evaluate<string | null>(
+      "window.localStorage.getItem('didacta.referral')",
+    );
     expect(stored, 'código persistido en localStorage').toContain(code);
 
     // ── 4. Checkout completado CON referralCode en metadata → atribución ──

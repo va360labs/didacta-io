@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { consumeIntendedPath } from '@/lib/post-login-redirect';
 import { LOCALE_OPTIONS, meApi, TIMEZONE_OPTIONS, type NotificationPreference } from '@/lib/me';
 import { useTenantContext } from '@/lib/tenant-context';
 import { communityApi } from '@/modules/community';
@@ -54,8 +55,16 @@ export default function OnboardingPage() {
         const p = await meApi.getProfile(token);
         if (cancelled) return;
         if (p.onboardingCompletedAt) {
-          // Ya lo completó: no se repite el onboarding.
-          router.replace('/inicio');
+          // Ya lo completó: no se repite el onboarding. Parcheamos la sesión
+          // local con el flag (las sesiones SSO no lo traen) para que el gate
+          // del shell no vuelva a mandar aquí en bucle, y si venía de un deep
+          // link (enlace compartido), volvemos ahí.
+          const session = authStorage.getSession();
+          if (session && !session.user.onboardingCompletedAt) {
+            session.user.onboardingCompletedAt = p.onboardingCompletedAt;
+            authStorage.saveSession(session);
+          }
+          router.replace(consumeIntendedPath() ?? '/inicio');
           return;
         }
         setEmail(p.email);
@@ -138,7 +147,8 @@ export default function OnboardingPage() {
         session.user.avatarUrl = avatarUrl;
         authStorage.saveSession(session);
       }
-      router.replace('/inicio');
+      // Deep link pendiente de antes del login (enlace compartido) → ahí.
+      router.replace(consumeIntendedPath() ?? '/inicio');
     } catch (e) {
       setError(
         e instanceof ApiHttpError
