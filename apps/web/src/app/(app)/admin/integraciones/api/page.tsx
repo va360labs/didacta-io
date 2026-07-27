@@ -154,12 +154,12 @@ export default function IntegracionApiPage() {
   const nothingPicked = pickedGroups.length === 0 && pickedCourses.length === 0;
 
   const communityCurl = useMemo(() => {
-    const tag = spaces[0]?.slug ?? 'general';
+    const space = spaces[0]?.slug ?? 'general';
     const body = JSON.stringify({
       title: 'Novedades de la semana',
       body: 'Esta semana hemos publicado…',
-      tags: [tag],
-      notifyAll: false,
+      space,
+      notifyAll: true,
     });
     return (
       `curl -X POST ${baseUrl}/api/v1/community-api/posts \\\n` +
@@ -464,10 +464,10 @@ export default function IntegracionApiPage() {
                   <td className="py-2">1–10.000 caracteres; se renderiza como un post normal.</td>
                 </tr>
                 <tr>
-                  <td className="py-2 pr-3 font-mono text-xs">tags</td>
-                  <td className="py-2 pr-3">string[] · opcional</td>
+                  <td className="py-2 pr-3 font-mono text-xs">space</td>
+                  <td className="py-2 pr-3">string · opcional</td>
                   <td className="py-2">
-                    Máx. 10. Usa el tag de un espacio para publicar en ese espacio
+                    Slug del espacio donde publicar (422 si no existe; sin él va a «general»)
                     {spaces.length > 0 ? (
                       <>
                         {' '}
@@ -482,14 +482,24 @@ export default function IntegracionApiPage() {
                         ))}
                       </>
                     ) : null}
+                    . También por API:{' '}
+                    <code className="rounded bg-surface-2 px-1 font-mono text-xs">
+                      GET /api/v1/community-api/spaces
+                    </code>
                     .
                   </td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-3 font-mono text-xs">tags</td>
+                  <td className="py-2 pr-3">string[] · opcional</td>
+                  <td className="py-2">Tags adicionales (máx. 10; el espacio ya va como tag).</td>
                 </tr>
                 <tr>
                   <td className="py-2 pr-3 font-mono text-xs">notifyAll</td>
                   <td className="py-2 pr-3">boolean · opcional</td>
                   <td className="py-2">
-                    Además de publicar, avisa por email + campana a TODOS los miembros.
+                    Con <code className="rounded bg-surface-2 px-1 font-mono text-xs">true</code>,
+                    además de publicar envía el aviso por EMAIL + campana a TODOS los miembros.
                   </td>
                 </tr>
                 <tr>

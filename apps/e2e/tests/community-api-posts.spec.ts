@@ -34,7 +34,22 @@ test.describe('Comunidad — publicación por API key', () => {
       scopes: ['enrollments:write'],
     });
 
-    // ── 2. Publicar por API → post firmado por el dueño de la key ──
+    // ── 2. Espacio real del tenant + descubrimiento vía GET /spaces ──
+    const spaceSlug = `e2e-espacio-${stamp}`;
+    const spaceRes = await fetch(`${API_URL}/api/v1/modules/community/spaces`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ slug: spaceSlug, title: `Espacio E2E ${stamp}` }),
+    });
+    expect(spaceRes.status, 'crear espacio').toBe(201);
+    const discovered = await fetch(`${API_URL}/api/v1/community-api/spaces`, {
+      headers: { Authorization: `ApiKey ${goodKey.token}` },
+    });
+    expect(discovered.status, 'GET /community-api/spaces').toBe(200);
+    const { spaces } = (await discovered.json()) as { spaces: Array<{ slug: string }> };
+    expect(spaces.some((s) => s.slug === spaceSlug)).toBe(true);
+
+    // ── 3. Publicar por API en ESE espacio y con aviso a todos ──
     const title = `Post por API E2E ${stamp}`;
     const created = await fetch(`${API_URL}/api/v1/community-api/posts`, {
       method: 'POST',
@@ -45,7 +60,9 @@ test.describe('Comunidad — publicación por API key', () => {
       body: JSON.stringify({
         title,
         body: 'Publicado desde una integración externa (spec E2E).',
-        tags: ['general'],
+        space: spaceSlug,
+        tags: ['anuncio'],
+        notifyAll: true,
       }),
     });
     expect(created.status, 'POST /community-api/posts').toBe(201);
@@ -54,8 +71,47 @@ test.describe('Comunidad — publicación por API key', () => {
       title: string;
       source: string;
       authorId: string;
+      tags: string[];
     };
     expect(post.source).toBe('api');
+    // El espacio va como PRIMER tag (convenio del composer web) + tags extra.
+    expect(post.tags[0]).toBe(spaceSlug);
+    expect(post.tags).toContain('anuncio');
+
+    // El post aparece en el FEED DEL ESPACIO (filtro por su tag).
+    const spaceFeed = await fetch(
+      `${API_URL}/api/v1/modules/community/posts?tag=${spaceSlug}&limit=50`,
+      { headers: { Authorization: `Bearer ${adminToken}` } },
+    );
+    const spacePosts = (await spaceFeed.json()) as Array<{ id: string }>;
+    expect(
+      spacePosts.some((p) => p.id === post.id),
+      'post visible en el espacio',
+    ).toBe(true);
+
+    // notifyAll creó el aviso masivo (email + campana) — visible para el admin.
+    const broadcasts = await fetch(`${API_URL}/api/v1/modules/community/broadcasts`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(broadcasts.status).toBe(200);
+    const broadcastList = (await broadcasts.json()) as Array<{ subject: string }>;
+    expect(
+      broadcastList.some((b) => b.subject === title),
+      'broadcast del notifyAll creado',
+    ).toBe(true);
+
+    // Espacio inexistente → 422 con los slugs válidos en el mensaje.
+    const badSpace = await fetch(`${API_URL}/api/v1/community-api/posts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `ApiKey ${goodKey.token}`,
+      },
+      body: JSON.stringify({ title: 'No entra', body: 'x', space: 'no-existe' }),
+    });
+    expect(badSpace.status, 'espacio inexistente').toBe(422);
+    const badBody = (await badSpace.json()) as { message: string };
+    expect(badBody.message).toContain(spaceSlug);
 
     // El post está en el feed y el filtro source=api lo encuentra.
     const feed = await fetch(`${API_URL}/api/v1/modules/community/posts?source=api&limit=100`, {
@@ -66,7 +122,7 @@ test.describe('Comunidad — publicación por API key', () => {
     expect(apiPosts.some((p) => p.id === post.id)).toBe(true);
     expect(apiPosts.every((p) => p.source === 'api')).toBe(true);
 
-    // ── 3. Key sin scope → 403 ──
+    // ── 4. Key sin scope → 403 ──
     const forbidden = await fetch(`${API_URL}/api/v1/community-api/posts`, {
       method: 'POST',
       headers: {
@@ -77,7 +133,7 @@ test.describe('Comunidad — publicación por API key', () => {
     });
     expect(forbidden.status, 'key sin community:post').toBe(403);
 
-    // ── 4. Auditoría en el admin (UI) ──
+    // ── 5. Auditoría en el admin (UI) ──
     const session = await signin({
       tenantSlug: TENANT_SLUG,
       email: process.env.E2E_ADMIN_EMAIL!,

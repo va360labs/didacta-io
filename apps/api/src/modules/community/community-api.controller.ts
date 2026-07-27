@@ -2,12 +2,15 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
   Post,
   UnauthorizedException,
+  UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
-import { createPostSchema, type CreatePostDto } from '@didacta/mod-community';
+import { z } from 'zod';
+import { createPostSchema } from '@didacta/mod-community';
 import { JwtOrApiKeyGuard } from '../../auth/api-key.guard';
 import { ApiScopeGuard } from '../../auth/api-scope.guard';
 import { RequireApiScopes } from '../../auth/api-scope.decorator';
@@ -19,6 +22,22 @@ import { ModuleRegistryService } from '../module-registry.service';
 import { CommunityBroadcastWorker } from './community-broadcast.worker';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
+
+/**
+ * Body del endpoint externo: el de la UI + `space` EXPLÍCITO (slug del
+ * espacio). Se valida contra los espacios reales del tenant y se convierte en
+ * el PRIMER tag del post — el mismo convenio que usa el composer de la web
+ * (el feed de un espacio filtra por su slug como tag).
+ */
+const apiCreatePostSchema = createPostSchema.extend({
+  space: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9][a-z0-9-]{0,59}$/)
+    .optional(),
+});
+type ApiCreatePostDto = z.infer<typeof apiCreatePostSchema>;
 
 /**
  * API EXTERNA de la comunidad (integradores: n8n, Zapier, scripts…).
@@ -42,17 +61,48 @@ export class CommunityApiController {
     private readonly broadcast: CommunityBroadcastWorker,
   ) {}
 
+  @Get('spaces')
+  @ApiOperation({
+    summary: 'Listar los espacios de la comunidad (para elegir dónde publicar)',
+    description:
+      'Devuelve los espacios reales del tenant con su `slug` — el valor que se pasa en el ' +
+      'campo `space` de POST /community-api/posts. Requiere scope `community:post`.',
+  })
+  @ApiResponse({
+    status: 200,
+    schema: {
+      type: 'object',
+      properties: {
+        spaces: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              slug: { type: 'string', example: 'general' },
+              title: { type: 'string', example: 'General' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async listSpaces(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    const spaces = await this.registry.getCommunityService().listSpaces(user.tenantId);
+    return { spaces: spaces.map((s) => ({ slug: s.slug, title: s.title })) };
+  }
+
   @Post('posts')
   @ApiOperation({
     summary: 'Publicar en la comunidad con API key (autor = dueño de la key)',
     description:
       'Crea un post en el feed de la comunidad firmado por el usuario dueño de la API key. ' +
-      'El dueño debe ser admin (super_admin/tenant_admin) del tenant. Para colocar el post en ' +
-      'un espacio, incluye su tag en `tags` (los espacios filtran por tag). Con `notifyAll` ' +
-      'se avisa además por email + campana a todos los miembros (`important` ignora las bajas ' +
-      'de avisos). Requiere una API key con scope `community:post` en el header ' +
-      '`Authorization: ApiKey lmsk_…`. El post queda marcado con origen API y es auditable ' +
-      'en /admin/comunidad/publicaciones-api.',
+      'El dueño debe ser admin (super_admin/tenant_admin) del tenant. `space` elige el ' +
+      'espacio (slug de GET /community-api/spaces; 422 si no existe; sin él, el post va al ' +
+      'espacio "general" si existe). Con `notifyAll: true` se avisa además por EMAIL + ' +
+      'campana a todos los miembros (`important` ignora las bajas de avisos). Requiere una ' +
+      'API key con scope `community:post` en el header `Authorization: ApiKey lmsk_…`. El ' +
+      'post queda marcado con origen API y es auditable en /admin/comunidad/publicaciones-api.',
   })
   @ApiBody({
     schema: {
@@ -66,12 +116,19 @@ export class CommunityApiController {
           maxLength: 10_000,
           example: 'Esta semana hemos publicado…',
         },
+        space: {
+          type: 'string',
+          description:
+            'Slug del espacio donde publicar (GET /community-api/spaces). 422 si no existe. ' +
+            'Por defecto: "general" (si el tenant lo tiene).',
+          example: 'general',
+        },
         tags: {
           type: 'array',
           items: { type: 'string', maxLength: 40 },
           maxItems: 10,
-          description: 'Tags del post. Usa el tag de un espacio para publicarlo en ese espacio.',
-          example: ['general'],
+          description: 'Tags ADICIONALES del post (el espacio ya va como primer tag).',
+          example: ['anuncio'],
         },
         courseId: {
           type: 'string',
@@ -95,10 +152,14 @@ export class CommunityApiController {
     status: 403,
     description: 'La key no tiene el scope `community:post` o su dueño ya no es admin.',
   })
+  @ApiResponse({
+    status: 422,
+    description: 'El `space` indicado no existe (la respuesta lista los slugs válidos).',
+  })
   @ApiResponse({ status: 429, description: 'Límite de peticiones superado.' })
   async createPost(
     @CurrentUser() user: SessionClaims | undefined,
-    @Body(new ZodValidationPipe(createPostSchema)) dto: CreatePostDto,
+    @Body(new ZodValidationPipe(apiCreatePostSchema)) dto: ApiCreatePostDto,
   ) {
     if (!user) throw new UnauthorizedException();
 
@@ -122,7 +183,34 @@ export class CommunityApiController {
 
     const author = { id: user.sub, displayName: owner.name ?? owner.email ?? null };
     const svc = this.registry.getCommunityService();
-    const post = await svc.createPost(user.tenantId, author, dto, 'api');
+
+    // Espacio destino → PRIMER tag (convenio del composer web). Con `space`
+    // explícito validamos contra los espacios reales; sin él caemos al
+    // espacio "general" si el tenant lo tiene (default de la UI).
+    const spaces = await svc.listSpaces(user.tenantId);
+    let spaceSlug: string | null = null;
+    if (dto.space) {
+      const match = spaces.find((s) => s.slug === dto.space);
+      if (!match) {
+        throw new UnprocessableEntityException(
+          `El espacio "${dto.space}" no existe. Espacios válidos: ${
+            spaces.map((s) => s.slug).join(', ') ||
+            '(ninguno — créalos en /admin/comunidad/espacios)'
+          }. Consulta GET /community-api/spaces.`,
+        );
+      }
+      spaceSlug = match.slug;
+    } else {
+      spaceSlug = spaces.find((s) => s.slug === 'general')?.slug ?? null;
+    }
+    const { space: _space, ...postInput } = dto;
+    const finalTags = [...new Set([...(spaceSlug ? [spaceSlug] : []), ...(dto.tags ?? [])])];
+    const post = await svc.createPost(
+      user.tenantId,
+      author,
+      { ...postInput, tags: finalTags },
+      'api',
+    );
 
     // Mismo comportamiento que la UI: notifyAll crea el broadcast (email +
     // campana). El dueño ya está verificado como admin.
