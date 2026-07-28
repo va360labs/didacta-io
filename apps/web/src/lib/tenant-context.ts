@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from './api-client';
+import { authStorage } from './auth-storage';
+import { formatTenantName } from './tenant-name';
 
 export interface TenantContextResponse {
   tenant: { id: string; slug: string; name: string; logoUrl: string | null } | null;
@@ -77,4 +79,28 @@ export function useTenantContext(): {
   }, []);
 
   return { loading, tenant };
+}
+
+/**
+ * Nombre de la organización tal y como debe mostrarse en la UI.
+ *
+ * Misma resolución que el shell autenticado (`(app)/layout.tsx`): nombre REAL
+ * del tenant resuelto por host y, si aún no ha cargado o el dominio no está
+ * mapeado, el slug de la sesión title-cased. Nunca devuelve cadena vacía, así
+ * que se puede interpolar directamente en un título sin dejar un hueco.
+ *
+ * Devolver un fallback en lugar de `null` es deliberado: estos textos ("Otros
+ * cursos de X") se leerían mal a medias mientras carga.
+ */
+export function useTenantDisplayName(): string {
+  const { tenant } = useTenantContext();
+  const [slug, setSlug] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSlug(authStorage.getSession()?.user.tenantSlug ?? null);
+  }, []);
+
+  const real = tenant?.name?.trim();
+  if (real) return real;
+  return slug ? formatTenantName(slug) : 'la organización';
 }
