@@ -197,7 +197,10 @@ export class PasswordResetService {
     args: { email: string; tenantSlug?: string; resolvedTenantId?: string },
     webBaseUrl: string,
     ctx: ClientContext = NO_CLIENT_CONTEXT,
-    opts: { allowPending?: boolean } = {},
+    // `ttlMinutes` se propaga a `request`: el alta de un alumno necesita un
+    // enlace que dure días, no los 60 minutos de un reset que el usuario acaba
+    // de pedir. Sin este paso la opción existía pero no era alcanzable.
+    opts: { allowPending?: boolean; ttlMinutes?: number } = {},
   ): Promise<void> {
     const result = await this.request(args, ctx, opts);
     if (!result) return;

@@ -10,6 +10,9 @@ import { PasswordResetService } from '../auth/password-reset.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 
+/** Validez del enlace de invitación: 7 días. Ver `resendInvite`. */
+const INVITE_TTL_MINUTES = 7 * 24 * 60;
+
 const NO_CTX: ClientContext = { ip: null, userAgent: null };
 
 /**
@@ -242,7 +245,7 @@ export class AdminUsersService {
           { email: dto.email, resolvedTenantId: tenantId },
           webBaseUrl,
           ctx,
-          { allowPending: true },
+          { allowPending: true, ttlMinutes: INVITE_TTL_MINUTES },
         );
       } catch (err) {
         this.logger.warn(
@@ -392,11 +395,16 @@ export class AdminUsersService {
 
     // `allowPending: true` porque el use case típico de resend es justo para
     // users PENDING que no recibieron el primer email. Ver CORE-FIX-03.
+    //
+    // TTL de 7 días, no los 60 minutos del reset normal: esto es un enlace de
+    // ALTA, no una petición que el usuario acaba de hacer. Nadie abre el correo
+    // de bienvenida en la hora siguiente a recibirlo, y un enlace caducado en
+    // una campaña de invitación significa perder al alumno en la puerta.
     await this.passwordReset.requestAndSendEmail(
       { email: user.email, resolvedTenantId: tenantId },
       webBaseUrl,
       ctx,
-      { allowPending: true },
+      { allowPending: true, ttlMinutes: INVITE_TTL_MINUTES },
     );
 
     await this.auditLog.record({
