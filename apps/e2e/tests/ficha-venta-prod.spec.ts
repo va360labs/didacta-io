@@ -56,7 +56,9 @@ test.describe('PROD · ficha de venta del curso', () => {
 
     // Caja de acceso total con enlace a la membresía.
     await expect(page.getByText('Acceso total', { exact: false })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Ver membresías' })).toHaveAttribute(
+    // Hay DOS enlaces a la membresía a propósito (la caja de arriba y el bloque
+    // bloqueado de abajo), así que se compara el de la caja de forma exacta.
+    await expect(page.getByRole('link', { name: 'Ver membresías', exact: true })).toHaveAttribute(
       'href',
       '/unete',
     );
