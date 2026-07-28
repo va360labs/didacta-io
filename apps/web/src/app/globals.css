@@ -698,3 +698,26 @@ table,
   padding-top: 0 !important;
   padding-bottom: 0 !important;
 }
+
+/* Caja "Acceso total" de la ficha de curso — dorado de marca, el mismo del
+ * botón de referidos, para que la oferta premium se lea como premium y no como
+ * una advertencia. Sin animación: aquí compite con el precio del curso y el
+ * brillo giratorio distraería. */
+.acceso-total-card {
+  border-color: #e5b94e;
+  background: linear-gradient(180deg, #fffaec 0%, #fdf3d6 100%);
+}
+
+.acceso-total-eyebrow {
+  color: #8a5c08;
+}
+
+.acceso-total-cta {
+  color: #3b2b00;
+  background: linear-gradient(180deg, #f9e7a0 0%, #eec95c 55%, #d9a92f 100%);
+  box-shadow: 0 1px 2px rgba(138, 92, 8, 0.25);
+}
+
+.acceso-total-cta:hover {
+  background: linear-gradient(180deg, #fbeeb8 0%, #f2d478 55%, #e0b43c 100%);
+}

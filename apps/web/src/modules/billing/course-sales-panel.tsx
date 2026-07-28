@@ -51,27 +51,7 @@ export function CourseSalesPanel({ courseId }: { courseId: string }) {
               protagonismo pasa a la rejilla de abajo y esta caja no se pinta. */}
           {opciones.length === 1 ? <CajaPrecio courseId={courseId} opcion={opciones[0]!} /> : null}
 
-          {plan ? (
-            <Card className="border-warning-200 bg-warning-50/60">
-              <CardContent className="space-y-3 p-6">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-warning-800">
-                  <Icon name="sparkles" size={14} />
-                  Acceso total
-                </div>
-                <p className="text-sm text-text">
-                  Desbloquea <strong>todos los cursos</strong> por{' '}
-                  <strong>{formatCents(plan.amountCents, 'eur')}</strong>{' '}
-                  {periodo(plan.intervalMonths)}.
-                </p>
-                <Link
-                  href="/unete"
-                  className="inline-flex w-full items-center justify-center rounded-lg bg-warning-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-warning-700"
-                >
-                  Ver membresías
-                </Link>
-              </CardContent>
-            </Card>
-          ) : null}
+          {plan ? <CajaAccesoTotal plan={plan} /> : null}
 
           {offer !== null && opciones.length === 0 && !plan ? (
             <Card>
@@ -102,6 +82,43 @@ export function CourseSalesPanel({ courseId }: { courseId: string }) {
         </section>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Oferta de la membresía dentro de la ficha de un curso.
+ *
+ * Enseña el precio de ENTRADA (el plan más barato de todos, que es el mensual),
+ * no el del plan destacado: el objetivo aquí no es vender el plan óptimo sino
+ * que el alumno vea que acceder a todo cuesta menos que este curso suelto. El
+ * detalle de los tres planes ya lo da /unete.
+ *
+ * Va en dorado de marca, no en el coral de "warning": es una oferta premium y
+ * el coral la hacía parecer una advertencia.
+ */
+function CajaAccesoTotal({ plan }: { plan: { amountCents: number; intervalMonths: number } }) {
+  return (
+    <Card className="acceso-total-card">
+      <CardContent className="space-y-3 p-6">
+        <div className="acceso-total-eyebrow flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+          <Icon name="sparkles" size={14} />
+          Acceso total
+        </div>
+        <p className="text-sm text-text">
+          Accede a <strong>todos los cursos</strong> desde{' '}
+          <strong>{formatCents(plan.amountCents, 'eur')}</strong> {periodo(plan.intervalMonths)}.
+        </p>
+        <Link
+          href="/unete"
+          className="acceso-total-cta inline-flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors"
+        >
+          Ver membresías
+        </Link>
+        <p className="text-center text-xs text-text-muted">
+          Cancela cuando quieras, sin permanencia
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -250,16 +267,16 @@ function Beneficio({ texto }: { texto: string }) {
   );
 }
 
-/** Plan a destacar en la caja de acceso total: el marcado por el admin, o el más barato al mes. */
+/**
+ * Plan que se muestra como precio de entrada: el de importe MÁS BAJO de todos
+ * (normalmente el mensual). Es el "desde X" que hace la oferta comparable con
+ * el precio del curso suelto; elegir el destacado enseñaría el anual y la
+ * membresía parecería más cara que comprar el curso.
+ */
 function destacado(page: MembershipPage | null) {
   const planes = page?.plans ?? [];
   if (planes.length === 0) return null;
-  return (
-    planes.find((p) => p.isFeatured) ??
-    [...planes].sort(
-      (a, b) => a.amountCents / (a.intervalMonths || 1) - b.amountCents / (b.intervalMonths || 1),
-    )[0]
-  );
+  return [...planes].sort((a, b) => a.amountCents - b.amountCents)[0]!;
 }
 
 function periodo(meses: number): string {
