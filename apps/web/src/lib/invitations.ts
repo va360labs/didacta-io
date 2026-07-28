@@ -17,6 +17,7 @@ export interface InvitationsSummary {
   invitados: number;
   activadosTrasInvitacion: number;
   sinInvitar: number;
+  pendientesSinAcceso: number;
   tasaConversion: number | null;
 }
 
@@ -28,6 +29,8 @@ export interface InvitationRow {
   invitedAt: string | null;
   lastLoginAt: string | null;
   envios: number;
+  /** Grupos de acceso a los que pertenece: lo que verá al entrar. */
+  grupos: string[];
 }
 
 export interface InvitationsPage {
@@ -45,7 +48,7 @@ export interface BatchResult {
   pendientesRestantes: number;
 }
 
-export type InvitationFilter = 'invitados' | 'activados' | 'sin-enviar';
+export type InvitationFilter = 'invitados' | 'activados' | 'sin-enviar' | 'sin-acceso';
 
 const BASE = '/api/v1/admin/invitations';
 

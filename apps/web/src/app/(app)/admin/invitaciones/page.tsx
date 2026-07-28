@@ -109,7 +109,12 @@ export default function AdminInvitacionesPage() {
           }
         />
         <Metrica valor={summary?.sinInvitar} etiqueta="Sin invitar todavía" />
-        <Metrica valor={summary?.pendientes} etiqueta="Pendientes de activar" />
+        <Metrica
+          valor={summary?.pendientesSinAcceso}
+          etiqueta="Sin ningún curso asignado"
+          detalle="Entrarían a un aula vacía"
+          alerta={(summary?.pendientesSinAcceso ?? 0) > 0}
+        />
       </div>
 
       {/* Envío por lotes */}
@@ -190,6 +195,9 @@ export default function AdminInvitacionesPage() {
           <Filtro actual={filtro} valor="sin-enviar" onSelect={setFiltro}>
             Sin invitar
           </Filtro>
+          <Filtro actual={filtro} valor="sin-acceso" onSelect={setFiltro}>
+            Sin acceso
+          </Filtro>
         </div>
         <div className="flex-1">
           <Input
@@ -221,6 +229,7 @@ export default function AdminInvitacionesPage() {
                   <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-text-muted">
                     <th className="px-5 py-3 font-semibold">Alumno</th>
                     <th className="px-5 py-3 font-semibold">Estado</th>
+                    <th className="px-5 py-3 font-semibold">Qué verá al entrar</th>
                     <th className="px-5 py-3 font-semibold">Invitado</th>
                     <th className="px-5 py-3 font-semibold">Último acceso</th>
                     <th className="px-5 py-3 text-right font-semibold">Envíos</th>
@@ -242,6 +251,32 @@ export default function AdminInvitacionesPage() {
                           <span className="rounded-full bg-bg-subtle px-2 py-0.5 text-xs font-semibold text-text-muted">
                             Pendiente
                           </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        {u.grupos.length === 0 ? (
+                          <span className="rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700">
+                            Sin ningún curso
+                          </span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {u.grupos.slice(0, 3).map((g) => (
+                              <span
+                                key={g}
+                                className="rounded-full bg-bg-subtle px-2 py-0.5 text-xs text-text-muted"
+                              >
+                                {g}
+                              </span>
+                            ))}
+                            {u.grupos.length > 3 ? (
+                              <span
+                                className="rounded-full bg-bg-subtle px-2 py-0.5 text-xs text-text-muted"
+                                title={u.grupos.join(', ')}
+                              >
+                                +{u.grupos.length - 3}
+                              </span>
+                            ) : null}
+                          </div>
                         )}
                       </td>
                       <td className="px-5 py-3 text-text-muted">{fecha(u.invitedAt)}</td>
@@ -270,15 +305,19 @@ function Metrica({
   valor,
   etiqueta,
   detalle,
+  alerta = false,
 }: {
   valor: number | undefined;
   etiqueta: string;
   detalle?: string;
+  alerta?: boolean;
 }) {
   return (
-    <Card>
+    <Card className={alerta ? 'border-danger-200' : undefined}>
       <CardContent className="p-5">
-        <div className="font-display text-2xl font-bold tracking-tight text-text">
+        <div
+          className={`font-display text-2xl font-bold tracking-tight ${alerta ? 'text-danger-700' : 'text-text'}`}
+        >
           {valor === undefined ? <span className="skeleton inline-block h-7 w-14" /> : valor}
         </div>
         <div className="mt-1 text-sm text-text-muted">{etiqueta}</div>

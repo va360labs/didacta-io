@@ -21,7 +21,7 @@ import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { InvitationsService } from './invitations.service';
 
 const listQuerySchema = z.object({
-  filtro: z.enum(['invitados', 'activados', 'sin-enviar']).optional(),
+  filtro: z.enum(['invitados', 'activados', 'sin-enviar', 'sin-acceso']).optional(),
   search: z.string().trim().max(200).optional(),
   page: z.coerce.number().int().min(1).max(10000).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -75,7 +75,8 @@ export class InvitationsController {
 
   @Get()
   @ApiOperation({
-    summary: 'Listado de invitaciones con su estado (filtros: invitados | activados | sin-enviar).',
+    summary:
+      'Listado de invitaciones con su estado (filtros: invitados | activados | sin-enviar | sin-acceso).',
   })
   async list(
     @CurrentUser() user: SessionClaims | undefined,

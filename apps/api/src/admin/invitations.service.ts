@@ -29,7 +29,7 @@ export class InvitationsService {
   ) {}
 
   async summary(tenantId: string): Promise<InvitationsSummary> {
-    const [totales, invitadosRows] = await Promise.all([
+    const [totales, invitadosRows, sinAccesoRows] = await Promise.all([
       this.prisma.user.groupBy({
         by: ['status'],
         where: { tenantId, deletedAt: null },
@@ -42,6 +42,17 @@ export class InvitationsService {
           AND u.deleted_at IS NULL
           AND EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)
         GROUP BY u.status
+      `,
+      this.prisma.$queryRaw<Array<{ total: bigint }>>`
+        SELECT COUNT(*)::bigint AS total
+        FROM "user" u
+        WHERE u.tenant_id = ${tenantId}::uuid
+          AND u.deleted_at IS NULL
+          AND u.status = 'PENDING'
+          AND NOT EXISTS (
+            SELECT 1 FROM mod_access_groups_group_member m
+            WHERE m.user_id = u.id AND m.status = 'ACTIVE'
+          )
       `,
     ]);
 
@@ -65,6 +76,7 @@ export class InvitationsService {
       // activos de antes de la campaña no inflan el resultado.
       activadosTrasInvitacion: invitadosActivados,
       sinInvitar: pendientes - (invitados['PENDING'] ?? 0),
+      pendientesSinAcceso: Number(sinAccesoRows[0]?.total ?? 0),
       tasaConversion:
         invitadosTotal > 0 ? Math.round((invitadosActivados / invitadosTotal) * 100) : null,
     };
@@ -75,11 +87,13 @@ export class InvitationsService {
    *  - `invitados`  → ya recibieron la invitación (activados o no)
    *  - `activados`  → invitados que ya entraron
    *  - `sin-enviar` → pendientes a los que aún no se les ha escrito
+   *  - `sin-acceso` → pendientes que no están en NINGÚN grupo: si se les invita
+   *    entrarían a un aula vacía, así que conviene revisarlos antes de escribir
    */
   async list(
     tenantId: string,
     opts: {
-      filtro?: 'invitados' | 'activados' | 'sin-enviar';
+      filtro?: 'invitados' | 'activados' | 'sin-enviar' | 'sin-acceso';
       search?: string;
       page?: number;
       limit?: number;
@@ -100,11 +114,13 @@ export class InvitationsService {
     // El WHERE cambia con el filtro; se construye con fragmentos parametrizados
     // (nunca interpolando el término de búsqueda) para no abrir un inyectable.
     const condicionFiltro =
-      filtro === 'sin-enviar'
-        ? `u.status = 'PENDING' AND NOT EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)`
-        : filtro === 'activados'
-          ? `u.status = 'ACTIVE' AND EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)`
-          : `EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)`;
+      filtro === 'sin-acceso'
+        ? `u.status = 'PENDING' AND NOT EXISTS (SELECT 1 FROM mod_access_groups_group_member m WHERE m.user_id = u.id AND m.status = 'ACTIVE')`
+        : filtro === 'sin-enviar'
+          ? `u.status = 'PENDING' AND NOT EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)`
+          : filtro === 'activados'
+            ? `u.status = 'ACTIVE' AND EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)`
+            : `EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)`;
 
     const rows = await this.prisma.$queryRawUnsafe<
       Array<{
@@ -148,6 +164,13 @@ export class InvitationsService {
     );
     const total = Number(totalRows[0]?.total ?? 0);
 
+    // Los grupos se piden aparte para los usuarios de ESTA página: agregarlos en
+    // la consulta principal obligaría a un GROUP BY sobre toda la tabla.
+    const grupos = await this.gruposDe(
+      tenantId,
+      rows.map((r) => r.id),
+    );
+
     return {
       items: rows.map((r) => ({
         id: r.id,
@@ -157,12 +180,40 @@ export class InvitationsService {
         invitedAt: r.invited_at ? r.invited_at.toISOString() : null,
         lastLoginAt: r.last_login_at ? r.last_login_at.toISOString() : null,
         envios: Number(r.envios),
+        grupos: grupos.get(r.id) ?? [],
       })),
       total,
       page,
       limit,
       hasMore: offset + rows.length < total,
     };
+  }
+
+  /**
+   * Grupos de acceso ACTIVOS de cada usuario. Es la respuesta a "¿qué va a ver
+   * esta persona cuando entre?", que es justo lo que hay que revisar ANTES de
+   * escribirle: invitar a alguien que entraría a un aula vacía es peor que no
+   * invitarle.
+   */
+  private async gruposDe(tenantId: string, userIds: string[]): Promise<Map<string, string[]>> {
+    if (userIds.length === 0) return new Map();
+    const filas = await this.prisma.modAccessGroupMember.findMany({
+      where: { tenantId, status: 'ACTIVE', userId: { in: userIds } },
+      select: { userId: true, group: { select: { name: true, deletedAt: true } } },
+    });
+    const mapa = new Map<string, string[]>();
+    for (const f of filas) {
+      if (f.group.deletedAt) continue;
+      const actual = mapa.get(f.userId) ?? [];
+      actual.push(f.group.name);
+      mapa.set(f.userId, actual);
+    }
+    for (const [k, v] of mapa)
+      mapa.set(
+        k,
+        v.sort((a, b) => a.localeCompare(b)),
+      );
+    return mapa;
   }
 
   /**
@@ -248,6 +299,8 @@ export interface InvitationsSummary {
   invitados: number;
   activadosTrasInvitacion: number;
   sinInvitar: number;
+  /** Pendientes que no están en ningún grupo: entrarían a un aula vacía. */
+  pendientesSinAcceso: number;
   /** Porcentaje de invitados que ya entraron. Null si aún no se invitó a nadie. */
   tasaConversion: number | null;
 }
@@ -261,6 +314,8 @@ export interface InvitationRow {
   lastLoginAt: string | null;
   /** Cuántas veces se le ha enviado (reenvíos incluidos). */
   envios: number;
+  /** Grupos de acceso a los que pertenece: lo que verá al entrar. */
+  grupos: string[];
 }
 
 export interface BatchResult {
