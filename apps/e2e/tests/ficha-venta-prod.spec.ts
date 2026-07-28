@@ -49,16 +49,28 @@ test.describe('PROD · ficha de venta del curso', () => {
     });
     await expect(page.getByText(/Acceso de por vida/i)).toBeVisible();
 
-    // La caja de precio debe mostrar un importe en euros. No se compara contra
-    // una cifra escrita en el test: el importe depende del curso y sale del
-    // backend, así que el spec vale para cualquiera de ellos.
-    const cajaPrecio = page.getByText('Pago único · IVA incluido').locator('..');
-    await expect(cajaPrecio).toBeVisible();
-    await expect(cajaPrecio).toContainText('€');
-    await expect(page.getByRole('button', { name: /Comprar curso/i })).toBeVisible();
+    // El curso se vende con precio único (una caja) o en varios formatos (una
+    // rejilla de tarjetas). Ambas formas muestran importe y "pago único", así
+    // que el spec cubre las dos sin depender del curso concreto.
+    const cajasPrecio = page.getByText('Pago único · IVA incluido');
+    await expect(cajasPrecio.first()).toBeVisible();
+    await expect(cajasPrecio.first().locator('..')).toContainText('€');
+    await expect(page.getByRole('button', { name: /^Comprar/i }).first()).toBeVisible();
 
-    // Caja de acceso total con enlace a la membresía.
+    const formatos = await cajasPrecio.count();
+    if (formatos > 1) {
+      // Varios formatos: rejilla comparable con una recomendación visible.
+      await expect(page.getByRole('heading', { name: 'Elige tu formato' })).toBeVisible();
+      await expect(page.getByText('El más elegido').first()).toBeVisible();
+    }
+
+    // Caja de acceso total: precio de ENTRADA (el plan más barato) y la nota
+    // que quita la objeción de la permanencia.
     await expect(page.getByText('Acceso total', { exact: false })).toBeVisible();
+    // El texto lleva <strong> dentro, así que se comprueba sobre el contenedor.
+    const cajaTotal = page.getByText('Cancela cuando quieras, sin permanencia').locator('..');
+    await expect(cajaTotal).toContainText('Accede a');
+    await expect(cajaTotal).toContainText('desde');
     // Hay DOS enlaces a la membresía a propósito (la caja de arriba y el bloque
     // bloqueado de abajo), así que se compara el de la caja de forma exacta.
     await expect(page.getByRole('link', { name: 'Ver membresías', exact: true })).toHaveAttribute(
