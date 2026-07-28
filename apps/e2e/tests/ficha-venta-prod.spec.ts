@@ -49,13 +49,21 @@ test.describe('PROD · ficha de venta del curso', () => {
     });
     await expect(page.getByText(/Acceso de por vida/i)).toBeVisible();
 
-    // La caja de precio debe mostrar un importe en euros. No se compara contra
-    // una cifra escrita en el test: el importe depende del curso y sale del
-    // backend, así que el spec vale para cualquiera de ellos.
-    const cajaPrecio = page.getByText('Pago único · IVA incluido').locator('..');
-    await expect(cajaPrecio).toBeVisible();
-    await expect(cajaPrecio).toContainText('€');
-    await expect(page.getByRole('button', { name: /Comprar curso/i })).toBeVisible();
+    // El curso se vende con precio único (una caja) o en varios formatos (una
+    // rejilla de tarjetas). Ambas formas muestran importe y "pago único", así
+    // que el spec cubre las dos sin depender del curso concreto.
+    // Ojo: `.locator('..')` sobre un locator con varias coincidencias viola el
+    // modo estricto — hay que reducir a UNA antes de subir al contenedor.
+    const cajasPrecio = page.getByText('Pago único · IVA incluido');
+    await expect(cajasPrecio.first()).toBeVisible();
+    await expect(cajasPrecio.first().locator('xpath=..')).toContainText('€');
+    await expect(page.getByRole('button', { name: /^Comprar/i }).first()).toBeVisible();
+
+    if ((await cajasPrecio.count()) > 1) {
+      // Varios formatos: rejilla comparable y una recomendación visible.
+      await expect(page.getByRole('heading', { name: 'Elige tu formato' })).toBeVisible();
+      await expect(page.getByText('El más elegido').first()).toBeVisible();
+    }
 
     // Caja de acceso total con enlace a la membresía.
     await expect(page.getByText('Acceso total', { exact: false })).toBeVisible();
@@ -68,7 +76,7 @@ test.describe('PROD · ficha de venta del curso', () => {
 
     // El muro de contenido bloqueado ahora sí ofrece salida.
     await expect(page.getByRole('heading', { name: 'Contenido bloqueado' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Comprar por/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Comprar (por|desde)/i })).toBeVisible();
     await expect(page.getByRole('link', { name: /Desbloquea todo/i })).toBeVisible();
 
     await page.screenshot({ path: 'apps/e2e/test-results/prod-ficha-venta.png', fullPage: true });
