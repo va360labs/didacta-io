@@ -138,7 +138,7 @@ export class WooCommercePriceSyncService {
       // "Curso Intermedio", "Curso Avanzado"). En un producto simple no hay
       // variante y el curso tiene precio único.
       const optionName = nombreDeOpcion(producto.name);
-      const orden = ORDEN_OPCIONES.findIndex((o) => optionName.toLowerCase().includes(o));
+      const presentacion = presentacionDe(optionName);
 
       if (opts.dryRun) {
         aplicados.push({
@@ -161,7 +161,8 @@ export class WooCommercePriceSyncService {
         compareAtAmount: ofertaVigente ? regular : null,
         name: curso.title,
         optionName,
-        sortOrder: orden >= 0 ? orden : 0,
+        sortOrder: presentacion.sortOrder,
+        isFeatured: presentacion.isFeatured,
         externalRef: producto.id,
       });
       aplicados.push({
@@ -232,8 +233,20 @@ type CursoRow = {
  */
 const MAX_CURSOS_CON_EXTRA = 3;
 
-/** Orden de presentación de las opciones típicas, de menor a mayor. */
-const ORDEN_OPCIONES = ['curso avanzado', 'curso intermedio', 'curso'];
+/**
+ * Orden y realce de las opciones típicas. Se busca por palabra distintiva y no
+ * por el nombre completo: "curso" es prefijo de "curso avanzado", así que
+ * comparar por prefijo pondría todo en la primera posición.
+ *
+ * La intermedia va destacada a propósito: es la que ancla la decisión, y sin
+ * una recomendación visible el comprador tiende a irse a la más barata.
+ */
+function presentacionDe(optionName: string): { sortOrder: number; isFeatured: boolean } {
+  const n = optionName.toLowerCase();
+  if (n.includes('avanzad')) return { sortOrder: 2, isFeatured: false };
+  if (n.includes('intermedi')) return { sortOrder: 1, isFeatured: true };
+  return { sortOrder: 0, isFeatured: false };
+}
 
 /**
  * El nombre de la variante viene pegado al del producto ("Curso de MAKE — Curso
