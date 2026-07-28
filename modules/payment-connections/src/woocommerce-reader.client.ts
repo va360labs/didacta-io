@@ -303,10 +303,26 @@ export class WooCommerceReadSdkAdapter implements StripeReadAdapter {
       if (!resp.ok) throw new StripeReadApiError(`WooCommerce products devolvió ${resp.status}`);
       const rows = (await resp.json()) as WooProduct[];
       for (const row of rows) {
-        const rel = (row.meta_data ?? []).find((m) => m.key === '_related_course');
-        const cursos = Array.isArray(rel?.value)
-          ? rel.value.map((v) => String(v)).filter((v) => v && v !== '0')
-          : [];
+        const cursos = cursosDe(row.meta_data);
+        // Producto VARIABLE: el vínculo con los cursos no está en el padre sino
+        // en cada variante ("Curso", "Curso Intermedio", "Curso Avanzado"), y
+        // cada una puede dar acceso a un conjunto distinto. Si no bajáramos a
+        // las variantes, estos productos parecerían no vender ningún curso.
+        if (esVariable(row.type) && cursos.length === 0) {
+          const variantes = await this.listVariations(row.id);
+          for (const v of variantes) {
+            out.push({
+              id: `${row.id}:${v.id}`,
+              name: `${row.name ?? ''}${v.nombre ? ` — ${v.nombre}` : ''}`,
+              type: 'simple',
+              price: v.price,
+              regularPrice: v.regularPrice,
+              salePrice: v.salePrice,
+              relatedCourseIds: v.cursos,
+            });
+          }
+          continue;
+        }
         out.push({
           id: String(row.id),
           name: row.name ?? '',
@@ -322,6 +338,33 @@ export class WooCommerceReadSdkAdapter implements StripeReadAdapter {
       page += 1;
     }
     return out;
+  }
+
+  /** Variantes de un producto variable, con su precio y sus cursos. */
+  private async listVariations(productId: number): Promise<
+    Array<{
+      id: string;
+      nombre: string;
+      price: string | null;
+      regularPrice: string | null;
+      salePrice: string | null;
+      cursos: string[];
+    }>
+  > {
+    const resp = await this.get(`/products/${productId}/variations?per_page=${PER_PAGE}`);
+    if (!resp.ok) return [];
+    const rows = (await resp.json()) as WooVariation[];
+    return rows.map((v) => ({
+      id: String(v.id),
+      nombre: (v.attributes ?? [])
+        .map((a) => a.option)
+        .filter(Boolean)
+        .join(' / '),
+      price: v.price ?? null,
+      regularPrice: v.regular_price ?? null,
+      salePrice: v.sale_price ?? null,
+      cursos: cursosDe(v.meta_data),
+    }));
   }
 
   private get(path: string): Promise<Response> {
@@ -375,6 +418,27 @@ export interface WooCatalogProduct {
   salePrice: string | null;
   /** IDs de curso de LearnDash que otorga. Vacío = no vende cursos. */
   relatedCourseIds: string[];
+}
+
+interface WooVariation {
+  id: number;
+  price?: string;
+  regular_price?: string;
+  sale_price?: string;
+  attributes?: Array<{ option?: string }>;
+  meta_data?: Array<{ key: string; value: unknown }>;
+}
+
+/** Lee el vínculo con cursos de LearnDash del meta `_related_course`. */
+function cursosDe(meta: Array<{ key: string; value: unknown }> | undefined): string[] {
+  const rel = (meta ?? []).find((m) => m.key === '_related_course');
+  return Array.isArray(rel?.value)
+    ? rel.value.map((v) => String(v)).filter((v) => v && v !== '0')
+    : [];
+}
+
+function esVariable(tipo: string | undefined): boolean {
+  return tipo === 'variable' || tipo === 'variable-subscription';
 }
 
 interface WooProduct {

@@ -189,7 +189,13 @@ export interface WooSyncReport {
     antesCents: number | null;
     accion: 'creado' | 'actualizado' | 'sin-cambios' | 'dry-run';
   }>;
-  packsIgnorados: Array<{ producto: string; cursos: number; motivo: string }>;
+  packsIgnorados: Array<{
+    producto: string;
+    cursos: number;
+    importeCents: number | null;
+    cursosAfectados: string[];
+    motivo: string;
+  }>;
   sinEmparejar: Array<{ producto: string; motivo: string }>;
 }
 

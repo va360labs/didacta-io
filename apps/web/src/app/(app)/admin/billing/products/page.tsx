@@ -306,9 +306,26 @@ function BillingProductsPanel() {
                 </div>
               ) : null}
               {syncReport.packsIgnorados.length > 0 ? (
-                <p className="text-text-muted">
-                  {syncReport.packsIgnorados.length} pack(s) ignorados por vender varios cursos.
-                </p>
+                <div>
+                  <p className="font-semibold text-text">Productos que venden varios cursos</p>
+                  <p className="text-xs text-text-muted">
+                    No fijan precio individual. Los packs grandes son la membresía; los de dos o
+                    tres cursos puede que vendan uno principal con algún extra de regalo — en ese
+                    caso dale el precio a mano al curso que corresponda.
+                  </p>
+                  <ul className="mt-1 space-y-1">
+                    {syncReport.packsIgnorados.map((x) => (
+                      <li key={x.producto} className="text-text-muted">
+                        <span className="text-text">{x.producto}</span>
+                        {x.importeCents ? ` · ${formatPrice(x.importeCents, 'eur')}` : ''} ·{' '}
+                        {x.cursos} cursos
+                        {x.cursosAfectados.length > 0 && x.cursos <= 3
+                          ? `: ${x.cursosAfectados.join(', ')}`
+                          : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : null}
             </div>
           ) : null}

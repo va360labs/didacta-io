@@ -61,10 +61,24 @@ export class WooCommercePriceSyncService {
       const cursosProducto = [...new Set(producto.relatedCourseIds)];
       if (cursosProducto.length === 0) continue; // no vende cursos
       if (cursosProducto.length > 1) {
+        // Un producto que da varios cursos puede ser dos cosas MUY distintas:
+        // un pack/membresía (VA360 PRO: 5-12 cursos), o la venta de un curso
+        // con algún extra de regalo (p. ej. "Curso de MAKE" incluye también
+        // "Clases en Directo"). No se puede decidir cuál es el principal desde
+        // los datos, así que se informa con los cursos afectados y el precio
+        // para que el admin lo resuelva, en vez de descartarlo en silencio.
+        const titulos = cursosProducto
+          .map((c) => porExternalId.get(c)?.title)
+          .filter((t): t is string => Boolean(t));
         packsIgnorados.push({
           producto: producto.name,
           cursos: cursosProducto.length,
-          motivo: 'pack de varios cursos: es la membresía, no fija precio individual',
+          importeCents: aCentimos(producto.price),
+          cursosAfectados: titulos,
+          motivo:
+            cursosProducto.length > 3
+              ? 'pack de varios cursos: es la membresía, no fija precio individual'
+              : 'vende varios cursos a la vez: decide cuál es el principal para fijarle este precio',
         });
         continue;
       }
@@ -158,6 +172,8 @@ export interface SyncItem {
 export interface PackItem {
   producto: string;
   cursos: number;
+  importeCents: number | null;
+  cursosAfectados: string[];
   motivo: string;
 }
 export interface SkipItem {
