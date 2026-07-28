@@ -30,4 +30,5 @@ export {
   type BillingProductResponse,
   type WooSyncReport,
   type CourseOffer,
+  type CourseOfferOption,
 } from './client';

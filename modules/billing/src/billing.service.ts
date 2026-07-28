@@ -67,6 +67,11 @@ export interface CreateProductInput {
   name?: string;
   /** Precio anterior (tachado) para la ficha de venta. Debe ser mayor que el real. */
   compareAtAmount?: number;
+  /** Nombre de la opción de compra ("Curso Intermedio"). "" = precio único. */
+  optionName?: string;
+  sortOrder?: number;
+  isFeatured?: boolean;
+  externalRef?: string;
 }
 
 export interface UpdateProductInput {
@@ -81,6 +86,11 @@ export interface StartCheckoutInput {
   userEmail: string;
   courseId: string;
   /**
+   * Opción de compra elegida. Si no llega se usa la destacada (o la primera),
+   * así los cursos con precio único siguen funcionando sin cambios.
+   */
+  optionId?: string;
+  /**
    * URLs de retorno de Stripe resueltas POR PETICIÓN (a partir del Host real).
    * Opcionales por compatibilidad: si no llegan, se cae al `CheckoutUrlBuilder`
    * del constructor. El caller HTTP debe pasarlas siempre — el builder del
@@ -89,6 +99,24 @@ export interface StartCheckoutInput {
    */
   successUrl?: string;
   cancelUrl?: string;
+}
+
+/** Una opción de compra del curso, tal y como la ve el alumno. */
+export interface CourseOfferOption {
+  id: string;
+  /** "" cuando el curso tiene precio único. */
+  name: string;
+  perks: string[];
+  unitAmount: number;
+  compareAtAmount: number | null;
+  currency: string;
+  discountPercent: number | null;
+  isFeatured: boolean;
+}
+
+export interface CourseOffer {
+  forSale: boolean;
+  options: CourseOfferOption[];
 }
 
 export interface StartCheckoutResult {
@@ -124,10 +152,38 @@ export class BillingService {
     });
   }
 
-  async getProductByCourse(tenantId: string, courseId: string): Promise<BillingProductRow | null> {
-    return this.prisma.modBillingProduct.findUnique({
-      where: { tenantId_courseId: { tenantId, courseId } },
+  /**
+   * Opciones de compra ACTIVAS de un curso, en orden de presentación. Un curso
+   * puede venderse en varios formatos ("Curso", "Curso Intermedio", "Curso
+   * Avanzado"), igual que la membresía tiene varios planes.
+   */
+  async listCourseOptions(tenantId: string, courseId: string): Promise<BillingProductRow[]> {
+    return this.prisma.modBillingProduct.findMany({
+      where: { tenantId, courseId, active: true },
+      orderBy: [{ sortOrder: 'asc' }, { unitAmount: 'asc' }],
     });
+  }
+
+  /**
+   * Opción concreta por id, validando que sea del tenant y del curso indicado.
+   * Sin esta comprobación, un id de otra organización o de otro curso serviría
+   * para pagar un precio que no toca.
+   */
+  async getCourseOption(
+    tenantId: string,
+    courseId: string,
+    optionId: string,
+  ): Promise<BillingProductRow | null> {
+    return this.prisma.modBillingProduct.findFirst({
+      where: { id: optionId, tenantId, courseId },
+    });
+  }
+
+  /** Opción por defecto: la destacada, si no la primera del orden. */
+  async getProductByCourse(tenantId: string, courseId: string): Promise<BillingProductRow | null> {
+    const opciones = await this.listCourseOptions(tenantId, courseId);
+    if (opciones.length === 0) return null;
+    return opciones.find((o) => o.isFeatured) ?? opciones[0]!;
   }
 
   /**
@@ -139,44 +195,36 @@ export class BillingService {
    * que la ficha no podía mostrarlo sin inventárselo — y el botón se pintaba
    * siempre, fallando al hacer clic en los cursos que no están a la venta.
    */
-  async getCourseOffer(
-    tenantId: string,
-    courseId: string,
-  ): Promise<{
-    forSale: boolean;
-    unitAmount: number | null;
-    compareAtAmount: number | null;
-    currency: string | null;
-    discountPercent: number | null;
-  }> {
-    const product = await this.getProductByCourse(tenantId, courseId);
-    if (!product || !product.active) {
-      return {
-        forSale: false,
-        unitAmount: null,
-        compareAtAmount: null,
-        currency: null,
-        discountPercent: null,
-      };
+  async getCourseOffer(tenantId: string, courseId: string): Promise<CourseOffer> {
+    const opciones = await this.listCourseOptions(tenantId, courseId);
+    if (opciones.length === 0) {
+      return { forSale: false, options: [] };
     }
-    const compareAt = product.compareAtAmount;
-    // El porcentaje se DERIVA; no se guarda, para que no pueda contradecir a
-    // los importes.
-    const discountPercent =
-      compareAt && compareAt > product.unitAmount
-        ? Math.round(((compareAt - product.unitAmount) / compareAt) * 100)
-        : null;
     return {
       forSale: true,
-      unitAmount: product.unitAmount,
-      compareAtAmount: compareAt ?? null,
-      currency: product.currency,
-      discountPercent,
+      options: opciones.map((o) => ({
+        id: o.id,
+        name: o.name,
+        perks: o.perks,
+        unitAmount: o.unitAmount,
+        compareAtAmount: o.compareAtAmount ?? null,
+        currency: o.currency,
+        // El porcentaje se DERIVA; no se guarda, para que no pueda contradecir
+        // a los importes.
+        discountPercent:
+          o.compareAtAmount && o.compareAtAmount > o.unitAmount
+            ? Math.round(((o.compareAtAmount - o.unitAmount) / o.compareAtAmount) * 100)
+            : null,
+        isFeatured: o.isFeatured,
+      })),
     };
   }
 
   async createProduct(input: CreateProductInput): Promise<BillingProductRow> {
-    const existing = await this.getProductByCourse(input.tenantId, input.courseId);
+    const optionName = input.optionName ?? '';
+    const existing = await this.prisma.modBillingProduct.findFirst({
+      where: { tenantId: input.tenantId, courseId: input.courseId, name: optionName },
+    });
     if (existing) {
       throw new ProductAlreadyExistsError(input.courseId);
     }
@@ -221,6 +269,10 @@ export class BillingService {
           input.compareAtAmount && input.compareAtAmount > price.unitAmount
             ? input.compareAtAmount
             : null,
+        name: optionName,
+        sortOrder: input.sortOrder ?? 0,
+        isFeatured: input.isFeatured ?? false,
+        externalRef: input.externalRef ?? null,
         active: true,
       },
     });
@@ -241,10 +293,31 @@ export class BillingService {
     unitAmount: number;
     currency?: string;
     compareAtAmount?: number | null;
+    /** Titulo del curso: es lo que ve el comprador en la pantalla de pago. */
     name?: string;
+    /** Nombre de la OPCION ("Curso Intermedio"). "" = precio unico. */
+    optionName?: string;
+    sortOrder?: number;
+    isFeatured?: boolean;
+    externalRef?: string | null;
   }): Promise<{ product: BillingProductRow; accion: 'creado' | 'actualizado' | 'sin-cambios' }> {
     const currency = (input.currency ?? 'eur').toLowerCase();
-    const existente = await this.getProductByCourse(input.tenantId, input.courseId);
+    const optionName = input.optionName ?? '';
+    // Se busca primero por referencia externa (sobrevive a que renombren la
+    // variante en la tienda) y, si no, por nombre de opcion.
+    const existente =
+      (input.externalRef
+        ? await this.prisma.modBillingProduct.findFirst({
+            where: {
+              tenantId: input.tenantId,
+              courseId: input.courseId,
+              externalRef: input.externalRef,
+            },
+          })
+        : null) ??
+      (await this.prisma.modBillingProduct.findFirst({
+        where: { tenantId: input.tenantId, courseId: input.courseId, name: optionName },
+      }));
 
     if (!existente) {
       const product = await this.createProduct({
@@ -254,6 +327,10 @@ export class BillingService {
         currency,
         name: input.name,
         compareAtAmount: input.compareAtAmount ?? undefined,
+        optionName,
+        sortOrder: input.sortOrder,
+        isFeatured: input.isFeatured,
+        externalRef: input.externalRef ?? undefined,
       });
       return { product, accion: 'creado' };
     }
@@ -264,7 +341,16 @@ export class BillingService {
         : null;
     const mismoImporte =
       existente.unitAmount === input.unitAmount && existente.currency === currency;
-    if (mismoImporte && existente.compareAtAmount === compareAt && existente.active) {
+    const mismaPresentacion =
+      existente.name === optionName &&
+      existente.sortOrder === (input.sortOrder ?? existente.sortOrder) &&
+      existente.isFeatured === (input.isFeatured ?? existente.isFeatured);
+    if (
+      mismoImporte &&
+      existente.compareAtAmount === compareAt &&
+      existente.active &&
+      mismaPresentacion
+    ) {
       return { product: existente, accion: 'sin-cambios' };
     }
 
@@ -296,6 +382,10 @@ export class BillingService {
         unitAmount: input.unitAmount,
         currency,
         compareAtAmount: compareAt,
+        name: optionName,
+        sortOrder: input.sortOrder ?? existente.sortOrder,
+        isFeatured: input.isFeatured ?? existente.isFeatured,
+        externalRef: input.externalRef ?? existente.externalRef,
         active: true,
       },
     });
@@ -339,8 +429,21 @@ export class BillingService {
   // ---------------- Checkout (alumno) ----------------
 
   async startCheckout(input: StartCheckoutInput): Promise<StartCheckoutResult> {
-    const product = await this.getProductByCourse(input.tenantId, input.courseId);
-    if (!product) throw new ProductNotFoundError(input.courseId);
+    // La opción se resuelve SIEMPRE contra (tenant, curso): un id de opción de
+    // otro curso u organización no puede colarse para pagar otro precio.
+    const product = input.optionId
+      ? await this.getCourseOption(input.tenantId, input.courseId, input.optionId)
+      : await this.getProductByCourse(input.tenantId, input.courseId);
+    if (!product) {
+      // `getProductByCourse` solo mira las opciones ACTIVAS. Si el curso tiene
+      // alguna desactivada, el error correcto es "no disponible" y no "no
+      // existe": al alumno le decimos algo distinto en cada caso.
+      const desactivada = await this.prisma.modBillingProduct.findFirst({
+        where: { tenantId: input.tenantId, courseId: input.courseId },
+      });
+      if (desactivada) throw new ProductInactiveError(input.courseId);
+      throw new ProductNotFoundError(input.courseId);
+    }
     if (!product.active) throw new ProductInactiveError(input.courseId);
 
     // Crear order en estado PENDING ANTES de llamar a Stripe — así el orderId

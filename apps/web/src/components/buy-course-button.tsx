@@ -34,6 +34,8 @@ interface BuyCourseButtonProps {
   courseId: string;
   /** Texto del botón en estado idle. Default: "Comprar curso". */
   label?: string;
+  /** Opción de compra elegida. Sin ella, el backend usa la destacada. */
+  optionId?: string;
   /** Variant del Button del UI kit. Default: 'primary'. */
   variant?: 'primary' | 'secondary' | 'ghost' | 'success';
   /** Tamaño del botón. Default: 'lg' (consistente con "Matricularme"). */
@@ -44,6 +46,7 @@ interface BuyCourseButtonProps {
 
 export function BuyCourseButton({
   courseId,
+  optionId,
   label = 'Comprar curso',
   variant = 'primary',
   size = 'lg',
@@ -62,7 +65,7 @@ export function BuyCourseButton({
         setPending(false);
         return;
       }
-      const { url } = await billingApi.startCheckout(courseId, token);
+      const { url } = await billingApi.startCheckout(courseId, token, optionId);
       // Redirigimos a la URL hosted de Stripe. NO usamos router.push() porque
       // es un dominio externo — sólo `window.location.href` cambia de origin.
       window.location.href = url;

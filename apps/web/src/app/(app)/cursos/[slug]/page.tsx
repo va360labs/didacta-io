@@ -451,9 +451,7 @@ export default function CourseAlumnoPage() {
         <div className="space-y-6">
           {/* Ficha de venta: beneficios, precio real del curso y acceso total.
               Todos los importes salen de la BD; si no existen, no se pintan. */}
-          {!course.externalPurchaseUrl ? (
-            <CourseSalesPanel courseId={course.id} courseTitle={course.title} />
-          ) : null}
+          {!course.externalPurchaseUrl ? <CourseSalesPanel courseId={course.id} /> : null}
           <Card>
             <CardHeader>
               <CardTitle>¿Tienes un código de invitación?</CardTitle>

@@ -81,10 +81,18 @@ export const billingApi = {
    *   3. pide a Stripe la session con metadata { orderId, tenantId, ... },
    *   4. devuelve la URL hosted donde redirigir al alumno.
    */
-  async startCheckout(courseId: string, accessToken: string): Promise<StartCheckoutResult> {
+  async startCheckout(
+    courseId: string,
+    accessToken: string,
+    /** Opción de compra elegida. Sin ella el backend usa la destacada. */
+    optionId?: string,
+  ): Promise<StartCheckoutResult> {
     return apiFetch<StartCheckoutResult>(
       `${BASE}/checkout/${encodeURIComponent(courseId)}`,
-      { method: 'POST' },
+      {
+        method: 'POST',
+        ...(optionId ? { body: JSON.stringify({ optionId }) } : {}),
+      },
       accessToken,
     );
   },
@@ -139,22 +147,26 @@ export function formatPrice(unitAmount: number, currency: string): string {
   }
 }
 
+/** Una opción de compra del curso ("Curso", "Curso Intermedio", "Curso Avanzado"). */
+export interface CourseOfferOption {
+  id: string;
+  /** "" cuando el curso tiene precio único. */
+  name: string;
+  perks: string[];
+  unitAmount: number;
+  compareAtAmount: number | null;
+  currency: string;
+  discountPercent: number | null;
+  isFeatured: boolean;
+}
+
 /** Oferta del curso tal y como la ve un alumno (GET /modules/billing/offer/:courseId). */
 export interface CourseOffer {
   forSale: boolean;
-  unitAmount: number | null;
-  compareAtAmount: number | null;
-  currency: string | null;
-  discountPercent: number | null;
+  options: CourseOfferOption[];
 }
 
-const OFFER_VACIA: CourseOffer = {
-  forSale: false,
-  unitAmount: null,
-  compareAtAmount: null,
-  currency: null,
-  discountPercent: null,
-};
+const OFFER_VACIA: CourseOffer = { forSale: false, options: [] };
 
 /**
  * Precio del curso para la ficha de venta. Nunca lanza: si el módulo de cobro

@@ -1,4 +1,5 @@
 import {
+  Body,
   ConflictException,
   Controller,
   Get,
@@ -10,11 +11,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import type { FastifyRequest } from 'fastify';
 import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
 import type { SessionClaims } from '../../auth/token.service';
+import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModuleRegistryService } from '../module-registry.service';
 
@@ -25,6 +28,13 @@ import { ModuleRegistryService } from '../module-registry.service';
  * curso es público / requiere licencia / etc.) la valida BillingService al
  * resolver el producto.
  */
+/** Cuerpo opcional del checkout: qué formato del curso quiere comprar. */
+const checkoutBodySchema = z
+  .object({ optionId: z.string().uuid().optional() })
+  .strict()
+  .optional()
+  .transform((v) => v ?? {});
+
 @ApiTags('Billing · Alumno')
 @Controller('modules/billing')
 @UseGuards(JwtAuthGuard)
@@ -70,6 +80,7 @@ export class BillingController {
     @Param('courseId') courseId: string,
     @CurrentUser() user: SessionClaims | undefined,
     @Req() req: FastifyRequest,
+    @Body(new ZodValidationPipe(checkoutBodySchema)) body: { optionId?: string },
   ) {
     if (!user) throw new UnauthorizedException();
 
@@ -116,6 +127,7 @@ export class BillingController {
       userId: user.sub,
       userEmail: account?.email ?? '',
       courseId,
+      optionId: body?.optionId,
       successUrl: `${webBaseUrl}/cursos/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${webBaseUrl}/cursos/checkout/cancel`,
     });

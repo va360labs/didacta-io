@@ -44,6 +44,12 @@ interface ProductRow {
   stripePriceId: string;
   unitAmount: number;
   currency: string;
+  compareAtAmount: number | null;
+  name: string;
+  perks: string[];
+  sortOrder: number;
+  isFeatured: boolean;
+  externalRef: string | null;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -80,32 +86,46 @@ class MockPrisma {
   webhookEvents = new Map<string, WebhookEventRow>();
 
   modBillingProduct = {
-    findUnique: async (args: {
-      where: { tenantId_courseId: { tenantId: string; courseId: string } };
+    findFirst: async (args: {
+      where: {
+        id?: string;
+        tenantId?: string;
+        courseId?: string;
+        name?: string;
+        externalRef?: string;
+      };
     }) => {
+      const w = args.where;
       for (const p of this.products.values()) {
-        if (
-          p.tenantId === args.where.tenantId_courseId.tenantId &&
-          p.courseId === args.where.tenantId_courseId.courseId
-        ) {
-          return p;
-        }
+        if (w.id !== undefined && p.id !== w.id) continue;
+        if (w.tenantId !== undefined && p.tenantId !== w.tenantId) continue;
+        if (w.courseId !== undefined && p.courseId !== w.courseId) continue;
+        if (w.name !== undefined && p.name !== w.name) continue;
+        if (w.externalRef !== undefined && p.externalRef !== w.externalRef) continue;
+        return p;
       }
       return null;
     },
-    findFirst: async (args: { where: { id: string; tenantId: string } }) => {
-      for (const p of this.products.values()) {
-        if (p.id === args.where.id && p.tenantId === args.where.tenantId) return p;
-      }
-      return null;
-    },
-    findMany: async (args: { where: { tenantId: string } }) => {
-      return [...this.products.values()].filter((p) => p.tenantId === args.where.tenantId);
+    findMany: async (args: {
+      where: { tenantId: string; courseId?: string; active?: boolean };
+    }) => {
+      return [...this.products.values()].filter(
+        (p) =>
+          p.tenantId === args.where.tenantId &&
+          (args.where.courseId === undefined || p.courseId === args.where.courseId) &&
+          (args.where.active === undefined || p.active === args.where.active),
+      );
     },
     create: async (args: { data: Omit<ProductRow, 'id' | 'createdAt' | 'updatedAt'> }) => {
       const id = `prod-${this.products.size + 1}`;
       const row: ProductRow = {
         id,
+        compareAtAmount: null,
+        name: '',
+        perks: [],
+        sortOrder: 0,
+        isFeatured: false,
+        externalRef: null,
         ...args.data,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -515,6 +535,83 @@ describe('BillingService — alta de producto por importe y URLs por petición',
     // Price nuevo, pero MISMO Product de Stripe: no se duplican productos.
     expect(tercera.product.stripePriceId).not.toBe(priceInicial);
     expect(tercera.product.stripeProductId).toBe(productStripe);
+  });
+
+  it('un curso puede tener VARIAS opciones de compra y el checkout cobra la elegida', async () => {
+    const basico = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 11997,
+      optionName: 'Curso',
+      sortOrder: 0,
+      name: 'Agentes IA',
+    });
+    const medio = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 18997,
+      optionName: 'Curso Intermedio',
+      sortOrder: 1,
+      isFeatured: true,
+      name: 'Agentes IA',
+    });
+    const alto = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 49797,
+      optionName: 'Curso Avanzado',
+      sortOrder: 2,
+      name: 'Agentes IA',
+    });
+    expect([basico.accion, medio.accion, alto.accion]).toEqual(['creado', 'creado', 'creado']);
+
+    const oferta = await svc.getCourseOffer('t1', 'course-1');
+    expect(oferta.forSale).toBe(true);
+    expect(oferta.options.map((o) => o.name)).toEqual([
+      'Curso',
+      'Curso Intermedio',
+      'Curso Avanzado',
+    ]);
+    expect(oferta.options.find((o) => o.isFeatured)?.unitAmount).toBe(18997);
+
+    // Comprar la opción avanzada cobra SU importe, no el de la destacada.
+    const checkout = await svc.startCheckout({
+      tenantId: 't1',
+      userId: 'u1',
+      userEmail: 'u@test',
+      courseId: 'course-1',
+      optionId: alto.product.id,
+    });
+    expect(prisma.orders.get(checkout.orderId)!.productId).toBe(alto.product.id);
+
+    // Sin elegir opción se usa la destacada.
+    const porDefecto = await svc.startCheckout({
+      tenantId: 't1',
+      userId: 'u2',
+      userEmail: 'u2@test',
+      courseId: 'course-1',
+    });
+    expect(prisma.orders.get(porDefecto.orderId)!.productId).toBe(medio.product.id);
+  });
+
+  it('no deja pagar con una opción de OTRO curso', async () => {
+    const delUno = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 5000,
+      optionName: 'Curso',
+    });
+    await svc.upsertCoursePrice({ tenantId: 't1', courseId: 'course-2', unitAmount: 9900 });
+
+    await expect(
+      svc.startCheckout({
+        tenantId: 't1',
+        userId: 'u1',
+        userEmail: 'u@test',
+        courseId: 'course-2',
+        optionId: delUno.product.id,
+      }),
+    ).rejects.toThrow();
   });
 
   it('ignora un precio tachado que no sea mayor que el precio real', async () => {

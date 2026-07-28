@@ -2351,13 +2351,27 @@ model ModBillingProduct {
   /// Null = sin oferta: la ficha no pinta ni el tachado ni el porcentaje. Mismo
   /// patrón que `ModSubscriptionsPlan.compareAtCents`.
   compareAtAmount Int?     @map("compare_at_amount")
-  /// Si false, el botón Comprar no aparece en el curso.
+  /// Nombre de la OPCIÓN de compra ("Curso", "Curso Intermedio", "Curso
+  /// Avanzado"…). Un curso puede tener varias, igual que la membresía tiene
+  /// varios planes; cadena vacía = la única opción (cursos con precio único).
+  name            String   @default("")
+  /// Qué incluye esta opción, para la ficha de venta. Una línea por ventaja.
+  perks           String[] @default([])
+  /// Orden de presentación (menor primero).
+  sortOrder       Int      @default(0) @map("sort_order")
+  /// Opción destacada ("la más popular"): se resalta en la ficha.
+  isFeatured      Boolean  @default(false) @map("is_featured")
+  /// Referencia en la tienda de origen (id de la variante de WooCommerce), para
+  /// que la sincronización sepa qué opción actualizar aunque cambie el nombre.
+  externalRef     String?  @map("external_ref")
+  /// Si false, esta opción no se ofrece.
   active          Boolean  @default(true)
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  @@unique([tenantId, courseId])
+  @@unique([tenantId, courseId, name])
   @@unique([tenantId, stripePriceId])
+  @@index([tenantId, courseId, active])
   @@index([tenantId, active])
   @@map("mod_billing_product")
 }
