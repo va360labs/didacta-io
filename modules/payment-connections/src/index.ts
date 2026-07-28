@@ -71,7 +71,10 @@ export type {
 export { PayPalReadSdkAdapter } from './paypal-reader.client.js';
 export type { PayPalReaderCredentials } from './paypal-reader.client.js';
 export { WooCommerceReadSdkAdapter } from './woocommerce-reader.client.js';
-export type { WooCommerceReaderCredentials } from './woocommerce-reader.client.js';
+export type {
+  WooCommerceReaderCredentials,
+  WooCatalogProduct,
+} from './woocommerce-reader.client.js';
 export {
   PaymentConnectionsError,
   PaymentConnectionNotFoundError,

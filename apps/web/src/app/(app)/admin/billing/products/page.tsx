@@ -25,7 +25,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
-import { billingApi, formatPrice, type BillingProduct } from '@/modules/billing';
+import {
+  billingApi,
+  formatPrice,
+  syncWoocommercePrices,
+  type BillingProduct,
+  type WooSyncReport,
+} from '@/modules/billing';
 import { coursesApi, type Course } from '@/lib/courses';
 
 const PRICE_ID_PATTERN = /^price_[A-Za-z0-9]+$/;
@@ -53,6 +59,8 @@ function BillingProductsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncReport, setSyncReport] = useState<WooSyncReport | null>(null);
 
   // Form alta
   const [courseId, setCourseId] = useState('');
@@ -186,6 +194,38 @@ function BillingProductsPanel() {
     }
   }
 
+  async function handleSyncWoo() {
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    setSyncing(true);
+    setActionError(null);
+    setActionInfo(null);
+    setSyncReport(null);
+    try {
+      const report = await syncWoocommercePrices(token);
+      setSyncReport(report);
+      if (!report.tiendaConectada) {
+        setActionError(
+          'No hay ninguna tienda WooCommerce verificada. Conéctala en Integraciones → Conexiones de pago.',
+        );
+      } else {
+        const cambios = report.aplicados.filter((a) => a.accion !== 'sin-cambios').length;
+        setActionInfo(
+          cambios === 0
+            ? 'Los precios ya estaban al día con la tienda.'
+            : `${cambios} precio(s) actualizados desde la tienda.`,
+        );
+        setProducts((await billingApi.listProducts(token)).products);
+      }
+    } catch (e) {
+      setActionError(
+        e instanceof ApiHttpError ? e.message : 'No se pudo sincronizar con la tienda.',
+      );
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   // Cursos disponibles para alta: PUBLISHED y aún sin producto.
   const availableCourses = useMemo(() => {
     if (!courses || !products) return courses ?? [];
@@ -216,6 +256,65 @@ function BillingProductsPanel() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Sincronización con la tienda: los cursos que se venden sueltos en
+          WooCommerce toman de allí su precio. Los packs de varios cursos se
+          ignoran (son la membresía, que se gobierna desde Didacta). */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="download-cloud" size={18} />
+            Traer precios de la tienda
+          </CardTitle>
+          <CardDescription>
+            Trae el precio de cada curso que se vende <strong>suelto</strong> en tu tienda
+            WooCommerce, con su descuento si la oferta está activa. Los packs de varios cursos no se
+            tocan: esos son la membresía y se configuran en Didacta. Se puede repetir cuando
+            quieras: solo cambia lo que haya cambiado en la tienda.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button type="button" onClick={handleSyncWoo} disabled={syncing}>
+            {syncing ? 'Sincronizando…' : 'Sincronizar precios'}
+          </Button>
+          {syncReport ? (
+            <div className="space-y-3 text-sm">
+              {syncReport.aplicados.length > 0 ? (
+                <div>
+                  <p className="font-semibold text-text">Precios aplicados</p>
+                  <ul className="mt-1 space-y-1">
+                    {syncReport.aplicados.map((a) => (
+                      <li key={a.curso} className="text-text-muted">
+                        <span className="text-text">{a.curso}</span> ·{' '}
+                        {formatPrice(a.importeCents, 'eur')}
+                        {a.antesCents ? ` (antes ${formatPrice(a.antesCents, 'eur')})` : ''} ·{' '}
+                        {a.accion}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {syncReport.sinEmparejar.length > 0 ? (
+                <div>
+                  <p className="font-semibold text-text">Sin emparejar</p>
+                  <ul className="mt-1 space-y-1">
+                    {syncReport.sinEmparejar.map((x) => (
+                      <li key={x.producto} className="text-text-muted">
+                        <span className="text-text">{x.producto}</span> — {x.motivo}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {syncReport.packsIgnorados.length > 0 ? (
+                <p className="text-text-muted">
+                  {syncReport.packsIgnorados.length} pack(s) ignorados por vender varios cursos.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
       {/* Form alta */}
       <Card>
         <CardHeader>

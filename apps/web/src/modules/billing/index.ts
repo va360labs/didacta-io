@@ -22,8 +22,12 @@ export const billingExtension: ModuleWebExtension = {
 export {
   billingApi,
   formatPrice,
+  syncWoocommercePrices,
+  getCourseOffer,
   type StartCheckoutResult,
   type BillingProduct,
   type BillingProductsListResponse,
   type BillingProductResponse,
+  type WooSyncReport,
+  type CourseOffer,
 } from './client';

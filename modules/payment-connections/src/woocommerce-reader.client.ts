@@ -284,6 +284,46 @@ export class WooCommerceReadSdkAdapter implements StripeReadAdapter {
     }
   }
 
+  /**
+   * Catálogo de productos de la tienda con el/los curso(s) de LearnDash que
+   * vende cada uno (meta `_related_course`).
+   *
+   * Lo consume el sincronizador de precios: en la tienda vive el precio real de
+   * cada curso suelto. Un producto que vende VARIOS cursos es un pack (la
+   * membresía) y el llamador debe ignorarlo para el precio individual.
+   */
+  async listCatalogProducts(): Promise<WooCatalogProduct[]> {
+    const out: WooCatalogProduct[] = [];
+    let page = 1;
+    for (;;) {
+      const resp = await this.get(`/products?status=publish&per_page=${PER_PAGE}&page=${page}`);
+      if (resp.status === 401 || resp.status === 403) {
+        throw new StripeReadKeyInvalidError(`WooCommerce ${resp.status} al listar productos`);
+      }
+      if (!resp.ok) throw new StripeReadApiError(`WooCommerce products devolvió ${resp.status}`);
+      const rows = (await resp.json()) as WooProduct[];
+      for (const row of rows) {
+        const rel = (row.meta_data ?? []).find((m) => m.key === '_related_course');
+        const cursos = Array.isArray(rel?.value)
+          ? rel.value.map((v) => String(v)).filter((v) => v && v !== '0')
+          : [];
+        out.push({
+          id: String(row.id),
+          name: row.name ?? '',
+          type: row.type ?? 'simple',
+          price: row.price ?? null,
+          regularPrice: row.regular_price ?? null,
+          salePrice: row.sale_price ?? null,
+          relatedCourseIds: cursos,
+        });
+      }
+      const totalPages = Number(resp.headers.get('X-WP-TotalPages') ?? '1') || 1;
+      if (page >= totalPages || rows.length === 0 || page >= DEFAULT_MAX_PAGES) break;
+      page += 1;
+    }
+    return out;
+  }
+
   private get(path: string): Promise<Response> {
     return this.fetchFn(`${this.base}${path}`, {
       headers: { Authorization: this.authHeader, Accept: 'application/json' },
@@ -321,6 +361,30 @@ function mapOrder(row: WooOrder): PurchaseRecord {
       .map((li) => (li.name ?? '').trim())
       .filter((n) => n.length > 0),
   };
+}
+
+/** Producto del catálogo con su vínculo a cursos de LearnDash. */
+export interface WooCatalogProduct {
+  id: string;
+  name: string;
+  /** 'simple' = pago único; 'subscription'/'variable' = otra cosa. */
+  type: string;
+  /** Precio EFECTIVO (ya refleja si hay oferta vigente). */
+  price: string | null;
+  regularPrice: string | null;
+  salePrice: string | null;
+  /** IDs de curso de LearnDash que otorga. Vacío = no vende cursos. */
+  relatedCourseIds: string[];
+}
+
+interface WooProduct {
+  id: number;
+  name?: string;
+  type?: string;
+  price?: string;
+  regular_price?: string;
+  sale_price?: string;
+  meta_data?: Array<{ key: string; value: unknown }>;
 }
 
 interface WooSubscription {

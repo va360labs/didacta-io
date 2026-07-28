@@ -20,6 +20,7 @@
  */
 
 import type { Prisma, PrismaClient } from '@didacta/database';
+import { WooCommerceReadSdkAdapter, type WooCatalogProduct } from './woocommerce-reader.client.js';
 import {
   PaymentConnectionsError,
   PaymentConnectionAlreadyExistsError,
@@ -881,6 +882,28 @@ export class PaymentConnectionsService {
    * Lo usa tanto `resolveRenewalUrl` (por id del registro materializado) como el panel
    * de solicitudes de inscripción (que solo tiene la referencia cruda del lookup en vivo).
    */
+  /**
+   * Catálogo de la tienda WooCommerce conectada, con el vínculo producto→curso.
+   *
+   * Lo usa el sincronizador de precios de cursos sueltos: en la tienda vive el
+   * precio real de cada curso. Devuelve [] si el tenant no tiene ninguna
+   * conexión WooCommerce verificada — el llamador lo trata como "nada que
+   * sincronizar", no como error.
+   */
+  async listWooCommerceCatalog(tenantId: string): Promise<WooCatalogProduct[]> {
+    const conexion = await this.prisma.modPaymentConnectionsConnection.findFirst({
+      where: { tenantId, provider: 'woocommerce', status: 'VERIFIED' },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!conexion) return [];
+    const credentials = await this.loadCredentials(tenantId, conexion.id, 'woocommerce');
+    const adapter = this.adapterFactory('woocommerce', credentials);
+    // El catálogo solo lo expone el lector de WooCommerce; otros proveedores no
+    // tienen equivalente y el contrato común no lo incluye.
+    if (!(adapter instanceof WooCommerceReadSdkAdapter)) return [];
+    return adapter.listCatalogProducts();
+  }
+
   async resolveRenewalUrlByRef(
     tenantId: string,
     connectionId: string,

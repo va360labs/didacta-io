@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -20,6 +21,7 @@ import type { SessionClaims } from '../../auth/token.service';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { WooCommercePriceSyncService } from './woocommerce-price-sync.service';
 
 const ADMIN_ROLES = ['super_admin', 'tenant_admin'] as const;
 
@@ -78,7 +80,23 @@ export class BillingAdminController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly prisma: PrismaService,
+    private readonly wooSync: WooCommercePriceSyncService,
   ) {}
+
+  @Post('sync-woocommerce')
+  @ApiOperation({
+    summary:
+      'Sincroniza el precio de los cursos SUELTOS desde la tienda WooCommerce conectada. ' +
+      'Los packs de varios cursos se ignoran (son la membresía). Idempotente. ' +
+      'Con ?dryRun=true informa de lo que haría sin tocar nada.',
+  })
+  async syncWoocommerce(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Query('dryRun') dryRun?: string,
+  ) {
+    const u = requireAdmin(user);
+    return this.wooSync.sync(u.tenantId, { dryRun: dryRun === 'true' });
+  }
 
   @Get()
   @ApiOperation({ summary: 'Lista productos del tenant (curso ↔ stripePriceId).' })
