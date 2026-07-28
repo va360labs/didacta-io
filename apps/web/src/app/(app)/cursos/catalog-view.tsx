@@ -9,25 +9,32 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
+import {
+  splitCoursesBySection,
+  type CatalogEnrollmentInfo as EnrollmentInfo,
+} from '@/lib/catalog-sections';
 import { coursesApi, type Course } from '@/lib/courses';
 import { learningApi, type Enrollment } from '@/lib/learning';
-
-interface EnrollmentInfo {
-  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
-  progressPercent: number;
-}
+import { useTenantDisplayName } from '@/lib/tenant-context';
 
 const ALL_CATEGORIES = '__all__';
 
 export function CatalogView() {
   const router = useRouter();
   const params = useSearchParams();
+  const tenantName = useTenantDisplayName();
 
   const initialQ = params.get('q') ?? '';
   const initialCategory = params.get('category') ?? ALL_CATEGORIES;
 
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [enrollments, setEnrollments] = useState<Map<string, EnrollmentInfo>>(new Map());
+  /**
+   * Las matrículas llegan en paralelo al listado. Hasta que estén, no sabemos
+   * qué cursos son "míos": si pintáramos ya, todo caería en "Otros cursos" y
+   * los cursos del alumno saltarían de sección a la vista. Esperamos a ambos.
+   */
+  const [enrollmentsLoaded, setEnrollmentsLoaded] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,7 +124,13 @@ export function CatalogView() {
           ),
         );
       })
-      .catch((): Enrollment[] => []);
+      .catch(() => {
+        // Sin matrículas conocidas el catálogo sigue siendo usable: todo cae en
+        // "Otros cursos". No bloqueamos la página por esto.
+      })
+      .finally(() => {
+        if (!aborted) setEnrollmentsLoaded(true);
+      });
     return () => {
       aborted = true;
     };
@@ -127,6 +140,27 @@ export function CatalogView() {
     () => debouncedQ.length > 0 || (category !== '' && category !== ALL_CATEGORIES),
     [debouncedQ, category],
   );
+
+  const { mine, others } = useMemo(
+    () => splitCoursesBySection(courses ?? [], enrollments),
+    [courses, enrollments],
+  );
+
+  function toCardData(c: Course): CourseCardData {
+    const enrollment = enrollments.get(c.id);
+    return {
+      id: c.id,
+      slug: c.slug,
+      title: c.title,
+      description: c.description,
+      category: c.category,
+      estimatedMinutes: c.estimatedMinutes,
+      language: c.language,
+      thumbnailUrl: c.thumbnailUrl,
+      progressPercent: enrollment?.progressPercent ?? null,
+      status: enrollment?.status ?? null,
+    };
+  }
 
   function clearFilters() {
     setSearchInput('');
@@ -186,7 +220,7 @@ export function CatalogView() {
             <p className="text-danger-700">{error}</p>
           </CardContent>
         </Card>
-      ) : courses === null ? (
+      ) : courses === null || !enrollmentsLoaded ? (
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
             <div key={i} className="skeleton h-64 w-full" />
@@ -217,24 +251,69 @@ export function CatalogView() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {courses.map((c) => {
-            const enrollment = enrollments.get(c.id);
-            const data: CourseCardData = {
-              id: c.id,
-              slug: c.slug,
-              title: c.title,
-              description: c.description,
-              category: c.category,
-              estimatedMinutes: c.estimatedMinutes,
-              language: c.language,
-              thumbnailUrl: c.thumbnailUrl,
-              progressPercent: enrollment?.progressPercent ?? null,
-              status: enrollment?.status ?? null,
-            };
-            return <CourseCard key={c.id} course={data} />;
-          })}
+        <div className="space-y-10">
+          <CatalogSection
+            title="Mis cursos"
+            count={mine.length}
+            emptyText={
+              hasActiveFilters
+                ? 'Ninguno de tus cursos coincide con estos filtros.'
+                : 'Aún no estás matriculado en ningún curso. Elige uno de abajo para empezar.'
+            }
+          >
+            {mine.map((c) => (
+              <CourseCard key={c.id} course={toCardData(c)} />
+            ))}
+          </CatalogSection>
+
+          <CatalogSection
+            title={`Otros cursos de ${tenantName}`}
+            count={others.length}
+            emptyText={
+              hasActiveFilters
+                ? 'No hay más cursos que coincidan con estos filtros.'
+                : 'Ya estás matriculado en todos los cursos disponibles.'
+            }
+          >
+            {others.map((c) => (
+              <CourseCard key={c.id} course={toCardData(c)} />
+            ))}
+          </CatalogSection>
         </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Sección del catálogo con su título y su rejilla. Cuando está vacía mantiene
+ * el título y explica por qué: al alumno le orienta más ver "Mis cursos —
+ * todavía ninguno" que no ver la sección.
+ */
+function CatalogSection({
+  title,
+  count,
+  emptyText,
+  children,
+}: {
+  title: string;
+  count: number;
+  emptyText: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-4">
+      {/* El contador va FUERA del <h2> a propósito: así el nombre accesible del
+          encabezado es siempre el título, estable para lectores de pantalla y
+          para los tests, sin depender de cuántos cursos haya. */}
+      <div className="flex items-baseline gap-2">
+        <h2 className="font-display text-xl font-semibold tracking-tight text-text">{title}</h2>
+        {count > 0 ? <span className="text-base font-normal text-text-muted">{count}</span> : null}
+      </div>
+      {count === 0 ? (
+        <p className="text-sm text-text-muted">{emptyText}</p>
+      ) : (
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{children}</div>
       )}
     </section>
   );
