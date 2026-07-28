@@ -178,6 +178,9 @@ class MockPrisma {
       this.webhookEvents.set(row.stripeEventId, row);
       return row;
     },
+    findUnique: async (args: { where: { stripeEventId: string } }) => {
+      return this.webhookEvents.get(args.where.stripeEventId) ?? null;
+    },
     update: async (args: { where: { stripeEventId: string }; data: Partial<WebhookEventRow> }) => {
       const row = this.webhookEvents.get(args.where.stripeEventId);
       if (!row) throw new Error('not found');
@@ -214,12 +217,43 @@ class MockStripe implements StripeAdapter {
     });
   }
 
-  async createCheckoutSession(params: { metadata: Record<string, string> }) {
+  lastCheckout: { successUrl: string; cancelUrl: string } | null = null;
+  lastOneOffPrice: { name: string; unitAmount: number; currency: string } | null = null;
+
+  async createCheckoutSession(params: {
+    metadata: Record<string, string>;
+    successUrl: string;
+    cancelUrl: string;
+  }) {
     this.sessionCounter += 1;
+    this.lastCheckout = { successUrl: params.successUrl, cancelUrl: params.cancelUrl };
     return {
       id: `cs_test_${this.sessionCounter}`,
       url: `https://checkout.stripe.test/cs_test_${this.sessionCounter}`,
     };
+  }
+
+  async createOneOffPrice(params: {
+    name: string;
+    unitAmount: number;
+    currency: string;
+    metadata: Record<string, string>;
+  }) {
+    this.lastOneOffPrice = {
+      name: params.name,
+      unitAmount: params.unitAmount,
+      currency: params.currency,
+    };
+    this.sessionCounter += 1;
+    const created = {
+      id: `price_auto_${this.sessionCounter}`,
+      productId: `prod_auto_${this.sessionCounter}`,
+      unitAmount: params.unitAmount,
+      currency: params.currency,
+      active: true,
+    };
+    this.prices.set(created.id, created);
+    return created;
   }
 
   async retrievePrice(priceId: string) {
@@ -401,6 +435,65 @@ describe('BillingService — startCheckout (alumno)', () => {
   });
 });
 
+describe('BillingService — alta de producto por importe y URLs por petición', () => {
+  let prisma: MockPrisma;
+  let stripe: MockStripe;
+  let publisher: MockPublisher;
+  let svc: BillingService;
+
+  beforeEach(() => {
+    prisma = new MockPrisma();
+    stripe = new MockStripe();
+    publisher = new MockPublisher();
+    svc = new BillingService(prisma as unknown as never, stripe, publisher, urls);
+  });
+
+  it('crea Product+Price en Stripe cuando se da un importe en vez de un price_', async () => {
+    const product = await svc.createProduct({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 11900,
+      currency: 'eur',
+      name: 'Curso de Claude Code',
+    });
+
+    expect(product.unitAmount).toBe(11900);
+    expect(product.currency).toBe('eur');
+    expect(product.stripePriceId).toMatch(/^price_/);
+    expect(product.stripeProductId).toMatch(/^prod_/);
+    // El nombre que verá el comprador en Stripe es el título del curso.
+    expect(stripe.lastOneOffPrice?.name).toBe('Curso de Claude Code');
+  });
+
+  it('rechaza un importe cero o negativo en lugar de crear un precio inválido', async () => {
+    await expect(
+      svc.createProduct({ tenantId: 't1', courseId: 'course-1', unitAmount: 0 }),
+    ).rejects.toThrow(/importe mayor que cero/i);
+  });
+
+  it('startCheckout usa las URLs de la petición y no las del arranque', async () => {
+    stripe.setPrice('price_a');
+    await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
+
+    await svc.startCheckout({
+      tenantId: 't1',
+      userId: 'u1',
+      userEmail: 'u@test',
+      courseId: 'course-1',
+      successUrl:
+        'https://aula.va360.academy/cursos/checkout/success?session_id={CHECKOUT_SESSION_ID}',
+      cancelUrl: 'https://aula.va360.academy/cursos/checkout/cancel',
+    });
+
+    expect(stripe.lastCheckout?.successUrl).toBe(
+      'https://aula.va360.academy/cursos/checkout/success?session_id={CHECKOUT_SESSION_ID}',
+    );
+    expect(stripe.lastCheckout?.cancelUrl).toBe(
+      'https://aula.va360.academy/cursos/checkout/cancel',
+    );
+  });
+});
+
 describe('BillingService — handleWebhookEvent (idempotente)', () => {
   let prisma: MockPrisma;
   let stripe: MockStripe;
@@ -462,6 +555,61 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     expect(publisher.events).toHaveLength(1);
     expect(publisher.events[0].name).toBe('billing.order.completed');
     expect(publisher.events[0].payload.amountPaid).toBe(1999);
+  });
+
+  it('un evento recibido pero NO procesado se reintenta (no se queda "quemado")', async () => {
+    stripe.setPrice('price_a');
+    await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
+    const checkout = await svc.startCheckout({
+      tenantId: 't1',
+      userId: 'u1',
+      userEmail: 'u@test',
+      courseId: 'course-1',
+    });
+    publisher.events = [];
+
+    // Primer intento: el trabajo de dominio falla a mitad (simulamos borrando
+    // la order justo después de que el evento quede registrado).
+    const event = buildSessionCompletedEvent('order-inexistente');
+    await expect(svc.handleWebhookEvent(event, {})).rejects.toThrow();
+    expect(publisher.events).toHaveLength(0);
+
+    // Segundo intento con el MISMO id de evento (reintento de Stripe), esta vez
+    // con la order correcta: debe volver a intentarlo, no salir por idempotencia.
+    const reintento = buildSessionCompletedEvent(checkout.orderId);
+    reintento.id = event.id;
+    await svc.handleWebhookEvent(reintento, {});
+
+    expect(publisher.events).toHaveLength(1);
+    expect(publisher.events[0].name).toBe('billing.order.completed');
+  });
+
+  it('ignora en silencio el checkout de OTRO módulo (membresía) en el endpoint compartido', async () => {
+    // Un único endpoint de Stripe alimenta a mod.billing y a mod.subscriptions.
+    // La sesión de la membresía no lleva courseId ni productId: billing debe
+    // archivarla y seguir, NO lanzar (un 5xx haría que Stripe reintentara
+    // durante días un evento que nunca fue suyo).
+    const membershipEvent = {
+      id: 'evt_membership_1',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_membership',
+          client_reference_id: 'plan-anual-uuid',
+          metadata: { tenantId: 't1', membership: '1', planId: 'plan-anual-uuid' },
+          amount_total: 39900,
+          status: 'complete',
+        } as unknown as Stripe.Checkout.Session,
+      },
+    } as Stripe.Event;
+
+    await expect(svc.handleWebhookEvent(membershipEvent, {})).resolves.toBeUndefined();
+
+    // Ni emite eventos de dominio ni deja el webhook marcado como fallido.
+    expect(publisher.events).toHaveLength(0);
+    const stored = prisma.webhookEvents.get('evt_membership_1');
+    expect(stored?.errorMessage ?? null).toBeNull();
+    expect(stored?.processedAt).toBeInstanceOf(Date);
   });
 
   it('idempotencia: el mismo evento dos veces NO duplica trabajo', async () => {

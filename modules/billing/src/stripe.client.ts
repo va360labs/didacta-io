@@ -29,6 +29,12 @@ export interface StripeAdapter {
   retrievePrice(priceId: string): Promise<StripePriceResult>;
   retrieveProduct(productId: string): Promise<StripeProductResult>;
   /**
+   * Crea Product + Price de pago único en Stripe a partir de un importe. Evita
+   * que el admin tenga que crearlos a mano en el dashboard y pegar el `price_`.
+   * Mismo patrón que `ensureStripePrice` de mod.subscriptions.
+   */
+  createOneOffPrice(params: CreateOneOffPriceParams): Promise<StripePriceResult>;
+  /**
    * Verifica la firma del webhook y devuelve el evento parseado. Lanza
    * WebhookSignatureInvalidError si la firma no concuerda.
    */
@@ -57,6 +63,15 @@ export interface CreateCheckoutSessionParams {
 export interface StripeCheckoutSessionResult {
   id: string;
   url: string;
+}
+
+export interface CreateOneOffPriceParams {
+  /** Nombre visible en el checkout de Stripe (normalmente el título del curso). */
+  name: string;
+  /** Importe en la unidad mínima (céntimos). */
+  unitAmount: number;
+  currency: string;
+  metadata: Record<string, string>;
 }
 
 export interface StripePriceResult {
@@ -134,6 +149,32 @@ export class StripeSdkAdapter implements StripeAdapter {
         id: price.id,
         productId: product,
         unitAmount: price.unit_amount ?? 0,
+        currency: price.currency,
+        active: price.active,
+      };
+    } catch (err) {
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async createOneOffPrice(params: CreateOneOffPriceParams): Promise<StripePriceResult> {
+    try {
+      // Un Product por curso, nombrado con el título: es lo que ve el comprador
+      // en la pantalla de pago de Stripe.
+      const product = await this.client.products.create({
+        name: params.name,
+        metadata: params.metadata,
+      });
+      const price = await this.client.prices.create({
+        product: product.id,
+        unit_amount: params.unitAmount,
+        currency: params.currency,
+        metadata: params.metadata,
+      });
+      return {
+        id: price.id,
+        productId: product.id,
+        unitAmount: price.unit_amount ?? params.unitAmount,
         currency: price.currency,
         active: price.active,
       };

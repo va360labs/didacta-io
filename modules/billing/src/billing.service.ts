@@ -54,7 +54,17 @@ export interface CheckoutUrlBuilder {
 export interface CreateProductInput {
   tenantId: string;
   courseId: string;
-  stripePriceId: string;
+  /** Price ya existente en Stripe. Excluyente con `unitAmount`. */
+  stripePriceId?: string;
+  /**
+   * Importe en céntimos: si llega (en vez de `stripePriceId`), el módulo crea
+   * el Product y el Price en Stripe por ti. Evita el paso manual de crearlos en
+   * el dashboard y pegar el `price_...`.
+   */
+  unitAmount?: number;
+  currency?: string;
+  /** Nombre visible en la pantalla de pago de Stripe (título del curso). */
+  name?: string;
 }
 
 export interface UpdateProductInput {
@@ -68,6 +78,15 @@ export interface StartCheckoutInput {
   userId: string;
   userEmail: string;
   courseId: string;
+  /**
+   * URLs de retorno de Stripe resueltas POR PETICIÓN (a partir del Host real).
+   * Opcionales por compatibilidad: si no llegan, se cae al `CheckoutUrlBuilder`
+   * del constructor. El caller HTTP debe pasarlas siempre — el builder del
+   * constructor se congela en el arranque con variables de entorno que en
+   * producción no existen, y genera una URL que la web no sabe resolver.
+   */
+  successUrl?: string;
+  cancelUrl?: string;
 }
 
 export interface StartCheckoutResult {
@@ -114,14 +133,32 @@ export class BillingService {
     if (existing) {
       throw new ProductAlreadyExistsError(input.courseId);
     }
-    // Sincronización con Stripe: si el priceId no existe o está inactivo,
-    // fallamos antes de crear el row local. Cacheamos unit_amount y currency
-    // para evitar lookup en el catálogo público (apps/web/cursos/[slug]).
-    const price = await this.stripe.retrievePrice(input.stripePriceId);
-    if (!price.active) {
-      throw new StripeApiError(
-        `El price ${input.stripePriceId} está inactivo en Stripe. Activa el price o usa otro.`,
-      );
+    // Dos vías: (a) el admin pega un price_ ya creado en Stripe, o (b) escribe
+    // un importe y lo creamos nosotros. Cacheamos unit_amount y currency para
+    // evitar lookup en el catálogo público (apps/web/cursos/[slug]).
+    let price;
+    if (input.stripePriceId) {
+      // Si el priceId no existe o está inactivo, fallamos antes de crear el row.
+      price = await this.stripe.retrievePrice(input.stripePriceId);
+      if (!price.active) {
+        throw new StripeApiError(
+          `El price ${input.stripePriceId} está inactivo en Stripe. Activa el price o usa otro.`,
+        );
+      }
+    } else {
+      if (input.unitAmount === undefined || input.unitAmount <= 0) {
+        throw new StripeApiError('Indica un importe mayor que cero o un stripePriceId existente.');
+      }
+      price = await this.stripe.createOneOffPrice({
+        name: input.name?.trim() || 'Curso',
+        unitAmount: input.unitAmount,
+        currency: (input.currency ?? 'eur').toLowerCase(),
+        metadata: {
+          tenantId: input.tenantId,
+          courseId: input.courseId,
+          didacta: 'course',
+        },
+      });
     }
     return this.prisma.modBillingProduct.create({
       data: {
@@ -199,8 +236,8 @@ export class BillingService {
     try {
       session = await this.stripe.createCheckoutSession({
         priceId: product.stripePriceId,
-        successUrl: this.urls.successUrl(input.courseId),
-        cancelUrl: this.urls.cancelUrl(input.courseId),
+        successUrl: input.successUrl ?? this.urls.successUrl(input.courseId),
+        cancelUrl: input.cancelUrl ?? this.urls.cancelUrl(input.courseId),
         customerEmail: input.userEmail,
         metadata: {
           tenantId: input.tenantId,
@@ -259,9 +296,22 @@ export class BillingService {
     } catch (err) {
       const message = (err as Error).message ?? '';
       if (message.includes('Unique constraint') || message.includes('mod_billing_webhook_event')) {
-        return; // ya procesado; idempotente.
+        // El evento ya se RECIBIÓ antes. Eso no significa que se procesara con
+        // éxito: si el intento anterior falló a mitad, la fila quedó con
+        // `processedAt` a null y un `errorMessage`. Dedupear por recibido
+        // "quemaba" el evento — ni un reintento de Stripe ni un reenvío manual
+        // volvían a intentarlo, y un pago podía quedarse sin matrícula para
+        // siempre. Dedupeamos por PROCESADO: solo salimos si ya se completó.
+        const previo = await this.prisma.modBillingWebhookEvent.findUnique({
+          where: { stripeEventId: event.id },
+          select: { processedAt: true },
+        });
+        if (previo?.processedAt) return; // ya procesado con éxito; idempotente.
+        // Si no, seguimos y reintentamos el trabajo de dominio (que es
+        // idempotente por su cuenta: la order no retrocede de COMPLETED).
+      } else {
+        throw err;
       }
-      throw err;
     }
 
     try {
@@ -302,6 +352,15 @@ export class BillingService {
     const userId = metadata.userId;
     const courseId = metadata.courseId;
 
+    // Pertenencia POSITIVA: una sola cuenta de Stripe alimenta a varios módulos
+    // desde el mismo endpoint, así que solo tratamos lo que lleva NUESTRA marca
+    // (`orderId` + `productId`, que solo escribe `startCheckout`). Definir lo
+    // propio por ausencia dejaba pasar otros checkouts con `courseId` — p.ej. el
+    // de suscripción por curso de mod.subscriptions. Lo ajeno se ignora en
+    // silencio: lanzar daría un 5xx y Stripe reintentaría durante días algo que
+    // nunca fue nuestro. Queda archivado para auditoría.
+    if (!metadata.orderId || !metadata.productId) return;
+
     if (!orderId || !tenantId || !userId || !courseId) {
       throw new StripeApiError(
         `checkout.session.completed sin metadata mínimo (orderId/tenantId/userId/courseId): ${session.id}`,
@@ -337,7 +396,9 @@ export class BillingService {
   }
 
   private async onCheckoutFailed(session: Stripe.Checkout.Session): Promise<void> {
-    const orderId = session.metadata?.orderId ?? session.client_reference_id;
+    // Misma pertenencia positiva que en onCheckoutCompleted: en un endpoint
+    // compartido, `client_reference_id` puede ser el id de OTRO módulo.
+    const orderId = session.metadata?.orderId;
     if (!orderId) return;
     const order = await this.prisma.modBillingOrder.findUnique({ where: { id: orderId } });
     if (!order) return;

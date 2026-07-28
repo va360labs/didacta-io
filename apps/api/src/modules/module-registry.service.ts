@@ -270,7 +270,20 @@ export class ModuleRegistryService implements OnModuleInit {
     // presentes. Sin Stripe configurado, el módulo no expone su service —
     // los endpoints `/modules/billing/*` devuelven 503 vía ConfigMissing.
     const stripeKey = process.env['STRIPE_SECRET_KEY'];
-    const stripeWebhookSecret = process.env['STRIPE_WEBHOOK_SECRET'];
+    // Fallback simétrico al de mod.subscriptions (más abajo): una sola cuenta
+    // de Stripe puede servir a los dos módulos desde un ÚNICO endpoint de
+    // webhook, y en ese caso hay un solo secreto de firma. Si el operador no
+    // define uno propio para billing, reutilizamos el de subscriptions en vez
+    // de dejar el módulo sin construir (que es lo que hacía que /modules/billing
+    // devolviera 500 y el botón "Comprar curso" no funcionara).
+    // OJO con `??`: la plantilla del .env declara `STRIPE_WEBHOOK_SECRET=` y un
+    // env_file convierte eso en CADENA VACÍA, no en undefined — con `??` el
+    // respaldo no entraría y el módulo seguiría apagado. Por eso `||` sobre el
+    // valor ya recortado.
+    const stripeWebhookSecret =
+      process.env['STRIPE_WEBHOOK_SECRET']?.trim() ||
+      process.env['SUBSCRIPTIONS_WEBHOOK_SECRET']?.trim() ||
+      undefined;
     if (stripeKey && stripeWebhookSecret) {
       // Carga perezosa de Stripe SDK — evita romper en NODE_ENV=test si no
       // está instalado (vitest unit no lo necesita).
