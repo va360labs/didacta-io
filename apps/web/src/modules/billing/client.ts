@@ -25,6 +25,7 @@
  */
 
 import { apiFetch } from '@/lib/api-client';
+import { authStorage } from '@/lib/auth-storage';
 
 /**
  * Forma exacta del retorno del backend `BillingService.startCheckout`:
@@ -161,10 +162,17 @@ const OFFER_VACIA: CourseOffer = {
  * compra (queda la membresía y el canje de código).
  */
 export async function getCourseOffer(courseId: string): Promise<CourseOffer> {
+  // El token va EXPLÍCITO: `apiFetch` solo pone la cabecera Authorization si se
+  // le pasa. Sin ella el endpoint responde 401 y el cliente HTTP interpreta ese
+  // 401 como "sesión caducada", la borra y echa al usuario a /signin — un
+  // efecto muy peor que quedarse sin caja de precio.
+  const bearer = authStorage.getAccessToken() ?? undefined;
+  if (!bearer) return OFFER_VACIA;
   try {
     return await apiFetch<CourseOffer>(
       `/api/v1/modules/billing/offer/${encodeURIComponent(courseId)}`,
       { method: 'GET' },
+      bearer,
     );
   } catch {
     return OFFER_VACIA;
