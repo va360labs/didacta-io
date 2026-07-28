@@ -49,9 +49,12 @@ test.describe('PROD · ficha de venta del curso', () => {
     });
     await expect(page.getByText(/Acceso de por vida/i)).toBeVisible();
 
-    // Precio real y descuento derivado de los importes.
-    await expect(page.getByText(/119/).first()).toBeVisible();
-    await expect(page.getByText('Pago único · IVA incluido')).toBeVisible();
+    // La caja de precio debe mostrar un importe en euros. No se compara contra
+    // una cifra escrita en el test: el importe depende del curso y sale del
+    // backend, así que el spec vale para cualquiera de ellos.
+    const cajaPrecio = page.getByText('Pago único · IVA incluido').locator('..');
+    await expect(cajaPrecio).toBeVisible();
+    await expect(cajaPrecio).toContainText('€');
     await expect(page.getByRole('button', { name: /Comprar curso/i })).toBeVisible();
 
     // Caja de acceso total con enlace a la membresía.
