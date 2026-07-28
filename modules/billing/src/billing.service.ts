@@ -226,6 +226,82 @@ export class BillingService {
     });
   }
 
+  /**
+   * Deja el curso a la venta al precio indicado, cree o actualice. Pensado para
+   * sincronizar precios desde una fuente externa (p. ej. la tienda WooCommerce)
+   * de forma repetible: llamarlo dos veces con el mismo importe no toca nada.
+   *
+   * Cuando el importe cambia se crea un Price NUEVO en Stripe sobre el mismo
+   * Product (Stripe no permite editar un Price ya creado) y se apunta el
+   * producto local al nuevo. Los pagos ya cobrados no se ven afectados.
+   */
+  async upsertCoursePrice(input: {
+    tenantId: string;
+    courseId: string;
+    unitAmount: number;
+    currency?: string;
+    compareAtAmount?: number | null;
+    name?: string;
+  }): Promise<{ product: BillingProductRow; accion: 'creado' | 'actualizado' | 'sin-cambios' }> {
+    const currency = (input.currency ?? 'eur').toLowerCase();
+    const existente = await this.getProductByCourse(input.tenantId, input.courseId);
+
+    if (!existente) {
+      const product = await this.createProduct({
+        tenantId: input.tenantId,
+        courseId: input.courseId,
+        unitAmount: input.unitAmount,
+        currency,
+        name: input.name,
+        compareAtAmount: input.compareAtAmount ?? undefined,
+      });
+      return { product, accion: 'creado' };
+    }
+
+    const compareAt =
+      input.compareAtAmount && input.compareAtAmount > input.unitAmount
+        ? input.compareAtAmount
+        : null;
+    const mismoImporte =
+      existente.unitAmount === input.unitAmount && existente.currency === currency;
+    if (mismoImporte && existente.compareAtAmount === compareAt && existente.active) {
+      return { product: existente, accion: 'sin-cambios' };
+    }
+
+    // Solo vamos a Stripe si de verdad cambió el importe: un cambio de precio
+    // tachado es un dato nuestro y no necesita tocar la pasarela.
+    let stripePriceId = existente.stripePriceId;
+    let stripeProductId = existente.stripeProductId;
+    if (!mismoImporte) {
+      const price = await this.stripe.createOneOffPrice({
+        name: input.name?.trim() || 'Curso',
+        productId: existente.stripeProductId,
+        unitAmount: input.unitAmount,
+        currency,
+        metadata: {
+          tenantId: input.tenantId,
+          courseId: input.courseId,
+          didacta: 'course',
+        },
+      });
+      stripePriceId = price.id;
+      stripeProductId = price.productId;
+    }
+
+    const product = await this.prisma.modBillingProduct.update({
+      where: { id: existente.id },
+      data: {
+        stripePriceId,
+        stripeProductId,
+        unitAmount: input.unitAmount,
+        currency,
+        compareAtAmount: compareAt,
+        active: true,
+      },
+    });
+    return { product, accion: 'actualizado' };
+  }
+
   async updateProduct(input: UpdateProductInput): Promise<BillingProductRow> {
     const product = await this.prisma.modBillingProduct.findFirst({
       where: { id: input.productId, tenantId: input.tenantId },

@@ -68,6 +68,12 @@ export interface StripeCheckoutSessionResult {
 export interface CreateOneOffPriceParams {
   /** Nombre visible en el checkout de Stripe (normalmente el título del curso). */
   name: string;
+  /**
+   * Product de Stripe ya existente. Si se pasa, solo se crea el Price nuevo
+   * sobre él — así al cambiar el importe de un curso no se acumula un Product
+   * duplicado por cada cambio de precio.
+   */
+  productId?: string;
   /** Importe en la unidad mínima (céntimos). */
   unitAmount: number;
   currency: string;
@@ -160,20 +166,24 @@ export class StripeSdkAdapter implements StripeAdapter {
   async createOneOffPrice(params: CreateOneOffPriceParams): Promise<StripePriceResult> {
     try {
       // Un Product por curso, nombrado con el título: es lo que ve el comprador
-      // en la pantalla de pago de Stripe.
-      const product = await this.client.products.create({
-        name: params.name,
-        metadata: params.metadata,
-      });
+      // en la pantalla de pago de Stripe. Se reutiliza si ya existe.
+      const productId =
+        params.productId ??
+        (
+          await this.client.products.create({
+            name: params.name,
+            metadata: params.metadata,
+          })
+        ).id;
       const price = await this.client.prices.create({
-        product: product.id,
+        product: productId,
         unit_amount: params.unitAmount,
         currency: params.currency,
         metadata: params.metadata,
       });
       return {
         id: price.id,
-        productId: product.id,
+        productId,
         unitAmount: price.unit_amount ?? params.unitAmount,
         currency: price.currency,
         active: price.active,

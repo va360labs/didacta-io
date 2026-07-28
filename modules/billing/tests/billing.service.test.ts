@@ -248,6 +248,7 @@ class MockStripe implements StripeAdapter {
 
   async createOneOffPrice(params: {
     name: string;
+    productId?: string;
     unitAmount: number;
     currency: string;
     metadata: Record<string, string>;
@@ -260,7 +261,7 @@ class MockStripe implements StripeAdapter {
     this.sessionCounter += 1;
     const created = {
       id: `price_auto_${this.sessionCounter}`,
-      productId: `prod_auto_${this.sessionCounter}`,
+      productId: params.productId ?? `prod_auto_${this.sessionCounter}`,
       unitAmount: params.unitAmount,
       currency: params.currency,
       active: true,
@@ -476,6 +477,54 @@ describe('BillingService — alta de producto por importe y URLs por petición',
     expect(product.stripeProductId).toMatch(/^prod_/);
     // El nombre que verá el comprador en Stripe es el título del curso.
     expect(stripe.lastOneOffPrice?.name).toBe('Curso de Claude Code');
+  });
+
+  it('upsertCoursePrice es repetible: crea, luego no toca nada, y actualiza si cambia el importe', async () => {
+    const primera = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 6700,
+      name: 'Ecosistema Claude',
+    });
+    expect(primera.accion).toBe('creado');
+    expect(primera.product.unitAmount).toBe(6700);
+    // Copiamos los valores: el mock devuelve la fila por REFERENCIA y un update
+    // posterior la mutaría, invalidando la comparación de después.
+    const priceInicial = String(primera.product.stripePriceId);
+    const productStripe = String(primera.product.stripeProductId);
+
+    const segunda = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 6700,
+      name: 'Ecosistema Claude',
+    });
+    expect(segunda.accion).toBe('sin-cambios');
+    expect(segunda.product.stripePriceId).toBe(priceInicial);
+
+    const tercera = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 4700,
+      compareAtAmount: 6700,
+      name: 'Ecosistema Claude',
+    });
+    expect(tercera.accion).toBe('actualizado');
+    expect(tercera.product.unitAmount).toBe(4700);
+    expect(tercera.product.compareAtAmount).toBe(6700);
+    // Price nuevo, pero MISMO Product de Stripe: no se duplican productos.
+    expect(tercera.product.stripePriceId).not.toBe(priceInicial);
+    expect(tercera.product.stripeProductId).toBe(productStripe);
+  });
+
+  it('ignora un precio tachado que no sea mayor que el precio real', async () => {
+    const r = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-2',
+      unitAmount: 9700,
+      compareAtAmount: 5000,
+    });
+    expect(r.product.compareAtAmount).toBeNull();
   });
 
   it('rechaza un importe cero o negativo en lugar de crear un precio inválido', async () => {
