@@ -1524,8 +1524,21 @@ model ModZoomSession {
   timezone                 String
   hostEmail                String   @map("host_email")
   zoomMeetingId            String?  @map("zoom_meeting_id")
+  /// UUID de la OCURRENCIA del meeting (`payload.object.uuid` del webhook),
+  /// distinto del id numérico: las Report API de participantes se consultan
+  /// por UUID y un recurrente tiene uno por ocurrencia (ADR-018). Se rellena
+  /// al recibir `meeting.started` / `meeting.ended`.
+  zoomMeetingUuid          String?  @map("zoom_meeting_uuid")
   joinUrl                  String?  @map("join_url")
   startUrl                 String?  @map("start_url")
+  /// Momento en que se reconcilió la asistencia contra Zoom. NULL = todavía
+  /// no se ha hecho el pull (el worker lo reintenta) o la sesión no ha
+  /// terminado. Marca el corte entre "confiamos en el click" y "lo dice Zoom".
+  attendanceSyncedAt       DateTime? @map("attendance_synced_at")
+  /// Último error del pull de asistencia, para que el formador sepa por qué
+  /// no hay datos (típicamente falta el scope `report:read:admin`). NULL si
+  /// el último intento fue bien o no ha habido ninguno.
+  attendanceSyncError      String?  @map("attendance_sync_error")
   /// `share_url` de la grabación de Zoom (se rellena al recibir el
   /// webhook `recording.completed`). NULL mientras no haya grabación.
   recordingUrl             String?  @map("recording_url")
@@ -1536,6 +1549,7 @@ model ModZoomSession {
   updatedAt                DateTime @updatedAt @map("updated_at")
 
   registrations ModZoomSessionRegistration[]
+  attendances   ModZoomSessionAttendance[]
 
   @@index([tenantId, startTime(sort: Desc)], map: "mod_zoom_session_tenant_idx")
   @@index([courseId], map: "mod_zoom_session_course_idx")
@@ -1559,6 +1573,59 @@ model ModZoomSessionRegistration {
   @@unique([sessionId, userId], name: "mod_zoom_session_registration_unique", map: "mod_zoom_session_registration_unique")
   @@index([tenantId, userId], map: "mod_zoom_session_registration_tenant_user_idx")
   @@map("mod_zoom_session_registration")
+}
+
+/// Asistencia REAL a una clase en directo (ADR-018), frente a la inscripción
+/// (`mod_zoom_session_registration`) que solo registra intención.
+///
+/// Dos fuentes conviven en la misma fila:
+///  - `clickedJoinAt`: el alumno pulsó "Unirme" en Didacta (`POST .../join`).
+///    Atribución perfecta al `userId`, pero solo prueba que abrió el enlace.
+///  - `present`/`minutes`/`joinedAt`/`leftAt`: lo que reporta Zoom al
+///    reconciliar la sesión terminada. Es la evidencia fuerte.
+///
+/// `userId` es NULL para participantes de Zoom que no casan con ningún user
+/// del tenant (invitados, otro email, sin autenticar). Se conservan con su
+/// identidad de Zoom para que el formador concilie a mano (`manualPresent`).
+/// Sin FK a `user` (tabla core); FK intra-módulo a la sesión con CASCADE.
+model ModZoomSessionAttendance {
+  id        String  @id @default(uuid()) @db.Uuid
+  tenantId  String  @map("tenant_id") @db.Uuid
+  sessionId String  @map("session_id") @db.Uuid
+  userId    String? @map("user_id") @db.Uuid
+
+  /// Identidad tal y como la reportó Zoom (para filas sin `userId`, es lo
+  /// único que el formador tiene para reconocer a la persona).
+  zoomEmail         String? @map("zoom_email")
+  zoomName          String? @map("zoom_name")
+  zoomParticipantId String? @map("zoom_participant_id")
+
+  /// Instante en que pulsó "Unirme" desde Didacta. NULL si entró por un
+  /// enlace copiado o directamente desde Zoom.
+  clickedJoinAt DateTime? @map("clicked_join_at")
+  /// true cuando Zoom confirma que estuvo dentro de la sala.
+  present       Boolean   @default(false)
+  /// Minutos totales dentro, sumando reconexiones. 0 cuando la confirmación
+  /// viene del fallback `past_meetings` (que no reporta duración).
+  minutes       Int       @default(0)
+  joinedAt      DateTime? @map("joined_at")
+  leftAt        DateTime? @map("left_at")
+
+  /// Override del formador. NULL = sin tocar; true/false pisan el cálculo
+  /// automático sin destruir la evidencia original.
+  manualPresent Boolean? @map("manual_present")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  session ModZoomSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  /// NULLs son distintos entre sí en PostgreSQL: la unique acota a un registro
+  /// por usuario identificado y deja convivir N participantes sin casar.
+  @@unique([sessionId, userId], name: "mod_zoom_session_attendance_unique", map: "mod_zoom_session_attendance_unique")
+  @@index([tenantId, sessionId], map: "mod_zoom_session_attendance_tenant_session_idx")
+  @@index([tenantId, userId], map: "mod_zoom_session_attendance_tenant_user_idx")
+  @@map("mod_zoom_session_attendance")
 }
 
 /// Registro de eventos webhook recibidos de Zoom para idempotencia.

@@ -17,9 +17,11 @@ import {
   createSessionSchema,
   listWebhookEventsQuerySchema,
   sessionStatusSchema,
+  setManualAttendanceSchema,
   updateSessionSchema,
   type CreateSessionDto,
   type ListWebhookEventsQuery,
+  type SetManualAttendanceDto,
   type UpdateSessionDto,
 } from '@didacta/mod-zoom-live';
 import { z } from 'zod';
@@ -63,6 +65,13 @@ function ensureSessionId(id: string): void {
 @UseGuards(JwtAuthGuard)
 export class ZoomLiveController {
   constructor(private readonly registry: ModuleRegistryService) {}
+
+  /** Gating de staff (formador/admin) con el motivo en el mensaje. */
+  private ensureStaff(user: SessionClaims, action: string): void {
+    if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
+      throw new UnauthorizedException(`Solo formadores y admins pueden ${action}.`);
+    }
+  }
 
   @Get('sessions')
   @ApiOperation({
@@ -138,6 +147,68 @@ export class ZoomLiveController {
     }
     ensureSessionId(id);
     return this.registry.getZoomLiveService().listRegistrations(user.tenantId, id);
+  }
+
+  @Post('sessions/:id/join')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Sella la entrada del usuario a la clase y devuelve el `joinUrl` (ADR-018). Es el proxy de asistencia: pasa por aquí antes de abrir Zoom. 403 si no está inscrito.',
+  })
+  async join(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException();
+    ensureSessionId(id);
+    const viewer = viewerOf(user);
+    return this.registry
+      .getZoomLiveService()
+      .markJoinClick(user.tenantId, user.sub, id, viewer.isStaff);
+  }
+
+  @Get('sessions/:id/attendance')
+  @ApiOperation({
+    summary:
+      'Informe de asistencia real: inscritos que asistieron, ausentes y participantes de Zoom sin casar (solo formador o admin).',
+  })
+  async getAttendance(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException();
+    this.ensureStaff(user, 'ver la asistencia');
+    ensureSessionId(id);
+    return this.registry.getZoomLiveService().getAttendance(user.tenantId, id);
+  }
+
+  @Post('sessions/:id/attendance/sync')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Fuerza la reconciliación de asistencia contra la API de Zoom. Devuelve el informe; si Zoom falla, el motivo viaja en `syncError` en vez de un 502 opaco.',
+  })
+  async syncAttendance(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    if (!user) throw new UnauthorizedException();
+    this.ensureStaff(user, 'sincronizar la asistencia');
+    ensureSessionId(id);
+    return this.registry.getZoomLiveService().syncAttendance(user.tenantId, id);
+  }
+
+  @Put('sessions/:id/attendance/:userId')
+  @ApiOperation({
+    summary:
+      'Marca a mano si un miembro asistió (`present: true|false`) o quita el override (`present: null`). No destruye la evidencia automática.',
+  })
+  async setManualAttendance(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Body(new ZodValidationPipe(setManualAttendanceSchema)) dto: SetManualAttendanceDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    this.ensureStaff(user, 'marcar la asistencia');
+    ensureSessionId(id);
+    if (!uuidSchema.safeParse(userId).success) {
+      throw new NotFoundException('Miembro no encontrado.');
+    }
+    return this.registry
+      .getZoomLiveService()
+      .setManualAttendance(user.tenantId, id, userId, dto.present);
   }
 
   @Post('sessions')
