@@ -245,7 +245,7 @@ export class AdminUsersService {
           { email: dto.email, resolvedTenantId: tenantId },
           webBaseUrl,
           ctx,
-          { allowPending: true, ttlMinutes: INVITE_TTL_MINUTES },
+          { allowPending: true, ttlMinutes: INVITE_TTL_MINUTES, asInvitation: true },
         );
       } catch (err) {
         this.logger.warn(
@@ -404,7 +404,7 @@ export class AdminUsersService {
       { email: user.email, resolvedTenantId: tenantId },
       webBaseUrl,
       ctx,
-      { allowPending: true, ttlMinutes: INVITE_TTL_MINUTES },
+      { allowPending: true, ttlMinutes: INVITE_TTL_MINUTES, asInvitation: true },
     );
 
     await this.auditLog.record({

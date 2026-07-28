@@ -6,6 +6,7 @@ import { PrismaTenantConfigService } from '../modules/prisma-tenant-config.servi
 import { SmtpAdapterService } from '../modules/smtp-adapter.service';
 import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { invitationEmailHtml } from '../common/invitation-email';
 import {
   renderBrandedEmail,
   resolveEmailBranding,
@@ -200,7 +201,11 @@ export class PasswordResetService {
     // `ttlMinutes` se propaga a `request`: el alta de un alumno necesita un
     // enlace que dure días, no los 60 minutos de un reset que el usuario acaba
     // de pedir. Sin este paso la opción existía pero no era alcanzable.
-    opts: { allowPending?: boolean; ttlMinutes?: number } = {},
+    // `asInvitation` cambia el CORREO, no el token: la invitación al aula tiene
+    // su propia maqueta (bienvenida, qué encontrará dentro, pasos) porque no es
+    // lo mismo que un "olvidé mi contraseña" que el usuario acaba de pedir.
+    // Compartir plantilla obligaba a que un reset sonara a campaña.
+    opts: { allowPending?: boolean; ttlMinutes?: number; asInvitation?: boolean } = {},
   ): Promise<void> {
     const result = await this.request(args, ctx, opts);
     if (!result) return;
@@ -267,13 +272,13 @@ export class PasswordResetService {
       result.tenantId,
       'auth.password_reset',
     );
-    const { subject, html, text } = this.buildResetEmail(
-      result.rawToken,
-      result.userName,
-      webBaseUrl,
-      branding,
-      override,
-    );
+    const { subject, html, text } = opts.asInvitation
+      ? invitationEmailHtml(branding, {
+          greeting: result.userName ? `Hola ${result.userName},` : 'Hola,',
+          resetUrl: `${webBaseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(result.rawToken)}`,
+          validezDias: Math.max(1, Math.round((opts.ttlMinutes ?? 60) / (60 * 24))),
+        })
+      : this.buildResetEmail(result.rawToken, result.userName, webBaseUrl, branding, override);
     const sendResult = await this.smtp.send(
       config,
       { to: args.email, subject, text, html },
