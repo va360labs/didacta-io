@@ -13,6 +13,8 @@ import { AdminTenantsController } from './admin-tenants.controller';
 import { AdminTenantsService } from './admin-tenants.service';
 import { AdminUsersController } from './admin-users.controller';
 import { AdminUsersService } from './admin-users.service';
+import { InvitationsController } from './invitations.controller';
+import { InvitationsService } from './invitations.service';
 import { CustomDomainsController } from './custom-domains/custom-domains.controller';
 import { CustomDomainsService } from './custom-domains/custom-domains.service';
 import { ScimAdminTokenController } from './scim/scim-admin.controller';
@@ -35,6 +37,7 @@ import { SuperUsersService } from './super/super-users.service';
 @Module({
   imports: [AuthModule, ModulesModule, SsoOidcModule, SsoSamlModule, SsoWpModule],
   controllers: [
+    InvitationsController,
     AdminUsersController,
     AdminTenantsController,
     AdminModulesController,
@@ -65,6 +68,7 @@ import { SuperUsersService } from './super/super-users.service';
     SuperUsersController,
   ],
   providers: [
+    InvitationsService,
     AdminUsersService,
     AdminTenantsService,
     AdminStatsService,

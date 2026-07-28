@@ -35,6 +35,7 @@ import { z } from 'zod';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
+import { PrismaService } from '../prisma/prisma.service';
 import type { SessionClaims } from '../auth/token.service';
 import { ModuleRegistryService } from './module-registry.service';
 import { LessonUnlockNotifierWorker } from './lesson-unlock-notifier.worker';
@@ -107,7 +108,25 @@ export class LearningController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly unlockNotifier: LessonUnlockNotifierWorker,
+    private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * Resuelve el nombre a mostrar del autor desde el User. Mismo patrón que
+   * `CommunityController.authorOf`: el comentario guarda un *snapshot* del
+   * nombre, así que hay que resolverlo al crearlo o queda anónimo para
+   * siempre. Si el user no existe (edge case), caemos a null.
+   */
+  private async authorOf(user: SessionClaims): Promise<{ id: string; displayName: string | null }> {
+    const dbUser = await this.prisma.user.findUnique({
+      where: { id: user.sub },
+      select: { name: true, email: true },
+    });
+    return {
+      id: user.sub,
+      displayName: dbUser?.name ?? dbUser?.email ?? null,
+    };
+  }
 
   @Get('me/enrollments')
   @ApiOperation({ summary: 'Listar mis matriculaciones' })
@@ -369,11 +388,11 @@ export class LearningController {
     if (!user) throw new UnauthorizedException();
     return this.registry
       .getLearningService()
-      .createLessonComment(
-        user.tenantId,
-        { id: user.sub, displayName: null },
-        { lessonId, courseId: dto.courseId, body: dto.body },
-      );
+      .createLessonComment(user.tenantId, await this.authorOf(user), {
+        lessonId,
+        courseId: dto.courseId,
+        body: dto.body,
+      });
   }
 
   @Get('courses/:courseId/comments/pending')
