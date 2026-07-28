@@ -2347,6 +2347,10 @@ model ModBillingProduct {
   unitAmount      Int      @map("unit_amount")
   /// ISO 4217 lowercase (eur, usd, gbp...).
   currency        String   @default("eur")
+  /// Precio ANTERIOR (tachado) para mostrar el descuento en la ficha de venta.
+  /// Null = sin oferta: la ficha no pinta ni el tachado ni el porcentaje. Mismo
+  /// patrón que `ModSubscriptionsPlan.compareAtCents`.
+  compareAtAmount Int?     @map("compare_at_amount")
   /// Si false, el botón Comprar no aparece en el curso.
   active          Boolean  @default(true)
   createdAt       DateTime @default(now()) @map("created_at")
@@ -2368,6 +2372,10 @@ model ModBillingOrder {
   courseId        String             @map("course_id") @db.Uuid
   /// Stripe Checkout Session ID (cs_...). Único globalmente.
   stripeSessionId String             @unique @map("stripe_session_id")
+  /// PaymentIntent (pi_...) del cobro, guardado al completar el checkout. Es la
+  /// ÚNICA forma fiable de reconocer la orden cuando llega `charge.refunded`:
+  /// el Charge no lleva la metadata que pusimos en la sesión.
+  stripePaymentIntentId String?       @map("stripe_payment_intent_id")
   status          BillingOrderStatus @default(PENDING)
   /// Importe pagado (en céntimos). Se rellena al recibir webhook completed.
   amountPaid      Int?               @map("amount_paid")
@@ -2382,6 +2390,7 @@ model ModBillingOrder {
   @@index([tenantId, userId])
   @@index([tenantId, status])
   @@index([courseId])
+  @@index([stripePaymentIntentId])
   @@map("mod_billing_order")
 }
 

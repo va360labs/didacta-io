@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Controller,
+  Get,
   NotFoundException,
   Param,
   Post,
@@ -33,6 +34,32 @@ export class BillingController {
     private readonly registry: ModuleRegistryService,
     private readonly prisma: PrismaService,
   ) {}
+
+  @Get('offer/:courseId')
+  @ApiOperation({
+    summary:
+      'Oferta del curso para el alumno: si está a la venta, precio, precio anterior y % de descuento. ' +
+      'Devuelve forSale=false (200) cuando el curso no se vende, para que la ficha oculte la compra.',
+  })
+  async getOffer(
+    @Param('courseId') courseId: string,
+    @CurrentUser() user: SessionClaims | undefined,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    // Si mod.billing no está configurado, la ficha debe seguir renderizando:
+    // simplemente no se ofrece la compra.
+    try {
+      return await this.registry.getBillingService().getCourseOffer(user.tenantId, courseId);
+    } catch {
+      return {
+        forSale: false,
+        unitAmount: null,
+        compareAtAmount: null,
+        currency: null,
+        discountPercent: null,
+      };
+    }
+  }
 
   @Post('checkout/:courseId')
   @ApiOperation({

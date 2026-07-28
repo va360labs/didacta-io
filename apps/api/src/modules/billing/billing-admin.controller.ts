@@ -37,6 +37,8 @@ const createProductSchema = z
       .regex(/^price_/, 'Debe empezar por price_')
       .optional(),
     amountCents: z.number().int().positive().max(99_999_99).optional(),
+    /** Precio anterior (tachado) para la ficha de venta. Opcional. */
+    compareAtCents: z.number().int().positive().max(99_999_99).optional(),
     currency: z.string().length(3).toLowerCase().optional(),
     name: z.string().trim().min(1).max(200).optional(),
   })
@@ -113,6 +115,7 @@ export class BillingAdminController {
       stripePriceId: dto.stripePriceId,
       unitAmount: dto.amountCents,
       currency: dto.currency,
+      compareAtAmount: dto.compareAtCents,
       name: dto.name ?? course?.title,
     });
     return { product };

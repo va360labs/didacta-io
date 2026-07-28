@@ -65,6 +65,8 @@ export interface CreateProductInput {
   currency?: string;
   /** Nombre visible en la pantalla de pago de Stripe (título del curso). */
   name?: string;
+  /** Precio anterior (tachado) para la ficha de venta. Debe ser mayor que el real. */
+  compareAtAmount?: number;
 }
 
 export interface UpdateProductInput {
@@ -128,6 +130,51 @@ export class BillingService {
     });
   }
 
+  /**
+   * Oferta del curso tal y como debe verla un ALUMNO: lo justo para pintar la
+   * caja de precio y decidir si se muestra el botón de compra. No expone nada
+   * interno de Stripe.
+   *
+   * Existe porque el precio solo estaba disponible en el endpoint de admin, así
+   * que la ficha no podía mostrarlo sin inventárselo — y el botón se pintaba
+   * siempre, fallando al hacer clic en los cursos que no están a la venta.
+   */
+  async getCourseOffer(
+    tenantId: string,
+    courseId: string,
+  ): Promise<{
+    forSale: boolean;
+    unitAmount: number | null;
+    compareAtAmount: number | null;
+    currency: string | null;
+    discountPercent: number | null;
+  }> {
+    const product = await this.getProductByCourse(tenantId, courseId);
+    if (!product || !product.active) {
+      return {
+        forSale: false,
+        unitAmount: null,
+        compareAtAmount: null,
+        currency: null,
+        discountPercent: null,
+      };
+    }
+    const compareAt = product.compareAtAmount;
+    // El porcentaje se DERIVA; no se guarda, para que no pueda contradecir a
+    // los importes.
+    const discountPercent =
+      compareAt && compareAt > product.unitAmount
+        ? Math.round(((compareAt - product.unitAmount) / compareAt) * 100)
+        : null;
+    return {
+      forSale: true,
+      unitAmount: product.unitAmount,
+      compareAtAmount: compareAt ?? null,
+      currency: product.currency,
+      discountPercent,
+    };
+  }
+
   async createProduct(input: CreateProductInput): Promise<BillingProductRow> {
     const existing = await this.getProductByCourse(input.tenantId, input.courseId);
     if (existing) {
@@ -168,6 +215,12 @@ export class BillingService {
         stripePriceId: price.id,
         unitAmount: price.unitAmount,
         currency: price.currency,
+        // Solo tiene sentido si es MAYOR que el precio real: un "antes" más
+        // barato que el "ahora" sería publicidad engañosa.
+        compareAtAmount:
+          input.compareAtAmount && input.compareAtAmount > price.unitAmount
+            ? input.compareAtAmount
+            : null,
         active: true,
       },
     });
@@ -380,6 +433,13 @@ export class BillingService {
         status: 'COMPLETED',
         amountPaid: session.amount_total ?? null,
         customerEmail: session.customer_details?.email ?? session.customer_email ?? null,
+        // Guardamos el PaymentIntent aquí porque es el único identificador que
+        // comparten el cobro y un futuro `charge.refunded` (el Charge NO lleva
+        // la metadata de la sesión). Sin esto, un reembolso es irreconocible.
+        stripePaymentIntentId:
+          typeof session.payment_intent === 'string'
+            ? session.payment_intent
+            : (session.payment_intent?.id ?? null),
         completedAt: new Date(),
       },
     });
@@ -420,20 +480,35 @@ export class BillingService {
     }
   }
 
+  /**
+   * Reembolso hecho desde el dashboard de Stripe.
+   *
+   * La orden se reconoce por el PaymentIntent que guardamos al completar el
+   * cobro: el Charge NO arrastra la metadata que pusimos en la sesión, así que
+   * buscar ahí (lo que se hacía antes) no encontraba nunca la orden y el
+   * reembolso pasaba desapercibido.
+   *
+   * Solo un reembolso TOTAL retira el acceso. Uno parcial (un descuento a
+   * posteriori, una devolución de gastos) deja la compra en pie: marcarla como
+   * reembolsada expulsaría del curso a alguien que sigue habiendo pagado.
+   */
   private async onChargeRefunded(charge: Stripe.Charge): Promise<void> {
-    // El charge.refunded llega tras un refund manual desde el dashboard.
-    // Buscamos la order por payment_intent en su metadata.
-    const orderId =
+    const paymentIntentId =
       typeof charge.payment_intent === 'string'
-        ? // No tenemos lookup directo session→charge sin expand; en MVP buscamos
-          // por metadata si está presente, si no, ignoramos (auditoría queda
-          // en webhook_event).
-          charge.metadata?.orderId
-        : null;
-    if (!orderId) return;
-    const order = await this.prisma.modBillingOrder.findUnique({ where: { id: orderId } });
-    if (!order) return;
+        ? charge.payment_intent
+        : (charge.payment_intent?.id ?? null);
+    if (!paymentIntentId) return;
+
+    const order = await this.prisma.modBillingOrder.findFirst({
+      where: { stripePaymentIntentId: paymentIntentId },
+    });
+    if (!order) return; // cobro de otro módulo (p.ej. membresía) o ajeno.
     if (order.status === 'REFUNDED') return;
+
+    const total = charge.amount ?? 0;
+    const devuelto = charge.amount_refunded ?? 0;
+    const esTotal = devuelto > 0 && devuelto >= total;
+    if (!esTotal) return; // parcial: no tocamos el acceso.
 
     await this.prisma.modBillingOrder.update({
       where: { id: order.id },
@@ -445,6 +520,7 @@ export class BillingService {
       productId: order.productId,
       courseId: order.courseId,
       userId: order.userId,
+      amountRefunded: devuelto,
     });
   }
 }

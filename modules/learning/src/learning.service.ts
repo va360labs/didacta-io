@@ -375,6 +375,34 @@ export class LearningService {
     return count;
   }
 
+  /**
+   * Cancela el acceso obtenido COMPRANDO el curso. Lo invoca el puente de
+   * mod.billing al recibir un reembolso total.
+   *
+   * SOLO toca `source = 'PURCHASE'`, igual que sus hermanos: si el alumno tiene
+   * además acceso por grupo o por la membresía, ese acceso sobrevive al
+   * reembolso — le devolvimos su compra, no le quitamos lo que ya tenía.
+   *
+   * Idempotente: devuelve cuántas matrículas se cancelaron (0 = ya no había
+   * ninguna viva por compra, p. ej. una reentrega del webhook).
+   */
+  async unenrollFromPurchase(tenantId: string, userId: string, courseId: string): Promise<number> {
+    const { count } = await this.prisma.modLearningEnrollment.updateMany({
+      where: {
+        tenantId,
+        userId,
+        courseId,
+        status: { in: ['ACTIVE', 'PAUSED'] },
+        source: 'PURCHASE',
+      },
+      data: { status: 'CANCELLED', cancelledAt: new Date() },
+    });
+    if (count > 0) {
+      await this.publish(tenantId, userId, 'learning.enrollment.cancelled', { courseId, userId });
+    }
+    return count;
+  }
+
   async listInvitationsForCourse(tenantId: string, courseId: string) {
     return this.prisma.modLearningInvitation.findMany({
       where: { tenantId, courseId, revokedAt: null },

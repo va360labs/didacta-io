@@ -137,3 +137,36 @@ export function formatPrice(unitAmount: number, currency: string): string {
     return `${(unitAmount / 100).toFixed(2)} ${currency.toUpperCase()}`;
   }
 }
+
+/** Oferta del curso tal y como la ve un alumno (GET /modules/billing/offer/:courseId). */
+export interface CourseOffer {
+  forSale: boolean;
+  unitAmount: number | null;
+  compareAtAmount: number | null;
+  currency: string | null;
+  discountPercent: number | null;
+}
+
+const OFFER_VACIA: CourseOffer = {
+  forSale: false,
+  unitAmount: null,
+  compareAtAmount: null,
+  currency: null,
+  discountPercent: null,
+};
+
+/**
+ * Precio del curso para la ficha de venta. Nunca lanza: si el módulo de cobro
+ * no está disponible, la ficha sigue renderizando y simplemente no ofrece la
+ * compra (queda la membresía y el canje de código).
+ */
+export async function getCourseOffer(courseId: string): Promise<CourseOffer> {
+  try {
+    return await apiFetch<CourseOffer>(
+      `/api/v1/modules/billing/offer/${encodeURIComponent(courseId)}`,
+      { method: 'GET' },
+    );
+  } catch {
+    return OFFER_VACIA;
+  }
+}

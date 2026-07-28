@@ -55,6 +55,7 @@ interface OrderRow {
   productId: string;
   courseId: string;
   stripeSessionId: string;
+  stripePaymentIntentId: string | null;
   status: 'PENDING' | 'COMPLETED' | 'CANCELLED' | 'FAILED' | 'REFUNDED';
   amountPaid: number | null;
   currency: string;
@@ -125,6 +126,17 @@ class MockPrisma {
 
   modBillingOrder = {
     findUnique: async (args: { where: { id: string } }) => this.orders.get(args.where.id) ?? null,
+    findFirst: async (args: { where: { stripePaymentIntentId?: string } }) => {
+      for (const o of this.orders.values()) {
+        if (
+          args.where.stripePaymentIntentId &&
+          o.stripePaymentIntentId === args.where.stripePaymentIntentId
+        ) {
+          return o;
+        }
+      }
+      return null;
+    },
     create: async (args: {
       data: Omit<
         OrderRow,
@@ -142,6 +154,7 @@ class MockPrisma {
       const row: OrderRow = {
         id,
         amountPaid: null,
+        stripePaymentIntentId: null,
         customerEmail: null,
         completedAt: null,
         refundedAt: null,
@@ -555,6 +568,69 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     expect(publisher.events).toHaveLength(1);
     expect(publisher.events[0].name).toBe('billing.order.completed');
     expect(publisher.events[0].payload.amountPaid).toBe(1999);
+  });
+
+  async function comprarYCobrar() {
+    stripe.setPrice('price_a');
+    await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
+    const checkout = await svc.startCheckout({
+      tenantId: 't1',
+      userId: 'u1',
+      userEmail: 'u@test',
+      courseId: 'course-1',
+    });
+    const ev = buildSessionCompletedEvent(checkout.orderId);
+    (ev.data.object as unknown as { payment_intent: string }).payment_intent = 'pi_test_1';
+    await svc.handleWebhookEvent(ev, {});
+    publisher.events = [];
+    return checkout.orderId;
+  }
+
+  function refundEvent(id: string, amount: number, refunded: number): Stripe.Event {
+    return {
+      id,
+      type: 'charge.refunded',
+      data: {
+        object: {
+          id: 'ch_1',
+          payment_intent: 'pi_test_1',
+          amount,
+          amount_refunded: refunded,
+        } as unknown as Stripe.Charge,
+      },
+    } as Stripe.Event;
+  }
+
+  it('un reembolso TOTAL marca la orden como REFUNDED y emite el evento para retirar el acceso', async () => {
+    const orderId = await comprarYCobrar();
+
+    await svc.handleWebhookEvent(refundEvent('evt_refund_total', 1999, 1999), {});
+
+    expect(prisma.orders.get(orderId)!.status).toBe('REFUNDED');
+    expect(prisma.orders.get(orderId)!.refundedAt).toBeInstanceOf(Date);
+    expect(publisher.events).toHaveLength(1);
+    expect(publisher.events[0].name).toBe('billing.order.refunded');
+    expect(publisher.events[0].payload.courseId).toBe('course-1');
+  });
+
+  it('un reembolso PARCIAL no retira el acceso ni marca la orden', async () => {
+    const orderId = await comprarYCobrar();
+
+    await svc.handleWebhookEvent(refundEvent('evt_refund_parcial', 1999, 500), {});
+
+    expect(prisma.orders.get(orderId)!.status).toBe('COMPLETED');
+    expect(publisher.events).toHaveLength(0);
+  });
+
+  it('un reembolso de un cobro AJENO (otro módulo) no toca ninguna orden', async () => {
+    const orderId = await comprarYCobrar();
+    const ajeno = refundEvent('evt_refund_ajeno', 39900, 39900);
+    (ajeno.data.object as unknown as { payment_intent: string }).payment_intent = 'pi_membresia';
+
+    await svc.handleWebhookEvent(ajeno, {});
+
+    expect(prisma.orders.get(orderId)!.status).toBe('COMPLETED');
+    expect(publisher.events).toHaveLength(0);
   });
 
   it('un evento recibido pero NO procesado se reintenta (no se queda "quemado")', async () => {

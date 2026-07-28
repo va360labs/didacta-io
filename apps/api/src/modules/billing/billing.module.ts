@@ -7,6 +7,7 @@ import { BillingAdminController } from './billing-admin.controller';
 import { BillingWebhookController } from './billing-webhook.controller';
 import { BillingErrorFilter } from './billing-error.filter';
 import { BillingLearningBridge } from './billing-learning.bridge';
+import { BillingRefundBridge } from './billing-refund.bridge';
 
 /// Backend del módulo `mod.billing`. Encapsula los controllers de checkout
 /// alumno, admin de productos Stripe, webhook idempotente, el filter y el
@@ -23,6 +24,10 @@ import { BillingLearningBridge } from './billing-learning.bridge';
 @Module({
   imports: [AuthModule, forwardRef(() => ModulesModule)],
   controllers: [BillingController, BillingAdminController, BillingWebhookController],
-  providers: [BillingLearningBridge, { provide: APP_FILTER, useClass: BillingErrorFilter }],
+  providers: [
+    BillingLearningBridge,
+    BillingRefundBridge,
+    { provide: APP_FILTER, useClass: BillingErrorFilter },
+  ],
 })
 export class BillingModule {}

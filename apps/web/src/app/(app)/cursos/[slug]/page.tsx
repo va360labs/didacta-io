@@ -7,6 +7,7 @@ import { AiTutorPanel } from '@/components/ai-tutor-panel';
 import { CourseStatusBadge } from '@/components/course-status-badge';
 import { authStorage } from '@/lib/auth-storage';
 import { BuyCourseButton } from '@/components/buy-course-button';
+import { CourseSalesPanel, LockedContentActions } from '@/modules/billing/course-sales-panel';
 import { LessonComments } from '@/components/lesson-comments';
 import { LessonPlayer } from '@/components/lesson-player';
 import { VideoEmbed } from '@/components/video-embed';
@@ -447,43 +448,49 @@ export default function CourseAlumnoPage() {
       {enrollment ? <RecordedZoomSessions sessions={zoomSessions} /> : null}
 
       {!enrollment && !isPreview ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Empieza este curso</CardTitle>
-            <CardDescription>
-              Compra el curso para acceder al contenido. Si tu organización te dio un código de
-              invitación, puedes canjearlo abajo.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="flex flex-wrap gap-3">
-              {course.externalPurchaseUrl ? (
-                // El curso se vende en una página externa: el CTA redirige allí.
-                // Tras el pago, esa página inscribe al alumno vía POST /api/v1/inscribe.
-                <Button asChild size="lg">
-                  <a href={course.externalPurchaseUrl} target="_blank" rel="noopener noreferrer">
-                    Comprar curso
-                  </a>
-                </Button>
-              ) : (
-                // Sin URL externa: si tu organización vinculó el curso a un producto
-                // Stripe en mod.billing, "Comprar curso" arranca el checkout. Si NO
-                // existe producto, el endpoint devuelve 404 BILLING_PRODUCT_NOT_FOUND y
-                // BuyCourseButton muestra un mensaje claro al alumno (sin crash).
-                <BuyCourseButton courseId={course.id} size="lg" />
-              )}
-            </div>
-            <form action={handleEnrollByCode} className="space-y-2 border-t border-border pt-5">
-              <Label htmlFor="code">¿Tienes un código de invitación?</Label>
-              <div className="flex gap-2">
-                <Input id="code" name="code" required placeholder="ABCD-1234" className="flex-1" />
-                <Button type="submit" variant="secondary" disabled={pending}>
-                  Canjear código
-                </Button>
+        <div className="space-y-6">
+          {/* Ficha de venta: beneficios, precio real del curso y acceso total.
+              Todos los importes salen de la BD; si no existen, no se pintan. */}
+          {!course.externalPurchaseUrl ? (
+            <CourseSalesPanel courseId={course.id} courseTitle={course.title} />
+          ) : null}
+          <Card>
+            <CardHeader>
+              <CardTitle>¿Tienes un código de invitación?</CardTitle>
+              <CardDescription>
+                Si tu organización te dio un código, canjéalo aquí para entrar al curso.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="flex flex-wrap gap-3">
+                {course.externalPurchaseUrl ? (
+                  // El curso se vende en una página externa: el CTA redirige allí.
+                  // Tras el pago, esa página inscribe al alumno vía POST /api/v1/inscribe.
+                  <Button asChild size="lg">
+                    <a href={course.externalPurchaseUrl} target="_blank" rel="noopener noreferrer">
+                      Comprar curso
+                    </a>
+                  </Button>
+                ) : null}
               </div>
-            </form>
-          </CardContent>
-        </Card>
+              <form action={handleEnrollByCode} className="space-y-2 border-t border-border pt-5">
+                <Label htmlFor="code">¿Tienes un código de invitación?</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="code"
+                    name="code"
+                    required
+                    placeholder="ABCD-1234"
+                    className="flex-1"
+                  />
+                  <Button type="submit" variant="secondary" disabled={pending}>
+                    Canjear código
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
@@ -606,11 +613,17 @@ export default function CourseAlumnoPage() {
           ) : !enrollment ? (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+                <span className="grid h-12 w-12 place-items-center rounded-full bg-bg-subtle text-text-muted">
+                  <Icon name="lock" size={22} />
+                </span>
                 <h3 className="font-display text-xl font-semibold">Contenido bloqueado</h3>
                 <p className="max-w-md text-sm text-text-muted">
-                  Matricúlate al curso para empezar a ver las lecciones, marcar tu progreso y
-                  recibir tu certificado al completar.
+                  Consigue el curso para desbloquear las {allLessons.length} lecciones, marcar tu
+                  progreso y recibir el certificado al completarlo.
                 </p>
+                {/* Mismas dos vías de acceso que arriba, aquí donde el alumno
+                    se topa con el muro. Se ocultan solas si no hay ninguna. */}
+                <LockedContentActions courseId={course.id} />
               </CardContent>
             </Card>
           ) : activeLesson &&
