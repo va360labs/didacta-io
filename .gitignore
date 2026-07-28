@@ -79,3 +79,5 @@ drip-evidence/
 # Informes de evidencia de operaciones en producción: contienen datos
 # personales de alumnos (nombre + email), nunca deben entrar al repo.
 evidencias/
+.quality/
+doc/
