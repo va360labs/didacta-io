@@ -1,10 +1,10 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import type { StorageService } from '@didacta/core-kernel';
+import type { StorageAdapter } from '@didacta/core-kernel';
 import { resolvePersistentDataRoot } from './persistent-data-root';
 
 /**
- * StorageService que persiste en disco bajo el volumen persistente.
+ * Adapter de storage que persiste en disco bajo el volumen persistente.
  *
  * El root se resuelve via `resolvePersistentDataRoot()` que prueba en este
  * orden: argumento explícito → `STORAGE_ROOT` env → `/app/data/storage` (si
@@ -18,7 +18,7 @@ import { resolvePersistentDataRoot } from './persistent-data-root';
  * `getSignedUrl` no firma realmente — devuelve la ruta relativa que el reverse
  * proxy de Easypanel sirve. En Fase 2 se reemplaza por un service S3-compatible.
  */
-export class LocalDiskStorageService implements StorageService {
+export class LocalDiskStorageService implements StorageAdapter {
   private readonly root: string;
 
   constructor(rootDir?: string) {

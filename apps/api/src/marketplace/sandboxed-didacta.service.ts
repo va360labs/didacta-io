@@ -1351,14 +1351,21 @@ class ScopedDidactaApi implements DidactaApi {
     const { tenantId } = this.requireTenant();
 
     const checksum = sha256Hex(input.bytes);
-    const storageKey = buildStorageKey(this.moduleId, tenantId, checksum);
+    const requestedKey = buildStorageKey(this.moduleId, tenantId, checksum);
     const storage = this.coreServices.getStorage();
-    await storage.upload(storageKey, input.bytes, input.contentType);
+
+    // Las imágenes van por `uploadImage` para que se optimicen como las del
+    // host: por aquí entra todo lo que suben los módulos (el migrador importa
+    // miles de portadas de un LMS de origen), y antes se guardaban en crudo.
+    // El resto de ficheros (PDF, ZIP, vídeo) se escriben byte a byte.
+    const stored = await storage.uploadImage(requestedKey, input.bytes, input.contentType);
 
     return {
-      storageKey,
-      contentType: input.contentType,
-      sizeBytes: input.bytes.byteLength,
+      // La key devuelta es la REAL: al recomprimir cambia la extensión, y el
+      // módulo persistirá esta para poder recuperar el blob después.
+      storageKey: stored.key,
+      contentType: stored.contentType,
+      sizeBytes: stored.size,
       checksum,
       uploadedAt: new Date().toISOString(),
     };

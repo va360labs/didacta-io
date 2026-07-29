@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_THEME,
   MAX_CUSTOM_CSS_BYTES,
@@ -81,17 +81,46 @@ function makeFakePrisma() {
  * Storage fake en memoria: registra uploads/deletes para aserciones del test
  * del uploader de logo. `upload` devuelve `{ key }` igual que LocalDiskStorage
  * y S3Storage del host.
+ *
+ * `uploadImage` simula el envoltorio del core (`withImageOptimization`): con
+ * `recomprime: true` devuelve una key con extensión `.webp` y otro contentType,
+ * que es lo que ocurre de verdad con un PNG grande. El módulo no puede importar
+ * la implementación del host (vive en `apps/api`), así que aquí se reproduce el
+ * CONTRATO: lo que importa es que el service persista lo DEVUELTO y no lo pedido.
  */
-function makeFakeStorage() {
+function makeFakeStorage(opts: { recomprime?: boolean } = {}) {
   const blobs = new Map<string, { buffer: Buffer; contentType?: string }>();
-  const calls = { upload: 0, delete: 0, download: 0 };
-  return {
+  const calls = { upload: 0, delete: 0, download: 0, uploadImage: 0 };
+  const self = {
     blobs,
     calls,
     async upload(key: string, data: Buffer, contentType?: string) {
       calls.upload++;
       blobs.set(key, { buffer: Buffer.from(data), contentType });
       return { key };
+    },
+    async uploadImage(key: string, data: Buffer, contentType: string) {
+      calls.uploadImage++;
+      if (!opts.recomprime) {
+        await self.upload(key, data, contentType);
+        return {
+          key,
+          contentType,
+          optimized: false,
+          size: data.length,
+          previousSize: data.length,
+        };
+      }
+      const webpKey = `${key.replace(/\.[^./]+$/, '')}.webp`;
+      const recomprimido = Buffer.from(data.subarray(0, Math.max(1, Math.floor(data.length / 2))));
+      await self.upload(webpKey, recomprimido, 'image/webp');
+      return {
+        key: webpKey,
+        contentType: 'image/webp',
+        optimized: true,
+        size: recomprimido.length,
+        previousSize: data.length,
+      };
     },
     async download(key: string) {
       calls.download++;
@@ -107,6 +136,7 @@ function makeFakeStorage() {
       return `/storage/${key}`;
     },
   };
+  return self;
 }
 
 function makeFakeCtx(storage?: ReturnType<typeof makeFakeStorage>) {
@@ -277,8 +307,47 @@ describe('ThemingService.uploadLogo', () => {
 
     expect(snap.logoUploaded).toBe(true);
     expect(snap.logoUrl).toMatch(/^\/api\/v1\/modules\/theming\/tenants\/[\w-]+\/logo\?v=\d+$/);
-    expect(storage.calls.upload).toBe(1);
+    expect(storage.calls.uploadImage).toBe(1);
     expect(storage.blobs.has(`tenants/${tenant}/branding/logo`)).toBe(true);
+  });
+
+  it('el logo pasa por uploadImage con ajustes conservadores (512px, calidad 90)', async () => {
+    const prisma = makeFakePrisma();
+    const storage = makeFakeStorage();
+    const spy = vi.spyOn(storage, 'uploadImage');
+    const service = new ThemingService(prisma as never, makeFakeCtx(storage));
+
+    await service.uploadLogo(tenant, {
+      data: tinyPngBase64,
+      filename: 'logo.png',
+      contentType: 'image/png',
+    });
+
+    expect(spy).toHaveBeenCalledWith(expect.any(String), expect.any(Buffer), 'image/png', {
+      maxWidth: 512,
+      quality: 90,
+    });
+    // Y NUNCA el `upload` crudo directamente: eso saltaría la optimización.
+    expect(storage.calls.upload).toBe(1); // el único, hecho DESDE uploadImage
+  });
+
+  it('si el core recomprime, persiste la key y el MIME REALES (no los pedidos)', async () => {
+    const prisma = makeFakePrisma();
+    const storage = makeFakeStorage({ recomprime: true });
+    const service = new ThemingService(prisma as never, makeFakeCtx(storage));
+
+    await service.uploadLogo(tenant, {
+      data: tinyPngBase64,
+      filename: 'logo.png',
+      contentType: 'image/png',
+    });
+
+    // El blob vive bajo la key con extensión nueva…
+    expect(storage.blobs.has(`tenants/${tenant}/branding/logo.webp`)).toBe(true);
+    // …y getLogoBlob lo encuentra, que es la prueba de que se persistió esa key
+    // y no la pedida (si guardara la pedida, esto lanzaría 'not found').
+    const { mimeType } = await service.getLogoBlob(tenant);
+    expect(mimeType).toBe('image/webp');
   });
 
   it('rechaza un contentType no permitido con UnsupportedLogoTypeError', async () => {

@@ -257,11 +257,19 @@ export interface DidactaEnrollment {
 /// Resultado de una operación de upload de media. `storageKey` es opaco
 /// y se pasa como referencia en `Lesson.content` (ej. `{ videoUrl: storageKey }`).
 export interface DidactaMediaUpload {
+  /// Key REAL bajo la que quedó el fichero. Si el core optimizó la imagen, la
+  /// extensión cambia respecto a la del original: persiste SIEMPRE esta.
   storageKey: string;
+  /// ContentType REAL de lo almacenado (`image/webp` si se recomprimió), no el
+  /// que se pasó al subir.
   contentType: string;
+  /// Bytes REALES almacenados, después de optimizar.
   sizeBytes: number;
-  /// SHA-256 del contenido. Permite al módulo detectar duplicados antes
-  /// de subir el mismo asset dos veces.
+  /// SHA-256 del contenido ORIGINAL que se pasó a `uploadFromBytes`, no del blob
+  /// almacenado. Es deliberado: sirve para que el módulo detecte que ya subió
+  /// ese asset (el migrador reimportando el mismo curso) y para eso tiene que
+  /// depender de la fuente, no del resultado de una recompresión que puede
+  /// cambiar entre versiones.
   checksum: string;
   uploadedAt: string;
 }

@@ -164,8 +164,16 @@ export class ThemingService {
       });
     }
 
-    const storageKey = `tenants/${tenantId}/branding/logo`;
-    await this.ctx.storage.upload(storageKey, buffer, input.contentType);
+    // `uploadImage` (no `upload`) para que el logo se recomprima como el resto
+    // de imágenes de la plataforma. Ajustes conservadores: un logo de cabecera
+    // se ve pequeño pero suele llevar texto fino, así que 512 px de ancho y
+    // calidad 90 en vez de los 1600/80 por defecto. Un SVG no es optimizable y
+    // el core lo guarda intacto, que es justo lo que queremos con un vector.
+    const requestedKey = `tenants/${tenantId}/branding/logo`;
+    const stored = await this.ctx.storage.uploadImage(requestedKey, buffer, input.contentType, {
+      maxWidth: 512,
+      quality: 90,
+    });
 
     // Cache-buster basado en timestamp para que el browser refresque al cambiar.
     const publicUrl = `/api/v1/modules/theming/tenants/${tenantId}/logo?v=${Date.now()}`;
@@ -174,8 +182,11 @@ export class ThemingService {
       where: { tenantId },
       data: {
         logoUrl: publicUrl,
-        logoStorageKey: storageKey,
-        logoMimeType: input.contentType,
+        // La key y el MIME son los REALES que devolvió el core: al recomprimir a
+        // WebP cambia la extensión, y el endpoint público sirve por esta key con
+        // este content-type. Persistir lo pedido serviría el blob equivocado.
+        logoStorageKey: stored.key,
+        logoMimeType: stored.contentType,
       },
     });
 
@@ -192,8 +203,10 @@ export class ThemingService {
     });
     this.ctx.logger.info('mod.theming: logo uploaded', {
       tenantId,
-      size: buffer.length,
-      contentType: input.contentType,
+      size: stored.size,
+      originalSize: buffer.length,
+      contentType: stored.contentType,
+      optimized: stored.optimized,
     });
 
     return this.toSnapshot(updated);
