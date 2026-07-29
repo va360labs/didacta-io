@@ -1,0 +1,14 @@
+{
+  "name": "surveys",
+  "version": "1.0.0",
+  "edition": "community",
+  "coreVersionRequired": "^1.0.0",
+  "displayName": "Encuestas y NPS",
+  "category": "engagement",
+  "tablePrefix": "mod_surveys_",
+  "permissions": ["surveys:response:write", "surveys:results:read", "surveys:manage"],
+  "events": [{ "name": "surveys.survey.created" }, { "name": "surveys.response.submitted" }],
+  "hooks": [{ "event": "zoom.session.ended" }],
+  "apiNamespace": "/modules/surveys",
+  "surfaces": ["alumno", "admin"]
+}

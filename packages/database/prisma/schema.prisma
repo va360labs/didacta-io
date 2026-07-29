@@ -3647,3 +3647,163 @@ model ModMessagingMessage {
   @@index([tenantId, conversationId, createdAt])
   @@map("mod_messaging_message")
 }
+
+// ============================================================================
+// mod.surveys — Encuestas y NPS (bloque 2 de la propuesta de comunidad)
+// ============================================================================
+
+enum SurveyKind {
+  /// Encuesta automática al terminar una clase en directo (mod.zoom-live).
+  POST_CLASS
+  /// Al completar un curso (v2, aún sin trigger).
+  POST_COURSE
+  /// Encuesta general del tenant (v2).
+  GENERAL
+}
+
+enum SurveyStatus {
+  OPEN
+  CLOSED
+}
+
+enum SurveyQuestionType {
+  /// "Del 0 al 10, ¿recomendarías…?" — valueInt 0-10.
+  NPS
+  /// Valoración 1-5 — valueInt 1-5.
+  SCALE
+  /// Respuesta libre — valueText, opcional.
+  TEXT
+}
+
+model ModSurveysSurvey {
+  id       String     @id @default(uuid()) @db.Uuid
+  tenantId String     @map("tenant_id") @db.Uuid
+  kind     SurveyKind
+  /// ID lógico de la sesión de mod.zoom-live (sin FK cross-module, ADR-016).
+  zoomSessionId String? @map("zoom_session_id") @db.Uuid
+  /// ID lógico del curso de mod.courses (sin FK cross-module).
+  courseId  String?      @map("course_id") @db.Uuid
+  title     String
+  status    SurveyStatus @default(OPEN)
+  createdAt DateTime     @default(now()) @map("created_at")
+  closedAt  DateTime?    @map("closed_at")
+  /// Cuándo se envió el recordatorio a los inscritos sin responder (1 por encuesta).
+  reminderSentAt DateTime? @map("reminder_sent_at")
+
+  questions ModSurveysQuestion[]
+  responses ModSurveysResponse[]
+
+  @@unique([tenantId, zoomSessionId])
+  @@index([tenantId, kind, createdAt(sort: Desc)])
+  @@map("mod_surveys_survey")
+}
+
+model ModSurveysQuestion {
+  id       String             @id @default(uuid()) @db.Uuid
+  tenantId String             @map("tenant_id") @db.Uuid
+  surveyId String             @map("survey_id") @db.Uuid
+  position Int
+  type     SurveyQuestionType
+  label    String
+
+  survey  ModSurveysSurvey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  answers ModSurveysAnswer[]
+
+  @@unique([surveyId, position])
+  @@index([tenantId, surveyId])
+  @@map("mod_surveys_question")
+}
+
+/// Respuesta ANÓNIMA: no guarda userId. `respondentHash` = HMAC(surveyId:userId)
+/// con secreto del servidor — dedupe de envíos sin poder identificar al autor.
+model ModSurveysResponse {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  surveyId       String   @map("survey_id") @db.Uuid
+  respondentHash String   @map("respondent_hash")
+  submittedAt    DateTime @default(now()) @map("submitted_at")
+
+  survey  ModSurveysSurvey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  answers ModSurveysAnswer[]
+
+  @@unique([surveyId, respondentHash])
+  @@index([tenantId, surveyId])
+  @@map("mod_surveys_response")
+}
+
+model ModSurveysAnswer {
+  id         String  @id @default(uuid()) @db.Uuid
+  tenantId   String  @map("tenant_id") @db.Uuid
+  responseId String  @map("response_id") @db.Uuid
+  questionId String  @map("question_id") @db.Uuid
+  valueInt   Int?    @map("value_int")
+  valueText  String? @map("value_text")
+
+  response ModSurveysResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  question ModSurveysQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([responseId, questionId])
+  @@index([tenantId, questionId])
+  @@map("mod_surveys_answer")
+}
+
+// ============================================================================
+// mod.resources — Biblioteca de recursos (bloque 4 de la propuesta de comunidad)
+// ============================================================================
+
+enum ResourceKind {
+  /// Archivo subido al storage del tenant.
+  FILE
+  /// Enlace externo (directorio de herramientas, plantillas de Notion…).
+  LINK
+}
+
+/// Colección de recursos con portada propia ("Workflows de clase", "Skills y
+/// agentes"…). Las 6 por defecto se siembran perezosamente al primer listado
+/// del tenant (runtime, no migración: el flujo real de despliegue es db push).
+model ModResourcesCollection {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  title       String
+  description String?
+  /// Imagen de portada (storage del tenant). Sin ella, la tarjeta usa el degradado de marca.
+  coverUrl  String?  @map("cover_url")
+  sortOrder Int      @default(0) @map("sort_order")
+  /// Sembrada por defecto. Editable; borrarla exige igualmente estar vacía.
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  resources ModResourcesResource[]
+
+  @@unique([tenantId, title])
+  @@index([tenantId, sortOrder])
+  @@map("mod_resources_collection")
+}
+
+model ModResourcesResource {
+  id           String       @id @default(uuid()) @db.Uuid
+  tenantId     String       @map("tenant_id") @db.Uuid
+  collectionId String       @map("collection_id") @db.Uuid
+  kind         ResourceKind
+  title        String
+  description  String?
+  /// URL del archivo en storage (kind FILE) o del enlace externo (kind LINK).
+  url         String
+  /// Nombre de archivo original (solo kind FILE).
+  fileName    String?          @map("file_name")
+  /// ID lógico de la clase de mod.zoom-live que generó el recurso (sin FK).
+  zoomSessionId String?        @map("zoom_session_id") @db.Uuid
+  /// ID lógico del miembro que lo compartió (tabla core `user`, sin FK cross-module).
+  createdById   String         @map("created_by_id") @db.Uuid
+  downloadCount Int            @default(0) @map("download_count")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  /// Restrict a propósito: borrar una colección con recursos es un error de
+  /// dominio, nunca un cascade silencioso (el service exige vaciarla antes).
+  collection ModResourcesCollection @relation(fields: [collectionId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, collectionId, createdAt(sort: Desc)])
+  @@map("mod_resources_resource")
+}

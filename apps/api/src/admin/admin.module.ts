@@ -9,6 +9,8 @@ import { AdminModulesController } from './admin-modules.controller';
 import { AdminSmtpController } from './admin-smtp.controller';
 import { AdminStatsController } from './admin-stats.controller';
 import { AdminStatsService } from './admin-stats.service';
+import { AdminBusinessMetricsController } from './admin-business-metrics.controller';
+import { AdminBusinessMetricsService } from './admin-business-metrics.service';
 import { AdminTenantsController } from './admin-tenants.controller';
 import { AdminTenantsService } from './admin-tenants.service';
 import { AdminUsersController } from './admin-users.controller';
@@ -42,6 +44,9 @@ import { SuperUsersService } from './super/super-users.service';
     AdminTenantsController,
     AdminModulesController,
     AdminStatsController,
+    // Bloque 7 — KPIs de negocio (/admin/metricas): NPS, ventas, impagos,
+    // altas/bajas, conexiones y uso del tutor IA, todo de la BD local.
+    AdminBusinessMetricsController,
     // Gestión de API keys del tenant (Administración → Claves API). Reusa
     // ApiKeyService + PrismaAuditLogService de AuthModule (ya importado).
     AdminApiKeysController,
@@ -72,6 +77,7 @@ import { SuperUsersService } from './super/super-users.service';
     AdminUsersService,
     AdminTenantsService,
     AdminStatsService,
+    AdminBusinessMetricsService,
     CustomDomainsService,
     SuperUsersService,
   ],

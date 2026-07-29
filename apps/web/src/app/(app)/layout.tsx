@@ -507,6 +507,7 @@ function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): SidebarG
     items: [
       { href: '/comunidad', label: '← Volver a la app', icon: 'home', exactMatch: true },
       { href: '/admin', label: 'Panel', icon: 'chart', exactMatch: true },
+      { href: '/admin/metricas', label: 'Métricas', icon: 'trending' },
       { href: '/admin/usuarios', label: 'Usuarios y roles', icon: 'users' },
       { href: '/admin/invitaciones', label: 'Invitaciones', icon: 'bell' },
       { href: '/admin/solicitudes-miembros', label: 'Solicitudes de inscripción', icon: 'users' },
