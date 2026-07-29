@@ -73,6 +73,7 @@ const UPLOAD_MIME_TYPES = [
   'application/x-zip-compressed', // zip (Windows)
   'text/plain',
   'text/csv',
+  'application/json', // workflows exportados (n8n, Make…) — mod.resources
 ] as const;
 
 const ALLOWED_MIME = new Set<string>(UPLOAD_MIME_TYPES);

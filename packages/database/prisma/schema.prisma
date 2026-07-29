@@ -3746,3 +3746,49 @@ model ModSurveysAnswer {
   @@index([tenantId, questionId])
   @@map("mod_surveys_answer")
 }
+
+// ============================================================================
+// mod.resources — Biblioteca de recursos (bloque 4 de la propuesta de comunidad)
+// ============================================================================
+
+enum ResourceCategory {
+  /// Plantillas de automatización de las clases (workflows n8n/Make…).
+  WORKFLOW
+  /// Skills y prompts.
+  SKILL
+  /// Directorio de herramientas de IA (enlaces).
+  TOOL
+  /// Plantillas (Notion, segundo cerebro…).
+  TEMPLATE
+  OTHER
+}
+
+enum ResourceKind {
+  /// Archivo subido al storage del tenant.
+  FILE
+  /// Enlace externo (directorio de herramientas, plantillas de Notion…).
+  LINK
+}
+
+model ModResourcesResource {
+  id          String           @id @default(uuid()) @db.Uuid
+  tenantId    String           @map("tenant_id") @db.Uuid
+  category    ResourceCategory
+  kind        ResourceKind
+  title       String
+  description String?
+  /// URL del archivo en storage (kind FILE) o del enlace externo (kind LINK).
+  url         String
+  /// Nombre de archivo original (solo kind FILE).
+  fileName    String?          @map("file_name")
+  /// ID lógico de la clase de mod.zoom-live que generó el recurso (sin FK).
+  zoomSessionId String?        @map("zoom_session_id") @db.Uuid
+  /// ID lógico del staff que lo publicó (tabla core `user`, sin FK cross-module).
+  createdById   String         @map("created_by_id") @db.Uuid
+  downloadCount Int            @default(0) @map("download_count")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  @@index([tenantId, category, createdAt(sort: Desc)])
+  @@map("mod_resources_resource")
+}

@@ -107,6 +107,9 @@ importers:
       '@didacta/mod-referrals':
         specifier: workspace:*
         version: link:../../modules/referrals
+      '@didacta/mod-resources':
+        specifier: workspace:*
+        version: link:../../modules/resources
       '@didacta/mod-subscriptions':
         specifier: workspace:*
         version: link:../../modules/subscriptions
@@ -708,6 +711,25 @@ importers:
         version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
 
   modules/referrals:
+    dependencies:
+      '@didacta/core-kernel':
+        specifier: workspace:*
+        version: link:../../packages/core-kernel
+      '@didacta/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.17
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
+
+  modules/resources:
     dependencies:
       '@didacta/core-kernel':
         specifier: workspace:*

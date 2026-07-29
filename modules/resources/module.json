@@ -1,0 +1,14 @@
+{
+  "name": "resources",
+  "version": "1.0.0",
+  "edition": "community",
+  "coreVersionRequired": "^1.0.0",
+  "displayName": "Biblioteca de recursos",
+  "category": "engagement",
+  "tablePrefix": "mod_resources_",
+  "permissions": ["resources:read", "resources:manage"],
+  "events": [{ "name": "resources.resource.created" }, { "name": "resources.resource.deleted" }],
+  "hooks": [],
+  "apiNamespace": "/modules/resources",
+  "surfaces": ["alumno", "formador"]
+}

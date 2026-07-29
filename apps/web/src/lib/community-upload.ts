@@ -21,6 +21,7 @@ const ALLOWED_FILE_TYPES = new Set([
   'application/x-zip-compressed',
   'text/plain',
   'text/csv',
+  'application/json', // workflows exportados (n8n, Make…)
 ]);
 
 /**
@@ -40,6 +41,7 @@ const EXT_TO_MIME: Record<string, string> = {
   zip: 'application/zip',
   txt: 'text/plain',
   csv: 'text/csv',
+  json: 'application/json',
 };
 
 /** Resuelve un contentType admitido para un archivo, o null si no se soporta. */

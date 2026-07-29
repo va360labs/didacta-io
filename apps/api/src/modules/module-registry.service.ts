@@ -57,6 +57,11 @@ import {
   SurveysService,
   type SurveysEventPublisher,
 } from '@didacta/mod-surveys';
+import {
+  buildResourcesModule,
+  ResourcesService,
+  type ResourcesEventPublisher,
+} from '@didacta/mod-resources';
 import { communityModule, CommunityService } from '@didacta/mod-community';
 import { coursesModule, CoursesService } from '@didacta/mod-courses';
 import { helloWorldModule } from '@didacta/mod-hello-world';
@@ -121,6 +126,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private referrals?: ReferralsService;
   private messaging?: MessagingService;
   private surveys?: SurveysService;
+  private resources?: ResourcesService;
 
   constructor(
     private readonly factory: ModuleContextFactory,
@@ -495,6 +501,28 @@ export class ModuleRegistryService implements OnModuleInit {
     this.surveys = new SurveysService(prisma, surveysPublisher, surveysHashSecret);
     const surveysModule = buildSurveysModule();
 
+    // mod.resources: biblioteca de recursos (bloque 4).
+    const resourcesEventBus = this.factory.getEventBus();
+    const resourcesPublisher: ResourcesEventPublisher = {
+      publish: async (tenantId, actorId, name, payload) => {
+        const entityId = (payload as { resourceId?: string }).resourceId;
+        await resourcesEventBus.publish({
+          name,
+          version: 1,
+          data: payload as never,
+          metadata: {
+            tenantId,
+            userId: actorId ?? undefined,
+            timestamp: new Date().toISOString(),
+            traceId: cryptoRandom(),
+            idempotencyKey: `${name}:${entityId ?? 'x'}:${cryptoRandom()}`,
+          },
+        });
+      },
+    };
+    this.resources = new ResourcesService(prisma, resourcesPublisher);
+    const resourcesModule = buildResourcesModule();
+
     // mod.messaging: salas por espacio, DMs y canal alumno↔profesores.
     // El módulo es puro: los ports (espacios de community, usuarios, staff)
     // los implementa el host aquí; el realtime lo publica el controller.
@@ -644,6 +672,7 @@ export class ModuleRegistryService implements OnModuleInit {
       referralsModule,
       messagingModule,
       surveysModule,
+      resourcesModule,
     ]);
 
     await this.persistManifests();
@@ -914,6 +943,14 @@ export class ModuleRegistryService implements OnModuleInit {
       throw new Error('mod.surveys no está inicializado (boot incompleto).');
     }
     return this.surveys;
+  }
+
+  /** Biblioteca de recursos. SIEMPRE inicializado tras el boot (sin gate de env). */
+  getResourcesService(): ResourcesService {
+    if (!this.resources) {
+      throw new Error('mod.resources no está inicializado (boot incompleto).');
+    }
+    return this.resources;
   }
 
   getMessagingService(): MessagingService {
