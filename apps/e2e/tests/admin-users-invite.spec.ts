@@ -5,9 +5,13 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
  * Spec del CRUD de usuarios del tenant (PR #95 admin/usuarios).
  *
  * Verifica:
- *  - tenant_admin invita usuario con rol formador → user con status PENDING aparece en la lista.
+ *  - tenant_admin invita usuario con rol formador → user ACTIVE en la lista.
  *  - cambia status a SUSPENDED → invalida sessions.
  *  - quita el rol → user sin rol formador.
+ *
+ * Lo de ACTIVE no es cosmética: el alta nacía PENDING y nada la promovía, así
+ * que el invitado definía su contraseña y seguía sin poder entrar hasta que un
+ * admin le daba a "Reactivar acceso" a mano.
  */
 
 test.describe('Admin: invitar y gestionar usuarios del tenant', () => {
@@ -31,9 +35,9 @@ test.describe('Admin: invitar y gestionar usuarios del tenant', () => {
     expect(invited.ok, 'invite → 200').toBe(true);
     const user = (await invited.json()) as { id: string; email: string; status: string };
     expect(user.email).toBe(email);
-    expect(['PENDING', 'ACTIVE']).toContain(user.status);
+    expect(user.status, 'la cuenta nace activada, sin activación manual').toBe('ACTIVE');
 
-    // 2. List y verificar que aparece.
+    // 2. List y verificar que aparece, también como ACTIVE.
     const listRes = await fetch(
       `${API_URL}/api/v1/admin/users?search=${encodeURIComponent(email)}`,
       {
@@ -41,10 +45,22 @@ test.describe('Admin: invitar y gestionar usuarios del tenant', () => {
       },
     );
     expect(listRes.ok).toBe(true);
-    const list = (await listRes.json()) as Array<{ id: string }>;
-    expect(list.find((u) => u.id === user.id)).toBeDefined();
+    // El listado es paginado desde alpha.74: { items, total, page, limit, hasMore }.
+    const list = (await listRes.json()) as { items: Array<{ id: string; status: string }> };
+    const enLista = list.items.find((u) => u.id === user.id);
+    expect(enLista).toBeDefined();
+    expect(enLista?.status).toBe('ACTIVE');
 
-    // 3. Suspend.
+    // 3. Sin contraseña NO entra: el status no es el gate de acceso, así que
+    //    crear la cuenta activada no abre la puerta a nadie.
+    const sinPassword = await fetch(`${API_URL}/api/v1/auth/signin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: 'LoQueSea123456', tenantSlug }),
+    });
+    expect(sinPassword.status, 'user sin passwordHash no puede firmar').toBe(401);
+
+    // 4. Suspend.
     const suspended = await fetch(`${API_URL}/api/v1/admin/users/${user.id}/status`, {
       method: 'PATCH',
       headers,
@@ -54,7 +70,7 @@ test.describe('Admin: invitar y gestionar usuarios del tenant', () => {
     const afterSuspend = (await suspended.json()) as { status: string };
     expect(afterSuspend.status).toBe('SUSPENDED');
 
-    // 4. Quitar rol formador.
+    // 5. Quitar rol formador.
     const removed = await fetch(`${API_URL}/api/v1/admin/users/${user.id}/roles/remove`, {
       method: 'PATCH',
       headers,

@@ -8,7 +8,8 @@ interface UserRow {
   tenantId: string;
   email: string;
   name: string | null;
-  passwordHash: string;
+  /** null = invitado que aún no ha definido contraseña (columna nullable). */
+  passwordHash: string | null;
   status: 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'DEACTIVATED';
 }
 
@@ -71,15 +72,22 @@ function makeFakePrisma() {
       },
     },
     user: {
-      async findUnique(args: { where: { tenantId_email?: { tenantId: string; email: string } } }) {
+      async findUnique(args: {
+        where: { id?: string; tenantId_email?: { tenantId: string; email: string } };
+      }) {
+        if (args.where.id) return users.find((u) => u.id === args.where.id) ?? null;
         const w = args.where.tenantId_email;
         if (!w) return null;
         return users.find((u) => u.tenantId === w.tenantId && u.email === w.email) ?? null;
       },
-      async update(args: { where: { id: string }; data: { passwordHash?: string } }) {
+      async update(args: {
+        where: { id: string };
+        data: { passwordHash?: string; status?: UserRow['status'] };
+      }) {
         const u = users.find((x) => x.id === args.where.id);
         if (!u) throw new Error('user not found');
         if (args.data.passwordHash !== undefined) u.passwordHash = args.data.passwordHash;
+        if (args.data.status !== undefined) u.status = args.data.status;
         return u;
       },
     },
@@ -254,7 +262,7 @@ describe('PasswordResetService.request', () => {
       tenantId: 'tenant-1',
       email: 'pending@va360.com',
       name: 'Alumno Migrado',
-      passwordHash: '',
+      passwordHash: null,
       status: 'PENDING',
     });
     const result = await service.request(
@@ -274,7 +282,7 @@ describe('PasswordResetService.request', () => {
       tenantId: 'tenant-1',
       email: 'pending2@va360.com',
       name: null,
-      passwordHash: '',
+      passwordHash: null,
       status: 'PENDING',
     });
     const result = await service.request({ tenantSlug: 'va360', email: 'pending2@va360.com' });
@@ -351,6 +359,64 @@ describe('PasswordResetService.reset', () => {
     await expect(service.reset(result!.rawToken, 'NuevaPasswordSegura123')).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
+  });
+
+  // ── Activación del invitado al estrenar su cuenta ──
+  //
+  // El invitado que definía su contraseña seguía en PENDING, y `signin` exige
+  // ACTIVE: definía la contraseña y AUN ASÍ no entraba hasta que un admin le
+  // daba a "Reactivar acceso" a mano.
+
+  it('PENDING sin contraseña → al definirla queda ACTIVE (invitado que estrena cuenta)', async () => {
+    const { service, prisma } = makeService();
+    prisma.users.push({
+      id: 'user-invitado',
+      tenantId: 'tenant-1',
+      email: 'invitado@va360.com',
+      name: 'Invitada',
+      passwordHash: null,
+      status: 'PENDING',
+    });
+    const result = await service.request(
+      { tenantSlug: 'va360', email: 'invitado@va360.com' },
+      undefined,
+      { allowPending: true },
+    );
+    await service.reset(result!.rawToken, 'NuevaPasswordSegura123');
+
+    const user = prisma.users.find((u) => u.id === 'user-invitado')!;
+    expect(user.status).toBe('ACTIVE');
+    expect(user.passwordHash).toBe('argon2:NuevaPasswordSegura123');
+  });
+
+  it('PENDING CON contraseña → sigue PENDING (la aprobación de inscripción no se salta)', async () => {
+    const { service, prisma } = makeService();
+    prisma.users.push({
+      id: 'user-inscrito',
+      tenantId: 'tenant-1',
+      email: 'inscrito@va360.com',
+      name: 'Solicitante',
+      // La eligió él mismo al inscribirse; el alta está a la espera del aprobador.
+      passwordHash: 'hash-elegido-al-inscribirse',
+      status: 'PENDING',
+    });
+    const result = await service.request(
+      { tenantSlug: 'va360', email: 'inscrito@va360.com' },
+      undefined,
+      { allowPending: true },
+    );
+    await service.reset(result!.rawToken, 'NuevaPasswordSegura123');
+
+    const user = prisma.users.find((u) => u.id === 'user-inscrito')!;
+    expect(user.status).toBe('PENDING');
+    expect(user.passwordHash).toBe('argon2:NuevaPasswordSegura123');
+  });
+
+  it('ACTIVE → el reset normal no toca el status', async () => {
+    const { service, prisma } = makeService();
+    const result = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
+    await service.reset(result!.rawToken, 'NuevaPasswordSegura123');
+    expect(prisma.users[0].status).toBe('ACTIVE');
   });
 });
 

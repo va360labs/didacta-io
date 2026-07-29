@@ -143,6 +143,16 @@ export class PasswordResetService {
   /**
    * Consume un token, valida no expirado y no usado, hashea la nueva
    * contraseña y la persiste. Marca el token como usado.
+   *
+   * Además ACTIVA al usuario si venía en PENDING **sin contraseña**: es el caso
+   * del invitado que estrena su cuenta con el enlace del email. Sin esto
+   * definía la contraseña y seguía sin poder entrar (`signin` exige
+   * `status === 'ACTIVE'`) hasta que un admin le daba a "Reactivar acceso".
+   *
+   * La condición `passwordHash === null` es la que deja intacta la aprobación
+   * de `inscripcion/member-registration`: ese PENDING sí tiene contraseña
+   * (la eligió el propio solicitante al inscribirse) y solo el aprobador puede
+   * levantarlo. Un reset no puede colarse por delante de esa decisión.
    */
   async reset(
     rawToken: string,
@@ -166,10 +176,16 @@ export class PasswordResetService {
 
     const passwordHash = await this.passwords.hash(newPassword);
 
+    const owner = await this.prisma.user.findUnique({
+      where: { id: record.userId },
+      select: { status: true, passwordHash: true },
+    });
+    const activarInvitado = owner?.status === 'PENDING' && owner.passwordHash === null;
+
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: record.userId },
-        data: { passwordHash },
+        data: { passwordHash, ...(activarInvitado ? { status: 'ACTIVE' as const } : {}) },
       }),
       this.prisma.passwordResetToken.update({
         where: { id: record.id },

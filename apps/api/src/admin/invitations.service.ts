@@ -12,14 +12,24 @@ import type { ClientContext } from '../auth/client-context';
  * llevar una lista aparte:
  *  - **Invitado**: el envío crea un token de restablecimiento. El más ANTIGUO de
  *    cada usuario es la fecha en que se le invitó por primera vez.
- *  - **Activado**: `user.status = ACTIVE`. Un usuario invitado pasa a activo en
- *    cuanto define su contraseña y entra.
- *  - **Sin invitar**: usuario PENDING sin ningún token.
+ *  - **Ya entró**: `user.last_login_at IS NOT NULL`. Es el hecho, no una
+ *    intención: la persona abrió el enlace, definió contraseña y usó el aula.
+ *  - **Sin invitar**: alguien que aún no ha entrado y no tiene ningún token.
+ *
+ * Antes esto se leía de `user.status` (PENDING = por entrar, ACTIVE = entró),
+ * y dejó de valer cuando las altas pasaron a crearse ACTIVE — el status nunca
+ * fue prueba de que nadie hubiese entrado, solo lo parecía porque el alta lo
+ * dejaba en PENDING. `last_login_at` responde exactamente a la pregunta del
+ * panel y funciona igual para las cuentas de antes y las de después.
  *
  * Consecuencia útil: el envío por lotes es REANUDABLE por construcción. Si un
  * lote se corta a la mitad, el siguiente sigue donde se quedó y nadie recibe la
  * invitación dos veces.
  */
+
+/** Quien todavía no ha entrado nunca (y no está suspendido ni desactivado). */
+const SIN_ENTRAR = `u.last_login_at IS NULL AND u.status NOT IN ('SUSPENDED', 'DEACTIVATED')`;
+
 @Injectable()
 export class InvitationsService {
   constructor(
@@ -29,53 +39,77 @@ export class InvitationsService {
   ) {}
 
   async summary(tenantId: string): Promise<InvitationsSummary> {
-    const [totales, invitadosRows, sinAccesoRows] = await Promise.all([
-      this.prisma.user.groupBy({
-        by: ['status'],
-        where: { tenantId, deletedAt: null },
-        _count: { _all: true },
-      }),
-      this.prisma.$queryRaw<Array<{ status: string; total: bigint }>>`
-        SELECT u.status::text AS status, COUNT(*)::bigint AS total
+    const [totales, invitadosRows, sinInvitarRows, sinAccesoRows] = await Promise.all([
+      this.prisma.$queryRawUnsafe<Array<{ entrado: boolean; total: bigint }>>(
+        `
+        SELECT (u.last_login_at IS NOT NULL) AS entrado, COUNT(*)::bigint AS total
         FROM "user" u
-        WHERE u.tenant_id = ${tenantId}::uuid
+        WHERE u.tenant_id = $1::uuid
+          AND u.deleted_at IS NULL
+          AND (u.last_login_at IS NOT NULL OR (${SIN_ENTRAR}))
+        GROUP BY 1
+        `,
+        tenantId,
+      ),
+      this.prisma.$queryRawUnsafe<Array<{ entrado: boolean; total: bigint }>>(
+        `
+        SELECT (u.last_login_at IS NOT NULL) AS entrado, COUNT(*)::bigint AS total
+        FROM "user" u
+        WHERE u.tenant_id = $1::uuid
           AND u.deleted_at IS NULL
           AND EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)
-        GROUP BY u.status
-      `,
-      this.prisma.$queryRaw<Array<{ total: bigint }>>`
+        GROUP BY 1
+        `,
+        tenantId,
+      ),
+      // Mismo predicado EXACTO que el filtro `sin-enviar` y que la selección de
+      // `sendBatch`: el contador tiene que decir lo que el botón va a hacer, y
+      // restar dos agregados con cohortes distintas (p. ej. un suspendido que sí
+      // tiene token) lo descuadraba por unos pocos.
+      this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
+        `
         SELECT COUNT(*)::bigint AS total
         FROM "user" u
-        WHERE u.tenant_id = ${tenantId}::uuid
+        WHERE u.tenant_id = $1::uuid
           AND u.deleted_at IS NULL
-          AND u.status = 'PENDING'
+          AND ${SIN_ENTRAR}
+          AND NOT EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)
+        `,
+        tenantId,
+      ),
+      this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
+        `
+        SELECT COUNT(*)::bigint AS total
+        FROM "user" u
+        WHERE u.tenant_id = $1::uuid
+          AND u.deleted_at IS NULL
+          AND ${SIN_ENTRAR}
           AND NOT EXISTS (
             SELECT 1 FROM mod_access_groups_group_member m
             WHERE m.user_id = u.id AND m.status = 'ACTIVE'
           )
-      `,
+        `,
+        tenantId,
+      ),
     ]);
 
-    const porEstado = (rows: Array<{ status: string; total: bigint }>) =>
-      Object.fromEntries(rows.map((r) => [r.status, Number(r.total)]));
-    const invitados = porEstado(invitadosRows);
+    const contar = (rows: Array<{ entrado: boolean; total: bigint }>, entrado: boolean) =>
+      Number(rows.find((r) => r.entrado === entrado)?.total ?? 0);
 
-    const total = totales.reduce((a, t) => a + t._count._all, 0);
-    const activos = totales.find((t) => t.status === 'ACTIVE')?._count._all ?? 0;
-    const pendientes = totales.find((t) => t.status === 'PENDING')?._count._all ?? 0;
-
-    const invitadosTotal = Object.values(invitados).reduce((a, n) => a + n, 0);
-    const invitadosActivados = invitados['ACTIVE'] ?? 0;
+    const activos = contar(totales, true);
+    const pendientes = contar(totales, false);
+    const invitadosActivados = contar(invitadosRows, true);
+    const invitadosTotal = invitadosActivados + contar(invitadosRows, false);
 
     return {
-      total,
+      total: activos + pendientes,
       activos,
       pendientes,
       invitados: invitadosTotal,
-      // Solo cuenta como "convertido" quien fue invitado Y está activo: los
-      // activos de antes de la campaña no inflan el resultado.
+      // Solo cuenta como "convertido" quien fue invitado Y ya entró: los que
+      // entraban antes de la campaña no inflan el resultado.
       activadosTrasInvitacion: invitadosActivados,
-      sinInvitar: pendientes - (invitados['PENDING'] ?? 0),
+      sinInvitar: Number(sinInvitarRows[0]?.total ?? 0),
       pendientesSinAcceso: Number(sinAccesoRows[0]?.total ?? 0),
       tasaConversion:
         invitadosTotal > 0 ? Math.round((invitadosActivados / invitadosTotal) * 100) : null,
@@ -115,11 +149,11 @@ export class InvitationsService {
     // (nunca interpolando el término de búsqueda) para no abrir un inyectable.
     const condicionFiltro =
       filtro === 'sin-acceso'
-        ? `u.status = 'PENDING' AND NOT EXISTS (SELECT 1 FROM mod_access_groups_group_member m WHERE m.user_id = u.id AND m.status = 'ACTIVE')`
+        ? `${SIN_ENTRAR} AND NOT EXISTS (SELECT 1 FROM mod_access_groups_group_member m WHERE m.user_id = u.id AND m.status = 'ACTIVE')`
         : filtro === 'sin-enviar'
-          ? `u.status = 'PENDING' AND NOT EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)`
+          ? `${SIN_ENTRAR} AND NOT EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)`
           : filtro === 'activados'
-            ? `u.status = 'ACTIVE' AND EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)`
+            ? `u.last_login_at IS NOT NULL AND EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)`
             : `EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)`;
 
     const rows = await this.prisma.$queryRawUnsafe<
@@ -177,6 +211,7 @@ export class InvitationsService {
         email: r.email,
         name: r.name,
         status: r.status,
+        entrado: r.last_login_at !== null,
         invitedAt: r.invited_at ? r.invited_at.toISOString() : null,
         lastLoginAt: r.last_login_at ? r.last_login_at.toISOString() : null,
         envios: Number(r.envios),
@@ -239,22 +274,27 @@ export class InvitationsService {
           where: {
             tenantId,
             deletedAt: null,
-            status: 'PENDING',
+            lastLoginAt: null,
+            status: { notIn: ['SUSPENDED', 'DEACTIVATED'] },
             email: { in: opts.emails.map((e) => e.trim().toLowerCase()) },
           },
           select: { id: true, email: true },
           take: size,
         })
-      : await this.prisma.$queryRaw<Array<{ id: string; email: string }>>`
+      : await this.prisma.$queryRawUnsafe<Array<{ id: string; email: string }>>(
+          `
           SELECT u.id, u.email
           FROM "user" u
-          WHERE u.tenant_id = ${tenantId}::uuid
+          WHERE u.tenant_id = $1::uuid
             AND u.deleted_at IS NULL
-            AND u.status = 'PENDING'
+            AND ${SIN_ENTRAR}
             AND NOT EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)
           ORDER BY u.created_at ASC
-          LIMIT ${size}
-        `;
+          LIMIT $2
+          `,
+          tenantId,
+          size,
+        );
 
     const enviados: string[] = [];
     const fallidos: Array<{ email: string; error: string }> = [];
@@ -274,14 +314,17 @@ export class InvitationsService {
       'invitaciones: lote enviado',
     );
 
-    const restantes = await this.prisma.$queryRaw<Array<{ total: bigint }>>`
+    const restantes = await this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
+      `
       SELECT COUNT(*)::bigint AS total
       FROM "user" u
-      WHERE u.tenant_id = ${tenantId}::uuid
+      WHERE u.tenant_id = $1::uuid
         AND u.deleted_at IS NULL
-        AND u.status = 'PENDING'
+        AND ${SIN_ENTRAR}
         AND NOT EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)
-    `;
+      `,
+      tenantId,
+    );
 
     return {
       enviados: enviados.length,
@@ -310,6 +353,8 @@ export interface InvitationRow {
   email: string;
   name: string | null;
   status: string;
+  /** True si ya usó el aula alguna vez. Es lo que la tabla pinta como "Ya entró". */
+  entrado: boolean;
   invitedAt: string | null;
   lastLoginAt: string | null;
   /** Cuántas veces se le ha enviado (reenvíos incluidos). */

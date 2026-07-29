@@ -243,7 +243,7 @@ export default function AdminInvitacionesPage() {
                         <div className="text-xs text-text-muted">{u.email}</div>
                       </td>
                       <td className="px-5 py-3">
-                        {u.status === 'ACTIVE' ? (
+                        {u.entrado ? (
                           <span className="rounded-full bg-success-50 px-2 py-0.5 text-xs font-semibold text-success-700">
                             Ya entró
                           </span>

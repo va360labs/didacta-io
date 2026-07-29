@@ -166,9 +166,18 @@ export class AdminUsersService {
   }
 
   /**
-   * Invita a un usuario nuevo: crea el User con status=PENDING (sin password),
-   * le asigna el rol seleccionado y envía email con link de reset para que
-   * el usuario defina su contraseña. Al primer signin queda ACTIVE.
+   * Invita a un usuario nuevo: crea el User **ACTIVE** (sin password), le asigna
+   * el rol seleccionado y envía email con link de reset para que el usuario
+   * defina su contraseña.
+   *
+   * Por qué ACTIVE y no PENDING: el status NO es el gate de acceso — `signin`
+   * exige además `passwordHash`, así que un ACTIVE sin contraseña no puede
+   * entrar hasta que use el enlace del email. PENDING solo añadía un segundo
+   * candado que nadie abría solo: nada promovía PENDING→ACTIVE, así que el
+   * invitado definía su contraseña y AUN ASÍ recibía "Credenciales inválidas"
+   * hasta que un admin le daba a "Reactivar acceso" a mano. PENDING queda
+   * reservado para el único caso donde significa algo: la inscripción de
+   * miembros pendiente de aprobación (`inscripcion/member-registration`).
    *
    * `options.sendInvite` (default `true`): cuando es `false`, el user se crea
    * IGUAL en estado PENDING + se le asigna el rol + queda registrado en audit,
@@ -211,7 +220,7 @@ export class AdminUsersService {
           tenantId,
           email: dto.email,
           name: dto.name ?? null,
-          status: 'PENDING',
+          status: 'ACTIVE',
         },
       });
       await tx.userRole.create({
@@ -232,9 +241,10 @@ export class AdminUsersService {
     });
 
     // Enviar email de "define tu contraseña" reusando el flujo de reset.
-    // `allowPending: true` porque el user recién creado está en PENDING — sin
-    // este flag, password-reset.request() lo descartaría silenciosamente
-    // por el guard anti user-enumeration. Ver CORE-FIX-03.
+    // `allowPending: true` se mantiene por si el user ya existía en PENDING de
+    // antes de que las altas pasaran a crearse ACTIVE: sin el flag,
+    // password-reset.request() lo descartaría silenciosamente por el guard
+    // anti user-enumeration. Ver CORE-FIX-03.
     //
     // Si `sendInvite === false` (path del migrador con suppressInvite) NO se
     // envía nada: el user queda creado en PENDING y el operador lo notifica

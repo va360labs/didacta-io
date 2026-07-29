@@ -26,6 +26,9 @@ export interface InvitationRow {
   email: string;
   name: string | null;
   status: string;
+  /** Ya usó el aula alguna vez. No confundir con `status`: una cuenta se crea
+   *  ACTIVE aunque su dueño todavía no haya definido contraseña ni entrado. */
+  entrado: boolean;
   invitedAt: string | null;
   lastLoginAt: string | null;
   envios: number;

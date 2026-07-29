@@ -2,17 +2,21 @@
  * Copyright (c) VA360 LABS S.L.
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  *
- * Tests de `AdminUsersService.invite` con foco en el flag `options.sendInvite`
- * (alpha.81).
+ * Tests de `AdminUsersService.invite`: el flag `options.sendInvite` (alpha.81) y
+ * el estado con el que nace la cuenta.
  *
- * Contexto: el migrador (ctx.didacta.users.upsertByExternalRef con
- * `suppressInvite: true`) crea miles de users importados de un LMS de origen y
- * NO debe bombardearlos con emails de activación durante la migración. Para eso
- * `invite()` acepta `options.sendInvite` (default `true`):
- *  - `sendInvite: false` → crea el user en PENDING + asigna rol + audit, pero
- *    NO dispara `passwordReset.requestAndSendEmail`.
+ * Contexto de `sendInvite`: el migrador (ctx.didacta.users.upsertByExternalRef
+ * con `suppressInvite: true`) crea miles de users importados de un LMS de origen
+ * y NO debe bombardearlos con emails de activación durante la migración. Para
+ * eso `invite()` acepta `options.sendInvite` (default `true`):
+ *  - `sendInvite: false` → crea el user + asigna rol + audit, pero NO dispara
+ *    `passwordReset.requestAndSendEmail`.
  *  - default (ausente) o `true` → comportamiento de siempre: envía el email.
  *    Es lo que usa el endpoint admin manual (un admin invitando a mano).
+ *
+ * Contexto del status: la cuenta nace ACTIVE. No puede entrar igualmente hasta
+ * definir contraseña (`signin` exige `passwordHash`), pero ya no necesita que un
+ * admin la "reactive" a mano después de que su dueño estrene el enlace.
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -29,7 +33,7 @@ function makeService() {
     tenantId: TENANT_ID,
     email: 'nuevo@example.com',
     name: 'Nuevo',
-    status: 'PENDING' as const,
+    status: 'ACTIVE' as const,
   };
 
   const tx = {
@@ -45,7 +49,7 @@ function makeService() {
         id: 'new-user',
         email: 'nuevo@example.com',
         name: 'Nuevo',
-        status: 'PENDING',
+        status: 'ACTIVE',
         mfaEnabled: false,
         emailVerified: false,
         createdAt: new Date('2026-06-01T00:00:00Z'),
@@ -72,6 +76,7 @@ function makeService() {
   return {
     service: new AdminUsersService(prisma, noopAudit, passwordReset as never, noopLogger),
     passwordReset,
+    tx,
   };
 }
 
@@ -87,6 +92,22 @@ describe('AdminUsersService.invite — flag sendInvite (alpha.81)', () => {
     );
 
     expect(passwordReset.requestAndSendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('la cuenta nace ACTIVE — nadie tiene que activarla a mano después', async () => {
+    const { service, tx } = makeService();
+
+    const detail = await service.invite(
+      TENANT_ID,
+      ACTOR_ID,
+      { email: 'nuevo@example.com', name: 'Nuevo', role: 'alumno' },
+      WEB_BASE_URL,
+    );
+
+    expect(tx.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'ACTIVE' }) }),
+    );
+    expect(detail.status).toBe('ACTIVE');
   });
 
   it('sendInvite: true explícito → envía el email', async () => {
@@ -117,8 +138,9 @@ describe('AdminUsersService.invite — flag sendInvite (alpha.81)', () => {
     );
 
     expect(passwordReset.requestAndSendEmail).not.toHaveBeenCalled();
-    // El user igual queda creado en PENDING (puede activarse luego con resend-invite).
-    expect(detail.status).toBe('PENDING');
+    // El user igual queda creado y utilizable; solo le falta el email, que el
+    // operador manda después con resend-invite.
+    expect(detail.status).toBe('ACTIVE');
     expect(detail.email).toBe('nuevo@example.com');
   });
 });
