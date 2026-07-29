@@ -221,12 +221,15 @@ export class AdminTenantsService {
           isVerified: true,
         },
       });
+      // ACTIVE sin passwordHash: no puede entrar hasta definir contraseña con
+      // el enlace del email, pero tampoco necesita que nadie le "reactive" el
+      // acceso después. Mismo criterio que `AdminUsersService.invite`.
       const admin = await tx.user.create({
         data: {
           tenantId: tenant.id,
           email: dto.adminEmail,
           name: dto.adminName ?? null,
-          status: 'PENDING',
+          status: 'ACTIVE',
         },
       });
       await tx.userRole.create({

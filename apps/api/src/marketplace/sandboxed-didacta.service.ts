@@ -605,13 +605,13 @@ class ScopedDidactaApi implements DidactaApi {
       return toDidactaUser(existing);
     }
 
-    // No existe → invitamos. AdminUsersService.invite crea User PENDING +
+    // No existe → invitamos. AdminUsersService.invite crea el User ACTIVE +
     // asigna rol + envía email de welcome (idempotente: si el email ya
     // existe en el tenant lanza ConflictException). Mapeamos esa error a
     // DIDACTA_CONFLICT así el módulo discrimina vs. otro tipo de error.
     //
     // alpha.81: si el módulo pasó `suppressInvite: true` (caso del migrador),
-    // creamos el user igual en PENDING pero SIN disparar el email de
+    // creamos el user igual pero SIN disparar el email de
     // invitación/activación — pasamos `sendInvite: false` al service del
     // admin. El default (flag ausente/false) mantiene el envío del email,
     // idéntico al invite manual de un admin.

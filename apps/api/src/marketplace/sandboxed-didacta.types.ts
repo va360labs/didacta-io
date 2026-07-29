@@ -287,8 +287,9 @@ export interface DidactaUpsertUserInput extends DidactaExternalRef {
   /// DNI/NIE en mayúsculas y sin separadores (Fundae). Validado por el core.
   documentId?: string;
   /// Si true, crea el user SIN enviar email de invitación/activación. El user
-  /// queda igualmente en estado PENDING (puede activarse luego con resend-invite
-  /// desde el admin). El migrador lo usa SIEMPRE: importa miles de users de un
+  /// queda igualmente creado y sin contraseña, así que no puede entrar hasta que
+  /// el operador le mande el enlace con resend-invite desde el admin.
+  /// El migrador lo usa SIEMPRE: importa miles de users de un
   /// LMS de origen y NO queremos bombardearlos con emails durante la migración;
   /// el operador notifica después de forma explícita. Default (ausente/false):
   /// se envía el email de bienvenida — mismo comportamiento que el invite manual
