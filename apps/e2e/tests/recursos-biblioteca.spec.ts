@@ -3,46 +3,54 @@ import { adminTokenForBootstrap, API_URL, signup } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
 /**
- * Bloque 4 — Biblioteca de recursos (mod.resources):
- *  - El staff publica un recurso desde la UI (modal de /recursos, tipo enlace).
- *  - Un alumno lo ve, busca y filtra por categoría.
- *  - "Abrir" registra la descarga (contador +1, verificado por API).
- *  - Un alumno NO puede publicar (403 por API).
+ * Bloque 4 — Biblioteca de recursos por colecciones (mod.resources):
+ *  - El primer listado siembra las 6 colecciones por defecto con badge
+ *    "Pronto" (vacías).
+ *  - El staff crea una colección nueva desde la UI.
+ *  - Un ALUMNO comparte un recurso (enlace) desde el detalle de una colección
+ *    — compartir es de todos, no solo del staff.
+ *  - El buscador dentro de la colección filtra; "Abrir" cuenta la descarga.
+ *  - Un alumno NO puede crear colecciones (403) ni borrar recursos ajenos
+ *    (403); sí borra lo suyo.
  *
  * Usa sesión REAL (patrón de calendario-agenda.spec.ts).
  */
 
-test.describe('Biblioteca de recursos (mod.resources)', () => {
-  test('staff publica, alumno busca/filtra y la descarga cuenta', async ({ page }) => {
+async function fullSession(
+  page: Parameters<typeof injectSession>[0],
+  auth: {
+    tokens: { accessToken: string; refreshToken: string };
+    user: Record<string, unknown>;
+  },
+) {
+  await page.goto('/signin');
+  await injectSession(page, {
+    accessToken: auth.tokens.accessToken,
+    refreshToken: auth.tokens.refreshToken,
+    user: { ...(auth.user as never), onboardingCompletedAt: new Date().toISOString() },
+  });
+}
+
+test.describe('Biblioteca de recursos por colecciones (mod.resources)', () => {
+  test('colecciones default, alta staff, compartir de alumno y descargas', async ({ page }) => {
     test.setTimeout(120_000);
     const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
 
-    // 1. Un recurso FILE de fondo por API (workflow), para tener dos categorías.
-    const fileRes = await fetch(`${API_URL}/api/v1/modules/resources`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        category: 'WORKFLOW',
-        kind: 'FILE',
-        title: `Workflow captación E2E ${stamp}`,
-        description: 'El flujo montado en la clase',
-        url: 'https://example.com/flujo.json',
-        fileName: 'flujo.json',
-      }),
-    });
-    expect(fileRes.status, `crear recurso FILE (${fileRes.status})`).toBe(201);
+    // 1. El listado siembra (idempotente) las colecciones por defecto.
+    const colsRes = await fetch(`${API_URL}/api/v1/modules/resources/collections`, { headers });
+    expect(colsRes.ok, `listar colecciones (${colsRes.status})`).toBe(true);
+    const { collections } = (await colsRes.json()) as {
+      collections: Array<{ id: string; title: string; resourceCount: number }>;
+    };
+    expect(collections.length).toBeGreaterThanOrEqual(6);
+    const workflows = collections.find((c) => c.title === 'Workflows de clase');
+    expect(workflows, 'existe "Workflows de clase"').toBeTruthy();
 
-    // 2. Staff publica un enlace desde la UI (modal de /recursos).
-    await page.goto('/signin');
-    const adminSession = { accessToken: adminToken };
-    await page.evaluate((data) => {
-      sessionStorage.setItem('didacta.access_token', data.accessToken);
-    }, adminSession);
-    // Sesión completa del admin vía helper (roles reales para ver el botón).
-    const adminMe = await fetch(`${API_URL}/api/v1/auth/signin`, {
+    // 2. Staff crea una colección desde la UI.
+    const adminAuthRes = await fetch(`${API_URL}/api/v1/auth/signin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -51,91 +59,108 @@ test.describe('Biblioteca de recursos (mod.resources)', () => {
         password: process.env.E2E_ADMIN_PASSWORD,
       }),
     });
-    const adminAuth = (await adminMe.json()) as {
-      tokens: { accessToken: string; refreshToken: string };
-      user: Record<string, unknown>;
-    };
-    await injectSession(page, {
-      accessToken: adminAuth.tokens.accessToken,
-      refreshToken: adminAuth.tokens.refreshToken,
-      user: {
-        ...(adminAuth.user as never),
-        onboardingCompletedAt: new Date().toISOString(),
-      },
-    });
+    const adminAuth = (await adminAuthRes.json()) as never;
+    await fullSession(page, adminAuth);
     await page.goto('/recursos');
-    await page.getByRole('button', { name: 'Añadir recurso' }).click();
-    const modal = page.getByRole('dialog', { name: 'Nuevo recurso' });
-    await modal.getByLabel('Título').fill(`Perplexity E2E ${stamp}`);
-    await modal.getByRole('button', { name: 'Herramientas IA' }).click();
-    await modal.getByRole('button', { name: 'Enlace' }).click();
-    await modal.getByLabel('Enlace').fill('https://perplexity.ai');
-    await modal.getByLabel('Descripción (opcional)').fill('Buscador con fuentes citadas');
-    await modal.getByRole('button', { name: 'Publicar recurso' }).click();
-    await expect(page.getByText(`Perplexity E2E ${stamp}`)).toBeVisible();
+    await expect(page.getByTestId('collection-card').first()).toBeVisible();
 
-    // 3. Alumno: ve, busca y filtra.
+    await page.getByRole('button', { name: 'Nueva colección' }).click();
+    const colModal = page.getByRole('dialog', { name: 'Colección' });
+    await colModal.getByLabel('Título').fill(`Guías de precios E2E ${stamp}`);
+    await colModal.getByLabel('Descripción').fill('Cómo presupuestar proyectos de IA');
+    await colModal.getByRole('button', { name: 'Crear colección' }).click();
+    await expect(page.getByText(`Guías de precios E2E ${stamp}`).first()).toBeVisible();
+
+    // 3. ALUMNO comparte un recurso (enlace) desde el detalle de una colección.
     const alumno = await signup({
       tenantSlug,
       email: `e2e-recursos-${stamp}@example.test`,
       password: 'E2eTestPassword123!',
       name: 'Alumno Recursos',
     });
-    await page.goto('/signin');
-    await injectSession(page, {
-      accessToken: alumno.tokens.accessToken,
-      refreshToken: alumno.tokens.refreshToken,
-      user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
-    });
-    await page.goto('/recursos');
-    await expect(page.getByText(`Perplexity E2E ${stamp}`)).toBeVisible();
-    await expect(page.getByText(`Workflow captación E2E ${stamp}`)).toBeVisible();
-    // El alumno no ve el botón de publicar.
-    await expect(page.getByRole('button', { name: 'Añadir recurso' })).toHaveCount(0);
+    await fullSession(page, alumno as never);
+    await page.goto(`/recursos/${workflows!.id}`);
+    await expect(page.getByRole('heading', { name: 'Workflows de clase' })).toBeVisible();
 
-    // Buscador (server-side, con debounce).
-    await page.getByPlaceholder('Buscar recursos…').fill('perplexity');
-    await expect(page.getByText(`Workflow captación E2E ${stamp}`)).toHaveCount(0);
-    await expect(page.getByText(`Perplexity E2E ${stamp}`)).toBeVisible();
-    await page.getByPlaceholder('Buscar recursos…').clear();
+    await page.getByRole('button', { name: 'Compartir recurso' }).click();
+    const shareModal = page.getByRole('dialog', { name: 'Compartir recurso' });
+    await shareModal.getByLabel('Título').fill(`Workflow scraping E2E ${stamp}`);
+    await shareModal.getByRole('button', { name: 'Enlace' }).click();
+    await shareModal.getByLabel('Enlace', { exact: true }).fill('https://n8n.io/workflows/demo');
+    await shareModal.getByLabel('Descripción (opcional)').fill('El flujo de scraping de la clase');
+    await shareModal.getByRole('button', { name: 'Compartir recurso' }).click();
+    await expect(page.getByText(`Workflow scraping E2E ${stamp}`)).toBeVisible();
 
-    // Filtro por categoría.
-    await page.getByRole('button', { name: 'Workflows', exact: true }).click();
-    await expect(page.getByText(`Perplexity E2E ${stamp}`)).toHaveCount(0);
-    await expect(page.getByText(`Workflow captación E2E ${stamp}`)).toBeVisible();
+    // 4. Buscador dentro de la colección.
+    await page.getByPlaceholder('Buscar en esta colección…').fill('scraping');
+    await expect(page.getByText(`Workflow scraping E2E ${stamp}`)).toBeVisible();
+    await page.getByPlaceholder('Buscar en esta colección…').fill('no-existe-nada');
+    await expect(page.getByText(`Workflow scraping E2E ${stamp}`)).toHaveCount(0);
+    await page.getByPlaceholder('Buscar en esta colección…').clear();
 
-    // 4. "Descargar" registra la descarga y abre pestaña nueva.
+    // 5. "Abrir" cuenta la descarga (la apertura es síncrona y el conteo va en
+    //    segundo plano, así que se espera con poll).
     const popupPromise = page.waitForEvent('popup');
     await page
       .getByTestId('resource-card')
-      .filter({ hasText: `Workflow captación E2E ${stamp}` })
-      .getByRole('button', { name: 'Descargar' })
+      .filter({ hasText: `Workflow scraping E2E ${stamp}` })
+      .getByRole('button', { name: 'Abrir' })
       .click();
     await popupPromise;
+    let sharedResourceId = '';
+    await expect
+      .poll(async () => {
+        const detailRes = await fetch(
+          `${API_URL}/api/v1/modules/resources/collections/${workflows!.id}?q=${stamp}`,
+          { headers: { Authorization: `Bearer ${alumno.tokens.accessToken}` } },
+        );
+        const detail = (await detailRes.json()) as {
+          resources: Array<{ id: string; downloadCount: number }>;
+        };
+        sharedResourceId = detail.resources[0]?.id ?? '';
+        return detail.resources[0]?.downloadCount ?? 0;
+      })
+      .toBe(1);
 
-    const listRes = await fetch(`${API_URL}/api/v1/modules/resources?q=${stamp}`, {
-      headers: { Authorization: `Bearer ${alumno.tokens.accessToken}` },
-    });
-    const list = (await listRes.json()) as {
-      resources: Array<{ title: string; downloadCount: number }>;
+    // 6. Permisos: el alumno no crea colecciones ni borra recursos ajenos.
+    const alumnoHeaders = {
+      Authorization: `Bearer ${alumno.tokens.accessToken}`,
+      'Content-Type': 'application/json',
     };
-    const workflow = list.resources.find((r) => r.title.startsWith('Workflow'));
-    expect(workflow?.downloadCount).toBe(1);
-
-    // 5. El alumno no puede publicar (403).
-    const forbidden = await fetch(`${API_URL}/api/v1/modules/resources`, {
+    const colForbidden = await fetch(`${API_URL}/api/v1/modules/resources/collections`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${alumno.tokens.accessToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers: alumnoHeaders,
+      body: JSON.stringify({ title: 'No debería poder' }),
+    });
+    expect(colForbidden.status, 'alumno no crea colecciones').toBe(403);
+
+    const ajeno = await fetch(`${API_URL}/api/v1/modules/resources`, {
+      method: 'POST',
+      headers,
       body: JSON.stringify({
-        category: 'TOOL',
+        collectionId: workflows!.id,
         kind: 'LINK',
-        title: 'No debería poder',
-        url: 'https://example.com',
+        title: `Recurso del admin E2E ${stamp}`,
+        url: 'https://example.com/admin',
       }),
     });
-    expect(forbidden.status).toBe(403);
+    const ajenoBody = (await ajeno.json()) as { id: string };
+    const delForbidden = await fetch(`${API_URL}/api/v1/modules/resources/${ajenoBody.id}`, {
+      method: 'DELETE',
+      headers: alumnoHeaders,
+    });
+    expect(delForbidden.status, 'alumno no borra recursos ajenos').toBe(403);
+
+    const delMine = await fetch(`${API_URL}/api/v1/modules/resources/${sharedResourceId}`, {
+      method: 'DELETE',
+      headers: alumnoHeaders,
+    });
+    expect(delMine.ok, 'alumno borra lo suyo').toBe(true);
+
+    // 7. Un id malformado devuelve 404 limpio, no un 500 de Prisma.
+    const malformed = await fetch(`${API_URL}/api/v1/modules/resources/collections/abc`, {
+      headers: alumnoHeaders,
+    });
+    expect(malformed.status, 'id malformado → 404').toBe(404);
   });
 });

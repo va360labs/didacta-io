@@ -11,6 +11,7 @@ import { ResourcesError } from '@didacta/mod-resources';
 const STATUS_BY_CODE: Record<string, number> = {
   RESOURCES_NOT_FOUND: HttpStatus.NOT_FOUND,
   RESOURCES_VALIDATION: HttpStatus.UNPROCESSABLE_ENTITY,
+  RESOURCES_FORBIDDEN: HttpStatus.FORBIDDEN,
 };
 
 @Catch(ResourcesError)

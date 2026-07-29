@@ -14,7 +14,11 @@ export const manifest: ModuleManifest = parseModuleManifest({
   tablePrefix: 'mod_resources_',
   permissions: ['resources.read', 'resources.manage'],
   dependencies: { modules: [], optionalModules: [] },
-  eventsEmitted: ['resources.resource.created', 'resources.resource.deleted'],
+  eventsEmitted: [
+    'resources.resource.created',
+    'resources.resource.deleted',
+    'resources.collection.created',
+  ],
   eventsConsumed: [],
   apiNamespace: '/modules/resources',
 });

@@ -3751,18 +3751,6 @@ model ModSurveysAnswer {
 // mod.resources — Biblioteca de recursos (bloque 4 de la propuesta de comunidad)
 // ============================================================================
 
-enum ResourceCategory {
-  /// Plantillas de automatización de las clases (workflows n8n/Make…).
-  WORKFLOW
-  /// Skills y prompts.
-  SKILL
-  /// Directorio de herramientas de IA (enlaces).
-  TOOL
-  /// Plantillas (Notion, segundo cerebro…).
-  TEMPLATE
-  OTHER
-}
-
 enum ResourceKind {
   /// Archivo subido al storage del tenant.
   FILE
@@ -3770,25 +3758,52 @@ enum ResourceKind {
   LINK
 }
 
-model ModResourcesResource {
-  id          String           @id @default(uuid()) @db.Uuid
-  tenantId    String           @map("tenant_id") @db.Uuid
-  category    ResourceCategory
-  kind        ResourceKind
+/// Colección de recursos con portada propia ("Workflows de clase", "Skills y
+/// agentes"…). Las 6 por defecto se siembran perezosamente al primer listado
+/// del tenant (runtime, no migración: el flujo real de despliegue es db push).
+model ModResourcesCollection {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
   title       String
   description String?
+  /// Imagen de portada (storage del tenant). Sin ella, la tarjeta usa el degradado de marca.
+  coverUrl  String?  @map("cover_url")
+  sortOrder Int      @default(0) @map("sort_order")
+  /// Sembrada por defecto. Editable; borrarla exige igualmente estar vacía.
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  resources ModResourcesResource[]
+
+  @@unique([tenantId, title])
+  @@index([tenantId, sortOrder])
+  @@map("mod_resources_collection")
+}
+
+model ModResourcesResource {
+  id           String       @id @default(uuid()) @db.Uuid
+  tenantId     String       @map("tenant_id") @db.Uuid
+  collectionId String       @map("collection_id") @db.Uuid
+  kind         ResourceKind
+  title        String
+  description  String?
   /// URL del archivo en storage (kind FILE) o del enlace externo (kind LINK).
   url         String
   /// Nombre de archivo original (solo kind FILE).
   fileName    String?          @map("file_name")
   /// ID lógico de la clase de mod.zoom-live que generó el recurso (sin FK).
   zoomSessionId String?        @map("zoom_session_id") @db.Uuid
-  /// ID lógico del staff que lo publicó (tabla core `user`, sin FK cross-module).
+  /// ID lógico del miembro que lo compartió (tabla core `user`, sin FK cross-module).
   createdById   String         @map("created_by_id") @db.Uuid
   downloadCount Int            @default(0) @map("download_count")
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
 
-  @@index([tenantId, category, createdAt(sort: Desc)])
+  /// Restrict a propósito: borrar una colección con recursos es un error de
+  /// dominio, nunca un cascade silencioso (el service exige vaciarla antes).
+  collection ModResourcesCollection @relation(fields: [collectionId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, collectionId, createdAt(sort: Desc)])
   @@map("mod_resources_resource")
 }

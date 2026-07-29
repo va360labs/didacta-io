@@ -1,35 +1,36 @@
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 
-/** Cliente HTTP de mod.resources (bloque 4 — biblioteca de recursos). */
+/** Cliente HTTP de mod.resources (bloque 4 — biblioteca por colecciones). */
 
 const BASE = '/api/v1/modules/resources';
 
-export type ResourceCategory = 'WORKFLOW' | 'SKILL' | 'TOOL' | 'TEMPLATE' | 'OTHER';
 export type ResourceKind = 'FILE' | 'LINK';
 
-export const RESOURCE_CATEGORY_LABELS: Record<ResourceCategory, string> = {
-  WORKFLOW: 'Workflows',
-  SKILL: 'Skills',
-  TOOL: 'Herramientas IA',
-  TEMPLATE: 'Plantillas',
-  OTHER: 'Otros',
-};
+export interface CollectionView {
+  id: string;
+  title: string;
+  description: string | null;
+  coverUrl: string | null;
+  isDefault: boolean;
+  resourceCount: number;
+}
 
 export interface ResourceView {
   id: string;
-  category: ResourceCategory;
+  collectionId: string;
   kind: ResourceKind;
   title: string;
   description: string | null;
   url: string;
   fileName: string | null;
+  createdById: string;
   downloadCount: number;
   createdAt: string;
 }
 
 export interface CreateResourceInput {
-  category: ResourceCategory;
+  collectionId: string;
   kind: ResourceKind;
   title: string;
   description?: string;
@@ -44,19 +45,51 @@ function withAuth(): string {
 }
 
 export const resourcesApi = {
-  async list(filter: { category?: ResourceCategory; q?: string } = {}): Promise<ResourceView[]> {
-    const params = new URLSearchParams();
-    if (filter.category) params.set('category', filter.category);
-    if (filter.q) params.set('q', filter.q);
-    const qs = params.toString();
-    const res = await apiFetch<{ resources: ResourceView[] }>(
-      `${BASE}${qs ? `?${qs}` : ''}`,
+  async listCollections(): Promise<CollectionView[]> {
+    const res = await apiFetch<{ collections: CollectionView[] }>(
+      `${BASE}/collections`,
       { method: 'GET' },
       withAuth(),
     );
-    return res.resources;
+    return res.collections;
   },
 
+  async getCollection(
+    id: string,
+    q?: string,
+  ): Promise<{ collection: CollectionView; resources: ResourceView[] }> {
+    const qs = q?.trim() ? `?q=${encodeURIComponent(q.trim())}` : '';
+    return apiFetch(`${BASE}/collections/${id}${qs}`, { method: 'GET' }, withAuth());
+  },
+
+  async createCollection(input: {
+    title: string;
+    description?: string;
+    coverUrl?: string;
+  }): Promise<CollectionView> {
+    return apiFetch<CollectionView>(
+      `${BASE}/collections`,
+      { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async updateCollection(
+    id: string,
+    patch: { title?: string; description?: string | null; coverUrl?: string | null },
+  ): Promise<CollectionView> {
+    return apiFetch<CollectionView>(
+      `${BASE}/collections/${id}`,
+      { method: 'PUT', body: JSON.stringify(patch) },
+      withAuth(),
+    );
+  },
+
+  async deleteCollection(id: string): Promise<{ ok: boolean }> {
+    return apiFetch<{ ok: boolean }>(`${BASE}/collections/${id}`, { method: 'DELETE' }, withAuth());
+  },
+
+  /** Cualquier miembro comparte un recurso en una colección. */
   async create(input: CreateResourceInput): Promise<ResourceView> {
     return apiFetch<ResourceView>(
       BASE,

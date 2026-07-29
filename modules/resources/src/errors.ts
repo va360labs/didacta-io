@@ -25,3 +25,11 @@ export class ResourcesValidationError extends ResourcesError {
     this.name = 'ResourcesValidationError';
   }
 }
+
+/** El actor no puede tocar ese recurso (no es suyo y no es staff). */
+export class ResourcesForbiddenError extends ResourcesError {
+  constructor() {
+    super('Solo puedes eliminar los recursos que compartiste tú.', 'RESOURCES_FORBIDDEN');
+    this.name = 'ResourcesForbiddenError';
+  }
+}

@@ -7,7 +7,11 @@
   "category": "engagement",
   "tablePrefix": "mod_resources_",
   "permissions": ["resources:read", "resources:manage"],
-  "events": [{ "name": "resources.resource.created" }, { "name": "resources.resource.deleted" }],
+  "events": [
+    { "name": "resources.resource.created" },
+    { "name": "resources.resource.deleted" },
+    { "name": "resources.collection.created" }
+  ],
   "hooks": [],
   "apiNamespace": "/modules/resources",
   "surfaces": ["alumno", "formador"]
