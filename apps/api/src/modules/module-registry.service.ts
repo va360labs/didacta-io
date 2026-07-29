@@ -52,6 +52,11 @@ import {
   type UserDirectoryPort as PaymentConnectionsUserDirectoryPort,
 } from '@didacta/mod-payment-connections';
 import { buildCertificatesModule, CertificatesService } from '@didacta/mod-certificates';
+import {
+  buildSurveysModule,
+  SurveysService,
+  type SurveysEventPublisher,
+} from '@didacta/mod-surveys';
 import { communityModule, CommunityService } from '@didacta/mod-community';
 import { coursesModule, CoursesService } from '@didacta/mod-courses';
 import { helloWorldModule } from '@didacta/mod-hello-world';
@@ -115,6 +120,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private paymentTiers?: PaymentTiersService;
   private referrals?: ReferralsService;
   private messaging?: MessagingService;
+  private surveys?: SurveysService;
 
   constructor(
     private readonly factory: ModuleContextFactory,
@@ -461,6 +467,34 @@ export class ModuleRegistryService implements OnModuleInit {
     );
     const referralsModule = buildReferralsModule(this.referrals);
 
+    // mod.surveys: encuestas anónimas con NPS (bloque 2). El secreto del hash
+    // anónimo debe ser estable entre deploys: SURVEYS_HASH_SECRET dedicado con
+    // fallback a AUTH_SECRET (cambiarlo rompería el dedupe de "ya respondió").
+    const surveysEventBus = this.factory.getEventBus();
+    const surveysPublisher: SurveysEventPublisher = {
+      publish: async (tenantId, actorId, name, payload) => {
+        const entityId = (payload as { surveyId?: string }).surveyId;
+        await surveysEventBus.publish({
+          name,
+          version: 1,
+          data: payload as never,
+          metadata: {
+            tenantId,
+            userId: actorId ?? undefined,
+            timestamp: new Date().toISOString(),
+            traceId: cryptoRandom(),
+            // Por ocurrencia (mismo criterio que referrals): el outbox dedupea
+            // para siempre y una encuesta emite varios response.submitted.
+            idempotencyKey: `${name}:${entityId ?? 'x'}:${cryptoRandom()}`,
+          },
+        });
+      },
+    };
+    const surveysHashSecret =
+      process.env['SURVEYS_HASH_SECRET']?.trim() || process.env['AUTH_SECRET']?.trim() || '';
+    this.surveys = new SurveysService(prisma, surveysPublisher, surveysHashSecret);
+    const surveysModule = buildSurveysModule();
+
     // mod.messaging: salas por espacio, DMs y canal alumno↔profesores.
     // El módulo es puro: los ports (espacios de community, usuarios, staff)
     // los implementa el host aquí; el realtime lo publica el controller.
@@ -609,6 +643,7 @@ export class ModuleRegistryService implements OnModuleInit {
       paymentConnectionsModule,
       referralsModule,
       messagingModule,
+      surveysModule,
     ]);
 
     await this.persistManifests();
@@ -871,6 +906,14 @@ export class ModuleRegistryService implements OnModuleInit {
       throw new Error('mod.referrals no está inicializado (boot incompleto).');
     }
     return this.referrals;
+  }
+
+  /** Encuestas y NPS. SIEMPRE inicializado tras el boot (sin gate de env). */
+  getSurveysService(): SurveysService {
+    if (!this.surveys) {
+      throw new Error('mod.surveys no está inicializado (boot incompleto).');
+    }
+    return this.surveys;
   }
 
   getMessagingService(): MessagingService {

@@ -23,6 +23,7 @@ import { migratorLearndashExtension } from './migrator-learndash';
 import { notificationsExtension } from './notifications';
 import { paymentConnectionsExtension } from './payment-connections';
 import { subscriptionsExtension } from './subscriptions';
+import { surveysExtension } from './surveys';
 import { zoomLiveExtension } from './zoom-live';
 
 export const moduleExtensions: readonly ModuleWebExtension[] = [
@@ -38,6 +39,7 @@ export const moduleExtensions: readonly ModuleWebExtension[] = [
   notificationsExtension,
   paymentConnectionsExtension,
   subscriptionsExtension,
+  surveysExtension,
   zoomLiveExtension,
 ];
 

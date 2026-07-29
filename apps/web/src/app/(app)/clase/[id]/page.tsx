@@ -26,6 +26,7 @@ import {
   type SessionStatus,
   type ZoomSession,
 } from '@/modules/zoom-live';
+import { SurveyPanel } from '@/modules/surveys';
 
 const STATUS_VARIANT: Record<SessionStatus, 'success' | 'warning' | 'muted' | 'danger'> = {
   SCHEDULED: 'warning',
@@ -313,6 +314,10 @@ export default function ClasePage() {
           ) : null}
         </CardContent>
       </Card>
+
+      {/* Encuesta post-clase (mod.surveys): el panel decide solo si se
+          renderiza — nada si la clase aún no tiene encuesta. */}
+      <SurveyPanel sessionId={session.id} />
 
       {isStaff ? (
         <AttendancePanel sessionId={session.id} refreshKey={session.registeredCount} />

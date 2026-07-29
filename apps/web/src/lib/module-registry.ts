@@ -35,6 +35,7 @@ export interface ModuleSidebarItem {
     | 'Aprendizaje'
     | 'Profesor'
     | 'Administración'
+    | 'Comunidad'
     | 'Formador'
     | 'Tenant'
     | 'Seguridad'

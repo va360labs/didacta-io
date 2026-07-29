@@ -3647,3 +3647,100 @@ model ModMessagingMessage {
   @@index([tenantId, conversationId, createdAt])
   @@map("mod_messaging_message")
 }
+
+// ============================================================================
+// mod.surveys — Encuestas y NPS (bloque 2 de la propuesta de comunidad)
+// ============================================================================
+
+enum SurveyKind {
+  /// Encuesta automática al terminar una clase en directo (mod.zoom-live).
+  POST_CLASS
+  /// Al completar un curso (v2, aún sin trigger).
+  POST_COURSE
+  /// Encuesta general del tenant (v2).
+  GENERAL
+}
+
+enum SurveyStatus {
+  OPEN
+  CLOSED
+}
+
+enum SurveyQuestionType {
+  /// "Del 0 al 10, ¿recomendarías…?" — valueInt 0-10.
+  NPS
+  /// Valoración 1-5 — valueInt 1-5.
+  SCALE
+  /// Respuesta libre — valueText, opcional.
+  TEXT
+}
+
+model ModSurveysSurvey {
+  id       String     @id @default(uuid()) @db.Uuid
+  tenantId String     @map("tenant_id") @db.Uuid
+  kind     SurveyKind
+  /// ID lógico de la sesión de mod.zoom-live (sin FK cross-module, ADR-016).
+  zoomSessionId String? @map("zoom_session_id") @db.Uuid
+  /// ID lógico del curso de mod.courses (sin FK cross-module).
+  courseId  String?      @map("course_id") @db.Uuid
+  title     String
+  status    SurveyStatus @default(OPEN)
+  createdAt DateTime     @default(now()) @map("created_at")
+  closedAt  DateTime?    @map("closed_at")
+
+  questions ModSurveysQuestion[]
+  responses ModSurveysResponse[]
+
+  @@unique([tenantId, zoomSessionId])
+  @@index([tenantId, kind, createdAt(sort: Desc)])
+  @@map("mod_surveys_survey")
+}
+
+model ModSurveysQuestion {
+  id       String             @id @default(uuid()) @db.Uuid
+  tenantId String             @map("tenant_id") @db.Uuid
+  surveyId String             @map("survey_id") @db.Uuid
+  position Int
+  type     SurveyQuestionType
+  label    String
+
+  survey  ModSurveysSurvey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  answers ModSurveysAnswer[]
+
+  @@unique([surveyId, position])
+  @@index([tenantId, surveyId])
+  @@map("mod_surveys_question")
+}
+
+/// Respuesta ANÓNIMA: no guarda userId. `respondentHash` = HMAC(surveyId:userId)
+/// con secreto del servidor — dedupe de envíos sin poder identificar al autor.
+model ModSurveysResponse {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  surveyId       String   @map("survey_id") @db.Uuid
+  respondentHash String   @map("respondent_hash")
+  submittedAt    DateTime @default(now()) @map("submitted_at")
+
+  survey  ModSurveysSurvey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  answers ModSurveysAnswer[]
+
+  @@unique([surveyId, respondentHash])
+  @@index([tenantId, surveyId])
+  @@map("mod_surveys_response")
+}
+
+model ModSurveysAnswer {
+  id         String  @id @default(uuid()) @db.Uuid
+  tenantId   String  @map("tenant_id") @db.Uuid
+  responseId String  @map("response_id") @db.Uuid
+  questionId String  @map("question_id") @db.Uuid
+  valueInt   Int?    @map("value_int")
+  valueText  String? @map("value_text")
+
+  response ModSurveysResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  question ModSurveysQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([responseId, questionId])
+  @@index([tenantId, questionId])
+  @@map("mod_surveys_answer")
+}

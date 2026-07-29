@@ -47,6 +47,7 @@ import { ThemingController } from './theming.controller';
 import { ThemingErrorFilter } from './theming-error.filter';
 import { ZoomLiveModule } from './zoom-live/zoom-live.module';
 import { FundaeModule } from './fundae/fundae.module';
+import { SurveysModule } from './surveys/surveys.module';
 import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
 
 @Module({
@@ -67,6 +68,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     forwardRef(() => AiTutorModule),
     forwardRef(() => AiGraderModule),
     forwardRef(() => AiContentModule),
+    forwardRef(() => SurveysModule),
   ],
   controllers: [
     CoursesController,

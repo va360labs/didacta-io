@@ -40,6 +40,7 @@
     "@didacta/mod-payment-connections": "workspace:*",
     "@didacta/mod-referrals": "workspace:*",
     "@didacta/mod-subscriptions": "workspace:*",
+    "@didacta/mod-surveys": "workspace:*",
     "@didacta/mod-theming": "workspace:*",
     "@didacta/mod-wp-sso": "workspace:*",
     "@didacta/mod-zoom-live": "workspace:*",
