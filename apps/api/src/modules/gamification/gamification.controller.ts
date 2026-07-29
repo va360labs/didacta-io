@@ -133,13 +133,15 @@ export class GamificationController {
       u.tenantId,
       board.rows.map((r) => r.userId),
     );
+    // Los puestos se renumeran DESPUÉS de descartar a quien ya no existe: si no,
+    // un usuario borrado deja un hueco en la lista (1, 2, 4…).
     return {
       total: board.total,
       entries: board.rows
         .filter((r) => names.has(r.userId))
-        .map((r) => ({
+        .map((r, i) => ({
           userId: r.userId,
-          rank: r.rank,
+          rank: i + 1,
           points: r.points,
           displayName: names.get(r.userId)!,
         })),

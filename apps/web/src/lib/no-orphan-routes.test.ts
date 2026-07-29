@@ -67,6 +67,11 @@ const ALLOWLIST: Record<string, { kind: AllowKind; reason: string }> = {
     kind: 'reachable',
     reason: 'enlace "Integración API" en /admin/api-keys (documentación en vivo para integradores)',
   },
+  '/admin/cursos/imagenes': {
+    kind: 'external',
+    reason:
+      'redirect legacy a /admin/imagenes: se mantiene para no romper enlaces guardados, por eso no está en la nav',
+  },
   '/cursos/checkout/success': { kind: 'external', reason: 'redirect de Stripe (success_url)' },
   '/cursos/checkout/cancel': { kind: 'external', reason: 'redirect de Stripe (cancel_url)' },
   '/eventos': {

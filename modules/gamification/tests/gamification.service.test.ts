@@ -504,6 +504,40 @@ describe('revocación', () => {
     expect(prisma.profiles[0]!['lifetimePoints']).toBe(0);
   });
 
+  it('restaurar lo ocultado devuelve los puntos', async () => {
+    const { service, prisma } = build();
+    await service.award({
+      tenantId: TENANT,
+      userId: USER,
+      ruleKey: 'community.post',
+      sourceKey: 'community.post:p1',
+    });
+    await service.revoke({ tenantId: TENANT, sourceKey: 'community.post:p1', reason: 'oculto' });
+    expect(prisma.profiles[0]!['lifetimePoints']).toBe(0);
+
+    const result = await service.restore({ tenantId: TENANT, sourceKey: 'community.post:p1' });
+
+    expect(result.restored).toBe(1);
+    expect(prisma.profiles[0]!['lifetimePoints']).toBe(10);
+    expect(prisma.entries[0]!['revokedAt']).toBeNull();
+  });
+
+  it('restaurar dos veces no suma dos veces', async () => {
+    const { service, prisma } = build();
+    await service.award({
+      tenantId: TENANT,
+      userId: USER,
+      ruleKey: 'community.post',
+      sourceKey: 'community.post:p1',
+    });
+    await service.revoke({ tenantId: TENANT, sourceKey: 'community.post:p1', reason: 'oculto' });
+    await service.restore({ tenantId: TENANT, sourceKey: 'community.post:p1' });
+    const second = await service.restore({ tenantId: TENANT, sourceKey: 'community.post:p1' });
+
+    expect(second.restored).toBe(0);
+    expect(prisma.profiles[0]!['lifetimePoints']).toBe(10);
+  });
+
   it('el nivel alcanzado NO baja aunque bajen los puntos', async () => {
     const { service, prisma } = build();
     await service.createLevel({ tenantId: TENANT, key: 'n1', name: 'Nivel 1', minPoints: 10 });

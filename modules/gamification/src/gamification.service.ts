@@ -399,6 +399,44 @@ export class GamificationService {
   }
 
   /**
+   * Deshace una revocación: devuelve los puntos de un hecho que vuelve a ser
+   * válido (un post que el moderador oculta y luego restaura). Sin esto, pasar
+   * por moderación una vez costaría los puntos para siempre.
+   */
+  async restore(args: { tenantId: string; sourceKey: string }): Promise<{ restored: number }> {
+    const entries = await this.prisma.modGamificationLedgerEntry.findMany({
+      where: { tenantId: args.tenantId, sourceKey: args.sourceKey, NOT: { revokedAt: null } },
+      select: { id: true, userId: true, points: true },
+    });
+    if (entries.length === 0) return { restored: 0 };
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const entry of entries) {
+        const { count } = await tx.modGamificationLedgerEntry.updateMany({
+          where: { id: entry.id, NOT: { revokedAt: null } },
+          data: { revokedAt: null, revokeReason: null },
+        });
+        // Otra pasada ya lo restauró: no sumar dos veces.
+        if (count !== 1) continue;
+        await tx.modGamificationProfile.updateMany({
+          where: { tenantId: args.tenantId, userId: entry.userId },
+          data: { lifetimePoints: { increment: entry.points } },
+        });
+      }
+    });
+
+    for (const entry of entries) {
+      await this.publisher.publish(args.tenantId, null, GAMIFICATION_EVENT.POINTS_AWARDED, {
+        userId: entry.userId,
+        points: entry.points,
+        sourceKey: args.sourceKey,
+        restored: true,
+      });
+    }
+    return { restored: entries.length };
+  }
+
+  /**
    * Sube de nivel si toca. Solo hacia arriba: los puntos de por vida pueden
    * bajar por una revocación, pero el nivel alcanzado no se retira.
    */

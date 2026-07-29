@@ -104,6 +104,24 @@ export class GamificationEventsBridge implements OnModuleInit {
       });
     });
 
+    // Restaurar lo ocultado devuelve los puntos: pasar por moderación una vez
+    // no puede costarlos para siempre.
+    bus.subscribe<{ postId: string }>('community.post.unhidden', async (event) => {
+      await this.guard(event.metadata.tenantId, async (tenantId) => {
+        await this.registry
+          .getGamificationService()
+          .restore({ tenantId, sourceKey: `community.post:${event.data.postId}` });
+      });
+    });
+
+    bus.subscribe<{ commentId: string }>('community.comment.unhidden', async (event) => {
+      await this.guard(event.metadata.tenantId, async (tenantId) => {
+        await this.registry
+          .getGamificationService()
+          .restore({ tenantId, sourceKey: `community.comment:${event.data.commentId}` });
+      });
+    });
+
     bus.subscribe<{ resourceId: string }>('resources.resource.created', async (event) => {
       await this.guard(event.metadata.tenantId, async (tenantId) => {
         const resource = await this.prisma.modResourcesResource.findFirst({
