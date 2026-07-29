@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { SidebarContent, type SidebarGroup } from '@/components/app-sidebar';
+import { SIDEBAR_BG_STYLE, SidebarContent, type SidebarGroup } from '@/components/app-sidebar';
 import type { StoredSession } from '@/lib/auth-storage';
 
 interface Props {
@@ -74,7 +74,7 @@ export function MobileNavDrawer({
         className={`absolute inset-y-0 left-0 flex w-71 max-w-[85vw] flex-col overflow-hidden text-white shadow-xl transition-transform duration-300 ease-out ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
-        style={{ backgroundColor: 'var(--sidebar-bg, #0D1B2A)' }}
+        style={SIDEBAR_BG_STYLE}
       >
         <SidebarContent
           groups={groups}

@@ -69,6 +69,11 @@ const ALLOWLIST: Record<string, { kind: AllowKind; reason: string }> = {
   },
   '/cursos/checkout/success': { kind: 'external', reason: 'redirect de Stripe (success_url)' },
   '/cursos/checkout/cancel': { kind: 'external', reason: 'redirect de Stripe (cancel_url)' },
+  '/eventos': {
+    kind: 'reachable',
+    reason:
+      'redirige a /calendario?vista=eventos (bloque 9: fusionado en la pestaña "Eventos" del calendario; la ruta se conserva para enlaces guardados)',
+  },
   '/cuenta/suscripciones': {
     kind: 'reachable',
     reason:

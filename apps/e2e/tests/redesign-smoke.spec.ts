@@ -69,9 +69,10 @@ test.describe('Redesign smoke — páginas principales', () => {
     await expect(page.getByRole('button', { name: 'Global' })).toBeVisible();
   });
 
-  test('/eventos muestra heading y empty state', async ({ page }) => {
+  test('/eventos redirige a la pestaña Eventos del calendario', async ({ page }) => {
+    // Bloque 9 (simplificar navegación): /eventos se fusionó con /calendario.
     await withSession(page, '/eventos');
-    await expect(page.getByRole('heading', { name: 'Eventos en directo' })).toBeVisible();
+    await expect(page).toHaveURL(/\/calendario\?vista=eventos/);
     await expect(page.getByText('No hay eventos programados')).toBeVisible();
   });
 

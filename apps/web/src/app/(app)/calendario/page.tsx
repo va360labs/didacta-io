@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { eventsApi, type CommunityEvent } from '@/lib/events';
 import { zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
+import { EventosView } from './eventos-view';
 
 const MONTH_NAMES = [
   'Enero',
@@ -184,11 +185,20 @@ function phaseOf(item: CalendarItem, now: number): Phase {
   return now < start ? 'proxima' : 'pasada';
 }
 
-type View = 'Mes' | 'Agenda';
+type View = 'Mes' | 'Agenda' | 'Eventos';
 
 export default function CalendarioPage() {
   const today = new Date();
   const [view, setView] = useState<View>('Mes');
+
+  // `/eventos` redirige aquí con `?vista=eventos` (bloque 9 — navegación). Se
+  // aplica tras el montaje (no en el inicializador) para que el primer render
+  // del cliente coincida con el HTML del servidor (evita hydration mismatch).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('vista') === 'eventos') {
+      setView('Eventos');
+    }
+  }, []);
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [monthItems, setMonthItems] = useState<CalendarItem[]>([]);
@@ -329,7 +339,7 @@ export default function CalendarioPage() {
               </button>
             ) : null}
             <div className="flex rounded-lg border border-border">
-              {(['Mes', 'Agenda'] as View[]).map((v) => (
+              {(['Mes', 'Agenda', 'Eventos'] as View[]).map((v) => (
                 <button
                   key={v}
                   type="button"
@@ -440,7 +450,7 @@ export default function CalendarioPage() {
               })}
             </div>
           </div>
-        ) : (
+        ) : view === 'Agenda' ? (
           <div className="space-y-5">
             {agendaItems === null ? (
               <div className="space-y-3">
@@ -490,6 +500,8 @@ export default function CalendarioPage() {
               </>
             )}
           </div>
+        ) : (
+          <EventosView />
         )}
       </div>
 

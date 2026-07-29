@@ -235,9 +235,14 @@ function Shell({
   }, [pathname]);
 
   const rawSpaces = useCommunitySpaces();
+  // Bloque 9 (simplificar navegación): los canales tipo foro se agrupan bajo un
+  // único menú "Foros" plegable — plegado por defecto salvo que estés dentro de
+  // un espacio. Ningún módulo declara `group: 'Foros'` ni 'Espacios' en sus
+  // sidebarItems, así que el rename no rompe el merge de extensiones.
   const espaciosGroup: SidebarGroup = {
-    label: 'Espacios',
+    label: 'Foros',
     icon: 'hash',
+    collapsible: true,
     canAdd: isAdmin,
     onAdd: isAdmin ? () => setCreateSpaceOpen(true) : undefined,
     items: rawSpaces.map((s) => ({
@@ -353,6 +358,8 @@ function Shell({
  */
 const SECTION_TITLE_EXTRAS: ReadonlyArray<{ href: string; label: string }> = [
   { href: '/cuenta', label: 'Mi perfil' },
+  // /grupos ya no tiene item en el sidebar (bloque 9) pero la ruta sigue viva.
+  { href: '/grupos', label: 'Grupos' },
 ];
 
 /**
@@ -415,21 +422,15 @@ function buildGroups({
     ],
   };
 
-  // ── Grupos ─────────────────────────────────────────────────────────────────
-  const grupos: SidebarGroup = {
-    label: 'Grupos',
-    icon: 'users',
-    items: [{ href: '/grupos', label: 'Grupos', icon: 'users' }],
-  };
-
   // ── Agenda ─────────────────────────────────────────────────────────────────
+  // Bloque 9: "Eventos en directo" se fusionó con el calendario (pestaña
+  // "Eventos" en /calendario; /eventos redirige allí). El grupo "Grupos" se
+  // ocultó del menú mientras la feature no esté activa — la ruta /grupos sigue
+  // existiendo, solo desaparece la entrada (un menú vacío es peor que ninguno).
   const agenda: SidebarGroup = {
     label: 'Agenda',
     icon: 'calendar',
-    items: [
-      { href: '/calendario', label: 'Calendario', icon: 'calendar' },
-      { href: '/eventos', label: 'Eventos en directo', icon: 'video' },
-    ],
+    items: [{ href: '/calendario', label: 'Calendario', icon: 'calendar' }],
   };
 
   // ── Personas ───────────────────────────────────────────────────────────────
@@ -445,7 +446,7 @@ function buildGroups({
   };
 
   if (!isAdminOrFormador) {
-    return [inicio, espacios, aprendizaje, grupos, agenda, personas];
+    return [inicio, espacios, aprendizaje, agenda, personas];
   }
 
   // ── Profesor ───────────────────────────────────────────────────────────────
@@ -470,7 +471,7 @@ function buildGroups({
   };
 
   if (!isAdmin) {
-    return [inicio, espacios, aprendizaje, grupos, agenda, personas, profesor];
+    return [inicio, espacios, aprendizaje, agenda, personas, profesor];
   }
 
   // ── Administración (entrada) ─────────────────────────────────────────────
@@ -486,7 +487,7 @@ function buildGroups({
     items: [{ href: '/admin', label: 'Administración', icon: 'building' }],
   };
 
-  return [inicio, espacios, aprendizaje, grupos, agenda, personas, profesor, entradaAdmin];
+  return [inicio, espacios, aprendizaje, agenda, personas, profesor, entradaAdmin];
 }
 
 /**
