@@ -65,12 +65,22 @@ SYNC_DIRS=(
   "apps/web/src"
   "apps/web/public"
   "packages/database/prisma"
-  "packages/database/src"
   "modules"
   # El Dockerfile COPIA el entrypoint desde aquí; sin sincronizarlo, el build
   # usaría el entrypoint viejo del server (drift). Cerrado: árbol completo.
   "infra/docker"
 )
+
+# TODOS los `packages/*/src`, no solo el de database.
+#
+# Antes solo se sincronizaba `packages/database/src` y el resto quedaba
+# congelado en lo que hubiera en el server. El fallo era silencioso mientras
+# nadie tocara esos paquetes, y explota en cuanto alguien lo hace: el build del
+# server compila el API contra un `@didacta/core-kernel` viejo. Enumerarlos
+# dinámicamente evita tener que acordarse al añadir un paquete nuevo.
+while IFS= read -r d; do
+  [[ -n "$d" ]] && SYNC_DIRS+=("$d")
+done < <(find packages -mindepth 2 -maxdepth 2 -type d -name src -not -path '*/node_modules/*' 2>/dev/null | sort)
 
 # Archivos sueltos del build context (manifests + config de build). Se COPIAN
 # (overwrite), nunca se borran del server.
