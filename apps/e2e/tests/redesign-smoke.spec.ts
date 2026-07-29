@@ -11,6 +11,9 @@ const FAKE_SESSION = {
     tenantSlug: 'acme',
     roles: ['alumno'],
     mfaEnabled: false,
+    // Sin esto el gate de onboarding secuestra la navegación y TODOS los tests
+    // del spec acaban en /signin (mismo fallo preexistente que enroll-by-code).
+    onboardingCompletedAt: '2026-01-01T00:00:00.000Z',
   },
 };
 
@@ -63,7 +66,8 @@ test.describe('Redesign smoke — páginas principales', () => {
 
   test('/leaderboard muestra heading y filtros', async ({ page }) => {
     await withSession(page, '/leaderboard');
-    await expect(page.getByRole('heading', { name: 'Leaderboard' })).toBeVisible();
+    // La página pasó a mod.gamification y se renombró a "Clasificación".
+    await expect(page.getByRole('heading', { name: 'Clasificación' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Este mes' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Esta semana' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Global' })).toBeVisible();

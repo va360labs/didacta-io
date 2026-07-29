@@ -19,6 +19,7 @@ import { billingExtension } from './billing';
 import { certificatesExtension } from './certificates';
 import { communityExtension } from './community';
 import { fundaeExtension } from './fundae';
+import { gamificationExtension } from './gamification';
 import { migratorLearndashExtension } from './migrator-learndash';
 import { notificationsExtension } from './notifications';
 import { paymentConnectionsExtension } from './payment-connections';
@@ -36,6 +37,7 @@ export const moduleExtensions: readonly ModuleWebExtension[] = [
   certificatesExtension,
   communityExtension,
   fundaeExtension,
+  gamificationExtension,
   migratorLearndashExtension,
   notificationsExtension,
   paymentConnectionsExtension,

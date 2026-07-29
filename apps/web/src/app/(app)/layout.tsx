@@ -439,7 +439,9 @@ function buildGroups({
     icon: 'users',
     items: [
       { href: '/miembros', label: 'Miembros', icon: 'users' },
-      { href: '/leaderboard', label: 'Leaderboard', icon: 'trophy' },
+      // 'Clasificación' y 'Retos' los aporta la extensión de mod.gamification,
+      // así desaparecen si el tenant desactiva el módulo (el /leaderboard
+      // anterior era fijo y se quedaba vacío).
       { href: '/mensajes', label: 'Mensajes', icon: 'messages' },
       { href: '/referidos', label: 'Referidos', icon: 'sparkles' },
     ],

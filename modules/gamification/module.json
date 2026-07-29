@@ -1,0 +1,29 @@
+{
+  "name": "gamification",
+  "version": "1.0.0",
+  "edition": "community",
+  "coreVersionRequired": "^1.0.0",
+  "displayName": "Puntos y retos",
+  "category": "engagement",
+  "tablePrefix": "mod_gamification_",
+  "permissions": ["gamification:read", "gamification:manage"],
+  "events": [
+    { "name": "gamification.points.awarded" },
+    { "name": "gamification.points.revoked" },
+    { "name": "gamification.level.changed" },
+    { "name": "gamification.challenge.submitted" },
+    { "name": "gamification.challenge.reviewed" }
+  ],
+  "hooks": [
+    { "event": "community.post.created" },
+    { "event": "community.comment.created" },
+    { "event": "community.post.hidden" },
+    { "event": "community.comment.hidden" },
+    { "event": "resources.resource.created" },
+    { "event": "resources.resource.deleted" },
+    { "event": "learning.course.completed" },
+    { "event": "referrals.referral.attributed" }
+  ],
+  "apiNamespace": "/modules/gamification",
+  "surfaces": ["alumno", "admin"]
+}

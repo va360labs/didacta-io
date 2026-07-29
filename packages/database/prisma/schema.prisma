@@ -746,15 +746,15 @@ model ModCommunityTag {
 /// v0.1: solo `digestOptOut`. Estructura abierta para sumar prefs sin
 /// nuevas migraciones (la fila se upsert siempre).
 model ModCommunityUserPref {
-  id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @map("tenant_id") @db.Uuid
-  userId       String   @map("user_id") @db.Uuid
-  digestOptOut Boolean  @default(false) @map("digest_opt_out")
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  digestOptOut    Boolean  @default(false) @map("digest_opt_out")
   /// Baja de los AVISOS MASIVOS (broadcasts a toda la comunidad). Se activa desde
   /// el enlace de baja del email. Los avisos marcados `important` la ignoran.
-  broadcastOptOut Boolean @default(false) @map("broadcast_opt_out")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  broadcastOptOut Boolean  @default(false) @map("broadcast_opt_out")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@unique([tenantId, userId], map: "mod_community_user_pref_tenant_user_key")
   @@map("mod_community_user_pref")
@@ -764,28 +764,28 @@ model ModCommunityUserPref {
 /// por envío. El worker lo procesa por lotes con ritmo controlado (rate-limit del
 /// SMTP), avanzando `cursorUserId` de forma resumible/idempotente ante reintentos.
 model ModCommunityBroadcast {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
-  createdById String   @map("created_by_id") @db.Uuid
-  subject     String
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  createdById  String    @map("created_by_id") @db.Uuid
+  subject      String
   /// Cuerpo en texto plano (se envuelve en HTML seguro + footer de baja al enviar).
-  bodyText    String   @map("body_text")
+  bodyText     String    @map("body_text")
   /// Si el aviso nace de publicar un post, su id (para el enlace "ver publicación").
-  postId      String?  @map("post_id") @db.Uuid
+  postId       String?   @map("post_id") @db.Uuid
   /// Los avisos importantes ignoran la baja (broadcastOptOut) del destinatario.
-  important   Boolean  @default(false)
+  important    Boolean   @default(false)
   /// Estado del envío: PENDING → RUNNING → DONE | FAILED.
-  status      String   @default("PENDING")
-  total       Int      @default(0)
-  sent        Int      @default(0)
-  failed      Int      @default(0)
-  skipped     Int      @default(0)
+  status       String    @default("PENDING")
+  total        Int       @default(0)
+  sent         Int       @default(0)
+  failed       Int       @default(0)
+  skipped      Int       @default(0)
   /// Cursor de reanudación: último `user_id` procesado (orden asc por id).
-  cursorUserId String? @map("cursor_user_id") @db.Uuid
-  error       String?
-  createdAt   DateTime  @default(now()) @map("created_at")
-  startedAt   DateTime? @map("started_at")
-  finishedAt  DateTime? @map("finished_at")
+  cursorUserId String?   @map("cursor_user_id") @db.Uuid
+  error        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  startedAt    DateTime? @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
 
   @@index([tenantId, createdAt])
   @@map("mod_community_broadcast")
@@ -1509,28 +1509,28 @@ model ModThemingTenantTheme {
 // startUrl solo se devuelve al host/admin; alumnos ven solo joinUrl.
 // ============================================================================
 model ModZoomSession {
-  id                       String   @id @default(uuid()) @db.Uuid
-  tenantId                 String   @map("tenant_id") @db.Uuid
-  courseId                 String?  @map("course_id") @db.Uuid
+  id                       String    @id @default(uuid()) @db.Uuid
+  tenantId                 String    @map("tenant_id") @db.Uuid
+  courseId                 String?   @map("course_id") @db.Uuid
   /// UUID de la lección concreta del curso a la que está vinculada esta
   /// sesión. NULL = sesión libre del curso. Permite mostrar el botón
   /// "Unirse" en el detalle de la lección.
-  lessonId                 String?  @map("lesson_id") @db.Uuid
+  lessonId                 String?   @map("lesson_id") @db.Uuid
   topic                    String
   description              String?
-  status                   String   @default("SCHEDULED") /// SCHEDULED | STARTED | ENDED | CANCELLED
-  startTime                DateTime @map("start_time")
-  durationMinutes          Int      @map("duration_minutes")
+  status                   String    @default("SCHEDULED") /// SCHEDULED | STARTED | ENDED | CANCELLED
+  startTime                DateTime  @map("start_time")
+  durationMinutes          Int       @map("duration_minutes")
   timezone                 String
-  hostEmail                String   @map("host_email")
-  zoomMeetingId            String?  @map("zoom_meeting_id")
+  hostEmail                String    @map("host_email")
+  zoomMeetingId            String?   @map("zoom_meeting_id")
   /// UUID de la OCURRENCIA del meeting (`payload.object.uuid` del webhook),
   /// distinto del id numérico: las Report API de participantes se consultan
   /// por UUID y un recurrente tiene uno por ocurrencia (ADR-018). Se rellena
   /// al recibir `meeting.started` / `meeting.ended`.
-  zoomMeetingUuid          String?  @map("zoom_meeting_uuid")
-  joinUrl                  String?  @map("join_url")
-  startUrl                 String?  @map("start_url")
+  zoomMeetingUuid          String?   @map("zoom_meeting_uuid")
+  joinUrl                  String?   @map("join_url")
+  startUrl                 String?   @map("start_url")
   /// Momento en que se reconcilió la asistencia contra Zoom. NULL = todavía
   /// no se ha hecho el pull (el worker lo reintenta) o la sesión no ha
   /// terminado. Marca el corte entre "confiamos en el click" y "lo dice Zoom".
@@ -1538,15 +1538,15 @@ model ModZoomSession {
   /// Último error del pull de asistencia, para que el formador sepa por qué
   /// no hay datos (típicamente falta el scope `report:read:admin`). NULL si
   /// el último intento fue bien o no ha habido ninguno.
-  attendanceSyncError      String?  @map("attendance_sync_error")
+  attendanceSyncError      String?   @map("attendance_sync_error")
   /// `share_url` de la grabación de Zoom (se rellena al recibir el
   /// webhook `recording.completed`). NULL mientras no haya grabación.
-  recordingUrl             String?  @map("recording_url")
+  recordingUrl             String?   @map("recording_url")
   /// Duración total del meeting reportada por Zoom en `recording.completed`
   /// (minutos enteros). NULL si todavía no hay grabación.
-  recordingDurationMinutes Int?     @map("recording_duration_minutes")
-  createdAt                DateTime @default(now()) @map("created_at")
-  updatedAt                DateTime @updatedAt @map("updated_at")
+  recordingDurationMinutes Int?      @map("recording_duration_minutes")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
 
   registrations ModZoomSessionRegistration[]
   attendances   ModZoomSessionAttendance[]
@@ -2060,26 +2060,26 @@ model MemberPaymentFlag {
 /// las cuentas de pago conectadas (Stripe/PayPal/WooCommerce) y guarda aquí el
 /// resultado para que el admin lo vea al validar la solicitud.
 model MemberSubscriptionLookup {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
-  email       String
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  email         String
   /// PENDING (job en curso) | DONE (terminó) | ERROR (falló).
-  status      String   @default("PENDING")
+  status        String    @default("PENDING")
   /// Array JSON de MemberSubscriptionMatch (provider, planName, status, importe…).
-  results     Json     @default("[]")
+  results       Json      @default("[]")
   /// Nº de suscripciones encontradas (cache para listar sin parsear el JSON).
-  matchCount  Int      @default(0) @map("match_count")
+  matchCount    Int       @default(0) @map("match_count")
   /// Array JSON de MemberPurchaseMatch: COMPRAS PUNTUALES (pedidos WooCommerce)
   /// del email. Delata a quien compró un "acceso lifetime" y por tanto no tiene
   /// ninguna suscripción viva que mostrar al aprobador.
-  purchases   Json     @default("[]")
+  purchases     Json      @default("[]")
   /// Nº de pedidos encontrados (cache, mismo criterio que matchCount).
-  purchaseCount Int    @default(0) @map("purchase_count")
-  error       String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  completedAt DateTime? @map("completed_at")
+  purchaseCount Int       @default(0) @map("purchase_count")
+  error         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  completedAt   DateTime? @map("completed_at")
 
   @@unique([tenantId, userId], map: "member_subscription_lookup_tenant_user_key")
   @@index([tenantId])
@@ -2379,27 +2379,27 @@ model ModBillingProduct {
 /// Una orden de compra de un alumno por un producto. Se crea al iniciar la
 /// Checkout Session y se actualiza vía webhook.
 model ModBillingOrder {
-  id              String             @id @default(uuid()) @db.Uuid
-  tenantId        String             @map("tenant_id") @db.Uuid
-  userId          String             @map("user_id") @db.Uuid
-  productId       String             @map("product_id") @db.Uuid
-  courseId        String             @map("course_id") @db.Uuid
+  id                    String             @id @default(uuid()) @db.Uuid
+  tenantId              String             @map("tenant_id") @db.Uuid
+  userId                String             @map("user_id") @db.Uuid
+  productId             String             @map("product_id") @db.Uuid
+  courseId              String             @map("course_id") @db.Uuid
   /// Stripe Checkout Session ID (cs_...). Único globalmente.
-  stripeSessionId String             @unique @map("stripe_session_id")
+  stripeSessionId       String             @unique @map("stripe_session_id")
   /// PaymentIntent (pi_...) del cobro, guardado al completar el checkout. Es la
   /// ÚNICA forma fiable de reconocer la orden cuando llega `charge.refunded`:
   /// el Charge no lleva la metadata que pusimos en la sesión.
-  stripePaymentIntentId String?       @map("stripe_payment_intent_id")
-  status          BillingOrderStatus @default(PENDING)
+  stripePaymentIntentId String?            @map("stripe_payment_intent_id")
+  status                BillingOrderStatus @default(PENDING)
   /// Importe pagado (en céntimos). Se rellena al recibir webhook completed.
-  amountPaid      Int?               @map("amount_paid")
-  currency        String             @default("eur")
+  amountPaid            Int?               @map("amount_paid")
+  currency              String             @default("eur")
   /// Email del comprador según Stripe (puede diferir del email del user).
-  customerEmail   String?            @map("customer_email")
-  completedAt     DateTime?          @map("completed_at")
-  refundedAt      DateTime?          @map("refunded_at")
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
+  customerEmail         String?            @map("customer_email")
+  completedAt           DateTime?          @map("completed_at")
+  refundedAt            DateTime?          @map("refunded_at")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
 
   @@index([tenantId, userId])
   @@index([tenantId, status])
@@ -3623,24 +3623,24 @@ model ModMessagingParticipant {
 }
 
 model ModMessagingMessage {
-  id             String               @id @default(uuid()) @db.Uuid
-  tenantId       String               @map("tenant_id") @db.Uuid
-  conversationId String               @map("conversation_id") @db.Uuid
+  id                String               @id @default(uuid()) @db.Uuid
+  tenantId          String               @map("tenant_id") @db.Uuid
+  conversationId    String               @map("conversation_id") @db.Uuid
   /// ID lógico de user (sin FK al core).
-  authorId       String               @map("author_id") @db.Uuid
+  authorId          String               @map("author_id") @db.Uuid
   /// Snapshot del nombre al enviar (patrón community.authorDisplayName):
   /// evita N+1 al pintar y sobrevive a renombres/bajas.
-  authorDisplayName String?           @map("author_display_name")
-  kind           MessagingMessageKind @default(TEXT)
+  authorDisplayName String?              @map("author_display_name")
+  kind              MessagingMessageKind @default(TEXT)
   /// Texto del mensaje (1..4000). En mensajes de media (US-M4) será el caption.
-  body           String
+  body              String
   /// Clave S3 del adjunto (US-M4). Null en TEXT.
-  mediaKey       String?              @map("media_key")
+  mediaKey          String?              @map("media_key")
   /// Duración de audio/vídeo en ms (US-M4).
-  durationMs     Int?                 @map("duration_ms")
+  durationMs        Int?                 @map("duration_ms")
   /// Soft delete: "Mensaje eliminado" (US-M5). El body se conserva para auditoría.
-  deletedAt      DateTime?            @map("deleted_at")
-  createdAt      DateTime             @default(now()) @map("created_at")
+  deletedAt         DateTime?            @map("deleted_at")
+  createdAt         DateTime             @default(now()) @map("created_at")
 
   conversation ModMessagingConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
@@ -3676,19 +3676,19 @@ enum SurveyQuestionType {
 }
 
 model ModSurveysSurvey {
-  id       String     @id @default(uuid()) @db.Uuid
-  tenantId String     @map("tenant_id") @db.Uuid
-  kind     SurveyKind
+  id             String       @id @default(uuid()) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  kind           SurveyKind
   /// ID lógico de la sesión de mod.zoom-live (sin FK cross-module, ADR-016).
-  zoomSessionId String? @map("zoom_session_id") @db.Uuid
+  zoomSessionId  String?      @map("zoom_session_id") @db.Uuid
   /// ID lógico del curso de mod.courses (sin FK cross-module).
-  courseId  String?      @map("course_id") @db.Uuid
-  title     String
-  status    SurveyStatus @default(OPEN)
-  createdAt DateTime     @default(now()) @map("created_at")
-  closedAt  DateTime?    @map("closed_at")
+  courseId       String?      @map("course_id") @db.Uuid
+  title          String
+  status         SurveyStatus @default(OPEN)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  closedAt       DateTime?    @map("closed_at")
   /// Cuándo se envió el recordatorio a los inscritos sin responder (1 por encuesta).
-  reminderSentAt DateTime? @map("reminder_sent_at")
+  reminderSentAt DateTime?    @map("reminder_sent_at")
 
   questions ModSurveysQuestion[]
   responses ModSurveysResponse[]
@@ -3767,12 +3767,12 @@ model ModResourcesCollection {
   title       String
   description String?
   /// Imagen de portada (storage del tenant). Sin ella, la tarjeta usa el degradado de marca.
-  coverUrl  String?  @map("cover_url")
-  sortOrder Int      @default(0) @map("sort_order")
+  coverUrl    String?  @map("cover_url")
+  sortOrder   Int      @default(0) @map("sort_order")
   /// Sembrada por defecto. Editable; borrarla exige igualmente estar vacía.
-  isDefault Boolean  @default(false) @map("is_default")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  isDefault   Boolean  @default(false) @map("is_default")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   resources ModResourcesResource[]
 
@@ -3782,23 +3782,23 @@ model ModResourcesCollection {
 }
 
 model ModResourcesResource {
-  id           String       @id @default(uuid()) @db.Uuid
-  tenantId     String       @map("tenant_id") @db.Uuid
-  collectionId String       @map("collection_id") @db.Uuid
-  kind         ResourceKind
-  title        String
-  description  String?
+  id            String       @id @default(uuid()) @db.Uuid
+  tenantId      String       @map("tenant_id") @db.Uuid
+  collectionId  String       @map("collection_id") @db.Uuid
+  kind          ResourceKind
+  title         String
+  description   String?
   /// URL del archivo en storage (kind FILE) o del enlace externo (kind LINK).
-  url         String
+  url           String
   /// Nombre de archivo original (solo kind FILE).
-  fileName    String?          @map("file_name")
+  fileName      String?      @map("file_name")
   /// ID lógico de la clase de mod.zoom-live que generó el recurso (sin FK).
-  zoomSessionId String?        @map("zoom_session_id") @db.Uuid
+  zoomSessionId String?      @map("zoom_session_id") @db.Uuid
   /// ID lógico del miembro que lo compartió (tabla core `user`, sin FK cross-module).
-  createdById   String         @map("created_by_id") @db.Uuid
-  downloadCount Int            @default(0) @map("download_count")
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
+  createdById   String       @map("created_by_id") @db.Uuid
+  downloadCount Int          @default(0) @map("download_count")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
 
   /// Restrict a propósito: borrar una colección con recursos es un error de
   /// dominio, nunca un cascade silencioso (el service exige vaciarla antes).
@@ -3806,4 +3806,192 @@ model ModResourcesResource {
 
   @@index([tenantId, collectionId, createdAt(sort: Desc)])
   @@map("mod_resources_resource")
+}
+
+// ============================================================================
+// mod.gamification — Puntos, niveles y retos (bloque 1)
+// ----------------------------------------------------------------------------
+// Dos capas deliberadamente distintas:
+//   · ACTIVIDAD: asientos automáticos desde eventos, pesos bajos y techo diario.
+//   · HITOS: retos con prueba y revisión humana, pesos altos.
+// Los niveles se calculan sobre los puntos DE POR VIDA (nunca bajan); el ranking
+// se calcula por rango de fechas sobre `occurred_at`.
+// El catálogo (reglas, niveles, retos) lo crea el operador: nace VACÍO salvo las
+// reglas, que se siembran en runtime al primer listado (el deploy es `db push` y
+// no ejecuta INSERTs de migración).
+// ============================================================================
+
+enum GamificationChallengeStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+enum GamificationSubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Cómo se materializa el beneficio de un nivel. El texto siempre es libre; esto
+/// es solo lo que el sistema sabe ejecutar de verdad.
+enum GamificationBenefitKind {
+  /// Solo el texto descriptivo (p. ej. un código promocional que se entrega a mano).
+  NONE
+  /// Al alcanzar el nivel se añade al alumno a un grupo de acceso.
+  ACCESS_GROUP
+}
+
+/// Asiento del libro de puntos. Append-only salvo la revocación, que se marca
+/// (nunca se borra la fila: el histórico tiene que poder auditarse).
+model ModGamificationLedgerEntry {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  /// ID lógico del miembro (tabla core `user`, sin FK cross-module).
+  userId   String @map("user_id") @db.Uuid
+  /// Regla que originó el asiento (`community.post`, `challenge`…).
+  ruleKey  String @map("rule_key") @db.VarChar(64)
+  points   Int
+
+  /// Clave del HECHO que originó el asiento, no del evento. Es la única defensa
+  /// real contra el doble cobro: el bus entrega AL MENOS UNA VEZ y su
+  /// `idempotencyKey` lleva Date.now(), así que no deduplica aguas abajo.
+  sourceKey String @map("source_key") @db.VarChar(160)
+
+  /// Fecha del HECHO, no de la inserción. Los cortes por rango se calculan sobre
+  /// esto para que el relleno del histórico respete las fechas originales.
+  occurredAt DateTime @map("occurred_at")
+
+  /// Contexto para poder explicar el asiento en la UI (postId, courseId…).
+  meta Json?
+
+  revokedAt    DateTime? @map("revoked_at")
+  revokeReason String?   @map("revoke_reason")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@unique([tenantId, userId, sourceKey])
+  @@index([tenantId, userId, revokedAt])
+  @@index([tenantId, occurredAt])
+  @@index([tenantId, ruleKey, userId, occurredAt])
+  @@map("mod_gamification_ledger_entry")
+}
+
+/// Materialización del saldo. NO es la fuente de verdad (lo es el ledger): existe
+/// para no sumar el libro entero en cada request.
+model ModGamificationProfile {
+  id             String @id @default(uuid()) @db.Uuid
+  tenantId       String @map("tenant_id") @db.Uuid
+  userId         String @map("user_id") @db.Uuid
+  /// Puntos acumulados de por vida. Nunca se reinician: son la base del nivel.
+  lifetimePoints Int    @default(0) @map("lifetime_points")
+
+  /// Nivel alcanzado, NULL mientras el operador no haya definido ninguno.
+  levelKey       String?   @map("level_key") @db.VarChar(64)
+  levelReachedAt DateTime? @map("level_reached_at")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, userId])
+  @@index([tenantId, lifetimePoints(sort: Desc)])
+  @@map("mod_gamification_profile")
+}
+
+/// Catálogo de reglas de puntuación. Se siembra en runtime con los pesos por
+/// defecto y el operador los edita desde /admin/gamificacion.
+model ModGamificationRule {
+  id       String  @id @default(uuid()) @db.Uuid
+  tenantId String  @map("tenant_id") @db.Uuid
+  /// Identificador estable de la regla; lo referencia el código del bridge.
+  key      String  @db.VarChar(64)
+  points   Int
+  /// Máximo de asientos de esta regla por usuario y día UTC. 0 = sin techo.
+  dailyCap Int     @default(0) @map("daily_cap")
+  enabled  Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, key])
+  @@map("mod_gamification_rule")
+}
+
+/// Nivel definido por el operador. Nace vacío a propósito: los nombres y los
+/// beneficios son decisiones de marca, no datos que pueda inventar el sistema.
+model ModGamificationLevel {
+  id        String @id @default(uuid()) @db.Uuid
+  tenantId  String @map("tenant_id") @db.Uuid
+  key       String @db.VarChar(64)
+  name      String @db.VarChar(80)
+  /// Puntos de por vida necesarios para alcanzarlo.
+  minPoints Int    @map("min_points")
+
+  /// Texto del beneficio tal cual se le enseña al alumno.
+  benefitText   String?                 @map("benefit_text")
+  benefitKind   GamificationBenefitKind @default(NONE) @map("benefit_kind")
+  /// Grupo de acceso al que se añade al alcanzar el nivel (kind ACCESS_GROUP).
+  /// ID lógico, sin FK: mod.access-groups es código del host.
+  accessGroupId String?                 @map("access_group_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, key])
+  @@unique([tenantId, minPoints])
+  @@index([tenantId, minPoints])
+  @@map("mod_gamification_level")
+}
+
+/// Reto con premio. La prueba obligatoria es lo que evita el postureo y lo que
+/// genera el repositorio de casos.
+model ModGamificationChallenge {
+  id          String  @id @default(uuid()) @db.Uuid
+  tenantId    String  @map("tenant_id") @db.Uuid
+  title       String  @db.VarChar(160)
+  description String?
+  points      Int
+
+  /// Si exige adjuntar prueba (captura, workflow o enlace) para poder entregar.
+  proofRequired Boolean @default(true) @map("proof_required")
+
+  status   GamificationChallengeStatus @default(DRAFT)
+  startsAt DateTime?                   @map("starts_at")
+  endsAt   DateTime?                   @map("ends_at")
+
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  submissions ModGamificationSubmission[]
+
+  @@index([tenantId, status, createdAt(sort: Desc)])
+  @@map("mod_gamification_challenge")
+}
+
+/// Entrega de un alumno a un reto. Una por reto y persona: la unique es lo que
+/// impide reenviar en bucle para farmear la revisión.
+model ModGamificationSubmission {
+  id          String @id @default(uuid()) @db.Uuid
+  tenantId    String @map("tenant_id") @db.Uuid
+  challengeId String @map("challenge_id") @db.Uuid
+  userId      String @map("user_id") @db.Uuid
+
+  /// URL de la prueba: fichero del storage del tenant o enlace externo.
+  proofUrl  String? @map("proof_url")
+  proofName String? @map("proof_name")
+  note      String?
+
+  status       GamificationSubmissionStatus @default(PENDING)
+  reviewedById String?                      @map("reviewed_by_id") @db.Uuid
+  reviewedAt   DateTime?                    @map("reviewed_at")
+  reviewNote   String?                      @map("review_note")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  challenge ModGamificationChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, challengeId, userId])
+  @@index([tenantId, status, createdAt(sort: Desc)])
+  @@index([tenantId, userId])
+  @@map("mod_gamification_submission")
 }
