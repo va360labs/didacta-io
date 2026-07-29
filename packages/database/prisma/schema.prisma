@@ -3687,6 +3687,8 @@ model ModSurveysSurvey {
   status    SurveyStatus @default(OPEN)
   createdAt DateTime     @default(now()) @map("created_at")
   closedAt  DateTime?    @map("closed_at")
+  /// Cuándo se envió el recordatorio a los inscritos sin responder (1 por encuesta).
+  reminderSentAt DateTime? @map("reminder_sent_at")
 
   questions ModSurveysQuestion[]
   responses ModSurveysResponse[]

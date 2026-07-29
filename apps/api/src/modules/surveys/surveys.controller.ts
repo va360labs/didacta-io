@@ -18,6 +18,7 @@ import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import type { SessionClaims } from '../../auth/token.service';
 import { ModuleContextFactory } from '../module-context.factory';
 import { ModuleRegistryService } from '../module-registry.service';
+import { SurveysReminderWorker } from './surveys-reminder.worker';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
@@ -43,6 +44,7 @@ export class SurveysController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly factory: ModuleContextFactory,
+    private readonly reminderWorker: SurveysReminderWorker,
   ) {}
 
   @Get('sessions/:sessionId')
@@ -124,6 +126,19 @@ export class SurveysController {
       topic: session.topic,
     });
     return result;
+  }
+
+  @Post('admin/reminders/run')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Fuerza el barrido de recordatorios sin esperar al cron (encuestas abiertas ≥24h sin recordatorio).',
+  })
+  async adminRunReminders(@CurrentUser() user: SessionClaims | undefined) {
+    this.requireAdmin(user);
+    return this.reminderWorker.runSweep();
   }
 
   @Post('admin/:id/close')

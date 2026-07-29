@@ -171,6 +171,10 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
     subject: 'Valora la clase: {{topic}}',
     body: '¿Qué te ha parecido "{{topic}}"? Son 30 segundos y la respuesta es anónima: nos ayuda a decidir qué grabar y qué mejorar.{{#surveyUrl}}\n\nResponde desde la página de la clase:\n{{surveyUrl}}{{/surveyUrl}}',
   },
+  'surveys.post_class.reminder': {
+    subject: 'Un momento: ¿qué te pareció "{{topic}}"?',
+    body: 'Ayer estuviste inscrito en "{{topic}}" y aún no nos has contado qué te pareció. Son 30 segundos y la respuesta es anónima — de verdad nos ayuda a mejorar las próximas clases.{{#surveyUrl}}\n\nValórala desde la página de la clase:\n{{surveyUrl}}{{/surveyUrl}}\n\n(Si ya la valoraste desde otra cuenta o no llegaste a asistir, ignora este mensaje.)',
+  },
 };
 
 /** Metadatos de los templates del hub para la UI (nombre humano, trigger, vars). */
@@ -374,6 +378,18 @@ const HUB_TEMPLATE_META: Record<
     name: 'Encuesta post-clase',
     description:
       'Al terminar una clase en directo, invita a cada inscrito a valorarla (respuesta anónima).',
+    category: 'learning',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'topic', description: 'Título de la clase' },
+      { name: 'surveyUrl', description: 'Enlace a la página de la clase (/clase/…)' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'surveys.post_class.reminder': {
+    name: 'Recordatorio de encuesta post-clase',
+    description:
+      'A las 24h de crearse la encuesta, recuerda valorarla SOLO a los inscritos que aún no respondieron (un único recordatorio por clase).',
     category: 'learning',
     channels: ['IN_APP', 'EMAIL'],
     variables: [

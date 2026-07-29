@@ -18,6 +18,7 @@ CREATE TABLE "mod_surveys_survey" (
     "status" "SurveyStatus" NOT NULL DEFAULT 'OPEN',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "closed_at" TIMESTAMP(3),
+    "reminder_sent_at" TIMESTAMP(3),
     CONSTRAINT "mod_surveys_survey_pkey" PRIMARY KEY ("id")
 );
 

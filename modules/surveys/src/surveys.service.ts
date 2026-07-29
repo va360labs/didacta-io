@@ -380,6 +380,70 @@ export class SurveysService {
     };
   }
 
+  /**
+   * Encuestas post-clase con recordatorio pendiente: abiertas, sin recordatorio
+   * enviado, creadas hace ≥ `delayHours` (default 24) y ≤ `maxAgeHours`. El
+   * tope superior evita que un deploy tardío bombardee encuestas antiguas.
+   */
+  async findDueReminders(
+    now: Date,
+    delayHours = 24,
+    maxAgeHours = 72,
+  ): Promise<Array<{ id: string; tenantId: string; zoomSessionId: string; title: string }>> {
+    const from = new Date(now.getTime() - maxAgeHours * 3_600_000);
+    const to = new Date(now.getTime() - delayHours * 3_600_000);
+    if (to < from) return [];
+    const surveys = await this.prisma.modSurveysSurvey.findMany({
+      where: {
+        kind: 'POST_CLASS',
+        status: 'OPEN',
+        reminderSentAt: null,
+        zoomSessionId: { not: null },
+        createdAt: { gte: from, lte: to },
+      },
+      select: { id: true, tenantId: true, zoomSessionId: true, title: true },
+    });
+    return surveys.map((s) => ({
+      id: s.id,
+      tenantId: s.tenantId,
+      zoomSessionId: s.zoomSessionId!,
+      title: s.title,
+    }));
+  }
+
+  /**
+   * Reclama el envío del recordatorio de una encuesta. Solo la primera llamada
+   * devuelve true (updateMany condicionado a reminderSentAt null): si hay dos
+   * instancias barriendo a la vez, una sola envía.
+   */
+  async claimReminder(tenantId: string, surveyId: string): Promise<boolean> {
+    const { count } = await this.prisma.modSurveysSurvey.updateMany({
+      where: { id: surveyId, tenantId, reminderSentAt: null },
+      data: { reminderSentAt: new Date() },
+    });
+    return count === 1;
+  }
+
+  /**
+   * De una lista de userIds, cuáles NO han respondido aún. Usa el hash anónimo:
+   * permite saber si alguien respondió (para no recordarle) sin poder asociar
+   * a nadie con el contenido de su respuesta.
+   */
+  async filterPendingRespondents(
+    tenantId: string,
+    surveyId: string,
+    userIds: string[],
+  ): Promise<string[]> {
+    if (userIds.length === 0) return [];
+    const hashByUser = new Map(userIds.map((u) => [u, this.respondentHash(surveyId, u)]));
+    const responded = await this.prisma.modSurveysResponse.findMany({
+      where: { tenantId, surveyId, respondentHash: { in: [...hashByUser.values()] } },
+      select: { respondentHash: true },
+    });
+    const done = new Set(responded.map((r) => r.respondentHash));
+    return userIds.filter((u) => !done.has(hashByUser.get(u)!));
+  }
+
   /** Cierra la encuesta (admin): deja de aceptar respuestas. Idempotente. */
   async closeSurvey(tenantId: string, surveyId: string): Promise<void> {
     const { count } = await this.prisma.modSurveysSurvey.updateMany({

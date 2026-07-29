@@ -87,9 +87,25 @@ class MockPrisma {
       return s ? this.surveyView(s, include as Row | undefined) : null;
     },
     findMany: async ({ where, include }: never) => {
-      const w = where as Row;
+      const w = (where ?? {}) as Row;
       return this.surveys
-        .filter((x) => x['tenantId'] === w['tenantId'])
+        .filter((x) => {
+          if (w['tenantId'] !== undefined && x['tenantId'] !== w['tenantId']) return false;
+          if (w['kind'] !== undefined && x['kind'] !== w['kind']) return false;
+          if (w['status'] !== undefined && x['status'] !== w['status']) return false;
+          if ('reminderSentAt' in w && w['reminderSentAt'] === null && x['reminderSentAt'] != null)
+            return false;
+          const zs = w['zoomSessionId'] as Row | undefined;
+          if (zs && typeof zs === 'object' && 'not' in zs && x['zoomSessionId'] === zs['not'])
+            return false;
+          const ca = w['createdAt'] as Row | undefined;
+          if (ca && typeof ca === 'object') {
+            const t = (x['createdAt'] as Date).getTime();
+            if (ca['gte'] !== undefined && t < (ca['gte'] as Date).getTime()) return false;
+            if (ca['lte'] !== undefined && t > (ca['lte'] as Date).getTime()) return false;
+          }
+          return true;
+        })
         .sort((a, b) => (b['createdAt'] as Date).getTime() - (a['createdAt'] as Date).getTime())
         .map((s) => this.surveyView(s, include as Row | undefined));
     },
@@ -108,6 +124,7 @@ class MockPrisma {
         createdAt: new Date(),
         closedAt: null,
         courseId: null,
+        reminderSentAt: null,
         ...d,
       };
       delete row['questions'];
@@ -124,7 +141,9 @@ class MockPrisma {
         (x) =>
           x['id'] === w['id'] &&
           x['tenantId'] === w['tenantId'] &&
-          (w['status'] === undefined || x['status'] === w['status']),
+          (w['status'] === undefined || x['status'] === w['status']) &&
+          (!('reminderSentAt' in w) ||
+            (w['reminderSentAt'] === null && x['reminderSentAt'] == null)),
       );
       for (const m of matched) Object.assign(m, data as Row);
       return { count: matched.length };
@@ -132,6 +151,16 @@ class MockPrisma {
   };
 
   modSurveysResponse = {
+    findMany: async ({ where }: never) => {
+      const w = where as Row;
+      const inList = ((w['respondentHash'] as Row | undefined)?.['in'] as string[]) ?? [];
+      return this.responses.filter(
+        (r) =>
+          r['tenantId'] === w['tenantId'] &&
+          r['surveyId'] === w['surveyId'] &&
+          inList.includes(r['respondentHash'] as string),
+      );
+    },
     findUnique: async ({ where }: never) => {
       const w = (where as Row)['surveyId_respondentHash'] as Row;
       return (
@@ -417,6 +446,59 @@ describe('SurveysService', () => {
     const textQ = results.questions[3]!;
     expect(textQ.texts).toEqual(['Genial', 'Más práctica']);
     expect(textQ.answerCount).toBe(2);
+  });
+
+  it('findDueReminders respeta la ventana 24-72h y los estados', async () => {
+    const { service } = makeService(mock);
+    const now = new Date('2026-07-29T12:00:00Z');
+    const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000);
+
+    await service.createForZoomSession({ tenantId: TENANT, sessionId: 's-due', topic: 'Debida' });
+    await service.createForZoomSession({ tenantId: TENANT, sessionId: 's-nueva', topic: 'Nueva' });
+    await service.createForZoomSession({ tenantId: TENANT, sessionId: 's-vieja', topic: 'Vieja' });
+    await service.createForZoomSession({
+      tenantId: TENANT,
+      sessionId: 's-cerrada',
+      topic: 'Cerrada',
+    });
+    const bySession = (sid: string) => mock.surveys.find((s) => s['zoomSessionId'] === sid)!;
+    bySession('s-due')['createdAt'] = hoursAgo(25);
+    bySession('s-nueva')['createdAt'] = hoursAgo(2);
+    bySession('s-vieja')['createdAt'] = hoursAgo(100);
+    bySession('s-cerrada')['createdAt'] = hoursAgo(30);
+    await service.closeSurvey(TENANT, bySession('s-cerrada')['id'] as string);
+
+    const due = await service.findDueReminders(now);
+    expect(due.map((d) => d.zoomSessionId)).toEqual(['s-due']);
+
+    // Tras reclamar, deja de estar pendiente.
+    expect(await service.claimReminder(TENANT, due[0]!.id)).toBe(true);
+    expect(await service.findDueReminders(now)).toEqual([]);
+  });
+
+  it('claimReminder solo gana la primera vez (carrera entre instancias)', async () => {
+    const { service } = makeService(mock);
+    const surveyId = await createSurvey(service);
+    expect(await service.claimReminder(TENANT, surveyId)).toBe(true);
+    expect(await service.claimReminder(TENANT, surveyId)).toBe(false);
+  });
+
+  it('filterPendingRespondents separa pendientes sin identificar respuestas', async () => {
+    const { service } = makeService(mock);
+    const surveyId = await createSurvey(service);
+    const a = validAnswersFor(mock, surveyId);
+    await service.submitResponse({
+      tenantId: TENANT,
+      surveyId,
+      userId: 'u2',
+      answers: [a.nps(9), a.scale1(5), a.scale2(5)],
+    });
+
+    expect(await service.filterPendingRespondents(TENANT, surveyId, [])).toEqual([]);
+    expect(await service.filterPendingRespondents(TENANT, surveyId, ['u1', 'u2', 'u3'])).toEqual([
+      'u1',
+      'u3',
+    ]);
   });
 
   it('getResults y closeSurvey lanzan not-found para encuestas ajenas', async () => {
