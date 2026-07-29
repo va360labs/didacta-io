@@ -8,7 +8,7 @@ import {
   type S3ClientConfig,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { StorageService } from '@didacta/core-kernel';
+import type { StorageAdapter } from '@didacta/core-kernel';
 
 export interface S3StorageOptions {
   endpoint: string;
@@ -23,7 +23,7 @@ export interface S3StorageOptions {
 }
 
 /**
- * StorageService backed por S3-compatible (MinIO en Easypanel, AWS S3, Hetzner, etc.).
+ * Adapter de storage backed por S3-compatible (MinIO en Easypanel, AWS S3, Hetzner, etc.).
  *
  * Por qué presigned URLs: el bucket queda **privado** (sin permisos públicos
  * de lectura). El backend firma una URL temporal con AWS Signature v4 y se la
@@ -37,7 +37,7 @@ export interface S3StorageOptions {
  * Path-style obligatorio en MinIO: la URL queda como
  * `https://lab-minio.../bucket/key` en vez de `https://bucket.lab-minio.../key`.
  */
-export class S3StorageService implements StorageService {
+export class S3StorageService implements StorageAdapter {
   private readonly client: S3Client;
   private readonly bucket: string;
   private readonly defaultTtl: number;

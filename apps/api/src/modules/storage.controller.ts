@@ -16,12 +16,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
 import { ModuleContextFactory } from './module-context.factory';
-import {
-  detectRasterContentType,
-  isOptimizableImage,
-  optimizeImage,
-  swapExtension,
-} from './image-optimizer';
+import { detectRasterContentType, optimizeImage, swapExtension } from './image-optimizer';
 
 const UPLOAD_ROLES = new Set(['super_admin', 'tenant_admin', 'formador', 'alumno']);
 
@@ -159,40 +154,50 @@ export class StorageController {
 
     // Normalizamos el filename para evitar traversal y caracteres
     // raros, conservando solo el sufijo de extensión.
-    let safeName = dto.filename
+    const safeName = dto.filename
       .toLowerCase()
       .replace(/[^a-z0-9._-]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 80);
 
-    // Auto-optimización de imágenes raster: se recomprimen a WebP y se
-    // redimensionan para servirlas ligeras. Activada por defecto; el caller
-    // puede afinar el ancho/calidad o desactivarla con `optimize.enabled=false`.
-    // Documentos y SVG no son optimizables → pasan intactos.
-    let outBuffer = buffer;
-    let outContentType: string = dto.contentType;
-    if (dto.optimize?.enabled !== false && isOptimizableImage(dto.contentType)) {
-      const optimized = await optimizeImage(buffer, dto.contentType, {
-        maxWidth: dto.optimize?.maxWidth,
-        quality: dto.optimize?.quality,
-      });
-      if (optimized.optimized) {
-        outBuffer = optimized.buffer;
-        outContentType = optimized.contentType;
-        safeName = swapExtension(safeName || 'image', optimized.extension);
-      }
-    }
-
-    const key = `tenants/${user.tenantId}/uploads/${Date.now()}-${safeName || 'image'}`;
+    const requestedKey = `tenants/${user.tenantId}/uploads/${Date.now()}-${safeName || 'image'}`;
 
     // Adapter per-tenant: si el tenant configuró storage S3 propio en
     // /admin/configuracion, usamos su bucket. Si no, fallback al adapter
     // global (env STORAGE_DRIVER) — compat con tenants que no migraron.
     const storage = await this.factory.getStorageForTenant(user.tenantId);
-    await storage.upload(key, outBuffer, outContentType);
-    const url = await storage.getSignedUrl(key);
 
-    return { key, url, contentType: outContentType, size: outBuffer.length };
+    // `uploadImage` recomprime a WebP y redimensiona; documentos y SVG pasan
+    // intactos porque el propio core los detecta como no optimizables. La única
+    // vía para guardar una imagen raster tal cual es pedirlo explícitamente con
+    // `optimize.enabled=false` (p. ej. una captura que se va a comparar píxel a
+    // píxel), y entonces bajamos al `upload` crudo.
+    if (dto.optimize?.enabled === false) {
+      await storage.upload(requestedKey, buffer, dto.contentType);
+      const rawUrl = await storage.getSignedUrl(requestedKey);
+      return {
+        key: requestedKey,
+        url: rawUrl,
+        contentType: dto.contentType,
+        size: buffer.length,
+        optimized: false,
+      };
+    }
+
+    const stored = await storage.uploadImage(requestedKey, buffer, dto.contentType, {
+      ...(dto.optimize?.maxWidth !== undefined ? { maxWidth: dto.optimize.maxWidth } : {}),
+      ...(dto.optimize?.quality !== undefined ? { quality: dto.optimize.quality } : {}),
+    });
+    const url = await storage.getSignedUrl(stored.key);
+
+    return {
+      key: stored.key,
+      url,
+      contentType: stored.contentType,
+      size: stored.size,
+      previousSize: stored.previousSize,
+      optimized: stored.optimized,
+    };
   }
 
   @Post('optimize')
@@ -242,12 +247,15 @@ export class StorageController {
       };
     }
 
+    // Aquí NO usamos `storage.uploadImage`: ese escribe siempre, y en un
+    // reproceso la imagen ya puede estar óptima. Comprimimos primero y solo
+    // tocamos el storage si hubo ganancia real — si no, dejaríamos un duplicado
+    // huérfano por cada pasada del reoptimizador.
     const optimized = await optimizeImage(original, contentType, {
-      maxWidth: dto.maxWidth,
-      quality: dto.quality,
+      ...(dto.maxWidth !== undefined ? { maxWidth: dto.maxWidth } : {}),
+      ...(dto.quality !== undefined ? { quality: dto.quality } : {}),
     });
     if (!optimized.optimized) {
-      // Ya estaba óptima: no reescribimos nada.
       return {
         url: dto.url,
         contentType,
@@ -258,14 +266,13 @@ export class StorageController {
     }
 
     // Subimos bajo una key nueva. NO borramos la original: sigue referenciada
-    // por el recurso (curso) hasta que el caller persista la nueva URL; borrarla
-    // aquí dejaría la imagen rota si el guardado posterior falla.
-    const base = key.split('/').pop() ?? 'image';
-    const safeBase = swapExtension(
-      base.toLowerCase().replace(/[^a-z0-9._-]+/g, '-') || 'image',
+    // por el recurso (curso, avatar, portada…) hasta que el caller persista la
+    // nueva URL; borrarla aquí dejaría la imagen rota si el guardado falla.
+    const base = (key.split('/').pop() ?? 'image').toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
+    const newKey = swapExtension(
+      `tenants/${user.tenantId}/uploads/${Date.now()}-${base || 'image'}`,
       optimized.extension,
     );
-    const newKey = `tenants/${user.tenantId}/uploads/${Date.now()}-${safeBase}`;
     await storage.upload(newKey, optimized.buffer, optimized.contentType);
     const url = await storage.getSignedUrl(newKey);
 

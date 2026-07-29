@@ -1,6 +1,8 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
+import type { StorageAdapter } from '@didacta/core-kernel';
 import { StorageController } from '../src/modules/storage.controller';
+import { withImageOptimization } from '../src/modules/image-optimizing-storage';
 import type { ModuleContextFactory } from '../src/modules/module-context.factory';
 import type { SessionClaims } from '../src/auth/token.service';
 
@@ -22,10 +24,23 @@ function makeUser(overrides: Partial<SessionClaims> = {}): SessionClaims {
   } as SessionClaims;
 }
 
+/**
+ * El fake es un adapter crudo envuelto con el MISMO `withImageOptimization` de
+ * producción: así estos tests ejercitan la optimización real en vez de un stub
+ * que siempre dice que sí. `spies.upload` sigue viendo la escritura final,
+ * porque `uploadImage` delega en `upload` tras recomprimir.
+ */
 function makeFakeFactory() {
-  const upload = vi.fn(async () => undefined);
+  const upload = vi.fn(async (key: string) => ({ key }));
   const getSignedUrl = vi.fn(async (key: string) => `https://cdn.example.test/${key}`);
-  const storage = { upload, getSignedUrl } as unknown;
+  const download = vi.fn(async () => Buffer.alloc(0));
+  const del = vi.fn(async () => undefined);
+  const storage = withImageOptimization({
+    upload,
+    getSignedUrl,
+    download,
+    delete: del,
+  } as unknown as StorageAdapter);
   const getStorageForTenant = vi.fn(async () => storage);
   return {
     factory: { getStorageForTenant } as unknown as ModuleContextFactory,

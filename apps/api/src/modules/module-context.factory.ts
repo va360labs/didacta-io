@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { StorageService } from '@didacta/core-kernel';
 import { LocalDiskStorageService } from './local-disk-storage.service';
 import { S3StorageService, buildS3StorageFromEnv } from './s3-storage.service';
+import { withImageOptimization } from './image-optimizing-storage';
 import { OutboxQueueService } from './outbox-queue.service';
 import { PersistentEventBus } from './persistent-event-bus';
 import { PrismaAuditLogService } from './prisma-audit-log.service';
@@ -30,6 +31,11 @@ import { loadCipherKey } from '../auth/cipher-key';
  * S3_* vars (endpoint, bucket, creds). `local` usa el disco bajo
  * `STORAGE_ROOT`. Sin var explícita: si las S3_* están completas → s3,
  * sino → local.
+ *
+ * El adapter elegido se envuelve SIEMPRE con `withImageOptimization`: es lo que
+ * garantiza que toda imagen de la plataforma se optimice al subirla, venga de
+ * donde venga (host, módulo first-party o módulo del marketplace), sin que cada
+ * call site tenga que acordarse.
  */
 function buildStorage(): StorageService & {
   /** Solo presente si el driver activo es S3. Permite check de health. */
@@ -37,18 +43,18 @@ function buildStorage(): StorageService & {
 } {
   const driver = process.env['STORAGE_DRIVER'];
   if (driver === 'local') {
-    return new LocalDiskStorageService();
+    return withImageOptimization(new LocalDiskStorageService());
   }
   const s3 = buildS3StorageFromEnv();
   if (s3) {
-    return s3;
+    return withImageOptimization(s3);
   }
   if (driver === 's3') {
     throw new Error(
       'STORAGE_DRIVER=s3 pero faltan S3_ENDPOINT/S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY',
     );
   }
-  return new LocalDiskStorageService();
+  return withImageOptimization(new LocalDiskStorageService());
 }
 
 type AnyHandler = (ctx: HookContext<unknown>) => Promise<void> | void;
@@ -252,13 +258,17 @@ export class ModuleContextFactory implements OnApplicationShutdown {
     // compat con S3-compatible (Hetzner/MinIO/Backblaze) sí. Si el admin
     // no lo proveyó, generamos el URL canónico de AWS.
     const endpoint = cfg.s3Endpoint?.trim() || `https://s3.${region}.amazonaws.com`;
-    const adapter = new S3StorageService({
-      bucket: cfg.s3Bucket,
-      region,
-      endpoint,
-      accessKeyId: cfg.s3AccessKeyId,
-      secretAccessKey: sec.s3SecretAccessKey,
-    });
+    // Mismo envoltorio que el adapter global: un tenant con su propio bucket no
+    // puede quedarse sin optimización de imágenes por usar otro backend.
+    const adapter = withImageOptimization(
+      new S3StorageService({
+        bucket: cfg.s3Bucket,
+        region,
+        endpoint,
+        accessKeyId: cfg.s3AccessKeyId,
+        secretAccessKey: sec.s3SecretAccessKey,
+      }),
+    );
     this.tenantStorageCache.set(tenantId, adapter);
     return adapter;
   }

@@ -49,11 +49,63 @@ export interface HookRegistry {
   run<TInput>(hookName: string, ctx: HookContext<TInput>): Promise<void>;
 }
 
-export interface StorageService {
+/**
+ * Backend de almacenamiento en crudo (disco, S3…). Escribe exactamente los
+ * bytes que recibe: es lo que se quiere para un PDF, un ZIP o los assets de un
+ * paquete SCORM, donde cualquier reescritura rompería el fichero.
+ *
+ * Los módulos NO reciben esto: reciben `StorageService`, que lo envuelve.
+ */
+export interface StorageAdapter {
   upload(key: string, data: Buffer | Uint8Array, contentType?: string): Promise<{ key: string }>;
   download(key: string): Promise<Buffer>;
   delete(key: string): Promise<void>;
   getSignedUrl(key: string, expiresInSeconds?: number): Promise<string>;
+}
+
+export interface UploadImageOptions {
+  /** Ancho máximo en px; nunca amplía. Default 1600. El core acota a [64, 4096]. */
+  maxWidth?: number;
+  /** Calidad de la recompresión. Default 80. El core acota a [40, 95]. */
+  quality?: number;
+}
+
+export interface UploadedImage {
+  /**
+   * Key REAL bajo la que quedó el fichero. Puede diferir de la pedida: al
+   * recomprimir a WebP se cambia la extensión para que el MIME servido case.
+   * Persiste SIEMPRE esta, no la que pasaste.
+   */
+  key: string;
+  /** ContentType real del blob almacenado (`image/webp` si se recomprimió). */
+  contentType: string;
+  /** false si se guardó el original (vector, formato desconocido, ya óptimo). */
+  optimized: boolean;
+  /** Bytes finales almacenados. */
+  size: number;
+  /** Bytes del original recibido. Igual a `size` si no se optimizó. */
+  previousSize: number;
+  width?: number;
+  height?: number;
+}
+
+export interface StorageService extends StorageAdapter {
+  /**
+   * Sube una IMAGEN optimizándola primero (recompresión + redimensionado).
+   * Úsalo para cualquier imagen que vaya a mostrarse en la plataforma: avatares,
+   * portadas, logos, adjuntos de un post. Es la vía por defecto — `upload()`
+   * queda para ficheros que deben conservarse byte a byte.
+   *
+   * Nunca falla por culpa de la imagen: si el formato no es optimizable (SVG),
+   * si viene corrupta, o si comprimir no aporta nada, guarda el original y
+   * devuelve `optimized: false`.
+   */
+  uploadImage(
+    key: string,
+    data: Buffer | Uint8Array,
+    contentType: string,
+    opts?: UploadImageOptions,
+  ): Promise<UploadedImage>;
 }
 
 export interface AuditLogService {

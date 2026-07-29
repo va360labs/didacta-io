@@ -176,6 +176,7 @@ interface MockServices {
   };
   storage: {
     upload: ReturnType<typeof vi.fn>;
+    uploadImage: ReturnType<typeof vi.fn>;
     download: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
     getSignedUrl: ReturnType<typeof vi.fn>;
@@ -204,6 +205,18 @@ function makeServiceMocks(): MockServices {
     },
     storage: {
       upload: vi.fn().mockResolvedValue({ key: 'ok' }),
+      // Espeja el envoltorio real del core: `uploadImage` escribe y devuelve la
+      // key/contentType EFECTIVOS. Aqui simula el caso "ya estaba optima"
+      // (passthrough); el test de recompresion lo sobreescribe.
+      uploadImage: vi
+        .fn()
+        .mockImplementation(async (key: string, data: Buffer, contentType: string) => ({
+          key,
+          contentType,
+          optimized: false,
+          size: data.byteLength,
+          previousSize: data.byteLength,
+        })),
       download: vi.fn(),
       delete: vi.fn(),
       getSignedUrl: vi.fn(),
@@ -1557,7 +1570,53 @@ describe('media.uploadFromBytes', () => {
     expect(result.contentType).toBe('image/png');
     expect(result.sizeBytes).toBe(5);
     expect(result.storageKey).toContain(expectedChecksum);
-    expect(services.storage.upload).toHaveBeenCalledWith(result.storageKey, bytes, 'image/png');
+    expect(services.storage.uploadImage).toHaveBeenCalledWith(
+      result.storageKey,
+      bytes,
+      'image/png',
+    );
+  });
+
+  it('si el core recomprime, devuelve la key y el tamaño REALES pero el checksum del ORIGEN', async () => {
+    const { api, services } = setup();
+    const bytes = new Uint8Array([1, 2, 3, 4, 5]);
+    const expectedChecksum = sha256Hex(bytes);
+    services.storage.uploadImage.mockImplementation(async (key: string) => ({
+      key: `${key}.webp`,
+      contentType: 'image/webp',
+      optimized: true,
+      size: 2,
+      previousSize: 5,
+    }));
+
+    const result = await api.media.uploadFromBytes({
+      bytes,
+      contentType: 'image/png',
+      filename: 'photo.png',
+    });
+
+    // Key y metadatos siguen al blob REAL: el módulo persiste esto para poder
+    // recuperarlo después.
+    expect(result.storageKey).toMatch(/\.webp$/);
+    expect(result.contentType).toBe('image/webp');
+    expect(result.sizeBytes).toBe(2);
+    // El checksum sigue siendo el del ORIGEN — es la clave de deduplicación del
+    // migrador, y tiene que sobrevivir a un cambio de ajustes de compresión.
+    expect(result.checksum).toBe(expectedChecksum);
+  });
+
+  it('un fichero NO imagen también pasa por uploadImage (el core lo deja intacto)', async () => {
+    const { api, services } = setup();
+    const bytes = new Uint8Array([37, 80, 68, 70]); // %PDF
+
+    const result = await api.media.uploadFromBytes({
+      bytes,
+      contentType: 'application/pdf',
+      filename: 'apuntes.pdf',
+    });
+
+    expect(services.storage.uploadImage).toHaveBeenCalledTimes(1);
+    expect(result.contentType).toBe('application/pdf');
   });
 
   it('rechaza bytes vacío con DIDACTA_VALIDATION_ERROR', async () => {

@@ -138,9 +138,16 @@ export async function detectRasterContentType(input: Buffer): Promise<string | n
  * Cambia la extensión de un nombre de fichero ya saneado. Si no tiene extensión,
  * la añade. Garantiza que la key acabe en `.webp` para que el servidor de
  * ficheros locales resuelva el MIME correcto.
+ *
+ * Acepta también una key con directorios (`tenants/…/branding/logo`): solo mira
+ * el último segmento, porque un punto en una carpeta no es una extensión y
+ * truncar por él dejaría la imagen en otra ruta.
  */
 export function swapExtension(name: string, ext: string): string {
-  const dot = name.lastIndexOf('.');
-  const base = dot > 0 ? name.slice(0, dot) : name;
-  return `${base || 'image'}.${ext}`;
+  const slash = name.lastIndexOf('/');
+  const dir = slash === -1 ? '' : name.slice(0, slash + 1);
+  const file = slash === -1 ? name : name.slice(slash + 1);
+  const dot = file.lastIndexOf('.');
+  const base = dot > 0 ? file.slice(0, dot) : file;
+  return `${dir}${base || 'image'}.${ext}`;
 }

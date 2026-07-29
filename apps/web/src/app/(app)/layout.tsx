@@ -515,7 +515,7 @@ function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): SidebarG
       { href: '/admin/grupos-acceso', label: 'Grupos de acceso', icon: 'lock' },
       { href: '/admin/competencias', label: 'Competencias', icon: 'award' },
       { href: '/admin/cursos/categorias', label: 'Categorías de cursos', icon: 'book' },
-      { href: '/admin/cursos/imagenes', label: 'Imágenes de cursos', icon: 'image' },
+      { href: '/admin/imagenes', label: 'Imágenes', icon: 'image' },
       { href: '/admin/branding', label: 'Branding', icon: 'palette' },
       { href: '/admin/emails', label: 'Emails', icon: 'bell' },
       { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
