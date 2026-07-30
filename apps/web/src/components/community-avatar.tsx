@@ -2,24 +2,20 @@
 
 import Link from 'next/link';
 import { publicProfileHref } from '@/lib/public-users';
-
-function initialsOf(name: string | null | undefined): string {
-  if (!name) return 'A';
-  return (
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((s) => s[0]?.toUpperCase() ?? '')
-      .join('') || 'A'
-  );
-}
+import { useUserRestriction } from '@/lib/restrictions';
+import { RestrictionShield, useCanModerate } from './restriction-shield';
+import { displayNameOf, UserAvatar } from './user-chip';
 
 /**
  * Avatar de usuario para la comunidad: muestra la imagen (`avatarUrl`) o, si no
  * hay, las iniciales sobre el gradiente de marca. Si se pasa `userId`, es un
  * enlace al perfil público `/u/[id]` (con stopPropagation para no disparar el
  * onClick de la tarjeta que lo contiene).
+ *
+ * Delega el pintado en `UserAvatar` para que las iniciales se calculen en un
+ * solo sitio del repo. No lleva escudo: en el feed el avatar y el nombre van
+ * separados, y el escudo vive junto al NOMBRE (ver `AuthorNameLink`), que es
+ * donde se espera encontrarlo y donde no se duplica.
  */
 export function CommunityAvatar({
   userId,
@@ -34,28 +30,7 @@ export function CommunityAvatar({
   size?: number;
   linkToProfile?: boolean;
 }) {
-  const dim = { width: `${size}px`, height: `${size}px` };
-  const inner = avatarUrl ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={avatarUrl} alt={name ?? 'Avatar'} className="h-full w-full object-cover" />
-  ) : (
-    <span
-      aria-hidden="true"
-      className="grid h-full w-full place-items-center font-display font-bold text-white"
-      style={{
-        background: 'linear-gradient(135deg, #1E5AA8 0%, #18B5A8 100%)',
-        fontSize: `${Math.round(size * 0.34)}px`,
-      }}
-    >
-      {initialsOf(name)}
-    </span>
-  );
-
-  const box = (
-    <span className="block shrink-0 overflow-hidden rounded-full" style={dim}>
-      {inner}
-    </span>
-  );
+  const box = <UserAvatar name={name} avatarUrl={avatarUrl} size={size} fallback="Anónimo" />;
 
   if (userId && linkToProfile) {
     return (
@@ -72,19 +47,32 @@ export function CommunityAvatar({
   return box;
 }
 
-/** Nombre del autor como enlace al perfil público (stopPropagation para tarjetas). */
+/**
+ * Nombre del autor como enlace al perfil público, con el escudo de moderación
+ * al lado cuando quien mira es admin.
+ *
+ * El escudo se cuelga aquí y no del avatar porque «al lado del nombre» es
+ * donde se busca, y porque así aparece de una vez en el feed, el detalle del
+ * post, los comentarios y los espacios sin tocar ninguno de ellos.
+ */
 export function AuthorNameLink({
   userId,
   name,
   className,
+  showShield = true,
 }: {
   userId?: string | null;
   name: string | null | undefined;
   className?: string;
+  showShield?: boolean;
 }) {
-  const label = name ?? 'Anónimo';
+  const canModerate = useCanModerate(userId);
+  const restriction = useUserRestriction(userId, canModerate && showShield);
+  const label = displayNameOf(name, null, 'Anónimo');
+
   if (!userId) return <span className={className}>{label}</span>;
-  return (
+
+  const link = (
     <Link
       href={publicProfileHref(userId)}
       onClick={(e) => e.stopPropagation()}
@@ -92,5 +80,14 @@ export function AuthorNameLink({
     >
       {label}
     </Link>
+  );
+
+  if (!showShield || !canModerate) return link;
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      {link}
+      <RestrictionShield userId={userId} userName={label} active={restriction} size={14} />
+    </span>
   );
 }

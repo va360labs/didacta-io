@@ -61,6 +61,11 @@ export interface CreateRestrictionInput {
 
 const MAX_REASON = 500;
 
+/** La más lejana de dos fechas ISO. */
+function maxIso(a: string, b: string): string {
+  return new Date(a).getTime() >= new Date(b).getTime() ? a : b;
+}
+
 @Injectable()
 export class RestrictionService {
   private readonly cache = new Map<string, CacheEntry>();
@@ -110,6 +115,57 @@ export class RestrictionService {
 
     this.cache.set(key, { active, expiresAt: ttl });
     return active;
+  }
+
+  /**
+   * Sanciones vigentes de varios usuarios de una vez.
+   *
+   * Existe para que el escudo del feed pueda pintarse en rojo sin disparar una
+   * petición por autor: con 20 posts en pantalla serían 20 llamadas. Mismo
+   * criterio que `fetchPublicUsers` en el front.
+   *
+   * No usa la caché del camino caliente a propósito: aquí el volumen es una
+   * query con `IN`, y cachear por lote complicaría la invalidación sin ganar
+   * nada — esto lo llama el panel de un admin, no cada request de la API.
+   */
+  async activeForMany(
+    tenantId: string,
+    userIds: string[],
+  ): Promise<
+    Record<string, { scopes: string[]; scopeLabels: string[]; expiresAt: string | null }>
+  > {
+    const ids = [...new Set(userIds.filter(Boolean))];
+    if (ids.length === 0) return {};
+
+    const rows = await this.prisma.userRestriction.findMany({
+      where: {
+        tenantId,
+        userId: { in: ids },
+        liftedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
+      select: { userId: true, scopes: true, expiresAt: true },
+    });
+
+    const out: Record<
+      string,
+      { scopes: string[]; scopeLabels: string[]; expiresAt: string | null }
+    > = {};
+    for (const row of rows) {
+      const prev = out[row.userId];
+      const scopes = [...new Set([...(prev?.scopes ?? []), ...row.scopes])];
+      // Con varias sanciones a la vez, la fecha que se muestra es la más
+      // lejana: es cuando el usuario recupera todo. Una permanente (null)
+      // gana siempre.
+      let expiresAt = prev?.expiresAt ?? null;
+      if (prev && prev.expiresAt !== null) {
+        expiresAt = row.expiresAt ? maxIso(prev.expiresAt, row.expiresAt.toISOString()) : null;
+      } else if (!prev) {
+        expiresAt = row.expiresAt?.toISOString() ?? null;
+      }
+      out[row.userId] = { scopes, scopeLabels: scopeLabels(scopes), expiresAt };
+    }
+    return out;
   }
 
   /** Histórico completo, lo consume el expediente. Más reciente primero. */

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { StatCard } from '@/components/stat-card';
+import { UserChip } from '@/components/user-chip';
 import { ApiHttpError } from '@/lib/api-client';
 import { coursesApi, type Course } from '@/lib/courses';
 import {
@@ -323,10 +324,20 @@ function FilaRespuesta({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm font-semibold text-text">{item.question}</p>
-          <p className="text-xs text-text-subtle">
-            {item.user.name ?? item.user.email ?? 'Alumno'} · {item.courseTitle ?? 'Curso'} ·{' '}
-            {formatFecha(item.askedAt)}
-          </p>
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-text-subtle">
+            <UserChip
+              userId={item.user.id}
+              name={item.user.name}
+              email={item.user.email}
+              fallback="Alumno"
+              showAvatar={false}
+              size={18}
+              nameClassName="block truncate text-xs text-text-subtle"
+            />
+            <span>
+              · {item.courseTitle ?? 'Curso'} · {formatFecha(item.askedAt)}
+            </span>
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {sinRespaldo ? <Badge variant="warning">Sin respaldo</Badge> : null}

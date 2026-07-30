@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { UserChip } from '@/components/user-chip';
 import { ApiHttpError } from '@/lib/api-client';
 import {
   decideMemberRequest,
@@ -183,7 +184,16 @@ export default function SolicitudesMiembrosPage() {
             <Card key={r.userId}>
               <CardHeader className="pb-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="text-base">{r.name ?? r.email}</CardTitle>
+                  <CardTitle className="text-base">
+                    <UserChip
+                      userId={r.userId}
+                      name={r.name}
+                      email={r.email}
+                      showAvatar={false}
+                      size={20}
+                      nameClassName="block truncate text-base"
+                    />
+                  </CardTitle>
                   <Button
                     variant="ghost"
                     onClick={() => void rerun(r.userId)}

@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { UserChip } from '@/components/user-chip';
 import { ApiHttpError } from '@/lib/api-client';
 import {
   accessGroupsApi,
@@ -505,10 +506,15 @@ export default function GruposAccesoPage() {
                         className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
                       >
                         <span className="flex items-center gap-2">
-                          <span>
-                            {m.name ?? m.email ?? m.userId}
-                            {m.email ? <span className="text-text-muted"> ({m.email})</span> : null}
-                          </span>
+                          <UserChip
+                            userId={m.userId}
+                            name={m.name}
+                            email={m.email}
+                            showAvatar={false}
+                            size={20}
+                            nameClassName="block truncate"
+                            subtitle={m.name && m.email ? m.email : null}
+                          />
                           {m.source === 'TIER' && <Badge variant="warning">Por tier</Badge>}
                         </span>
                         <Button

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { UserChip } from '@/components/user-chip';
 import { authStorage } from '@/lib/auth-storage';
 import { adminUsersApi, type UserListItem } from '@/lib/admin-users';
 
@@ -13,14 +14,6 @@ const ROLE_STYLE: Record<string, string> = {
   auditor: 'bg-(--didacta-balance)/10 text-(--didacta-balance)',
   empresa_manager: 'bg-bg-subtle text-text-muted',
 };
-
-function initials(name: string | null, email: string): string {
-  if (name) {
-    const parts = name.trim().split(/\s+/);
-    return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
-  }
-  return email[0].toUpperCase();
-}
 
 function primaryRole(roles: string[]): string {
   const priority = [
@@ -150,31 +143,25 @@ export default function MiembrosPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {users.map((u) => {
               const role = primaryRole(u.roles);
-              const ini = initials(u.name, u.email);
               return (
-                <Link
+                <div
                   key={u.id}
-                  href={`/u/${u.id}` as never}
-                  className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4 transition-shadow hover:border-border-strong hover:shadow-sm"
+                  className="flex items-center gap-2 rounded-xl border border-border bg-surface p-4 transition-shadow hover:border-border-strong hover:shadow-sm"
                 >
-                  <div
-                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-[11px] font-bold ${ROLE_STYLE[role] ?? 'bg-bg-subtle text-text-muted'}`}
+                  <UserChip
+                    userId={u.id}
+                    name={u.name}
+                    email={u.email}
+                    size={40}
+                    className="min-w-0 flex-1"
+                    nameClassName="truncate text-sm font-semibold text-text"
+                  />
+                  <span
+                    className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${ROLE_STYLE[role] ?? 'bg-bg-subtle text-text-muted'}`}
                   >
-                    {ini}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-semibold text-text">
-                        {u.name?.trim() || 'Miembro'}
-                      </span>
-                      <span
-                        className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${ROLE_STYLE[role] ?? 'bg-bg-subtle text-text-muted'}`}
-                      >
-                        {ROLE_LABELS[role] ?? role}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
+                    {ROLE_LABELS[role] ?? role}
+                  </span>
+                </div>
               );
             })}
           </div>

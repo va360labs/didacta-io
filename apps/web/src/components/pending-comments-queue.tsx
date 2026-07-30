@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { UserChip } from '@/components/user-chip';
 import { ApiHttpError } from '@/lib/api-client';
 import { learningApi, type LessonComment } from '@/lib/learning';
 
@@ -105,7 +106,14 @@ export function PendingCommentsQueue({ courseId }: Props) {
           {items.map((c) => (
             <li key={c.id} className="rounded-lg border border-border-soft bg-surface-2 p-3">
               <div className="flex flex-wrap items-center gap-2 text-xs text-text-subtle">
-                <span className="font-semibold text-text">{c.authorDisplayName ?? 'Anónimo'}</span>
+                <UserChip
+                  userId={c.authorId}
+                  name={c.authorDisplayName}
+                  fallback="Anónimo"
+                  showAvatar={false}
+                  size={20}
+                  nameClassName="block truncate font-semibold text-text"
+                />
                 <span>·</span>
                 <span>{relTime(c.createdAt)}</span>
                 <span>·</span>

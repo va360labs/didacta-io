@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { UserChip } from '@/components/user-chip';
 import { ApiHttpError } from '@/lib/api-client';
 import {
   gamificationAdminApi,
@@ -344,9 +345,17 @@ function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) 
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="font-semibold text-text">{s.challengeTitle}</p>
-                  <p className="text-sm text-text-muted">
-                    {s.displayName} · {new Date(s.createdAt).toLocaleDateString('es-ES')}
-                  </p>
+                  <div className="flex items-center gap-1.5 text-sm text-text-muted">
+                    <UserChip
+                      userId={s.userId}
+                      name={s.displayName}
+                      fallback="Alumno"
+                      showAvatar={false}
+                      size={20}
+                      nameClassName="block truncate text-sm text-text-muted"
+                    />
+                    <span>· {new Date(s.createdAt).toLocaleDateString('es-ES')}</span>
+                  </div>
                 </div>
                 {s.status !== 'PENDING' ? (
                   <Badge variant={s.status === 'APPROVED' ? 'success' : 'muted'}>
@@ -850,12 +859,22 @@ function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void })
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="font-semibold text-text">{r.perkTitle}</p>
-                  <p className="text-sm text-text-muted">
-                    {r.displayName} · pedida el {new Date(r.createdAt).toLocaleDateString('es-ES')}
-                    {r.handledAt
-                      ? ` · respondida el ${new Date(r.handledAt).toLocaleDateString('es-ES')}`
-                      : ''}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5 text-sm text-text-muted">
+                    <UserChip
+                      userId={r.userId}
+                      name={r.displayName}
+                      fallback="Alumno"
+                      showAvatar={false}
+                      size={20}
+                      nameClassName="block truncate text-sm text-text-muted"
+                    />
+                    <span>
+                      · pedida el {new Date(r.createdAt).toLocaleDateString('es-ES')}
+                      {r.handledAt
+                        ? ` · respondida el ${new Date(r.handledAt).toLocaleDateString('es-ES')}`
+                        : ''}
+                    </span>
+                  </div>
                 </div>
                 <Badge
                   variant={

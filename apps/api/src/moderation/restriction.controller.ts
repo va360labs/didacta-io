@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards,
@@ -32,6 +33,18 @@ const liftSchema = z.object({
   liftReason: z.string().trim().max(500).nullish(),
 });
 type LiftDto = z.infer<typeof liftSchema>;
+
+/** Tope del lote: el feed pinta 20-50 autores, no miles. */
+const MAX_BATCH = 200;
+
+const activeQuerySchema = z.object({
+  userIds: z
+    .string()
+    .trim()
+    .min(1)
+    .max(MAX_BATCH * 40),
+});
+type ActiveQueryDto = z.infer<typeof activeQuerySchema>;
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
@@ -100,16 +113,36 @@ export class RestrictionController {
   }
 }
 
-/** Catálogo de áreas para que el diálogo del escudo no las duplique en el front. */
+/** Catálogo de áreas y consulta por lotes para el escudo del feed. */
 @ApiTags('Admin · Moderación')
 @ApiBearerAuth()
-@Controller('admin/restriction-scopes')
+@Controller('admin/restrictions')
 @UseGuards(JwtAuthGuard)
 export class RestrictionScopesController {
-  @Get()
+  constructor(private readonly service: RestrictionService) {}
+
+  @Get('scopes')
   @ApiOperation({ summary: 'Áreas sancionables disponibles.' })
-  list(@CurrentUser() user: SessionClaims | undefined) {
+  scopes(@CurrentUser() user: SessionClaims | undefined) {
     requireAdmin(user);
     return { scopes: ALL_SCOPES };
+  }
+
+  @Get('active')
+  @ApiOperation({
+    summary:
+      'Sanciones vigentes de varios usuarios (?userIds=a,b,c). Permite pintar el escudo del feed sin una petición por autor.',
+  })
+  active(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(activeQuerySchema)) query: ActiveQueryDto,
+  ) {
+    const u = requireAdmin(user);
+    const ids = query.userIds
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, MAX_BATCH);
+    return this.service.activeForMany(u.tenantId, ids);
   }
 }

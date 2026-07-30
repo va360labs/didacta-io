@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { UserChip } from '@/components/user-chip';
 import {
   gamificationApi,
   type LeaderboardEntry,
@@ -138,12 +139,12 @@ export default function LeaderboardPage() {
               >
                 {e.rank}
               </span>
-              <div className="flex items-center gap-3">
-                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-(--didacta-trust)/10 text-xs font-bold text-(--didacta-trust)">
-                  {e.displayName.slice(0, 1).toUpperCase()}
-                </div>
-                <span className="text-sm font-medium text-text">{e.displayName}</span>
-              </div>
+              <UserChip
+                userId={e.userId}
+                name={e.displayName}
+                size={32}
+                nameClassName="block truncate text-sm font-medium text-text"
+              />
               <span className="text-sm font-semibold text-text">
                 {e.points.toLocaleString('es-ES')}
               </span>
