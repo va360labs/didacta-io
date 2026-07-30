@@ -401,37 +401,30 @@ export function SidebarContent({
     <>
       {/* ── Community header ── */}
       <div className="flex items-center gap-2 border-b border-white/8 px-4 py-3.5">
-        <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left">
-          {logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={logoUrl}
-              alt="Logo"
-              width={36}
-              height={36}
-              className="h-9 w-9 rounded-xl object-contain"
-            />
-          ) : (
+        {logoUrl ? (
+          // Con logo del tenant, el logo ES la cabecera: se pinta a lo ancho y
+          // se quitan el nombre, el subtítulo "Comunidad" y el chevron. El
+          // nombre repetía lo que ya dice el logo, y el chevron era una flecha
+          // muerta (el <button> que la envolvía no tenía onClick).
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={logoUrl}
+            alt={orgName}
+            className="h-11 w-auto min-w-0 max-w-[170px] flex-1 object-contain object-left"
+          />
+        ) : (
+          <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#1E5AA8]">
               <Image src="/brand/anagrama.png" alt="" width={22} height={22} priority />
             </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[14px] font-bold leading-tight text-white">{orgName}</div>
-            <div className="mt-0.5 text-[11px] text-white/40">Comunidad</div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[14px] font-bold leading-tight text-white">
+                {orgName}
+              </div>
+              <div className="mt-0.5 text-[11px] text-white/40">Comunidad</div>
+            </div>
           </div>
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className="shrink-0 text-white/30"
-          >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        </button>
+        )}
         {onToggleCollapsed ? (
           <button
             type="button"
