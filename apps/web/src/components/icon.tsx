@@ -64,6 +64,8 @@ export type IconName =
   | 'megaphone'
   | 'menu'
   | 'link'
+  | 'volume'
+  | 'volume-off'
   | 'x';
 
 interface Props extends Omit<SVGProps<SVGSVGElement>, 'name'> {
@@ -466,6 +468,21 @@ export function Icon({ name, size = 20, strokeWidth = 1.75, className, ...rest }
         <svg {...common}>
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+      );
+    case 'volume':
+      return (
+        <svg {...common}>
+          <path d="M11 5 6 9H2v6h4l5 4z" />
+          <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+          <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+        </svg>
+      );
+    case 'volume-off':
+      return (
+        <svg {...common}>
+          <path d="M11 5 6 9H2v6h4l5 4z" />
+          <path d="m22 9-6 6M16 9l6 6" />
         </svg>
       );
     case 'x':

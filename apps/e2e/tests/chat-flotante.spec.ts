@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { signup } from '../helpers/api';
+import { API_URL, signup } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
 /**
@@ -18,7 +18,36 @@ import { injectSession } from '../helpers/auth';
 
 const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
 
-async function signInAs(page: Page, user: Awaited<ReturnType<typeof signup>>, path = '/comunidad') {
+type E2eUser = Awaited<ReturnType<typeof signup>>;
+
+/** Llamada autenticada a la API de mensajería (montar hilos sin pasar por la UI). */
+async function messagingApi<T>(
+  user: E2eUser,
+  path: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const res = await fetch(`${API_URL}/api/v1/modules/messaging${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${user.tokens.accessToken}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`POST ${path} -> ${res.status} ${text}`);
+  return (text ? JSON.parse(text) : null) as T;
+}
+
+function openDm(user: E2eUser, userId: string) {
+  return messagingApi<{ conversationId: string }>(user, '/dm', { userId });
+}
+
+function sendMessage(user: E2eUser, conversationId: string, body: string) {
+  return messagingApi(user, `/conversations/${conversationId}/messages`, { body });
+}
+
+async function signInAs(page: Page, user: E2eUser, path = '/comunidad') {
   await page.goto('/signin');
   await injectSession(page, {
     accessToken: user.tokens.accessToken,
@@ -248,6 +277,133 @@ test.describe('chat flotante', () => {
     expect(pageB.url(), 'B sigue en la misma página').toBe(urlAntes);
 
     await ctxB.close();
+  });
+
+  test('al reabrir el chat, la conversación aparece por el último mensaje', async ({ page }) => {
+    test.setTimeout(180_000);
+    const stamp = Date.now();
+    const userA = await signup({
+      tenantSlug,
+      email: `e2e-scr-a-${stamp}@example.test`,
+      password: 'E2eScrA123!aa',
+      name: `E2E Scroll A ${stamp}`,
+    });
+    const userB = await signup({
+      tenantSlug,
+      email: `e2e-scr-b-${stamp}@example.test`,
+      password: 'E2eScrB123!aa',
+      name: `E2E Scroll B ${stamp}`,
+    });
+
+    // Hilo largo: sin desbordar el contenedor no hay scroll que comprobar.
+    const { conversationId } = await openDm(userA, userB.user.id);
+    for (let i = 1; i <= 14; i += 1) {
+      await sendMessage(userA, conversationId, `Mensaje ${i} del hilo largo ${stamp}`);
+    }
+
+    await signInAs(page, userB);
+    await page.getByTestId('chat-pill').click();
+    const panel = page.getByTestId('chat-panel');
+    await panel.getByTestId('conversation-item-dm').first().click();
+    const messages = panel.getByTestId('chat-panel-messages');
+    await expect(messages).toContainText(`Mensaje 14 del hilo largo ${stamp}`, { timeout: 25_000 });
+
+    const atBottom = async () =>
+      page.evaluate(() => {
+        const el = document.querySelector('[data-testid="chat-panel-messages"]');
+        if (!el) return null;
+        return {
+          scrollable: el.scrollHeight > el.clientHeight + 20,
+          distanceFromBottom: el.scrollHeight - el.scrollTop - el.clientHeight,
+        };
+      });
+
+    const initial = await atBottom();
+    expect(initial?.scrollable, 'el hilo desborda, así que hay scroll real que comprobar').toBe(
+      true,
+    );
+
+    // Plegar y volver a abrir: el contenedor se desmonta y renace en scrollTop 0
+    // (el mensaje MÁS ANTIGUO) si nadie lo corrige.
+    await page.getByTestId('chat-pill').click();
+    await expect(panel).toHaveCount(0);
+    await page.getByTestId('chat-pill').click();
+    await expect(messages).toBeVisible();
+    await page.waitForTimeout(600);
+
+    const reopened = await atBottom();
+    expect(
+      reopened?.distanceFromBottom ?? 999,
+      'al reabrir se ve el último mensaje, no el más antiguo',
+    ).toBeLessThan(40);
+    await expect(messages).toContainText(`Mensaje 14 del hilo largo ${stamp}`);
+  });
+
+  test('con el chat plegado, un mensaje nuevo avisa con toast y burbuja roja', async ({ page }) => {
+    test.setTimeout(180_000);
+    const stamp = Date.now();
+    const userA = await signup({
+      tenantSlug,
+      email: `e2e-avi-a-${stamp}@example.test`,
+      password: 'E2eAviA123!aa',
+      name: `E2E Aviso A ${stamp}`,
+    });
+    const userB = await signup({
+      tenantSlug,
+      email: `e2e-avi-b-${stamp}@example.test`,
+      password: 'E2eAviB123!aa',
+      name: `E2E Aviso B ${stamp}`,
+    });
+    const { conversationId } = await openDm(userA, userB.user.id);
+
+    // B entra y deja el chat plegado (estado por defecto). Hay que esperar a que
+    // su stream SSE esté abierto: el aviso es push, así que un mensaje enviado
+    // antes de conectar no lo puede recibir nadie (el no-leído sí lo recoge la
+    // carga inicial de la lista).
+    const streamUp = page.waitForResponse(
+      (r) => r.url().includes('/modules/messaging/stream'),
+      { timeout: 40_000 },
+    );
+    await signInAs(page, userB);
+    await expect(page.getByTestId('chat-pill')).toBeVisible({ timeout: 25_000 });
+    await expect(page.getByTestId('chat-panel')).toHaveCount(0);
+    await streamUp;
+    // La respuesta del SSE llega con las cabeceras; el EventSource del
+    // navegador aún tiene que asentarse antes de que el push le encuentre.
+    await page.waitForTimeout(1_500);
+
+    const aviso = `Te escribo con el chat cerrado ${stamp}`;
+    await sendMessage(userA, conversationId, aviso);
+
+    const toast = page.getByTestId('chat-toast');
+    await expect(toast, 'el aviso aparece sin abrir nada').toBeVisible({ timeout: 25_000 });
+    await expect(toast).toContainText(`E2E Aviso A ${stamp}`);
+    await expect(toast).toContainText(aviso);
+    await expect(
+      page.getByTestId('chat-pill').getByTestId('chat-pill-unread'),
+      'y la píldora marca el no-leído en rojo',
+    ).toHaveText('1');
+
+    // Pulsar el aviso abre esa conversación en el panel.
+    await page.getByTestId('chat-toast-open').first().click();
+    const panel = page.getByTestId('chat-panel');
+    await expect(panel.getByTestId('chat-panel-messages')).toContainText(aviso, {
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId('chat-toast')).toHaveCount(0);
+
+    // El aviso sonoro se puede silenciar desde la propia cabecera.
+    await panel.getByTestId('chat-panel-back').click();
+    const soundToggle = panel.getByTestId('chat-sound-toggle');
+    await expect(soundToggle).toHaveAttribute('aria-pressed', 'true');
+    await soundToggle.click();
+    await expect(soundToggle).toHaveAttribute('aria-pressed', 'false');
+    await page.reload();
+    await page.getByTestId('chat-pill').waitFor({ timeout: 25_000 });
+    await expect(
+      page.getByTestId('chat-sound-toggle'),
+      'la preferencia sobrevive a la recarga',
+    ).toHaveAttribute('aria-pressed', 'false');
   });
 
   test('el panel abierto sobrevive a navegar y recargar', async ({ page }) => {

@@ -6,7 +6,14 @@ import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { authStorage } from '@/lib/auth-storage';
 import { usePublicUsers } from '@/lib/public-users';
-import { FLOATING_CHAT_OPEN_KEY } from './constants';
+import {
+  isChatSoundEnabled,
+  playChatChime,
+  primeChatSound,
+  setChatSoundEnabled,
+} from './chat-alert';
+import { CHAT_TOAST_MAX, CHAT_TOAST_MS, FLOATING_CHAT_OPEN_KEY } from './constants';
+import type { ConversationView } from './client';
 import { ConversationBadge } from './conversation-badge';
 import { ConversationGroup } from './conversation-list';
 import { MessageComposer } from './message-composer';
@@ -33,13 +40,16 @@ export function FloatingChat() {
     () => (session?.user.roles ?? []).some((r) => STAFF_ROLES.includes(r)),
     [session],
   );
-  const { conversations, listError, presence, typing, viewerId, setPresenceTracking } =
+  const { conversations, listError, presence, typing, viewerId, setPresenceTracking, subscribe } =
     useMessagingContext();
   const thread = useConversationThread();
 
   const [open, setOpen] = useState(false);
+  const [toasts, setToasts] = useState<ChatToastItem[]>([]);
+  const [soundOn, setSoundOn] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const pillRef = useRef<HTMLButtonElement | null>(null);
+  const cornerRef = useRef<HTMLDivElement | null>(null);
 
   // Estado abierto persistido. Se hidrata en efecto (no en el estado inicial)
   // para no descuadrar el HTML del servidor.
@@ -122,6 +132,95 @@ export function FloatingChat() {
     };
   }, [open]);
 
+  // ── Aviso con el chat plegado ────────────────────────────────────────────
+  // Con la píldora cerrada, un mensaje nuevo solo cambiaba una línea de texto
+  // en una esquina: fácil de no ver. Ahora avisa con un toast, la burbuja roja
+  // de la píldora y un tono corto que se puede silenciar.
+
+  useEffect(() => {
+    setSoundOn(isChatSoundEnabled());
+    return primeChatSound();
+  }, []);
+
+  const conversationsRef = useRef<ConversationView[] | null>(null);
+  conversationsRef.current = conversations;
+  const openRef = useRef(open);
+  openRef.current = open;
+
+  useEffect(() => {
+    return subscribe((event) => {
+      if (event === null || event.kind !== 'message.created') return;
+      // Con el panel abierto el mensaje ya se ve; los propios nunca avisan.
+      if (openRef.current || event.message.authorId === viewerId) return;
+
+      const conversation =
+        conversationsRef.current?.find((c) => c.id === event.conversationId) ?? null;
+      setToasts((prev) =>
+        [
+          ...prev.filter((t) => t.conversationId !== event.conversationId),
+          {
+            id: event.message.id,
+            conversationId: event.conversationId,
+            author: event.message.authorDisplayName,
+            authorId: event.message.authorId,
+            // Sin conversación en la lista todavía (primer DM entrante), el
+            // toast se queda sin titulo antes que inventarse uno.
+            title: conversation?.title ?? null,
+            isRoom: conversation?.type === 'SPACE',
+            body: event.message.body,
+          },
+        ].slice(-CHAT_TOAST_MAX),
+      );
+      playChatChime();
+    });
+  }, [subscribe, viewerId]);
+
+  // Al abrir el panel, los avisos pendientes sobran: ya está mirando.
+  useEffect(() => {
+    if (open) setToasts([]);
+  }, [open]);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  /**
+   * Borde superior de la esquina del chat (píldora + avisos), en px desde el
+   * fondo del viewport. El toaster de notificaciones lo lee para apilarse
+   * encima sin numeros magicos que se rompan al cambiar la altura de nada.
+   */
+  useEffect(() => {
+    const el = cornerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const fromBottom = Math.round(window.innerHeight - rect.top);
+    document.documentElement.style.setProperty('--didacta-chat-corner', `${fromBottom}px`);
+    return () => {
+      document.documentElement.style.removeProperty('--didacta-chat-corner');
+    };
+  }, [toasts.length, open]);
+
+  const toggleSound = useCallback(() => {
+    setSoundOn((prev) => {
+      const next = !prev;
+      setChatSoundEnabled(next);
+      // Suena al activarlo: así se oye exactamente lo que se está aceptando.
+      if (next) playChatChime();
+      return next;
+    });
+  }, []);
+
+  const openConversationFromToast = useCallback(
+    (conversationId: string) => {
+      const conversation =
+        conversationsRef.current?.find((c) => c.id === conversationId) ?? null;
+      setOpenPersisted(true);
+      setToasts([]);
+      if (conversation) void thread.select(conversation);
+    },
+    [setOpenPersisted, thread],
+  );
+
   const pill = useMemo<PillState>(
     () => derivePillState({ conversations, typing, viewerId, now: Date.now() }),
     [conversations, typing, viewerId],
@@ -132,13 +231,16 @@ export function FloatingChat() {
 
   return (
     <div
-      className="fixed right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-(--z-chat) lg:right-5 lg:bottom-5"
+      ref={cornerRef}
+      className="fixed right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-(--z-chat) flex flex-col items-end lg:right-5 lg:bottom-5"
       data-testid="floating-chat"
     >
       {open ? (
         <ChatPanel
           ref={panelRef}
           isStaff={isStaff}
+          soundOn={soundOn}
+          onToggleSound={toggleSound}
           onClose={() => {
             setOpenPersisted(false);
             pillRef.current?.focus();
@@ -148,6 +250,23 @@ export function FloatingChat() {
           listError={listError}
           presence={presence}
         />
+      ) : null}
+
+      {!open && toasts.length > 0 ? (
+        <div
+          className="mb-2.5 flex w-[min(20rem,calc(100vw-2rem))] flex-col gap-2"
+          role="status"
+          aria-live="polite"
+        >
+          {toasts.map((toast) => (
+            <ChatToast
+              key={toast.id}
+              toast={toast}
+              onOpen={() => openConversationFromToast(toast.conversationId)}
+              onDismiss={() => dismissToast(toast.id)}
+            />
+          ))}
+        </div>
       ) : null}
 
       <ChatPill
@@ -213,11 +332,12 @@ function ChatPill({
             <Icon name="messages" size={16} />
           </span>
         )}
-        {/* Móvil: la píldora colapsa a las caras, así que el badge de no-leídos
-            viaja pegado a ellas. */}
+        {/* Burbuja roja de no-leídos, pegada a las caras. En movil la pildora
+            colapsa a los avatares y es lo unico que queda; en escritorio
+            acompaña al texto, que por si solo pasaba desapercibido. */}
         {pill.unreadConversations > 0 ? (
           <span
-            className="ml-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-brand-500 px-1 text-[10px] font-bold leading-none text-text-on-brand lg:hidden"
+            className="ml-1 grid min-h-[1.15rem] min-w-[1.15rem] place-items-center rounded-full bg-danger-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-[var(--didacta-night)]"
             data-testid="chat-pill-unread"
           >
             {pill.unreadConversations > 99 ? '99+' : pill.unreadConversations}
@@ -242,6 +362,71 @@ function ChatPill({
   );
 }
 
+// ── Aviso de mensaje nuevo (chat plegado) ───────────────────────────────────
+
+interface ChatToastItem {
+  /** Id del mensaje: sirve de clave y evita repetir el mismo aviso. */
+  id: string;
+  conversationId: string;
+  author: string | null;
+  authorId: string;
+  /** Título de la conversación; `null` si aún no está en la lista. */
+  title: string | null;
+  isRoom: boolean;
+  body: string;
+}
+
+function ChatToast({
+  toast,
+  onOpen,
+  onDismiss,
+}: {
+  toast: ChatToastItem;
+  onOpen: () => void;
+  onDismiss: () => void;
+}) {
+  useEffect(() => {
+    const handle = setTimeout(onDismiss, CHAT_TOAST_MS);
+    return () => clearTimeout(handle);
+  }, [onDismiss]);
+
+  const who = toast.author?.trim() || 'Alguien';
+  const where = toast.title ? (toast.isRoom ? ` en ${toast.title}` : '') : '';
+
+  return (
+    <div
+      className="animate-in fade-in slide-in-from-bottom-2 flex items-start gap-2.5 rounded-xl border border-border-soft bg-surface p-3 shadow-lg ring-1 ring-black/5 duration-200 motion-reduce:animate-none"
+      data-testid="chat-toast"
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+        data-testid="chat-toast-open"
+      >
+        <CommunityAvatar userId={toast.authorId} name={toast.author} size={30} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-semibold text-text">
+            {who}
+            {where}
+          </span>
+          <span className="mt-0.5 line-clamp-2 block text-xs text-text-muted">
+            {toast.body || '(mensaje eliminado)'}
+          </span>
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Descartar aviso"
+        className="shrink-0 rounded-md p-1 text-text-subtle transition-colors hover:bg-bg-subtle hover:text-text"
+      >
+        <Icon name="x" size={14} />
+      </button>
+    </div>
+  );
+}
+
 // ── Panel ───────────────────────────────────────────────────────────────────
 
 type ThreadApi = ReturnType<typeof useConversationThread>;
@@ -249,6 +434,8 @@ type ThreadApi = ReturnType<typeof useConversationThread>;
 function ChatPanel({
   ref,
   isStaff,
+  soundOn,
+  onToggleSound,
   onClose,
   thread,
   conversations,
@@ -257,6 +444,8 @@ function ChatPanel({
 }: {
   ref: Ref<HTMLDivElement>;
   isStaff: boolean;
+  soundOn: boolean;
+  onToggleSound: () => void;
   onClose: () => void;
   thread: ThreadApi;
   conversations: ReturnType<typeof useMessagingContext>['conversations'];
@@ -295,15 +484,30 @@ function ChatPanel({
               </p>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar mensajes"
-            data-testid="chat-panel-close"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted transition-colors hover:bg-bg-subtle hover:text-text"
-          >
-            <Icon name="x" size={16} />
-          </button>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <button
+              type="button"
+              onClick={onToggleSound}
+              aria-pressed={soundOn}
+              aria-label={
+                soundOn ? 'Silenciar el aviso de mensajes' : 'Activar el aviso sonoro de mensajes'
+              }
+              title={soundOn ? 'Aviso sonoro activado' : 'Aviso sonoro silenciado'}
+              data-testid="chat-sound-toggle"
+              className="grid h-8 w-8 place-items-center rounded-lg text-text-muted transition-colors hover:bg-bg-subtle hover:text-text"
+            >
+              <Icon name={soundOn ? 'volume' : 'volume-off'} size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar mensajes"
+              data-testid="chat-panel-close"
+              className="grid h-8 w-8 place-items-center rounded-lg text-text-muted transition-colors hover:bg-bg-subtle hover:text-text"
+            >
+              <Icon name="x" size={16} />
+            </button>
+          </div>
         </div>
       )}
 

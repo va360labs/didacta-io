@@ -14,10 +14,12 @@ const AUTO_DISMISS_MS = 8_000;
  * conexión. Cada toast se auto-descarta y, si la notificación tiene una acción
  * de navegación (p. ej. "Responder"), ofrece el enlace directo.
  *
- * La esquina inferior derecha la comparte con la píldora del chat flotante: los
- * toasts se apilan POR ENCIMA de ella (y del tab bar en móvil) para que ambos
- * sigan siendo clicables. Si cambia la altura de la píldora, hay que revisar
- * estos offsets.
+ * La esquina inferior derecha la comparte con el chat flotante. En vez de
+ * ajustar offsets a mano cada vez que cambia la altura de la píldora o le
+ * aparecen avisos encima, el chat publica su borde superior en
+ * `--didacta-chat-corner` (px desde el fondo del viewport) y los toasts se
+ * apilan justo por encima. Sin chat montado, el valor por defecto deja sitio al
+ * tab bar móvil.
  */
 export function NotificationsToaster() {
   const { toasts, dismissToast } = useNotificationsContext();
@@ -26,7 +28,7 @@ export function NotificationsToaster() {
 
   return (
     <div
-      className="pointer-events-none fixed right-4 bottom-[calc(8.5rem+env(safe-area-inset-bottom))] z-(--z-toast) flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2 lg:bottom-[5.5rem]"
+      className="pointer-events-none fixed right-4 bottom-[calc(var(--didacta-chat-corner,8rem)+0.75rem)] z-(--z-toast) flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2"
       aria-live="polite"
       aria-relevant="additions"
     >
