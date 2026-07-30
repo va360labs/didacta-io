@@ -133,7 +133,7 @@ function CollectionCard({
 }) {
   return (
     <Card data-testid="collection-card" className="overflow-hidden">
-      {/* Portada: imagen propia o degradado de marca, con el título encima. */}
+      {/* Portada: imagen propia o degradado de marca. El título va bajo la imagen. */}
       <div
         className="relative h-44"
         style={{ background: 'linear-gradient(160deg, #0D1B2A 0%, #1E5AA8 100%)' }}
@@ -146,10 +146,6 @@ function CollectionCard({
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : null}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0D1B2A]/90 via-[#0D1B2A]/25 to-transparent" />
-        <h2 className="absolute bottom-4 left-5 right-5 font-display text-2xl font-bold leading-tight text-white">
-          {collection.title}
-        </h2>
         {isStaff ? (
           <button
             type="button"
