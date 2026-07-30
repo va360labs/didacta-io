@@ -99,8 +99,14 @@ export class AuthController {
 
   @Post('refresh')
   @ApiOperation({ summary: 'Renovar access token con un refresh token' })
-  async refresh(@Body(new ZodValidationPipe(refreshSchema)) dto: RefreshDto) {
-    const tokens = await this.auth.refresh(dto.refreshToken);
+  async refresh(
+    @Req() req: FastifyRequest,
+    @Body(new ZodValidationPipe(refreshSchema)) dto: RefreshDto,
+  ) {
+    // El contexto va aquí para que la sesión registre desde dónde se renovó:
+    // si el refresh abre una sesión nueva (token viejo sin `sid`), sin esto
+    // la fila saldría sin IP ni dispositivo.
+    const tokens = await this.auth.refresh(dto.refreshToken, extractClientContext(req));
     return { tokens };
   }
 

@@ -5,21 +5,48 @@ export { manifest };
 export {
   askSchema,
   indexCourseSchema,
+  listAnswersSchema,
+  monthlyReportSchema,
+  reviewAnswerSchema,
+  upsertCorrectionSchema,
+  REVIEW_STATUSES,
   type AskDto,
   type AskResponseView,
   type ChunkView,
   type CitationView,
+  type CorrectionView,
   type IndexCourseDto,
   type IndexCourseResultView,
+  type ListAnswersDto,
+  type ListAnswersResultView,
+  type MonthlyReportDto,
+  type MonthlyReportView,
+  type ReportTopicView,
+  type ReviewAnswerDto,
+  type ReviewAnswerView,
+  type ReviewStatus,
+  type UpsertCorrectionDto,
 } from './dto.js';
 export {
   AiTutorError,
   ChatProviderError,
+  CorrectionNotFoundError,
   CourseNotIndexedError,
   CourseNotPublishedError,
   EmbeddingsProviderError,
+  MessageNotFoundError,
   TokenQuotaExceededError,
 } from './errors.js';
+export {
+  clusterQuestions,
+  cosineSimilarity,
+  formatVector,
+  parseVector,
+  type ClusterableQuestion,
+  type ClusterOptions,
+  type QuestionCluster,
+} from './clustering.js';
+export { AiTutorReviewService, rangoDelMes } from './review.service.js';
 export { chunkText, type Chunk, type ChunkerOptions } from './chunker.js';
 export {
   extractLessonText,
@@ -38,6 +65,7 @@ export {
   type ParsedCitation,
   type PriorMessage,
   type RetrievedChunk,
+  type ValidatedAnswer,
 } from './prompt-builder.js';
 
 export const aiTutorModule: DidactaModule = {

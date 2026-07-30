@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
+import { UserChip } from '@/components/user-chip';
 import { ApiHttpError } from '@/lib/api-client';
 import {
   enrollmentsToCsv,
@@ -251,12 +252,16 @@ export default function AlumnosPage() {
                       className="border-b border-border last:border-0 hover:bg-surface-2"
                     >
                       <td className="px-6 py-3">
-                        <p className="font-semibold text-text">
-                          {r.userName ?? r.userEmail ?? r.userId.slice(0, 8)}
-                        </p>
-                        {r.userName && r.userEmail ? (
-                          <p className="text-xs text-text-subtle">{r.userEmail}</p>
-                        ) : null}
+                        <UserChip
+                          userId={r.userId}
+                          name={r.userName}
+                          email={r.userEmail}
+                          fallback="Alumno"
+                          showAvatar={false}
+                          size={20}
+                          nameClassName="block truncate font-semibold text-text"
+                          subtitle={r.userName && r.userEmail ? r.userEmail : null}
+                        />
                       </td>
                       <td className="px-3 py-3">
                         <Badge variant={STATUS_VARIANT[r.status]}>{STATUS_LABEL[r.status]}</Badge>

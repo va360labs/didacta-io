@@ -5,6 +5,7 @@ import { TokenService, type SignedTokens } from '../auth/token.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { SetupInitDto } from './dto';
+import { SessionRegistryService } from '../auth/session-registry.service';
 
 const NO_CTX: ClientContext = { ip: null, userAgent: null };
 
@@ -68,6 +69,7 @@ export class SetupService {
     private readonly passwords: PasswordService,
     private readonly tokens: TokenService,
     private readonly auditLog: PrismaAuditLogService,
+    private readonly sessions: SessionRegistryService,
   ) {}
 
   async getStatus(): Promise<SetupStatus> {
@@ -217,7 +219,7 @@ export class SetupService {
     });
 
     const roles = ['super_admin'];
-    const tokens = await this.tokens.sign({
+    const tokens = await this.sessions.issue({
       sub: created.user.id,
       tenantId: created.tenant.id,
       roles,

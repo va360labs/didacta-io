@@ -1,3 +1,4 @@
+import { sessionRegistryStub } from './helpers/session-registry-stub';
 /**
  * Tests unit de SetupService — bootstrap del primer arranque.
  *
@@ -203,7 +204,13 @@ beforeEach(() => {
 describe('SetupService.getStatus', () => {
   it('devuelve initialized=false en DB virgen', async () => {
     const { client } = makeFakePrisma();
-    const svc = new SetupService(client as never, realPasswords, tokensFake, dummyAuditLog);
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+    );
     expect(await svc.getStatus()).toEqual({ initialized: false });
   });
 
@@ -216,7 +223,13 @@ describe('SetupService.getStatus', () => {
       status: 'ACTIVE',
       deletedAt: null,
     });
-    const svc = new SetupService(client as never, realPasswords, tokensFake, dummyAuditLog);
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+    );
     expect(await svc.getStatus()).toEqual({ initialized: true });
   });
 
@@ -229,7 +242,13 @@ describe('SetupService.getStatus', () => {
       status: 'ARCHIVED',
       deletedAt: new Date(),
     });
-    const svc = new SetupService(client as never, realPasswords, tokensFake, dummyAuditLog);
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+    );
     expect(await svc.getStatus()).toEqual({ initialized: false });
   });
 });
@@ -242,7 +261,13 @@ describe('SetupService.init', () => {
 
   it('bootstrappea tenant + roles + super_admin + dominio en DB virgen', async () => {
     const { client, state } = makeFakePrisma();
-    const svc = new SetupService(client as never, realPasswords, tokensFake, dummyAuditLog);
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+    );
 
     const result = await svc.init(validDto, 'lms.acme.test', { ip: null, userAgent: null });
 
@@ -297,7 +322,13 @@ describe('SetupService.init', () => {
       status: 'ACTIVE',
       deletedAt: null,
     });
-    const svc = new SetupService(client as never, realPasswords, tokensFake, dummyAuditLog);
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+    );
 
     await expect(svc.init(validDto, 'host.test', { ip: null, userAgent: null })).rejects.toThrow(
       ConflictException,
@@ -310,7 +341,13 @@ describe('SetupService.init', () => {
 
   it('idempotencia bajo carrera: dos init concurrentes → uno gana, otro 409', async () => {
     const { client } = makeFakePrisma();
-    const svc = new SetupService(client as never, realPasswords, tokensFake, dummyAuditLog);
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+    );
 
     const [a, b] = await Promise.allSettled([
       svc.init(validDto, 'host.test', { ip: null, userAgent: null }),
@@ -329,7 +366,13 @@ describe('SetupService.init', () => {
 
   it('autogenera slug a partir del nombre con acentos y espacios', async () => {
     const { client, state } = makeFakePrisma();
-    const svc = new SetupService(client as never, realPasswords, tokensFake, dummyAuditLog);
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+    );
 
     await svc.init(
       {
@@ -344,7 +387,13 @@ describe('SetupService.init', () => {
 
   it('respeta slug explícito si lo pasa el usuario', async () => {
     const { client, state } = makeFakePrisma();
-    const svc = new SetupService(client as never, realPasswords, tokensFake, dummyAuditLog);
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+    );
 
     await svc.init(
       {
@@ -359,7 +408,13 @@ describe('SetupService.init', () => {
 
   it('cae al hostname del request si el cliente no provee primaryHostname', async () => {
     const { client, state } = makeFakePrisma();
-    const svc = new SetupService(client as never, realPasswords, tokensFake, dummyAuditLog);
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+    );
 
     await svc.init(
       {
@@ -374,7 +429,13 @@ describe('SetupService.init', () => {
 
   it('si hostname=localhost no duplica el upsert extra', async () => {
     const { client, state } = makeFakePrisma();
-    const svc = new SetupService(client as never, realPasswords, tokensFake, dummyAuditLog);
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+    );
 
     await svc.init(
       {

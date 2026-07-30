@@ -21,6 +21,7 @@ import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AccountStateService } from './account-state.service';
 import { extractClientContext } from './client-context';
 import { CurrentUser, MfaExempt } from './decorators';
 import { isValidDocumentId, normalizeDocumentId } from './document-id';
@@ -119,6 +120,7 @@ export class MeController {
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
     private readonly auditLog: PrismaAuditLogService,
+    private readonly accountState: AccountStateService,
   ) {}
 
   @Get('profile')
@@ -420,6 +422,7 @@ export class MeController {
       // password si el actual no es el del JWT.
       this.prisma.session.deleteMany({ where: { userId: user.sub } }),
     ]);
+    this.accountState.invalidateAllSessions();
 
     const ctx = extractClientContext(req);
     await this.auditLog.record({
@@ -467,6 +470,8 @@ export class MeController {
     });
     if (!sess) throw new ForbiddenException('Sesión no encontrada o no es tuya.');
     await this.prisma.session.delete({ where: { id } });
+    // Que el cierre surta efecto ya y no en los próximos 30 s.
+    this.accountState.invalidateSession(id);
     const ctx = extractClientContext(req);
     await this.auditLog.record({
       tenantId: user.tenantId,
@@ -487,6 +492,7 @@ export class MeController {
   async revokeAll(@Req() req: FastifyRequest, @CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
     const result = await this.prisma.session.deleteMany({ where: { userId: user.sub } });
+    this.accountState.invalidateAllSessions();
     const ctx = extractClientContext(req);
     await this.auditLog.record({
       tenantId: user.tenantId,

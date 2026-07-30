@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { UserChip } from '@/components/user-chip';
 import { ApiHttpError } from '@/lib/api-client';
 import {
   adminUsersApi,
@@ -30,15 +31,6 @@ const STATUS_VARIANT: Record<UserStatus, 'success' | 'warning' | 'muted' | 'dang
   SUSPENDED: 'danger',
   DEACTIVATED: 'muted',
 };
-
-function userInitials(name: string | null, email: string): string {
-  return (name ?? email)
-    .split(/[\s.@]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase() ?? '')
-    .join('');
-}
 
 export default function UsuariosPage() {
   const [users, setUsers] = useState<UserListItem[] | null>(null);
@@ -271,26 +263,14 @@ export default function UsuariosPage() {
                     className="border-b border-border last:border-0 hover:bg-surface-2"
                   >
                     <td className="px-6 py-3">
-                      <Link
-                        href={`/admin/usuarios/${u.id}` as never}
-                        className="flex items-center gap-3 hover:text-brand-700"
-                      >
-                        <span
-                          aria-hidden="true"
-                          className="grid h-9 w-9 shrink-0 place-items-center rounded-full font-display text-xs font-bold text-white"
-                          style={{
-                            background: 'linear-gradient(135deg, #2E7DCE 0%, #18B5A8 100%)',
-                          }}
-                        >
-                          {userInitials(u.name, u.email) || '·'}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-text">{u.name ?? u.email}</p>
-                          {u.name ? (
-                            <p className="truncate text-xs text-text-subtle">{u.email}</p>
-                          ) : null}
-                        </div>
-                      </Link>
+                      <UserChip
+                        userId={u.id}
+                        name={u.name}
+                        email={u.email}
+                        size={36}
+                        nameClassName="block truncate font-semibold text-text"
+                        subtitle={u.name ? u.email : null}
+                      />
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-1">

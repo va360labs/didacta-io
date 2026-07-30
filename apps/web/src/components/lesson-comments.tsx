@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { UserChip } from '@/components/user-chip';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { learningApi, type LessonComment } from '@/lib/learning';
@@ -156,9 +157,14 @@ export function LessonComments({ lessonId, courseId }: Props) {
               return (
                 <li key={c.id} className="rounded-lg border border-border-soft bg-surface-2 p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-text">
-                      {c.authorDisplayName ?? (isMine ? 'Vos' : 'Anónimo')}
-                    </span>
+                    <UserChip
+                      userId={c.authorId}
+                      name={c.authorDisplayName ?? (isMine ? 'Vos' : null)}
+                      fallback="Anónimo"
+                      showAvatar={false}
+                      size={20}
+                      nameClassName="block truncate text-sm font-semibold text-text"
+                    />
                     {c.status === 'PENDING' ? (
                       <Badge variant="warning" dot>
                         En revisión

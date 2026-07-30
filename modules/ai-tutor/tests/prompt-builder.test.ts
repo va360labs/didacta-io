@@ -268,3 +268,46 @@ describe('extractCitations', () => {
     expect(extractCitations('', chunks)).toEqual([]);
   });
 });
+
+describe('buildPrompt · respuestas validadas por el equipo', () => {
+  const base = {
+    courseTitle: 'n8n desde cero',
+    locale: 'es',
+    retrieved: [],
+    history: [],
+    question: '¿dónde saco la factura?',
+  };
+
+  it('sin correcciones el prompt no menciona el bloque', () => {
+    // Un tenant que nunca ha corregido nada no debe pagar tokens por esto.
+    const { system } = buildPrompt(base);
+    expect(system).not.toContain('RESPUESTAS YA VALIDADAS');
+  });
+
+  it('con correcciones las lista y declara que mandan sobre el contexto', () => {
+    const { system } = buildPrompt({
+      ...base,
+      validated: [
+        {
+          id: 'c1',
+          question: '¿cómo descargo mi factura?',
+          answer: 'En /cuenta → Facturación, botón Descargar.',
+          distance: 0.1,
+        },
+      ],
+    });
+    expect(system).toContain('RESPUESTAS YA VALIDADAS POR EL EQUIPO');
+    expect(system).toContain('tienen prioridad sobre el CONTEXTO');
+    expect(system).toContain('En /cuenta → Facturación, botón Descargar.');
+  });
+
+  it('la regla 0 le dice al modelo que no delate la corrección', () => {
+    // Si el tutor dice "según una corrección del formador", el alumno pierde la
+    // confianza en todo lo demás que ha respondido.
+    const { system } = buildPrompt({
+      ...base,
+      validated: [{ id: 'c1', question: 'p', answer: 'r', distance: 0.1 }],
+    });
+    expect(system).toContain('No menciones que es una corrección');
+  });
+});

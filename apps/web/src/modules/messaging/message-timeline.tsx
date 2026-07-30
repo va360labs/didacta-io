@@ -1,6 +1,6 @@
 'use client';
 
-import { CommunityAvatar } from '@/components/community-avatar';
+import { AuthorNameLink, CommunityAvatar } from '@/components/community-avatar';
 import type { MessageView } from './client';
 import { dayLabel, timeLabel } from './shared';
 
@@ -92,7 +92,11 @@ export function MessageBubble({
         }`}
       >
         {!own && showAuthor && msg.authorDisplayName ? (
-          <p className="text-[11px] font-bold text-brand-700">{msg.authorDisplayName}</p>
+          <AuthorNameLink
+            userId={msg.authorId}
+            name={msg.authorDisplayName}
+            className="text-[11px] font-bold text-brand-700"
+          />
         ) : null}
         {msg.deletedAt ? (
           <p className="text-sm italic opacity-70">Mensaje eliminado</p>

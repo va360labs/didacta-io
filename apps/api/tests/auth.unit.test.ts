@@ -1,3 +1,4 @@
+import { sessionRegistryStub } from './helpers/session-registry-stub';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../src/auth/auth.service';
 
@@ -127,6 +128,7 @@ describe('AuthService.signup · gate AUTH_SIGNUP_ENABLED', () => {
       { sign: async () => ({ accessToken: 'a', refreshToken: 'r' }) } as never,
       { record: async () => {} } as never,
       { evaluateLoginPolicy: async () => ({ outcome: 'allow' }) } as never,
+      sessionRegistryStub({ sign: async () => ({ accessToken: 'a', refreshToken: 'r' }) } as never),
     );
 
     const result = await service.signup(dto);

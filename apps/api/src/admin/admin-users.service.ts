@@ -9,6 +9,7 @@ import type { ClientContext } from '../auth/client-context';
 import { PasswordResetService } from '../auth/password-reset.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AccountStateService } from '../auth/account-state.service';
 
 /** Validez del enlace de invitación: 7 días. Ver `resendInvite`. */
 const INVITE_TTL_MINUTES = 7 * 24 * 60;
@@ -77,6 +78,7 @@ export class AdminUsersService {
     private readonly auditLog: PrismaAuditLogService,
     private readonly passwordReset: PasswordResetService,
     private readonly logger: PinoLogger,
+    private readonly accountState: AccountStateService,
   ) {}
 
   /**
@@ -292,6 +294,12 @@ export class AdminUsersService {
         await tx.session.deleteMany({ where: { userId, expiresAt: { gt: new Date() } } });
       }
     });
+
+    // Sin esto el corte tardaría hasta 30 s (el TTL de la caché). Y antes de
+    // que existiera `AccountStateService` no llegaba nunca: borrar las filas
+    // de `session` no invalidaba el access token ya emitido.
+    this.accountState.invalidateUser(userId);
+    this.accountState.invalidateAllSessions();
 
     await this.auditLog.record({
       tenantId,

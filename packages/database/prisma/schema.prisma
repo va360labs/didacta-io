@@ -234,6 +234,7 @@ model User {
   apiKeys            ApiKey[]
   roles              UserRole[]
   externalIdentities UserExternalIdentity[]
+  restrictions       UserRestriction[]
 
   @@unique([tenantId, email])
   @@unique([tenantId, documentId], map: "user_tenant_document_id_key")
@@ -248,6 +249,49 @@ enum UserStatus {
   PENDING
   SUSPENDED
   DEACTIVATED
+}
+
+/// Sanción de moderación: el usuario sigue entrando y leyendo, pero no puede
+/// APORTAR contenido en las áreas sancionadas.
+///
+/// Es deliberadamente distinta de `UserStatus.SUSPENDED`, que corta el login
+/// entero. Aquí el caso de uso es el contrario: alguien que paga y consume el
+/// curso pero está haciendo spam en el feed sigue accediendo a lo que compró.
+///
+/// Vive en el CORE y no en un módulo porque una sanción cruza comunidad,
+/// mensajería, recursos y tutor IA a la vez. El enforcement es central
+/// (`RestrictionInterceptor`), así que ningún módulo conoce esta tabla ni
+/// cambia por su existencia.
+///
+/// Append-only en la práctica: levantar una sanción NO borra la fila, sella
+/// `liftedAt`. El histórico completo es lo que hace útil el expediente.
+model UserRestriction {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  userId   String @map("user_id") @db.Uuid
+  /// Áreas sancionadas: 'community' | 'messaging' | 'uploads' | 'ai', o el
+  /// comodín 'all'. Se guarda 'all' literal (y no la lista expandida) para que
+  /// un baneo total cubra también las áreas que se añadan en el futuro.
+  scopes   String[]
+  /// Motivo obligatorio. Se le muestra al sancionado cuando intenta publicar:
+  /// un 403 mudo genera un ticket de soporte, uno con motivo no.
+  reason   String @db.VarChar(500)
+  /// Null = permanente. La expiración es perezosa: no hay cron que limpie,
+  /// la consulta filtra por fecha. Una sanción caducada deja de aplicar sola.
+  expiresAt   DateTime? @map("expires_at")
+  createdById String    @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  liftedAt    DateTime? @map("lifted_at")
+  liftedById  String?   @map("lifted_by_id") @db.Uuid
+  liftReason  String?   @map("lift_reason") @db.VarChar(500)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// El interceptor pega a este índice en cada petición mutante: filtra por
+  /// usuario y descarta las levantadas antes de mirar fechas.
+  @@index([tenantId, userId, liftedAt], map: "user_restriction_tenant_user_active_idx")
+  @@index([tenantId, createdAt], map: "user_restriction_tenant_created_idx")
+  @@map("user_restriction")
 }
 
 /// Identidad federada de un usuario en un proveedor externo (WordPress, etc.).
@@ -2216,10 +2260,60 @@ model ModAiTutorMessage {
   tokensOutput   Int      @default(0) @map("tokens_output")
   createdAt      DateTime @default(now()) @map("created_at")
 
+  /// Embedding de la pregunta (solo role='user'). Ya lo pagamos al responder,
+  /// así que guardarlo es gratis y permite agrupar preguntas parecidas en el
+  /// informe mensual sin volver a llamar al proveedor. Null en los mensajes
+  /// anteriores a esta columna: el informe los embebe la primera vez que se
+  /// pide el mes y los deja guardados.
+  questionEmbedding Unsupported("vector(1536)")? @map("question_embedding")
+
+  /// Revisión humana de la respuesta (solo role='assistant').
+  /// 'PENDING' | 'OK' | 'CORRECTED'. Una respuesta CORRECTED tiene su
+  /// corrección en mod_ai_tutor_correction, que el tutor reinyecta.
+  reviewStatus String    @default("PENDING") @map("review_status")
+  reviewedById String?   @map("reviewed_by_id") @db.Uuid
+  reviewedAt   DateTime? @map("reviewed_at")
+  /// Nota del revisor: por qué estaba mal, qué falta en el material.
+  reviewNote   String?   @map("review_note")
+
   conversation ModAiTutorConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt], map: "mod_ai_tutor_message_conv_created_idx")
+  @@index([tenantId, role, createdAt], map: "mod_ai_tutor_message_tenant_role_created_idx")
+  @@index([tenantId, reviewStatus, createdAt], map: "mod_ai_tutor_message_tenant_review_idx")
   @@map("mod_ai_tutor_message")
+}
+
+/// Respuesta validada por el equipo, con prioridad sobre el material indexado.
+///
+/// Nace cuando un admin revisa una respuesta del tutor y la corrige. Vive en su
+/// propia tabla y NO en `mod_ai_tutor_chunk` a propósito: la reindexación borra
+/// y regenera los chunks del curso, así que una corrección guardada ahí se
+/// perdería en el siguiente `courses.lesson.updated`. Aquí sobrevive, se puede
+/// editar, desactivar y auditar.
+model ModAiTutorCorrection {
+  id              String                      @id @default(uuid()) @db.Uuid
+  tenantId        String                      @map("tenant_id") @db.Uuid
+  /// Curso al que aplica. NULL = vale para cualquier curso del tenant (dudas
+  /// transversales: certificados, cómo funciona el aula, facturación…).
+  courseId        String?                     @map("course_id") @db.Uuid
+  /// Pregunta canónica. Es lo que se embebe y contra lo que se busca.
+  question        String
+  /// Respuesta correcta escrita por una persona. Manda sobre el contexto RAG.
+  answer          String
+  embedding       Unsupported("vector(1536)")
+  /// Mensaje del tutor que la originó, si nació de una revisión.
+  sourceMessageId String?                     @map("source_message_id") @db.Uuid
+  authorId        String                      @map("author_id") @db.Uuid
+  active          Boolean                     @default(true)
+  /// Veces que se ha inyectado en un prompt. Dice cuáles están pagando.
+  timesUsed       Int                         @default(0) @map("times_used")
+  createdAt       DateTime                    @default(now()) @map("created_at")
+  updatedAt       DateTime                    @updatedAt @map("updated_at")
+
+  @@index([tenantId, courseId], map: "mod_ai_tutor_correction_tenant_course_idx")
+  @@index([tenantId, active], map: "mod_ai_tutor_correction_tenant_active_idx")
+  @@map("mod_ai_tutor_correction")
 }
 
 model ModAiTutorTokenUsage {
