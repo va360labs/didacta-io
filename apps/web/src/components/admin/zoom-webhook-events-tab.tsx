@@ -22,7 +22,8 @@ const RESULT_VARIANT: Record<WebhookEventResult, 'success' | 'muted' | 'danger'>
 
 const PAGE_SIZE = 25;
 
-export default function ZoomWebhookEventsPage() {
+/** Pestaña "Zoom" de /admin/webhooks. Antes `/admin/zoom/webhook-events`. */
+export function ZoomWebhookEventsTab() {
   const [data, setData] = useState<PaginatedWebhookEvents | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [eventType, setEventType] = useState('');
@@ -55,7 +56,9 @@ export default function ZoomWebhookEventsPage() {
     <div className="flex flex-col gap-6">
       <header className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Eventos webhook · Zoom</h1>
+          <h2 className="font-display text-lg font-semibold tracking-tight">
+            Eventos webhook · Zoom
+          </h2>
           <p className="mt-1 text-text-muted">
             Trazabilidad de los eventos recibidos del webhook de Zoom. Útil para diagnosticar
             sesiones que no transicionan o grabaciones que no aparecen.

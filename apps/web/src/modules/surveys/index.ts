@@ -8,7 +8,7 @@ export const surveysExtension: ModuleWebExtension = {
   name: 'mod.surveys',
   sidebarItems: [
     {
-      group: 'Comunidad',
+      group: 'Contenido',
       href: '/admin/encuestas',
       label: 'Encuestas',
       icon: 'chart',

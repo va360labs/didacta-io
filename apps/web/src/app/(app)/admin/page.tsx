@@ -1,10 +1,26 @@
 'use client';
 
-import Link from 'next/link';
+/**
+ * Panel del tenant — el único dashboard del área de administración.
+ *
+ * Dos pestañas:
+ *   - "Actividad": el pulso del aula (usuarios, cursos, matrículas, certificados).
+ *   - "Negocio":   los KPIs del lunes, antes en `/admin/metricas` (que ahora
+ *     redirige aquí). Eran dos dashboards compitiendo, cada uno con su entrada
+ *     de menú y ninguna pista de cuál abrir.
+ *
+ * La tarjeta "Atajos" que había aquí se eliminó: duplicaba siete enlaces que ya
+ * están en el sidebar y describía Branding como si viviera dentro de
+ * Configuración, cuando tiene pantalla propia.
+ */
+
 import { useEffect, useState, type ReactNode } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { StatCard } from '@/components/stat-card';
+import { BusinessMetricsPanel } from '@/components/admin/business-metrics-panel';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ApiHttpError } from '@/lib/api-client';
 import { adminStatsApi, type AdminStats, type StatsRange } from '@/lib/admin-stats';
 
@@ -14,7 +30,50 @@ const RANGE_LABELS: Array<{ key: StatsRange; label: string }> = [
   { key: '7d', label: 'Últimos 7 días' },
 ];
 
+const TABS = ['actividad', 'negocio'] as const;
+type TabKey = (typeof TABS)[number];
+
 export default function AdminDashboardPage() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const requested = params.get('tab');
+  const tab: TabKey = (TABS as readonly string[]).includes(requested ?? '')
+    ? (requested as TabKey)
+    : 'actividad';
+
+  // La pestaña vive en la URL para que `/admin/metricas` pueda redirigir a
+  // `/admin?tab=negocio` y el enlace sea compartible.
+  function selectTab(next: string): void {
+    router.replace(next === 'actividad' ? '/admin' : `/admin?tab=${next}`);
+  }
+
+  return (
+    <section className="space-y-6">
+      <header>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Panel del tenant</h1>
+        <p className="mt-1 text-text-muted">
+          Cómo va tu organización: la actividad del aula y los números del negocio.
+        </p>
+      </header>
+
+      <Tabs value={tab} onValueChange={selectTab}>
+        <TabsList>
+          <TabsTrigger value="actividad">Actividad</TabsTrigger>
+          <TabsTrigger value="negocio">Negocio</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="actividad" className="mt-5">
+          <ActivityTab />
+        </TabsContent>
+        <TabsContent value="negocio" className="mt-5">
+          <BusinessMetricsPanel />
+        </TabsContent>
+      </Tabs>
+    </section>
+  );
+}
+
+function ActivityTab(): ReactNode {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<StatsRange>('all');
@@ -45,16 +104,12 @@ export default function AdminDashboardPage() {
   }, [range]);
 
   return (
-    <section className="space-y-8">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Panel del tenant</h1>
-          <p className="mt-1 text-text-muted">
-            Métricas clave de actividad de tu organización. Las <strong>matriculaciones</strong> y{' '}
-            <strong>certificados</strong> respetan el rango; usuarios activos y cursos publicados
-            son siempre el snapshot actual.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <p className="max-w-2xl text-sm text-text-muted">
+          Las <strong>matriculaciones</strong> y <strong>certificados</strong> respetan el rango;
+          usuarios activos y cursos publicados son siempre el snapshot actual.
+        </p>
 
         <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1">
           {RANGE_LABELS.map((r) => (
@@ -72,7 +127,7 @@ export default function AdminDashboardPage() {
             </button>
           ))}
         </div>
-      </header>
+      </div>
 
       <MemberOnboardingCard />
 
@@ -132,50 +187,7 @@ export default function AdminDashboardPage() {
           />
         </div>
       ) : null}
-
-      <Card>
-        <CardContent className="p-6">
-          <h2 className="font-display text-lg font-semibold mb-4">Atajos</h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <ShortcutLink
-              href="/admin/usuarios"
-              label="Usuarios y formadores"
-              hint="Invitar, suspender, asignar roles."
-            />
-            <ShortcutLink
-              href="/admin/configuracion"
-              label="Configuración del tenant"
-              hint="SMTP, módulos, branding y plantillas."
-            />
-            <ShortcutLink
-              href="/admin/branding"
-              label="Branding"
-              hint="Color de marca, fuentes, logo."
-            />
-            <ShortcutLink
-              href="/admin/auditoria"
-              label="Auditoría"
-              hint="Cadena de hashes verificable."
-            />
-            <ShortcutLink
-              href="/admin/zoom/webhook-events"
-              label="Webhooks Zoom"
-              hint="Trazabilidad de eventos recibidos para QA."
-            />
-            <ShortcutLink
-              href="/admin/comunidad/tags"
-              label="Tags de comunidad"
-              hint="Cura los tags oficiales con color e icono."
-            />
-            <ShortcutLink
-              href="/admin/cursos/categorias"
-              label="Categorías de cursos"
-              hint="Cura las categorías del catálogo con color e icono."
-            />
-          </div>
-        </CardContent>
-      </Card>
-    </section>
+    </div>
   );
 }
 
@@ -233,30 +245,5 @@ function MemberOnboardingCard(): ReactNode {
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-function ShortcutLink({
-  href,
-  label,
-  hint,
-}: {
-  href: string;
-  label: string;
-  hint: string;
-}): ReactNode {
-  return (
-    <Link
-      href={href as never}
-      className="flex items-start gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-2"
-    >
-      <span className="text-brand-500 text-lg" aria-hidden="true">
-        →
-      </span>
-      <div className="flex-1">
-        <p className="font-semibold text-text">{label}</p>
-        <p className="mt-0.5 text-xs text-text-muted">{hint}</p>
-      </div>
-    </Link>
   );
 }

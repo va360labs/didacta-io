@@ -27,21 +27,30 @@ export interface ModuleAdminConfigTab {
 
 export interface ModuleSidebarItem {
   /// Grupo del sidebar donde insertar el item. DEBE coincidir con un `label`
-  /// real de `buildGroups()` en (app)/layout.tsx, o el merge lo descarta en
-  /// silencio. 'Administración'/'Profesor' son los grupos consolidados actuales;
-  /// el resto son nombres legacy previos a la consolidación (quedan por compat
-  /// hasta migrar las extensiones que aún los usen).
+  /// real de `buildGroups()` o `buildAdminGroups()` en `@/lib/sidebar-nav`, o
+  /// el merge lo descarta en silencio.
+  ///
+  /// Esta unión es la primera línea de defensa (falla en compilación); la
+  /// segunda es `sidebar-nav.test.ts`, que además comprueba que el grupo exista
+  /// para el ROL que el item exige — un `group` válido puede seguir siendo
+  /// inalcanzable, que es justo lo que le pasó a 'Puntos y retos' apuntando a
+  /// 'Administración' (grupo solo-super_admin) con `requiresRole:
+  /// 'tenant_admin'`.
   group:
+    // Menú principal.
     | 'Aprendizaje'
     | 'Personas'
-    | 'Profesor'
-    | 'Administración'
-    | 'Comunidad'
     | 'Formador'
-    | 'Tenant'
+    // Área de administración.
+    | 'Personas y accesos'
+    | 'Comunidad'
+    | 'Contenido'
+    | 'Ingresos'
+    | 'Comunicación'
+    | 'Marca y ajustes'
+    | 'Integraciones y API'
     | 'Seguridad'
-    | 'Integraciones'
-    | 'Facturación';
+    | 'Plataforma';
   href: string;
   label: string;
   icon: string;

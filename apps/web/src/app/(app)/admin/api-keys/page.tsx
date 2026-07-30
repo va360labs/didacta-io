@@ -1,7 +1,17 @@
 'use client';
 
+/**
+ * Admin · Claves API.
+ *
+ * Dos pestañas: las claves en sí y la documentación EN VIVO para integradores
+ * (antes `/admin/integraciones/api`, una página huérfana del menú a la que solo
+ * se llegaba por un enlace enterrado en esta misma cabecera).
+ */
+
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ApiDocsTab } from '@/components/admin/api-docs-tab';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,7 +34,50 @@ function fmtDate(value: string | null): string {
   return new Date(value).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+const TABS = ['claves', 'docs'] as const;
+type TabKey = (typeof TABS)[number];
+
 export default function ApiKeysPage() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const requested = params.get('tab');
+  const tab: TabKey = (TABS as readonly string[]).includes(requested ?? '')
+    ? (requested as TabKey)
+    : 'claves';
+
+  return (
+    <section className="space-y-6">
+      <header>
+        <h1 className="text-2xl font-semibold text-text">Claves API</h1>
+        <p className="mt-1 text-sm text-text-muted">
+          Cómo inscriben alumnos tus sistemas externos (tu página de ventas, n8n, WooCommerce…) vía{' '}
+          <code>POST /api/v1/inscribe</code>.
+        </p>
+      </header>
+
+      <Tabs
+        value={tab}
+        onValueChange={(next) =>
+          router.replace(next === 'claves' ? '/admin/api-keys' : `/admin/api-keys?tab=${next}`)
+        }
+      >
+        <TabsList>
+          <TabsTrigger value="claves">Claves</TabsTrigger>
+          <TabsTrigger value="docs">Documentación</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="claves" className="mt-5">
+          <KeysTab />
+        </TabsContent>
+        <TabsContent value="docs" className="mt-5">
+          <ApiDocsTab />
+        </TabsContent>
+      </Tabs>
+    </section>
+  );
+}
+
+function KeysTab() {
   const [keys, setKeys] = useState<TenantApiKey[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -93,22 +146,11 @@ export default function ApiKeysPage() {
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-text">Claves API</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            Claves para que sistemas externos (p.ej. tu página de ventas) inscriban alumnos vía{' '}
-            <code>POST /api/v1/inscribe</code>. Consulta la documentación técnica en{' '}
-            <code>/api/docs</code>.
-          </p>
-          <p className="mt-2 text-sm">
-            <Link
-              href="/admin/integraciones/api"
-              className="font-semibold text-brand-700 hover:underline"
-            >
-              → Integración API: tus grupos y cursos reales + payloads listos para copiar
-            </Link>
-          </p>
-        </div>
+        <p className="max-w-2xl text-sm text-text-muted">
+          El contrato estático y público está en <code>/api/docs</code>; la pestaña
+          &ldquo;Documentación&rdquo; muestra tus grupos y cursos reales con payloads listos para
+          copiar.
+        </p>
         {!creating ? <Button onClick={() => setCreating(true)}>Crear clave</Button> : null}
       </div>
 

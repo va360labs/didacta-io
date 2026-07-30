@@ -13,6 +13,8 @@ interface Props {
   onLogout: () => void;
   /** Abre el command palette (⌘K); cierra antes el drawer. */
   onOpenSearch?: () => void;
+  /** Salida del área actual (admin → app); se pinta bajo la cabecera. */
+  backLink?: { href: string; label: string };
 }
 
 /**
@@ -34,6 +36,7 @@ export function MobileNavDrawer({
   session,
   onLogout,
   onOpenSearch,
+  backLink,
 }: Props) {
   // Bloqueo de scroll del body + cierre con Escape mientras el drawer está abierto.
   useEffect(() => {
@@ -83,6 +86,7 @@ export function MobileNavDrawer({
           onLogout={onLogout}
           onNavigate={onClose}
           onClose={onClose}
+          backLink={backLink}
           onOpenSearch={
             onOpenSearch
               ? () => {

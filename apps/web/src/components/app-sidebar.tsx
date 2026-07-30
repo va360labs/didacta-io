@@ -46,6 +46,13 @@ interface Props {
   onLogout: () => void;
   /** Abre el command palette (⌘K). Si no se pasa, el buscador no hace nada. */
   onOpenSearch?: () => void;
+  /**
+   * Enlace de salida del área actual, pintado como chrome bajo la cabecera
+   * (área admin → "Volver a la app"). Era el primer item del grupo "General":
+   * un control de navegación disfrazado de sección, que además hacía que el
+   * grupo arrancara con algo que no es una sección.
+   */
+  backLink?: { href: string; label: string };
 }
 
 /**
@@ -130,6 +137,7 @@ export function SidebarContent({
   showVersionBanner,
   collapsed,
   onToggleCollapsed,
+  backLink,
 }: SidebarContentProps) {
   const theme = useTenantTheme();
   const logoUrl = theme?.logoUrl ?? null;
@@ -217,6 +225,20 @@ export function SidebarContent({
             </svg>
           </button>
         </div>
+
+        {backLink ? (
+          <div className="border-b border-white/8 px-2.5 py-2">
+            <Link
+              href={backLink.href as never}
+              onClick={onNavigate}
+              title={backLink.label}
+              aria-label={backLink.label}
+              className="grid h-9 w-full place-items-center rounded-xl text-white/40 transition-colors hover:bg-white/8 hover:text-white/80"
+            >
+              <Icon name="arrow-left" size={16} />
+            </Link>
+          </div>
+        ) : null}
 
         <nav className="scrollbar-thin-dark flex-1 overflow-y-auto px-2.5 py-2">
           {groups.map((section, idx) => (
@@ -467,6 +489,20 @@ export function SidebarContent({
           </kbd>
         </button>
       </div>
+
+      {/* ── Salida del área (admin → app) ── */}
+      {backLink ? (
+        <div className="border-b border-white/8 px-3 py-2">
+          <Link
+            href={backLink.href as never}
+            onClick={onNavigate}
+            className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] font-medium text-white/45 transition-colors hover:bg-white/5 hover:text-white/80"
+          >
+            <Icon name="arrow-left" size={14} />
+            <span>{backLink.label}</span>
+          </Link>
+        </div>
+      ) : null}
 
       {/* ── Nav sections ── */}
       <nav className="scrollbar-thin-dark flex-1 overflow-y-auto px-2 py-2">

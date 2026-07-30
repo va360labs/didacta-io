@@ -84,7 +84,8 @@ function UuidCell({ id }: { id: string }) {
   );
 }
 
-export default function IntegracionApiPage() {
+/** Pestaña "Documentación" de /admin/api-keys. Antes `/admin/integraciones/api`. */
+export function ApiDocsTab() {
   const [groups, setGroups] = useState<AccessGroupListItem[] | null>(null);
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [spaces, setSpaces] = useState<CommunitySpace[]>([]);
@@ -172,7 +173,7 @@ export default function IntegracionApiPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Integración API</h1>
+        <h2 className="font-display text-lg font-semibold tracking-tight">Integración API</h2>
         <p className="text-text-muted">
           Datos reales de tu academia para conectar tu tienda (WooCommerce, n8n, Zapier…). Marca los
           grupos o cursos y copia el payload exacto.

@@ -13,7 +13,7 @@ function makeGroups(): SidebarGroup[] {
       ],
     },
     {
-      label: 'Integraciones',
+      label: 'Integraciones y API',
       items: [{ href: '/admin/webhooks', label: 'Webhooks API', icon: 'package' }],
     },
   ];
@@ -77,14 +77,14 @@ describe('mergeExtensionSidebarItems', () => {
   it('REGRESIÓN: dedupe entre dos extensions que declaran el mismo href', () => {
     const a: ModuleWebExtension = {
       name: 'mod.a',
-      sidebarItems: [{ group: 'Integraciones', href: '/x', label: 'A', icon: 'package' }],
+      sidebarItems: [{ group: 'Integraciones y API', href: '/x', label: 'A', icon: 'package' }],
     };
     const b: ModuleWebExtension = {
       name: 'mod.b',
-      sidebarItems: [{ group: 'Integraciones', href: '/x', label: 'B', icon: 'package' }],
+      sidebarItems: [{ group: 'Integraciones y API', href: '/x', label: 'B', icon: 'package' }],
     };
     const result = mergeExtensionSidebarItems(makeGroups(), [a, b], new Set([]));
-    const integraciones = result.find((g) => g.label === 'Integraciones')!;
+    const integraciones = result.find((g) => g.label === 'Integraciones y API')!;
     const matches = integraciones.items.filter((i) => i.href === '/x');
     expect(matches).toHaveLength(1);
     // Gana el primero (mod.a).
@@ -96,7 +96,7 @@ describe('mergeExtensionSidebarItems', () => {
       name: 'mod.migrator',
       sidebarItems: [
         {
-          group: 'Integraciones',
+          group: 'Integraciones y API',
           href: '/admin/integraciones/migrator-learndash',
           label: 'Migrar desde LearnDash',
           icon: 'download-cloud',
@@ -107,14 +107,14 @@ describe('mergeExtensionSidebarItems', () => {
     const noSuper = mergeExtensionSidebarItems(makeGroups(), [ext], new Set(['tenant_admin']));
     expect(
       noSuper
-        .find((g) => g.label === 'Integraciones')!
+        .find((g) => g.label === 'Integraciones y API')!
         .items.find((i) => i.href === '/admin/integraciones/migrator-learndash'),
     ).toBeUndefined();
 
     const withSuper = mergeExtensionSidebarItems(makeGroups(), [ext], new Set(['super_admin']));
     expect(
       withSuper
-        .find((g) => g.label === 'Integraciones')!
+        .find((g) => g.label === 'Integraciones y API')!
         .items.find((i) => i.href === '/admin/integraciones/migrator-learndash'),
     ).toBeDefined();
   });
@@ -159,7 +159,7 @@ describe('mergeExtensionSidebarItems', () => {
         name: 'mod.fundae',
         sidebarItems: [
           {
-            group: 'Integraciones',
+            group: 'Integraciones y API',
             href: '/admin/fundae',
             label: 'Fundae',
             icon: 'file',
@@ -183,7 +183,7 @@ describe('mergeExtensionSidebarItems', () => {
     const asSuper = mergeExtensionSidebarItems(makeGroups(), exts, new Set(['super_admin']));
     expect(
       asSuper
-        .find((g) => g.label === 'Integraciones')!
+        .find((g) => g.label === 'Integraciones y API')!
         .items.find((i) => i.href === '/admin/fundae'),
     ).toBeDefined();
     expect(
@@ -196,11 +196,11 @@ describe('mergeExtensionSidebarItems', () => {
   it('items SIN requiresRole pasan para todos los roles', () => {
     const ext: ModuleWebExtension = {
       name: 'mod.x',
-      sidebarItems: [{ group: 'Integraciones', href: '/x', label: 'X', icon: 'package' }],
+      sidebarItems: [{ group: 'Integraciones y API', href: '/x', label: 'X', icon: 'package' }],
     };
     const result = mergeExtensionSidebarItems(makeGroups(), [ext], new Set());
     expect(
-      result.find((g) => g.label === 'Integraciones')!.items.find((i) => i.href === '/x'),
+      result.find((g) => g.label === 'Integraciones y API')!.items.find((i) => i.href === '/x'),
     ).toBeDefined();
   });
 

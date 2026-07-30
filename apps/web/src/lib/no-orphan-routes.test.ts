@@ -28,6 +28,8 @@ const HERE = dirname(fileURLToPath(import.meta.url)); // apps/web/src/lib
 const WEB_SRC = join(HERE, '..'); // apps/web/src
 const APP_DIR = join(WEB_SRC, 'app', '(app)');
 const LAYOUT = join(APP_DIR, 'layout.tsx');
+/** El árbol de navegación se extrajo del layout a `lib/sidebar-nav.ts`. */
+const SIDEBAR_NAV = join(WEB_SRC, 'lib', 'sidebar-nav.ts');
 const MODULES_DIR = join(WEB_SRC, 'modules');
 
 /**
@@ -71,6 +73,27 @@ const ALLOWLIST: Record<string, { kind: AllowKind; reason: string }> = {
     kind: 'external',
     reason:
       'redirect legacy a /admin/imagenes: se mantiene para no romper enlaces guardados, por eso no está en la nav',
+  },
+  // ── Fusiones de la reordenación del panel admin ────────────────────────────
+  // Cuatro pantallas se convirtieron en pestañas de otra. Las rutas viejas
+  // sobreviven como redirect para enlaces guardados y documentación ya
+  // repartida, y por eso NO están en la nav (tenerlas duplicaría la entrada).
+  '/admin/metricas': {
+    kind: 'external',
+    reason: 'redirect a /admin?tab=negocio (las métricas son pestaña del panel)',
+  },
+  '/admin/sso-saml': {
+    kind: 'external',
+    reason: 'redirect a /admin/sso?tab=saml (los tres protocolos SSO se unificaron con pestañas)',
+  },
+  '/admin/sso-wordpress': {
+    kind: 'external',
+    reason:
+      'redirect a /admin/sso?tab=wordpress; la ruta se cita en las instrucciones de wp-config.php',
+  },
+  '/admin/zoom/webhook-events': {
+    kind: 'external',
+    reason: 'redirect a /admin/webhooks?tab=zoom (entregas de Zoom como pestaña de Webhooks)',
   },
   '/cursos/checkout/success': { kind: 'external', reason: 'redirect de Stripe (success_url)' },
   '/cursos/checkout/cancel': { kind: 'external', reason: 'redirect de Stripe (cancel_url)' },
@@ -120,9 +143,9 @@ function collectRoutes(): string[] {
   return [...new Set(routes)].sort();
 }
 
-/** hrefs literales (comilla simple) de layout.tsx + modules/<m>/index.ts. */
+/** hrefs literales (comilla simple) de sidebar-nav.ts + layout.tsx + modules/<m>/index.ts. */
 function collectNavHrefs(): Set<string> {
-  const files = [LAYOUT];
+  const files = [SIDEBAR_NAV, LAYOUT];
   for (const m of readdirSync(MODULES_DIR, { withFileTypes: true })) {
     if (m.isDirectory()) {
       const idx = join(MODULES_DIR, m.name, 'index.ts');
