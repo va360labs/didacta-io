@@ -12,6 +12,22 @@ import {
 import { aiFetchJson } from './http-helper';
 
 /**
+ * True si el modelo pertenece a las familias que sustituyeron `max_tokens` por
+ * `max_completion_tokens` en /chat/completions: gpt-5.x y los razonadores
+ * o1/o3/o4. Se comprueba por prefijo porque OpenAI publica variantes nuevas
+ * (`-mini`, `-nano`, fechadas) sin cambiar la raíz del nombre.
+ *
+ * Exportada para poder cubrirla con tests sin levantar el adapter entero.
+ */
+export function usesCompletionTokensParam(model: string): boolean {
+  const m = model.trim().toLowerCase();
+  // Los proveedores compatibles-OpenAI prefijan con el vendor
+  // ("openai/gpt-5.4-mini" en OpenRouter): nos quedamos con la última parte.
+  const bare = m.includes('/') ? (m.split('/').pop() ?? m) : m;
+  return /^(gpt-5|o1|o3|o4)(\b|[-.])/.test(bare);
+}
+
+/**
  * Adapter para OpenAI (chat completions + embeddings).
  *
  * Su API es de facto estándar para muchos providers compatibles
@@ -33,14 +49,22 @@ export class OpenAiAdapter implements AiProviderAdapter {
     const baseUrl = config.baseUrl ?? this.defaultBaseUrl;
     const model = config.model || this.defaultChatModel;
 
+    // Los modelos gpt-5.x y la familia de razonadores (o1/o3/o4) rechazan
+    // `max_tokens` con 400 `unsupported_parameter` y exigen
+    // `max_completion_tokens`. Además sólo aceptan la `temperature` por
+    // defecto, así que ni la mandamos.
+    const nuevaApi = usesCompletionTokensParam(model);
+    const limite = input.maxTokens ?? 1500;
+
     const body = {
       model,
       messages: [
         { role: 'system', content: input.system },
         ...input.messages.map((m) => ({ role: m.role, content: m.content })),
       ],
-      temperature: input.temperature ?? 0.3,
-      max_tokens: input.maxTokens ?? 1500,
+      ...(nuevaApi
+        ? { max_completion_tokens: limite }
+        : { temperature: input.temperature ?? 0.3, max_tokens: limite }),
     };
 
     const json = await aiFetchJson<{

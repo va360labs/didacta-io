@@ -1,6 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AiTutorChatService, type ChatFn, type EmbedFn } from '../src/chat.service.js';
-import { ChatProviderError, CourseNotIndexedError } from '../src/errors.js';
+import {
+  AiTutorChatService,
+  DAILY_QUESTION_LIMIT,
+  type ChatFn,
+  type EmbedFn,
+} from '../src/chat.service.js';
+import {
+  ChatProviderError,
+  CourseAccessDeniedError,
+  CourseNotIndexedError,
+  DailyQuestionQuotaExceededError,
+} from '../src/errors.js';
 
 function makeContext() {
   return {
@@ -25,13 +35,20 @@ function makeFakePrisma(opts: {
   user?: { locale: string } | null;
   hydrationLessons?: Array<{ id: string; title: string }>;
   hydrationChunks?: Array<{ id: string; content: string }>;
-  tokenUsageExisting?: { id: string } | null;
+  tokenUsageExisting?: { id: string; questions?: number } | null;
+  /** Matrícula del alumno. Por defecto existe: los tests viejos asumen acceso. */
+  enrollment?: { id: string } | null;
 }) {
   const created: Array<{ table: string; data: unknown }> = [];
   const updated: Array<{ table: string; id: string; data: unknown }> = [];
   return {
     created,
     updated,
+    modLearningEnrollment: {
+      findFirst: vi.fn(async () =>
+        opts.enrollment === undefined ? { id: 'e1' } : opts.enrollment,
+      ),
+    },
     modAiTutorChunk: {
       count: vi.fn(async () => opts.chunkCount),
       findMany: vi.fn(async () => opts.hydrationChunks ?? []),
@@ -319,6 +336,9 @@ describe('AiTutorChatService.ask (LMS-90.D)', () => {
       retrieved: sampleRetrieved,
       course: { title: 'X' },
       user: { locale: 'es' },
+      // El histórico sólo se carga en una conversación que ya existe: en una
+      // nueva no hay nada que cargar y nos ahorramos la query.
+      conversation: { id: '11111111-1111-4111-8111-111111111111' },
       messages: [
         { role: 'user', content: 'pregunta previa', createdAt: new Date() },
         { role: 'assistant', content: 'respuesta previa', createdAt: new Date() },
@@ -338,12 +358,129 @@ describe('AiTutorChatService.ask (LMS-90.D)', () => {
       outputTokens: 1,
     }));
     const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), chatSpy);
-    await svc.ask('t1', 'u1', 'c1', { question: 'nueva' });
+    await svc.ask('t1', 'u1', 'c1', {
+      question: 'nueva',
+      conversationId: '11111111-1111-4111-8111-111111111111',
+    });
     const callArgs = (chatSpy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
       messages: Array<{ role: string; content: string }>;
     };
     // 2 mensajes histórico + 1 actual
     expect(callArgs.messages).toHaveLength(3);
     expect(callArgs.messages[2]!.content).toBe('nueva');
+  });
+});
+
+describe('AiTutorChatService.ask · acceso y cuota', () => {
+  const base = {
+    chunkCount: 5,
+    retrieved: sampleRetrieved,
+    course: { title: 'X' },
+    user: { locale: 'es' },
+    hydrationLessons: [{ id: 'l1', title: 'A' }],
+    hydrationChunks: [{ id: 'chunk-1', content: '[12:34] a' }],
+  };
+
+  it('sin matrícula → CourseAccessDeniedError y no gasta en IA', async () => {
+    const prisma = makeFakePrisma({ ...base, enrollment: null });
+    const embedSpy = vi.fn(makeEmbed());
+    const svc = new AiTutorChatService(
+      prisma,
+      makeContext(),
+      embedSpy as unknown as EmbedFn,
+      makeChat(),
+    );
+    await expect(svc.ask('t1', 'u1', 'c1', { question: 'hola' })).rejects.toBeInstanceOf(
+      CourseAccessDeniedError,
+    );
+    expect(embedSpy).not.toHaveBeenCalled();
+  });
+
+  it('staff responde sin matrícula y sin consumir cuota', async () => {
+    const prisma = makeFakePrisma({ ...base, enrollment: null });
+    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat());
+    const r = await svc.ask('t1', 'u1', 'c1', { question: 'hola' }, { staff: true });
+    expect(r.answer).toBeTruthy();
+    const usage = prisma.created.find((c) => c.table === 'usage');
+    expect((usage?.data as { questions: number }).questions).toBe(0);
+  });
+
+  it('al llegar al límite diario → DailyQuestionQuotaExceededError sin llamar a la IA', async () => {
+    const prisma = makeFakePrisma({
+      ...base,
+      tokenUsageExisting: { id: 'usage-1', questions: DAILY_QUESTION_LIMIT },
+    });
+    const embedSpy = vi.fn(makeEmbed());
+    const svc = new AiTutorChatService(
+      prisma,
+      makeContext(),
+      embedSpy as unknown as EmbedFn,
+      makeChat(),
+    );
+    await expect(svc.ask('t1', 'u1', 'c1', { question: 'hola' })).rejects.toBeInstanceOf(
+      DailyQuestionQuotaExceededError,
+    );
+    expect(embedSpy).not.toHaveBeenCalled();
+  });
+
+  it('una pregunta por debajo del límite pasa y devuelve lo que queda', async () => {
+    const prisma = makeFakePrisma({
+      ...base,
+      tokenUsageExisting: { id: 'usage-1', questions: DAILY_QUESTION_LIMIT - 1 },
+    });
+    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat());
+    const r = await svc.ask('t1', 'u1', 'c1', { question: 'hola' });
+    expect(r.quota).toEqual({
+      used: DAILY_QUESTION_LIMIT,
+      limit: DAILY_QUESTION_LIMIT,
+      remaining: 0,
+    });
+  });
+
+  // Regresión: cuando el proveedor fallaba, la conversación ya estaba creada y
+  // quedaban filas vacías. Así se acumularon 5 en producción (2026-07-30).
+  it('si el proveedor de chat falla NO deja conversación huérfana', async () => {
+    const prisma = makeFakePrisma(base);
+    const chatRoto: ChatFn = async () => {
+      throw new Error('502 del proveedor');
+    };
+    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), chatRoto);
+    await expect(svc.ask('t1', 'u1', 'c1', { question: 'hola' })).rejects.toBeInstanceOf(
+      ChatProviderError,
+    );
+    expect(prisma.created.some((c) => c.table === 'conv')).toBe(false);
+  });
+
+  it('con lessonId busca también dentro de la lección y lo dice en el prompt', async () => {
+    const prisma = makeFakePrisma({
+      ...base,
+      hydrationLessons: [{ id: 'l1', title: 'Webhooks en n8n' }],
+    });
+    const chatSpy: ChatFn = vi.fn(async () => ({
+      content: 'ok [1]',
+      inputTokens: 1,
+      outputTokens: 1,
+    }));
+    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), chatSpy);
+    await svc.ask('t1', 'u1', 'c1', {
+      question: 'no me va',
+      lessonId: 'l1',
+      positionSeconds: 754,
+    });
+    // Dos búsquedas: el curso entero y la lección que está viendo.
+    expect((prisma.$queryRawUnsafe as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+    const system = (chatSpy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0].system;
+    expect(system).toContain('Webhooks en n8n');
+    expect(system).toContain('12:34');
+  });
+
+  it('la cita expone el segundo de la marca de tiempo del fragmento', async () => {
+    const prisma = makeFakePrisma({
+      ...base,
+      hydrationChunks: [{ id: 'chunk-1', content: '[12:34] el webhook expone tu workflow' }],
+    });
+    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat('Mira [1].'));
+    const r = await svc.ask('t1', 'u1', 'c1', { question: 'webhook?' });
+    expect(r.citations[0]!.startSeconds).toBe(754);
   });
 });

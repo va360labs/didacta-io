@@ -49,6 +49,13 @@ export default function CourseAlumnoPage() {
   }, []);
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
+  /**
+   * Segundo por el que va el vídeo de la lección abierta. Lo reporta el
+   * reproductor de Bunny y viaja al tutor IA para que sepa dónde está el alumno
+   * cuando pregunta. `undefined` mientras no haya reporte (o si el proveedor de
+   * vídeo no es Bunny, que es el único que medimos).
+   */
+  const [lessonPosition, setLessonPosition] = useState<number | undefined>(undefined);
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
   const [progressByLesson, setProgressByLesson] = useState<Record<string, boolean>>({});
   // Posición de reanudación por lección (segundos) desde el backend, para
@@ -150,6 +157,13 @@ export default function CourseAlumnoPage() {
       document.title = 'Didacta';
     };
   }, [course, activeLessonId]);
+
+  // Al cambiar de clase, la posición anterior deja de ser cierta: si no se
+  // limpia, el tutor situaría al alumno en el minuto de la clase que acaba de
+  // abandonar hasta que el reproductor reporte de nuevo.
+  useEffect(() => {
+    setLessonPosition(undefined);
+  }, [activeLessonId]);
 
   async function handleDownloadCertificate() {
     if (!certificate) return;
@@ -657,6 +671,7 @@ export default function CourseAlumnoPage() {
                 enrollmentId={enrollment.id}
                 initialResumePositionSec={resumeByLesson[activeLesson.id] ?? 0}
                 initialCompleted={Boolean(progressByLesson[activeLesson.id])}
+                onPosition={setLessonPosition}
                 onProgress={(percent) => {
                   setEnrollment((e) => (e ? { ...e, progressPercent: percent } : e));
                   setProgressByLesson((map) => ({ ...map, [activeLesson.id]: true }));
@@ -678,7 +693,12 @@ export default function CourseAlumnoPage() {
                 lessonId={activeLesson.id}
                 courseId={course.id}
               />
-              <AiTutorPanel courseId={course.id} />
+              <AiTutorPanel
+                courseId={course.id}
+                lessonId={activeLesson.id}
+                lessonTitle={activeLesson.title}
+                positionSeconds={lessonPosition}
+              />
             </div>
           ) : (
             <Card>

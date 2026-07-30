@@ -7,6 +7,7 @@ import {
   MistralAdapter,
   OpenAiAdapter,
   OpenRouterAdapter,
+  usesCompletionTokensParam,
 } from '../src/ai/adapters/openai.adapter';
 import { VoyageAdapter } from '../src/ai/adapters/voyage.adapter';
 import {
@@ -56,6 +57,80 @@ describe('OpenAiAdapter', () => {
     expect(r.usage).toEqual({ inputTokens: 5, outputTokens: 3 });
     expect(r.provider).toBe('openai');
     expect(r.model).toBe('gpt-4o-mini');
+  });
+
+  it('chat() con gpt-4o-mini manda max_tokens y temperature', async () => {
+    let enviado: Record<string, unknown> = {};
+    global.fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      enviado = JSON.parse(String(init?.body));
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({
+          choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        }),
+      } as Response;
+    }) as never;
+
+    await new OpenAiAdapter().chat(
+      { system: 'S', messages: [{ role: 'user', content: 'Hola' }], maxTokens: 900 },
+      { ...baseConfig('sk-x'), provider: 'openai', model: 'gpt-4o-mini' },
+    );
+    expect(enviado.max_tokens).toBe(900);
+    expect(enviado.temperature).toBe(0.3);
+    expect(enviado).not.toHaveProperty('max_completion_tokens');
+  });
+
+  // Regresión: gpt-5.4-mini devolvía 400 "Unsupported parameter: 'max_tokens'"
+  // y el tutor IA respondía 502 a todos los alumnos (2026-07-30).
+  it('chat() con gpt-5.x manda max_completion_tokens y omite temperature', async () => {
+    let enviado: Record<string, unknown> = {};
+    global.fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      enviado = JSON.parse(String(init?.body));
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({
+          choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        }),
+      } as Response;
+    }) as never;
+
+    await new OpenAiAdapter().chat(
+      { system: 'S', messages: [{ role: 'user', content: 'Hola' }], maxTokens: 900 },
+      { ...baseConfig('sk-x'), provider: 'openai', model: 'gpt-5.4-mini' },
+    );
+    expect(enviado.max_completion_tokens).toBe(900);
+    expect(enviado).not.toHaveProperty('max_tokens');
+    expect(enviado).not.toHaveProperty('temperature');
+  });
+
+  it('usesCompletionTokensParam distingue las familias nuevas de las viejas', () => {
+    for (const m of [
+      'gpt-5.4-mini',
+      'gpt-5',
+      'GPT-5.4-NANO',
+      'o1-preview',
+      'o3-mini',
+      'o4-mini',
+      'openai/gpt-5.4-mini',
+    ]) {
+      expect(usesCompletionTokensParam(m), m).toBe(true);
+    }
+    for (const m of [
+      'gpt-4o-mini',
+      'gpt-4.1',
+      'gpt-4-turbo',
+      'mistral-large-latest',
+      'llama-3.3-70b-versatile',
+      'gpt-51-imaginario',
+    ]) {
+      expect(usesCompletionTokensParam(m), m).toBe(false);
+    }
   });
 
   it('embed() respeta orden por index y devuelve dim', async () => {

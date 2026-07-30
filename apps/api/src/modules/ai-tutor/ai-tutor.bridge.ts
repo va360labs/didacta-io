@@ -11,6 +11,11 @@ interface CourseUnpublishedEvent {
   courseId: string;
 }
 
+/** `courses.lesson.updated` sólo trae el id; el curso lo resuelve el indexer. */
+interface LessonEvent {
+  lessonId: string;
+}
+
 /**
  * Bridge que conecta los eventos del catálogo (mod.courses) con el indexer
  * del tutor IA (LMS-90.C).
@@ -80,6 +85,54 @@ export class AiTutorBridge implements OnModuleInit {
             err: err instanceof Error ? err.message : String(err),
           },
           'mod.ai-tutor: fallo al desindexar',
+        );
+      }
+    });
+
+    // Una clase nueva (o una transcripción recién pegada) entra en el tutor sin
+    // que nadie reindexe a mano. Antes sólo se indexaba al publicar el curso:
+    // añadir un capítulo a un curso ya publicado no llegaba nunca al tutor.
+    const reindexarLeccion = async (event: {
+      metadata: { tenantId: string };
+      data: LessonEvent;
+    }) => {
+      const tenantId = event.metadata.tenantId;
+      const { lessonId } = event.data;
+      const indexer = this.registry.getAiTutorIndexerServiceOrNull();
+      if (!indexer) return;
+      try {
+        const r = await indexer.indexLesson(tenantId, lessonId);
+        if (r.skipped) {
+          this.logger.debug(
+            { lessonId, tenantId, motivo: r.skipped },
+            'mod.ai-tutor: lección no indexada',
+          );
+        }
+      } catch (err) {
+        // Igual que al publicar: un fallo de IA no puede tumbar el guardado de
+        // la lección. Queda sin indexar y el admin puede reindexar a mano.
+        this.logger.error(
+          { lessonId, tenantId, err: err instanceof Error ? err.message : String(err) },
+          'mod.ai-tutor: fallo al indexar lección',
+        );
+      }
+    };
+
+    eventBus.subscribe<LessonEvent>('courses.lesson.created', reindexarLeccion);
+    eventBus.subscribe<LessonEvent>('courses.lesson.updated', reindexarLeccion);
+
+    eventBus.subscribe<LessonEvent>('courses.lesson.deleted', async (event) => {
+      const indexer = this.registry.getAiTutorIndexerServiceOrNull();
+      if (!indexer) return;
+      try {
+        await indexer.unindexLesson(event.metadata.tenantId, event.data.lessonId);
+      } catch (err) {
+        this.logger.error(
+          {
+            lessonId: event.data.lessonId,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          'mod.ai-tutor: fallo al desindexar lección',
         );
       }
     });

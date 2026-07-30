@@ -10,6 +10,14 @@ export const askSchema = z.object({
   conversationId: z.string().uuid().optional(),
   /** Top-K de chunks relevantes para el RAG. Default 5. */
   topK: z.number().int().min(1).max(20).optional(),
+  /**
+   * Lección que el alumno está viendo cuando pregunta. Cambia la respuesta:
+   * «no me funciona el webhook» no significa lo mismo en el capítulo 21 que en
+   * el 45. Los fragmentos de esta lección se priorizan sobre el resto del curso.
+   */
+  lessonId: z.string().uuid().optional(),
+  /** Segundo del vídeo en el que va el alumno. Sirve para situar la duda. */
+  positionSeconds: z.number().int().min(0).max(86_400).optional(),
 });
 export type AskDto = z.infer<typeof askSchema>;
 
@@ -36,6 +44,12 @@ export interface CitationView {
   chunkOrdinal: number;
   /** Snippet del chunk citado (primeros 200 chars). */
   snippet: string;
+  /**
+   * Segundo del vídeo donde empieza lo citado, si el fragmento viene de una
+   * transcripción con marcas de tiempo. Permite enlazar «minuto 12:34» al punto
+   * exacto del vídeo. Null cuando el fragmento es de texto sin marcas.
+   */
+  startSeconds: number | null;
 }
 
 export interface AskResponseView {
@@ -49,6 +63,12 @@ export interface AskResponseView {
   tokensUsed: {
     input: number;
     output: number;
+  };
+  /** Cuota diaria de preguntas tras contar ésta. */
+  quota: {
+    used: number;
+    limit: number;
+    remaining: number;
   };
 }
 

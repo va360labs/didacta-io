@@ -66,6 +66,52 @@ describe('extractLessonText (LMS-90.C)', () => {
     expect(r.skipReason).toContain('queda vacía');
   });
 
+  // Regresión: en producción los chunks más pesados del índice eran el CSS del
+  // bloque <style> que arrastró la importación de LearnDash (2026-07-30).
+  it('HTML descarta el contenido de <style> y <script>, no sólo sus etiquetas', () => {
+    const r = extractLessonText({
+      type: 'HTML',
+      title: 'Resumen',
+      content: {
+        html:
+          '<style>:root{--clay:#CC785C;--cream:#FAF9F5;}</style>' +
+          '<p>El webhook expone tu workflow como una API.</p>' +
+          '<script>window.dataLayer.push({evento:"play"});</script>',
+      },
+    });
+    expect(r.text).toContain('El webhook expone tu workflow como una API.');
+    expect(r.text).not.toContain('--clay');
+    expect(r.text).not.toContain('#CC785C');
+    expect(r.text).not.toContain('dataLayer');
+  });
+
+  it('HTML descarta el iframe del vídeo y los comentarios', () => {
+    const r = extractLessonText({
+      type: 'HTML',
+      title: 'Clase',
+      content: {
+        html:
+          '<div><iframe src="https://iframe.mediadelivery.net/embed/376431/abc">fallback</iframe></div>' +
+          '<!-- nota interna del importador -->' +
+          '<p>Contenido de verdad.</p>',
+      },
+    });
+    expect(r.text).toContain('Contenido de verdad.');
+    expect(r.text).not.toContain('mediadelivery');
+    expect(r.text).not.toContain('fallback');
+    expect(r.text).not.toContain('nota interna');
+  });
+
+  it('HTML que sólo era estilos queda vacío y se salta', () => {
+    const r = extractLessonText({
+      type: 'HTML',
+      title: 'X',
+      content: { html: '<style>.a{color:red}</style>' },
+    });
+    expect(r.text).toBe('');
+    expect(r.skipReason).toContain('queda vacía');
+  });
+
   it('VIDEO con transcript usa la transcripción', () => {
     const r = extractLessonText({
       type: 'VIDEO',
