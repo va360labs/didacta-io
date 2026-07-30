@@ -224,7 +224,7 @@ describe('AdminImagesService', () => {
       expect(rows.collection[0]!.coverUrl).toMatch(/\.webp$/);
     });
 
-    it('logo: actualiza key, MIME y el cache-buster de la URL pública', async () => {
+    it('logo: se reoptimiza a PNG (no WebP) y repunta key, MIME y cache-buster', async () => {
       const { service, rows } = makeHarness(foto);
       rows.theme.logoStorageKey = `tenants/${TENANT}/uploads/vieja.png`;
 
@@ -233,8 +233,11 @@ describe('AdminImagesService', () => {
       ]);
 
       expect(res!.ok).toBe(true);
-      expect(rows.theme.logoStorageKey).toMatch(/\.webp$/);
-      expect(rows.theme.logoMimeType).toBe('image/webp');
+      // PNG a propósito: este blob va también en la cabecera de los emails y
+      // hay clientes que pintan el WebP ignorando el alfa (rectángulo negro).
+      // Si esta pantalla lo pasara a WebP, volvería a romperlos.
+      expect(rows.theme.logoStorageKey).toMatch(/\.png$/);
+      expect(rows.theme.logoMimeType).toBe('image/png');
       // El `?v=` es lo que hace que el navegador suelte el logo cacheado.
       expect(rows.theme.logoUrl).toMatch(/\/logo\?v=\d+$/);
     });

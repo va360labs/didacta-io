@@ -68,6 +68,15 @@ export interface UploadImageOptions {
   maxWidth?: number;
   /** Calidad de la recompresión. Default 80. El core acota a [40, 95]. */
   quality?: number;
+  /**
+   * Formato de salida. Default `'webp'`, que es lo que quiere la web.
+   *
+   * Usa `'png'` si la imagen también va a mostrarse en un CLIENTE DE EMAIL (el
+   * logo del tenant, por ejemplo): WebP no es seguro ahí — hay clientes que no
+   * lo pintan y otros que ignoran su canal alfa y dejan un rectángulo negro
+   * donde debería haber transparencia.
+   */
+  format?: 'webp' | 'png';
 }
 
 export interface UploadedImage {

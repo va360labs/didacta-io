@@ -165,14 +165,21 @@ export class ThemingService {
     }
 
     // `uploadImage` (no `upload`) para que el logo se recomprima como el resto
-    // de imágenes de la plataforma. Ajustes conservadores: un logo de cabecera
-    // se ve pequeño pero suele llevar texto fino, así que 512 px de ancho y
-    // calidad 90 en vez de los 1600/80 por defecto. Un SVG no es optimizable y
+    // de imágenes de la plataforma, pero con dos ajustes propios: 512 px de
+    // ancho (un logo de cabecera se ve pequeño) y salida PNG.
+    //
+    // `format: 'png'` NO es un capricho: este mismo blob es el que va en la
+    // cabecera de TODOS los emails del tenant, y WebP no es seguro en clientes
+    // de correo. Al pasar el logo a WebP (2026-07-29) los emails empezaron a
+    // enseñar un rectángulo negro con las letras recortadas: el cliente
+    // decodifica el WebP e ignora su canal alfa, así que el fondo transparente
+    // se pinta con el RGB que hay debajo. PNG lo pinta cualquier cliente, con
+    // transparencia y sin halos alrededor del texto. Un SVG no es optimizable y
     // el core lo guarda intacto, que es justo lo que queremos con un vector.
     const requestedKey = `tenants/${tenantId}/branding/logo`;
     const stored = await this.ctx.storage.uploadImage(requestedKey, buffer, input.contentType, {
       maxWidth: 512,
-      quality: 90,
+      format: 'png',
     });
 
     // Cache-buster basado en timestamp para que el browser refresque al cambiar.

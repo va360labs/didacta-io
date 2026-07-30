@@ -311,7 +311,7 @@ describe('ThemingService.uploadLogo', () => {
     expect(storage.blobs.has(`tenants/${tenant}/branding/logo`)).toBe(true);
   });
 
-  it('el logo pasa por uploadImage con ajustes conservadores (512px, calidad 90)', async () => {
+  it('el logo pasa por uploadImage a 512px y en PNG (el mismo blob va en los emails)', async () => {
     const prisma = makeFakePrisma();
     const storage = makeFakeStorage();
     const spy = vi.spyOn(storage, 'uploadImage');
@@ -323,9 +323,12 @@ describe('ThemingService.uploadLogo', () => {
       contentType: 'image/png',
     });
 
+    // `format: 'png'` es lo que impide que el logo acabe en WebP: hay clientes
+    // de email que lo decodifican ignorando el alfa y pintan un rectángulo
+    // negro donde debería estar la transparencia (regresión del 2026-07-30).
     expect(spy).toHaveBeenCalledWith(expect.any(String), expect.any(Buffer), 'image/png', {
       maxWidth: 512,
-      quality: 90,
+      format: 'png',
     });
     // Y NUNCA el `upload` crudo directamente: eso saltaría la optimización.
     expect(storage.calls.upload).toBe(1); // el único, hecho DESDE uploadImage
