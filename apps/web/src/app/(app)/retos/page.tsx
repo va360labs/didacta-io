@@ -74,6 +74,15 @@ export default function RetosPage() {
 
   const points = standing?.lifetimePoints ?? 0;
   const ordered = useMemo(() => [...levels].sort((a, b) => a.minPoints - b.minPoints), [levels]);
+  /**
+   * Beneficios de menos a más caro. El servidor los devuelve por fecha de alta,
+   * que en pantalla se lee raro: la rejilla tiene que subir igual que la
+   * escalera, del que casi tienes al que queda lejos.
+   */
+  const perksPorNivel = useMemo(
+    () => [...perks].sort((a, b) => a.levelMinPoints - b.levelMinPoints),
+    [perks],
+  );
   const nextLevel = ordered.find((l) => l.minPoints > points) ?? null;
   const currentLevel = [...ordered].reverse().find((l) => l.minPoints <= points) ?? null;
   const gap = nextLevel ? nextLevel.minPoints - points : 0;
@@ -128,7 +137,7 @@ export default function RetosPage() {
           note="Los puntos no se gastan: al alcanzar el nivel, la ventaja queda abierta."
         >
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {perks.map((perk, i) => (
+            {perksPorNivel.map((perk, i) => (
               <PerkCard
                 key={perk.id}
                 perk={perk}
