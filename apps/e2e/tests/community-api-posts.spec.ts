@@ -6,7 +6,7 @@
  *     `source='api'`, y aparece en el feed de la comunidad.
  *  3. Una key sin el scope recibe 403 (contrato de scopes).
  *  4. Auditoría en el admin: /admin/comunidad/publicaciones-api lista el post
- *     agrupado por usuario, y /admin/integraciones/api documenta el endpoint.
+ *     agrupado por usuario, y la pestaña Documentación de /admin/api-keys lo documenta.
  */
 
 import { expect, test } from '@playwright/test';
@@ -163,7 +163,7 @@ test.describe('Comunidad — publicación por API key', () => {
     await expect(page.getByRole('link', { name: title })).toBeVisible();
 
     // La documentación del endpoint vive en Integraciones → API.
-    await page.goto('/admin/integraciones/api');
+    await page.goto('/admin/api-keys?tab=docs');
     await expect(page.getByTestId('community-api-docs')).toBeVisible({ timeout: 15_000 });
     await expect(
       page.getByTestId('community-api-docs').getByText('POST /api/v1/community-api/posts'),

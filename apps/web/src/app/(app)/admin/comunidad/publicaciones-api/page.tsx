@@ -74,8 +74,8 @@ export default function AdminPublicacionesApiPage() {
             Claves API
           </Link>{' '}
           y el endpoint está documentado en{' '}
-          <Link href="/admin/integraciones/api" className="text-brand-700 hover:underline">
-            Integraciones → API
+          <Link href="/admin/api-keys?tab=docs" className="text-brand-700 hover:underline">
+            Claves API → Documentación
           </Link>
           .
         </p>
