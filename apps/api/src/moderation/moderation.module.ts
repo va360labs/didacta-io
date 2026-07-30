@@ -1,7 +1,12 @@
 import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthModule } from '../auth/auth.module';
-import { RestrictionController, RestrictionScopesController } from './restriction.controller';
+import { DossierService } from './dossier.service';
+import {
+  DossierController,
+  RestrictionController,
+  RestrictionScopesController,
+} from './restriction.controller';
 import { RestrictionInterceptor } from './restriction.interceptor';
 import { RestrictionService } from './restriction.service';
 
@@ -21,9 +26,10 @@ import { RestrictionService } from './restriction.service';
  */
 @Module({
   imports: [AuthModule],
-  controllers: [RestrictionController, RestrictionScopesController],
+  controllers: [RestrictionController, RestrictionScopesController, DossierController],
   providers: [
     RestrictionService,
+    DossierService,
     RestrictionInterceptor,
     { provide: APP_INTERCEPTOR, useExisting: RestrictionInterceptor },
   ],

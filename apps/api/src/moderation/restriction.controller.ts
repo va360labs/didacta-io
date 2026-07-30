@@ -18,6 +18,7 @@ import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { SessionClaims } from '../auth/token.service';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
+import { DossierService } from './dossier.service';
 import { ALL_SCOPES } from './restriction-scopes';
 import { RestrictionService } from './restriction.service';
 
@@ -110,6 +111,29 @@ export class RestrictionController {
       dto.liftReason ?? null,
       extractClientContext(req),
     );
+  }
+}
+
+/** Expediente completo del usuario. Solo admin, y cada consulta queda auditada. */
+@ApiTags('Admin · Moderación')
+@ApiBearerAuth()
+@Controller('admin/users/:userId/dossier')
+@UseGuards(JwtAuthGuard)
+export class DossierController {
+  constructor(private readonly service: DossierService) {}
+
+  @Get()
+  @ApiOperation({
+    summary:
+      'Expediente del usuario: identidad, compras, suscripción, formación, actividad, mensajes, gamificación, acceso y sanciones.',
+  })
+  async get(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('userId') userId: string,
+  ) {
+    const u = requireAdmin(user);
+    return this.service.get(u.tenantId, u.sub, userId, extractClientContext(req));
   }
 }
 

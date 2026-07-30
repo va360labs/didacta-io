@@ -1,23 +1,35 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog } from '@/components/ui/dialog';
 import { CommunityAvatar } from '@/components/community-avatar';
 import { ThreadCard } from '@/components/community-thread-card';
 import { PostDetailView } from '@/components/post-detail-view';
+import { useCanModerate } from '@/components/restriction-shield';
+import { UserDossierPanel } from '@/components/user-dossier';
 import { authStorage } from '@/lib/auth-storage';
 import { fetchPublicProfile, type PublicProfile } from '@/lib/public-users';
 import { communityApi, useCommunityTags, type Post } from '@/modules/community';
 
 /**
- * Perfil público de un usuario del tenant (`/u/[id]`). Se llega pulsando el
- * nombre/avatar de un autor en la comunidad. Muestra los datos públicos
- * (avatar, nombre, cargo, departamento, ubicación, bio) + sus publicaciones.
- * Solo lectura; respeta el tenant (el backend filtra).
+ * Ficha de un usuario del tenant (`/u/[id]`). Se llega pulsando su nombre desde
+ * cualquier sección.
+ *
+ * Un miembro ve el perfil público: avatar, nombre, cargo, bio y publicaciones.
+ * Un admin ve además el expediente completo (compras, suscripción, formación,
+ * actividad, mensajes, acceso y sanciones).
+ *
+ * Es UNA sola ruta a propósito: `/admin/usuarios/[id]` redirige aquí. La regla
+ * del proyecto prohíbe dos caminos al mismo destino, y con «pulsar un nombre
+ * desde cualquier sección» tener dos fichas distintas era garantía de acabar
+ * en la equivocada.
  */
 export default function PublicProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const searchParams = useSearchParams();
+  const canModerate = useCanModerate(id);
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
@@ -109,6 +121,9 @@ export default function PublicProfilePage({ params }: { params: Promise<{ id: st
           </div>
         </CardContent>
       </Card>
+
+      {/* Expediente: solo para admins. El backend revalida y audita cada consulta. */}
+      {canModerate ? <UserDossierPanel userId={id} initialTab={searchParams.get('tab')} /> : null}
 
       {/* Publicaciones del usuario */}
       <div>
