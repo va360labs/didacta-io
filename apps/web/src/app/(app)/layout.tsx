@@ -360,6 +360,9 @@ const SECTION_TITLE_EXTRAS: ReadonlyArray<{ href: string; label: string }> = [
   { href: '/cuenta', label: 'Mi perfil' },
   // /grupos ya no tiene item en el sidebar (bloque 9) pero la ruta sigue viva.
   { href: '/grupos', label: 'Grupos' },
+  // Ídem /rutas: item del alumno retirado del menú, la página sigue accesible
+  // por URL y desde el detalle de una ruta.
+  { href: '/rutas', label: 'Rutas de aprendizaje' },
 ];
 
 /**
@@ -415,9 +418,11 @@ function buildGroups({
   const aprendizaje: SidebarGroup = {
     label: 'Aprendizaje',
     icon: 'book',
+    // "Rutas de aprendizaje" se ocultó del menú por ahora (mismo criterio que
+    // /grupos en el bloque 9): la ruta /rutas sigue viva y el formador conserva
+    // "Mis rutas", solo desaparece la entrada del alumno.
     items: [
       { href: '/cursos', label: 'Cursos', icon: 'book' },
-      { href: '/rutas', label: 'Rutas de aprendizaje', icon: 'route' },
       { href: '/mis-certificados', label: 'Certificados', icon: 'award' },
     ],
   };
