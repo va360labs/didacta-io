@@ -267,9 +267,12 @@ function ChallengesPanel({ onError }: { onError: (m: string | null) => void }) {
 function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) {
   const [submissions, setSubmissions] = useState<SubmissionView[] | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [soloPendientes, setSoloPendientes] = useState(true);
 
+  // Todas de una vez: revisar una entrega no puede hacerla desaparecer sin
+  // dejar rastro de qué se aprobó y qué se rechazó.
   const reload = useCallback(async () => {
-    setSubmissions(await gamificationAdminApi.listSubmissions('PENDING'));
+    setSubmissions(await gamificationAdminApi.listSubmissions());
   }, []);
 
   useEffect(() => {
@@ -290,21 +293,52 @@ function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) 
     }
   }
 
+  const todas = submissions ?? [];
+  const pendientes = todas.filter((s) => s.status === 'PENDING');
+  const visibles = soloPendientes ? pendientes : todas;
+
   return (
     <div className="mt-4 space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setSoloPendientes(true)}
+          className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+            soloPendientes
+              ? 'border-(--didacta-trust) bg-(--didacta-trust)/10 text-(--didacta-trust)'
+              : 'border-border text-text-muted hover:text-text'
+          }`}
+        >
+          Por revisar{pendientes.length > 0 ? ` (${pendientes.length})` : ''}
+        </button>
+        <button
+          type="button"
+          onClick={() => setSoloPendientes(false)}
+          className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+            !soloPendientes
+              ? 'border-(--didacta-trust) bg-(--didacta-trust)/10 text-(--didacta-trust)'
+              : 'border-border text-text-muted hover:text-text'
+          }`}
+        >
+          Todas{todas.length > 0 ? ` (${todas.length})` : ''}
+        </button>
+      </div>
+
       {submissions === null ? (
         <p className="text-sm text-text-muted">Cargando entregas…</p>
-      ) : submissions.length === 0 ? (
+      ) : visibles.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <p className="font-semibold text-text">No hay entregas pendientes</p>
+            <p className="font-semibold text-text">
+              {soloPendientes ? 'No hay entregas por revisar' : 'Todavía no hay entregas'}
+            </p>
             <p className="mt-1 text-sm text-text-muted">
               Aquí aparecen las entregas en cuanto alguien completa un reto.
             </p>
           </CardContent>
         </Card>
       ) : (
-        submissions.map((s) => (
+        visibles.map((s) => (
           <Card key={s.id}>
             <CardContent className="space-y-3 py-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -314,6 +348,11 @@ function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) 
                     {s.displayName} · {new Date(s.createdAt).toLocaleDateString('es-ES')}
                   </p>
                 </div>
+                {s.status !== 'PENDING' ? (
+                  <Badge variant={s.status === 'APPROVED' ? 'success' : 'muted'}>
+                    {s.status === 'APPROVED' ? 'Aprobada' : 'Rechazada'}
+                  </Badge>
+                ) : null}
                 {s.proofUrl ? (
                   <a
                     href={s.proofUrl}
@@ -334,21 +373,31 @@ function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) 
                 </p>
               ) : null}
 
-              <Textarea
-                rows={2}
-                placeholder="Comentario para quien entrega (opcional)"
-                value={notes[s.id] ?? ''}
-                onChange={(e) => setNotes((prev) => ({ ...prev, [s.id]: e.target.value }))}
-              />
+              {s.reviewNote ? (
+                <p className="whitespace-pre-line text-sm text-text-muted">
+                  <span className="font-medium text-text">Tu comentario:</span> {s.reviewNote}
+                </p>
+              ) : null}
 
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => void review(s, true)}>
-                  Aprobar y dar puntos
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => void review(s, false)}>
-                  Rechazar
-                </Button>
-              </div>
+              {s.status === 'PENDING' ? (
+                <>
+                  <Textarea
+                    rows={2}
+                    placeholder="Comentario para quien entrega (opcional)"
+                    value={notes[s.id] ?? ''}
+                    onChange={(e) => setNotes((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                  />
+
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => void review(s, true)}>
+                      Aprobar y dar puntos
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => void review(s, false)}>
+                      Rechazar
+                    </Button>
+                  </div>
+                </>
+              ) : null}
             </CardContent>
           </Card>
         ))
@@ -712,9 +761,12 @@ function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
 function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void }) {
   const [requests, setRequests] = useState<PerkRequestView[] | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [view, setView] = useState<'PENDING' | 'APPROVED' | 'CLOSED'>('PENDING');
 
+  // Se traen TODAS y se filtran aquí: así los contadores de cada pestaña salen
+  // gratis y ninguna solicitud queda invisible.
   const load = useCallback(async () => {
-    setRequests(await gamificationAdminApi.listPerkRequests('PENDING'));
+    setRequests(await gamificationAdminApi.listPerkRequests());
   }, []);
 
   useEffect(() => {
@@ -735,28 +787,95 @@ function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void })
     }
   }
 
+  const all = requests ?? [];
+  const porAprobar = all.filter((r) => r.status === 'PENDING');
+  const porCumplir = all.filter((r) => r.status === 'APPROVED');
+  const cerradas = all.filter((r) => r.status === 'DONE' || r.status === 'REJECTED');
+  const visible = view === 'PENDING' ? porAprobar : view === 'APPROVED' ? porCumplir : cerradas;
+
+  const TABS: Array<{ key: typeof view; label: string; count: number }> = [
+    { key: 'PENDING', label: 'Por aprobar', count: porAprobar.length },
+    { key: 'APPROVED', label: 'Por cumplir', count: porCumplir.length },
+    { key: 'CLOSED', label: 'Historial', count: cerradas.length },
+  ];
+
+  const EMPTY: Record<typeof view, { title: string; hint: string }> = {
+    PENDING: {
+      title: 'No hay solicitudes por aprobar',
+      hint: 'Aquí caen las peticiones de beneficios en cuanto alguien las manda.',
+    },
+    APPROVED: {
+      title: 'No debes nada',
+      hint: 'Lo que apruebas se queda aquí hasta que lo marcas como hecho.',
+    },
+    CLOSED: {
+      title: 'Todavía no hay historial',
+      hint: 'Aquí quedan las solicitudes ya cumplidas o rechazadas.',
+    },
+  };
+
   return (
     <div className="mt-4 space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setView(t.key)}
+            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+              view === t.key
+                ? 'border-(--didacta-trust) bg-(--didacta-trust)/10 text-(--didacta-trust)'
+                : 'border-border text-text-muted hover:text-text'
+            }`}
+          >
+            {t.label}
+            {t.count > 0 ? ` (${t.count})` : ''}
+          </button>
+        ))}
+      </div>
+
       {requests === null ? (
         <p className="text-sm text-text-muted">Cargando solicitudes…</p>
-      ) : requests.length === 0 ? (
+      ) : visible.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <p className="font-semibold text-text">No hay solicitudes pendientes</p>
-            <p className="mt-1 text-sm text-text-muted">
-              Aquí caen las peticiones de beneficios en cuanto alguien las manda.
-            </p>
+            <p className="font-semibold text-text">{EMPTY[view].title}</p>
+            <p className="mt-1 text-sm text-text-muted">{EMPTY[view].hint}</p>
           </CardContent>
         </Card>
       ) : (
-        requests.map((r) => (
+        visible.map((r) => (
           <Card key={r.id}>
             <CardContent className="space-y-3 py-4">
-              <div>
-                <p className="font-semibold text-text">{r.perkTitle}</p>
-                <p className="text-sm text-text-muted">
-                  {r.displayName} · {new Date(r.createdAt).toLocaleDateString('es-ES')}
-                </p>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-text">{r.perkTitle}</p>
+                  <p className="text-sm text-text-muted">
+                    {r.displayName} · pedida el {new Date(r.createdAt).toLocaleDateString('es-ES')}
+                    {r.handledAt
+                      ? ` · respondida el ${new Date(r.handledAt).toLocaleDateString('es-ES')}`
+                      : ''}
+                  </p>
+                </div>
+                <Badge
+                  variant={
+                    r.status === 'DONE'
+                      ? 'success'
+                      : r.status === 'REJECTED'
+                        ? 'muted'
+                        : r.status === 'APPROVED'
+                          ? 'warning'
+                          : 'info'
+                  }
+                >
+                  {r.status === 'PENDING'
+                    ? 'Por aprobar'
+                    : r.status === 'APPROVED'
+                      ? 'Pendiente de cumplir'
+                      : r.status === 'DONE'
+                        ? 'Hecho'
+                        : 'Rechazada'}
+                </Badge>
               </div>
 
               {r.note ? (
@@ -765,24 +884,39 @@ function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void })
                 </p>
               ) : null}
 
-              <Textarea
-                rows={2}
-                placeholder="Respuesta para el alumno (opcional)"
-                value={notes[r.id] ?? ''}
-                onChange={(e) => setNotes((prev) => ({ ...prev, [r.id]: e.target.value }))}
-              />
+              {r.staffNote ? (
+                <p className="whitespace-pre-line text-sm text-text-muted">
+                  <span className="font-medium text-text">Tu respuesta:</span> {r.staffNote}
+                </p>
+              ) : null}
 
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => void handle(r, 'APPROVED')}>
-                  Aprobar
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => void handle(r, 'DONE')}>
-                  Marcar hecho
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => void handle(r, 'REJECTED')}>
-                  Rechazar
-                </Button>
-              </div>
+              {r.status === 'PENDING' || r.status === 'APPROVED' ? (
+                <>
+                  <Textarea
+                    rows={2}
+                    placeholder="Respuesta para el alumno (opcional)"
+                    value={notes[r.id] ?? ''}
+                    onChange={(e) => setNotes((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    {r.status === 'PENDING' ? (
+                      <Button size="sm" onClick={() => void handle(r, 'APPROVED')}>
+                        Aprobar
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant={r.status === 'APPROVED' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => void handle(r, 'DONE')}
+                    >
+                      Marcar hecho
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => void handle(r, 'REJECTED')}>
+                      Rechazar
+                    </Button>
+                  </div>
+                </>
+              ) : null}
             </CardContent>
           </Card>
         ))
