@@ -3,6 +3,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { LicenseModule } from '@didacta/license-sdk';
 import { AdminModule } from './admin/admin.module';
+import { ModerationModule } from './moderation/moderation.module';
 import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { BrandingModule } from './branding/branding.module';
@@ -81,6 +82,10 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     // Endpoints transversales (proxy a Docker Hub para "versión nueva", etc.).
     SystemModule,
     AdminModule,
+    // Moderación de personas: sanciones que dejan leer pero no aportar.
+    // Registra RestrictionInterceptor como APP_INTERCEPTOR global, así que
+    // cubre también las rutas que no pasan por JwtAuthGuard (community-api).
+    ModerationModule,
     TenancyModule,
     AiModule,
     ModulesModule,

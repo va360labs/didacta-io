@@ -234,6 +234,7 @@ model User {
   apiKeys            ApiKey[]
   roles              UserRole[]
   externalIdentities UserExternalIdentity[]
+  restrictions       UserRestriction[]
 
   @@unique([tenantId, email])
   @@unique([tenantId, documentId], map: "user_tenant_document_id_key")
@@ -248,6 +249,49 @@ enum UserStatus {
   PENDING
   SUSPENDED
   DEACTIVATED
+}
+
+/// Sanción de moderación: el usuario sigue entrando y leyendo, pero no puede
+/// APORTAR contenido en las áreas sancionadas.
+///
+/// Es deliberadamente distinta de `UserStatus.SUSPENDED`, que corta el login
+/// entero. Aquí el caso de uso es el contrario: alguien que paga y consume el
+/// curso pero está haciendo spam en el feed sigue accediendo a lo que compró.
+///
+/// Vive en el CORE y no en un módulo porque una sanción cruza comunidad,
+/// mensajería, recursos y tutor IA a la vez. El enforcement es central
+/// (`RestrictionInterceptor`), así que ningún módulo conoce esta tabla ni
+/// cambia por su existencia.
+///
+/// Append-only en la práctica: levantar una sanción NO borra la fila, sella
+/// `liftedAt`. El histórico completo es lo que hace útil el expediente.
+model UserRestriction {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  userId   String @map("user_id") @db.Uuid
+  /// Áreas sancionadas: 'community' | 'messaging' | 'uploads' | 'ai', o el
+  /// comodín 'all'. Se guarda 'all' literal (y no la lista expandida) para que
+  /// un baneo total cubra también las áreas que se añadan en el futuro.
+  scopes   String[]
+  /// Motivo obligatorio. Se le muestra al sancionado cuando intenta publicar:
+  /// un 403 mudo genera un ticket de soporte, uno con motivo no.
+  reason   String @db.VarChar(500)
+  /// Null = permanente. La expiración es perezosa: no hay cron que limpie,
+  /// la consulta filtra por fecha. Una sanción caducada deja de aplicar sola.
+  expiresAt   DateTime? @map("expires_at")
+  createdById String    @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  liftedAt    DateTime? @map("lifted_at")
+  liftedById  String?   @map("lifted_by_id") @db.Uuid
+  liftReason  String?   @map("lift_reason") @db.VarChar(500)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// El interceptor pega a este índice en cada petición mutante: filtra por
+  /// usuario y descarta las levantadas antes de mirar fechas.
+  @@index([tenantId, userId, liftedAt], map: "user_restriction_tenant_user_active_idx")
+  @@index([tenantId, createdAt], map: "user_restriction_tenant_created_idx")
+  @@map("user_restriction")
 }
 
 /// Identidad federada de un usuario en un proveedor externo (WordPress, etc.).
