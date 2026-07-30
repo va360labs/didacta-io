@@ -17,6 +17,9 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'ai-tutor.chat.write',
     'ai-tutor.index.write',
     'ai-tutor.config.write',
+    // Revisión de respuestas y conocimiento validado.
+    'ai-tutor.review.read',
+    'ai-tutor.review.write',
   ],
   dependencies: {
     modules: [],
@@ -30,6 +33,9 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'ai-tutor.course.index-failed',
     'ai-tutor.chat.message-sent',
     'ai-tutor.chat.message-received',
+    // Revisión humana de las respuestas.
+    'ai-tutor.answer.reviewed',
+    'ai-tutor.answer.corrected',
   ],
   eventsConsumed: [
     'courses.course.published',

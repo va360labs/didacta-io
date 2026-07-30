@@ -2216,10 +2216,60 @@ model ModAiTutorMessage {
   tokensOutput   Int      @default(0) @map("tokens_output")
   createdAt      DateTime @default(now()) @map("created_at")
 
+  /// Embedding de la pregunta (solo role='user'). Ya lo pagamos al responder,
+  /// así que guardarlo es gratis y permite agrupar preguntas parecidas en el
+  /// informe mensual sin volver a llamar al proveedor. Null en los mensajes
+  /// anteriores a esta columna: el informe los embebe la primera vez que se
+  /// pide el mes y los deja guardados.
+  questionEmbedding Unsupported("vector(1536)")? @map("question_embedding")
+
+  /// Revisión humana de la respuesta (solo role='assistant').
+  /// 'PENDING' | 'OK' | 'CORRECTED'. Una respuesta CORRECTED tiene su
+  /// corrección en mod_ai_tutor_correction, que el tutor reinyecta.
+  reviewStatus String    @default("PENDING") @map("review_status")
+  reviewedById String?   @map("reviewed_by_id") @db.Uuid
+  reviewedAt   DateTime? @map("reviewed_at")
+  /// Nota del revisor: por qué estaba mal, qué falta en el material.
+  reviewNote   String?   @map("review_note")
+
   conversation ModAiTutorConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt], map: "mod_ai_tutor_message_conv_created_idx")
+  @@index([tenantId, role, createdAt], map: "mod_ai_tutor_message_tenant_role_created_idx")
+  @@index([tenantId, reviewStatus, createdAt], map: "mod_ai_tutor_message_tenant_review_idx")
   @@map("mod_ai_tutor_message")
+}
+
+/// Respuesta validada por el equipo, con prioridad sobre el material indexado.
+///
+/// Nace cuando un admin revisa una respuesta del tutor y la corrige. Vive en su
+/// propia tabla y NO en `mod_ai_tutor_chunk` a propósito: la reindexación borra
+/// y regenera los chunks del curso, así que una corrección guardada ahí se
+/// perdería en el siguiente `courses.lesson.updated`. Aquí sobrevive, se puede
+/// editar, desactivar y auditar.
+model ModAiTutorCorrection {
+  id              String                      @id @default(uuid()) @db.Uuid
+  tenantId        String                      @map("tenant_id") @db.Uuid
+  /// Curso al que aplica. NULL = vale para cualquier curso del tenant (dudas
+  /// transversales: certificados, cómo funciona el aula, facturación…).
+  courseId        String?                     @map("course_id") @db.Uuid
+  /// Pregunta canónica. Es lo que se embebe y contra lo que se busca.
+  question        String
+  /// Respuesta correcta escrita por una persona. Manda sobre el contexto RAG.
+  answer          String
+  embedding       Unsupported("vector(1536)")
+  /// Mensaje del tutor que la originó, si nació de una revisión.
+  sourceMessageId String?                     @map("source_message_id") @db.Uuid
+  authorId        String                      @map("author_id") @db.Uuid
+  active          Boolean                     @default(true)
+  /// Veces que se ha inyectado en un prompt. Dice cuáles están pagando.
+  timesUsed       Int                         @default(0) @map("times_used")
+  createdAt       DateTime                    @default(now()) @map("created_at")
+  updatedAt       DateTime                    @updatedAt @map("updated_at")
+
+  @@index([tenantId, courseId], map: "mod_ai_tutor_correction_tenant_course_idx")
+  @@index([tenantId, active], map: "mod_ai_tutor_correction_tenant_active_idx")
+  @@map("mod_ai_tutor_correction")
 }
 
 model ModAiTutorTokenUsage {
@@ -2231,6 +2281,9 @@ model ModAiTutorTokenUsage {
   day          DateTime @db.Date
   tokensInput  Int      @default(0) @map("tokens_input")
   tokensOutput Int      @default(0) @map("tokens_output")
+  /// Preguntas hechas ese día. Es la unidad de cuota de cara al alumno —
+  /// «te quedan 3 preguntas hoy» se entiende; «te quedan 4.200 tokens» no.
+  questions    Int      @default(0)
   /// Coste estimado en céntimos de USD según pricing del provider al momento.
   costCents    Int      @default(0) @map("cost_cents")
   createdAt    DateTime @default(now()) @map("created_at")

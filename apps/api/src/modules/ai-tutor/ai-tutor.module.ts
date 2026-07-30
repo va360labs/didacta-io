@@ -3,6 +3,7 @@ import { APP_FILTER } from '@nestjs/core';
 import { AuthModule } from '../../auth/auth.module';
 import { ModulesModule } from '../modules.module';
 import { AiTutorController } from './ai-tutor.controller';
+import { AiTutorReviewController } from './ai-tutor-review.controller';
 import { AiTutorErrorFilter } from './ai-tutor-error.filter';
 import { AiTutorBridge } from './ai-tutor.bridge';
 
@@ -14,7 +15,7 @@ import { AiTutorBridge } from './ai-tutor.bridge';
 /// Convención sub-módulo (ADR-011): forwardRef recíproco con ModulesModule.
 @Module({
   imports: [AuthModule, forwardRef(() => ModulesModule)],
-  controllers: [AiTutorController],
+  controllers: [AiTutorController, AiTutorReviewController],
   providers: [AiTutorBridge, { provide: APP_FILTER, useClass: AiTutorErrorFilter }],
 })
 export class AiTutorModule {}

@@ -26,6 +26,13 @@ interface FakeChunkRow {
   distance: number;
 }
 
+interface FakeCorrectionRow {
+  id: string;
+  question: string;
+  answer: string;
+  distance: number;
+}
+
 function makeFakePrisma(opts: {
   chunkCount: number;
   retrieved?: FakeChunkRow[];
@@ -38,9 +45,12 @@ function makeFakePrisma(opts: {
   tokenUsageExisting?: { id: string; questions?: number } | null;
   /** Matrícula del alumno. Por defecto existe: los tests viejos asumen acceso. */
   enrollment?: { id: string } | null;
+  /** Respuestas ya validadas por el equipo que devuelve la búsqueda vectorial. */
+  correcciones?: FakeCorrectionRow[];
 }) {
   const created: Array<{ table: string; data: unknown }> = [];
   const updated: Array<{ table: string; id: string; data: unknown }> = [];
+  const ejecutados: Array<{ sql: string; params: unknown[] }> = [];
   return {
     created,
     updated,
@@ -87,7 +97,18 @@ function makeFakePrisma(opts: {
     user: {
       findFirst: vi.fn(async () => opts.user ?? null),
     },
-    $queryRawUnsafe: vi.fn(async () => opts.retrieved ?? []),
+    // El service lanza dos búsquedas vectoriales distintas contra el mismo
+    // método: los fragmentos del curso y las correcciones del equipo. Se
+    // distinguen por la tabla, no por el orden de llamada — si no, añadir una
+    // query nueva desplaza silenciosamente las respuestas de todas las demás.
+    $queryRawUnsafe: vi.fn(async (sql: string) =>
+      sql.includes('mod_ai_tutor_correction') ? (opts.correcciones ?? []) : (opts.retrieved ?? []),
+    ),
+    $executeRawUnsafe: vi.fn(async (sql: string, ...params: unknown[]) => {
+      ejecutados.push({ sql, params });
+      return 1;
+    }),
+    ejecutados,
     $transaction: vi.fn(async (queries: Promise<unknown>[]) => Promise.all(queries)),
   } as never;
 }
@@ -467,8 +488,12 @@ describe('AiTutorChatService.ask · acceso y cuota', () => {
       lessonId: 'l1',
       positionSeconds: 754,
     });
-    // Dos búsquedas: el curso entero y la lección que está viendo.
-    expect((prisma.$queryRawUnsafe as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+    // Dos búsquedas sobre los fragmentos: el curso entero y la lección que
+    // está viendo. La tercera llamada es la de correcciones, que va aparte.
+    const sqls = (prisma.$queryRawUnsafe as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0] as string,
+    );
+    expect(sqls.filter((s) => s.includes('mod_ai_tutor_chunk'))).toHaveLength(2);
     const system = (chatSpy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0].system;
     expect(system).toContain('Webhooks en n8n');
     expect(system).toContain('12:34');
@@ -482,5 +507,98 @@ describe('AiTutorChatService.ask · acceso y cuota', () => {
     const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat('Mira [1].'));
     const r = await svc.ask('t1', 'u1', 'c1', { question: 'webhook?' });
     expect(r.citations[0]!.startSeconds).toBe(754);
+  });
+});
+
+/**
+ * Lo que corrige un admin tiene que llegar al prompt de la siguiente pregunta.
+ * Si no, la pantalla de revisión es un cementerio de notas y el tutor sigue
+ * equivocándose exactamente igual.
+ */
+describe('AiTutorChatService.ask · conocimiento validado', () => {
+  const base = {
+    chunkCount: 5,
+    retrieved: sampleRetrieved,
+    course: { title: 'n8n' },
+    user: { locale: 'es' },
+    hydrationLessons: [{ id: 'l1', title: 'Webhooks' }],
+    hydrationChunks: [{ id: 'chunk-1', content: 'texto' }],
+  };
+
+  it('mete la corrección en el system prompt y avisa de que manda sobre el contexto', async () => {
+    const prisma = makeFakePrisma({
+      ...base,
+      correcciones: [
+        {
+          id: 'corr-1',
+          question: '¿cómo descargo la factura?',
+          answer: 'Desde /cuenta → Facturación, botón Descargar.',
+          distance: 0.12,
+        },
+      ],
+    });
+    const chatSpy: ChatFn = vi.fn(async () => ({
+      content: 'ok',
+      inputTokens: 1,
+      outputTokens: 1,
+    }));
+    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), chatSpy);
+    await svc.ask('t1', 'u1', 'c1', { question: 'dónde saco la factura' });
+
+    const system = (chatSpy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0].system;
+    expect(system).toContain('RESPUESTAS YA VALIDADAS POR EL EQUIPO');
+    expect(system).toContain('/cuenta → Facturación');
+    expect(system).toContain('tienen prioridad sobre el CONTEXTO');
+  });
+
+  it('descarta la corrección que no viene a cuento', async () => {
+    // 0.9 de distancia coseno es otra duda distinta. Colarla sería peor que no
+    // tener correcciones: manda sobre el material y desviaría la respuesta.
+    const prisma = makeFakePrisma({
+      ...base,
+      correcciones: [
+        {
+          id: 'corr-lejana',
+          question: 'algo de facturación',
+          answer: 'nada que ver',
+          distance: 0.9,
+        },
+      ],
+    });
+    const chatSpy: ChatFn = vi.fn(async () => ({
+      content: 'ok',
+      inputTokens: 1,
+      outputTokens: 1,
+    }));
+    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), chatSpy);
+    await svc.ask('t1', 'u1', 'c1', { question: 'qué es un webhook' });
+
+    const system = (chatSpy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0].system;
+    expect(system).not.toContain('RESPUESTAS YA VALIDADAS');
+  });
+
+  it('guarda el embedding de la pregunta y suma un uso a la corrección aplicada', async () => {
+    const prisma = makeFakePrisma({
+      ...base,
+      correcciones: [{ id: 'corr-1', question: 'p', answer: 'r', distance: 0.1 }],
+    });
+    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat('ok'));
+    await svc.ask('t1', 'u1', 'c1', { question: 'una duda' });
+
+    const sqls = prisma.ejecutados.map((e) => e.sql);
+    expect(sqls.some((s) => s.includes('"question_embedding" = $1::vector'))).toBe(true);
+    expect(sqls.some((s) => s.includes('"times_used" = "times_used" + 1'))).toBe(true);
+  });
+
+  it('si la tabla de correcciones falla, el alumno recibe su respuesta igual', async () => {
+    const prisma = makeFakePrisma(base);
+    // Simula una base sin migrar: la query de correcciones revienta.
+    (prisma.$queryRawUnsafe as ReturnType<typeof vi.fn>).mockImplementation(async (sql: string) => {
+      if (sql.includes('mod_ai_tutor_correction')) throw new Error('relation does not exist');
+      return sampleRetrieved;
+    });
+    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat('Mira [1].'));
+    const r = await svc.ask('t1', 'u1', 'c1', { question: 'q' });
+    expect(r.answer).toContain('[1]');
   });
 });

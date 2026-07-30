@@ -87,7 +87,12 @@ import {
 } from '@didacta/mod-learning';
 import { themingModule, ThemingService } from '@didacta/mod-theming';
 import { zoomLiveModule, ZoomLiveService } from '@didacta/mod-zoom-live';
-import { aiTutorModule, AiTutorChatService, AiTutorIndexerService } from '@didacta/mod-ai-tutor';
+import {
+  aiTutorModule,
+  AiTutorChatService,
+  AiTutorIndexerService,
+  AiTutorReviewService,
+} from '@didacta/mod-ai-tutor';
 import {
   aiGraderModule,
   AiGraderRubricService,
@@ -120,6 +125,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private scorm?: ScormService;
   private aiTutorIndexer?: AiTutorIndexerService;
   private aiTutorChat?: AiTutorChatService;
+  private aiTutorReview?: AiTutorReviewService;
   private aiGraderRubric?: AiGraderRubricService;
   private aiGraderSuggestion?: AiGraderSuggestionService;
   private aiContent?: AiContentService;
@@ -193,6 +199,9 @@ export class ModuleRegistryService implements OnModuleInit {
         outputTokens: result.usage.outputTokens,
       };
     });
+    // Revisión humana del tutor: reutiliza el mismo embedFn porque las
+    // correcciones se buscan contra el mismo espacio vectorial que los chunks.
+    this.aiTutorReview = new AiTutorReviewService(prisma, context, embedFn);
 
     // mod.ai-grader: rúbrica + sugerencias IA con human-in-the-loop.
     // chatFn delega al AI Gateway con resolución de provider per-tenant.
@@ -871,6 +880,11 @@ export class ModuleRegistryService implements OnModuleInit {
   getAiTutorChatService(): AiTutorChatService {
     if (!this.aiTutorChat) throw new Error('ModuleRegistry no está inicializado');
     return this.aiTutorChat;
+  }
+
+  getAiTutorReviewService(): AiTutorReviewService {
+    if (!this.aiTutorReview) throw new Error('ModuleRegistry no está inicializado');
+    return this.aiTutorReview;
   }
 
   getAiGraderRubricService(): AiGraderRubricService {

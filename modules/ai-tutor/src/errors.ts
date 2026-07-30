@@ -64,6 +64,22 @@ export class TokenQuotaExceededError extends AiTutorError {
   }
 }
 
+/** El admin intenta revisar una respuesta que no existe (o es de otro tenant). */
+export class MessageNotFoundError extends AiTutorError {
+  constructor(messageId: string) {
+    super(
+      'AI_TUTOR_MESSAGE_NOT_FOUND',
+      `No existe la respuesta ${messageId} del tutor en este tenant.`,
+    );
+  }
+}
+
+export class CorrectionNotFoundError extends AiTutorError {
+  constructor(correctionId: string) {
+    super('AI_TUTOR_CORRECTION_NOT_FOUND', `No existe la corrección ${correctionId}.`);
+  }
+}
+
 export class EmbeddingsProviderError extends AiTutorError {
   constructor(provider: string, reason: string) {
     super('AI_TUTOR_EMBEDDINGS_PROVIDER_ERROR', `Provider ${provider} falló: ${reason}`);

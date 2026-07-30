@@ -17,6 +17,7 @@ import {
   type LessonContext,
   type PriorMessage,
   type RetrievedChunk,
+  type ValidatedAnswer,
 } from './prompt-builder.js';
 
 /**
@@ -84,6 +85,24 @@ interface MessageRow {
 
 const DEFAULT_TOP_K = 5;
 const HISTORY_TOKEN_BUDGET = 3000;
+
+/**
+ * Cuántas respuestas ya validadas por el equipo se pueden inyectar en un
+ * prompt. Más de dos y el modelo empieza a mezclarlas; con dos cubre la duda y
+ * su variante más cercana.
+ */
+const CORRECTIONS_TOP_K = 2;
+
+/**
+ * Distancia coseno máxima para que una corrección se considere pertinente.
+ *
+ * Con `text-embedding-3-small`, la misma duda escrita de otra forma queda por
+ * debajo de 0.30 y una duda distinta del mismo tema ronda 0.50-0.70. 0.45 deja
+ * pasar las reformulaciones sin que una corrección sobre facturación se cuele
+ * en una pregunta sobre webhooks — que es el fallo caro, porque la corrección
+ * manda sobre el material del curso.
+ */
+const CORRECTION_MAX_DISTANCE = 0.45;
 
 /**
  * Preguntas al tutor por alumno y día. La unidad es la pregunta, no el token:
@@ -219,9 +238,10 @@ export class AiTutorChatService {
         ...[embeddingStr, tenantId, courseId, limit, ...(lessonId ? [lessonId] : [])],
       ) as Promise<ChunkRetrievalRow[]>;
 
-    const [delCurso, deLaLeccion] = await Promise.all([
+    const [delCurso, deLaLeccion, validated] = await Promise.all([
       buscar(null, topK),
       dto.lessonId ? buscar(dto.lessonId, LESSON_PINNED) : Promise.resolve([]),
+      this.buscarCorrecciones(tenantId, courseId, embeddingStr),
     ]);
 
     // Los de la lección actual van primero (son los que el alumno tiene
@@ -268,6 +288,7 @@ export class AiTutorChatService {
       history: historyTrimmed,
       question: dto.question,
       lessonContext,
+      validated,
     });
 
     // 7. Llamada chat
@@ -325,6 +346,13 @@ export class AiTutorChatService {
       }),
     ]);
 
+    // 9.b Guardar el embedding de la pregunta y apuntar qué correcciones se
+    //     usaron. Va fuera de la transacción y con el error tragado a
+    //     propósito: son datos para el informe y las estadísticas del admin,
+    //     nunca una razón para que el alumno se quede sin respuesta que ya
+    //     está pagada y generada.
+    await this.registrarParaRevision(tenantId, userMsgId, embeddingStr, validated);
+
     // 10. Actualizar consumo agregado del día (tokens y preguntas)
     await this.bumpTokenUsage({
       tenantId,
@@ -360,6 +388,85 @@ export class AiTutorChatService {
         remaining: Math.max(0, DAILY_QUESTION_LIMIT - usadas),
       },
     };
+  }
+
+  /**
+   * Correcciones del equipo pertinentes para la pregunta.
+   *
+   * Busca por similitud igual que los chunks, pero sobre
+   * `mod_ai_tutor_correction`, incluyendo las de alcance global
+   * (`course_id IS NULL`) para dudas transversales — certificados, facturación,
+   * cómo va el aula — que no son de ningún curso en concreto.
+   *
+   * Si la tabla no existe todavía (tenant sin migrar) o la query falla,
+   * devuelve lista vacía: el tutor sigue respondiendo como antes.
+   */
+  private async buscarCorrecciones(
+    tenantId: string,
+    courseId: string,
+    embeddingStr: string,
+  ): Promise<ValidatedAnswer[]> {
+    try {
+      const rows = (await this.prisma.$queryRawUnsafe(
+        `SELECT
+           "id"::text AS "id",
+           "question",
+           "answer",
+           ("embedding" <=> $1::vector)::float AS "distance"
+         FROM "mod_ai_tutor_correction"
+         WHERE "tenant_id" = $2::uuid
+           AND "active" = true
+           AND ("course_id" = $3::uuid OR "course_id" IS NULL)
+         ORDER BY "embedding" <=> $1::vector
+         LIMIT $4`,
+        embeddingStr,
+        tenantId,
+        courseId,
+        CORRECTIONS_TOP_K,
+      )) as ValidatedAnswer[];
+      return rows.filter((r) => r.distance <= CORRECTION_MAX_DISTANCE);
+    } catch (err) {
+      this.ctx.logger.warn('mod.ai-tutor: no se pudieron leer las correcciones', {
+        tenantId,
+        courseId,
+        reason: err instanceof Error ? err.message : String(err),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Deja la pregunta lista para el panel de revisión: guarda su embedding (ya
+   * lo hemos pagado al buscar) y suma un uso a cada corrección inyectada, que
+   * es lo que luego dice cuáles están sirviendo de algo.
+   */
+  private async registrarParaRevision(
+    tenantId: string,
+    userMsgId: string,
+    embeddingStr: string,
+    validated: ValidatedAnswer[],
+  ): Promise<void> {
+    try {
+      await this.prisma.$executeRawUnsafe(
+        `UPDATE "mod_ai_tutor_message" SET "question_embedding" = $1::vector WHERE "id" = $2::uuid`,
+        embeddingStr,
+        userMsgId,
+      );
+      if (validated.length > 0) {
+        await this.prisma.$executeRawUnsafe(
+          `UPDATE "mod_ai_tutor_correction"
+           SET "times_used" = "times_used" + 1
+           WHERE "tenant_id" = $1::uuid AND "id" = ANY($2::uuid[])`,
+          tenantId,
+          validated.map((v) => v.id),
+        );
+      }
+    } catch (err) {
+      this.ctx.logger.warn('mod.ai-tutor: no se pudo registrar la pregunta para revisión', {
+        tenantId,
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   /**

@@ -44,6 +44,20 @@ export interface PriorMessage {
   content: string;
 }
 
+/**
+ * Respuesta que una persona del equipo ya ha dado por buena para una pregunta
+ * parecida (`mod_ai_tutor_correction`). Va al prompt por encima del material
+ * indexado: si alguien se molestó en corregir al tutor, esa corrección gana al
+ * contenido del curso, que muchas veces es justo lo que estaba desfasado.
+ */
+export interface ValidatedAnswer {
+  id: string;
+  question: string;
+  answer: string;
+  /** Distancia coseno con la pregunta del alumno. Menor = más pertinente. */
+  distance: number;
+}
+
 export interface BuildPromptInput {
   /** Título del curso, va al system prompt para contexto. */
   courseTitle: string;
@@ -57,6 +71,8 @@ export interface BuildPromptInput {
   question: string;
   /** Lección que está viendo, si la superficie la conoce. */
   lessonContext?: LessonContext | null;
+  /** Correcciones del equipo pertinentes para esta pregunta. */
+  validated?: ValidatedAnswer[];
 }
 
 export interface BuiltPrompt {
@@ -89,7 +105,9 @@ export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
     'C. Si la pregunta es puramente localizadora ("dónde está ese botón", "cómo se llamaba el nodo", "en qué clase se ve esto"), responde y calla. Ahí guiar sólo molesta.',
     'D. Si el alumno ya te ha dicho que está perdido o frustrado, baja el nivel: pasos numerados, sin preguntas de vuelta.',
     '',
+    formatValidated(input.validated),
     'REGLAS DURAS:',
+    '0. Si alguna RESPUESTA VALIDADA de arriba cubre lo que te preguntan, respóndela con ESE contenido aunque el CONTEXTO diga otra cosa: la ha escrito una persona del equipo y es la versión buena. No menciones que es una corrección ni la cites con [N].',
     '1. Responde SOLO con información del CONTEXTO de abajo.',
     '2. Si la respuesta no está en el contexto, dilo claramente ("esto no lo veo en el material del curso") y ofrece escribir al formador. No rellenes con conocimiento general.',
     '3. NUNCA inventes datos, cifras, normativa, precios, nombres de nodos ni pasos que no aparezcan en el contexto.',
@@ -161,6 +179,23 @@ export function formatMmSs(total: number): string {
   const sec = s % 60;
   const dos = (n: number) => String(n).padStart(2, '0');
   return h > 0 ? `${h}:${dos(m)}:${dos(sec)}` : `${m}:${dos(sec)}`;
+}
+
+/**
+ * Bloque de correcciones. Sin correcciones devuelve cadena vacía y el prompt
+ * queda exactamente como antes — el tutor de un tenant que nunca ha corregido
+ * nada no paga ni un token por esta función.
+ */
+function formatValidated(validated: ValidatedAnswer[] | undefined): string {
+  if (!validated || validated.length === 0) return '';
+  const lista = validated
+    .map((v) => `- P: ${v.question.trim()}\n  R: ${v.answer.trim()}`)
+    .join('\n');
+  return [
+    'RESPUESTAS YA VALIDADAS POR EL EQUIPO (tienen prioridad sobre el CONTEXTO):',
+    lista,
+    '',
+  ].join('\n');
 }
 
 function formatRetrievedChunks(chunks: RetrievedChunk[]): string {
