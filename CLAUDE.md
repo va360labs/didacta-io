@@ -49,9 +49,20 @@ pnpm exec playwright test --config apps/e2e/playwright.config.ts apps/e2e/tests/
 **Antes de crear una página o sección nueva, verificar que no exista ya:**
 
 - Buscar en `apps/web/src/app/(app)/` si hay una ruta con el mismo propósito.
-- Buscar en `buildGroups()` del layout si ya hay un item del sidebar que apunte a contenido equivalente.
+- Buscar en `buildGroups()` / `buildAdminGroups()` de `apps/web/src/lib/sidebar-nav.ts` si ya hay un item del sidebar que apunte a contenido equivalente.
 - Si existe: reutilizar o consolidar, nunca crear un segundo camino al mismo destino.
 - Histórico: `/inicio` (feed hardcodeado del rediseño) duplicaba `/comunidad` (feed real). Resultado: confusión + datos de cartón visibles en producción.
+
+### 6. Nunca `git commit` sin ruta
+
+**El árbol de trabajo se comparte entre sesiones. `git commit` sin pathspec se lleva TODO lo que haya en el índice, incluido lo que esté preparando otra persona.**
+
+- Commitear SIEMPRE acotado: `git commit <ruta> [<ruta>…] -m "…"`. Nunca `git add -A && git commit`, ni `git commit -a`, ni `git commit` a secas.
+- Antes de commitear, mirar `git status`: si aparecen ficheros que no son tuyos, no son tuyos. No los incluyas ni los revierta nadie por su cuenta.
+- Antes de `git merge`, `git checkout <rama>` o `git clean` en el árbol compartido: comprobar que lo que vas a pisar está commiteado en alguna rama (`git log --all -- <fichero>`). Si no lo está, respaldarlo primero (`git add -A && git commit` en una rama `wip/…` y `git reset --mixed` para devolver el árbol a como estaba).
+- Un deploy sube el **working tree** vía rsync, no lo que haya en git: un árbol sucio de otra sesión se despliega con lo tuyo. Desplegar SIEMPRE desde el worktree limpio (`didacta-prod-deploy`).
+- Lo sano: un worktree por sesión (`git worktree add ../didacta-<tarea> -b feat/<tarea>`).
+- Histórico (2026-07-30): un `git commit` sin ruta arrastró 5 `git mv` que otra sesión tenía en el índice — movían `/admin/sso`, `/admin/sso-saml`, `/admin/sso-wordpress` y `/admin/zoom/webhook-events` a componentes, sin su página contenedora. Las 4 rutas se quedaron **en 404** y el commit llegó a `main`. Lo cazó `no-orphan-routes.test.ts` justo antes de desplegar. Ese mismo día, al revés: una revisión del árbol compartido estuvo a punto de descartar ~1.950 líneas de otra sesión que no estaban en ninguna rama.
 
 ---
 
