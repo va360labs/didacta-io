@@ -143,6 +143,29 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
     body: 'La clase "{{lessonTitle}}" del curso "{{courseTitle}}" ya está disponible.',
   },
   // Programa de referidos (mod.referrals): comisión devengada y liquidación.
+  // Puntos y retos (mod.gamification). Sin estos avisos el alumno no se entera
+  // de que le han revisado la entrega ni de que ha subido de nivel: el esfuerzo
+  // cae en el vacío y el sistema deja de ser un bucle.
+  'gamification.level.reached': {
+    subject: 'Has llegado a {{levelName}}',
+    body: 'Enhorabuena: acabas de alcanzar el nivel {{levelName}} en {{tenantName}}.\n\nMira lo que desbloquea en la sección de Retos.',
+  },
+  'gamification.challenge.approved': {
+    subject: 'Reto superado: {{title}}',
+    body: 'Hemos revisado tu entrega de "{{title}}" y está aprobada: {{points}} puntos para ti.{{#reviewNote}}\n\nComentario del equipo: {{reviewNote}}{{/reviewNote}}\n\nGracias por documentarlo y compartirlo.',
+  },
+  'gamification.challenge.rejected': {
+    subject: 'Tu entrega de "{{title}}" necesita un repaso',
+    body: 'Hemos revisado tu entrega de "{{title}}" y todavía no la damos por buena.{{#reviewNote}}\n\nQué falta: {{reviewNote}}{{/reviewNote}}\n\nSi lo ajustas y quieres otra oportunidad, escríbenos.',
+  },
+  'gamification.staff.pending': {
+    subject: 'Tienes algo que revisar',
+    body: '{{message}}\n\nLo tienes en Gestión → Puntos y retos.',
+  },
+  'gamification.perk.handled': {
+    subject: 'Sobre tu solicitud: {{perkTitle}}',
+    body: '{{statusText}}{{#staffNote}}\n\n{{staffNote}}{{/staffNote}}',
+  },
   'referrals.commission.earned': {
     subject: '¡Has ganado una comisión de {{amount}}!',
     body: 'Tu recomendación ha dado fruto: has ganado {{amount}} por el pago de {{baseAmount}} de una persona que entró con tu enlace.\n\nLa comisión queda pendiente durante el periodo de garantía; puedes seguirla en tu área de Referidos.',
@@ -326,6 +349,62 @@ const HUB_TEMPLATE_META: Record<
     variables: [
       { name: 'lessonTitle', description: 'Título de la clase' },
       { name: 'courseTitle', description: 'Título del curso' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'gamification.level.reached': {
+    name: 'Nuevo nivel alcanzado',
+    description: 'Cuando un miembro cruza los puntos de un nivel.',
+    category: 'community',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'levelName', description: 'Nombre del nivel alcanzado' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'gamification.challenge.approved': {
+    name: 'Reto aprobado',
+    description: 'Cuando el equipo aprueba la entrega de un reto y acredita los puntos.',
+    category: 'community',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'title', description: 'Título del reto' },
+      { name: 'points', description: 'Puntos concedidos' },
+      { name: 'reviewNote', description: 'Comentario del equipo (puede ir vacío)' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'gamification.challenge.rejected': {
+    name: 'Reto no aprobado',
+    description: 'Cuando el equipo rechaza la entrega de un reto.',
+    category: 'community',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'title', description: 'Título del reto' },
+      { name: 'reviewNote', description: 'Motivo o qué falta (puede ir vacío)' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'gamification.staff.pending': {
+    name: 'Aviso al equipo: algo pendiente de revisar',
+    description:
+      'Cuando llega una entrega de reto o una solicitud de beneficio. Solo dentro de la plataforma.',
+    category: 'community',
+    channels: ['IN_APP'],
+    variables: [
+      { name: 'message', description: 'Qué ha llegado' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'gamification.perk.handled': {
+    name: 'Solicitud de beneficio atendida',
+    description: 'Cuando el equipo aprueba, completa o rechaza la petición de un beneficio.',
+    category: 'community',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'perkTitle', description: 'Beneficio solicitado' },
+      { name: 'statusText', description: 'Frase según el resultado (aprobada, hecha o rechazada)' },
+      { name: 'staffNote', description: 'Respuesta del equipo (puede ir vacío)' },
       { name: 'tenantName', description: 'Nombre de la plataforma' },
     ],
   },

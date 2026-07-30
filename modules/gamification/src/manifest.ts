@@ -31,6 +31,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'gamification.challenge.submitted',
     'gamification.challenge.reviewed',
     'gamification.perk.requested',
+    'gamification.perk.handled',
   ],
   eventsConsumed: [
     'community.post.created',

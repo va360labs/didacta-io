@@ -287,6 +287,16 @@ class MockPrisma {
       }),
       [],
     ),
+    findFirst: async ({ where, include }: never) => {
+      const row = this.perkRequests.find((r) => matches(r, where as Row));
+      if (!row) return null;
+      const out: Row = { ...row };
+      if ((include as Row | undefined)?.['perk']) {
+        const perk = this.perks.find((p) => p['id'] === row['perkId']);
+        out['perk'] = { title: perk?.['title'] };
+      }
+      return out;
+    },
     findMany: async ({ where, include }: never) => {
       const found = this.perkRequests.filter((r) => matches(r, where as Row));
       return found
@@ -640,9 +650,11 @@ describe('niveles', () => {
       sourceKey: 'p2',
     });
 
-    expect(second.levelChange).toEqual({ from: 'bronce', to: 'plata' });
+    expect(second.levelChange).toEqual({ from: 'bronce', to: 'plata', toName: 'Plata' });
     const changes = events.filter((e) => e.name === 'gamification.level.changed');
     expect(changes).toHaveLength(2);
+    // El nombre tiene que viajar en el evento o el aviso al alumno sale vacío.
+    expect(changes[1]!.payload['levelName']).toBe('Plata');
   });
 
   it('sin niveles definidos nadie tiene nivel', async () => {
@@ -844,6 +856,36 @@ describe('beneficios de nivel', () => {
 
     const second = await service.requestPerk({ tenantId: TENANT, userId: USER, perkId: perk.id });
     expect(second.status).toBe('PENDING');
+  });
+
+  it('atender la solicitud emite el evento con el que se avisa al alumno', async () => {
+    const { service, level, events } = await setup();
+    const perk = await service.createPerk({
+      tenantId: TENANT,
+      levelId: level.id,
+      title: 'Sesión 1:1',
+    });
+    await service.award({
+      tenantId: TENANT,
+      userId: USER,
+      ruleKey: 'learning.course',
+      sourceKey: 'c1',
+    });
+    const request = await service.requestPerk({ tenantId: TENANT, userId: USER, perkId: perk.id });
+    await service.handlePerkRequest({
+      tenantId: TENANT,
+      requestId: request.id,
+      handledById: 'admin',
+      status: 'APPROVED',
+      staffNote: 'Te escribo para cuadrar hora.',
+    });
+
+    const handled = events.find((e) => e.name === 'gamification.perk.handled');
+    expect(handled).toBeTruthy();
+    // El aviso necesita el título y el estado: sin ellos diría una clave técnica.
+    expect(handled!.payload['perkTitle']).toBe('Sesión 1:1');
+    expect(handled!.payload['status']).toBe('APPROVED');
+    expect(handled!.payload['userId']).toBe(USER);
   });
 
   it('atender dos veces la misma solicitud falla', async () => {

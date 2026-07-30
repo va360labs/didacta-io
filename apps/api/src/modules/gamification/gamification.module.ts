@@ -5,6 +5,7 @@ import { ModulesModule } from '../modules.module';
 import { GamificationController } from './gamification.controller';
 import { GamificationErrorFilter } from './gamification-error.filter';
 import { GamificationEventsBridge } from './gamification-events.bridge';
+import { GamificationNotificationsBridge } from './gamification-notifications.bridge';
 import { GamificationBackfillService } from './gamification-backfill.service';
 
 /// Backend del módulo `mod.gamification` (bloque 1 — puntos, niveles y retos).
@@ -14,6 +15,7 @@ import { GamificationBackfillService } from './gamification-backfill.service';
   controllers: [GamificationController],
   providers: [
     GamificationEventsBridge,
+    GamificationNotificationsBridge,
     GamificationBackfillService,
     { provide: APP_FILTER, useClass: GamificationErrorFilter },
   ],
