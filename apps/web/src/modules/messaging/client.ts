@@ -24,11 +24,19 @@ export interface ConversationView {
   lastMessage: {
     body: string;
     kind: string;
+    /** Autor del último mensaje: con él la píldora resuelve su avatar real. */
+    authorId: string;
     authorDisplayName: string | null;
     createdAt: string;
   } | null;
   lastMessageAt: string | null;
   unreadCount: number;
+}
+
+/** Presencia efímera del aula (ADR-019). */
+export interface PresenceSnapshot {
+  onlineCount: number;
+  onlineUserIds: string[];
 }
 
 export interface MessageView {
@@ -50,6 +58,13 @@ export interface MessagesPage {
 /** Evento del stream SSE de mensajería (discriminador `kind` en el JSON). */
 export type MessagingStreamEvent =
   | { kind: 'message.created'; conversationId: string; message: MessageView }
+  | {
+      kind: 'typing';
+      conversationId: string;
+      userId: string;
+      displayName: string | null;
+      ttlMs: number;
+    }
   | { kind: 'ping'; t: number };
 
 const BASE = '/api/v1/modules/messaging';
@@ -108,6 +123,22 @@ export const messagingApi = {
       { method: 'POST', body: JSON.stringify({ body }) },
       withAuth(),
     );
+  },
+
+  /**
+   * Señala que el usuario está escribiendo. Efímero y best-effort: si falla, el
+   * único coste es que el otro no ve el indicador — nunca rompe el composer.
+   */
+  async notifyTyping(conversationId: string): Promise<void> {
+    await apiFetch<void>(
+      `${BASE}/conversations/${conversationId}/typing`,
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
+
+  async getPresence(): Promise<PresenceSnapshot> {
+    return apiFetch<PresenceSnapshot>(`${BASE}/presence`, { method: 'GET' }, withAuth());
   },
 
   async markRead(conversationId: string): Promise<void> {
