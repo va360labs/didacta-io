@@ -32,6 +32,13 @@ const SIN_ENTRAR = `u.last_login_at IS NULL AND u.status NOT IN ('SUSPENDED', 'D
 
 @Injectable()
 export class InvitationsService {
+  /**
+   * Progreso del envío por tenant. En memoria a propósito: es estado de una
+   * operación en vuelo, no un dato del producto. Con más de una instancia de
+   * API habría que moverlo a Redis — hoy sirve una sola.
+   */
+  private readonly envios = new Map<string, EnvioEstado>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly adminUsers: AdminUsersService,
@@ -113,6 +120,9 @@ export class InvitationsService {
       pendientesSinAcceso: Number(sinAccesoRows[0]?.total ?? 0),
       tasaConversion:
         invitadosTotal > 0 ? Math.round((invitadosActivados / invitadosTotal) * 100) : null,
+      // El envío por lotes corre en segundo plano: el panel lee su progreso de
+      // aquí (ya pide el summary) en vez de esperar a que termine la petición.
+      envio: this.envios.get(tenantId) ?? null,
     };
   }
 
@@ -259,17 +269,65 @@ export class InvitationsService {
    * `emails` permite fijar exactamente a quién escribir (para priorizar, por
    * ejemplo, a los clientes de pago). Sin esa lista se toman los más antiguos.
    */
-  async sendBatch(
+  /**
+   * Arranca el envío del siguiente lote y **vuelve enseguida**, sin esperar a
+   * que termine.
+   *
+   * Por qué no es síncrono: cada correo tarda ~1 s (envío + pausa
+   * anti-spam), así que un lote de 150 son ~3 minutos y el proxy corta la
+   * petición a los 30 s. El lote se enviaba entero igual — el bucle seguía en
+   * segundo plano — pero el panel enseñaba "No se pudo enviar el lote" sobre
+   * un envío que había funcionado. Mentir así en una campaña de un solo
+   * disparo por destinatario es peor que no informar.
+   *
+   * El progreso se consulta en `summary().envio`. Si el contenedor se reinicia
+   * a mitad, los que queden sin token los recoge el lote siguiente: el envío
+   * es reanudable por construcción.
+   */
+  async startBatch(
     tenantId: string,
     actorId: string,
     webBaseUrl: string,
     ctx: ClientContext,
     opts: { size?: number; emails?: string[]; pauseMs?: number },
-  ): Promise<BatchResult> {
-    const size = Math.min(200, Math.max(1, opts.size ?? 25));
-    const pausa = Math.min(5000, Math.max(0, opts.pauseMs ?? 400));
+  ): Promise<{ aceptado: boolean; yaEnCurso: boolean; total: number }> {
+    const enCurso = this.envios.get(tenantId);
+    if (enCurso?.enCurso) {
+      // Segundo click (o segundo admin) mientras uno corre: no arrancamos otro
+      // bucle. Dos a la vez seleccionarían los mismos pendientes en la ventana
+      // entre el SELECT y la creación del token, y alguien recibiría dos correos.
+      return { aceptado: false, yaEnCurso: true, total: enCurso.total };
+    }
 
-    const destinatarios = opts.emails?.length
+    const destinatarios = await this.seleccionarPendientes(tenantId, opts);
+    const ahora = new Date().toISOString();
+    this.envios.set(tenantId, {
+      enCurso: destinatarios.length > 0,
+      total: destinatarios.length,
+      enviados: 0,
+      fallidos: [],
+      iniciadoEn: ahora,
+      terminadoEn: destinatarios.length > 0 ? null : ahora,
+    });
+
+    if (destinatarios.length > 0) {
+      void this.enviarEnSegundoPlano(tenantId, actorId, webBaseUrl, ctx, destinatarios, opts);
+    }
+    return { aceptado: true, yaEnCurso: false, total: destinatarios.length };
+  }
+
+  /** Estado del envío en curso (o del último), para que el panel lo pinte. */
+  estadoEnvio(tenantId: string): EnvioEstado | null {
+    return this.envios.get(tenantId) ?? null;
+  }
+
+  private async seleccionarPendientes(
+    tenantId: string,
+    opts: { size?: number; emails?: string[] },
+  ): Promise<Array<{ id: string; email: string }>> {
+    const size = Math.min(200, Math.max(1, opts.size ?? 25));
+
+    return opts.emails?.length
       ? await this.prisma.user.findMany({
           where: {
             tenantId,
@@ -295,44 +353,70 @@ export class InvitationsService {
           tenantId,
           size,
         );
-
-    const enviados: string[] = [];
-    const fallidos: Array<{ email: string; error: string }> = [];
-
-    for (const u of destinatarios) {
-      try {
-        await this.adminUsers.resendInvite(tenantId, actorId, u.id, webBaseUrl, ctx);
-        enviados.push(u.email);
-      } catch (err) {
-        fallidos.push({ email: u.email, error: (err as Error).message ?? 'error' });
-      }
-      if (pausa > 0) await new Promise((r) => setTimeout(r, pausa));
-    }
-
-    this.logger.log(
-      { tenantId, actorId, enviados: enviados.length, fallidos: fallidos.length },
-      'invitaciones: lote enviado',
-    );
-
-    const restantes = await this.prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
-      `
-      SELECT COUNT(*)::bigint AS total
-      FROM "user" u
-      WHERE u.tenant_id = $1::uuid
-        AND u.deleted_at IS NULL
-        AND ${SIN_ENTRAR}
-        AND NOT EXISTS (SELECT 1 FROM password_reset_token t WHERE t.user_id = u.id)
-      `,
-      tenantId,
-    );
-
-    return {
-      enviados: enviados.length,
-      fallidos,
-      emails: enviados,
-      pendientesRestantes: Number(restantes[0]?.total ?? 0),
-    };
   }
+
+  /**
+   * El bucle real. Corre desligado de la petición HTTP, así que NO puede
+   * lanzar: cualquier excepción aquí sería un unhandled rejection. Todo va
+   * dentro de try/catch y el estado siempre acaba con `enCurso: false`, o el
+   * panel se quedaría diciendo "enviando…" para siempre.
+   */
+  private async enviarEnSegundoPlano(
+    tenantId: string,
+    actorId: string,
+    webBaseUrl: string,
+    ctx: ClientContext,
+    destinatarios: Array<{ id: string; email: string }>,
+    opts: { pauseMs?: number },
+  ): Promise<void> {
+    const pausa = Math.min(5000, Math.max(0, opts.pauseMs ?? 400));
+    const estado = this.envios.get(tenantId);
+
+    try {
+      for (const u of destinatarios) {
+        try {
+          await this.adminUsers.resendInvite(tenantId, actorId, u.id, webBaseUrl, ctx);
+          if (estado) estado.enviados += 1;
+        } catch (err) {
+          if (estado) {
+            estado.fallidos.push({ email: u.email, error: (err as Error).message ?? 'error' });
+          }
+        }
+        if (pausa > 0) await new Promise((r) => setTimeout(r, pausa));
+      }
+    } catch (err) {
+      this.logger.error(
+        { tenantId, err: err instanceof Error ? err.message : String(err) },
+        'invitaciones: el lote se cortó por un error inesperado',
+      );
+    } finally {
+      if (estado) {
+        estado.enCurso = false;
+        estado.terminadoEn = new Date().toISOString();
+      }
+      this.logger.log(
+        {
+          tenantId,
+          actorId,
+          enviados: estado?.enviados ?? 0,
+          fallidos: estado?.fallidos.length ?? 0,
+        },
+        'invitaciones: lote enviado',
+      );
+    }
+  }
+}
+
+/** Progreso del envío por lotes. En memoria: sobrevive a la petición, no al
+ *  reinicio del contenedor — y no hace falta que sobreviva, porque quien se
+ *  quede sin token lo recoge el lote siguiente. */
+export interface EnvioEstado {
+  enCurso: boolean;
+  total: number;
+  enviados: number;
+  fallidos: Array<{ email: string; error: string }>;
+  iniciadoEn: string;
+  terminadoEn: string | null;
 }
 
 export interface InvitationsSummary {
@@ -346,6 +430,8 @@ export interface InvitationsSummary {
   pendientesSinAcceso: number;
   /** Porcentaje de invitados que ya entraron. Null si aún no se invitó a nadie. */
   tasaConversion: number | null;
+  /** Envío por lotes en curso (o el último terminado). Null si nunca se lanzó. */
+  envio: EnvioEstado | null;
 }
 
 export interface InvitationRow {
