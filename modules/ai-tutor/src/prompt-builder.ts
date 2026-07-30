@@ -130,7 +130,18 @@ function formatLessonContext(ctx: LessonContext | null | undefined): string {
  * `[1:02:03]`. La pone el ingestor al guardar la transcripción, así que viaja
  * dentro del texto del chunk y no necesita columna propia.
  */
-const MARCA_TIEMPO = /^\s*\[(\d{1,2}):(\d{2})(?::(\d{2}))?\]/;
+/**
+ * NO va anclada al principio a propósito. Un fragmento del índice casi nunca
+ * empieza por su marca: el indexador le antepone la cabecera del módulo y el
+ * troceador arrastra el solape del fragmento anterior. Anclando la expresión,
+ * las 963 marcas que hay en el índice de producción quedaban invisibles y todas
+ * las citas salían sin minuto (2026-07-30).
+ *
+ * La primera marca que aparece es donde arranca el contenido propio del
+ * fragmento —lo anterior es cola del anterior—, así que es el punto correcto
+ * al que mandar al alumno.
+ */
+const MARCA_TIEMPO = /\[(\d{1,2}):(\d{2})(?::(\d{2}))?\]/;
 
 /** Segundos de la primera marca de tiempo del texto, o null si no lleva. */
 export function parseStartSeconds(content: string): number | null {

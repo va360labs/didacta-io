@@ -162,10 +162,24 @@ describe('parseStartSeconds / formatMmSs', () => {
     expect(parseStartSeconds('[1:02:03] hola')).toBe(3723);
   });
 
-  it('devuelve null si no hay marca o no está al principio', () => {
-    expect(parseStartSeconds('hola [12:34]')).toBeNull();
+  it('devuelve null si no hay ninguna marca', () => {
     expect(parseStartSeconds('sin marca')).toBeNull();
     expect(parseStartSeconds('[12] hola')).toBeNull();
+    expect(parseStartSeconds('')).toBeNull();
+  });
+
+  // Un fragmento del índice llega con la cabecera del módulo delante y con el
+  // solape del fragmento anterior: la marca nunca está en la posición 0.
+  it('encuentra la marca aunque no abra el fragmento', () => {
+    const chunkReal =
+      '[Módulo 3: Agentes de IA]\n\n# Guardrails en n8n\n\n' +
+      '…cola del fragmento anterior que arrastra el solape. ' +
+      '[07:12] Los guardrails son una capa de control.';
+    expect(parseStartSeconds(chunkReal)).toBe(432);
+  });
+
+  it('se queda con la PRIMERA marca cuando el fragmento tiene varias', () => {
+    expect(parseStartSeconds('cola… [2:00] uno [5:00] dos')).toBe(120);
   });
 
   it('formatea segundos a mm:ss y h:mm:ss', () => {
