@@ -12,7 +12,7 @@ export const fundaeExtension: ModuleWebExtension = {
   name: 'mod.fundae',
   sidebarItems: [
     {
-      group: 'Integraciones',
+      group: 'Integraciones y API',
       href: '/admin/fundae',
       label: 'Fundae',
       icon: 'file',

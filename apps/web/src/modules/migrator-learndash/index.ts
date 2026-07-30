@@ -26,7 +26,7 @@ export const migratorLearndashExtension: ModuleWebExtension = {
       // (ver buildGroups en (app)/layout.tsx). El merge solo inserta en
       // grupos EXISTENTES, así que apuntar a un grupo inexistente descartaba
       // el item en silencio. Va en "Administración" junto a Marketplace/Tenants.
-      group: 'Administración',
+      group: 'Plataforma',
       href: '/admin/integraciones/migrator-learndash',
       label: 'Migrar desde LearnDash',
       icon: 'download-cloud',

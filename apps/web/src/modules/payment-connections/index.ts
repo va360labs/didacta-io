@@ -13,7 +13,7 @@ export const paymentConnectionsExtension: ModuleWebExtension = {
   name: 'mod.payment-connections',
   sidebarItems: [
     {
-      group: 'Administración',
+      group: 'Ingresos',
       href: '/admin/integraciones/payment-connections',
       label: 'Conexiones de pago',
       icon: 'briefcase',
