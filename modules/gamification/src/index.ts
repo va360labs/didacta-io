@@ -15,6 +15,10 @@ export {
   type LeaderboardRange,
   type LeaderboardRow,
   type LevelView,
+  type MyPerkView,
+  type PerkRequestStatus,
+  type PerkRequestView,
+  type PerkView,
   type RuleView,
   type SubmissionView,
 } from './gamification.service.js';
@@ -25,6 +29,7 @@ export {
   GamificationConflictError,
   GamificationError,
   GamificationNotFoundError,
+  GamificationPerkUnavailableError,
   GamificationValidationError,
 } from './errors.js';
 

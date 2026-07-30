@@ -34,18 +34,21 @@ export const gamificationExtension: ModuleWebExtension = {
 };
 
 // Convención: los consumidores importan SIEMPRE desde '@/modules/gamification'.
-export { SubmitChallengeModal } from './challenge-modals';
+export { RequestPerkModal, SubmitChallengeModal } from './challenge-modals';
 export {
   gamificationApi,
   gamificationAdminApi,
   type BackfillSummary,
-  type BenefitKind,
   type ChallengeStatus,
   type ChallengeView,
   type LeaderboardEntry,
   type LeaderboardRange,
   type LedgerEntry,
   type LevelView,
+  type MyPerkView,
+  type PerkRequestStatus,
+  type PerkRequestView,
+  type PerkView,
   type RuleView,
   type Standing,
   type SubmissionStatus,

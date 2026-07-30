@@ -17,18 +17,24 @@ Convierte la actividad de la comunidad en un libro de puntos auditable. Dos capa
 
 Encima de las dos: los **niveles** se calculan sobre los puntos de por vida y no bajan nunca; la **clasificación** se calcula por rango de fechas y sí se mueve.
 
+Un nivel desbloquea **beneficios** que define el operador —una sesión 1:1, una clase extra, una píldora a medida—, con cupo por alumno y espera opcional entre solicitudes. El alumno los pide y una persona los atiende: nada se concede solo.
+
+⚠️ Los beneficios **NO tocan los grupos de acceso**, a propósito. El acceso a cursos es acceso comprado y no puede ganarse participando; mezclarlo convertiría los puntos en una vía para obtener producto de pago.
+
 El catálogo lo define el operador desde `/admin/gamificacion`. Los niveles y los retos **nacen vacíos a propósito**: sus nombres y sus premios son decisiones de marca, no datos que pueda inventar el sistema. Lo único que se siembra en runtime son las reglas, con los pesos que ya usaba el ranking anterior (post 10, comentario 5) para que el traspaso no mueva a nadie de puesto.
 
 ## Modelo de datos
 
-| Tabla                           | Para qué                                                                      |
-| ------------------------------- | ----------------------------------------------------------------------------- |
-| `mod_gamification_ledger_entry` | El asiento. Append-only salvo la revocación, que se marca sin borrar la fila. |
-| `mod_gamification_profile`      | Saldo materializado por persona. No es la fuente de verdad: lo es el ledger.  |
-| `mod_gamification_rule`         | Catálogo de reglas automáticas (puntos, techo diario, activa).                |
-| `mod_gamification_level`        | Niveles del operador, con su beneficio.                                       |
-| `mod_gamification_challenge`    | Retos con premio y ventana de fechas.                                         |
-| `mod_gamification_submission`   | Entregas, una por reto y persona.                                             |
+| Tabla                           | Para qué                                                                         |
+| ------------------------------- | -------------------------------------------------------------------------------- |
+| `mod_gamification_ledger_entry` | El asiento. Append-only salvo la revocación, que se marca sin borrar la fila.    |
+| `mod_gamification_profile`      | Saldo materializado por persona. No es la fuente de verdad: lo es el ledger.     |
+| `mod_gamification_rule`         | Catálogo de reglas automáticas (puntos, techo diario, activa).                   |
+| `mod_gamification_level`        | Niveles del operador.                                                            |
+| `mod_gamification_perk`         | Lo que desbloquea un nivel (sesión 1:1, clase extra…), definido por el operador. |
+| `mod_gamification_perk_request` | Solicitud de un beneficio; la atiende una persona, nunca se concede sola.        |
+| `mod_gamification_challenge`    | Retos con premio y ventana de fechas.                                            |
+| `mod_gamification_submission`   | Entregas, una por reto y persona.                                                |
 
 Dos claves sostienen la integridad:
 
@@ -43,15 +49,15 @@ El aislamiento entre tenants lo da la política genérica de `rls.sql`, que cubr
 
 Bajo `/api/v1/modules/gamification`. El interceptor de módulos la bloquea entera si el tenant desactiva el módulo.
 
-**Miembro:** `GET /leaderboard`, `GET /me`, `GET /me/history`, `GET /levels`, `GET /challenges`, `POST /challenges/:id/submit`.
+**Miembro:** `GET /leaderboard`, `GET /me`, `GET /me/history`, `GET /levels`, `GET /me/perks`, `POST /perks/:id/request`, `GET /challenges`, `POST /challenges/:id/submit`.
 
-**Operador:** `GET|PUT /admin/rules`, `POST|PUT|DELETE /admin/levels`, `GET|POST|PUT|DELETE /admin/challenges`, `GET /admin/submissions`, `POST /admin/submissions/:id/review`, `POST /admin/backfill`.
+**Operador:** `GET|PUT /admin/rules`, `POST|PUT|DELETE /admin/levels`, `GET|POST|PUT|DELETE /admin/perks`, `GET /admin/perk-requests`, `POST /admin/perk-requests/:id/handle`, `GET|POST|PUT|DELETE /admin/challenges`, `GET /admin/submissions`, `POST /admin/submissions/:id/review`, `POST /admin/backfill`.
 
 El módulo nunca lee la tabla `user`: los nombres para mostrar los resuelve el controller del host, igual que hace mod.community con el autor de un post.
 
 ## Eventos
 
-**Emite:** `gamification.points.awarded`, `gamification.points.revoked`, `gamification.level.changed`, `gamification.challenge.submitted`, `gamification.challenge.reviewed`.
+**Emite:** `gamification.points.awarded`, `gamification.points.revoked`, `gamification.level.changed`, `gamification.challenge.submitted`, `gamification.challenge.reviewed`, `gamification.perk.requested`.
 
 **Consume** (vía `GamificationEventsBridge`, en el host): `community.post.created`, `community.comment.created`, `community.post.hidden`, `community.comment.hidden`, `resources.resource.created`, `resources.resource.deleted`, `learning.course.completed`, `referrals.referral.attributed`.
 

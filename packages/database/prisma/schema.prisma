@@ -3833,13 +3833,13 @@ enum GamificationSubmissionStatus {
   REJECTED
 }
 
-/// Cómo se materializa el beneficio de un nivel. El texto siempre es libre; esto
-/// es solo lo que el sistema sabe ejecutar de verdad.
-enum GamificationBenefitKind {
-  /// Solo el texto descriptivo (p. ej. un código promocional que se entrega a mano).
-  NONE
-  /// Al alcanzar el nivel se añade al alumno a un grupo de acceso.
-  ACCESS_GROUP
+/// Estado de una solicitud de beneficio. Nada se concede solo: una sesión 1:1
+/// o una clase extra la atiende una persona.
+enum GamificationPerkRequestStatus {
+  PENDING
+  APPROVED
+  DONE
+  REJECTED
 }
 
 /// Asiento del libro de puntos. Append-only salvo la revocación, que se marca
@@ -3925,20 +3925,71 @@ model ModGamificationLevel {
   /// Puntos de por vida necesarios para alcanzarlo.
   minPoints Int    @map("min_points")
 
-  /// Texto del beneficio tal cual se le enseña al alumno.
-  benefitText   String?                 @map("benefit_text")
-  benefitKind   GamificationBenefitKind @default(NONE) @map("benefit_kind")
-  /// Grupo de acceso al que se añade al alcanzar el nivel (kind ACCESS_GROUP).
-  /// ID lógico, sin FK: mod.access-groups es código del host.
-  accessGroupId String?                 @map("access_group_id") @db.Uuid
+  /// Resumen del nivel para el alumno. El detalle de lo que desbloquea son los
+  /// beneficios (`ModGamificationPerk`), no este texto.
+  benefitText String? @map("benefit_text")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  perks ModGamificationPerk[]
 
   @@unique([tenantId, key])
   @@unique([tenantId, minPoints])
   @@index([tenantId, minPoints])
   @@map("mod_gamification_level")
+}
+
+/// Beneficio que desbloquea un nivel: una sesión 1:1, una clase extra, una
+/// píldora personalizada… Lo define el operador y NO se concede solo — el
+/// alumno lo solicita y una persona lo atiende.
+///
+/// A propósito NO toca los grupos de acceso: eso es acceso comprado, y no puede
+/// ganarse participando.
+model ModGamificationPerk {
+  id          String  @id @default(uuid()) @db.Uuid
+  tenantId    String  @map("tenant_id") @db.Uuid
+  levelId     String  @map("level_id") @db.Uuid
+  title       String  @db.VarChar(160)
+  description String?
+
+  /// Veces que un mismo alumno puede pedirlo. 0 = sin límite.
+  maxPerUser   Int @default(1) @map("max_per_user")
+  /// Días de espera entre dos solicitudes del mismo alumno. 0 = sin espera.
+  cooldownDays Int @default(0) @map("cooldown_days")
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  level    ModGamificationLevel         @relation(fields: [levelId], references: [id], onDelete: Cascade)
+  requests ModGamificationPerkRequest[]
+
+  @@index([tenantId, levelId])
+  @@map("mod_gamification_perk")
+}
+
+/// Solicitud de un beneficio por parte de un alumno que ya lo tiene desbloqueado.
+model ModGamificationPerkRequest {
+  id       String  @id @default(uuid()) @db.Uuid
+  tenantId String  @map("tenant_id") @db.Uuid
+  perkId   String  @map("perk_id") @db.Uuid
+  userId   String  @map("user_id") @db.Uuid
+  note     String?
+
+  status      GamificationPerkRequestStatus @default(PENDING)
+  handledById String?                       @map("handled_by_id") @db.Uuid
+  handledAt   DateTime?                     @map("handled_at")
+  staffNote   String?                       @map("staff_note")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  perk ModGamificationPerk @relation(fields: [perkId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, createdAt(sort: Desc)])
+  @@index([tenantId, userId, perkId])
+  @@map("mod_gamification_perk_request")
 }
 
 /// Reto con premio. La prueba obligatoria es lo que evita el postureo y lo que

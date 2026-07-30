@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from '@didacta/database';
 import {
   GamificationAlreadyReviewedError,
+  GamificationPerkUnavailableError,
   GamificationAlreadySubmittedError,
   GamificationChallengeClosedError,
   GamificationConflictError,
@@ -39,6 +40,7 @@ export const GAMIFICATION_EVENT = {
   LEVEL_CHANGED: 'gamification.level.changed',
   CHALLENGE_SUBMITTED: 'gamification.challenge.submitted',
   CHALLENGE_REVIEWED: 'gamification.challenge.reviewed',
+  PERK_REQUESTED: 'gamification.perk.requested',
 } as const;
 
 /**
@@ -97,14 +99,56 @@ export interface RuleView {
   enabled: boolean;
 }
 
+export type PerkRequestStatus = 'PENDING' | 'APPROVED' | 'DONE' | 'REJECTED';
+
+export interface PerkView {
+  id: string;
+  levelId: string;
+  levelName: string;
+  levelMinPoints: number;
+  title: string;
+  description: string | null;
+  /** Veces que un alumno puede pedirlo. 0 = sin límite. */
+  maxPerUser: number;
+  /** Días de espera entre solicitudes. 0 = sin espera. */
+  cooldownDays: number;
+  active: boolean;
+}
+
+/** Un beneficio visto por el alumno, con su desbloqueo y su cupo. */
+export interface MyPerkView {
+  id: string;
+  title: string;
+  description: string | null;
+  levelName: string;
+  levelMinPoints: number;
+  unlocked: boolean;
+  canRequest: boolean;
+  /** Solicitudes que le quedan; null = sin límite. */
+  quotaLeft: number | null;
+  /** Si está en espera, cuándo vuelve a poder pedirlo. */
+  availableAt: Date | null;
+  lastRequestStatus: PerkRequestStatus | null;
+}
+
+export interface PerkRequestView {
+  id: string;
+  perkId: string;
+  perkTitle: string;
+  userId: string;
+  note: string | null;
+  status: PerkRequestStatus;
+  staffNote: string | null;
+  handledAt: Date | null;
+  createdAt: Date;
+}
+
 export interface LevelView {
   id: string;
   key: string;
   name: string;
   minPoints: number;
   benefitText: string | null;
-  benefitKind: 'NONE' | 'ACCESS_GROUP';
-  accessGroupId: string | null;
   memberCount?: number;
 }
 
@@ -182,6 +226,13 @@ function validatePoints(raw: number, { allowZero = false } = {}): number {
   }
   if (!allowZero && raw === 0) {
     throw new GamificationValidationError('Los puntos deben ser mayores que cero.');
+  }
+  return raw;
+}
+
+function validateCount(raw: number, label: string): number {
+  if (!Number.isInteger(raw) || raw < 0 || raw > 1000) {
+    throw new GamificationValidationError(`${label} debe ser un entero entre 0 y 1000.`);
   }
   return raw;
 }
@@ -682,8 +733,6 @@ export class GamificationService {
       name: l.name,
       minPoints: l.minPoints,
       benefitText: l.benefitText,
-      benefitKind: l.benefitKind as 'NONE' | 'ACCESS_GROUP',
-      accessGroupId: l.accessGroupId,
     }));
   }
 
@@ -693,18 +742,10 @@ export class GamificationService {
     name: string;
     minPoints: number;
     benefitText?: string | null;
-    benefitKind?: 'NONE' | 'ACCESS_GROUP';
-    accessGroupId?: string | null;
   }): Promise<LevelView> {
     const key = validateKey(args.key);
     const name = validateName(args.name);
     const minPoints = validatePoints(args.minPoints, { allowZero: true });
-    const benefitKind = args.benefitKind ?? 'NONE';
-    if (benefitKind === 'ACCESS_GROUP' && !args.accessGroupId) {
-      throw new GamificationValidationError(
-        'Elige el grupo de acceso al que entra quien alcance el nivel.',
-      );
-    }
     try {
       const level = await this.prisma.modGamificationLevel.create({
         data: {
@@ -713,8 +754,6 @@ export class GamificationService {
           name,
           minPoints,
           benefitText: validateText(args.benefitText),
-          benefitKind,
-          accessGroupId: benefitKind === 'ACCESS_GROUP' ? args.accessGroupId! : null,
         },
       });
       await this.recomputeLevels(args.tenantId);
@@ -724,8 +763,6 @@ export class GamificationService {
         name: level.name,
         minPoints: level.minPoints,
         benefitText: level.benefitText,
-        benefitKind: level.benefitKind as 'NONE' | 'ACCESS_GROUP',
-        accessGroupId: level.accessGroupId,
       };
     } catch (e) {
       if (isUniqueViolation(e)) {
@@ -744,8 +781,6 @@ export class GamificationService {
       name?: string;
       minPoints?: number;
       benefitText?: string | null;
-      benefitKind?: 'NONE' | 'ACCESS_GROUP';
-      accessGroupId?: string | null;
     },
   ): Promise<LevelView> {
     const data: Record<string, unknown> = {};
@@ -754,13 +789,6 @@ export class GamificationService {
       data['minPoints'] = validatePoints(patch.minPoints, { allowZero: true });
     }
     if (patch.benefitText !== undefined) data['benefitText'] = validateText(patch.benefitText);
-    if (patch.benefitKind !== undefined) {
-      data['benefitKind'] = patch.benefitKind;
-      if (patch.benefitKind === 'NONE') data['accessGroupId'] = null;
-    }
-    if (patch.accessGroupId !== undefined && patch.benefitKind !== 'NONE') {
-      data['accessGroupId'] = patch.accessGroupId;
-    }
 
     try {
       const { count } = await this.prisma.modGamificationLevel.updateMany({
@@ -783,8 +811,6 @@ export class GamificationService {
       name: level!.name,
       minPoints: level!.minPoints,
       benefitText: level!.benefitText,
-      benefitKind: level!.benefitKind as 'NONE' | 'ACCESS_GROUP',
-      accessGroupId: level!.accessGroupId,
     };
   }
 
@@ -834,6 +860,271 @@ export class GamificationService {
       },
       data: { levelKey: null, levelReachedAt: null },
     });
+  }
+
+  // ── Beneficios de nivel ────────────────────────────────────────────────────
+
+  /** Beneficios de un nivel (panel del operador). */
+  async listPerks(tenantId: string, levelId?: string): Promise<PerkView[]> {
+    const perks = await this.prisma.modGamificationPerk.findMany({
+      where: { tenantId, ...(levelId ? { levelId } : {}) },
+      orderBy: { createdAt: 'asc' },
+      take: LIST_LIMIT,
+      include: { level: { select: { name: true, minPoints: true } } },
+    });
+    return perks.map((p) => ({
+      id: p.id,
+      levelId: p.levelId,
+      levelName: p.level.name,
+      levelMinPoints: p.level.minPoints,
+      title: p.title,
+      description: p.description,
+      maxPerUser: p.maxPerUser,
+      cooldownDays: p.cooldownDays,
+      active: p.active,
+    }));
+  }
+
+  async createPerk(args: {
+    tenantId: string;
+    levelId: string;
+    title: string;
+    description?: string | null;
+    maxPerUser?: number;
+    cooldownDays?: number;
+  }): Promise<PerkView> {
+    const level = await this.prisma.modGamificationLevel.findFirst({
+      where: { id: args.levelId, tenantId: args.tenantId },
+    });
+    if (!level) throw new GamificationNotFoundError('Nivel no encontrado.');
+
+    const perk = await this.prisma.modGamificationPerk.create({
+      data: {
+        tenantId: args.tenantId,
+        levelId: args.levelId,
+        title: validateTitle(args.title),
+        description: validateText(args.description),
+        maxPerUser: validateCount(args.maxPerUser ?? 1, 'El máximo por alumno'),
+        cooldownDays: validateCount(args.cooldownDays ?? 0, 'La espera entre solicitudes'),
+      },
+    });
+    return {
+      id: perk.id,
+      levelId: perk.levelId,
+      levelName: level.name,
+      levelMinPoints: level.minPoints,
+      title: perk.title,
+      description: perk.description,
+      maxPerUser: perk.maxPerUser,
+      cooldownDays: perk.cooldownDays,
+      active: perk.active,
+    };
+  }
+
+  async updatePerk(
+    tenantId: string,
+    id: string,
+    patch: {
+      title?: string;
+      description?: string | null;
+      maxPerUser?: number;
+      cooldownDays?: number;
+      active?: boolean;
+    },
+  ): Promise<void> {
+    const data: Record<string, unknown> = {};
+    if (patch.title !== undefined) data['title'] = validateTitle(patch.title);
+    if (patch.description !== undefined) data['description'] = validateText(patch.description);
+    if (patch.maxPerUser !== undefined) {
+      data['maxPerUser'] = validateCount(patch.maxPerUser, 'El máximo por alumno');
+    }
+    if (patch.cooldownDays !== undefined) {
+      data['cooldownDays'] = validateCount(patch.cooldownDays, 'La espera entre solicitudes');
+    }
+    if (patch.active !== undefined) data['active'] = patch.active;
+
+    const { count } = await this.prisma.modGamificationPerk.updateMany({
+      where: { id, tenantId },
+      data,
+    });
+    if (count === 0) throw new GamificationNotFoundError('Beneficio no encontrado.');
+  }
+
+  async deletePerk(tenantId: string, id: string): Promise<void> {
+    const { count } = await this.prisma.modGamificationPerk.deleteMany({
+      where: { id, tenantId },
+    });
+    if (count === 0) throw new GamificationNotFoundError('Beneficio no encontrado.');
+  }
+
+  /**
+   * Lo que un alumno tiene desbloqueado, con el estado de sus solicitudes. Un
+   * beneficio se desbloquea por PUNTOS DE POR VIDA, no por el nivel guardado en
+   * el perfil: así un nivel creado a posteriori aparece sin esperar a que el
+   * alumno vuelva a puntuar.
+   */
+  async listMyPerks(tenantId: string, userId: string, now = new Date()): Promise<MyPerkView[]> {
+    const [profile, perks] = await Promise.all([
+      this.prisma.modGamificationProfile.findUnique({
+        where: { tenantId_userId: { tenantId, userId } },
+      }),
+      this.prisma.modGamificationPerk.findMany({
+        where: { tenantId, active: true },
+        orderBy: { createdAt: 'asc' },
+        take: LIST_LIMIT,
+        include: { level: { select: { name: true, minPoints: true } } },
+      }),
+    ]);
+    if (perks.length === 0) return [];
+
+    const points = profile?.lifetimePoints ?? 0;
+    const requests = await this.prisma.modGamificationPerkRequest.findMany({
+      where: { tenantId, userId, perkId: { in: perks.map((p) => p.id) } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return perks.map((perk) => {
+      const mine = requests.filter((r) => r.perkId === perk.id);
+      const used = mine.filter((r) => r.status !== 'REJECTED').length;
+      const last = mine[0];
+      const unlocked = points >= perk.level.minPoints;
+
+      let availableAt: Date | null = null;
+      if (perk.cooldownDays > 0 && last) {
+        const next = new Date(last.createdAt.getTime() + perk.cooldownDays * 86_400_000);
+        if (next > now) availableAt = next;
+      }
+      const quotaLeft = perk.maxPerUser === 0 ? null : Math.max(0, perk.maxPerUser - used);
+
+      return {
+        id: perk.id,
+        title: perk.title,
+        description: perk.description,
+        levelName: perk.level.name,
+        levelMinPoints: perk.level.minPoints,
+        unlocked,
+        canRequest: unlocked && quotaLeft !== 0 && availableAt === null,
+        quotaLeft,
+        availableAt,
+        lastRequestStatus: last ? (last.status as PerkRequestStatus) : null,
+      };
+    });
+  }
+
+  /**
+   * Solicita un beneficio. Comprueba desbloqueo, cuota y espera; nada se concede
+   * solo — queda PENDING hasta que una persona lo atiende.
+   */
+  async requestPerk(args: {
+    tenantId: string;
+    userId: string;
+    perkId: string;
+    note?: string | null;
+    now?: Date;
+  }): Promise<{ id: string; status: PerkRequestStatus }> {
+    const now = args.now ?? new Date();
+    const perk = await this.prisma.modGamificationPerk.findFirst({
+      where: { id: args.perkId, tenantId: args.tenantId },
+      include: { level: { select: { minPoints: true, name: true } } },
+    });
+    if (!perk) throw new GamificationNotFoundError('Beneficio no encontrado.');
+    if (!perk.active) throw new GamificationPerkUnavailableError('Este beneficio no está activo.');
+
+    const profile = await this.prisma.modGamificationProfile.findUnique({
+      where: { tenantId_userId: { tenantId: args.tenantId, userId: args.userId } },
+    });
+    if ((profile?.lifetimePoints ?? 0) < perk.level.minPoints) {
+      throw new GamificationPerkUnavailableError(
+        `Necesitas ${perk.level.minPoints} puntos (nivel ${perk.level.name}) para pedir esto.`,
+      );
+    }
+
+    const mine = await this.prisma.modGamificationPerkRequest.findMany({
+      where: { tenantId: args.tenantId, userId: args.userId, perkId: args.perkId },
+      orderBy: { createdAt: 'desc' },
+    });
+    const used = mine.filter((r) => r.status !== 'REJECTED').length;
+    if (perk.maxPerUser > 0 && used >= perk.maxPerUser) {
+      throw new GamificationPerkUnavailableError('Ya has agotado este beneficio.');
+    }
+    const last = mine[0];
+    if (perk.cooldownDays > 0 && last) {
+      const next = new Date(last.createdAt.getTime() + perk.cooldownDays * 86_400_000);
+      if (next > now) {
+        throw new GamificationPerkUnavailableError(
+          `Podrás volver a pedirlo a partir del ${next.toLocaleDateString('es-ES')}.`,
+        );
+      }
+    }
+
+    const request = await this.prisma.modGamificationPerkRequest.create({
+      data: {
+        tenantId: args.tenantId,
+        perkId: args.perkId,
+        userId: args.userId,
+        note: validateText(args.note, NOTE_MAX),
+      },
+    });
+    await this.publisher.publish(args.tenantId, args.userId, GAMIFICATION_EVENT.PERK_REQUESTED, {
+      requestId: request.id,
+      perkId: args.perkId,
+      userId: args.userId,
+    });
+    return { id: request.id, status: request.status as PerkRequestStatus };
+  }
+
+  async listPerkRequests(tenantId: string, status?: PerkRequestStatus): Promise<PerkRequestView[]> {
+    const requests = await this.prisma.modGamificationPerkRequest.findMany({
+      where: { tenantId, ...(status ? { status } : {}) },
+      orderBy: { createdAt: 'desc' },
+      take: LIST_LIMIT,
+      include: { perk: { select: { title: true } } },
+    });
+    return requests.map((r) => ({
+      id: r.id,
+      perkId: r.perkId,
+      perkTitle: r.perk.title,
+      userId: r.userId,
+      note: r.note,
+      status: r.status as PerkRequestStatus,
+      staffNote: r.staffNote,
+      handledAt: r.handledAt,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  /**
+   * El staff atiende la solicitud. La transición es un updateMany condicionado
+   * al estado anterior, así dos revisiones simultáneas no se pisan.
+   */
+  async handlePerkRequest(args: {
+    tenantId: string;
+    requestId: string;
+    handledById: string;
+    status: 'APPROVED' | 'DONE' | 'REJECTED';
+    staffNote?: string | null;
+  }): Promise<{ status: PerkRequestStatus }> {
+    // DONE solo tiene sentido desde APPROVED o directamente desde PENDING.
+    const from: PerkRequestStatus[] =
+      args.status === 'DONE' ? ['PENDING', 'APPROVED'] : ['PENDING'];
+
+    const { count } = await this.prisma.modGamificationPerkRequest.updateMany({
+      where: { id: args.requestId, tenantId: args.tenantId, status: { in: from } },
+      data: {
+        status: args.status,
+        handledById: args.handledById,
+        handledAt: new Date(),
+        staffNote: validateText(args.staffNote, NOTE_MAX),
+      },
+    });
+    if (count !== 1) {
+      const exists = await this.prisma.modGamificationPerkRequest.findFirst({
+        where: { id: args.requestId, tenantId: args.tenantId },
+      });
+      if (!exists) throw new GamificationNotFoundError('Solicitud no encontrada.');
+      throw new GamificationAlreadyReviewedError();
+    }
+    return { status: args.status };
   }
 
   // ── Retos (los define el operador) ─────────────────────────────────────────

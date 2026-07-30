@@ -50,6 +50,17 @@ export class GamificationAlreadyReviewedError extends GamificationError {
   }
 }
 
+/**
+ * El beneficio no se puede pedir ahora: sin nivel suficiente, cupo agotado,
+ * en periodo de espera o desactivado.
+ */
+export class GamificationPerkUnavailableError extends GamificationError {
+  constructor(detail: string) {
+    super(detail, 'GAMIFICATION_PERK_UNAVAILABLE');
+    this.name = 'GamificationPerkUnavailableError';
+  }
+}
+
 /** Choque de catálogo: la clave o los puntos del nivel ya están ocupados. */
 export class GamificationConflictError extends GamificationError {
   constructor(detail: string) {

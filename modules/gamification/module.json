@@ -12,7 +12,8 @@
     { "name": "gamification.points.revoked" },
     { "name": "gamification.level.changed" },
     { "name": "gamification.challenge.submitted" },
-    { "name": "gamification.challenge.reviewed" }
+    { "name": "gamification.challenge.reviewed" },
+    { "name": "gamification.perk.requested" }
   ],
   "hooks": [
     { "event": "community.post.created" },

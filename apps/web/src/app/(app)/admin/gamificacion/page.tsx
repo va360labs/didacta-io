@@ -14,6 +14,8 @@ import {
   gamificationApi,
   type ChallengeView,
   type LevelView,
+  type PerkRequestView,
+  type PerkView,
   type RuleView,
   type SubmissionView,
 } from '@/modules/gamification';
@@ -59,6 +61,8 @@ export default function AdminGamificacionPage() {
           <TabsTrigger value="retos">Retos</TabsTrigger>
           <TabsTrigger value="entregas">Entregas</TabsTrigger>
           <TabsTrigger value="niveles">Niveles</TabsTrigger>
+          <TabsTrigger value="beneficios">Beneficios</TabsTrigger>
+          <TabsTrigger value="solicitudes">Solicitudes</TabsTrigger>
           <TabsTrigger value="reglas">Reglas</TabsTrigger>
         </TabsList>
 
@@ -70,6 +74,12 @@ export default function AdminGamificacionPage() {
         </TabsContent>
         <TabsContent value="niveles">
           <LevelsPanel onError={setError} />
+        </TabsContent>
+        <TabsContent value="beneficios">
+          <PerksPanel onError={setError} />
+        </TabsContent>
+        <TabsContent value="solicitudes">
+          <PerkRequestsPanel onError={setError} />
         </TabsContent>
         <TabsContent value="reglas">
           <RulesPanel onError={setError} />
@@ -487,6 +497,297 @@ function slugify(value: string): string {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 64) || 'nivel'
+  );
+}
+
+// ── Beneficios ───────────────────────────────────────────────────────────────
+
+function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
+  const [perks, setPerks] = useState<PerkView[] | null>(null);
+  const [levels, setLevels] = useState<LevelView[]>([]);
+  const [levelId, setLevelId] = useState('');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [maxPerUser, setMaxPerUser] = useState('1');
+  const [cooldownDays, setCooldownDays] = useState('0');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const [list, levelList] = await Promise.all([
+      gamificationAdminApi.listPerks(),
+      gamificationApi.listLevels(),
+    ]);
+    setPerks(list);
+    setLevels(levelList);
+    setLevelId((prev) => prev || (levelList[0]?.id ?? ''));
+  }, []);
+
+  useEffect(() => {
+    load().catch((e) => onError(errorMessage(e, 'No pudimos cargar los beneficios.')));
+  }, [load, onError]);
+
+  async function create() {
+    setBusy(true);
+    onError(null);
+    try {
+      await gamificationAdminApi.createPerk({
+        levelId,
+        title,
+        description: description.trim() || undefined,
+        maxPerUser: Number(maxPerUser),
+        cooldownDays: Number(cooldownDays),
+      });
+      setTitle('');
+      setDescription('');
+      await load();
+    } catch (e) {
+      onError(errorMessage(e, 'No pudimos crear el beneficio.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggle(perk: PerkView) {
+    onError(null);
+    try {
+      await gamificationAdminApi.updatePerk(perk.id, { active: !perk.active });
+      await load();
+    } catch (e) {
+      onError(errorMessage(e, 'No pudimos cambiar el beneficio.'));
+    }
+  }
+
+  async function remove(perk: PerkView) {
+    onError(null);
+    try {
+      await gamificationAdminApi.deletePerk(perk.id);
+      await load();
+    } catch (e) {
+      onError(errorMessage(e, 'No pudimos borrar el beneficio.'));
+    }
+  }
+
+  if (levels.length === 0) {
+    return (
+      <Card className="mt-4">
+        <CardContent className="py-10 text-center">
+          <p className="font-semibold text-text">Primero crea un nivel</p>
+          <p className="mt-1 text-sm text-text-muted">
+            Un beneficio cuelga de un nivel: es lo que hay que alcanzar para desbloquearlo.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Nuevo beneficio</CardTitle>
+          <CardDescription>
+            Lo que desbloquea un nivel: una sesión 1:1, una clase extra, una píldora a medida… No se
+            concede solo — el alumno lo pide y tú lo atiendes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-[1fr_220px]">
+            <div className="space-y-1.5">
+              <Label htmlFor="perk-titulo">Qué desbloquea</Label>
+              <Input
+                id="perk-titulo"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Sesión 1:1 de 30 minutos conmigo"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="perk-nivel">Nivel que lo desbloquea</Label>
+              <select
+                id="perk-nivel"
+                value={levelId}
+                onChange={(e) => setLevelId(e.target.value)}
+                className="h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-text"
+              >
+                {levels.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name} ({l.minPoints} pts)
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="perk-desc">Detalle para el alumno</Label>
+            <Textarea
+              id="perk-desc"
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Qué incluye y cómo se organiza."
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="perk-max">Veces por alumno (0 = sin límite)</Label>
+              <Input
+                id="perk-max"
+                type="number"
+                min={0}
+                value={maxPerUser}
+                onChange={(e) => setMaxPerUser(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="perk-cooldown">Espera entre solicitudes (días)</Label>
+              <Input
+                id="perk-cooldown"
+                type="number"
+                min={0}
+                value={cooldownDays}
+                onChange={(e) => setCooldownDays(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <Button onClick={() => void create()} disabled={busy || title.trim().length < 3}>
+            {busy ? 'Creando…' : 'Crear beneficio'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {perks === null ? (
+        <p className="text-sm text-text-muted">Cargando beneficios…</p>
+      ) : perks.length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center">
+            <p className="font-semibold text-text">Ningún beneficio todavía</p>
+            <p className="mt-1 text-sm text-text-muted">
+              Sin beneficios, un nivel es solo un nombre.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {perks.map((perk) => (
+            <Card key={perk.id}>
+              <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3.5">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-text">{perk.title}</p>
+                    <Badge variant={perk.active ? 'success' : 'muted'}>
+                      {perk.active ? 'Activo' : 'Pausado'}
+                    </Badge>
+                  </div>
+                  <p className="mt-0.5 text-xs text-text-muted">
+                    {perk.levelName} · {perk.levelMinPoints.toLocaleString('es-ES')} puntos ·{' '}
+                    {perk.maxPerUser === 0 ? 'sin límite' : `${perk.maxPerUser} por alumno`}
+                    {perk.cooldownDays > 0 ? ` · cada ${perk.cooldownDays} días` : ''}
+                  </p>
+                  {perk.description ? (
+                    <p className="mt-1 text-sm text-text-muted">{perk.description}</p>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button variant="outline" size="sm" onClick={() => void toggle(perk)}>
+                    {perk.active ? 'Pausar' : 'Activar'}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => void remove(perk)}>
+                    Borrar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Solicitudes de beneficio ─────────────────────────────────────────────────
+
+function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void }) {
+  const [requests, setRequests] = useState<PerkRequestView[] | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+
+  const load = useCallback(async () => {
+    setRequests(await gamificationAdminApi.listPerkRequests('PENDING'));
+  }, []);
+
+  useEffect(() => {
+    load().catch((e) => onError(errorMessage(e, 'No pudimos cargar las solicitudes.')));
+  }, [load, onError]);
+
+  async function handle(request: PerkRequestView, status: 'APPROVED' | 'DONE' | 'REJECTED') {
+    onError(null);
+    try {
+      const note = notes[request.id]?.trim();
+      await gamificationAdminApi.handlePerkRequest(request.id, {
+        status,
+        ...(note ? { staffNote: note } : {}),
+      });
+      await load();
+    } catch (e) {
+      onError(errorMessage(e, 'No pudimos registrar la respuesta.'));
+    }
+  }
+
+  return (
+    <div className="mt-4 space-y-3">
+      {requests === null ? (
+        <p className="text-sm text-text-muted">Cargando solicitudes…</p>
+      ) : requests.length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center">
+            <p className="font-semibold text-text">No hay solicitudes pendientes</p>
+            <p className="mt-1 text-sm text-text-muted">
+              Aquí caen las peticiones de beneficios en cuanto alguien las manda.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        requests.map((r) => (
+          <Card key={r.id}>
+            <CardContent className="space-y-3 py-4">
+              <div>
+                <p className="font-semibold text-text">{r.perkTitle}</p>
+                <p className="text-sm text-text-muted">
+                  {r.displayName} · {new Date(r.createdAt).toLocaleDateString('es-ES')}
+                </p>
+              </div>
+
+              {r.note ? (
+                <p className="whitespace-pre-line rounded-lg bg-bg-subtle px-3 py-2 text-sm text-text-muted">
+                  {r.note}
+                </p>
+              ) : null}
+
+              <Textarea
+                rows={2}
+                placeholder="Respuesta para el alumno (opcional)"
+                value={notes[r.id] ?? ''}
+                onChange={(e) => setNotes((prev) => ({ ...prev, [r.id]: e.target.value }))}
+              />
+
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => void handle(r, 'APPROVED')}>
+                  Aprobar
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => void handle(r, 'DONE')}>
+                  Marcar hecho
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => void handle(r, 'REJECTED')}>
+                  Rechazar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))
+      )}
+    </div>
   );
 }
 

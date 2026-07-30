@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import {
+  RequestPerkModal,
   SubmitChallengeModal,
   gamificationApi,
   type ChallengeView,
   type LevelView,
+  type MyPerkView,
   type Standing,
 } from '@/modules/gamification';
 
@@ -19,6 +21,7 @@ const STATUS_LABEL: Record<string, { label: string; variant: 'info' | 'success' 
 export default function RetosPage() {
   const [challenges, setChallenges] = useState<ChallengeView[]>([]);
   const [levels, setLevels] = useState<LevelView[]>([]);
+  const [perks, setPerks] = useState<MyPerkView[]>([]);
   const [standing, setStanding] = useState<Standing | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,14 +29,16 @@ export default function RetosPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [list, levelList, mine] = await Promise.all([
+      const [list, levelList, mine, myPerks] = await Promise.all([
         gamificationApi.listChallenges(),
         gamificationApi.listLevels(),
         gamificationApi.myStanding('all'),
+        gamificationApi.myPerks(),
       ]);
       setChallenges(list);
       setLevels(levelList);
       setStanding(mine);
+      setPerks(myPerks);
     } catch {
       setError('No se pudieron cargar los retos.');
     } finally {
@@ -114,6 +119,17 @@ export default function RetosPage() {
                 </div>
               );
             })}
+          </div>
+        </section>
+      ) : null}
+
+      {perks.length > 0 ? (
+        <section className="space-y-3">
+          <h2 className="font-display text-lg font-semibold text-text">Lo que desbloqueas</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {perks.map((perk) => (
+              <PerkCard key={perk.id} perk={perk} onDone={load} />
+            ))}
           </div>
         </section>
       ) : null}
@@ -200,6 +216,66 @@ function ChallengeCard({
         onOpenChange={setOpen}
         onSubmitted={onDone}
       />
+    </div>
+  );
+}
+
+const REQUEST_LABEL: Record<string, string> = {
+  PENDING: 'Solicitado',
+  APPROVED: 'Aprobado',
+  DONE: 'Hecho',
+  REJECTED: 'No concedido',
+};
+
+function PerkCard({ perk, onDone }: { perk: MyPerkView; onDone: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div
+      className={`rounded-xl border p-4 ${
+        perk.unlocked ? 'border-border bg-surface' : 'border-border bg-bg-subtle opacity-70'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="font-semibold text-text">{perk.title}</p>
+        {perk.lastRequestStatus ? (
+          <Badge variant={perk.lastRequestStatus === 'REJECTED' ? 'muted' : 'info'}>
+            {REQUEST_LABEL[perk.lastRequestStatus]}
+          </Badge>
+        ) : null}
+      </div>
+
+      {perk.description ? (
+        <p className="mt-1.5 whitespace-pre-line text-sm text-text-muted">{perk.description}</p>
+      ) : null}
+
+      <p className="mt-2 text-xs text-text-muted">
+        {perk.unlocked
+          ? `Desbloqueado con ${perk.levelName}`
+          : `Se desbloquea en ${perk.levelName} (${perk.levelMinPoints.toLocaleString('es-ES')} puntos)`}
+      </p>
+
+      {perk.unlocked ? (
+        <div className="mt-3">
+          {perk.canRequest ? (
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="rounded-lg bg-(--didacta-trust) px-3 py-1.5 text-sm font-medium text-white"
+            >
+              Pedirlo
+            </button>
+          ) : perk.availableAt ? (
+            <p className="text-xs text-text-muted">
+              Podrás volver a pedirlo el {new Date(perk.availableAt).toLocaleDateString('es-ES')}.
+            </p>
+          ) : (
+            <p className="text-xs text-text-muted">Ya lo has aprovechado.</p>
+          )}
+        </div>
+      ) : null}
+
+      <RequestPerkModal perk={perk} open={open} onOpenChange={setOpen} onRequested={onDone} />
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   GamificationAlreadyReviewedError,
   GamificationAlreadySubmittedError,
   GamificationChallengeClosedError,
+  GamificationPerkUnavailableError,
   GamificationValidationError,
 } from '../src/errors.js';
 
@@ -171,6 +172,8 @@ class MockPrisma {
   levels: Row[] = [];
   challenges: Row[] = [];
   submissions: Row[] = [];
+  perks: Row[] = [];
+  perkRequests: Row[] = [];
 
   modGamificationLedgerEntry = {
     ...makeTable(
@@ -235,8 +238,6 @@ class MockPrisma {
     () => ({
       id: nextId('lvl'),
       benefitText: null,
-      benefitKind: 'NONE',
-      accessGroupId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     }),
@@ -245,6 +246,71 @@ class MockPrisma {
       ['tenantId', 'minPoints'],
     ],
   );
+
+  modGamificationPerk = {
+    ...makeTable(
+      this.perks,
+      () => ({
+        id: nextId('perk'),
+        description: null,
+        maxPerUser: 1,
+        cooldownDays: 0,
+        active: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      [],
+    ),
+    findFirst: async ({ where, include }: never) => {
+      const row = this.perks.find((r) => matches(r, where as Row));
+      if (!row) return null;
+      return this.hydratePerk(row, include as Row | undefined);
+    },
+    findMany: async ({ where, include }: never) => {
+      const found = this.perks.filter((r) => matches(r, where as Row));
+      return found.map((row) => this.hydratePerk(row, include as Row | undefined));
+    },
+  };
+
+  modGamificationPerkRequest = {
+    ...makeTable(
+      this.perkRequests,
+      () => ({
+        id: nextId('preq'),
+        note: null,
+        status: 'PENDING',
+        handledById: null,
+        handledAt: null,
+        staffNote: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      [],
+    ),
+    findMany: async ({ where, include }: never) => {
+      const found = this.perkRequests.filter((r) => matches(r, where as Row));
+      return found
+        .slice()
+        .sort((a, b) => (b['createdAt'] as Date).getTime() - (a['createdAt'] as Date).getTime())
+        .map((row) => {
+          const out: Row = { ...row };
+          if ((include as Row | undefined)?.['perk']) {
+            const perk = this.perks.find((p) => p['id'] === row['perkId']);
+            out['perk'] = { title: perk?.['title'] };
+          }
+          return out;
+        });
+    },
+  };
+
+  private hydratePerk(row: Row, include?: Row): Row {
+    const out: Row = { ...row };
+    if (include?.['level']) {
+      const level = this.levels.find((l) => l['id'] === row['levelId']);
+      out['level'] = { name: level?.['name'], minPoints: level?.['minPoints'] };
+    }
+    return out;
+  }
 
   modGamificationChallenge = {
     ...makeTable(
@@ -624,18 +690,204 @@ describe('niveles', () => {
     await service.deleteLevel(TENANT, plata.id);
     expect(prisma.profiles[0]!['levelKey']).toBe('bronce');
   });
+});
 
-  it('exige grupo de acceso si el beneficio es ACCESS_GROUP', async () => {
-    const { service } = build();
+describe('beneficios de nivel', () => {
+  async function setup() {
+    const ctx = build();
+    const level = await ctx.service.createLevel({
+      tenantId: TENANT,
+      key: 'plata',
+      name: 'Plata',
+      minPoints: 50,
+    });
+    return { ...ctx, level };
+  }
+
+  it('un beneficio aparece bloqueado si no llegas a los puntos del nivel', async () => {
+    const { service, level } = await setup();
+    await service.createPerk({
+      tenantId: TENANT,
+      levelId: level.id,
+      title: 'Sesión 1:1 de 30 minutos',
+    });
+
+    const mine = await service.listMyPerks(TENANT, USER);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]!.unlocked).toBe(false);
+    expect(mine[0]!.canRequest).toBe(false);
+  });
+
+  it('se desbloquea al llegar a los puntos, sin esperar a re-puntuar', async () => {
+    const { service, level } = await setup();
+    await service.createPerk({ tenantId: TENANT, levelId: level.id, title: 'Clase extra' });
+    await service.award({
+      tenantId: TENANT,
+      userId: USER,
+      ruleKey: 'learning.course',
+      sourceKey: 'c1',
+    });
+
+    const mine = await service.listMyPerks(TENANT, USER);
+    expect(mine[0]!.unlocked).toBe(true);
+    expect(mine[0]!.canRequest).toBe(true);
+  });
+
+  it('no se puede pedir sin nivel suficiente', async () => {
+    const { service, level } = await setup();
+    const perk = await service.createPerk({
+      tenantId: TENANT,
+      levelId: level.id,
+      title: 'Píldora personalizada',
+    });
     await expect(
-      service.createLevel({
+      service.requestPerk({ tenantId: TENANT, userId: USER, perkId: perk.id }),
+    ).rejects.toBeInstanceOf(GamificationPerkUnavailableError);
+  });
+
+  it('la solicitud queda PENDIENTE: nada se concede solo', async () => {
+    const { service, level, events } = await setup();
+    const perk = await service.createPerk({ tenantId: TENANT, levelId: level.id, title: '1:1' });
+    await service.award({
+      tenantId: TENANT,
+      userId: USER,
+      ruleKey: 'learning.course',
+      sourceKey: 'c1',
+    });
+
+    const request = await service.requestPerk({
+      tenantId: TENANT,
+      userId: USER,
+      perkId: perk.id,
+      note: 'Quiero repasar mi embudo.',
+    });
+
+    expect(request.status).toBe('PENDING');
+    expect(events.map((e) => e.name)).toContain('gamification.perk.requested');
+  });
+
+  it('respeta el cupo por alumno', async () => {
+    const { service, level } = await setup();
+    const perk = await service.createPerk({
+      tenantId: TENANT,
+      levelId: level.id,
+      title: '1:1',
+      maxPerUser: 1,
+    });
+    await service.award({
+      tenantId: TENANT,
+      userId: USER,
+      ruleKey: 'learning.course',
+      sourceKey: 'c1',
+    });
+    await service.requestPerk({ tenantId: TENANT, userId: USER, perkId: perk.id });
+
+    await expect(
+      service.requestPerk({ tenantId: TENANT, userId: USER, perkId: perk.id }),
+    ).rejects.toBeInstanceOf(GamificationPerkUnavailableError);
+  });
+
+  it('respeta la espera entre solicitudes', async () => {
+    const { service, level } = await setup();
+    const perk = await service.createPerk({
+      tenantId: TENANT,
+      levelId: level.id,
+      title: '1:1 mensual',
+      maxPerUser: 0,
+      cooldownDays: 30,
+    });
+    await service.award({
+      tenantId: TENANT,
+      userId: USER,
+      ruleKey: 'learning.course',
+      sourceKey: 'c1',
+    });
+    await service.requestPerk({ tenantId: TENANT, userId: USER, perkId: perk.id });
+
+    await expect(
+      service.requestPerk({ tenantId: TENANT, userId: USER, perkId: perk.id }),
+    ).rejects.toBeInstanceOf(GamificationPerkUnavailableError);
+
+    // Pasada la espera vuelve a poder pedirlo.
+    const later = new Date(Date.now() + 31 * 86_400_000);
+    const second = await service.requestPerk({
+      tenantId: TENANT,
+      userId: USER,
+      perkId: perk.id,
+      now: later,
+    });
+    expect(second.status).toBe('PENDING');
+  });
+
+  it('un beneficio rechazado no consume cupo', async () => {
+    const { service, level } = await setup();
+    const perk = await service.createPerk({
+      tenantId: TENANT,
+      levelId: level.id,
+      title: '1:1',
+      maxPerUser: 1,
+    });
+    await service.award({
+      tenantId: TENANT,
+      userId: USER,
+      ruleKey: 'learning.course',
+      sourceKey: 'c1',
+    });
+    const request = await service.requestPerk({ tenantId: TENANT, userId: USER, perkId: perk.id });
+    await service.handlePerkRequest({
+      tenantId: TENANT,
+      requestId: request.id,
+      handledById: 'admin',
+      status: 'REJECTED',
+      staffNote: 'Esta semana no tengo hueco.',
+    });
+
+    const second = await service.requestPerk({ tenantId: TENANT, userId: USER, perkId: perk.id });
+    expect(second.status).toBe('PENDING');
+  });
+
+  it('atender dos veces la misma solicitud falla', async () => {
+    const { service, level } = await setup();
+    const perk = await service.createPerk({ tenantId: TENANT, levelId: level.id, title: '1:1' });
+    await service.award({
+      tenantId: TENANT,
+      userId: USER,
+      ruleKey: 'learning.course',
+      sourceKey: 'c1',
+    });
+    const request = await service.requestPerk({ tenantId: TENANT, userId: USER, perkId: perk.id });
+    await service.handlePerkRequest({
+      tenantId: TENANT,
+      requestId: request.id,
+      handledById: 'admin',
+      status: 'DONE',
+    });
+
+    await expect(
+      service.handlePerkRequest({
         tenantId: TENANT,
-        key: 'oro',
-        name: 'Oro',
-        minPoints: 100,
-        benefitKind: 'ACCESS_GROUP',
+        requestId: request.id,
+        handledById: 'admin',
+        status: 'DONE',
       }),
-    ).rejects.toBeInstanceOf(GamificationValidationError);
+    ).rejects.toBeInstanceOf(GamificationAlreadyReviewedError);
+  });
+
+  it('un beneficio desactivado no se lista ni se puede pedir', async () => {
+    const { service, level } = await setup();
+    const perk = await service.createPerk({ tenantId: TENANT, levelId: level.id, title: '1:1' });
+    await service.award({
+      tenantId: TENANT,
+      userId: USER,
+      ruleKey: 'learning.course',
+      sourceKey: 'c1',
+    });
+    await service.updatePerk(TENANT, perk.id, { active: false });
+
+    expect(await service.listMyPerks(TENANT, USER)).toHaveLength(0);
+    await expect(
+      service.requestPerk({ tenantId: TENANT, userId: USER, perkId: perk.id }),
+    ).rejects.toBeInstanceOf(GamificationPerkUnavailableError);
   });
 });
 

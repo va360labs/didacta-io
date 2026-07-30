@@ -8,7 +8,6 @@ const BASE = '/api/v1/modules/gamification';
 export type LeaderboardRange = 'week' | 'month' | 'all';
 export type ChallengeStatus = 'DRAFT' | 'OPEN' | 'CLOSED';
 export type SubmissionStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
-export type BenefitKind = 'NONE' | 'ACCESS_GROUP';
 
 export interface LeaderboardEntry {
   userId: string;
@@ -47,8 +46,46 @@ export interface LevelView {
   name: string;
   minPoints: number;
   benefitText: string | null;
-  benefitKind: BenefitKind;
-  accessGroupId: string | null;
+}
+
+export type PerkRequestStatus = 'PENDING' | 'APPROVED' | 'DONE' | 'REJECTED';
+
+export interface PerkView {
+  id: string;
+  levelId: string;
+  levelName: string;
+  levelMinPoints: number;
+  title: string;
+  description: string | null;
+  maxPerUser: number;
+  cooldownDays: number;
+  active: boolean;
+}
+
+export interface MyPerkView {
+  id: string;
+  title: string;
+  description: string | null;
+  levelName: string;
+  levelMinPoints: number;
+  unlocked: boolean;
+  canRequest: boolean;
+  quotaLeft: number | null;
+  availableAt: string | null;
+  lastRequestStatus: PerkRequestStatus | null;
+}
+
+export interface PerkRequestView {
+  id: string;
+  perkId: string;
+  perkTitle: string;
+  userId: string;
+  displayName: string;
+  note: string | null;
+  status: PerkRequestStatus;
+  staffNote: string | null;
+  handledAt: string | null;
+  createdAt: string;
 }
 
 export interface ChallengeView {
@@ -136,6 +173,26 @@ export const gamificationApi = {
     return res.challenges;
   },
 
+  async myPerks(): Promise<MyPerkView[]> {
+    const res = await apiFetch<{ perks: MyPerkView[] }>(
+      `${BASE}/me/perks`,
+      { method: 'GET' },
+      withAuth(),
+    );
+    return res.perks;
+  },
+
+  async requestPerk(
+    perkId: string,
+    body: { note?: string },
+  ): Promise<{ id: string; status: PerkRequestStatus }> {
+    return apiFetch<{ id: string; status: PerkRequestStatus }>(
+      `${BASE}/perks/${perkId}/request`,
+      { method: 'POST', body: JSON.stringify(body) },
+      withAuth(),
+    );
+  },
+
   async submit(
     challengeId: string,
     body: { proofUrl?: string; proofName?: string; note?: string },
@@ -175,8 +232,6 @@ export const gamificationAdminApi = {
     name: string;
     minPoints: number;
     benefitText?: string;
-    benefitKind?: BenefitKind;
-    accessGroupId?: string;
   }): Promise<LevelView> {
     return apiFetch<LevelView>(
       `${BASE}/admin/levels`,
@@ -191,8 +246,6 @@ export const gamificationAdminApi = {
       name?: string;
       minPoints?: number;
       benefitText?: string | null;
-      benefitKind?: BenefitKind;
-      accessGroupId?: string | null;
     },
   ): Promise<LevelView> {
     return apiFetch<LevelView>(
@@ -204,6 +257,65 @@ export const gamificationAdminApi = {
 
   async deleteLevel(id: string): Promise<void> {
     await apiFetch<void>(`${BASE}/admin/levels/${id}`, { method: 'DELETE' }, withAuth());
+  },
+
+  async listPerks(): Promise<PerkView[]> {
+    const res = await apiFetch<{ perks: PerkView[] }>(
+      `${BASE}/admin/perks`,
+      { method: 'GET' },
+      withAuth(),
+    );
+    return res.perks;
+  },
+
+  async createPerk(body: {
+    levelId: string;
+    title: string;
+    description?: string;
+    maxPerUser?: number;
+    cooldownDays?: number;
+  }): Promise<PerkView> {
+    return apiFetch<PerkView>(
+      `${BASE}/admin/perks`,
+      { method: 'POST', body: JSON.stringify(body) },
+      withAuth(),
+    );
+  },
+
+  async updatePerk(
+    id: string,
+    body: { title?: string; maxPerUser?: number; cooldownDays?: number; active?: boolean },
+  ): Promise<void> {
+    await apiFetch<void>(
+      `${BASE}/admin/perks/${id}`,
+      { method: 'PUT', body: JSON.stringify(body) },
+      withAuth(),
+    );
+  },
+
+  async deletePerk(id: string): Promise<void> {
+    await apiFetch<void>(`${BASE}/admin/perks/${id}`, { method: 'DELETE' }, withAuth());
+  },
+
+  async listPerkRequests(status?: PerkRequestStatus): Promise<PerkRequestView[]> {
+    const qs = status ? `?status=${status}` : '';
+    const res = await apiFetch<{ requests: PerkRequestView[] }>(
+      `${BASE}/admin/perk-requests${qs}`,
+      { method: 'GET' },
+      withAuth(),
+    );
+    return res.requests;
+  },
+
+  async handlePerkRequest(
+    id: string,
+    body: { status: 'APPROVED' | 'DONE' | 'REJECTED'; staffNote?: string },
+  ): Promise<{ status: PerkRequestStatus }> {
+    return apiFetch<{ status: PerkRequestStatus }>(
+      `${BASE}/admin/perk-requests/${id}/handle`,
+      { method: 'POST', body: JSON.stringify(body) },
+      withAuth(),
+    );
   },
 
   async listChallenges(): Promise<ChallengeView[]> {

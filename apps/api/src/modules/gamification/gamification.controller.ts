@@ -42,16 +42,41 @@ const levelBodySchema = z.object({
   name: z.string().trim().min(2).max(80),
   minPoints: z.number().int().min(0).max(100_000),
   benefitText: z.string().trim().max(2000).optional(),
-  benefitKind: z.enum(['NONE', 'ACCESS_GROUP']).optional(),
-  accessGroupId: z.string().uuid().optional(),
+});
+
+const perkBodySchema = z.object({
+  levelId: z.string().uuid(),
+  title: z.string().trim().min(3).max(160),
+  description: z.string().trim().max(2000).optional(),
+  maxPerUser: z.number().int().min(0).max(1000).optional(),
+  cooldownDays: z.number().int().min(0).max(1000).optional(),
+});
+
+const updatePerkSchema = z.object({
+  title: z.string().trim().min(3).max(160).optional(),
+  description: z.string().trim().max(2000).nullable().optional(),
+  maxPerUser: z.number().int().min(0).max(1000).optional(),
+  cooldownDays: z.number().int().min(0).max(1000).optional(),
+  active: z.boolean().optional(),
+});
+
+const requestPerkSchema = z.object({
+  note: z.string().trim().max(1000).optional(),
+});
+
+const handlePerkSchema = z.object({
+  status: z.enum(['APPROVED', 'DONE', 'REJECTED']),
+  staffNote: z.string().trim().max(1000).optional(),
+});
+
+const perkRequestFilterSchema = z.object({
+  status: z.enum(['PENDING', 'APPROVED', 'DONE', 'REJECTED']).optional(),
 });
 
 const updateLevelSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),
   minPoints: z.number().int().min(0).max(100_000).optional(),
   benefitText: z.string().trim().max(2000).nullable().optional(),
-  benefitKind: z.enum(['NONE', 'ACCESS_GROUP']).optional(),
-  accessGroupId: z.string().uuid().nullable().optional(),
 });
 
 /**
@@ -192,6 +217,35 @@ export class GamificationController {
     return { challenges };
   }
 
+  @Get('me/perks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Beneficios de nivel con su estado de desbloqueo y cupo.' })
+  async myPerks(@CurrentUser() user: SessionClaims | undefined) {
+    const u = this.requireUser(user);
+    const perks = await this.registry.getGamificationService().listMyPerks(u.tenantId, u.sub);
+    return { perks };
+  }
+
+  @Post('perks/:id/request')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(201)
+  @ApiOperation({ summary: 'Solicita un beneficio desbloqueado; lo atiende una persona.' })
+  async requestPerk(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(requestPerkSchema)) dto: z.infer<typeof requestPerkSchema>,
+  ) {
+    const u = this.requireUser(user);
+    return this.registry.getGamificationService().requestPerk({
+      tenantId: u.tenantId,
+      userId: u.sub,
+      perkId: ensureUuid(id),
+      ...dto,
+    });
+  }
+
   @Post('challenges/:id/submit')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -270,6 +324,96 @@ export class GamificationController {
   async deleteLevel(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
     const u = this.requireAdmin(user);
     await this.registry.getGamificationService().deleteLevel(u.tenantId, ensureUuid(id));
+  }
+
+  @Get('admin/perks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Beneficios configurados, con el nivel que los desbloquea.' })
+  async listPerks(@CurrentUser() user: SessionClaims | undefined) {
+    const u = this.requireAdmin(user);
+    const perks = await this.registry.getGamificationService().listPerks(u.tenantId);
+    return { perks };
+  }
+
+  @Post('admin/perks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(201)
+  @ApiOperation({ summary: 'Crea un beneficio y lo cuelga de un nivel.' })
+  async createPerk(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(perkBodySchema)) dto: z.infer<typeof perkBodySchema>,
+  ) {
+    const u = this.requireAdmin(user);
+    return this.registry.getGamificationService().createPerk({ tenantId: u.tenantId, ...dto });
+  }
+
+  @Put('admin/perks/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Edita un beneficio (cupo, espera, activación).' })
+  async updatePerk(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updatePerkSchema)) dto: z.infer<typeof updatePerkSchema>,
+  ) {
+    const u = this.requireAdmin(user);
+    await this.registry.getGamificationService().updatePerk(u.tenantId, ensureUuid(id), dto);
+  }
+
+  @Delete('admin/perks/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Borra un beneficio y sus solicitudes.' })
+  async deletePerk(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    const u = this.requireAdmin(user);
+    await this.registry.getGamificationService().deletePerk(u.tenantId, ensureUuid(id));
+  }
+
+  @Get('admin/perk-requests')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Solicitudes de beneficio por atender, con quién las pide.' })
+  async listPerkRequests(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(perkRequestFilterSchema))
+    query: z.infer<typeof perkRequestFilterSchema>,
+  ) {
+    const u = this.requireStaff(user);
+    const requests = await this.registry
+      .getGamificationService()
+      .listPerkRequests(u.tenantId, query.status);
+    const names = await this.resolveDisplayNames(
+      u.tenantId,
+      requests.map((r) => r.userId),
+    );
+    return {
+      requests: requests.map((r) => ({
+        ...r,
+        displayName: names.get(r.userId) ?? r.userId.slice(0, 8),
+      })),
+    };
+  }
+
+  @Post('admin/perk-requests/:id/handle')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Atiende una solicitud: aprobar, marcar hecha o rechazar.' })
+  async handlePerkRequest(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(handlePerkSchema)) dto: z.infer<typeof handlePerkSchema>,
+  ) {
+    const u = this.requireStaff(user);
+    return this.registry.getGamificationService().handlePerkRequest({
+      tenantId: u.tenantId,
+      requestId: ensureUuid(id),
+      handledById: u.sub,
+      ...dto,
+    });
   }
 
   @Get('admin/challenges')
