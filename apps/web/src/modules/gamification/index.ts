@@ -24,7 +24,12 @@ export const gamificationExtension: ModuleWebExtension = {
       icon: 'target',
     },
     {
-      group: 'Administración',
+      // 'Personas y accesos' (área admin), NO 'Personas' (menú principal): son
+      // árboles distintos y este item es solo para el admin. Apuntaba a
+      // 'Administración', un grupo que solo existe para super_admin → el merge
+      // lo descartaba en silencio y el panel era invisible para los
+      // tenant_admin, que son justo su destinatario.
+      group: 'Personas y accesos',
       href: '/admin/gamificacion',
       label: 'Puntos y retos',
       icon: 'trophy',

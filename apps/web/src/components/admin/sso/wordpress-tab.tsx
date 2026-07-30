@@ -23,7 +23,8 @@ import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { wpSsoAdminApi, type WpSsoConfigPutBody, type WpSsoSafeConfig } from '@/lib/sso';
 
-export default function AdminWpSsoPage() {
+/** Pestaña "WordPress" de /admin/sso. Antes era la página `/admin/sso-wordpress`. */
+export function WordpressTab() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [allowed, setAllowed] = useState<boolean | null>(null);
@@ -163,7 +164,7 @@ export default function AdminWpSsoPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">SSO desde WordPress</h1>
+        <h2 className="font-display text-lg font-semibold tracking-tight">SSO desde WordPress</h2>
         <p className="text-text-muted">
           Permite que tus usuarios ya logueados en tu WordPress entren a Didacta sin volver a
           iniciar sesión. Tu WordPress firma un token corto (HMAC) y Didacta lo verifica con el

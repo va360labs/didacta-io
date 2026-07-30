@@ -24,8 +24,11 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { EeGate, LICENSE_CAPABILITIES, useLicense } from '@didacta/license-sdk/react';
 import { Icon } from '@/components/icon';
+import { ZoomWebhookEventsTab } from '@/components/admin/zoom-webhook-events-tab';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,19 +45,58 @@ import {
   type WebhooksInfo,
 } from '@/lib/webhooks';
 
+const TABS = ['salientes', 'zoom'] as const;
+type TabKey = (typeof TABS)[number];
+
+/**
+ * Admin · Webhooks — salientes (los que emite Didacta) y entrantes de Zoom.
+ *
+ * Las entregas de Zoom vivían en `/admin/zoom/webhook-events`, otra entrada del
+ * menú: mirar "qué webhooks se han movido" obligaba a saber de antemano de qué
+ * lado venía el evento. Esa ruta redirige ahora a la pestaña "Zoom".
+ */
 export default function AdminWebhooksPage() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const requested = params.get('tab');
+  const tab: TabKey = (TABS as readonly string[]).includes(requested ?? '')
+    ? (requested as TabKey)
+    : 'salientes';
+
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Webhooks salientes</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Webhooks</h1>
         <p className="text-text-muted">
-          Configura URLs externas que reciban una notificación cada vez que sucede un evento en la
-          plataforma (alumno completa curso, nuevo post en comunidad, etc.). Útil para integrar con
-          sistemas internos (Slack, CRM, ERP) o automatizaciones n8n / Zapier.
+          Los eventos que salen de la plataforma hacia tus sistemas y los que entran desde Zoom.
         </p>
       </header>
 
-      <WebhooksDashboard />
+      <Tabs
+        value={tab}
+        onValueChange={(next) =>
+          router.replace(next === 'salientes' ? '/admin/webhooks' : `/admin/webhooks?tab=${next}`)
+        }
+      >
+        <TabsList>
+          <TabsTrigger value="salientes">Salientes</TabsTrigger>
+          <TabsTrigger value="zoom">Zoom</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="salientes" className="mt-5">
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-text-muted">
+              URLs externas que reciben una notificación cada vez que sucede un evento en la
+              plataforma (alumno completa curso, nuevo post en comunidad, etc.). Útil para integrar
+              con sistemas internos (Slack, CRM, ERP) o automatizaciones n8n / Zapier.
+            </p>
+            <WebhooksDashboard />
+          </div>
+        </TabsContent>
+        <TabsContent value="zoom" className="mt-5">
+          <ZoomWebhookEventsTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

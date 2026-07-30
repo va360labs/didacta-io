@@ -71,14 +71,24 @@ test.describe('Métricas del negocio (bloque 7)', () => {
       refreshToken: adminAuth.tokens.refreshToken,
       user: { ...(adminAuth.user as never), onboardingCompletedAt: new Date().toISOString() },
     });
+    // /admin/metricas es ahora un redirect a la pestaña "Negocio" del panel:
+    // los KPIs dejaron de tener pantalla propia para no competir con /admin.
     await page.goto('/admin/metricas');
-    await expect(page.getByRole('heading', { name: 'Métricas del negocio' })).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\?tab=negocio/);
+    await expect(page.getByRole('heading', { name: 'Panel del tenant' })).toBeVisible();
     await expect(page.getByText('NPS (30 días)')).toBeVisible();
     await expect(page.getByText('Ventas (30 días)')).toBeVisible();
     await expect(page.getByText('Impagos ahora')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Ventas por semana' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Altas por semana' })).toBeVisible();
-    // El item del sidebar admin lleva a la página.
-    await expect(page.getByRole('link', { name: 'Métricas' })).toBeVisible();
+
+    // Y se llega igual desde la pestaña, entrando por el panel.
+    await page.goto('/admin');
+    await expect(page.getByRole('tab', { name: 'Actividad' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await page.getByRole('tab', { name: 'Negocio' }).click();
+    await expect(page.getByText('NPS (30 días)')).toBeVisible();
   });
 });

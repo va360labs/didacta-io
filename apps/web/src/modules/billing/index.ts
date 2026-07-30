@@ -10,7 +10,7 @@ export const billingExtension: ModuleWebExtension = {
   name: 'mod.billing',
   sidebarItems: [
     {
-      group: 'Facturación',
+      group: 'Ingresos',
       href: '/admin/billing/products',
       label: 'Productos (Stripe)',
       icon: 'package',

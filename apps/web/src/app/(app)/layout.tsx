@@ -19,6 +19,13 @@ import { formatTenantName } from '@/lib/tenant-name';
 import { useTenantContext } from '@/lib/tenant-context';
 import { mergeExtensionSidebarItems } from '@/lib/sidebar-extensions-merge';
 import { filterByActiveModules } from '@/lib/sidebar-modules-filter';
+import {
+  buildGroups,
+  buildAdminGroups,
+  applyAdminBadges,
+  ADMIN_BACK_LINK,
+} from '@/lib/sidebar-nav';
+import { useAdminPendingCounts } from '@/lib/admin-pending-counts';
 import { moduleExtensions } from '@/modules';
 import { useCommunitySpaces, invalidateCommunitySpacesCache } from '@/modules/community';
 import { themeCache, requestThemeRefresh } from '@/lib/theming';
@@ -268,7 +275,11 @@ function Shell({
       });
   const userRoles = new Set(session.user.roles);
   const mergedGroups = mergeExtensionSidebarItems(baseGroups, moduleExtensions, userRoles);
-  const groups = filterByActiveModules(mergedGroups, activeModules);
+  const filteredGroups = filterByActiveModules(mergedGroups, activeModules);
+  // Badges de trabajo pendiente (solicitudes de inscripción, impagos). Se
+  // aplican al final para que alcancen también a items aportados por módulos.
+  const pendingCounts = useAdminPendingCounts(isAdminArea);
+  const groups = isAdminArea ? applyAdminBadges(filteredGroups, pendingCounts) : filteredGroups;
 
   // `<title>` del documento: "Sección actual | Nombre del Tenant | Didacta".
   // Antes todas las páginas mostraban solo "Didacta" (default del root layout):
@@ -299,6 +310,7 @@ function Shell({
             session={session}
             onLogout={onLogout}
             onOpenSearch={() => setCmdOpen(true)}
+            backLink={isAdminArea ? ADMIN_BACK_LINK : undefined}
           />
 
           {/* Drawer de navegación — solo móvil (<lg). Reutiliza el mismo sidebar. */}
@@ -310,6 +322,7 @@ function Shell({
             session={session}
             onLogout={onLogout}
             onOpenSearch={() => setCmdOpen(true)}
+            backLink={isAdminArea ? ADMIN_BACK_LINK : undefined}
           />
 
           <div className="flex min-w-0 flex-1 flex-col">
@@ -393,195 +406,6 @@ function resolveSectionLabel(groups: SidebarGroup[], pathname: string): string |
   return best?.label ?? null;
 }
 
-function buildGroups({
-  isAdminOrFormador,
-  isSuperAdmin,
-  isAdmin,
-  espacios,
-}: {
-  isAdminOrFormador: boolean;
-  isSuperAdmin: boolean;
-  isAdmin: boolean;
-  espacios: SidebarGroup;
-}): SidebarGroup[] {
-  // ── Inicio ─────────────────────────────────────────────────────────────────
-  const inicio: SidebarGroup = {
-    label: 'Inicio',
-    icon: 'home',
-    items: [
-      { href: '/comunidad', label: 'Feed de la comunidad', icon: 'globe', exactMatch: true },
-      { href: '/inicio/mi-panel', label: 'Mi panel', icon: 'chart', exactMatch: true },
-    ],
-  };
-
-  // ── Aprendizaje ────────────────────────────────────────────────────────────
-  const aprendizaje: SidebarGroup = {
-    label: 'Aprendizaje',
-    icon: 'book',
-    // "Rutas de aprendizaje" se ocultó del menú por ahora (mismo criterio que
-    // /grupos en el bloque 9): la ruta /rutas sigue viva y el formador conserva
-    // "Mis rutas", solo desaparece la entrada del alumno.
-    items: [
-      { href: '/cursos', label: 'Cursos', icon: 'book' },
-      { href: '/mis-certificados', label: 'Certificados', icon: 'award' },
-    ],
-  };
-
-  // ── Agenda ─────────────────────────────────────────────────────────────────
-  // Bloque 9: "Eventos en directo" se fusionó con el calendario (pestaña
-  // "Eventos" en /calendario; /eventos redirige allí). El grupo "Grupos" se
-  // ocultó del menú mientras la feature no esté activa — la ruta /grupos sigue
-  // existiendo, solo desaparece la entrada (un menú vacío es peor que ninguno).
-  const agenda: SidebarGroup = {
-    label: 'Agenda',
-    icon: 'calendar',
-    items: [{ href: '/calendario', label: 'Calendario', icon: 'calendar' }],
-  };
-
-  // ── Personas ───────────────────────────────────────────────────────────────
-  const personas: SidebarGroup = {
-    label: 'Personas',
-    icon: 'users',
-    items: [
-      { href: '/miembros', label: 'Miembros', icon: 'users' },
-      // 'Clasificación' y 'Retos' los aporta la extensión de mod.gamification,
-      // así desaparecen si el tenant desactiva el módulo (el /leaderboard
-      // anterior era fijo y se quedaba vacío).
-      { href: '/mensajes', label: 'Mensajes', icon: 'messages' },
-      { href: '/referidos', label: 'Referidos', icon: 'sparkles' },
-    ],
-  };
-
-  if (!isAdminOrFormador) {
-    return [inicio, espacios, aprendizaje, agenda, personas];
-  }
-
-  // ── Profesor ───────────────────────────────────────────────────────────────
-  // El item "Aula virtual" del módulo `mod.zoom-live` y "Correcciones" de
-  // `mod.ai-grader` NO se hardcodean acá — los aporta cada extensión vía
-  // `moduleExtensions[].sidebarItems`. El core no debe conocer features de
-  // un módulo (rompe el contrato de módulo).
-  const profesor: SidebarGroup = {
-    // El label DEBE ser 'Formador' (no 'Profesor'): es la clave por la que
-    // `mergeExtensionSidebarItems` inserta los items de extensión de los módulos
-    // (zoom-live → Aula virtual, certificates → Plantillas certificado, …), que
-    // declaran `group: 'Formador'`. Con 'Profesor' el merge no casaba y esos
-    // items se caían silenciosamente (features huérfanas).
-    label: 'Formador',
-    icon: 'edit',
-    items: [
-      { href: '/formador', label: 'Panel', icon: 'chart', exactMatch: true },
-      { href: '/formador/cursos', label: 'Mis cursos', icon: 'book' },
-      { href: '/formador/rutas', label: 'Mis rutas', icon: 'route' },
-      { href: '/formador/correcciones', label: 'Correcciones', icon: 'check' },
-    ],
-  };
-
-  if (!isAdmin) {
-    return [inicio, espacios, aprendizaje, agenda, personas, profesor];
-  }
-
-  // ── Administración (entrada) ─────────────────────────────────────────────
-  // El admin tiene su PROPIA área (buildAdminGroups): el menú principal solo
-  // muestra UNA entrada que lleva a /admin, donde el sidebar cambia a las
-  // sub-secciones de administración. Así el rail principal no se satura con ~20
-  // items. La etiqueta del grupo es 'Gestión' (NO 'Administración') a propósito:
-  // así las extensiones de módulos que apuntan a 'Administración' NO se cuelan
-  // en el menú principal — solo aparecen dentro del área admin.
-  const entradaAdmin: SidebarGroup = {
-    label: 'Gestión',
-    icon: 'building',
-    items: [{ href: '/admin', label: 'Administración', icon: 'building' }],
-  };
-
-  return [inicio, espacios, aprendizaje, agenda, personas, profesor, entradaAdmin];
-}
-
-/**
- * Sidebar del ÁREA de administración. Se usa cuando el pathname empieza por
- * `/admin` o `/super` (ver Shell): reemplaza al sidebar principal para que el
- * admin tenga su propio espacio, organizado en sub-secciones + "Volver a la app".
- *
- * Los labels 'Facturación' / 'Integraciones' / 'Administración' coinciden A
- * PROPÓSITO con los `group` que declaran las extensiones de módulos (billing →
- * Facturación, fundae → Integraciones, migrator → Administración) para que
- * `mergeExtensionSidebarItems` inserte sus items aquí dentro.
- */
-function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): SidebarGroup[] {
-  const general: SidebarGroup = {
-    label: 'General',
-    icon: 'building',
-    items: [
-      { href: '/comunidad', label: '← Volver a la app', icon: 'home', exactMatch: true },
-      { href: '/admin', label: 'Panel', icon: 'chart', exactMatch: true },
-      { href: '/admin/metricas', label: 'Métricas', icon: 'trending' },
-      { href: '/admin/usuarios', label: 'Usuarios y roles', icon: 'users' },
-      { href: '/admin/invitaciones', label: 'Invitaciones', icon: 'bell' },
-      { href: '/admin/solicitudes-miembros', label: 'Solicitudes de inscripción', icon: 'users' },
-      { href: '/admin/membresia', label: 'Membresía', icon: 'sparkles' },
-      { href: '/admin/grupos-acceso', label: 'Grupos de acceso', icon: 'lock' },
-      { href: '/admin/competencias', label: 'Competencias', icon: 'award' },
-      { href: '/admin/cursos/categorias', label: 'Categorías de cursos', icon: 'book' },
-      { href: '/admin/imagenes', label: 'Imágenes', icon: 'image' },
-      { href: '/admin/branding', label: 'Branding', icon: 'palette' },
-      { href: '/admin/emails', label: 'Emails', icon: 'bell' },
-      { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
-    ],
-  };
-  const comunidad: SidebarGroup = {
-    label: 'Comunidad',
-    icon: 'hash',
-    items: [
-      { href: '/admin/comunidad/espacios', label: 'Espacios', icon: 'hash' },
-      { href: '/admin/comunidad/tags', label: 'Tags', icon: 'message' },
-      { href: '/admin/avisos', label: 'Avisos', icon: 'bell' },
-      { href: '/admin/comunidad/publicaciones-api', label: 'Publicaciones API', icon: 'code' },
-    ],
-  };
-  const facturacion: SidebarGroup = {
-    label: 'Facturación',
-    icon: 'shield',
-    items: [
-      { href: '/admin/impagos', label: 'Impagos', icon: 'shield' },
-      { href: '/admin/referidos', label: 'Referidos', icon: 'sparkles' },
-    ],
-  };
-  const seguridad: SidebarGroup = {
-    label: 'Seguridad',
-    icon: 'shield',
-    items: [
-      { href: '/admin/seguridad', label: 'Seguridad', icon: 'shield' },
-      { href: '/admin/auditoria', label: 'Auditoría', icon: 'shield' },
-      // Features EE con UI: siempre visibles (patrón EeGate); el backend gatea.
-      { href: '/admin/sso', label: 'SSO (OIDC)', icon: 'lock' },
-      { href: '/admin/sso-saml', label: 'SSO (SAML)', icon: 'lock' },
-      // WP-SSO es Community (sin gate EE) — login desde WordPress.
-      { href: '/admin/sso-wordpress', label: 'SSO (WordPress)', icon: 'lock' },
-      { href: '/admin/scim', label: 'SCIM Provisioning', icon: 'users' },
-    ],
-  };
-  const integraciones: SidebarGroup = {
-    label: 'Integraciones',
-    icon: 'package',
-    items: [
-      { href: '/admin/webhooks', label: 'Webhooks API', icon: 'package' },
-      { href: '/admin/api-keys', label: 'Claves API', icon: 'code' },
-      { href: '/admin/rate-limit', label: 'Límites API', icon: 'trending' },
-      { href: '/admin/dominios', label: 'Dominios propios', icon: 'building' },
-      { href: '/admin/ia/providers', label: 'Proveedores de IA', icon: 'sparkles' },
-      { href: '/admin/zoom/webhook-events', label: 'Webhooks Zoom', icon: 'calendar' },
-    ],
-  };
-  const groups: SidebarGroup[] = [general, comunidad, facturacion, seguridad, integraciones];
-  if (isSuperAdmin) {
-    groups.push({
-      label: 'Administración',
-      icon: 'building',
-      items: [
-        { href: '/admin/tenants', label: 'Tenants', icon: 'building' },
-        { href: '/admin/marketplace', label: 'Marketplace módulos', icon: 'package' },
-      ],
-    });
-  }
-  return groups;
-}
+// `buildGroups` y `buildAdminGroups` viven ahora en `@/lib/sidebar-nav` — son
+// funciones puras y así los guards pueden importarlas en vez de hacer regex
+// sobre este archivo (ver `sidebar-nav.test.ts`).
