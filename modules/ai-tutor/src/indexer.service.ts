@@ -70,6 +70,18 @@ interface PreparedChunk extends Chunk {
   lessonId: string | null;
 }
 
+/** Resultado de reindexar una sola lección. */
+export interface IndexLessonResult {
+  lessonId: string;
+  /** Curso al que pertenece, null si no se pudo resolver. */
+  courseId: string | null;
+  chunksGenerated: number;
+  tokensUsed: number;
+  /** Motivo por el que no se indexó, o null si sí se indexó. */
+  skipped: string | null;
+  durationMs: number;
+}
+
 export class AiTutorIndexerService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -272,6 +284,173 @@ export class AiTutorIndexerService {
       tokensUsed: totalTokens,
       durationMs: Date.now() - start,
     };
+  }
+
+  /**
+   * Reindexa UNA lección. Es el camino normal cuando el formador sube una clase
+   * nueva o pega su transcripción: reindexar el curso entero costaría cientos de
+   * embeddings para cambiar una lección.
+   *
+   * Idempotente: borra los chunks de esa lección y vuelve a generarlos. Si el
+   * curso no está publicado o la lección no tiene texto indexable, deja el
+   * índice limpio y devuelve 0 chunks — nunca lanza por eso, porque va colgado
+   * de un evento y no debe tumbar el guardado de la lección.
+   */
+  async indexLesson(tenantId: string, lessonId: string): Promise<IndexLessonResult> {
+    const start = Date.now();
+    const vacio = (motivo: string): IndexLessonResult => ({
+      lessonId,
+      courseId: null,
+      chunksGenerated: 0,
+      tokensUsed: 0,
+      skipped: motivo,
+      durationMs: Date.now() - start,
+    });
+
+    const lesson = (await this.prisma.modCoursesLesson.findFirst({
+      where: { tenantId, id: lessonId, deletedAt: null },
+      select: { id: true, moduleId: true, type: true, title: true, content: true },
+    })) as (LessonRow & { moduleId: string }) | null;
+    if (!lesson) return vacio('lección inexistente o borrada');
+
+    const courseModule = (await this.prisma.modCoursesModule.findFirst({
+      where: { tenantId, id: lesson.moduleId, deletedAt: null },
+      select: { id: true, courseId: true, title: true, position: true },
+    })) as (ModuleRow & { courseId: string }) | null;
+    if (!courseModule) return vacio('módulo inexistente o borrado');
+
+    const courseId = courseModule.courseId;
+    const course = (await this.prisma.modCoursesCourse.findFirst({
+      where: { tenantId, id: courseId, deletedAt: null },
+      select: { status: true },
+    })) as { status: string } | null;
+    if (!course) return { ...vacio('curso inexistente'), courseId };
+    if (course.status !== 'PUBLISHED') {
+      return { ...vacio('curso no publicado'), courseId };
+    }
+
+    // Fuera los chunks viejos de esta lección, pase lo que pase después: si la
+    // lección se quedó sin texto, lo correcto es que el tutor deje de citarla.
+    await this.prisma.$executeRawUnsafe(
+      'DELETE FROM "mod_ai_tutor_chunk" WHERE "tenant_id" = $1::uuid AND "lesson_id" = $2::uuid',
+      tenantId,
+      lessonId,
+    );
+
+    const extracted = extractLessonText({
+      type: lesson.type,
+      title: lesson.title,
+      content: (lesson.content as Record<string, unknown>) ?? {},
+    });
+    if (!extracted.text) {
+      return { ...vacio(extracted.skipReason ?? 'sin texto indexable'), courseId };
+    }
+
+    const withModuleHeader = `[Módulo ${courseModule.position + 1}: ${courseModule.title}]\n\n${extracted.text}`;
+    const chunks = chunkText(withModuleHeader);
+    if (chunks.length === 0) return { ...vacio('el troceado no produjo nada'), courseId };
+
+    const { embeddings, totalTokens } = await this.embedInBatches(
+      tenantId,
+      chunks.map((c) => c.content),
+      courseId,
+    );
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i]!;
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO "mod_ai_tutor_chunk"
+         ("id", "tenant_id", "course_id", "lesson_id", "ordinal", "content", "embedding", "tokens_count", "created_at")
+         VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7::vector, $8, NOW())`,
+        randomUUID(),
+        tenantId,
+        courseId,
+        lessonId,
+        chunk.ordinal,
+        chunk.content,
+        '[' + embeddings[i]!.join(',') + ']',
+        chunk.tokensCount,
+      );
+    }
+
+    this.ctx.logger.info('mod.ai-tutor: lección reindexada', {
+      tenantId,
+      courseId,
+      lessonId,
+      chunksGenerated: chunks.length,
+      tokensUsed: totalTokens,
+      durationMs: Date.now() - start,
+    });
+
+    return {
+      lessonId,
+      courseId,
+      chunksGenerated: chunks.length,
+      tokensUsed: totalTokens,
+      skipped: null,
+      durationMs: Date.now() - start,
+    };
+  }
+
+  /** Borra los chunks de una lección (al borrarla). Idempotente. */
+  async unindexLesson(tenantId: string, lessonId: string): Promise<void> {
+    await this.prisma.$executeRawUnsafe(
+      'DELETE FROM "mod_ai_tutor_chunk" WHERE "tenant_id" = $1::uuid AND "lesson_id" = $2::uuid',
+      tenantId,
+      lessonId,
+    );
+  }
+
+  /**
+   * Genera embeddings en lotes y valida la dimensión. Compartido por la
+   * indexación de curso y la de lección.
+   */
+  private async embedInBatches(
+    tenantId: string,
+    texts: string[],
+    courseId: string,
+  ): Promise<{ embeddings: number[][]; totalTokens: number }> {
+    const BATCH_SIZE = 64;
+    const embeddings: number[][] = new Array(texts.length);
+    let totalTokens = 0;
+    let dimension = 0;
+
+    for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+      const batch = texts.slice(i, i + BATCH_SIZE);
+      let result;
+      try {
+        result = await this.embedFn({ tenantId, texts: batch });
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        await this.publish(tenantId, 'ai-tutor.course.index-failed', {
+          courseId,
+          batchIndex: i,
+          reason,
+        });
+        throw new EmbeddingsProviderError('gateway', reason);
+      }
+      if (result.embeddings.length !== batch.length) {
+        throw new EmbeddingsProviderError(
+          'gateway',
+          `embeddings count mismatch: esperados ${batch.length}, recibidos ${result.embeddings.length}`,
+        );
+      }
+      totalTokens += result.totalTokens;
+      dimension = result.dimension;
+      for (let j = 0; j < batch.length; j++) embeddings[i + j] = result.embeddings[j]!;
+    }
+
+    const EXPECTED_DIM = 1536;
+    if (dimension !== EXPECTED_DIM) {
+      throw new EmbeddingsProviderError(
+        'gateway',
+        `dimensión ${dimension} ≠ esperada ${EXPECTED_DIM}. ` +
+          'El schema mod_ai_tutor_chunk usa vector(1536). ' +
+          'Reconfigura el provider de embeddings del tenant o migra el schema.',
+      );
+    }
+
+    return { embeddings, totalTokens };
   }
 
   /**

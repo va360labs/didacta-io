@@ -18,6 +18,7 @@ import { ApiHttpError } from '@/lib/api-client';
 import { assessmentsApi } from '@/modules/assessments';
 import { coursesApi, type CourseLesson, type LessonType } from '@/lib/courses';
 import { scormApi, type ScormPackageMetadata } from '@/lib/scorm';
+import { normalizeTranscript } from '@/lib/transcript';
 
 /** ISO → valor de `<input type="datetime-local">` en hora LOCAL (YYYY-MM-DDTHH:mm). */
 function isoToLocalInput(iso: string): string {
@@ -79,6 +80,10 @@ export function LessonContentEditor({
     typeof content['resources'] === 'string' ? content['resources'] : '',
   );
   const [html, setHtml] = useState(typeof content['html'] === 'string' ? content['html'] : '');
+  const [transcript, setTranscript] = useState(
+    typeof content['transcript'] === 'string' ? content['transcript'] : '',
+  );
+  const [transcriptAviso, setTranscriptAviso] = useState<string | null>(null);
   const [text, setText] = useState(typeof content['text'] === 'string' ? content['text'] : '');
   const [quizId, setQuizId] = useState(
     typeof content['quizId'] === 'string' ? content['quizId'] : '',
@@ -95,7 +100,9 @@ export function LessonContentEditor({
         // `html`: contenido complementario opcional que el player pinta debajo
         // del vídeo (texto enriquecido). Lo guardamos siempre (vacío incluido)
         // para poder borrarlo desde el editor.
-        return { videoUrl, resources, html };
+        // `transcript`: lo que el tutor IA usa para responder sobre esta clase.
+        // No se muestra al alumno; al guardar, la lección se reindexa sola.
+        return { videoUrl, resources, html, transcript };
       case 'PDF':
         return { pdfUrl };
       case 'HTML':
@@ -213,6 +220,69 @@ export function LessonContentEditor({
             <p className="text-xs text-text-subtle">
               Texto enriquecido opcional que complementa la clase (encabezados, listas, enlaces,
               imágenes). Se sanitiza al mostrarse al alumno. El vídeo va arriba, en su reproductor.
+            </p>
+          </div>
+
+          <div className="space-y-1.5 pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label htmlFor={`transcript-${lesson.id}`}>Transcripción (para el tutor IA)</Label>
+              <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-brand hover:underline">
+                <Icon name="file" className="h-3.5 w-3.5" />
+                Subir .srt, .vtt o .txt
+                <input
+                  type="file"
+                  accept=".srt,.vtt,.txt,text/plain"
+                  className="sr-only"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!file) return;
+                    const crudo = await file.text();
+                    const r = normalizeTranscript(crudo);
+                    if (!r.text) {
+                      setTranscriptAviso('El archivo no tenía texto que aprovechar.');
+                      return;
+                    }
+                    setTranscript(r.text);
+                    setTranscriptAviso(
+                      r.formato === 'subtitulos'
+                        ? `${file.name}: ${r.bloques} bloques con marca de tiempo. El tutor podrá citar el minuto exacto.`
+                        : `${file.name}: texto sin marcas de tiempo. El tutor lo usará igual, pero no podrá citar el minuto.`,
+                    );
+                  }}
+                />
+              </label>
+            </div>
+            <Textarea
+              id={`transcript-${lesson.id}`}
+              rows={8}
+              value={transcript}
+              onChange={(e) => {
+                setTranscript(e.target.value);
+                setTranscriptAviso(null);
+              }}
+              placeholder={
+                '[0:00] Hola, en esta clase vamos a ver los webhooks.\n\n[0:32] Lo primero es crear el nodo…'
+              }
+              className="font-mono text-xs"
+            />
+            {transcriptAviso ? (
+              <p className="text-xs font-medium text-brand">{transcriptAviso}</p>
+            ) : null}
+            <p className="text-xs text-text-subtle">
+              No se muestra al alumno: es lo que lee el tutor IA para responder dudas sobre esta
+              clase. Al guardar, la lección se reindexa sola. Si subes subtítulos, se convierten a
+              bloques <code>[mm:ss] texto</code> y el tutor podrá responder «te lo explica en el
+              12:34» enlazando a ese punto del vídeo.
+              {transcript ? (
+                <>
+                  {' '}
+                  Ahora mismo: <strong>{transcript.length.toLocaleString('es-ES')}</strong>{' '}
+                  caracteres.
+                </>
+              ) : (
+                ' Ahora mismo esta clase es invisible para el tutor.'
+              )}
             </p>
           </div>
         </div>

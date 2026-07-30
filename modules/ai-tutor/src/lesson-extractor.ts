@@ -114,6 +114,21 @@ function pickString(obj: Record<string, unknown>, keys: readonly string[]): stri
  */
 function stripHtmlTags(html: string): string {
   let text = html;
+  // Bloques cuyo CONTENIDO no es texto para el alumno. Hay que borrarlos
+  // enteros ANTES de quitar etiquetas: si sólo se quitan los tags, el CSS y el
+  // JS quedan dentro como si fueran prosa.
+  //
+  // Pasó de verdad: los chunks más grandes del índice de producción eran
+  // `:root{ --clay:#CC785C; … }` del bloque <style> que arrastró la
+  // importación de LearnDash — 730 tokens de variables de color compitiendo
+  // con el contenido real en la búsqueda por similitud (2026-07-30).
+  text = text.replace(/<(style|script|noscript|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ');
+  // Etiquetas vacías cuyo contenido tampoco aporta texto (iframes de vídeo,
+  // svg decorativos). Sin el cierre no hay nada que borrar: cae en el strip
+  // genérico de abajo.
+  text = text.replace(/<(iframe|svg|canvas|object)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ');
+  // Comentarios HTML
+  text = text.replace(/<!--[\s\S]*?-->/g, ' ');
   // Saltos de línea por bloques semánticos
   text = text.replace(/<\/?(br|p|div|h[1-6]|li|tr)[^>]*>/gi, '\n');
   // Espacio entre celdas inline

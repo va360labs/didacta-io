@@ -6,10 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
+import { formatMmSs } from '@/lib/transcript';
 import { aiTutorApi, type AskResponseView, type CitationView } from '@/modules/ai-tutor';
 
 interface Props {
   courseId: string;
+  /** Lección abierta ahora mismo. El tutor prioriza sus fragmentos. */
+  lessonId?: string;
+  /** Título de esa lección, para decírselo al alumno en la cabecera. */
+  lessonTitle?: string;
+  /** Segundo del vídeo en el que va, si el reproductor lo reporta. */
+  positionSeconds?: number;
 }
 
 interface Turn {
@@ -35,12 +42,13 @@ interface Turn {
  *   - 429 AI_TUTOR_TOKEN_QUOTA_EXCEEDED / AI_PROVIDER_RATE_LIMIT.
  *   - 502 AI_PROVIDER_UNAVAILABLE / *_PROVIDER_ERROR.
  */
-export function AiTutorPanel({ courseId }: Props) {
+export function AiTutorPanel({ courseId, lessonId, lessonTitle, positionSeconds }: Props) {
   const [question, setQuestion] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [turns, setTurns] = useState<Turn[]>([]);
+  const [quota, setQuota] = useState<{ remaining: number; limit: number } | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -52,8 +60,13 @@ export function AiTutorPanel({ courseId }: Props) {
       const r: AskResponseView = await aiTutorApi.ask(courseId, {
         question: q,
         conversationId,
+        // Sin esto el tutor es un buscador del curso entero: no sabe que la
+        // duda es de la clase que el alumno tiene delante ni por dónde va.
+        lessonId,
+        positionSeconds,
       });
       setConversationId(r.conversationId);
+      setQuota({ remaining: r.quota.remaining, limit: r.quota.limit });
       setTurns((prev) => [
         ...prev,
         {
@@ -84,9 +97,15 @@ export function AiTutorPanel({ courseId }: Props) {
           <div>
             <h3 className="font-display text-lg font-semibold text-text">Tutor IA</h3>
             <p className="text-xs text-text-subtle">
-              Pregunta lo que quieras sobre el curso. Las respuestas se basan en el contenido
-              publicado e incluyen citas a las lecciones.
+              {lessonTitle
+                ? `Pregunta sobre «${lessonTitle}» o sobre cualquier otra parte del curso. Responde con lo que se explica en clase y te dice dónde verlo.`
+                : 'Pregunta lo que quieras sobre el curso. Las respuestas se basan en el contenido publicado e incluyen citas a las lecciones.'}
             </p>
+            {quota ? (
+              <p className="mt-1 text-[11px] text-text-subtle">
+                Te quedan <strong>{quota.remaining}</strong> de {quota.limit} preguntas hoy.
+              </p>
+            ) : null}
           </div>
           {turns.length > 0 ? (
             <Button type="button" size="sm" variant="ghost" onClick={reset}>
@@ -125,7 +144,12 @@ export function AiTutorPanel({ courseId }: Props) {
                           >
                             <span className="font-semibold text-text">
                               [{ci + 1}] {c.lessonTitle ?? 'Lección'}
-                            </span>{' '}
+                            </span>
+                            {c.startSeconds !== null ? (
+                              <span className="ml-1 font-mono text-[11px] text-brand">
+                                min {formatMmSs(c.startSeconds)}
+                              </span>
+                            ) : null}{' '}
                             — <span className="italic">{c.snippet}</span>
                           </li>
                         ))}

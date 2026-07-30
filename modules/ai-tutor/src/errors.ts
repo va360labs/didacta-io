@@ -27,6 +27,34 @@ export class CourseNotPublishedError extends AiTutorError {
   }
 }
 
+/**
+ * El alumno pide el tutor de un curso en el que no está matriculado. La ficha
+ * del curso ya esconde el contenido sin matrícula; sin esta comprobación el
+ * tutor era una puerta trasera para leer resumido un curso sin comprarlo.
+ */
+export class CourseAccessDeniedError extends AiTutorError {
+  constructor(courseId: string) {
+    super(
+      'AI_TUTOR_COURSE_ACCESS_DENIED',
+      `Sin acceso al curso ${courseId}: el tutor sólo responde sobre cursos en los que estás matriculado.`,
+    );
+  }
+}
+
+/** Cuota diaria de preguntas del alumno. Se comprueba ANTES de gastar en IA. */
+export class DailyQuestionQuotaExceededError extends AiTutorError {
+  constructor(
+    public readonly used: number,
+    public readonly limit: number,
+  ) {
+    super(
+      'AI_TUTOR_DAILY_QUESTION_QUOTA',
+      `Has llegado a tu límite de ${limit} preguntas al tutor por día (llevas ${used}). ` +
+        'Vuelve mañana o escribe a tu formador.',
+    );
+  }
+}
+
 export class TokenQuotaExceededError extends AiTutorError {
   constructor(scope: 'user' | 'tenant', usedTokens: number, limitTokens: number) {
     super(

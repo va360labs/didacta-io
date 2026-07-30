@@ -6,6 +6,8 @@ export interface CitationView {
   lessonTitle: string | null;
   chunkOrdinal: number;
   snippet: string;
+  /** Segundo del vídeo donde empieza lo citado, si la transcripción lo traía. */
+  startSeconds: number | null;
 }
 
 export interface AskResponseView {
@@ -13,6 +15,7 @@ export interface AskResponseView {
   citations: CitationView[];
   conversationId: string;
   tokensUsed: { input: number; output: number };
+  quota: { used: number; limit: number; remaining: number };
 }
 
 export interface IndexCourseResultView {
@@ -61,7 +64,15 @@ export const aiTutorApi = {
   /** El alumno (o cualquier usuario autenticado) pregunta al tutor del curso. */
   async ask(
     courseId: string,
-    input: { question: string; conversationId?: string; topK?: number },
+    input: {
+      question: string;
+      conversationId?: string;
+      topK?: number;
+      /** Lección que está viendo: prioriza sus fragmentos y sitúa la duda. */
+      lessonId?: string;
+      /** Segundo del vídeo en el que va. */
+      positionSeconds?: number;
+    },
   ): Promise<AskResponseView> {
     return apiFetch<AskResponseView>(
       `/api/v1/modules/ai-tutor/courses/${courseId}/ask`,

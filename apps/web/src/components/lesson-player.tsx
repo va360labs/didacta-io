@@ -34,6 +34,12 @@ interface Props {
   initialCompleted?: boolean;
   onProgress?: (progressPercent: number) => void;
   /**
+   * Posición actual del vídeo (segundos), cada vez que el reproductor reporta.
+   * La usa el tutor IA para saber por dónde va el alumno cuando pregunta. Sólo
+   * llega en Bunny Stream, que es el único proveedor que medimos vía Player.js.
+   */
+  onPosition?: (positionSeconds: number) => void;
+  /**
    * Vista previa de editor/admin: renderiza el contenido de la lección tal cual lo
    * vería el alumno, pero SIN trackear progreso ni permitir marcar completada
    * (no hay matrícula). Los tipos que requieren backend con matrícula (QUIZ, SCORM)
@@ -71,6 +77,7 @@ export function LessonPlayer({
   initialResumePositionSec = 0,
   initialCompleted = false,
   onProgress,
+  onPosition,
   preview = false,
 }: Props) {
   const [completed, setCompleted] = useState(initialCompleted);
@@ -129,13 +136,16 @@ export function LessonPlayer({
   // reproducidos) en una llamada de progreso y fijamos la posición de reanudación.
   const handleWatch = useCallback(
     (report: WatchReport) => {
+      // La posición se publica siempre, aunque no haya visionado nuevo que
+      // reportar: al tutor le sirve igual saber dónde está parado el alumno.
+      onPosition?.(Math.round(report.positionSeconds));
       const delta = Math.round(report.watchedSecondsDelta);
       if (delta <= 0 && !report.ended) return;
       void sendDelta(Math.max(0, delta), {
         resumePositionSec: Math.round(report.positionSeconds),
       });
     },
-    [sendDelta],
+    [sendDelta, onPosition],
   );
 
   async function markCompleted() {
@@ -321,7 +331,9 @@ function LessonContent({
 
   if (lesson.type === 'SCORM') {
     if (preview) {
-      return <Empty hint="Vista previa: el contenido SCORM se ejecuta al matricularse en el curso." />;
+      return (
+        <Empty hint="Vista previa: el contenido SCORM se ejecuta al matricularse en el curso." />
+      );
     }
     return <ScormFrame lessonId={lesson.id} title={lesson.title} />;
   }

@@ -59,15 +59,19 @@ describe('AiTutorController · ask', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('cualquier rol autenticado puede preguntar', async () => {
+  it('un alumno pregunta como alumno: se le comprueba matrícula y cuota', async () => {
     const { registry, spies } = makeRegistry();
     const c = new AiTutorController(registry);
     await c.ask(makeUser({ roles: ['alumno'] }), 'course-1', {
       question: 'que es algo?',
     } as never);
-    expect(spies.ask).toHaveBeenCalledWith('tenant-A', 'user-1', 'course-1', {
-      question: 'que es algo?',
-    });
+    expect(spies.ask).toHaveBeenCalledWith(
+      'tenant-A',
+      'user-1',
+      'course-1',
+      { question: 'que es algo?' },
+      { staff: false },
+    );
   });
 
   it('pasa tenantId y userId del JWT al service (no del request)', async () => {
@@ -77,11 +81,34 @@ describe('AiTutorController · ask', () => {
       question: 'q?',
       conversationId: 'conv-existing',
     } as never);
-    expect(spies.ask).toHaveBeenCalledWith('real-tenant', 'real-user', 'course-X', {
-      question: 'q?',
-      conversationId: 'conv-existing',
-    });
+    expect(spies.ask).toHaveBeenCalledWith(
+      'real-tenant',
+      'real-user',
+      'course-X',
+      { question: 'q?', conversationId: 'conv-existing' },
+      { staff: false },
+    );
   });
+
+  // El formador prueba el tutor de un curso que no ha comprado, y sus pruebas
+  // no consumen la cuota diaria de nadie.
+  it.each([['formador'], ['tenant_admin'], ['super_admin']])(
+    '%s pregunta como staff (sin matrícula ni cuota)',
+    async (rol) => {
+      const { registry, spies } = makeRegistry();
+      const c = new AiTutorController(registry);
+      await c.ask(makeUser({ roles: [rol] }), 'course-1', { question: 'q?' } as never);
+      expect(spies.ask).toHaveBeenCalledWith(
+        'tenant-A',
+        'user-1',
+        'course-1',
+        { question: 'q?' },
+        {
+          staff: true,
+        },
+      );
+    },
+  );
 });
 
 describe('AiTutorController · reindex', () => {

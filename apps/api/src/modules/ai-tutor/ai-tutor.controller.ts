@@ -13,6 +13,8 @@ import type { SessionClaims } from '../../auth/token.service';
 import { ModuleRegistryService } from '../module-registry.service';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
+/** Mismos roles que previsualizan un curso sin matricularse (PREVIEW_ROLES en web). */
+const STAFF_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
 
 /**
  * Endpoints REST del tutor IA (LMS-90.E).
@@ -54,7 +56,11 @@ export class AiTutorController {
     @Body(new ZodValidationPipe(askSchema)) dto: AskDto,
   ) {
     const u = this.requireAuth(user);
-    return this.registry.getAiTutorChatService().ask(u.tenantId, u.sub, courseId, dto);
+    // Formador/admin puede probar el tutor de cualquier curso sin matricularse
+    // y sin gastar cuota — es la misma regla con la que ya previsualizan el
+    // contenido. Nunca se decide desde el cuerpo de la petición.
+    const staff = u.roles.some((r) => STAFF_ROLES.has(r));
+    return this.registry.getAiTutorChatService().ask(u.tenantId, u.sub, courseId, dto, { staff });
   }
 
   @Post('admin/ai-tutor/courses/:courseId/index')

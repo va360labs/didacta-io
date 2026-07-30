@@ -31,6 +31,14 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'ai-tutor.chat.message-sent',
     'ai-tutor.chat.message-received',
   ],
-  eventsConsumed: ['courses.course.published', 'courses.course.unpublished'],
+  eventsConsumed: [
+    'courses.course.published',
+    'courses.course.unpublished',
+    // Reindexado por lección: subir una clase o pegar su transcripción la mete
+    // en el tutor sin reindexar el curso entero.
+    'courses.lesson.created',
+    'courses.lesson.updated',
+    'courses.lesson.deleted',
+  ],
   apiNamespace: '/modules/ai-tutor',
 });
