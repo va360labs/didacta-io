@@ -19,6 +19,7 @@ import { TokenService, type SessionClaims } from './token.service';
 import { ZodValidationPipe } from './zod-validation.pipe';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SessionRegistryService } from './session-registry.service';
 
 const enableSchema = z.object({
   code: z
@@ -42,6 +43,7 @@ export class MfaController {
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
     private readonly auditLog: PrismaAuditLogService,
+    private readonly sessions: SessionRegistryService,
   ) {}
 
   @Post('setup')
@@ -98,12 +100,15 @@ export class MfaController {
       userAgent: ctx.userAgent ?? undefined,
     });
 
-    const tokens = await this.tokens.sign({
-      sub: user.sub,
-      tenantId: user.tenantId,
-      roles: user.roles,
-      mfaVerified: true,
-    });
+    const tokens = await this.sessions.issue(
+      {
+        sub: user.sub,
+        tenantId: user.tenantId,
+        roles: user.roles,
+        mfaVerified: true,
+      },
+      extractClientContext(req),
+    );
 
     return { enabled: true, tokens };
   }
@@ -166,12 +171,15 @@ export class MfaController {
       userAgent: ctx.userAgent ?? undefined,
     });
 
-    const tokens = await this.tokens.sign({
-      sub: user.sub,
-      tenantId: user.tenantId,
-      roles: user.roles,
-      mfaVerified: true,
-    });
+    const tokens = await this.sessions.issue(
+      {
+        sub: user.sub,
+        tenantId: user.tenantId,
+        roles: user.roles,
+        mfaVerified: true,
+      },
+      extractClientContext(req),
+    );
 
     return { verified: true, tokens };
   }

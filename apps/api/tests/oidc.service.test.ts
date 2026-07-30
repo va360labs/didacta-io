@@ -1,3 +1,4 @@
+import { sessionRegistryStub } from './helpers/session-registry-stub';
 /**
  * Copyright (c) VA360 LABS S.L.
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
@@ -345,6 +346,7 @@ function setupService(opts?: {
     tc as unknown as ConstructorParameters<typeof OidcService>[1],
     al as unknown as ConstructorParameters<typeof OidcService>[2],
     tokens as unknown as ConstructorParameters<typeof OidcService>[3],
+    sessionRegistryStub(tokens as never),
   );
 
   svc.issuerStub = {
@@ -984,6 +986,7 @@ describe('OidcService — tenant isolation', () => {
       tc as unknown as ConstructorParameters<typeof OidcService>[1],
       al as unknown as ConstructorParameters<typeof OidcService>[2],
       tokens as unknown as ConstructorParameters<typeof OidcService>[3],
+      sessionRegistryStub(tokens as never),
     );
     svc.issuerStub = {
       metadata: {

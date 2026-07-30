@@ -59,6 +59,7 @@ import {
   type TenantOidcConfig,
 } from './oidc.types';
 import type { OidcConfigPutDto } from './oidc.dto';
+import { SessionRegistryService } from '../../auth/session-registry.service';
 
 /**
  * Forma mínima del Issuer / Client del que dependemos. La envoltura permite
@@ -157,6 +158,7 @@ export class OidcService {
     private readonly tenantConfig: PrismaTenantConfigService,
     private readonly auditLog: PrismaAuditLogService,
     private readonly tokens: TokenService,
+    private readonly sessions: SessionRegistryService,
   ) {
     this.redirectUri =
       stripTrailingSlash(
@@ -564,7 +566,7 @@ export class OidcService {
     }
 
     const roles = user.roles.map((r: { role: { name: string } }) => r.role.name);
-    const tokens = await this.tokens.sign({
+    const tokens = await this.sessions.issue({
       sub: user.id,
       tenantId: flow.tenantId,
       roles,

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { LicenseService } from '@didacta/license-sdk';
 import { PrismaService } from '../prisma/prisma.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
@@ -21,6 +22,9 @@ import { PublicProfileController } from './public-profile.controller';
 import { PasswordResetService } from './password-reset.service';
 import { PasswordService } from './password.service';
 import { SigninContextService } from './signin-context.service';
+import { AccountStateInterceptor } from './account-state.interceptor';
+import { AccountStateService } from './account-state.service';
+import { SessionRegistryService } from './session-registry.service';
 import { TokenService } from './token.service';
 import { loadCipherKey, describeCipherKeySource } from './cipher-key';
 
@@ -56,6 +60,14 @@ function loadCipherKeyForAuth(): string {
     PasswordService,
     SigninContextService,
     TokenService,
+    // Emite los tokens Y registra la sesión en la misma operación, para que
+    // no vuelvan a separarse (la tabla `session` llevaba sin escribirse).
+    SessionRegistryService,
+    AccountStateService,
+    // Global: corta en CADA petición si la cuenta fue suspendida/borrada o
+    // la sesión cerrada, sin esperar a que caduque el access token.
+    AccountStateInterceptor,
+    { provide: APP_INTERCEPTOR, useExisting: AccountStateInterceptor },
     MfaService,
     ApiKeyService,
     JwtAuthGuard,
@@ -103,6 +115,8 @@ function loadCipherKeyForAuth(): string {
     AuthService,
     PasswordResetService,
     TokenService,
+    SessionRegistryService,
+    AccountStateService,
     PasswordService,
     MfaService,
     MfaPolicyService,

@@ -1,3 +1,4 @@
+import { sessionRegistryStub } from './helpers/session-registry-stub';
 /**
  * Copyright (c) VA360 LABS S.L.
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
@@ -286,7 +287,13 @@ function setupService(opts?: {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const service = new TestSamlService(prisma as any, tc as any, al as any, tokens as any);
+  const service = new TestSamlService(
+    prisma as any,
+    tc as any,
+    al as any,
+    tokens as any,
+    sessionRegistryStub(tokens as never),
+  );
   return { service, prisma, tc, al, tokens, tenantId, tenantSlug };
 }
 

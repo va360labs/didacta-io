@@ -1,3 +1,4 @@
+import { sessionRegistryStub } from './helpers/session-registry-stub';
 import { SignJWT } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WpSsoTokenError } from '@didacta/mod-wp-sso';
@@ -104,6 +105,7 @@ function build(configOverrides: Record<string, unknown> = {}): { svc: WpSsoServi
     m.tokens as unknown as TokenService,
     m.auditLog as unknown as PrismaAuditLogService,
     m.config as unknown as WpSsoConfigService,
+    sessionRegistryStub(m.tokens as never),
   );
   return { svc, m };
 }

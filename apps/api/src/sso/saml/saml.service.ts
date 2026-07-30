@@ -58,6 +58,7 @@ import {
   type TenantSamlConfig,
 } from './saml.types';
 import type { SamlConfigPutDto } from './saml.dto';
+import { SessionRegistryService } from '../../auth/session-registry.service';
 
 export interface SamlAuthorizationParams {
   /** URL completa del IdP con SAMLRequest + RelayState en query string. */
@@ -144,6 +145,7 @@ export class SamlService {
     private readonly tenantConfig: PrismaTenantConfigService,
     private readonly auditLog: PrismaAuditLogService,
     private readonly tokens: TokenService,
+    private readonly sessions: SessionRegistryService,
   ) {
     this.apiPublicBase = stripTrailingSlash(
       process.env['SAML_PUBLIC_API_URL'] ??
@@ -512,7 +514,7 @@ export class SamlService {
     }
 
     const roles = user.roles.map((r: { role: { name: string } }) => r.role.name);
-    const tokens = await this.tokens.sign({
+    const tokens = await this.sessions.issue({
       sub: user.id,
       tenantId: flow.tenantId,
       roles,

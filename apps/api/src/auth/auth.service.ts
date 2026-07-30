@@ -11,6 +11,7 @@ import { isAdminMfaEnforced } from './mfa-config';
 import { MfaPolicyService } from './mfa-policy/mfa-policy.service';
 import { MfaRequiredByTenantPolicyError } from './mfa-policy/mfa-required-by-tenant-policy.error';
 import { PasswordService } from './password.service';
+import { SessionRegistryService } from './session-registry.service';
 import { TokenService, type SignedTokens } from './token.service';
 import type { SigninDto, SignupDto } from './dto';
 
@@ -95,6 +96,7 @@ export class AuthService {
     private readonly tokens: TokenService,
     private readonly auditLog: PrismaAuditLogService,
     private readonly mfaPolicy: MfaPolicyService,
+    private readonly sessions: SessionRegistryService,
   ) {}
 
   async signup(
@@ -166,12 +168,15 @@ export class AuthService {
       roles,
     });
 
-    const tokens = await this.tokens.sign({
-      sub: user.id,
-      tenantId: tenant.id,
-      roles,
-      mfaVerified: !mfaRequired,
-    });
+    const tokens = await this.sessions.issue(
+      {
+        sub: user.id,
+        tenantId: tenant.id,
+        roles,
+        mfaVerified: !mfaRequired,
+      },
+      ctx,
+    );
 
     await this.auditLog.record({
       tenantId: tenant.id,
@@ -295,12 +300,15 @@ export class AuthService {
       });
     }
 
-    const tokens = await this.tokens.sign({
-      sub: user.id,
-      tenantId: tenant.id,
-      roles,
-      mfaVerified: !mfaRequired,
-    });
+    const tokens = await this.sessions.issue(
+      {
+        sub: user.id,
+        tenantId: tenant.id,
+        roles,
+        mfaVerified: !mfaRequired,
+      },
+      ctx,
+    );
 
     await this.auditLog.record({
       tenantId: tenant.id,
@@ -344,7 +352,10 @@ export class AuthService {
     };
   }
 
-  async refresh(refreshToken: string): Promise<SignedTokens> {
+  async refresh(
+    refreshToken: string,
+    ctx: ClientContext = NO_CLIENT_CONTEXT,
+  ): Promise<SignedTokens> {
     const claims = await this.tokens.verifyRefresh(refreshToken).catch(() => null);
     if (!claims) {
       throw new UnauthorizedException('Refresh token inválido o expirado');
@@ -357,12 +368,18 @@ export class AuthService {
       throw new UnauthorizedException('Usuario no válido');
     }
     const roles = user.roles.map((r: { role: { name: string } }) => r.role.name);
-    return this.tokens.sign({
-      sub: user.id,
-      tenantId: user.tenantId,
-      roles,
-      mfaVerified: !this.shouldRequireMfa(roles, user.mfaEnabled),
-    });
+    // Rotar y no re-emitir: si cada refresh abriera una sesión nueva, la lista
+    // de «sesiones activas» del usuario acumularía una fila por hora.
+    return this.sessions.rotate(
+      claims.sid,
+      {
+        sub: user.id,
+        tenantId: user.tenantId,
+        roles,
+        mfaVerified: !this.shouldRequireMfa(roles, user.mfaEnabled),
+      },
+      ctx,
+    );
   }
 
   /**

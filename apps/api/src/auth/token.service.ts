@@ -7,6 +7,18 @@ export interface SessionClaims {
   tenantId: string;
   roles: string[];
   mfaVerified: boolean;
+  /**
+   * Id de la fila `session` que respalda este token.
+   *
+   * Es lo que permite revocar un acceso ya emitido: sin él, un access token
+   * firmado sigue siendo válido hasta que expira, pase lo que pase con la
+   * cuenta. `AccountStateService` lo comprueba en cada petición.
+   *
+   * Opcional a propósito: los tokens emitidos ANTES de este cambio no lo
+   * llevan, y deben seguir funcionando hasta que caduquen. Para ellos se
+   * valida el estado del usuario, pero no la sesión concreta.
+   */
+  sid?: string;
 }
 
 export interface SignedTokens {
@@ -43,6 +55,7 @@ export class TokenService {
       roles: claims.roles,
       mfaVerified: claims.mfaVerified,
       kind: 'access',
+      ...(claims.sid ? { sid: claims.sid } : {}),
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(claims.sub)
@@ -55,6 +68,7 @@ export class TokenService {
     const refresh = await new SignJWT({
       tenantId: claims.tenantId,
       kind: 'refresh',
+      ...(claims.sid ? { sid: claims.sid } : {}),
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(claims.sub)
@@ -79,15 +93,17 @@ export class TokenService {
     if (payload['kind'] !== 'access') {
       throw new Error('Token no es de tipo access');
     }
+    const sid = payload['sid'];
     return {
       sub: String(payload.sub),
       tenantId: String(payload['tenantId']),
       roles: (payload['roles'] as string[] | undefined) ?? [],
       mfaVerified: Boolean(payload['mfaVerified']),
+      ...(typeof sid === 'string' ? { sid } : {}),
     };
   }
 
-  async verifyRefresh(token: string): Promise<{ sub: string; tenantId: string }> {
+  async verifyRefresh(token: string): Promise<{ sub: string; tenantId: string; sid?: string }> {
     const { payload } = await jwtVerify(token, this.secret, {
       issuer: this.config.jwtIssuer,
       audience: 'didacta-api',
@@ -95,9 +111,11 @@ export class TokenService {
     if (payload['kind'] !== 'refresh') {
       throw new Error('Token no es de tipo refresh');
     }
+    const sid = payload['sid'];
     return {
       sub: String(payload.sub),
       tenantId: String(payload['tenantId']),
+      ...(typeof sid === 'string' ? { sid } : {}),
     };
   }
 

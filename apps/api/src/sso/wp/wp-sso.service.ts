@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PrismaAuditLogService } from '../../modules/prisma-audit-log.service';
 import { TokenService } from '../../auth/token.service';
 import { WpSsoConfigService } from './wp-sso-config.service';
+import { SessionRegistryService } from '../../auth/session-registry.service';
 
 /**
  * WpSsoService — intercambia el token firmado por WordPress por una sesión
@@ -37,6 +38,7 @@ export class WpSsoService {
     private readonly tokens: TokenService,
     private readonly auditLog: PrismaAuditLogService,
     private readonly config: WpSsoConfigService,
+    private readonly sessions: SessionRegistryService,
   ) {}
 
   async exchange(
@@ -207,7 +209,7 @@ export class WpSsoService {
     });
 
     const roles = user.roles.map((r) => r.role.name);
-    const tokens = await this.tokens.sign({
+    const tokens = await this.sessions.issue({
       sub: user.id,
       tenantId: tenant.id,
       roles,

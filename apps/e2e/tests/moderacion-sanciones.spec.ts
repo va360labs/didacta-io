@@ -202,6 +202,142 @@ test.describe('moderación · sanciones', () => {
   });
 });
 
+/**
+ * Suspender ≠ sancionar. Suspender corta el acceso ENTERO, y hasta este
+ * arreglo no cortaba nada: nadie escribía en la tabla `session`, así que
+ * borrarlas al suspender no invalidaba el access token ya emitido y el
+ * suspendido seguía dentro hasta una hora.
+ */
+test.describe('cuentas · suspensión y sesiones', () => {
+  const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+
+  test('suspender echa al usuario con su token actual, y reactivar le deja volver', async () => {
+    const stamp = Date.now();
+    const adminToken = await adminTokenForBootstrap(tenantSlug);
+    const adminHeaders = {
+      Authorization: `Bearer ${adminToken}`,
+      'Content-Type': 'application/json',
+    };
+
+    const alumno = await signup({
+      tenantSlug,
+      email: `e2e-suspension-${stamp}@example.test`,
+      password: 'E2eSuspension123!',
+      name: 'Alumno Suspendido',
+    });
+    const alumnoHeaders = { Authorization: `Bearer ${alumno.tokens.accessToken}` };
+
+    const antes = await fetch(`${API_URL}/api/v1/me/profile`, { headers: alumnoHeaders });
+    expect(antes.ok, 'entra antes de suspenderlo').toBe(true);
+
+    const suspender = await fetch(`${API_URL}/api/v1/admin/users/${alumno.user.id}/status`, {
+      method: 'PATCH',
+      headers: adminHeaders,
+      body: JSON.stringify({ status: 'SUSPENDED' }),
+    });
+    expect(suspender.ok, 'el admin puede suspender').toBe(true);
+
+    // MISMO token que antes. Este es el test que fallaba: el access token
+    // seguía siendo válido y el suspendido continuaba operando.
+    const despues = await fetch(`${API_URL}/api/v1/me/profile`, { headers: alumnoHeaders });
+    expect(despues.status, 'el token del suspendido deja de valer al instante').toBe(401);
+    const body = (await despues.json()) as { code?: string };
+    expect(body.code).toBe('account_suspended');
+
+    // Tampoco puede leer el feed: una cuenta suspendida no entra a nada.
+    const feed = await fetch(`${API_URL}/api/v1/modules/community/posts?limit=1`, {
+      headers: alumnoHeaders,
+    });
+    expect(feed.status, 'ni siquiera lee').toBe(401);
+
+    const reactivar = await fetch(`${API_URL}/api/v1/admin/users/${alumno.user.id}/status`, {
+      method: 'PATCH',
+      headers: adminHeaders,
+      body: JSON.stringify({ status: 'ACTIVE' }),
+    });
+    expect(reactivar.ok).toBe(true);
+
+    // Reactivar NO resucita el token viejo, y eso es lo correcto: suspender
+    // cierra las sesiones abiertas, y una sesión cerrada se queda cerrada.
+    // Si reviviera, cualquiera con el token guardado volvería a entrar.
+    const tokenViejo = await fetch(`${API_URL}/api/v1/me/profile`, { headers: alumnoHeaders });
+    expect(tokenViejo.status, 'el token de antes de la suspensión no revive').toBe(401);
+
+    // Lo que sí puede es volver a entrar: la cuenta está operativa otra vez.
+    const relogin = await fetch(`${API_URL}/api/v1/auth/signin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenantSlug,
+        email: `e2e-suspension-${stamp}@example.test`,
+        password: 'E2eSuspension123!',
+      }),
+    });
+    expect(relogin.ok, 'tras reactivar puede volver a iniciar sesión').toBe(true);
+    const nueva = (await relogin.json()) as { tokens: { accessToken: string } };
+    const conNuevoToken = await fetch(`${API_URL}/api/v1/me/profile`, {
+      headers: { Authorization: `Bearer ${nueva.tokens.accessToken}` },
+    });
+    expect(conNuevoToken.ok, 'y opera con normalidad').toBe(true);
+  });
+
+  test('el alta registra la sesión y el usuario puede verla y cerrarla', async () => {
+    const stamp = Date.now();
+    const alumno = await signup({
+      tenantSlug,
+      email: `e2e-sesiones-${stamp}@example.test`,
+      password: 'E2eSesiones123!',
+      name: 'Alumno Sesiones',
+    });
+    const headers = {
+      Authorization: `Bearer ${alumno.tokens.accessToken}`,
+      'Content-Type': 'application/json',
+    };
+
+    // Antes de este arreglo esta lista salía SIEMPRE vacía.
+    const res = await fetch(`${API_URL}/api/v1/me/security/sessions`, { headers });
+    expect(res.ok).toBe(true);
+    const sesiones = (await res.json()) as Array<{ id: string; createdAt: string }>;
+    expect(sesiones.length, 'el alta deja constancia de la sesión').toBeGreaterThan(0);
+
+    // Cerrarla debe echar al propio token que la respalda.
+    const cerrar = await fetch(`${API_URL}/api/v1/me/security/sessions/${sesiones[0]!.id}`, {
+      method: 'DELETE',
+      headers,
+    });
+    expect(cerrar.ok, 'puede cerrar su sesión').toBe(true);
+
+    const despues = await fetch(`${API_URL}/api/v1/me/profile`, { headers });
+    expect(despues.status, 'cerrar la sesión invalida su token').toBe(401);
+    const body = (await despues.json()) as { code?: string };
+    expect(body.code).toBe('session_revoked');
+  });
+
+  test('el refresh conserva la sesión en vez de acumular duplicados', async () => {
+    const stamp = Date.now();
+    const alumno = await signup({
+      tenantSlug,
+      email: `e2e-refresh-${stamp}@example.test`,
+      password: 'E2eRefresh123!',
+      name: 'Alumno Refresh',
+    });
+
+    const refreshed = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: alumno.tokens.refreshToken }),
+    });
+    expect(refreshed.ok).toBe(true);
+    const { tokens } = (await refreshed.json()) as { tokens: { accessToken: string } };
+
+    const res = await fetch(`${API_URL}/api/v1/me/security/sessions`, {
+      headers: { Authorization: `Bearer ${tokens.accessToken}` },
+    });
+    const sesiones = (await res.json()) as unknown[];
+    expect(sesiones.length, 'renovar no abre una sesión nueva').toBe(1);
+  });
+});
+
 test.describe('moderación · expediente', () => {
   const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
 
