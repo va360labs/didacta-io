@@ -12,3 +12,12 @@ export const TYPING_THROTTLE_MS = 3_000;
 
 /** Clave de persistencia del panel abierto. */
 export const FLOATING_CHAT_OPEN_KEY = 'didacta:chat-flotante:open';
+
+/** Vida de un aviso de mensaje nuevo con el chat plegado (ms). */
+export const CHAT_TOAST_MS = 7_000;
+
+/**
+ * Avisos simultáneos como máximo. Con más, una sala activa convierte la esquina
+ * en una cascada y deja de leerse nada.
+ */
+export const CHAT_TOAST_MAX = 2;

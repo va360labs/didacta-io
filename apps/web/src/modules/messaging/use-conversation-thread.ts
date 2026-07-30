@@ -29,12 +29,34 @@ export function useConversationThread() {
 
   const activeIdRef = useRef<string | null>(null);
   activeIdRef.current = activeId;
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollElRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = useRef(true);
 
   const scrollToBottom = useCallback(() => {
-    const el = scrollRef.current;
+    const el = scrollElRef.current;
     if (el) el.scrollTop = el.scrollHeight;
+  }, []);
+
+  /**
+   * Ref de callback, no ref de objeto: hace falta enterarse de CUÁNDO se monta
+   * el contenedor, no solo tenerlo a mano.
+   *
+   * Al plegar el chat flotante su panel se desmonta, pero la conversación sigue
+   * abierta en este hook. Al reabrirlo, el contenedor es un nodo NUEVO con
+   * `scrollTop = 0` — es decir, el mensaje más antiguo — y ningún efecto lo
+   * corrige porque `messages` no ha cambiado. Se baja al último al montar, que
+   * además es lo que uno espera de un chat al reabrirlo.
+   */
+  const scrollRef = useCallback((el: HTMLDivElement | null) => {
+    scrollElRef.current = el;
+    if (!el) return;
+    stickToBottomRef.current = true;
+    el.scrollTop = el.scrollHeight;
+    // Segunda pasada tras el layout: con avatares o fuentes aún por asentar,
+    // el scrollHeight del primer tick se queda corto.
+    requestAnimationFrame(() => {
+      if (scrollElRef.current === el) el.scrollTop = el.scrollHeight;
+    });
   }, []);
 
   useEffect(() => {
@@ -178,7 +200,7 @@ export function useConversationThread() {
     if (!id || !nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      const el = scrollRef.current;
+      const el = scrollElRef.current;
       const prevHeight = el?.scrollHeight ?? 0;
       const page = await messagingApi.listMessages(id, nextCursor);
       // Respuesta obsoleta (el usuario cambió de conversación en vuelo): no
