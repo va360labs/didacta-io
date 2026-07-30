@@ -171,10 +171,16 @@ export default function AiProvidersAdminPage() {
         `Reindexado: ${res.indexed}/${res.total} cursos OK${res.failed ? `, ${res.failed} con error` : ''}.`,
       );
     } catch (e) {
+      // Reindexar el catálogo entero tarda minutos y el proxy corta la conexión
+      // antes de que termine. Cuando eso pasa NO ha fallado nada: el servidor
+      // sigue trabajando. Decir «no pudimos reindexar» mandó a buscar un fallo
+      // en la configuración cuando el índice se había regenerado entero
+      // (2026-07-30). Sólo un error con respuesta del servidor es un error real.
       setError(
         e instanceof ApiHttpError
           ? e.message
-          : 'No pudimos reindexar. ¿Está configurado el proveedor de embeddings?',
+          : 'Se cortó la conexión antes de terminar, pero el reindexado sigue en marcha en el servidor. ' +
+              'Espera unos minutos y pregúntale algo al tutor para comprobarlo; no hace falta repetir.',
       );
     } finally {
       setReindexing(false);
