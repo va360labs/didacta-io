@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Icon } from '@/components/icon';
 import { ApiHttpError } from '@/lib/api-client';
-import { zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
+import { AddToCalendarDialog, zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
 import { cn } from '@/lib/utils';
 
 /**
@@ -81,6 +81,8 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  /** Se abre al inscribirse desde el feed, igual que en /clase/[id]. */
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,6 +113,7 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
     setError(null);
     try {
       setSession(await zoomLiveApi.register(session.id));
+      setCalendarOpen(true);
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos completar la inscripción.');
     } finally {
@@ -281,6 +284,14 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
           {error}
         </p>
       ) : null}
+
+      <AddToCalendarDialog
+        sessionId={session.id}
+        topic={session.topic}
+        open={calendarOpen}
+        onOpenChange={setCalendarOpen}
+        justRegistered
+      />
     </div>
   );
 }

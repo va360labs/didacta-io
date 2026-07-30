@@ -2,6 +2,7 @@ import { Injectable, type OnModuleInit } from '@nestjs/common';
 import type { DomainEvent } from '@didacta/core-kernel';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleContextFactory } from '../module-context.factory';
+import { calendarVariables } from './class-links';
 
 /**
  * Puente mod.zoom-live → NotificationHub (ADR-017): confirma la inscripción a
@@ -10,6 +11,10 @@ import { ModuleContextFactory } from '../module-context.factory';
  * clase se cancela (`zoom.class.cancelled`). Plantillas personalizables en
  * /admin/emails, categoría LEARNING (respeta la matriz de preferencias del
  * usuario).
+ *
+ * La confirmación lleva además los enlaces de "añadir al calendario" (Google
+ * y `.ics` para Outlook/Apple): inscribirse y no apuntarlo es la vía más
+ * corta a perderse la clase.
  *
  * El joinUrl de Zoom NUNCA viaja por email: el enlace que se envía es la
  * página de la clase (/clase/[id]), donde el gating server-side decide.
@@ -53,17 +58,6 @@ function formatStartsAt(iso: string | undefined, timezone: string | undefined): 
   }
 }
 
-/**
- * Enlace absoluto a la página de la clase, o '' si `WEB_PUBLIC_URL` no está
- * configurada — la plantilla envuelve el enlace en una sección mustache
- * (`{{#classUrl}}…{{/classUrl}}`), así que un email sin base configurada
- * simplemente omite el bloque en vez de mandar un enlace relativo roto.
- */
-function classUrl(sessionId: string): string {
-  const base = (process.env['WEB_PUBLIC_URL'] ?? '').trim().replace(/\/+$/, '');
-  return base ? `${base}/clase/${sessionId}` : '';
-}
-
 @Injectable()
 export class ZoomLiveNotificationsBridge implements OnModuleInit {
   constructor(
@@ -82,7 +76,7 @@ export class ZoomLiveNotificationsBridge implements OnModuleInit {
           variables: {
             topic: event.data.topic,
             startsAt: formatStartsAt(event.data.startTime, event.data.timezone),
-            classUrl: classUrl(event.data.sessionId),
+            ...calendarVariables(event.data.sessionId),
           },
         });
       },
