@@ -730,6 +730,25 @@ describe('beneficios de nivel', () => {
     expect(mine[0]!.canRequest).toBe(false);
   });
 
+  it('devuelve nivel y condiciones: la pantalla los agrupa y los explica', async () => {
+    const { service, level } = await setup();
+    await service.createPerk({
+      tenantId: TENANT,
+      levelId: level.id,
+      title: 'Revisión escrita',
+      maxPerUser: 3,
+      cooldownDays: 30,
+    });
+
+    const [mine] = await service.listMyPerks(TENANT, USER);
+
+    // `levelId` agrupa los beneficios bajo su nivel en "Tu escalera"; el tope y
+    // la espera son los que se leen como "3 en total, una cada 30 días".
+    expect(mine!.levelId).toBe(level.id);
+    expect(mine!.maxPerUser).toBe(3);
+    expect(mine!.cooldownDays).toBe(30);
+  });
+
   it('se desbloquea al llegar a los puntos, sin esperar a re-puntuar', async () => {
     const { service, level } = await setup();
     await service.createPerk({ tenantId: TENANT, levelId: level.id, title: 'Clase extra' });

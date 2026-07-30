@@ -121,12 +121,18 @@ export interface MyPerkView {
   id: string;
   title: string;
   description: string | null;
+  /** Nivel que lo abre. El id permite agrupar los beneficios por nivel en la UI. */
+  levelId: string;
   levelName: string;
   levelMinPoints: number;
   unlocked: boolean;
   canRequest: boolean;
   /** Solicitudes que le quedan; null = sin límite. */
   quotaLeft: number | null;
+  /** Tope por persona; 0 = sin tope. La UI lo cuenta ("una cada 30 días"). */
+  maxPerUser: number;
+  /** Días de espera entre solicitudes; 0 = ninguna. */
+  cooldownDays: number;
   /** Si está en espera, cuándo vuelve a poder pedirlo. */
   availableAt: Date | null;
   lastRequestStatus: PerkRequestStatus | null;
@@ -1004,11 +1010,14 @@ export class GamificationService {
         id: perk.id,
         title: perk.title,
         description: perk.description,
+        levelId: perk.levelId,
         levelName: perk.level.name,
         levelMinPoints: perk.level.minPoints,
         unlocked,
         canRequest: unlocked && quotaLeft !== 0 && availableAt === null,
         quotaLeft,
+        maxPerUser: perk.maxPerUser,
+        cooldownDays: perk.cooldownDays,
         availableAt,
         lastRequestStatus: last ? (last.status as PerkRequestStatus) : null,
       };
