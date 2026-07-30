@@ -66,11 +66,16 @@ export interface MyPerkView {
   id: string;
   title: string;
   description: string | null;
+  levelId: string;
   levelName: string;
   levelMinPoints: number;
   unlocked: boolean;
   canRequest: boolean;
   quotaLeft: number | null;
+  /** Tope por persona; 0 = sin tope. */
+  maxPerUser: number;
+  /** Días de espera entre solicitudes; 0 = ninguna. */
+  cooldownDays: number;
   availableAt: string | null;
   lastRequestStatus: PerkRequestStatus | null;
 }

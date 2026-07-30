@@ -88,7 +88,14 @@ test.describe('Puntos, niveles y retos (mod.gamification)', () => {
     await expect(page.getByText(title).first()).toBeVisible();
     // La entrega vive en un modal, y antes de enviar hay un paso de
     // confirmación: la entrega es única por reto y persona.
-    await page.getByRole('button', { name: 'Entregar' }).first().click();
+    //
+    // Acotado a la tarjeta del reto: la cabecera tiene su propio atajo
+    // ("Entregar el reto más rápido") que también case con /Entregar/.
+    await page
+      .getByTestId('challenge-card')
+      .filter({ hasText: title })
+      .getByRole('button', { name: 'Entregar', exact: true })
+      .click();
     const modal = page.getByRole('dialog');
     await expect(modal.getByText('Entregar reto')).toBeVisible();
     await modal.getByLabel('Cuéntanos qué has hecho').fill('Automaticé el alta de clientes.');
