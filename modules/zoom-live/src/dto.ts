@@ -32,6 +32,13 @@ export const createSessionSchema = z.object({
   timezone: z.string().min(3).max(64),
   /** Notas o agenda opcional. */
   description: z.string().max(2000).optional(),
+  /**
+   * Intención de quien crea la clase de anunciarla públicamente. El módulo no
+   * sabe QUIÉN la anuncia ni CÓMO: solo la propaga en `zoom.session.created`
+   * para que el host componga (ADR-016). Por defecto no se anuncia, así que
+   * una clase de prueba nunca acaba publicada por descuido.
+   */
+  announce: z.boolean().optional(),
 });
 export type CreateSessionDto = z.infer<typeof createSessionSchema>;
 
@@ -41,6 +48,12 @@ export const updateSessionSchema = z.object({
   durationMinutes: z.number().int().min(15).max(480).optional(),
   timezone: z.string().min(3).max(64).optional(),
   description: z.string().max(2000).nullable().optional(),
+  /**
+   * Intención de anunciar la clase, igual que en la creación: permite publicar
+   * en la comunidad una clase que se creó sin anunciar. Si ya estaba anunciada
+   * no duplica nada — quien consume el evento es idempotente.
+   */
+  announce: z.boolean().optional(),
 });
 export type UpdateSessionDto = z.infer<typeof updateSessionSchema>;
 

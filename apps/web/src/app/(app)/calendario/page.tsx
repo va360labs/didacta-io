@@ -2,8 +2,16 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { eventsApi, type CommunityEvent } from '@/lib/events';
-import { zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
+import {
+  buildGrid,
+  dateKeyOf,
+  dayKeyOf,
+  fetchAgenda,
+  fetchRange,
+  gridRange,
+  phaseOf,
+  type CalendarItem,
+} from '@/lib/agenda';
 import { EventosView } from './eventos-view';
 
 const MONTH_NAMES = [
@@ -29,33 +37,6 @@ const AGENDA_MONTHS_FORWARD = 12;
 const TICK_MS = 60_000;
 /** Cuántas citas pasadas se pintan antes de cortar (evita listas enormes). */
 const PAST_VISIBLE = 25;
-/**
- * Margen tras la hora de fin durante el que una sesión marcada STARTED sigue
- * contando como "en curso". Zoom no siempre entrega `meeting.ended` (endpoint
- * caído, reintentos agotados), así que sin esta cota una clase se quedaría
- * "En curso" para siempre y coparía la barra lateral.
- */
-const LIVE_GRACE_MS = 2 * 60 * 60 * 1000;
-
-function getDaysInMonth(year: number, month: number) {
-  return new Date(year, month + 1, 0).getDate();
-}
-
-function getFirstDayOfWeek(year: number, month: number) {
-  const jsDay = new Date(year, month, 1).getDay();
-  return jsDay === 0 ? 6 : jsDay - 1;
-}
-
-function toDateStr(year: number, month: number, day: number): string {
-  const mm = String(month + 1).padStart(2, '0');
-  const dd = String(day).padStart(2, '0');
-  return `${year}-${mm}-${dd}`;
-}
-
-function dayKeyOf(iso: string): string {
-  const d = new Date(iso);
-  return toDateStr(d.getFullYear(), d.getMonth(), d.getDate());
-}
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -67,122 +48,6 @@ function formatDayLong(iso: string): string {
     day: 'numeric',
     month: 'long',
   });
-}
-
-/**
- * Item unificado del calendario: agrega los eventos de comunidad
- * (mod.events) y las clases en directo (mod.zoom-live) sin acoplar los
- * módulos entre sí — la agregación vive solo en esta vista (ADR-017).
- */
-interface CalendarItem {
-  key: string;
-  kind: 'evento' | 'clase';
-  id: string;
-  title: string;
-  startAt: string;
-  endAt: string;
-  isRegistered: boolean;
-  location: string | null;
-  /**
-   * Estado real de la sesión Zoom. `null` para eventos de comunidad, que no
-   * tienen estado y se clasifican solo por reloj.
-   */
-  status: 'SCHEDULED' | 'STARTED' | 'ENDED' | null;
-  /** Solo las clases tienen página de detalle propia. */
-  href: string | null;
-}
-
-function toItems(events: CommunityEvent[], sessions: ZoomSession[]): CalendarItem[] {
-  const fromEvents: CalendarItem[] = events.map((e) => ({
-    key: `evento-${e.id}`,
-    kind: 'evento',
-    id: e.id,
-    title: e.title,
-    startAt: e.startAt,
-    endAt: e.endAt,
-    isRegistered: e.isRegistered,
-    location: e.location,
-    status: null,
-    href: null,
-  }));
-  const fromSessions: CalendarItem[] = sessions
-    .filter((s) => s.status !== 'CANCELLED')
-    .map((s) => ({
-      key: `clase-${s.id}`,
-      kind: 'clase',
-      id: s.id,
-      title: s.topic,
-      startAt: s.startTime,
-      endAt: new Date(new Date(s.startTime).getTime() + s.durationMinutes * 60_000).toISOString(),
-      isRegistered: s.isRegistered,
-      location: null,
-      status: s.status === 'CANCELLED' ? null : s.status,
-      href: `/clase/${s.id}`,
-    }));
-  return [...fromEvents, ...fromSessions].sort(
-    (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
-  );
-}
-
-/** Carga ambas fuentes en paralelo; si una falla, la otra se muestra igual. */
-async function fetchRange(from: Date, to: Date): Promise<CalendarItem[]> {
-  const [events, sessions] = await Promise.all([
-    eventsApi
-      .list({ from: from.toISOString(), to: to.toISOString(), limit: 100 })
-      .catch(() => [] as CommunityEvent[]),
-    zoomLiveApi
-      .list({ from: from.toISOString(), to: to.toISOString() })
-      .catch(() => [] as ZoomSession[]),
-  ]);
-  return toItems(events, sessions);
-}
-
-/**
- * Agenda: presupuestos SEPARADOS para pasado y futuro.
- *
- * `mod.events` tiene un tope duro de 100 filas y ordena por fecha, así que
- * una única consulta a 18 meses gastaría el cupo en los eventos más antiguos
- * y dejaría el futuro fuera — justo el bug que esta vista viene a arreglar.
- * Pedimos el pasado en `desc` (los 100 más recientes) y el futuro en `asc`
- * (los 100 más cercanos). Las clases Zoom no tienen tope, así que van en una
- * sola consulta.
- */
-async function fetchAgenda(from: Date, to: Date, pivot: Date): Promise<CalendarItem[]> {
-  const [pastEvents, futureEvents, sessions] = await Promise.all([
-    eventsApi
-      .list({ from: from.toISOString(), to: pivot.toISOString(), limit: 100, order: 'desc' })
-      .catch(() => [] as CommunityEvent[]),
-    eventsApi
-      .list({ from: pivot.toISOString(), to: to.toISOString(), limit: 100, order: 'asc' })
-      .catch(() => [] as CommunityEvent[]),
-    zoomLiveApi
-      .list({ from: from.toISOString(), to: to.toISOString() })
-      .catch(() => [] as ZoomSession[]),
-  ]);
-  // Los dos tramos comparten el instante pivote: deduplicamos por id.
-  const byId = new Map<string, CommunityEvent>();
-  for (const e of [...pastEvents, ...futureEvents]) byId.set(e.id, e);
-  return toItems([...byId.values()], sessions);
-}
-
-type Phase = 'curso' | 'proxima' | 'pasada';
-
-function phaseOf(item: CalendarItem, now: number): Phase {
-  const start = new Date(item.startAt).getTime();
-  const end = new Date(item.endAt).getTime();
-  // El estado real de Zoom manda sobre el reloj, pero acotado: ENDED es
-  // pasado aunque la ventana teórica siga abierta (el formador cerró antes),
-  // y STARTED deja de ser "en curso" pasado el margen de gracia.
-  if (item.status === 'ENDED') return 'pasada';
-  if (item.status === 'STARTED') {
-    // STARTED solo es "en curso" dentro de su ventana (con margen): una
-    // sesión futura con un `meeting.started` espurio no puede anunciarse
-    // como en directo hoy, ni una vieja quedarse así para siempre.
-    if (now < start) return 'proxima';
-    return now <= end + LIVE_GRACE_MS ? 'curso' : 'pasada';
-  }
-  if (now >= start && now <= end) return 'curso';
-  return now < start ? 'proxima' : 'pasada';
 }
 
 type View = 'Mes' | 'Agenda' | 'Eventos';
@@ -213,21 +78,24 @@ export default function CalendarioPage() {
     return () => clearInterval(id);
   }, []);
 
-  // Rejilla del mes visible.
+  const cells = useMemo(() => buildGrid(year, month), [year, month]);
+
+  // Rejilla visible. Se pide el rango de las 42 CELDAS, no el del mes: si solo
+  // se pidiera el mes, los días de agosto que rellenan el pie de julio saldrían
+  // vacíos aunque tengan clases.
   useEffect(() => {
     let cancelled = false;
-    // Límites del mes en hora LOCAL del navegador (no UTC): la grilla agrupa
-    // por día local, así que pedir el rango en UTC dejaría fuera las citas
-    // de madrugada en los bordes del mes.
-    const from = new Date(year, month, 1);
-    const to = new Date(year, month, getDaysInMonth(year, month), 23, 59, 59, 999);
+    // Límites en hora LOCAL del navegador (no UTC): la grilla agrupa por día
+    // local, así que pedir el rango en UTC dejaría fuera las citas de
+    // madrugada en los bordes.
+    const { from, to } = gridRange(cells);
     void fetchRange(from, to).then((items) => {
       if (!cancelled) setMonthItems(items);
     });
     return () => {
       cancelled = true;
     };
-  }, [year, month]);
+  }, [cells]);
 
   // Agenda: se carga una sola vez y no depende del mes que estés mirando —
   // es lo que evita que una clase del mes que viene quede invisible.
@@ -279,22 +147,6 @@ export default function CalendarioPage() {
     };
   }, [agendaItems, now]);
 
-  const daysInMonth = getDaysInMonth(year, month);
-  const firstWeekDay = getFirstDayOfWeek(year, month);
-  const prevMonthDays = getDaysInMonth(year, month - 1 < 0 ? 11 : month - 1);
-
-  const cells: Array<{ day: number; currentMonth: boolean }> = [];
-  for (let i = firstWeekDay - 1; i >= 0; i--) {
-    cells.push({ day: prevMonthDays - i, currentMonth: false });
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    cells.push({ day: d, currentMonth: true });
-  }
-  const remaining = 42 - cells.length;
-  for (let d = 1; d <= remaining; d++) {
-    cells.push({ day: d, currentMonth: false });
-  }
-
   function prevMonth() {
     if (month === 0) {
       setMonth(11);
@@ -321,6 +173,7 @@ export default function CalendarioPage() {
   }
 
   const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+  const todayKey = dateKeyOf(today);
   const upcoming = agenda.curso.concat(agenda.proximas).slice(0, 6);
 
   return (
@@ -394,9 +247,9 @@ export default function CalendarioPage() {
 
             <div className="grid grid-cols-7">
               {cells.map((cell, i) => {
-                const isToday = cell.currentMonth && isCurrentMonth && cell.day === today.getDate();
-                const dateKey = cell.currentMonth ? toDateStr(year, month, cell.day) : '';
-                const dayItems = dateKey ? (itemsByDay.get(dateKey) ?? []) : [];
+                const dateKey = dateKeyOf(cell.date);
+                const dayItems = itemsByDay.get(dateKey) ?? [];
+                const isToday = dateKey === todayKey;
                 return (
                   <div
                     key={i}
@@ -410,10 +263,15 @@ export default function CalendarioPage() {
                           ? 'bg-(--didacta-trust) font-bold text-white'
                           : cell.currentMonth
                             ? 'text-text'
-                            : 'text-text-muted/50'
+                            : // Los días del mes vecino se atenúan, pero si tienen
+                              // citas se dejan legibles: son justo los que el bug
+                              // anterior escondía.
+                              dayItems.length > 0
+                              ? 'text-text-muted'
+                              : 'text-text-muted/50'
                       }`}
                     >
-                      {cell.day}
+                      {cell.date.getDate()}
                     </span>
                     {dayItems.slice(0, 2).map((item) => {
                       const phase = phaseOf(item, now);

@@ -65,6 +65,38 @@ export function wallTimeToIso(wall: string, timeZone: string): string {
   }
 }
 
+/**
+ * Inversa de `wallTimeToIso`: del instante ISO que guarda la API al valor
+ * "YYYY-MM-DDTHH:mm" que entiende un `datetime-local`, leído en la zona de la
+ * clase.
+ *
+ * La usa el formulario de EDICIÓN para precargar la hora. Sin ella, el input
+ * mostraría la hora en la zona del navegador y guardar sin tocar el campo
+ * movería la clase.
+ */
+export function isoToWallTime(iso: string, timeZone: string): string {
+  const instant = new Date(iso);
+  if (Number.isNaN(instant.getTime())) return '';
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(instant);
+    const get = (type: Intl.DateTimeFormatPartTypes): string =>
+      parts.find((p) => p.type === type)?.value ?? '00';
+    return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+  } catch {
+    // Zona inválida: hora del navegador, que es mejor que un campo vacío.
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${instant.getFullYear()}-${pad(instant.getMonth() + 1)}-${pad(instant.getDate())}T${pad(instant.getHours())}:${pad(instant.getMinutes())}`;
+  }
+}
+
 /** ¿Es una zona IANA que este navegador entiende? */
 export function isValidTimeZone(timeZone: string): boolean {
   try {

@@ -209,10 +209,36 @@ export const zoomLiveApi = {
     hostEmail: string;
     timezone: string;
     description?: string;
+    /** Publica un anuncio de la clase en el feed de la comunidad. */
+    announce?: boolean;
   }): Promise<ZoomSession> {
     return apiFetch<ZoomSession>(
       '/api/v1/modules/zoom-live/sessions',
       { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  /**
+   * Edita una sesión SCHEDULED/STARTED. Solo viajan los campos que la API
+   * admite cambiar: el host, el curso y la lección quedan fijos desde la
+   * creación (cambiarlos implicaría recrear el meeting en Zoom).
+   */
+  async update(
+    id: string,
+    input: {
+      topic?: string;
+      startTime?: string;
+      durationMinutes?: number;
+      timezone?: string;
+      description?: string | null;
+      /** Publica el anuncio en la comunidad si aún no existe. */
+      announce?: boolean;
+    },
+  ): Promise<ZoomSession> {
+    return apiFetch<ZoomSession>(
+      `/api/v1/modules/zoom-live/sessions/${id}`,
+      { method: 'PUT', body: JSON.stringify(input) },
       withAuth(),
     );
   },

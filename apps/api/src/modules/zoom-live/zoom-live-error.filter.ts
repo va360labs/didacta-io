@@ -16,6 +16,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   ZOOM_ATTENDANCE_NOT_AVAILABLE: HttpStatus.CONFLICT,
   ZOOM_COURSE_NOT_IN_TENANT: HttpStatus.UNPROCESSABLE_ENTITY,
   ZOOM_LESSON_NOT_IN_COURSE: HttpStatus.UNPROCESSABLE_ENTITY,
+  // El host no existe en la cuenta de Zoom: es un dato mal puesto por quien
+  // crea la clase, no un fallo de Zoom (no es 502).
+  ZOOM_HOST_NOT_FOUND: HttpStatus.UNPROCESSABLE_ENTITY,
   ZOOM_API_ERROR: HttpStatus.BAD_GATEWAY,
 };
 

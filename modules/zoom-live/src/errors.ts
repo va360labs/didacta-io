@@ -74,8 +74,31 @@ export class AttendanceNotAvailableError extends ZoomLiveError {
 }
 
 export class ZoomApiError extends ZoomLiveError {
-  constructor(reason: string) {
+  constructor(
+    reason: string,
+    /** Status HTTP de la respuesta de Zoom, si la hubo. */
+    public readonly status?: number,
+    /** Código de error propio de Zoom (`code` del body JSON). */
+    public readonly zoomCode?: number,
+  ) {
     super('ZOOM_API_ERROR', `Error hablando con Zoom: ${reason}`);
+  }
+}
+
+/**
+ * El email del host no corresponde a ningún usuario de la cuenta de Zoom.
+ *
+ * Zoom crea las reuniones con `POST /users/{hostEmail}/meetings`, así que el
+ * host tiene que existir COMO USUARIO en la cuenta de Zoom del tenant — ser
+ * formador en Didacta no basta. Sin este error el formador solo veía
+ * «Error hablando con Zoom: … 404: {"code":1001,…}», que no dice qué hacer.
+ */
+export class ZoomHostNotFoundError extends ZoomLiveError {
+  constructor(hostEmail: string) {
+    super(
+      'ZOOM_HOST_NOT_FOUND',
+      `El email del host (${hostEmail}) no es un usuario de vuestra cuenta de Zoom, así que Zoom no deja crear la reunión a su nombre. Usa el email de alguien que tenga usuario en la cuenta de Zoom, o añádelo primero desde zoom.us → Gestión de usuarios.`,
+    );
   }
 }
 

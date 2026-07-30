@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isValidTimeZone, wallTimeToIso } from './wall-time';
+import { isoToWallTime, isValidTimeZone, wallTimeToIso } from './wall-time';
 
 /**
  * El formulario del formador escribe la hora en un `datetime-local`, que no
@@ -50,5 +50,40 @@ describe('isValidTimeZone', () => {
     expect(isValidTimeZone('Europe/Madrid')).toBe(true);
     expect(isValidTimeZone('UTC')).toBe(true);
     expect(isValidTimeZone('No/Existe')).toBe(false);
+  });
+});
+
+/**
+ * La inversa la usa el formulario de EDICIÓN para precargar el
+ * `datetime-local`. Si leyera el instante en la zona del navegador, guardar
+ * sin tocar el campo movería la clase de hora.
+ */
+describe('isoToWallTime', () => {
+  it('lee el instante en la zona de la clase, no en la del navegador', () => {
+    // La Masterclass de prod: 16:00 UTC = 18:00 en Madrid (CEST).
+    expect(isoToWallTime('2026-08-03T16:00:00.000Z', 'Europe/Madrid')).toBe('2026-08-03T18:00');
+    expect(isoToWallTime('2026-08-03T16:00:00.000Z', 'America/Bogota')).toBe('2026-08-03T11:00');
+  });
+
+  it('aplica el offset de invierno cuando toca', () => {
+    expect(isoToWallTime('2026-01-15T17:00:00.000Z', 'Europe/Madrid')).toBe('2026-01-15T18:00');
+  });
+
+  it('es la inversa exacta de wallTimeToIso', () => {
+    for (const [wall, tz] of [
+      ['2026-08-03T18:00', 'Europe/Madrid'],
+      ['2026-01-15T09:30', 'America/Argentina/Buenos_Aires'],
+      ['2026-12-31T23:45', 'UTC'],
+    ] as const) {
+      expect(isoToWallTime(wallTimeToIso(wall, tz), tz)).toBe(wall);
+    }
+  });
+
+  it('rellena a dos dígitos (el input lo exige)', () => {
+    expect(isoToWallTime('2026-03-05T08:07:00.000Z', 'UTC')).toBe('2026-03-05T08:07');
+  });
+
+  it('con una fecha inválida devuelve cadena vacía en vez de romper el form', () => {
+    expect(isoToWallTime('no-es-una-fecha', 'Europe/Madrid')).toBe('');
   });
 });

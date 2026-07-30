@@ -409,6 +409,64 @@ describe('ZoomLiveService', () => {
     expect(session.joinUrl).toMatch(/^https:\/\/stub-zoom/);
     expect(session.startUrl).toMatch(/^https:\/\/stub-zoom/);
     expect(ctx.events).toEqual([expect.objectContaining({ name: 'zoom.session.created' })]);
+    // Sin `announce` explícito la clase NO se anuncia: una prueba no puede
+    // acabar publicada en el feed por descuido.
+    expect(ctx.events[0]?.data).toMatchObject({ announce: false });
+  });
+
+  it('propaga la intención de anunciar la clase en el evento', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+
+    await service.create(TENANT, ACTOR, {
+      topic: 'Masterclass',
+      startTime: '2026-08-03T16:00:00+02:00',
+      durationMinutes: 90,
+      hostEmail: 'host@example.com',
+      timezone: 'Europe/Madrid',
+      announce: true,
+    });
+
+    expect(ctx.events[0]?.data).toMatchObject({ announce: true });
+  });
+
+  it('editar propaga la intención de anunciar, para publicar una clase que no lo estaba', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+
+    const creada = await service.create(TENANT, ACTOR, {
+      topic: 'Sin anunciar',
+      startTime: '2026-08-03T16:00:00+02:00',
+      durationMinutes: 60,
+      hostEmail: 'host@example.com',
+      timezone: 'Europe/Madrid',
+    });
+
+    await service.update(TENANT, ACTOR, creada.id, { topic: 'Ya anunciada', announce: true });
+
+    const updated = ctx.events.find((e) => e.name === 'zoom.session.updated');
+    expect(updated?.data).toMatchObject({ sessionId: creada.id, announce: true });
+  });
+
+  it('editar sin pedir anuncio no lo pide (el consumidor solo re-sincroniza)', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+
+    const creada = await service.create(TENANT, ACTOR, {
+      topic: 'Clase',
+      startTime: '2026-08-03T16:00:00+02:00',
+      durationMinutes: 60,
+      hostEmail: 'host@example.com',
+      timezone: 'Europe/Madrid',
+    });
+
+    await service.update(TENANT, ACTOR, creada.id, { durationMinutes: 90 });
+
+    const updated = ctx.events.find((e) => e.name === 'zoom.session.updated');
+    expect(updated?.data).toMatchObject({ announce: false });
   });
 
   it('list filtra por status', async () => {

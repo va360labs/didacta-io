@@ -626,6 +626,9 @@ export class ZoomLiveService {
       sessionId: created.id,
       courseId: created.courseId,
       meetingId: meeting.meetingId,
+      // Intención del formador, no acción: quien la consuma decide qué
+      // significa "anunciar" (ver ZoomLiveCommunityBridge en el host).
+      announce: dto.announce ?? false,
     });
     this.ctx.logger.info('mod.zoom-live: session created', {
       tenantId,
@@ -683,7 +686,10 @@ export class ZoomLiveService {
       include: { _count: { select: { registrations: true } } },
     });
 
-    await this.publish(tenantId, actorId, 'zoom.session.updated', { sessionId });
+    await this.publish(tenantId, actorId, 'zoom.session.updated', {
+      sessionId,
+      announce: dto.announce ?? false,
+    });
     return this.toView(updated, {
       includeStartUrl: true,
       includeJoinUrl: true,

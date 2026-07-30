@@ -17,6 +17,7 @@ import { zoomLiveApi, type SessionStatus, type ZoomSession } from '@/modules/zoo
 import {
   COMMON_TIMEZONES,
   isValidTimeZone,
+  isoToWallTime,
   timeZoneLabel,
   wallTimeToIso,
 } from '@/modules/zoom-live/wall-time';
@@ -54,7 +55,24 @@ export default function AulaVirtualPage() {
   const [sessions, setSessions] = useState<ZoomSession[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  /** Sesión en edición. null = el formulario, si está abierto, crea una nueva. */
+  const [editing, setEditing] = useState<ZoomSession | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  function openCreate() {
+    setEditing(null);
+    setShowForm((v) => !v);
+  }
+
+  function openEdit(session: ZoomSession) {
+    setEditing(session);
+    setShowForm(true);
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditing(null);
+  }
 
   async function handleCopyLink(id: string) {
     try {
@@ -100,9 +118,9 @@ export default function AulaVirtualPage() {
             para que los miembros se apunten — solo los inscritos ven el link de Zoom.
           </p>
         </div>
-        <Button type="button" onClick={() => setShowForm((v) => !v)}>
+        <Button type="button" onClick={openCreate}>
           <Icon name="plus" size={16} />
-          {showForm ? 'Cerrar' : 'Nueva sesión'}
+          {showForm && !editing ? 'Cerrar' : 'Nueva sesión'}
         </Button>
       </header>
 
@@ -116,12 +134,16 @@ export default function AulaVirtualPage() {
       ) : null}
 
       {showForm ? (
-        <CreateSessionForm
-          onCreated={async () => {
-            setShowForm(false);
+        <SessionForm
+          // Remonta el formulario al cambiar de sesión: los defaultValue de
+          // los inputs no controlados solo se aplican al montar.
+          key={editing?.id ?? 'nueva'}
+          session={editing}
+          onSaved={async () => {
+            closeForm();
             await reload();
           }}
-          onCancel={() => setShowForm(false)}
+          onCancel={closeForm}
         />
       ) : null}
 
@@ -199,6 +221,20 @@ export default function AulaVirtualPage() {
                       </Link>
                     </Button>
                   ) : null}
+                  {/* La API solo admite editar mientras no haya terminado ni
+                      estar cancelada (SessionAlreadyEndedError). */}
+                  {s.status === 'SCHEDULED' || s.status === 'STARTED' ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openEdit(s)}
+                      data-testid={`editar-clase-${s.id}`}
+                    >
+                      <Icon name="edit" size={13} />
+                      Editar
+                    </Button>
+                  ) : null}
                   {s.status !== 'CANCELLED' ? (
                     <Button
                       type="button"
@@ -237,24 +273,37 @@ export default function AulaVirtualPage() {
   );
 }
 
-function CreateSessionForm({
-  onCreated,
+/**
+ * Formulario de clase en directo, en modo alta o edición.
+ *
+ * En edición solo se ofrecen los campos que la API admite cambiar
+ * (`updateSessionSchema`): título, fecha/hora, duración, zona y agenda. El
+ * host, el curso y la lección quedan fijos desde la creación — cambiarlos
+ * obligaría a recrear el meeting en Zoom —, así que se muestran como dato, no
+ * como input muerto.
+ */
+function SessionForm({
+  session: editing,
+  onSaved,
   onCancel,
 }: {
-  onCreated: () => Promise<void>;
+  /** null = alta. Con sesión = edición de esa clase. */
+  session: ZoomSession | null;
+  onSaved: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const isEdit = editing !== null;
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<string>('');
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
   const [lessonId, setLessonId] = useState<string>('');
-  const session = authStorage.getSession();
-  const defaultEmail = session?.user.email ?? '';
+  const authSession = authStorage.getSession();
+  const defaultEmail = authSession?.user.email ?? '';
   const tzGuess =
     typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC';
-  const [timezone, setTimezone] = useState(tzGuess);
+  const [timezone, setTimezone] = useState(editing?.timezone ?? tzGuess);
   // La zona del navegador va primero si no está ya en la lista, para que el
   // formador nunca tenga que buscar la suya.
   const tzOptions =
@@ -262,8 +311,10 @@ function CreateSessionForm({
       ? COMMON_TIMEZONES
       : [tzGuess, ...COMMON_TIMEZONES];
 
-  // Carga inicial de cursos publicados del tenant para el select.
+  // Carga inicial de cursos publicados del tenant para el select (solo alta:
+  // en edición el curso no se puede cambiar).
   useEffect(() => {
+    if (isEdit) return;
     let aborted = false;
     void coursesApi
       .list({ status: 'PUBLISHED' })
@@ -277,7 +328,7 @@ function CreateSessionForm({
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [isEdit]);
 
   // Al cambiar de curso, cargamos su detalle para el select de lecciones.
   // El reset de lessonId evita que quede un id huérfano de un curso anterior.
@@ -320,19 +371,38 @@ function CreateSessionForm({
       // zona ELEGIDA para la clase, no en la del navegador: si no, un
       // formador conectado desde otra zona programaría a otra hora.
       const tz = String(form.get('timezone') ?? tzGuess);
-      await zoomLiveApi.create({
-        topic: String(form.get('topic') ?? ''),
-        startTime: wallTimeToIso(startTimeRaw, tz),
-        durationMinutes: Number(form.get('durationMinutes') ?? 60),
-        hostEmail: String(form.get('hostEmail') ?? defaultEmail),
-        timezone: tz,
-        description: form.get('description') ? String(form.get('description')) : undefined,
-        courseId: form.get('courseId') ? String(form.get('courseId')) : undefined,
-        lessonId: form.get('lessonId') ? String(form.get('lessonId')) : undefined,
-      });
-      await onCreated();
+      if (editing) {
+        await zoomLiveApi.update(editing.id, {
+          topic: String(form.get('topic') ?? ''),
+          startTime: wallTimeToIso(startTimeRaw, tz),
+          durationMinutes: Number(form.get('durationMinutes') ?? 60),
+          timezone: tz,
+          // `null` limpia la agenda; `undefined` la dejaría intacta.
+          description: form.get('description') ? String(form.get('description')) : null,
+          announce: form.get('announce') === 'on',
+        });
+      } else {
+        await zoomLiveApi.create({
+          topic: String(form.get('topic') ?? ''),
+          startTime: wallTimeToIso(startTimeRaw, tz),
+          durationMinutes: Number(form.get('durationMinutes') ?? 60),
+          hostEmail: String(form.get('hostEmail') ?? defaultEmail),
+          timezone: tz,
+          description: form.get('description') ? String(form.get('description')) : undefined,
+          courseId: form.get('courseId') ? String(form.get('courseId')) : undefined,
+          lessonId: form.get('lessonId') ? String(form.get('lessonId')) : undefined,
+          announce: form.get('announce') === 'on',
+        });
+      }
+      await onSaved();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos crear la sesión.');
+      setError(
+        e instanceof ApiHttpError
+          ? e.message
+          : editing
+            ? 'No pudimos guardar los cambios.'
+            : 'No pudimos crear la sesión.',
+      );
     } finally {
       setPending(false);
     }
@@ -350,13 +420,14 @@ function CreateSessionForm({
               color: 'var(--didacta-info-fg)',
             }}
           >
-            <Icon name="plus" size={18} />
+            <Icon name={isEdit ? 'edit' : 'plus'} size={18} />
           </span>
           <div className="min-w-0">
-            <CardTitle>Nueva sesión Zoom</CardTitle>
+            <CardTitle>{isEdit ? 'Editar clase en directo' : 'Nueva sesión Zoom'}</CardTitle>
             <CardDescription>
-              Programa una sesión síncrona. Si la vinculas a un curso, los alumnos matriculados
-              verán el botón "Unirse" en su detalle.
+              {isEdit
+                ? 'Los cambios se aplican también a la reunión de Zoom. El host, el curso y la lección no se pueden cambiar: para eso hay que crear otra clase.'
+                : 'Programa una sesión síncrona. Si la vinculas a un curso, los alumnos matriculados verán el botón "Unirse" en su detalle.'}
             </CardDescription>
           </div>
         </div>
@@ -373,6 +444,7 @@ function CreateSessionForm({
               required
               maxLength={200}
               placeholder="Ej: Q&A semanal del curso de n8n"
+              defaultValue={editing?.topic ?? ''}
               autoFocus
             />
           </div>
@@ -381,7 +453,15 @@ function CreateSessionForm({
               <Label htmlFor="startTime">
                 Fecha y hora <span className="text-danger-700">*</span>
               </Label>
-              <Input id="startTime" name="startTime" type="datetime-local" required />
+              <Input
+                id="startTime"
+                name="startTime"
+                type="datetime-local"
+                // Leída en la ZONA DE LA CLASE, no en la del navegador: si no,
+                // guardar sin tocar el campo movería la clase de hora.
+                defaultValue={editing ? isoToWallTime(editing.startTime, editing.timezone) : ''}
+                required
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="durationMinutes">
@@ -393,7 +473,7 @@ function CreateSessionForm({
                 type="number"
                 min={15}
                 max={480}
-                defaultValue={60}
+                defaultValue={editing?.durationMinutes ?? 60}
                 required
               />
             </div>
@@ -401,15 +481,32 @@ function CreateSessionForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="hostEmail">
-                Email del host <span className="text-danger-700">*</span>
+                Email del host {isEdit ? null : <span className="text-danger-700">*</span>}
               </Label>
-              <Input
-                id="hostEmail"
-                name="hostEmail"
-                type="email"
-                defaultValue={defaultEmail}
-                required
-              />
+              {isEdit ? (
+                <>
+                  <p className="rounded-lg border border-border-soft bg-bg-subtle px-3 py-2 text-sm text-text-muted">
+                    {editing.hostEmail}
+                  </p>
+                  <p className="text-xs text-text-subtle">
+                    El host queda fijo desde la creación: la reunión ya existe a su nombre en Zoom.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Input
+                    id="hostEmail"
+                    name="hostEmail"
+                    type="email"
+                    defaultValue={defaultEmail}
+                    required
+                  />
+                  <p className="text-xs text-text-subtle">
+                    Puede ser otra persona del equipo, pero ese email tiene que tener usuario en
+                    vuestra cuenta de Zoom: la reunión se crea a su nombre.
+                  </p>
+                </>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="timezone">Zona horaria</Label>
@@ -431,48 +528,80 @@ function CreateSessionForm({
               </p>
             </div>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="courseId">Curso (opcional)</Label>
-              <Select
-                id="courseId"
-                name="courseId"
-                value={courseId}
-                onChange={(e) => setCourseId(e.target.value)}
-              >
-                <option value="">Sesión libre (sin curso)</option>
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
-                  </option>
-                ))}
-              </Select>
+          {isEdit ? null : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="courseId">Curso (opcional)</Label>
+                <Select
+                  id="courseId"
+                  name="courseId"
+                  value={courseId}
+                  onChange={(e) => setCourseId(e.target.value)}
+                >
+                  <option value="">Sesión libre (sin curso)</option>
+                  {courses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="lessonId">Lección (opcional)</Label>
+                <Select
+                  id="lessonId"
+                  name="lessonId"
+                  value={lessonId}
+                  onChange={(e) => setLessonId(e.target.value)}
+                  disabled={!courseId || lessonOptions.length === 0}
+                >
+                  <option value="">— Sin vincular a una lección —</option>
+                  {lessonOptions.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.label}
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-xs text-text-subtle">
+                  Si seleccionas una lección, la sesión aparece en su detalle para los alumnos
+                  matriculados.
+                </p>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="lessonId">Lección (opcional)</Label>
-              <Select
-                id="lessonId"
-                name="lessonId"
-                value={lessonId}
-                onChange={(e) => setLessonId(e.target.value)}
-                disabled={!courseId || lessonOptions.length === 0}
-              >
-                <option value="">— Sin vincular a una lección —</option>
-                {lessonOptions.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.label}
-                  </option>
-                ))}
-              </Select>
-              <p className="text-xs text-text-subtle">
-                Si seleccionas una lección, la sesión aparece en su detalle para los alumnos
-                matriculados.
-              </p>
-            </div>
-          </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="description">Agenda / notas (opcional)</Label>
-            <Textarea id="description" name="description" rows={3} maxLength={2000} />
+            <Textarea
+              id="description"
+              name="description"
+              rows={3}
+              maxLength={2000}
+              defaultValue={editing?.description ?? ''}
+            />
+          </div>
+
+          <div className="flex items-start gap-2.5 rounded-lg border border-border-soft bg-bg-subtle p-3">
+            <input
+              id="announce"
+              name="announce"
+              type="checkbox"
+              // En alta va marcada (lo normal es querer anunciarla). En edición
+              // NO: guardar un cambio no puede publicar por la espalda una
+              // clase que se creó a propósito sin anunciar.
+              defaultChecked={!isEdit}
+              data-testid="anunciar-clase"
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--didacta-trust)]"
+            />
+            <div className="min-w-0">
+              <Label htmlFor="announce" className="cursor-pointer">
+                {isEdit ? 'Anunciar en la comunidad ahora' : 'Anunciar en la comunidad'}
+              </Label>
+              <p className="text-xs text-text-subtle">
+                {isEdit
+                  ? 'Publica la clase en el feed si todavía no lo estaba. Si ya la anunciaste, el post existente se actualiza solo con estos cambios — no se publica otro ni hace falta marcar nada.'
+                  : 'Publica la clase en el feed con una tarjeta desde la que los miembros pueden inscribirse sin salir de la comunidad. Desmárcalo si es una prueba.'}
+              </p>
+            </div>
           </div>
 
           {error ? (
@@ -486,7 +615,7 @@ function CreateSessionForm({
 
           <div className="flex items-center gap-2 border-t border-border-soft pt-4">
             <Button type="submit" disabled={pending}>
-              {pending ? 'Creando…' : 'Crear sesión'}
+              {pending ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Crear sesión'}
             </Button>
             <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
               Cancelar

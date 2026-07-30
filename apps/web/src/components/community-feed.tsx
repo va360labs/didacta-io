@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CommunityGalleryModal } from '@/components/community-gallery-modal';
 import { CommunityTagChip } from '@/components/community-tag-chip';
 import { ThreadCard, TAG_COLORS } from '@/components/community-thread-card';
+import { CommunityUpcomingCard } from '@/components/community-upcoming-card';
 import { usePublicUsers } from '@/lib/public-users';
 import { Icon } from '@/components/icon';
 import { PostComposerModal } from '@/components/post-composer-modal';
@@ -262,6 +263,10 @@ export function CommunityFeed({
 
         {/* Sidebar derecha */}
         <aside className="flex min-w-0 flex-col gap-4">
+          {/* Lo primero: al abrir la comunidad se ve qué hay por delante sin
+              tener que ir hasta /calendario. */}
+          <CommunityUpcomingCard />
+
           <Card>
             <CardContent className="p-5">
               <h4 className="font-display text-base font-semibold text-text">Actividad</h4>

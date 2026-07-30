@@ -13,7 +13,9 @@ import { authStorage } from '@/lib/auth-storage';
 import { postShareUrl } from '@/lib/post-link';
 import { cn } from '@/lib/utils';
 import { AuthorNameLink, CommunityAvatar } from '@/components/community-avatar';
+import { ClaseEmbedCard } from '@/components/clase-embed-card';
 import { RichBody } from '@/components/rich-body';
+import { parseClaseEmbed } from '@/lib/clase-embed';
 import { PostComposerModal } from '@/components/post-composer-modal';
 import { usePublicUsers } from '@/lib/public-users';
 import {
@@ -379,13 +381,17 @@ export function PostDetailView({
         {post.title}
       </h1>
       {(() => {
-        const { cleanBody, images, files } = parseBodyAttachments(post.body);
+        const { cleanBody: withoutAttachments, images, files } = parseBodyAttachments(post.body);
+        // Un post que anuncia una clase en directo muestra su tarjeta con
+        // inscripción en línea, igual que en el feed.
+        const { cleanBody, sessionId: claseId } = parseClaseEmbed(withoutAttachments);
         return (
           <>
             {/* div, no p: RichBody emite bloques (títulos, listas, párrafos). */}
             <div className="mt-3 text-[15px] leading-relaxed text-[#374151]">
               <RichBody body={cleanBody} />
             </div>
+            {claseId ? <ClaseEmbedCard sessionId={claseId} /> : null}
             {images.length > 0 && <ImageGallery images={images} />}
             {files.length > 0 && <FileList files={files} />}
           </>

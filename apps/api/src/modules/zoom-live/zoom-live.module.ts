@@ -6,6 +6,7 @@ import { ModulesModule } from '../modules.module';
 import { ZoomAttendanceSyncWorker } from './zoom-attendance-sync.worker';
 import { ZoomLiveController } from './zoom-live.controller';
 import { ZoomLiveErrorFilter } from './zoom-live-error.filter';
+import { ZoomLiveCommunityBridge } from './zoom-live-community.bridge';
 import { ZoomLiveNotificationsBridge } from './zoom-live-notifications.bridge';
 import { ZoomWebhookController } from './zoom-webhook.controller';
 
@@ -29,6 +30,7 @@ import { ZoomWebhookController } from './zoom-webhook.controller';
   controllers: [ZoomLiveController, ZoomWebhookController],
   providers: [
     ZoomLiveNotificationsBridge,
+    ZoomLiveCommunityBridge,
     ZoomAttendanceSyncWorker,
     { provide: APP_FILTER, useClass: ZoomLiveErrorFilter },
   ],
