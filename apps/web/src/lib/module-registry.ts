@@ -33,6 +33,7 @@ export interface ModuleSidebarItem {
   /// hasta migrar las extensiones que aún los usen).
   group:
     | 'Aprendizaje'
+    | 'Personas'
     | 'Profesor'
     | 'Administración'
     | 'Comunidad'

@@ -40,7 +40,6 @@ import { AccessGroupsController } from './access-groups/access-groups.controller
 import { AccessGroupsService } from './access-groups/access-groups.service';
 import { AccessGroupsCoursesBridge } from './access-groups/access-groups-courses.bridge';
 import { AccessGroupsTiersBridge } from './access-groups/access-groups-tiers.bridge';
-import { LeaderboardController } from './leaderboard.controller';
 import { MeModulesController } from './me-modules.controller';
 import { TenantSettingsController } from './tenant-settings.controller';
 import { ThemingController } from './theming.controller';
@@ -49,6 +48,7 @@ import { ZoomLiveModule } from './zoom-live/zoom-live.module';
 import { FundaeModule } from './fundae/fundae.module';
 import { SurveysModule } from './surveys/surveys.module';
 import { ResourcesModule } from './resources/resources.module';
+import { GamificationModule } from './gamification/gamification.module';
 import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
 
 @Module({
@@ -71,6 +71,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     forwardRef(() => AiContentModule),
     forwardRef(() => SurveysModule),
     forwardRef(() => ResourcesModule),
+    forwardRef(() => GamificationModule),
   ],
   controllers: [
     CoursesController,
@@ -87,7 +88,6 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     AiProvidersController,
     // GET /me/modules — sidebar gating UI (módulos activos + capabilities EE).
     MeModulesController,
-    LeaderboardController,
     GroupsController,
     EventsController,
     AccessGroupsController,

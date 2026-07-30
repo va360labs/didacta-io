@@ -58,6 +58,7 @@ export type IconName =
   | 'hash'
   | 'globe'
   | 'video'
+  | 'target'
   | 'trophy'
   | 'messages'
   | 'megaphone'
@@ -419,6 +420,14 @@ export function Icon({ name, size = 20, strokeWidth = 1.75, className, ...rest }
         <svg {...common}>
           <path d="m22 8-6 4 6 4V8z" />
           <rect width="14" height="12" x="2" y="6" rx="2" ry="2" />
+        </svg>
+      );
+    case 'target':
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="6" />
+          <circle cx="12" cy="12" r="2" />
         </svg>
       );
     case 'trophy':

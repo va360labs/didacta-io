@@ -1,8 +1,7 @@
 'use client';
 
 import { certificatesApi } from '@/modules/certificates';
-import { authStorage } from './auth-storage';
-import { leaderboardApi } from './leaderboard';
+import { gamificationApi } from '@/modules/gamification';
 import { learningApi } from './learning';
 
 /**
@@ -22,11 +21,10 @@ export interface ProfileStats {
 }
 
 export async function loadProfileStats(): Promise<ProfileStats> {
-  const userId = authStorage.getSession()?.user.id ?? null;
-  const [learning, certs, board] = await Promise.allSettled([
+  const [learning, certs, standing] = await Promise.allSettled([
     learningApi.getMyStats(),
     certificatesApi.listMine(),
-    leaderboardApi.get('all'),
+    gamificationApi.myStanding('all'),
   ]);
 
   const completedCourses = learning.status === 'fulfilled' ? learning.value.completedCourses : null;
@@ -35,11 +33,15 @@ export async function loadProfileStats(): Promise<ProfileStats> {
   const certificates =
     certs.status === 'fulfilled' ? certs.value.filter((c) => c.revokedAt === null).length : null;
 
+  // El percentil se calcula contra la población COMPLETA de clasificados, que
+  // ahora devuelve el módulo. Antes se dividía entre el top 50 que llegaba en
+  // la respuesta, así que en un tenant con más de 50 personas salía mal.
   let rankingTopPercent: number | null = null;
-  if (board.status === 'fulfilled' && userId && board.value.length > 0) {
-    const me = board.value.find((e) => e.userId === userId);
-    // Solo hay percentil si el usuario aparece en el ranking (tiene puntos).
-    if (me) rankingTopPercent = Math.max(1, Math.ceil((me.rank / board.value.length) * 100));
+  if (standing.status === 'fulfilled') {
+    const { rank, total } = standing.value;
+    if (rank !== null && total > 0) {
+      rankingTopPercent = Math.max(1, Math.ceil((rank / total) * 100));
+    }
   }
 
   return { completedCourses, trainingHours, certificates, rankingTopPercent };

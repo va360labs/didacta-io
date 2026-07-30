@@ -62,6 +62,11 @@ import {
   ResourcesService,
   type ResourcesEventPublisher,
 } from '@didacta/mod-resources';
+import {
+  buildGamificationModule,
+  GamificationService,
+  type GamificationEventPublisher,
+} from '@didacta/mod-gamification';
 import { communityModule, CommunityService } from '@didacta/mod-community';
 import { coursesModule, CoursesService } from '@didacta/mod-courses';
 import { helloWorldModule } from '@didacta/mod-hello-world';
@@ -93,6 +98,8 @@ import { AiGatewayService } from '../ai/ai-gateway.service';
 import { ModuleContextFactory } from './module-context.factory';
 
 const CORE_VERSION = '1.0.0';
+/** Mismo TTL que el cache del ModuleAccessInterceptor, por coherencia. */
+const MODULE_ENABLED_CACHE_TTL_MS = 30_000;
 
 @Injectable()
 export class ModuleRegistryService implements OnModuleInit {
@@ -127,6 +134,9 @@ export class ModuleRegistryService implements OnModuleInit {
   private messaging?: MessagingService;
   private surveys?: SurveysService;
   private resources?: ResourcesService;
+  private gamification?: GamificationService;
+  /** Cache de activación por (tenant, módulo) para consultas fuera del path HTTP. */
+  private readonly moduleEnabledCache = new Map<string, { enabled: boolean; expiresAt: number }>();
 
   constructor(
     private readonly factory: ModuleContextFactory,
@@ -523,6 +533,30 @@ export class ModuleRegistryService implements OnModuleInit {
     this.resources = new ResourcesService(prisma, resourcesPublisher);
     const resourcesModule = buildResourcesModule();
 
+    // mod.gamification: puntos, niveles y retos (bloque 1).
+    const gamificationEventBus = this.factory.getEventBus();
+    const gamificationPublisher: GamificationEventPublisher = {
+      publish: async (tenantId, actorId, name, payload) => {
+        const entityId =
+          (payload as { sourceKey?: string; submissionId?: string }).sourceKey ??
+          (payload as { submissionId?: string }).submissionId;
+        await gamificationEventBus.publish({
+          name,
+          version: 1,
+          data: payload as never,
+          metadata: {
+            tenantId,
+            userId: actorId ?? undefined,
+            timestamp: new Date().toISOString(),
+            traceId: cryptoRandom(),
+            idempotencyKey: `${name}:${entityId ?? 'x'}:${cryptoRandom()}`,
+          },
+        });
+      },
+    };
+    this.gamification = new GamificationService(prisma, gamificationPublisher);
+    const gamificationModule = buildGamificationModule();
+
     // mod.messaging: salas por espacio, DMs y canal alumno↔profesores.
     // El módulo es puro: los ports (espacios de community, usuarios, staff)
     // los implementa el host aquí; el realtime lo publica el controller.
@@ -673,6 +707,7 @@ export class ModuleRegistryService implements OnModuleInit {
       messagingModule,
       surveysModule,
       resourcesModule,
+      gamificationModule,
     ]);
 
     await this.persistManifests();
@@ -848,8 +883,34 @@ export class ModuleRegistryService implements OnModuleInit {
     return this.aiGraderSuggestion;
   }
 
-  isModuleEnabledForTenant(_tenantId: string, _moduleName: string): boolean {
-    return true;
+  /**
+   * ¿Está el módulo activo para ese tenant? Mismo criterio que
+   * `ModuleAccessInterceptor` (fila de `tenant_module`, y si no hay,
+   * `enabledByDefault` del catálogo), pero utilizable FUERA del path HTTP.
+   *
+   * Existe porque desactivar un módulo no apaga el bus de eventos: las
+   * suscripciones se hacen en `onRegister`, una sola vez por proceso y sin
+   * tenant, y `onDisable` no desuscribe nada. Sin esta comprobación, un tenant
+   * que apaga el módulo dejaría de ver la UI pero seguiría acumulando datos.
+   */
+  async isModuleEnabledForTenant(tenantId: string, moduleName: string): Promise<boolean> {
+    const cacheKey = `${tenantId}::${moduleName}`;
+    const cached = this.moduleEnabledCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && cached.expiresAt > now) return cached.enabled;
+
+    const prisma = this.factory.getPrisma();
+    const row = await prisma.module.findUnique({
+      where: { name: moduleName },
+      include: { tenantModules: { where: { tenantId } } },
+    });
+    // Sin fila de catálogo todavía (boot a medias): no bloquear.
+    const enabled = row ? (row.tenantModules[0]?.enabled ?? row.enabledByDefault) : true;
+    this.moduleEnabledCache.set(cacheKey, {
+      enabled,
+      expiresAt: now + MODULE_ENABLED_CACHE_TTL_MS,
+    });
+    return enabled;
   }
 
   getAiContentService(): AiContentService {
@@ -951,6 +1012,14 @@ export class ModuleRegistryService implements OnModuleInit {
       throw new Error('mod.resources no está inicializado (boot incompleto).');
     }
     return this.resources;
+  }
+
+  /** Puntos, niveles y retos. SIEMPRE inicializado tras el boot (sin gate de env). */
+  getGamificationService(): GamificationService {
+    if (!this.gamification) {
+      throw new Error('mod.gamification no está inicializado (boot incompleto).');
+    }
+    return this.gamification;
   }
 
   getMessagingService(): MessagingService {

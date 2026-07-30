@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { leaderboardApi, type LeaderboardEntry, type LeaderboardRange } from '@/lib/leaderboard';
+import {
+  gamificationApi,
+  type LeaderboardEntry,
+  type LeaderboardRange,
+  type Standing,
+} from '@/modules/gamification';
 
 const RANGE_LABELS: { label: string; value: LeaderboardRange }[] = [
   { label: 'Este mes', value: 'month' },
@@ -18,6 +23,7 @@ const RANK_STYLE: Record<number, string> = {
 export default function LeaderboardPage() {
   const [range, setRange] = useState<LeaderboardRange>('month');
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [standing, setStanding] = useState<Standing | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,19 +31,17 @@ export default function LeaderboardPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    leaderboardApi
-      .get(range)
-      .then((data) => {
-        if (!cancelled) {
-          setEntries(data);
-          setLoading(false);
-        }
+    Promise.all([gamificationApi.leaderboard(range), gamificationApi.myStanding(range)])
+      .then(([board, mine]) => {
+        if (cancelled) return;
+        setEntries(board.entries);
+        setStanding(mine);
+        setLoading(false);
       })
       .catch(() => {
-        if (!cancelled) {
-          setError('No se pudo cargar el leaderboard.');
-          setLoading(false);
-        }
+        if (cancelled) return;
+        setError('No se pudo cargar la clasificación.');
+        setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -47,9 +51,43 @@ export default function LeaderboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-bold text-text">Leaderboard</h1>
-        <p className="mt-1 text-sm text-text-muted">Clasificación de la comunidad</p>
+        <h1 className="font-display text-2xl font-bold text-text">Clasificación</h1>
+        <p className="mt-1 text-sm text-text-muted">
+          Puntos de la comunidad por publicar, responder, compartir recursos y terminar cursos.
+        </p>
       </div>
+
+      {standing && standing.points > 0 ? (
+        <div className="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-xl border border-border bg-surface px-5 py-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+              Tus puntos
+            </p>
+            <p className="font-display text-xl font-bold text-text">
+              {standing.points.toLocaleString('es-ES')}
+            </p>
+          </div>
+          {standing.rank !== null ? (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                Tu puesto
+              </p>
+              <p className="font-display text-xl font-bold text-text">
+                #{standing.rank}{' '}
+                <span className="text-sm font-medium text-text-muted">de {standing.total}</span>
+              </p>
+            </div>
+          ) : null}
+          {standing.levelName ? (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                Tu nivel
+              </p>
+              <p className="font-display text-xl font-bold text-text">{standing.levelName}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="flex gap-2">
         {RANGE_LABELS.map(({ label, value }) => (
@@ -69,7 +107,7 @@ export default function LeaderboardPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-text-muted">Cargando ranking…</p>
+        <p className="text-sm text-text-muted">Cargando clasificación…</p>
       ) : error ? (
         <div className="rounded-xl border border-border bg-surface p-4 text-sm text-text-muted">
           {error}
@@ -78,7 +116,7 @@ export default function LeaderboardPage() {
         <div className="rounded-xl border border-border bg-surface p-12 text-center">
           <p className="text-base font-semibold text-text">Aún no hay actividad registrada</p>
           <p className="mt-1 text-sm text-text-muted">
-            El ranking aparecerá cuando los miembros publiquen y comenten en la comunidad.
+            La clasificación aparecerá cuando los miembros publiquen, comenten o compartan recursos.
           </p>
         </div>
       ) : (
