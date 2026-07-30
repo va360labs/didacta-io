@@ -3,6 +3,8 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   Query,
@@ -18,7 +20,10 @@ import type { SessionClaims } from '../../auth/token.service';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { MessagingPresenceService } from './messaging-presence.service';
+import { MessagingRateLimit, MessagingRateLimitGuard } from './messaging-rate-limit.guard';
 import { MessagingRealtimePublisher } from './messaging-realtime.publisher';
+import { TYPING_TTL_MS } from './messaging-realtime.types';
 
 const openDmSchema = z.object({ userId: z.string().uuid() });
 const sendMessageSchema = z.object({ body: z.string().min(1).max(4000) });
@@ -33,12 +38,15 @@ const membersQuerySchema = z.object({ search: z.string().max(80).optional() });
 @ApiTags('Modules · Messaging')
 @ApiBearerAuth()
 @Controller('modules/messaging')
-@UseGuards(JwtAuthGuard)
+// El guard de cupo solo actúa donde hay @MessagingRateLimit(); colgarlo del
+// controller entero evita olvidarlo al añadir endpoints con efectos.
+@UseGuards(JwtAuthGuard, MessagingRateLimitGuard)
 export class MessagingController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly prisma: PrismaService,
     private readonly realtime: MessagingRealtimePublisher,
+    private readonly presence: MessagingPresenceService,
   ) {}
 
   /**
@@ -114,6 +122,9 @@ export class MessagingController {
   }
 
   @Post('conversations/:id/messages')
+  // El cupo de 20/min que especificaba el PRD de `mensajes` y que nunca llegó a
+  // implementarse (no había throttler en la API). ADR-019 §3.
+  @MessagingRateLimit({ bucket: 'send', limit: 20, windowSec: 60 })
   @ApiOperation({ summary: 'Envía un mensaje de texto y lo empuja por SSE a los participantes.' })
   async sendMessage(
     @CurrentUser() user: SessionClaims | undefined,
@@ -134,6 +145,44 @@ export class MessagingController {
     );
 
     return { message: result.message };
+  }
+
+  @Post('conversations/:id/typing')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  // 30/min = el doble de lo que emite el cliente (1 cada 3 s): deja margen a
+  // varias conversaciones abiertas sin dejar el endpoint a pelo.
+  @MessagingRateLimit({ bucket: 'typing', limit: 30, windowSec: 60 })
+  @ApiOperation({
+    summary:
+      'Señala que el usuario está escribiendo en la conversación. Efímero: publica por SSE y no persiste nada (ADR-019).',
+  })
+  async typing(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') conversationId: string,
+  ): Promise<void> {
+    const caller = await this.callerOf(user);
+    const recipients = await this.registry
+      .getMessagingService()
+      .recipientsForTyping(user!.tenantId, caller, conversationId);
+
+    // Sin el autor: nadie necesita verse escribir a sí mismo.
+    await this.realtime.publishToUsers(user!.tenantId, recipients, {
+      kind: 'typing',
+      conversationId,
+      userId: caller.userId,
+      displayName: caller.displayName,
+      ttlMs: TYPING_TTL_MS,
+    });
+  }
+
+  @Get('presence')
+  @ApiOperation({
+    summary:
+      'Miembros del tenant con el stream de mensajería abierto ahora (presencia efímera, ADR-019).',
+  })
+  async getPresence(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    return this.presence.snapshot(user.tenantId);
   }
 
   @Post('conversations/:id/read')

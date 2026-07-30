@@ -4,6 +4,8 @@ import { AuthModule } from '../../auth/auth.module';
 import { ModulesModule } from '../modules.module';
 import { MessagingController } from './messaging.controller';
 import { MessagingErrorFilter } from './messaging-error.filter';
+import { MessagingPresenceService } from './messaging-presence.service';
+import { MessagingRateLimitGuard } from './messaging-rate-limit.guard';
 import { MessagingRealtimePublisher } from './messaging-realtime.publisher';
 import { MessagingStreamController } from './messaging-stream.controller';
 import { MessagingStreamService } from './messaging-stream.service';
@@ -19,6 +21,8 @@ import { MessagingStreamService } from './messaging-stream.service';
   controllers: [MessagingController, MessagingStreamController],
   providers: [
     MessagingRealtimePublisher,
+    MessagingPresenceService,
+    MessagingRateLimitGuard,
     MessagingStreamService,
     { provide: APP_FILTER, useClass: MessagingErrorFilter },
   ],

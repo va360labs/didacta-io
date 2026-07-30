@@ -524,6 +524,56 @@ describe('MessagingService', () => {
     });
   });
 
+  describe('autoría del último mensaje (píldora del chat flotante)', () => {
+    it('el listado expone el authorId del último mensaje', async () => {
+      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      await service.sendMessage(TENANT, callerOf('alice'), conversationId, 'hola');
+
+      const list = await service.listConversations(TENANT, callerOf('bob'));
+      const dm = list.find((c) => c.id === conversationId);
+      expect(dm?.lastMessage?.authorId).toBe(USERS.alice.id);
+      expect(dm?.lastMessage?.authorDisplayName).toBe('Alice Alumna');
+    });
+
+    it('una sala sin mensajes no inventa autor', async () => {
+      const list = await service.listConversations(TENANT, callerOf('alice'));
+      const sinMensajes = list.find((c) => c.type === 'SPACE' && c.lastMessage === null);
+      expect(sinMensajes?.lastMessage).toBeNull();
+    });
+  });
+
+  describe('destinatarios del indicador de escritura', () => {
+    it('en un directo, el otro participante', async () => {
+      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      const recipients = await service.recipientsForTyping(
+        TENANT,
+        callerOf('alice'),
+        conversationId,
+      );
+      expect(recipients).toEqual([USERS.bob.id]);
+    });
+
+    it('quien no participa no puede anunciar que escribe', async () => {
+      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      await expect(
+        service.recipientsForTyping(TENANT, callerOf('profe', ['alumno']), conversationId),
+      ).rejects.toThrow(NotParticipantError);
+    });
+
+    it('en una sala, solo quienes la han abierto', async () => {
+      const { conversationId } = await service.openSpace(TENANT, callerOf('alice'), 'general');
+      // Bob aún no ha entrado en la sala: no hay a quién avisar.
+      expect(await service.recipientsForTyping(TENANT, callerOf('alice'), conversationId)).toEqual(
+        [],
+      );
+
+      await service.openSpace(TENANT, callerOf('bob'), 'general');
+      expect(await service.recipientsForTyping(TENANT, callerOf('alice'), conversationId)).toEqual([
+        USERS.bob.id,
+      ]);
+    });
+  });
+
   describe('listado e histórico', () => {
     it('incluye salas sin materializar como entradas sintéticas', async () => {
       const list = await service.listConversations(TENANT, callerOf('alice'));

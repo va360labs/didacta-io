@@ -9,10 +9,21 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import IORedis, { type Redis } from 'ioredis';
 import { Observable, Subject } from 'rxjs';
 import { finalize } from 'rxjs/operators';
+import { MessagingPresenceService } from './messaging-presence.service';
 import { MESSAGING_RT_CHANNEL_PATTERN } from './messaging-realtime.types';
 
 function userKeyOf(tenantId: string, userId: string): string {
   return `${tenantId}:${userId}`;
+}
+
+/** Deshace `userKeyOf` para el latido de presencia. */
+function splitUserKey(key: string): { tenantId: string; userId: string } | null {
+  const idx = key.indexOf(':');
+  if (idx < 0) return null;
+  const tenantId = key.slice(0, idx);
+  const userId = key.slice(idx + 1);
+  if (!tenantId || !userId) return null;
+  return { tenantId, userId };
 }
 
 /** Parsea `didacta:rt:msg:<tenantId>:<userId>` → userKey, o null. */
@@ -46,7 +57,10 @@ export class MessagingStreamService implements OnModuleInit, OnApplicationShutdo
   private heartbeat: NodeJS.Timeout | null = null;
   private readonly streams = new Map<string, Set<Subject<MessageEvent>>>();
 
-  constructor(@Optional() private readonly logger?: PinoLogger) {}
+  constructor(
+    private readonly presence: MessagingPresenceService,
+    @Optional() private readonly logger?: PinoLogger,
+  ) {}
 
   onModuleInit(): void {
     const url = process.env['REDIS_URL'];
@@ -76,6 +90,8 @@ export class MessagingStreamService implements OnModuleInit, OnApplicationShutdo
   }
 
   register(tenantId: string, userId: string): Observable<MessageEvent> {
+    // Alta de presencia (ADR-019): abrir el stream ES estar en el aula.
+    this.presence.touch(tenantId, userId);
     const key = userKeyOf(tenantId, userId);
     let set = this.streams.get(key);
     if (!set) {
@@ -135,7 +151,11 @@ export class MessagingStreamService implements OnModuleInit, OnApplicationShutdo
     // eventos. Sin REDIS_URL (dev), el fan-out local sigue con heartbeat.
     if (this.subscriber && this.subscriber.status !== 'ready') return;
     const ping: MessageEvent = { data: { kind: 'ping', t: Date.now() } };
-    for (const set of this.streams.values()) {
+    for (const [key, set] of this.streams) {
+      // El latido que ya existía es también el de la presencia: sigue vivo
+      // quien sigue teniendo el stream abierto (ADR-019).
+      const parsed = splitUserKey(key);
+      if (parsed) this.presence.touch(parsed.tenantId, parsed.userId);
       for (const subject of set) {
         if (!subject.closed) subject.next(ping);
       }
