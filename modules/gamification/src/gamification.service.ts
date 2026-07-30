@@ -41,6 +41,7 @@ export const GAMIFICATION_EVENT = {
   CHALLENGE_SUBMITTED: 'gamification.challenge.submitted',
   CHALLENGE_REVIEWED: 'gamification.challenge.reviewed',
   PERK_REQUESTED: 'gamification.perk.requested',
+  PERK_HANDLED: 'gamification.perk.handled',
 } as const;
 
 /**
@@ -83,7 +84,7 @@ export interface AwardResult {
   reason?: 'duplicate' | 'rule_disabled' | 'daily_cap' | 'zero_points';
   points?: number;
   lifetimePoints?: number;
-  levelChange?: { from: string | null; to: string } | null;
+  levelChange?: { from: string | null; to: string; toName: string } | null;
 }
 
 export interface LeaderboardRow {
@@ -401,6 +402,9 @@ export class GamificationService {
           userId: args.userId,
           from: result.levelChange.from,
           to: result.levelChange.to,
+          // El nombre viaja en el evento: el aviso al alumno no puede enseñar
+          // la clave técnica del nivel.
+          levelName: result.levelChange.toName,
         });
       }
     }
@@ -497,7 +501,7 @@ export class GamificationService {
     userId: string,
     lifetimePoints: number,
     currentKey: string | null,
-  ): Promise<{ from: string | null; to: string } | null> {
+  ): Promise<{ from: string | null; to: string; toName: string } | null> {
     const target = await tx.modGamificationLevel.findFirst({
       where: { tenantId, minPoints: { lte: lifetimePoints } },
       orderBy: { minPoints: 'desc' },
@@ -515,7 +519,7 @@ export class GamificationService {
       where: { tenantId, userId },
       data: { levelKey: target.key, levelReachedAt: new Date() },
     });
-    return { from: currentKey, to: target.key };
+    return { from: currentKey, to: target.key, toName: target.name };
   }
 
   // ── Ranking ────────────────────────────────────────────────────────────────
@@ -1124,6 +1128,26 @@ export class GamificationService {
       if (!exists) throw new GamificationNotFoundError('Solicitud no encontrada.');
       throw new GamificationAlreadyReviewedError();
     }
+
+    const handled = await this.prisma.modGamificationPerkRequest.findFirst({
+      where: { id: args.requestId, tenantId: args.tenantId },
+      include: { perk: { select: { title: true } } },
+    });
+    if (handled) {
+      await this.publisher.publish(
+        args.tenantId,
+        args.handledById,
+        GAMIFICATION_EVENT.PERK_HANDLED,
+        {
+          requestId: handled.id,
+          perkId: handled.perkId,
+          userId: handled.userId,
+          status: args.status,
+          perkTitle: handled.perk.title,
+          staffNote: handled.staffNote,
+        },
+      );
+    }
     return { status: args.status };
   }
 
@@ -1415,6 +1439,9 @@ export class GamificationService {
         challengeId: submission.challengeId,
         userId: submission.userId,
         status,
+        title: submission.challenge.title,
+        points: args.approve ? submission.challenge.points : 0,
+        reviewNote: args.reviewNote?.trim() || null,
       },
     );
     return { status, awarded };
