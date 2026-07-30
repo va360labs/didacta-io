@@ -77,6 +77,23 @@ export const adminSmtpApi = {
       withAuth(),
     );
   },
+  /**
+   * Envía el email REAL de una plantilla (con el override del tenant si lo
+   * tiene) a una dirección. Sirve para ver cómo queda antes de que salga a
+   * cientos de personas — distinto del test de SMTP, que manda un texto fijo
+   * solo para validar credenciales.
+   */
+  async testTemplate(args: {
+    toEmail: string;
+    templateKey: string;
+    variables?: Record<string, string>;
+  }): Promise<{ ok: true; sentTo: string; subject: string | null; messageId?: string }> {
+    return apiFetch<{ ok: true; sentTo: string; subject: string | null; messageId?: string }>(
+      '/api/v1/admin/tenant-settings/smtp/test-template',
+      { method: 'POST', body: JSON.stringify(args) },
+      withAuth(),
+    );
+  },
   async test(toEmail: string): Promise<AdminSmtpTestResult> {
     return apiFetch<AdminSmtpTestResult>(
       '/api/v1/admin/tenant-settings/smtp/test',
