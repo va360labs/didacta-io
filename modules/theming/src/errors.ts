@@ -59,6 +59,15 @@ export class FooterHtmlTooLargeError extends ThemingError {
   }
 }
 
+export class SigninCopyTooLongError extends ThemingError {
+  constructor(field: 'signinHeadline' | 'signinSubheadline', maxChars: number) {
+    super(
+      'THEMING_SIGNIN_COPY_TOO_LONG',
+      `El texto de "${field}" supera los ${maxChars} caracteres y rompería el panel de acceso.`,
+    );
+  }
+}
+
 export class InvalidUrlError extends ThemingError {
   constructor(field: string) {
     super('THEMING_INVALID_URL', `La URL de "${field}" no es válida o no usa https.`);

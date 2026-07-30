@@ -45,6 +45,8 @@ interface FormState {
   faviconUrl: string;
   customCss: string;
   footerHtml: string;
+  signinHeadline: string;
+  signinSubheadline: string;
 }
 
 function themeToForm(t: TenantTheme): FormState {
@@ -57,6 +59,8 @@ function themeToForm(t: TenantTheme): FormState {
     faviconUrl: t.faviconUrl ?? '',
     customCss: t.customCss ?? '',
     footerHtml: t.footerHtml ?? '',
+    signinHeadline: t.signinHeadline ?? '',
+    signinSubheadline: t.signinSubheadline ?? '',
   };
 }
 
@@ -113,6 +117,8 @@ export default function BrandingPage() {
         faviconUrl: form.faviconUrl.trim() || null,
         customCss: form.customCss.trim() || null,
         footerHtml: form.footerHtml.trim() || null,
+        signinHeadline: form.signinHeadline.trim() || null,
+        signinSubheadline: form.signinSubheadline.trim() || null,
       });
       setTheme(updated);
       setForm(themeToForm(updated));
@@ -363,6 +369,52 @@ export default function BrandingPage() {
                   onChange={(e) => setForm((f) => f && { ...f, faviconUrl: e.target.value })}
                   className="mt-1.5"
                 />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/*
+           * Copy del panel de marca de /signin. Vive aquí y no hardcodeado en el
+           * web porque es texto DEL TENANT: Didacta es multi-tenant y no puede
+           * llevar la frase de VA360 (ni la de nadie) en su código.
+           */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Pantalla de acceso</CardTitle>
+              <CardDescription>
+                Texto del panel oscuro de <code>/signin</code>. Si lo dejas vacío se usa el texto
+                genérico de Didacta. Las cifras que aparecen debajo (alumnos activos, cursos
+                publicados) son reales y se calculan solas: no se configuran aquí.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div>
+                <Label htmlFor="signinHeadline">Titular</Label>
+                <Input
+                  id="signinHeadline"
+                  type="text"
+                  maxLength={160}
+                  placeholder="Formación en IA aplicada, con la comunidad que la usa cada día."
+                  value={form.signinHeadline}
+                  onChange={(e) => setForm((f) => f && { ...f, signinHeadline: e.target.value })}
+                  className="mt-1.5"
+                />
+                <p className="mt-1 text-xs text-text-subtle">
+                  Máximo 160 caracteres. Se ve muy grande: funciona mejor con una frase corta.
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="signinSubheadline">Línea de apoyo (opcional)</Label>
+                <Input
+                  id="signinSubheadline"
+                  type="text"
+                  maxLength={240}
+                  placeholder="Cursos, comunidad y clases en directo en un mismo sitio."
+                  value={form.signinSubheadline}
+                  onChange={(e) => setForm((f) => f && { ...f, signinSubheadline: e.target.value })}
+                  className="mt-1.5"
+                />
+                <p className="mt-1 text-xs text-text-subtle">Máximo 240 caracteres.</p>
               </div>
             </CardContent>
           </Card>

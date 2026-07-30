@@ -8,6 +8,8 @@ import {
   MAX_CUSTOM_CSS_BYTES,
   MAX_FOOTER_HTML_BYTES,
   MAX_LOGO_BYTES,
+  MAX_SIGNIN_HEADLINE_CHARS,
+  MAX_SIGNIN_SUBHEADLINE_CHARS,
   type ThemeSnapshot,
   type UpdateThemeDto,
 } from './dto.js';
@@ -20,6 +22,7 @@ import {
   InvalidSaturationError,
   LogoNotFoundError,
   LogoTooLargeError,
+  SigninCopyTooLongError,
   UnsupportedFontError,
   UnsupportedLogoTypeError,
 } from './errors.js';
@@ -89,6 +92,12 @@ export class ThemingService {
         ...(dto.bodyFontFamily !== undefined ? { bodyFontFamily: dto.bodyFontFamily } : {}),
         ...(dto.customCss !== undefined ? { customCss: dto.customCss } : {}),
         ...(dto.footerHtml !== undefined ? { footerHtml: dto.footerHtml } : {}),
+        // Copy del panel de marca de /signin: cadena vacía = "sin copy propio"
+        // (vuelve al genérico Didacta), igual que hacemos con logoUrl.
+        ...(dto.signinHeadline !== undefined ? { signinHeadline: dto.signinHeadline || null } : {}),
+        ...(dto.signinSubheadline !== undefined
+          ? { signinSubheadline: dto.signinSubheadline || null }
+          : {}),
       },
     });
     this.ctx.logger.info('mod.theming: theme updated', { tenantId, fields: Object.keys(dto) });
@@ -118,6 +127,8 @@ export class ThemingService {
         bodyFontFamily: DEFAULT_THEME.bodyFontFamily,
         customCss: null,
         footerHtml: null,
+        signinHeadline: null,
+        signinSubheadline: null,
       },
     });
     this.ctx.logger.info('mod.theming: theme reset to defaults', { tenantId });
@@ -301,6 +312,23 @@ export class ThemingService {
       const bytes = Buffer.byteLength(dto.footerHtml, 'utf8');
       if (bytes > MAX_FOOTER_HTML_BYTES) throw new FooterHtmlTooLargeError(MAX_FOOTER_HTML_BYTES);
     }
+    // Copy del panel de acceso: el límite es de CARACTERES (no bytes) porque
+    // coincide con el VarChar de la columna — pasarse aquí reventaría en Prisma
+    // con un error opaco en vez de uno explicable al admin.
+    if (
+      dto.signinHeadline !== undefined &&
+      dto.signinHeadline !== null &&
+      dto.signinHeadline.length > MAX_SIGNIN_HEADLINE_CHARS
+    ) {
+      throw new SigninCopyTooLongError('signinHeadline', MAX_SIGNIN_HEADLINE_CHARS);
+    }
+    if (
+      dto.signinSubheadline !== undefined &&
+      dto.signinSubheadline !== null &&
+      dto.signinSubheadline.length > MAX_SIGNIN_SUBHEADLINE_CHARS
+    ) {
+      throw new SigninCopyTooLongError('signinSubheadline', MAX_SIGNIN_SUBHEADLINE_CHARS);
+    }
   }
 
   private toSnapshot(row: {
@@ -314,6 +342,8 @@ export class ThemingService {
     bodyFontFamily: string;
     customCss: string | null;
     footerHtml: string | null;
+    signinHeadline: string | null;
+    signinSubheadline: string | null;
     updatedAt: Date;
   }): ThemeSnapshot {
     return {
@@ -327,6 +357,8 @@ export class ThemingService {
       bodyFontFamily: row.bodyFontFamily,
       customCss: row.customCss,
       footerHtml: row.footerHtml,
+      signinHeadline: row.signinHeadline,
+      signinSubheadline: row.signinSubheadline,
       updatedAt: row.updatedAt.toISOString(),
     };
   }

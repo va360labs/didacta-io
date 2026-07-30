@@ -55,11 +55,31 @@ const SESSION_KEY = 'didacta.session';
  */
 let refreshInFlight: Promise<string | null> | null = null;
 
+/**
+ * Los tokens viven en localStorage (login con "Mantener la sesión abierta") o
+ * en sessionStorage (sin marcar) — ver `auth-storage.ts`. Toda lectura mira los
+ * dos, localStorage primero.
+ */
 function readToken(key: string): string | null {
   try {
-    return localStorage.getItem(key);
+    return localStorage.getItem(key) ?? sessionStorage.getItem(key);
   } catch {
     return null;
+  }
+}
+
+/**
+ * Escribe respetando el almacén donde ya vivía la sesión: si el usuario entró
+ * sin "mantener la sesión abierta", el token renovado NO debe acabar en
+ * localStorage (sobreviviría al cierre de la pestaña, justo lo contrario de lo
+ * que pidió).
+ */
+function writeToken(key: string, value: string): void {
+  try {
+    const store = localStorage.getItem(REFRESH_KEY) !== null ? localStorage : sessionStorage;
+    store.setItem(key, value);
+  } catch {
+    /* almacenamiento no disponible */
   }
 }
 
@@ -69,6 +89,7 @@ function clearAuthAndRedirect(): void {
     localStorage.removeItem(REFRESH_KEY);
     localStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(ACCESS_KEY);
+    sessionStorage.removeItem(REFRESH_KEY);
     sessionStorage.removeItem(SESSION_KEY);
   } catch {
     /* almacenamiento no disponible */
@@ -104,13 +125,12 @@ async function refreshAccessToken(): Promise<string | null> {
         };
         const newAccess = data.tokens?.accessToken;
         if (typeof newAccess !== 'string') return null;
-        try {
-          localStorage.setItem(ACCESS_KEY, newAccess);
-          if (typeof data.tokens?.refreshToken === 'string') {
-            localStorage.setItem(REFRESH_KEY, data.tokens.refreshToken);
-          }
-        } catch {
-          /* ignore */
+        // El refresh se escribe DESPUÉS del access a propósito: `writeToken`
+        // decide el almacén mirando dónde está el refresh actual, así que hay
+        // que rotarlo al final para que ambas escrituras coincidan de almacén.
+        writeToken(ACCESS_KEY, newAccess);
+        if (typeof data.tokens?.refreshToken === 'string') {
+          writeToken(REFRESH_KEY, data.tokens.refreshToken);
         }
         return newAccess;
       } catch {

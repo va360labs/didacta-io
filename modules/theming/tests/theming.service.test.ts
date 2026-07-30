@@ -4,6 +4,8 @@ import {
   MAX_CUSTOM_CSS_BYTES,
   MAX_FOOTER_HTML_BYTES,
   MAX_LOGO_BYTES,
+  MAX_SIGNIN_HEADLINE_CHARS,
+  MAX_SIGNIN_SUBHEADLINE_CHARS,
 } from '../src/dto.js';
 import {
   CustomCssTooLargeError,
@@ -13,6 +15,7 @@ import {
   InvalidHueError,
   InvalidSaturationError,
   LogoTooLargeError,
+  SigninCopyTooLongError,
   UnsupportedFontError,
   UnsupportedLogoTypeError,
 } from '../src/errors.js';
@@ -30,6 +33,8 @@ interface ThemeRow {
   bodyFontFamily: string;
   customCss: string | null;
   footerHtml: string | null;
+  signinHeadline: string | null;
+  signinSubheadline: string | null;
   updatedAt: Date;
 }
 
@@ -55,6 +60,8 @@ function makeFakePrisma() {
           bodyFontFamily: args.data.bodyFontFamily ?? DEFAULT_THEME.bodyFontFamily,
           customCss: null,
           footerHtml: null,
+          signinHeadline: null,
+          signinSubheadline: null,
           updatedAt: new Date(),
         };
         return row;
@@ -468,5 +475,74 @@ describe('ThemingService.reset', () => {
     expect(reset.displayFontFamily).toBe(DEFAULT_THEME.displayFontFamily);
     expect(reset.logoUrl).toBeNull();
     expect(reset.customCss).toBeNull();
+  });
+
+  it('borra también el copy de la pantalla de acceso', async () => {
+    const prisma = makeFakePrisma();
+    const service = new ThemingService(prisma as never, fakeCtx);
+    await service.update(tenant, {
+      signinHeadline: 'Formación en IA aplicada.',
+      signinSubheadline: 'Con la comunidad que la usa cada día.',
+    });
+    const reset = await service.reset(tenant);
+    expect(reset.signinHeadline).toBeNull();
+    expect(reset.signinSubheadline).toBeNull();
+  });
+});
+
+describe('ThemingService — copy de la pantalla de acceso', () => {
+  it('nace vacío: sin copy propio el web usa el texto genérico de Didacta', async () => {
+    const prisma = makeFakePrisma();
+    const service = new ThemingService(prisma as never, fakeCtx);
+    const theme = await service.getOrCreate(tenant);
+    expect(theme.signinHeadline).toBeNull();
+    expect(theme.signinSubheadline).toBeNull();
+  });
+
+  it('persiste titular y línea de apoyo', async () => {
+    const prisma = makeFakePrisma();
+    const service = new ThemingService(prisma as never, fakeCtx);
+    const updated = await service.update(tenant, {
+      signinHeadline: 'Formación en IA aplicada, con la comunidad que la usa cada día.',
+      signinSubheadline: 'Acceso privado a la plataforma.',
+    });
+    expect(updated.signinHeadline).toBe(
+      'Formación en IA aplicada, con la comunidad que la usa cada día.',
+    );
+    expect(updated.signinSubheadline).toBe('Acceso privado a la plataforma.');
+  });
+
+  it('la cadena vacía limpia el campo (vuelve al genérico), no guarda ""', async () => {
+    const prisma = makeFakePrisma();
+    const service = new ThemingService(prisma as never, fakeCtx);
+    await service.update(tenant, { signinHeadline: 'Algo' });
+    const cleared = await service.update(tenant, { signinHeadline: '' });
+    expect(cleared.signinHeadline).toBeNull();
+  });
+
+  it('rechaza un titular más largo que el máximo', async () => {
+    const prisma = makeFakePrisma();
+    const service = new ThemingService(prisma as never, fakeCtx);
+    await expect(
+      service.update(tenant, { signinHeadline: 'x'.repeat(MAX_SIGNIN_HEADLINE_CHARS + 1) }),
+    ).rejects.toBeInstanceOf(SigninCopyTooLongError);
+  });
+
+  it('rechaza una línea de apoyo más larga que el máximo', async () => {
+    const prisma = makeFakePrisma();
+    const service = new ThemingService(prisma as never, fakeCtx);
+    await expect(
+      service.update(tenant, {
+        signinSubheadline: 'x'.repeat(MAX_SIGNIN_SUBHEADLINE_CHARS + 1),
+      }),
+    ).rejects.toBeInstanceOf(SigninCopyTooLongError);
+  });
+
+  it('no toca el copy cuando la actualización no lo menciona', async () => {
+    const prisma = makeFakePrisma();
+    const service = new ThemingService(prisma as never, fakeCtx);
+    await service.update(tenant, { signinHeadline: 'Mi titular' });
+    const after = await service.update(tenant, { brandHue: 24 });
+    expect(after.signinHeadline).toBe('Mi titular');
   });
 });

@@ -111,8 +111,12 @@ export function SignInForm() {
           password: String(form.get('password')),
         }),
       });
-      authStorage.saveTokens(response.tokens.accessToken, response.tokens.refreshToken);
-      authStorage.saveSession({ user: response.user, mfaRequired: response.mfaRequired });
+      // "Mantener la sesión abierta": marcado → localStorage (sobrevive al
+      // cierre del navegador); desmarcado → sessionStorage (muere con la
+      // pestaña). Ver la nota de `auth-storage.ts`.
+      const remember = form.get('remember') === 'on';
+      authStorage.saveTokens(response.tokens.accessToken, response.tokens.refreshToken, remember);
+      authStorage.saveSession({ user: response.user, mfaRequired: response.mfaRequired }, remember);
       // Arranca el sidebar de espacios desde cero con el token ya válido (evita
       // arrastrar un cache vacío o de otro tenant entre navegaciones SPA).
       invalidateCommunitySpacesCache();
@@ -225,20 +229,23 @@ export function SignInForm() {
         ) : null}
 
         <div className="space-y-1.5">
-          <Label htmlFor="email">
-            Email <span className="text-danger-700">*</span>
-          </Label>
-          <Input id="email" name="email" type="email" autoComplete="email" required />
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            className="h-12"
+          />
         </div>
 
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">
-              Contraseña <span className="text-danger-700">*</span>
-            </Label>
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="password">Contraseña</Label>
             <Link
               href="/forgot-password"
-              className="text-xs font-semibold text-brand-700 hover:underline"
+              className="text-[0.8125rem] font-semibold text-brand-600 hover:underline"
             >
               ¿Olvidaste tu contraseña?
             </Link>
@@ -249,7 +256,23 @@ export function SignInForm() {
             type="password"
             autoComplete="current-password"
             required
+            className="h-12"
           />
+        </div>
+
+        {/* Checkbox REAL: decide si los tokens van a localStorage (marcado) o a
+            sessionStorage (desmarcado, la sesión muere al cerrar la pestaña). */}
+        <div className="flex items-center gap-2.5">
+          <input
+            id="remember"
+            name="remember"
+            type="checkbox"
+            defaultChecked
+            className="h-[18px] w-[18px] shrink-0 cursor-pointer rounded-[5px] border border-border-strong accent-brand-500 focus-visible:outline-none focus-visible:shadow-focus"
+          />
+          <Label htmlFor="remember" className="cursor-pointer font-normal text-text-muted">
+            Mantener la sesión abierta
+          </Label>
         </div>
 
         {error ? (
@@ -261,10 +284,24 @@ export function SignInForm() {
           </div>
         ) : null}
 
-        <Button type="submit" disabled={pending} className="w-full" size="lg">
+        <Button type="submit" disabled={pending} className="h-13 w-full text-[1.0625rem]" size="lg">
           {pending ? 'Entrando…' : 'Entrar'}
         </Button>
       </form>
+
+      {/* Enlace a la membresía SOLO si el tenant tiene /unete activa: si no,
+          sería un enlace a una página que responde "no disponible". */}
+      {tenant?.membershipPageActive ? (
+        <>
+          <div className="h-px w-full bg-border-soft" />
+          <p className="text-center text-[0.9375rem] text-text-muted">
+            ¿Aún no tienes cuenta?{' '}
+            <Link href="/unete" className="font-semibold text-brand-600 hover:underline">
+              Ver la membresía
+            </Link>
+          </p>
+        </>
+      ) : null}
     </div>
   );
 }

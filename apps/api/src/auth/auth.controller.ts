@@ -18,6 +18,7 @@ import {
   type SignupDto,
 } from './dto';
 import { PasswordResetService } from './password-reset.service';
+import { SigninContextService } from './signin-context.service';
 import { ZodValidationPipe } from './zod-validation.pipe';
 
 @ApiTags('Auth')
@@ -27,6 +28,7 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly passwordReset: PasswordResetService,
     private readonly tenantResolver: TenantResolverService,
+    private readonly signinContext: SigninContextService,
   ) {}
 
   /**
@@ -35,23 +37,42 @@ export class AuthController {
    * decidir si esconde el campo "Organización" (caso normal en producción
    * con dominio configurado) o lo muestra (caso fallback dev / dominio sin
    * configurar).
+   *
+   * Devuelve además el material del panel de marca de las pantallas de acceso:
+   * copy propio del tenant (mod.theming, null si no lo configuró) y dos cifras
+   * REALES del tenant (miembros activos, cursos publicados). Cero datos de
+   * cartón: si el tenant no tiene copy ni cifras, el web pinta su versión
+   * genérica en vez de inventarlas.
    */
   @Get('tenant-context')
   @ApiOperation({
     summary:
-      'Resuelve el tenant del request por Host header. Devuelve { tenant: { id, slug, name } } o { tenant: null }.',
+      'Resuelve el tenant del request por Host header. Devuelve { tenant: { id, slug, name, logoUrl, headline, subheadline, stats } } o { tenant: null }.',
   })
   async tenantContext(@Req() req: FastifyRequest) {
     const host = req.headers.host ?? req.headers['x-forwarded-host'];
     const hostStr = Array.isArray(host) ? host[0] : host;
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
+    if (!tenant) return { tenant: null, host: hostStr ?? null };
     // Logo del tenant (mod.theming) para que las páginas anónimas (signin,
     // inscripción) muestren la marca del tenant en vez de "Didacta".
-    const logoUrl = tenant
-      ? await this.passwordReset.resolveTenantLogoUrl(tenant.id, resolveWebBaseUrl(req))
-      : null;
+    const [logoUrl, branding] = await Promise.all([
+      this.passwordReset.resolveTenantLogoUrl(tenant.id, resolveWebBaseUrl(req)),
+      this.signinContext.get(tenant.id),
+    ]);
     return {
-      tenant: tenant ? { id: tenant.id, slug: tenant.slug, name: tenant.name, logoUrl } : null,
+      tenant: {
+        id: tenant.id,
+        slug: tenant.slug,
+        name: tenant.name,
+        logoUrl,
+        headline: branding.headline,
+        subheadline: branding.subheadline,
+        brandHue: branding.brandHue,
+        brandSaturation: branding.brandSaturation,
+        stats: branding.stats,
+        membershipPageActive: branding.membershipPageActive,
+      },
       host: hostStr ?? null,
     };
   }
