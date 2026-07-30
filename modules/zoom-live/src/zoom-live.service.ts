@@ -565,6 +565,110 @@ export class ZoomLiveService {
     return rows.filter((r) => hasFinished(r, now)).map((r) => ({ id: r.id, tenantId: r.tenantId }));
   }
 
+  /**
+   * Datos mínimos para generar el evento de calendario de una sesión.
+   *
+   * NO va acotado por tenant a propósito: lo consume el endpoint público de
+   * calendario (`/calendar.ics` y los deeplinks), al que se llega desde un
+   * email — y un cliente de correo no lleva bearer token. El UUID de la
+   * sesión hace de credencial, igual que en el enlace compartible
+   * `/clase/<id>` (ADR-017).
+   *
+   * Devuelve solo lo que ya es público en ese enlace: título, hora y
+   * duración. Ni la descripción interna, ni el `joinUrl`, ni el roster.
+   */
+  async getCalendarInfo(sessionId: string): Promise<{
+    id: string;
+    tenantId: string;
+    topic: string;
+    startTime: Date;
+    durationMinutes: number;
+    timezone: string;
+    status: SessionStatus;
+    organizerName: string;
+  } | null> {
+    const row = await this.prisma.modZoomSession.findFirst({
+      where: { id: sessionId },
+      select: {
+        id: true,
+        tenantId: true,
+        topic: true,
+        startTime: true,
+        durationMinutes: true,
+        timezone: true,
+        status: true,
+      },
+    });
+    if (!row) return null;
+
+    // Nombre del tenant para que el evento se reconozca en el calendario.
+    // Lectura de tabla core (no de otro módulo), acotada al tenant dueño.
+    const tenant = await this.prisma.tenant
+      .findUnique({ where: { id: row.tenantId }, select: { name: true } })
+      .catch(() => null);
+
+    return {
+      ...row,
+      status: row.status as SessionStatus,
+      organizerName: tenant?.name ?? 'Didacta',
+    };
+  }
+
+  /**
+   * Sesiones que arrancan dentro de `hoursBefore` y a las que todavía no se
+   * les ha mandado el recordatorio. Lo usa el worker de avisos.
+   *
+   * El extremo inferior de la ventana es `now` menos un margen corto: si el
+   * worker estuvo caído un rato, un aviso que llega 5 minutos tarde sigue
+   * sirviendo; uno que llega cuando la clase ya va por la mitad, no.
+   */
+  async listSessionsPendingReminder(
+    now: Date,
+    hoursBefore: number,
+    limit = 100,
+    /** Acota a un tenant. Lo usa el disparo manual del panel; el cron barre todos. */
+    tenantId?: string,
+  ): Promise<{ id: string; tenantId: string }[]> {
+    const rows = await this.prisma.modZoomSession.findMany({
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        status: { in: ['SCHEDULED', 'STARTED'] },
+        reminderSentAt: null,
+        startTime: {
+          gte: new Date(now.getTime() - REMINDER_LATE_GRACE_MINUTES * 60 * 1000),
+          lte: new Date(now.getTime() + hoursBefore * 60 * 60 * 1000),
+        },
+      },
+      orderBy: { startTime: 'asc' },
+      take: limit,
+      select: { id: true, tenantId: true },
+    });
+    return rows.map((r) => ({ id: r.id, tenantId: r.tenantId }));
+  }
+
+  /**
+   * Reclama el recordatorio de una sesión. Devuelve `true` solo para el
+   * primero que lo consigue: con dos instancias de la API barriendo a la vez,
+   * el `updateMany` condicionado a `reminderSentAt: null` decide quién envía
+   * y nadie recibe el aviso dos veces.
+   */
+  async claimReminder(tenantId: string, sessionId: string, now = new Date()): Promise<boolean> {
+    const { count } = await this.prisma.modZoomSession.updateMany({
+      where: { id: sessionId, tenantId, reminderSentAt: null },
+      data: { reminderSentAt: now },
+    });
+    return count > 0;
+  }
+
+  /** Inscritos de una sesión (ids). Lo usa el worker de recordatorios. */
+  async listRegisteredUserIds(tenantId: string, sessionId: string): Promise<string[]> {
+    const rows = await this.prisma.modZoomSessionRegistration.findMany({
+      where: { tenantId, sessionId },
+      select: { userId: true },
+    });
+    return rows.map((r) => r.userId);
+  }
+
   async create(
     tenantId: string,
     actorId: string | null,
@@ -682,6 +786,10 @@ export class ZoomLiveService {
         ...(dto.durationMinutes !== undefined ? { durationMinutes: dto.durationMinutes } : {}),
         ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
         ...(dto.description !== undefined ? { description: dto.description } : {}),
+        // Reprogramar la clase reabre el recordatorio: el que se mandó (si se
+        // mandó) hablaba de otra hora. Con `reminderSentAt` a NULL el worker
+        // vuelve a avisar 2h antes de la hora nueva.
+        ...(dto.startTime !== undefined ? { reminderSentAt: null } : {}),
       },
       include: { _count: { select: { registrations: true } } },
     });
@@ -1219,6 +1327,13 @@ export class ZoomLiveService {
  * Zoom: el meeting puede alargarse y el informe tarda un poco en cuajar.
  */
 const GRACE_MINUTES = 15;
+
+/**
+ * Cuánto puede llegar tarde un recordatorio y seguir sirviendo. Cubre un
+ * worker caído unos minutos; pasado ese margen la clase ya ha empezado y el
+ * aviso solo genera ruido.
+ */
+const REMINDER_LATE_GRACE_MINUTES = 10;
 
 /**
  * ¿Ya pasó la hora de fin teórica (+ margen) de la sesión? Es lo que decide

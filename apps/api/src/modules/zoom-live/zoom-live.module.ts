@@ -4,10 +4,12 @@ import { AuthModule } from '../../auth/auth.module';
 import { AiModule } from '../../ai/ai.module';
 import { ModulesModule } from '../modules.module';
 import { ZoomAttendanceSyncWorker } from './zoom-attendance-sync.worker';
+import { ZoomCalendarController } from './zoom-calendar.controller';
 import { ZoomLiveController } from './zoom-live.controller';
 import { ZoomLiveErrorFilter } from './zoom-live-error.filter';
 import { ZoomLiveCommunityBridge } from './zoom-live-community.bridge';
 import { ZoomLiveNotificationsBridge } from './zoom-live-notifications.bridge';
+import { ZoomReminderWorker } from './zoom-reminder.worker';
 import { ZoomWebhookController } from './zoom-webhook.controller';
 
 /// Backend del módulo `mod.zoom-live`. Encapsula sus controllers + el
@@ -27,11 +29,12 @@ import { ZoomWebhookController } from './zoom-webhook.controller';
 /// lo carga dinámicamente — la dependencia circular desaparece sola.
 @Module({
   imports: [AuthModule, AiModule, forwardRef(() => ModulesModule)],
-  controllers: [ZoomLiveController, ZoomWebhookController],
+  controllers: [ZoomLiveController, ZoomCalendarController, ZoomWebhookController],
   providers: [
     ZoomLiveNotificationsBridge,
     ZoomLiveCommunityBridge,
     ZoomAttendanceSyncWorker,
+    ZoomReminderWorker,
     { provide: APP_FILTER, useClass: ZoomLiveErrorFilter },
   ],
 })

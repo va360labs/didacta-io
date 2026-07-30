@@ -1546,6 +1546,11 @@ model ModZoomSession {
   /// no hay datos (típicamente falta el scope `report:read:admin`). NULL si
   /// el último intento fue bien o no ha habido ninguno.
   attendanceSyncError      String?   @map("attendance_sync_error")
+  /// Momento en que se envió el recordatorio "tu clase empieza en 2h" a los
+  /// inscritos. NULL = todavía no se ha mandado. Hace de claim atómico para
+  /// que dos instancias barriendo a la vez no avisen dos veces, y se vuelve a
+  /// poner a NULL si la clase se reprograma.
+  reminderSentAt           DateTime? @map("reminder_sent_at")
   /// `share_url` de la grabación de Zoom (se rellena al recibir el
   /// webhook `recording.completed`). NULL mientras no haya grabación.
   recordingUrl             String?   @map("recording_url")

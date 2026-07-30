@@ -29,6 +29,7 @@ interface SessionRow {
   recordingDurationMinutes: number | null;
   attendanceSyncedAt: Date | null;
   attendanceSyncError: string | null;
+  reminderSentAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -77,11 +78,23 @@ interface FakeUser {
   avatarUrl: string | null;
 }
 
-function makeFakePrisma(courses: { id: string; tenantId: string }[] = [], users: FakeUser[] = []) {
+function makeFakePrisma(
+  courses: { id: string; tenantId: string }[] = [],
+  users: FakeUser[] = [],
+  tenants: { id: string; name: string }[] = [],
+) {
   const sessions: SessionRow[] = [];
   const webhookEvents: WebhookEventRow[] = [];
   const registrations: RegistrationRow[] = [];
   const attendances: AttendanceRow[] = [];
+
+  /** Proyección `select` de Prisma: solo las claves pedidas con `true`. */
+  const project = (row: SessionRow, select: Record<string, boolean>) =>
+    Object.fromEntries(
+      Object.entries(select)
+        .filter(([, wanted]) => wanted)
+        .map(([key]) => [key, row[key as keyof SessionRow]]),
+    );
 
   // Simula el `include: { _count: { select: { registrations: true } } }` que
   // usa el service real. Lo adjuntamos siempre: es inocuo para los callers
@@ -103,6 +116,7 @@ function makeFakePrisma(courses: { id: string; tenantId: string }[] = [], users:
           courseId?: string;
           status?: string | { in: string[] };
           attendanceSyncedAt?: null;
+          reminderSentAt?: null;
           startTime?: { gte?: Date; lte?: Date };
         };
         orderBy?: { startTime?: 'asc' | 'desc' };
@@ -119,6 +133,7 @@ function makeFakePrisma(courses: { id: string; tenantId: string }[] = [], users:
           .filter((s) =>
             args.where.attendanceSyncedAt === null ? s.attendanceSyncedAt === null : true,
           )
+          .filter((s) => (args.where.reminderSentAt === null ? s.reminderSentAt === null : true))
           .filter((s) =>
             args.where.startTime?.gte ? s.startTime >= args.where.startTime.gte : true,
           )
@@ -133,7 +148,10 @@ function makeFakePrisma(courses: { id: string; tenantId: string }[] = [], users:
           .map(withCount);
         return args.take ? rows.slice(0, args.take) : rows;
       },
-      async findFirst(args: { where: { tenantId?: string; id?: string; zoomMeetingId?: string } }) {
+      async findFirst(args: {
+        where: { tenantId?: string; id?: string; zoomMeetingId?: string };
+        select?: Record<string, boolean>;
+      }) {
         const found = sessions.find((s) => {
           if (args.where.tenantId && s.tenantId !== args.where.tenantId) return false;
           if (args.where.id && s.id !== args.where.id) return false;
@@ -141,7 +159,11 @@ function makeFakePrisma(courses: { id: string; tenantId: string }[] = [], users:
             return false;
           return true;
         });
-        return found ? withCount(found) : null;
+        if (!found) return null;
+        // Prisma proyecta de verdad cuando hay `select`. El fake tiene que
+        // hacerlo también: hay lecturas (el evento de calendario, que es
+        // público) cuya garantía ES que el joinUrl no sale del service.
+        return args.select ? project(found, args.select) : withCount(found);
       },
       async create(args: {
         data: Partial<SessionRow> & Pick<SessionRow, 'id' | 'tenantId' | 'topic'>;
@@ -163,6 +185,7 @@ function makeFakePrisma(courses: { id: string; tenantId: string }[] = [], users:
           startUrl: null,
           attendanceSyncedAt: null,
           attendanceSyncError: null,
+          reminderSentAt: null,
           ...args.data,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -177,7 +200,12 @@ function makeFakePrisma(courses: { id: string; tenantId: string }[] = [], users:
         return withCount(sessions[idx]!);
       },
       async updateMany(args: {
-        where: { id: string; tenantId?: string; status?: { notIn: string[] } };
+        where: {
+          id: string;
+          tenantId?: string;
+          status?: { notIn: string[] };
+          reminderSentAt?: null;
+        };
         data: Partial<SessionRow>;
       }) {
         let count = 0;
@@ -186,10 +214,16 @@ function makeFakePrisma(courses: { id: string; tenantId: string }[] = [], users:
           if (s.id !== args.where.id) continue;
           if (args.where.tenantId && s.tenantId !== args.where.tenantId) continue;
           if (args.where.status?.notIn && args.where.status.notIn.includes(s.status)) continue;
+          if (args.where.reminderSentAt === null && s.reminderSentAt !== null) continue;
           sessions[i] = { ...s, ...args.data, updatedAt: new Date() };
           count++;
         }
         return { count };
+      },
+    },
+    tenant: {
+      async findUnique(args: { where: { id: string }; select?: unknown }) {
+        return tenants.find((t) => t.id === args.where.id) ?? null;
       },
     },
     modZoomSessionRegistration: {
@@ -1405,5 +1439,130 @@ describe('ZoomLiveService · asistencia (ADR-018)', () => {
     // Tras sincronizar, deja de aparecer.
     await service.syncAttendance(TENANT, terminada.id);
     expect(await service.listSessionsPendingAttendanceSync(now)).toHaveLength(0);
+  });
+});
+
+describe('ZoomLiveService · recordatorio 2h antes', () => {
+  const NOW = new Date('2026-05-15T12:00:00Z');
+
+  /** Crea una sesión que empieza `minutes` minutos después de NOW. */
+  async function sessionStartingIn(service: ZoomLiveService, topic: string, minutes: number) {
+    return service.create(TENANT, ACTOR, {
+      topic,
+      startTime: new Date(NOW.getTime() + minutes * 60_000).toISOString(),
+      durationMinutes: 60,
+      hostEmail: 'h@x.com',
+      timezone: 'Europe/Madrid',
+    });
+  }
+
+  it('recoge solo las clases que empiezan dentro de la ventana de aviso', async () => {
+    const prisma = makeFakePrisma();
+    const service = new ZoomLiveService(
+      prisma as never,
+      makeCtx() as never,
+      new StubZoomApiClient(),
+    );
+
+    const dentro = await sessionStartingIn(service, 'Empieza en 90 min', 90);
+    const inminente = await sessionStartingIn(service, 'Empieza en 20 min', 20);
+    await sessionStartingIn(service, 'Empieza mañana', 26 * 60);
+    // Empezó hace media hora: el aviso ya no sirve para nada.
+    await sessionStartingIn(service, 'Ya empezada', -30);
+
+    const due = await service.listSessionsPendingReminder(NOW, 2);
+    // Orden por startTime ascendente: primero la más inminente.
+    expect(due.map((d) => d.id)).toEqual([inminente.id, dentro.id]);
+  });
+
+  it('el claim es de un solo ganador: dos barridos concurrentes no avisan dos veces', async () => {
+    const prisma = makeFakePrisma();
+    const service = new ZoomLiveService(
+      prisma as never,
+      makeCtx() as never,
+      new StubZoomApiClient(),
+    );
+    const session = await sessionStartingIn(service, 'Clase con aviso', 90);
+
+    expect(await service.claimReminder(TENANT, session.id, NOW)).toBe(true);
+    expect(await service.claimReminder(TENANT, session.id, NOW)).toBe(false);
+    // Y ya no vuelve a salir en el barrido.
+    expect(await service.listSessionsPendingReminder(NOW, 2)).toHaveLength(0);
+  });
+
+  it('reprogramar la clase rearma el recordatorio', async () => {
+    const prisma = makeFakePrisma();
+    const service = new ZoomLiveService(
+      prisma as never,
+      makeCtx() as never,
+      new StubZoomApiClient(),
+    );
+    const session = await sessionStartingIn(service, 'Clase que se mueve', 90);
+    await service.claimReminder(TENANT, session.id, NOW);
+    expect(await service.listSessionsPendingReminder(NOW, 2)).toHaveLength(0);
+
+    // Se mueve a dentro de 100 minutos: el aviso enviado hablaba de otra hora.
+    await service.update(TENANT, ACTOR, session.id, {
+      startTime: new Date(NOW.getTime() + 100 * 60_000).toISOString(),
+    });
+
+    expect((await service.listSessionsPendingReminder(NOW, 2)).map((d) => d.id)).toEqual([
+      session.id,
+    ]);
+  });
+
+  it('una clase cancelada deja de recibir recordatorio', async () => {
+    const prisma = makeFakePrisma();
+    const service = new ZoomLiveService(
+      prisma as never,
+      makeCtx() as never,
+      new StubZoomApiClient(),
+    );
+    const session = await sessionStartingIn(service, 'Clase cancelada', 60);
+
+    await service.cancel(TENANT, ACTOR, session.id);
+    expect(await service.listSessionsPendingReminder(NOW, 2)).toHaveLength(0);
+  });
+
+  it('getCalendarInfo devuelve lo público de la clase con el nombre del tenant', async () => {
+    const prisma = makeFakePrisma([], [], [{ id: TENANT, name: 'VA360' }]);
+    const service = new ZoomLiveService(
+      prisma as never,
+      makeCtx() as never,
+      new StubZoomApiClient(),
+    );
+    const session = await sessionStartingIn(service, 'Clase pública', 90);
+
+    const info = await service.getCalendarInfo(session.id);
+    expect(info).toMatchObject({
+      id: session.id,
+      tenantId: TENANT,
+      topic: 'Clase pública',
+      durationMinutes: 60,
+      timezone: 'Europe/Madrid',
+      status: 'SCHEDULED',
+      organizerName: 'VA360',
+    });
+    // No hay campo alguno que exponga el enlace de Zoom (ADR-017).
+    expect(JSON.stringify(info)).not.toMatch(/stub-zoom|joinUrl/);
+    expect(await service.getCalendarInfo('11111111-2222-3333-4444-555555555555')).toBeNull();
+  });
+
+  it('listRegisteredUserIds devuelve los inscritos del tenant', async () => {
+    const prisma = makeFakePrisma();
+    const service = new ZoomLiveService(
+      prisma as never,
+      makeCtx() as never,
+      new StubZoomApiClient(),
+    );
+    const session = await sessionStartingIn(service, 'Clase con inscritos', 90);
+
+    await service.register(TENANT, 'alumno-1', session.id);
+    await service.register(TENANT, 'alumno-2', session.id);
+
+    expect((await service.listRegisteredUserIds(TENANT, session.id)).sort()).toEqual([
+      'alumno-1',
+      'alumno-2',
+    ]);
   });
 });

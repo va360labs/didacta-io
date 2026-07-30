@@ -41,6 +41,13 @@ export {
 } from './errors.js';
 export { verifyZoomSignature } from './webhook-signature.js';
 export {
+  buildGoogleCalendarUrl,
+  buildIcsEvent,
+  buildOutlookCalendarUrl,
+  toIcsUtc,
+  type CalendarEventInput,
+} from './calendar.js';
+export {
   buildZoomApiClient,
   encodeZoomMeetingId,
   RealZoomApiClient,

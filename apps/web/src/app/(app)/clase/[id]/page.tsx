@@ -20,6 +20,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import {
+  AddToCalendarDialog,
   zoomLiveApi,
   type AttendanceReport,
   type AttendanceRow,
@@ -84,6 +85,13 @@ export default function ClasePage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [copied, setCopied] = useState(false);
+  /**
+   * Se abre solo al inscribirse (`justRegistered`) o a mano desde el botón
+   * "Añadir al calendario": inscribirse y no apuntarlo es la vía más corta a
+   * perderse la clase.
+   */
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [justRegistered, setJustRegistered] = useState(false);
 
   const isStaff = useMemo(() => {
     const roles = authStorage.getSession()?.user.roles ?? [];
@@ -114,6 +122,8 @@ export default function ClasePage() {
     setError(null);
     try {
       setSession(await zoomLiveApi.register(session.id));
+      setJustRegistered(true);
+      setCalendarOpen(true);
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos completar la inscripción.');
     } finally {
@@ -272,6 +282,20 @@ export default function ClasePage() {
               </Button>
             ) : null}
 
+            {isOpen && session.isRegistered ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setJustRegistered(false);
+                  setCalendarOpen(true);
+                }}
+              >
+                <Icon name="calendar" size={15} />
+                Añadir al calendario
+              </Button>
+            ) : null}
+
             {isStaff && isOpen && session.startUrl ? (
               <Button asChild variant="secondary">
                 <Link href={session.startUrl as never} target="_blank">
@@ -322,6 +346,14 @@ export default function ClasePage() {
       {isStaff ? (
         <AttendancePanel sessionId={session.id} refreshKey={session.registeredCount} />
       ) : null}
+
+      <AddToCalendarDialog
+        sessionId={session.id}
+        topic={session.topic}
+        open={calendarOpen}
+        onOpenChange={setCalendarOpen}
+        justRegistered={justRegistered}
+      />
     </section>
   );
 }

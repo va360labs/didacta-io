@@ -30,6 +30,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import type { SessionClaims } from '../../auth/token.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { ZoomReminderWorker } from './zoom-reminder.worker';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
 
@@ -64,7 +65,10 @@ function ensureSessionId(id: string): void {
 @Controller('modules/zoom-live')
 @UseGuards(JwtAuthGuard)
 export class ZoomLiveController {
-  constructor(private readonly registry: ModuleRegistryService) {}
+  constructor(
+    private readonly registry: ModuleRegistryService,
+    private readonly reminderWorker: ZoomReminderWorker,
+  ) {}
 
   /** Gating de staff (formador/admin) con el motivo en el mensaje. */
   private ensureStaff(user: SessionClaims, action: string): void {
@@ -270,6 +274,19 @@ export class ZoomLiveController {
       );
     }
     return this.registry.getZoomLiveService().testCredentials(user.tenantId);
+  }
+
+  @Post('admin/reminders/run')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Fuerza el barrido de recordatorios de clase sin esperar al cron (clases que empiezan dentro de la ventana y aún sin aviso). Solo formador/admin.',
+  })
+  async runReminders(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    this.ensureStaff(user, 'lanzar los recordatorios');
+    // Acotado al tenant del que llama: el cron barre todos, un admin no.
+    return this.reminderWorker.runSweep(new Date(), user.tenantId);
   }
 
   @Get('webhook-events')

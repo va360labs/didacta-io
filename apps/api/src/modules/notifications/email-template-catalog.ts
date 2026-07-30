@@ -180,7 +180,13 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
   // solo estando inscrito.
   'zoom.class.registration.confirmed': {
     subject: 'Inscripción confirmada: {{topic}}',
-    body: 'Te has inscrito a la clase en directo "{{topic}}" ({{startsAt}}).{{#classUrl}}\n\nCuando llegue el momento podrás unirte desde la página de la clase:\n{{classUrl}}{{/classUrl}}',
+    body: 'Te has inscrito a la clase en directo "{{topic}}" ({{startsAt}}).{{#classUrl}}\n\nCuando llegue el momento podrás unirte desde la página de la clase:\n{{classUrl}}{{/classUrl}}{{#calendarGoogleUrl}}\n\nGuárdala en tu calendario para que no se te pase:\nGoogle Calendar: {{calendarGoogleUrl}}{{/calendarGoogleUrl}}{{#calendarIcsUrl}}\nOutlook, Apple y otros: {{calendarIcsUrl}}{{/calendarIcsUrl}}\n\nTe avisaremos otra vez 2 horas antes de empezar.',
+  },
+  // Recordatorio automático 2h antes (worker `zoom-reminder.worker.ts`). Un
+  // único envío por clase; si se reprograma, vuelve a armarse.
+  'zoom.class.reminder': {
+    subject: 'Tu clase "{{topic}}" empieza en {{hoursBefore}} h',
+    body: 'Recordatorio: la clase en directo "{{topic}}" empieza {{startsAt}}.{{#classUrl}}\n\nEntra desde la página de la clase:\n{{classUrl}}{{/classUrl}}{{#calendarGoogleUrl}}\n\n¿Aún no la tienes en el calendario?\nGoogle Calendar: {{calendarGoogleUrl}}{{/calendarGoogleUrl}}{{#calendarIcsUrl}}\nOutlook, Apple y otros: {{calendarIcsUrl}}{{/calendarIcsUrl}}',
   },
   'zoom.class.cancelled': {
     subject: 'Clase cancelada: {{topic}}',
@@ -439,6 +445,30 @@ const HUB_TEMPLATE_META: Record<
       { name: 'topic', description: 'Título de la clase' },
       { name: 'startsAt', description: 'Fecha y hora de inicio formateadas' },
       { name: 'classUrl', description: 'Enlace a la página de la clase (/clase/…)' },
+      { name: 'calendarGoogleUrl', description: 'Enlace para añadir la clase a Google Calendar' },
+      {
+        name: 'calendarIcsUrl',
+        description: 'Descarga del evento .ics (Outlook, Apple Calendar y otros)',
+      },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'zoom.class.reminder': {
+    name: 'Recordatorio de clase en directo (2 h antes)',
+    description:
+      'Aviso automático a los inscritos poco antes de que empiece la clase. Se envía una sola vez por clase; si se reprograma, vuelve a enviarse a la hora nueva.',
+    category: 'learning',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'topic', description: 'Título de la clase' },
+      { name: 'startsAt', description: 'Cuándo empieza, en la zona horaria del formador' },
+      { name: 'hoursBefore', description: 'Horas de antelación del aviso (2 por defecto)' },
+      { name: 'classUrl', description: 'Enlace a la página de la clase (/clase/…)' },
+      { name: 'calendarGoogleUrl', description: 'Enlace para añadir la clase a Google Calendar' },
+      {
+        name: 'calendarIcsUrl',
+        description: 'Descarga del evento .ics (Outlook, Apple Calendar y otros)',
+      },
       { name: 'tenantName', description: 'Nombre de la plataforma' },
     ],
   },
