@@ -8,7 +8,6 @@ import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import {
   invitationsApi,
-  type BatchResult,
   type InvitationFilter,
   type InvitationRow,
   type InvitationsSummary,
@@ -22,6 +21,8 @@ import {
  * por lotes, que es como se evita que el dominio acabe marcado como spam.
  */
 const TAMANOS = [5, 25, 50, 100, 150];
+/** Filas por página del listado. */
+const PAGINA = 100;
 
 export default function AdminInvitacionesPage() {
   const [summary, setSummary] = useState<InvitationsSummary | null>(null);
@@ -32,8 +33,9 @@ export default function AdminInvitacionesPage() {
   const [busqueda, setBusqueda] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [tamanoLote, setTamanoLote] = useState(25);
-  const [enviando, setEnviando] = useState(false);
-  const [ultimoLote, setUltimoLote] = useState<BatchResult | null>(null);
+  const [arrancando, setArrancando] = useState(false);
+  const [hayMas, setHayMas] = useState(false);
+  const [cargandoMas, setCargandoMas] = useState(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => setBusqueda(search.trim()), 350);
@@ -46,11 +48,12 @@ export default function AdminInvitacionesPage() {
     try {
       const [s, page] = await Promise.all([
         invitationsApi.summary(token),
-        invitationsApi.list(token, { filtro, search: busqueda || undefined, limit: 100 }),
+        invitationsApi.list(token, { filtro, search: busqueda || undefined, limit: PAGINA }),
       ]);
       setSummary(s);
       setItems(page.items);
       setTotal(page.total);
+      setHayMas(page.hasMore);
       setError(null);
     } catch (e) {
       setError(
@@ -59,6 +62,43 @@ export default function AdminInvitacionesPage() {
     }
   }, [filtro, busqueda]);
 
+  /**
+   * Trae la siguiente página y la añade. Sin esto, el panel enseñaba solo los
+   * primeros 100 de cada filtro y el resto era invisible: con 467 invitados,
+   * 367 personas parecían no existir.
+   */
+  const cargarMas = useCallback(async () => {
+    const token = authStorage.getAccessToken();
+    if (!token || !items) return;
+    setCargandoMas(true);
+    try {
+      const page = await invitationsApi.list(token, {
+        filtro,
+        search: busqueda || undefined,
+        limit: PAGINA,
+        page: Math.floor(items.length / PAGINA) + 1,
+      });
+      setItems((previos) => [...(previos ?? []), ...page.items]);
+      setHayMas(page.hasMore);
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar más resultados.');
+    } finally {
+      setCargandoMas(false);
+    }
+  }, [filtro, busqueda, items]);
+
+  /**
+   * Mientras hay un lote en vuelo, refrescamos cada 3 s para que los
+   * contadores avancen solos. El envío tarda ~1 s por correo y vive en el
+   * servidor: cerrar la pestaña no lo detiene.
+   */
+  const envio = summary?.envio ?? null;
+  useEffect(() => {
+    if (!envio?.enCurso) return;
+    const id = window.setInterval(() => void cargar(), 3000);
+    return () => window.clearInterval(id);
+  }, [envio?.enCurso, cargar]);
+
   useEffect(() => {
     void cargar();
   }, [cargar]);
@@ -66,17 +106,18 @@ export default function AdminInvitacionesPage() {
   async function enviarLote() {
     const token = authStorage.getAccessToken();
     if (!token) return;
-    setEnviando(true);
+    setArrancando(true);
     setError(null);
-    setUltimoLote(null);
     try {
       const r = await invitationsApi.sendBatch(token, { size: tamanoLote });
-      setUltimoLote(r);
+      if (r.yaEnCurso) {
+        setError('Ya hay un lote en marcha. Espera a que termine antes de lanzar otro.');
+      }
       await cargar();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudo enviar el lote.');
+      setError(e instanceof ApiHttpError ? e.message : 'No se pudo arrancar el lote.');
     } finally {
-      setEnviando(false);
+      setArrancando(false);
     }
   }
 
@@ -147,10 +188,10 @@ export default function AdminInvitacionesPage() {
             <Button
               type="button"
               onClick={enviarLote}
-              disabled={enviando || (summary?.sinInvitar ?? 0) === 0}
+              disabled={arrancando || envio?.enCurso || (summary?.sinInvitar ?? 0) === 0}
               className="ml-auto"
             >
-              {enviando ? 'Enviando…' : `Enviar a ${tamanoLote}`}
+              {envio?.enCurso ? 'Enviando…' : arrancando ? 'Arrancando…' : `Enviar a ${tamanoLote}`}
             </Button>
           </div>
 
@@ -160,18 +201,43 @@ export default function AdminInvitacionesPage() {
             </p>
           ) : null}
 
-          {ultimoLote ? (
+          {envio ? (
             <div className="rounded-lg border border-border bg-bg-subtle p-4 text-sm">
               <p className="font-semibold text-text">
-                Enviadas {ultimoLote.enviados} invitaciones
-                {ultimoLote.fallidos.length > 0 ? ` · ${ultimoLote.fallidos.length} fallaron` : ''}
+                {envio.enCurso
+                  ? `Enviando… ${envio.enviados} de ${envio.total}`
+                  : `Enviadas ${envio.enviados} invitaciones`}
+                {envio.fallidos.length > 0 ? ` · ${envio.fallidos.length} fallaron` : ''}
               </p>
-              <p className="mt-1 text-text-muted">
-                Quedan {ultimoLote.pendientesRestantes} por invitar.
-              </p>
-              {ultimoLote.fallidos.length > 0 ? (
+              {envio.enCurso ? (
+                <>
+                  <div
+                    className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border"
+                    role="progressbar"
+                    aria-valuenow={envio.enviados}
+                    aria-valuemin={0}
+                    aria-valuemax={envio.total}
+                  >
+                    <div
+                      className="h-full bg-brand-500 transition-all"
+                      style={{
+                        width: `${envio.total > 0 ? (envio.enviados / envio.total) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="mt-2 text-text-muted">
+                    Va de uno en uno, así que tarda alrededor de un segundo por correo. Sigue en el
+                    servidor: puedes cerrar esta página sin cortarlo.
+                  </p>
+                </>
+              ) : (
+                <p className="mt-1 text-text-muted">
+                  Quedan {summary?.sinInvitar ?? 0} por invitar.
+                </p>
+              )}
+              {envio.fallidos.length > 0 ? (
                 <ul className="mt-2 space-y-1">
-                  {ultimoLote.fallidos.slice(0, 10).map((f) => (
+                  {envio.fallidos.slice(0, 10).map((f) => (
                     <li key={f.email} className="text-danger-700">
                       {f.email} — {f.error}
                     </li>
@@ -289,9 +355,22 @@ export default function AdminInvitacionesPage() {
                 </tbody>
               </table>
               {total > items.length ? (
-                <p className="px-5 py-3 text-xs text-text-muted">
-                  Mostrando {items.length} de {total}. Afina con la búsqueda para ver el resto.
-                </p>
+                <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-3">
+                  <p className="text-xs text-text-muted">
+                    Mostrando {items.length} de {total}.
+                  </p>
+                  {hayMas ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => void cargarMas()}
+                      disabled={cargandoMas}
+                    >
+                      {cargandoMas ? 'Cargando…' : 'Cargar más'}
+                    </Button>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           )}

@@ -89,8 +89,10 @@ export class InvitationsController {
   @Post('send-batch')
   @ApiOperation({
     summary:
-      'Envía la invitación al siguiente lote de pendientes que aún no la han recibido. ' +
-      'Idempotente entre lotes: nadie la recibe dos veces.',
+      'Arranca el envío de la invitación al siguiente lote de pendientes que aún no la han ' +
+      'recibido y responde al instante: el envío sigue en segundo plano (~1 s por correo) y su ' +
+      'progreso se consulta en `GET /summary` → `envio`. Idempotente entre lotes: nadie la ' +
+      'recibe dos veces. Si ya hay un lote en curso responde `yaEnCurso: true` sin arrancar otro.',
   })
   async sendBatch(
     @CurrentUser() user: SessionClaims | undefined,
@@ -98,7 +100,7 @@ export class InvitationsController {
     @Body(new ZodValidationPipe(batchSchema)) dto: BatchDto,
   ) {
     const u = requireAdmin(user);
-    return this.service.sendBatch(
+    return this.service.startBatch(
       u.tenantId,
       u.sub,
       resolveWebBaseUrl(req),

@@ -19,6 +19,28 @@ export interface InvitationsSummary {
   sinInvitar: number;
   pendientesSinAcceso: number;
   tasaConversion: number | null;
+  /** Envío por lotes en curso (o el último). Null si nunca se lanzó uno. */
+  envio: EnvioEstado | null;
+}
+
+/**
+ * Progreso del envío por lotes. El envío NO es síncrono: cada correo tarda
+ * ~1 s (envío + pausa anti-spam), así que el servidor arranca el lote, responde
+ * al instante y el panel sigue el avance leyendo esto del summary.
+ */
+export interface EnvioEstado {
+  enCurso: boolean;
+  total: number;
+  enviados: number;
+  fallidos: Array<{ email: string; error: string }>;
+  iniciadoEn: string;
+  terminadoEn: string | null;
+}
+
+export interface BatchStarted {
+  aceptado: boolean;
+  yaEnCurso: boolean;
+  total: number;
 }
 
 export interface InvitationRow {
@@ -73,11 +95,12 @@ export const invitationsApi = {
     return apiFetch<InvitationsPage>(`${BASE}${suffix}`, { method: 'GET' }, bearer);
   },
 
+  /** Arranca el lote. Vuelve enseguida: el avance se sigue en `summary().envio`. */
   async sendBatch(
     bearer: string,
     opts: { size?: number; emails?: string[]; pauseMs?: number } = {},
-  ): Promise<BatchResult> {
-    return apiFetch<BatchResult>(
+  ): Promise<BatchStarted> {
+    return apiFetch<BatchStarted>(
       `${BASE}/send-batch`,
       { method: 'POST', body: JSON.stringify(opts) },
       bearer,
