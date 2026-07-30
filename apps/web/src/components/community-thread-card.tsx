@@ -7,7 +7,9 @@ import { Icon } from '@/components/icon';
 import { PostReactions } from '@/components/post-reactions';
 import { parseBodyAttachments, type CommunityTag, type Post } from '@/modules/community';
 import { AuthorNameLink, CommunityAvatar } from '@/components/community-avatar';
+import { ClaseEmbedCard } from '@/components/clase-embed-card';
 import { RichBody } from '@/components/rich-body';
+import { parseClaseEmbed } from '@/lib/clase-embed';
 
 export const TAG_COLORS = ['#1E5AA8', '#18B5A8', '#FF6F61', '#2E7DCE', '#0D1B2A'];
 
@@ -48,7 +50,10 @@ export function ThreadCard({
 }) {
   // El body trae los adjuntos serializados en un comentario HTML al final.
   // En el feed mostramos solo el texto + miniaturas de los adjuntos.
-  const { cleanBody, images, files } = parseBodyAttachments(post.body);
+  const { cleanBody: bodyWithoutAttachments, images, files } = parseBodyAttachments(post.body);
+  // Si el post anuncia una clase en directo, se pinta su tarjeta rica (con
+  // inscripción en línea) en vez del enlace pelado.
+  const { cleanBody, sessionId: claseId } = parseClaseEmbed(bodyWithoutAttachments);
   const allAttachments: AttachmentTile[] = [
     ...images.map((img) => ({ kind: 'image' as const, url: img.url, name: img.name })),
     ...files.map((f) => ({ kind: 'file' as const, name: f.name })),
@@ -126,6 +131,7 @@ export function ThreadCard({
                   Leer más →
                 </span>
               ) : null}
+              {claseId ? <ClaseEmbedCard sessionId={claseId} /> : null}
               {attachmentTiles.length > 0 ? (
                 <div className="mt-2.5 flex flex-wrap gap-2">
                   {attachmentTiles.map((tile, i) =>

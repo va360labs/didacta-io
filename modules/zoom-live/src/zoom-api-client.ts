@@ -11,7 +11,7 @@
  */
 
 import type { ZoomParticipantRecord, ZoomParticipantsResult } from './dto.js';
-import { ZoomApiError } from './errors.js';
+import { ZoomApiError, ZoomHostNotFoundError } from './errors.js';
 
 export interface ZoomMeetingCreateInput {
   hostEmail: string;
@@ -186,6 +186,14 @@ export class RealZoomApiClient implements ZoomApiClient {
     const res = await this.zoomFetch(`/users/${encodeURIComponent(input.hostEmail)}/meetings`, {
       method: 'POST',
       body: JSON.stringify(body),
+    }).catch((err: unknown) => {
+      // Zoom responde 404 con `code: 1001` ("User does not exist") cuando el
+      // host no está dado de alta en la cuenta. Es EL error que se lleva un
+      // formador nuevo, así que se traduce a algo accionable.
+      if (err instanceof ZoomApiError && err.status === 404 && err.zoomCode === 1001) {
+        throw new ZoomHostNotFoundError(input.hostEmail);
+      }
+      throw err;
     });
     const json = (await res.json()) as {
       id: number;
@@ -337,8 +345,20 @@ export class RealZoomApiClient implements ZoomApiClient {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
+      // El `code` propio de Zoom viaja en el body y distingue causas que el
+      // status HTTP mezcla (un 404 puede ser "no existe la reunión" o "no
+      // existe el usuario"). Lo propagamos para poder traducirlo arriba.
+      let zoomCode: number | undefined;
+      try {
+        const parsed = JSON.parse(text) as { code?: unknown };
+        if (typeof parsed.code === 'number') zoomCode = parsed.code;
+      } catch {
+        // Body no-JSON (HTML de un proxy, cuerpo vacío): sin código.
+      }
       throw new ZoomApiError(
         `Zoom API ${init.method ?? 'GET'} ${path} → ${res.status}: ${text.slice(0, 200)}`,
+        res.status,
+        zoomCode,
       );
     }
     return res;
