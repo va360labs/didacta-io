@@ -85,6 +85,7 @@ export function ResetPasswordForm() {
           autoComplete="new-password"
           minLength={12}
           required
+          className="h-12"
         />
       </div>
 
@@ -97,6 +98,7 @@ export function ResetPasswordForm() {
           autoComplete="new-password"
           minLength={12}
           required
+          className="h-12"
         />
       </div>
 
@@ -106,7 +108,7 @@ export function ResetPasswordForm() {
         </p>
       ) : null}
 
-      <Button type="submit" disabled={pending} className="w-full">
+      <Button type="submit" disabled={pending} size="lg" className="h-13 w-full">
         {pending ? 'Actualizando…' : 'Guardar nueva contraseña'}
       </Button>
     </form>

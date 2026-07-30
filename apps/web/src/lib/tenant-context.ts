@@ -5,8 +5,34 @@ import { apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
 import { formatTenantName } from './tenant-name';
 
+/**
+ * Cifras REALES del tenant que pinta el panel de marca de /signin. Vienen de
+ * dos COUNT del backend; un 0 significa "no hay dato" y la UI oculta el tile
+ * en vez de enseñar un número inventado.
+ */
+export interface TenantPublicStats {
+  activeMembers: number;
+  publishedCourses: number;
+}
+
+export interface TenantPublicInfo {
+  id: string;
+  slug: string;
+  name: string;
+  logoUrl: string | null;
+  /** Copy propio del tenant para el panel de acceso (mod.theming). */
+  headline?: string | null;
+  subheadline?: string | null;
+  /** Color de marca del tenant, para pintar las pantallas sin sesión. */
+  brandHue?: number;
+  brandSaturation?: number;
+  stats?: TenantPublicStats;
+  /** El tenant tiene /unete activa: solo entonces el login enlaza la membresía. */
+  membershipPageActive?: boolean;
+}
+
 export interface TenantContextResponse {
-  tenant: { id: string; slug: string; name: string; logoUrl: string | null } | null;
+  tenant: TenantPublicInfo | null;
   host: string | null;
 }
 

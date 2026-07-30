@@ -27,6 +27,9 @@ export interface TenantTheme {
   bodyFontFamily: string;
   customCss: string | null;
   footerHtml: string | null;
+  /** Copy del panel de marca de /signin. null = texto genérico de Didacta. */
+  signinHeadline: string | null;
+  signinSubheadline: string | null;
   updatedAt: string;
 }
 
@@ -39,6 +42,8 @@ export interface UpdateThemeInput {
   bodyFontFamily?: string;
   customCss?: string | null;
   footerHtml?: string | null;
+  signinHeadline?: string | null;
+  signinSubheadline?: string | null;
 }
 
 export const themingApi = {

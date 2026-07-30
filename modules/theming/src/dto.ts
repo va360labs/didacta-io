@@ -36,6 +36,15 @@ export const MAX_CUSTOM_CSS_BYTES = 16 * 1024;
 export const MAX_FOOTER_HTML_BYTES = 4 * 1024;
 
 /**
+ * Copy del panel de marca de las pantallas de acceso (/signin y hermanas).
+ * Son textos PLANOS (se pintan como texto, nunca como HTML), así que el límite
+ * es de legibilidad, no de seguridad: un titular que no entre en dos líneas
+ * rompe el layout.
+ */
+export const MAX_SIGNIN_HEADLINE_CHARS = 160;
+export const MAX_SIGNIN_SUBHEADLINE_CHARS = 240;
+
+/**
  * URLs de branding aceptan:
  *  - `https://...` (URL externa pegada por el admin).
  *  - `/api/v1/...` (endpoint público del backend que sirve el logo subido).
@@ -63,6 +72,8 @@ export const updateThemeSchema = z
     bodyFontFamily: z.enum(ALLOWED_BODY_FONTS).optional(),
     customCss: z.string().max(MAX_CUSTOM_CSS_BYTES).nullable().optional(),
     footerHtml: z.string().max(MAX_FOOTER_HTML_BYTES).nullable().optional(),
+    signinHeadline: z.string().trim().max(MAX_SIGNIN_HEADLINE_CHARS).nullable().optional(),
+    signinSubheadline: z.string().trim().max(MAX_SIGNIN_SUBHEADLINE_CHARS).nullable().optional(),
   })
   .strict();
 
@@ -110,6 +121,10 @@ export interface ThemeSnapshot {
   bodyFontFamily: string;
   customCss: string | null;
   footerHtml: string | null;
+  /** Titular del panel de marca de /signin. null = copy genérico Didacta. */
+  signinHeadline: string | null;
+  /** Línea de apoyo del panel de marca de /signin. null = copy genérico. */
+  signinSubheadline: string | null;
   updatedAt: string;
 }
 

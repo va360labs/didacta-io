@@ -20,6 +20,7 @@ import { MfaService } from './mfa.service';
 import { PublicProfileController } from './public-profile.controller';
 import { PasswordResetService } from './password-reset.service';
 import { PasswordService } from './password.service';
+import { SigninContextService } from './signin-context.service';
 import { TokenService } from './token.service';
 import { loadCipherKey, describeCipherKeySource } from './cipher-key';
 
@@ -53,6 +54,7 @@ function loadCipherKeyForAuth(): string {
     AuthService,
     PasswordResetService,
     PasswordService,
+    SigninContextService,
     TokenService,
     MfaService,
     ApiKeyService,

@@ -1497,6 +1497,13 @@ model ModThemingTenantTheme {
   /// HTML del footer custom (sanitizado). Solo etiquetas básicas: a, p, span, br.
   footerHtml String? @map("footer_html")
 
+  /// Titular del panel de marca de las pantallas de acceso (/signin y hermanas).
+  /// Texto PLANO del tenant ("Formación en IA aplicada, con la comunidad…").
+  /// NULL = se usa el copy genérico de Didacta. Nunca se inventa copy por tenant.
+  signinHeadline    String? @map("signin_headline") @db.VarChar(160)
+  /// Línea de apoyo bajo el titular, en el pie del panel de marca.
+  signinSubheadline String? @map("signin_subheadline") @db.VarChar(240)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

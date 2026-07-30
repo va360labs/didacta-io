@@ -83,10 +83,15 @@ export function ForgotPasswordForm() {
       )}
 
       <div className="space-y-1.5">
-        <Label htmlFor="email">
-          Email <span className="text-danger-700">*</span>
-        </Label>
-        <Input id="email" name="email" type="email" autoComplete="email" required />
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          className="h-12"
+        />
       </div>
 
       {error ? (
@@ -95,7 +100,7 @@ export function ForgotPasswordForm() {
         </p>
       ) : null}
 
-      <Button type="submit" disabled={pending} className="w-full">
+      <Button type="submit" disabled={pending} size="lg" className="h-13 w-full">
         {pending ? 'Enviando…' : 'Enviar enlace'}
       </Button>
     </form>

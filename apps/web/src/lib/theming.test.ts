@@ -13,6 +13,8 @@ function makeTheme(overrides: Partial<TenantTheme> = {}): TenantTheme {
     bodyFontFamily: 'Inter',
     customCss: null,
     footerHtml: null,
+    signinHeadline: null,
+    signinSubheadline: null,
     updatedAt: new Date().toISOString(),
     ...overrides,
   };
