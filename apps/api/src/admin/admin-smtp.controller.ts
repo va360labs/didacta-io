@@ -25,6 +25,10 @@ import {
   textToHtmlParagraphs,
   type BrandingPrisma,
 } from '../common/branded-email';
+import {
+  HUB_TEMPLATE_DEFAULTS,
+  interpolate,
+} from '../modules/notifications/email-template-catalog';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
@@ -49,6 +53,21 @@ const SmtpUpsertSchema = z.object({
 
 const SmtpTestSchema = z.object({
   toEmail: z.string().email(),
+});
+
+/**
+ * Envío de prueba de una plantilla CONCRETA del catálogo. Distinto del test de
+ * SMTP: aquel manda un texto fijo para validar credenciales; este manda el
+ * email real que recibiría un miembro, con el override del tenant si lo hay.
+ *
+ * Sirve para ver cómo queda un correo antes de que salga a cientos de personas,
+ * y para reproducir uno ya enviado pasándole las mismas variables.
+ */
+const TemplateTestSchema = z.object({
+  toEmail: z.string().email(),
+  templateKey: z.string().trim().min(1).max(120),
+  /** Variables de la plantilla. Las que falten se quedan vacías. */
+  variables: z.record(z.string()).optional(),
 });
 
 interface SmtpResponseDto {
@@ -256,6 +275,77 @@ export class AdminSmtpController {
     );
 
     return { ok: true, sentTo: body.toEmail, messageId: result.messageId, verifiedAt };
+  }
+
+  @Post('test-template')
+  @ApiOperation({
+    summary:
+      'Envía a `toEmail` el email REAL de una plantilla del catálogo, con el override del tenant si lo tiene. Para previsualizar antes de que salga a cientos de personas.',
+  })
+  async testTemplate(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(TemplateTestSchema))
+    body: z.infer<typeof TemplateTestSchema>,
+  ): Promise<{ ok: true; sentTo: string; subject: string | null; messageId?: string }> {
+    const claims = requireAdmin(user);
+
+    // A diferencia del test de SMTP, aquí sí vale el global del despliegue: lo
+    // que se quiere probar es el email, no las credenciales del tenant.
+    const resolved = await this.resolver.resolve(claims.tenantId);
+    if (!resolved) {
+      throw new BadRequestException('No hay SMTP configurado ni en el tenant ni en el despliegue.');
+    }
+
+    const variables = body.variables ?? {};
+    const override = await this.prisma.notificationTemplate.findUnique({
+      where: {
+        tenantId_key_channel_locale: {
+          tenantId: claims.tenantId,
+          key: body.templateKey,
+          channel: 'EMAIL',
+          locale: 'es-ES',
+        },
+      },
+    });
+    const fallback = HUB_TEMPLATE_DEFAULTS[body.templateKey];
+    if (!override && !fallback) {
+      throw new BadRequestException(`No existe la plantilla "${body.templateKey}".`);
+    }
+
+    const branding = await resolveEmailBranding(
+      this.prisma as unknown as BrandingPrisma,
+      claims.tenantId,
+      process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+    );
+    // `tenantName` lo inyecta el hub en todos sus envíos: sin él la plantilla
+    // saldría con un hueco donde va el nombre de la plataforma.
+    const vars = { tenantName: branding.tenantName, ...variables };
+
+    const rawSubject = override?.subject ?? fallback?.subject ?? null;
+    const rawBody = override?.body ?? fallback?.body ?? '';
+    const subject = rawSubject ? interpolate(rawSubject, vars) : null;
+    const bodyText = interpolate(rawBody, vars);
+
+    const { html, text } = renderBrandedEmail(branding, {
+      title: subject ?? branding.tenantName,
+      bodyHtml: textToHtmlParagraphs(bodyText),
+      bodyText,
+    });
+    const result = await this.modules
+      .getSmtpAdapter()
+      .send(
+        resolved.config,
+        { to: body.toEmail, subject: subject ?? branding.tenantName, text, html },
+        branding.tenantName,
+      );
+
+    if (!result.ok) {
+      throw new BadRequestException(`SMTP falló: ${result.error ?? 'sin detalle'}`);
+    }
+    this.logger.log(
+      `Prueba de plantilla "${body.templateKey}" enviada a ${body.toEmail} (tenant ${claims.tenantId})`,
+    );
+    return { ok: true, sentTo: body.toEmail, subject, messageId: result.messageId };
   }
 
   private async readDto(tenantId: string): Promise<SmtpResponseDto> {

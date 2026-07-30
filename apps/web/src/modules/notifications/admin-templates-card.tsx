@@ -20,6 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { adminSmtpApi } from '@/lib/admin-smtp';
 import { ApiHttpError } from '@/lib/api-client';
 import {
   adminNotificationsApi,
@@ -78,6 +79,8 @@ export function EmailTemplatesManager() {
   const [notice, setNotice] = useState<string | null>(null);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [pending, setPending] = useState(false);
+  /** Se recuerda entre envíos para no reescribir el correo cada vez. */
+  const [lastTestEmail, setLastTestEmail] = useState('');
 
   async function reload() {
     try {
@@ -153,6 +156,40 @@ export function EmailTemplatesManager() {
       await reload();
     } catch (e) {
       setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar la plantilla.');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  /**
+   * Manda el email real de esta plantilla a una dirección, para verlo antes de
+   * que salga a cientos de personas. Las variables se rellenan con el nombre de
+   * cada una entre corchetes: así se ve dónde encaja cada dato sin inventarse
+   * valores que confundan.
+   */
+  async function handleSendTest() {
+    if (!editor) return;
+    const to = window.prompt(
+      `¿A qué dirección enviamos la prueba de «${editor.entry.name}»?`,
+      lastTestEmail,
+    );
+    if (!to?.trim()) return;
+
+    setPending(true);
+    setError(null);
+    try {
+      const variables = Object.fromEntries(
+        editor.entry.variables.map((v) => [v.name, `[${v.name}]`]),
+      );
+      const res = await adminSmtpApi.testTemplate({
+        toEmail: to.trim(),
+        templateKey: editor.entry.key,
+        variables,
+      });
+      setLastTestEmail(to.trim());
+      setNotice(`Prueba enviada a ${res.sentTo}. Si no llega, mira en spam.`);
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? e.message : 'No pudimos enviar la prueba.');
     } finally {
       setPending(false);
     }
@@ -307,6 +344,14 @@ export function EmailTemplatesManager() {
                   Restaurar por defecto
                 </Button>
               ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleSendTest()}
+                disabled={pending}
+              >
+                Enviarme una prueba
+              </Button>
               <Button
                 type="button"
                 variant="ghost"
