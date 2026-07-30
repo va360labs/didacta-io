@@ -209,3 +209,132 @@ describe('withImageOptimization · uploadImage', () => {
     expect(wrapped).toBe(original);
   });
 });
+
+/**
+ * Regresión del 2026-07-30: al pasar el logo del tenant a WebP, los emails
+ * empezaron a enseñar un rectángulo negro con las letras recortadas. El logo va
+ * en la cabecera de todos los correos y hay clientes que decodifican el WebP
+ * IGNORANDO su canal alfa, así que el fondo transparente se pinta con el RGB
+ * que quedó debajo (negro). Por eso el logo se guarda en PNG.
+ */
+describe('withImageOptimization · uploadImage con format:"png" (imágenes de email)', () => {
+  const ANCHO = 400;
+  const ALTO = 105;
+
+  /** PNG tipo logo: fondo transparente y una barra opaca en el centro. */
+  async function makeLogoTransparente(): Promise<Buffer> {
+    const raw = Buffer.alloc(ANCHO * ALTO * 4);
+    for (let y = 0; y < ALTO; y++) {
+      for (let x = 0; x < ANCHO; x++) {
+        const i = (y * ANCHO + x) * 4;
+        const dentro = y > 30 && y < 75 && x > 40 && x < 360;
+        raw[i] = dentro ? 20 : 0;
+        raw[i + 1] = dentro ? 20 : 0;
+        raw[i + 2] = dentro ? 20 : 0;
+        raw[i + 3] = dentro ? 255 : 0; // alfa: 0 fuera de las letras
+      }
+    }
+    return sharp(raw, { raw: { width: ANCHO, height: ALTO, channels: 4 } })
+      .png()
+      .toBuffer();
+  }
+
+  /** WebP con alfa y ruido: en PNG NO cabe en menos bytes que en WebP. */
+  async function makeWebpRuidoso(): Promise<Buffer> {
+    const raw = Buffer.alloc(ANCHO * ALTO * 4);
+    for (let i = 0; i < raw.length; i += 4) {
+      const px = i / 4;
+      raw[i] = (px * 37) % 256;
+      raw[i + 1] = (px * 91) % 256;
+      raw[i + 2] = (px * 173) % 256;
+      raw[i + 3] = px % 7 === 0 ? 0 : 255;
+    }
+    return sharp(raw, { raw: { width: ANCHO, height: ALTO, channels: 4 } })
+      .webp({ quality: 80 })
+      .toBuffer();
+  }
+
+  /** ¿Qué alfa tiene el píxel (x,y) del blob guardado? */
+  async function alphaEn(buffer: Buffer, x: number, y: number): Promise<number> {
+    const { data, info } = await sharp(buffer)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    return data[(y * info.width + x) * info.channels + 3]!;
+  }
+
+  it('guarda PNG (no WebP) y conserva la transparencia', async () => {
+    const { adapter, blobs } = makeAdapter();
+    const storage = withImageOptimization(adapter);
+    const logo = await makeLogoTransparente();
+
+    const out = await storage.uploadImage('tenants/t1/branding/logo.png', logo, 'image/png', {
+      maxWidth: 512,
+      format: 'png',
+    });
+
+    expect(out.contentType).toBe('image/png');
+    expect(out.key).toBe('tenants/t1/branding/logo.png');
+    const guardado = blobs.get(out.key)!;
+    expect(guardado.contentType).toBe('image/png');
+    expect((await sharp(guardado.buffer).metadata()).format).toBe('png');
+    // Lo que rompía el email: el fondo tiene que seguir siendo transparente.
+    expect(await alphaEn(guardado.buffer, 2, 2)).toBe(0);
+    expect(await alphaEn(guardado.buffer, 200, 50)).toBe(255);
+  });
+
+  it('deja BLANCO el RGB bajo la transparencia (por si el cliente ignora el alfa)', async () => {
+    const { adapter, blobs } = makeAdapter();
+    const storage = withImageOptimization(adapter);
+    // Logo "de manual": fondo transparente con negro debajo del alfa. Si el
+    // cliente de email ignora el canal alfa, ese negro es el rectángulo negro.
+    const logo = await makeLogoTransparente();
+
+    const out = await storage.uploadImage('logo.png', logo, 'image/png', { format: 'png' });
+
+    // Leemos el RGB CRUDO (sin componer con el alfa): es lo que ve un cliente
+    // que decodifica la imagen y tira el canal alfa a la basura.
+    const { data, info } = await sharp(blobs.get(out.key)!.buffer)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const px = (x: number, y: number) => {
+      const i = (y * info.width + x) * info.channels;
+      return [data[i], data[i + 1], data[i + 2]];
+    };
+    // El fondo sale blanco, no negro: sobre la cabecera blanca del email, ni se ve.
+    expect(px(2, 2)).toEqual([255, 255, 255]);
+    // Y las letras siguen intactas.
+    expect(px(200, 50)).toEqual([20, 20, 20]);
+  });
+
+  it('convierte un WebP a PNG aunque engorde — en el email el WebP no se ve', async () => {
+    const { adapter, blobs } = makeAdapter();
+    const storage = withImageOptimization(adapter);
+    const webp = await makeWebpRuidoso();
+
+    const out = await storage.uploadImage('tenants/t1/branding/logo.webp', webp, 'image/webp', {
+      maxWidth: 512,
+      format: 'png',
+    });
+
+    expect(out.contentType).toBe('image/png');
+    expect(out.key).toBe('tenants/t1/branding/logo.png');
+    // Es el caso que justifica la excepción al guard de tamaño.
+    expect(out.size).toBeGreaterThan(out.previousSize);
+    expect((await sharp(blobs.get(out.key)!.buffer).metadata()).format).toBe('png');
+  });
+
+  it('la excepción es solo para `format:"png"`: sin él manda el guard de tamaño', async () => {
+    const { adapter, blobs } = makeAdapter();
+    const storage = withImageOptimization(adapter);
+    // La patológica engorda al pasar a WebP: es el caso que dispara el guard.
+    const patologica = await makePatologica();
+
+    const out = await storage.uploadImage('tenants/t1/uploads/patron.png', patologica, 'image/png');
+
+    expect(out.optimized).toBe(false);
+    expect(out.key).toBe('tenants/t1/uploads/patron.png');
+    expect(blobs.get(out.key)!.buffer.equals(patologica)).toBe(true);
+  });
+});

@@ -30,7 +30,25 @@ export interface OptimizeImageOptions {
   maxWidth?: number;
   /** Calidad WebP. Default 80. Se acota a [40, 95]. */
   quality?: number;
+  /**
+   * Formato de salida. Default `'webp'` (lo mejor para la web).
+   *
+   * `'png'` es para imágenes que además consumen CLIENTES DE EMAIL — hoy, el
+   * logo del tenant, que va en la cabecera de todos los correos. WebP no es
+   * seguro ahí: Outlook de escritorio no lo entiende y otros clientes decodifican
+   * el WebP con pérdida IGNORANDO su canal alfa, así que un logo transparente
+   * aparece como un rectángulo negro con las letras recortadas. PNG lo soporta
+   * todo el mundo desde siempre, alfa incluido.
+   */
+  format?: 'webp' | 'png';
 }
+
+/**
+ * Formatos que cualquier cliente de email sabe pintar. Un logo que ya esté en
+ * uno de estos no se fuerza a PNG si eso lo engordara; uno que no lo esté (WebP)
+ * SÍ se convierte aunque pese más — que se vea vale más que unos KB.
+ */
+const EMAIL_SAFE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif']);
 
 export interface OptimizedImage {
   buffer: Buffer;
@@ -92,24 +110,41 @@ export async function optimizeImage(
 
   const maxWidth = clamp(opts.maxWidth ?? DEFAULT_MAX_WIDTH, 64, 4096);
   const quality = clamp(opts.quality ?? DEFAULT_QUALITY, 40, 95);
-  // GIF puede ser animado: leemos todos los frames y emitimos WebP animado.
-  const animated = contentType === 'image/gif';
+  const target = opts.format ?? 'webp';
+  // GIF puede ser animado: leemos todos los frames y emitimos WebP animado. Con
+  // salida PNG NO: sharp apilaría los frames en una tira vertical.
+  const animated = contentType === 'image/gif' && target === 'webp';
 
   try {
-    const out = await sharp(input, { animated })
+    const pipeline = sharp(input, { animated })
       .rotate() // aplica la orientación EXIF y descarta el tag (fotos de móvil)
-      .resize({ width: maxWidth, withoutEnlargement: true })
-      .webp({ quality, effort: 4 })
-      .toBuffer({ resolveWithObject: true });
+      .resize({ width: maxWidth, withoutEnlargement: true });
+
+    const conAlfa = target === 'png' ? ((await sharp(input).metadata()).hasAlpha ?? false) : false;
+
+    const out =
+      target === 'png'
+        ? await encodePngParaEmail(pipeline, conAlfa)
+        : await pipeline.webp({ quality, effort: 4 }).toBuffer({ resolveWithObject: true });
+
+    const outContentType = target === 'png' ? 'image/png' : 'image/webp';
+
+    // Reescribir es OBLIGATORIO —pese al guard de tamaño— en dos casos, porque
+    // ahí los bytes ahorrados no valen nada si la imagen no se ve:
+    //  - el original está en un formato que los clientes de email no pintan;
+    //  - el original tiene transparencia, y solo reescribiéndolo podemos
+    //    garantizar que debajo del alfa hay blanco y no negro.
+    const conversionObligada = target === 'png' && (!EMAIL_SAFE_TYPES.has(contentType) || conAlfa);
 
     // Nos quedamos con el original si comprimir no aportó nada (el header WebP
-    // puede pesar más que el ahorro en imágenes ya minúsculas).
-    if (out.data.length >= input.length) return passthrough();
+    // puede pesar más que el ahorro en imágenes ya minúsculas, y recomprimir un
+    // WebP ya óptimo solo pierde calidad).
+    if (out.data.length >= input.length && !conversionObligada) return passthrough();
 
     return {
       buffer: out.data,
-      contentType: 'image/webp',
-      extension: 'webp',
+      contentType: outContentType,
+      extension: target,
       width: out.info.width,
       height: out.info.height,
       optimized: true,
@@ -117,6 +152,50 @@ export async function optimizeImage(
   } catch {
     return passthrough();
   }
+}
+
+/**
+ * Codifica el PNG que se va a ver en un cliente de email. Siempre sin pérdida:
+ * un logo es plano y con bordes duros, y comprimirlo con pérdida le deja halos
+ * alrededor de las letras.
+ *
+ * Si la imagen NO tiene alfa, se cuantiza a paleta y queda pequeña.
+ *
+ * Si la tiene, se hace algo que no se ve pero decide si el email queda bien: el
+ * RGB de los píxeles TOTALMENTE transparentes se pinta de blanco. Un logo con
+ * fondo transparente suele llevar negro debajo del alfa; si el cliente de correo
+ * ignora el canal alfa —cosa que pasa— ese negro sale a la superficie y el logo
+ * aparece como un rectángulo negro. Con blanco debajo, el peor caso es un fondo
+ * blanco sobre la cabecera blanca del email: invisible. Para quien respeta el
+ * alfa no cambia nada.
+ *
+ * Ojo: en ese caso NO se cuantiza a paleta. El cuantizador reasigna a su antojo
+ * el RGB de los píxeles transparentes (le da igual, no se ven) y se cargaría el
+ * blanco que acabamos de poner. Un logo pesa unas decenas de KB: barato.
+ */
+async function encodePngParaEmail(
+  pipeline: sharp.Sharp,
+  conAlfa: boolean,
+): Promise<{ data: Buffer; info: sharp.OutputInfo }> {
+  if (!conAlfa) {
+    return pipeline
+      .png({ compressionLevel: 9, palette: true })
+      .toBuffer({ resolveWithObject: true });
+  }
+
+  const { data, info } = await pipeline.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] === 0) {
+      data[i - 3] = 255;
+      data[i - 2] = 255;
+      data[i - 1] = 255;
+    }
+  }
+  return sharp(data, {
+    raw: { width: info.width, height: info.height, channels: 4 },
+  })
+    .png({ compressionLevel: 9 })
+    .toBuffer({ resolveWithObject: true });
 }
 
 /**

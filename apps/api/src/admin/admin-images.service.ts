@@ -2,7 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
 import { ModuleContextFactory } from '../modules/module-context.factory';
-import { detectRasterContentType, optimizeImage, swapExtension } from '../modules/image-optimizer';
+import {
+  detectRasterContentType,
+  optimizeImage,
+  swapExtension,
+  type OptimizeImageOptions,
+} from '../modules/image-optimizer';
 
 /**
  * Inventario y reoptimización de las imágenes YA subidas del tenant.
@@ -346,15 +351,19 @@ export class AdminImagesService {
 
 /**
  * Ajustes por fuente. Un avatar se pinta a 40-96 px y no necesita 1600 de
- * ancho; un logo lleva texto fino y agradece más calidad. Las portadas y las
- * fotos de un post sí se ven a tamaño grande.
+ * ancho. Las portadas y las fotos de un post sí se ven a tamaño grande.
+ *
+ * El logo sale en PNG a propósito (mismo criterio que `mod.theming` al subirlo):
+ * ese blob se sirve también en la cabecera de los emails y WebP no es seguro en
+ * clientes de correo — hay quien ignora el canal alfa y deja un rectángulo
+ * negro. Si esta pantalla lo reoptimizara a WebP, volvería a romper los emails.
  */
-function imageOptionsFor(source: ImageSource): { maxWidth: number; quality: number } {
+function imageOptionsFor(source: ImageSource): OptimizeImageOptions {
   switch (source) {
     case 'avatar':
       return { maxWidth: 512, quality: 80 };
     case 'logo':
-      return { maxWidth: 512, quality: 90 };
+      return { maxWidth: 512, format: 'png' };
     default:
       return { maxWidth: 1600, quality: 80 };
   }
