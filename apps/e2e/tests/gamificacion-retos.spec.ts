@@ -86,10 +86,19 @@ test.describe('Puntos, niveles y retos (mod.gamification)', () => {
     // exact: true — si no, colisiona con el h2 "Retos abiertos" de más abajo.
     await expect(page.getByRole('heading', { name: 'Retos', exact: true })).toBeVisible();
     await expect(page.getByText(title).first()).toBeVisible();
+    // La entrega vive en un modal, y antes de enviar hay un paso de
+    // confirmación: la entrega es única por reto y persona.
     await page.getByRole('button', { name: 'Entregar' }).first().click();
-    await page.getByLabel('Cuéntanos qué has hecho').fill('Automaticé el alta de clientes.');
-    await page.getByLabel('…o pega un enlace').fill('https://ejemplo.com/mi-caso');
-    await page.getByRole('button', { name: 'Enviar entrega' }).click();
+    const modal = page.getByRole('dialog');
+    await expect(modal.getByText('Entregar reto')).toBeVisible();
+    await modal.getByLabel('Cuéntanos qué has hecho').fill('Automaticé el alta de clientes.');
+    await modal.getByLabel('…o pega un enlace').fill('https://ejemplo.com/mi-caso');
+    await modal.getByRole('button', { name: 'Continuar' }).click();
+
+    await expect(modal.getByText('Confirmar entrega')).toBeVisible();
+    await expect(modal.getByText('https://ejemplo.com/mi-caso')).toBeVisible();
+    await modal.getByRole('button', { name: 'Confirmar y enviar' }).click();
+
     await expect(page.getByText('En revisión').first()).toBeVisible();
 
     const studentToken = (student as { tokens: { accessToken: string } }).tokens.accessToken;

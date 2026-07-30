@@ -34,6 +34,7 @@ export const gamificationExtension: ModuleWebExtension = {
 };
 
 // Convención: los consumidores importan SIEMPRE desde '@/modules/gamification'.
+export { SubmitChallengeModal } from './challenge-modals';
 export {
   gamificationApi,
   gamificationAdminApi,
