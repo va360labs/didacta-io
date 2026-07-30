@@ -137,6 +137,14 @@ export function createMessagingStream(deps: StreamDeps): StreamController {
       if (parsed === null || typeof parsed !== 'object') return;
       const event = parsed as MessagingStreamEvent;
       if (event.kind === 'ping') return;
+      // «Está escribiendo» (ADR-019): efímero y sin id, así que NO pasa por el
+      // de-dup de mensajes — ese `seen` es por `message.id` y aquí no hay.
+      // Repetirlo es lo normal: cada aviso renueva el TTL en el receptor.
+      if (event.kind === 'typing') {
+        if (typeof event.conversationId !== 'string' || typeof event.userId !== 'string') return;
+        deps.onEvent(event);
+        return;
+      }
       if (event.kind !== 'message.created') return;
       const id = event.message?.id;
       if (typeof id !== 'string' || seen.has(id)) return;

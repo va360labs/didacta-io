@@ -10,8 +10,7 @@ import { NotificationsBell } from '@/components/notifications-bell';
 import { ReferralsPromoButton } from '@/components/referrals-promo-button';
 import { NotificationsProvider } from '@/components/notifications-provider';
 import { NotificationsToaster } from '@/components/notifications-toaster';
-import { MessagingProvider } from '@/components/messaging-provider';
-import { MessagesHeaderLink } from '@/components/messages-header-link';
+import { FloatingChat, MessagingProvider } from '@/modules/messaging';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
 import { clearIntendedPath, rememberIntendedPath } from '@/lib/post-login-redirect';
 import { meApi } from '@/lib/me';
@@ -347,7 +346,9 @@ function Shell({
               {/* Promo del programa de referidos — solo si está activo (el % es real). */}
               <ReferralsPromoButton />
 
-              <MessagesHeaderLink />
+              {/* El icono de mensajes vivía aquí. Ahora el chat es la píldora
+                  flotante de abajo a la derecha: un solo indicador de no-leídos
+                  en pantalla (regla #5, PRD chat-flotante UC-CF203). */}
               <NotificationsBell />
             </header>
 
@@ -359,6 +360,7 @@ function Shell({
           {/* Barra inferior de pestañas — solo móvil (<lg). */}
           <MobileTabBar pathname={pathname ?? null} onOpenMenu={() => setMobileNavOpen(true)} />
         </div>
+        <FloatingChat />
         <NotificationsToaster />
       </MessagingProvider>
     </NotificationsProvider>

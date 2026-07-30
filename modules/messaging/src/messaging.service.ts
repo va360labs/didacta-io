@@ -102,6 +102,12 @@ export interface ConversationView {
   lastMessage: {
     body: string;
     kind: string;
+    /**
+     * Autor del último mensaje. Necesario para resolver su avatar real en la
+     * píldora del chat flotante (el nombre solo no basta: el avatar se pide por
+     * id al perfil público).
+     */
+    authorId: string;
     authorDisplayName: string | null;
     createdAt: string;
   } | null;
@@ -305,6 +311,9 @@ export class MessagingService {
           ? {
               body: lastMessage.deletedAt ? '' : lastMessage.body,
               kind: lastMessage.kind,
+              // Un mensaje borrado conserva autor: la cara sigue en la píldora,
+              // el texto lo sustituye el placeholder del cliente.
+              authorId: lastMessage.authorId,
               authorDisplayName: lastMessage.authorDisplayName,
               createdAt: lastMessage.createdAt.toISOString(),
             }
@@ -720,6 +729,21 @@ export class MessagingService {
         }
       }
     }
+  }
+
+  /**
+   * Destinatarios del indicador «está escribiendo» (ADR-019): los mismos que
+   * los de un mensaje, tras verificar que el llamante participa. El evento no
+   * persiste nada — el host solo lo publica y se acabó.
+   */
+  async recipientsForTyping(
+    tenantId: string,
+    caller: MessagingCaller,
+    conversationId: string,
+  ): Promise<string[]> {
+    const conv = await this.getConversationOrThrow(tenantId, conversationId);
+    await this.assertAccess(conv, caller);
+    return this.resolveRecipients(tenantId, conv, caller.userId);
   }
 
   /** Destinatarios del push realtime, sin el autor. */

@@ -13,6 +13,11 @@ const AUTO_DISMISS_MS = 8_000;
  * `NotificationsProvider` (que escucha el stream SSE); no abre su propia
  * conexión. Cada toast se auto-descarta y, si la notificación tiene una acción
  * de navegación (p. ej. "Responder"), ofrece el enlace directo.
+ *
+ * La esquina inferior derecha la comparte con la píldora del chat flotante: los
+ * toasts se apilan POR ENCIMA de ella (y del tab bar en móvil) para que ambos
+ * sigan siendo clicables. Si cambia la altura de la píldora, hay que revisar
+ * estos offsets.
  */
 export function NotificationsToaster() {
   const { toasts, dismissToast } = useNotificationsContext();
@@ -21,7 +26,7 @@ export function NotificationsToaster() {
 
   return (
     <div
-      className="pointer-events-none fixed bottom-4 right-4 z-(--z-toast) flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2"
+      className="pointer-events-none fixed right-4 bottom-[calc(8.5rem+env(safe-area-inset-bottom))] z-(--z-toast) flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2 lg:bottom-[5.5rem]"
       aria-live="polite"
       aria-relevant="additions"
     >

@@ -24,6 +24,21 @@ export type MessagingRealtimeEvent =
       message: MessageView;
     }
   | {
+      /**
+       * «Está escribiendo» (ADR-019). Efímero puro: no se persiste ni se guarda
+       * en Redis, y NO existe un evento de "ha dejado de escribir" — el cliente
+       * retira el indicador al vencer `ttlMs`.
+       */
+      kind: 'typing';
+      conversationId: string;
+      userId: string;
+      displayName: string | null;
+      ttlMs: number;
+    }
+  | {
       kind: 'ping';
       t: number;
     };
+
+/** Vida del indicador de escritura en el cliente (ms). */
+export const TYPING_TTL_MS = 6_000;

@@ -177,6 +177,9 @@
   --z-base: 0;
   --z-dropdown: 10;
   --z-sticky: 20;
+  /* Chat flotante: por encima del header y del tab bar móvil (sticky), por
+     debajo de cualquier modal — un diálogo debe poder taparlo. */
+  --z-chat: 25;
   --z-overlay: 30;
   --z-modal: 40;
   --z-toast: 50;
@@ -192,6 +195,9 @@
   --didacta-trust: #1e5aa8;
   --didacta-balance: #2e7dce;
   --didacta-growth: #18b5a8;
+  /* Verde crecimiento aclarado para leerse sobre azul noche (píldora del chat
+     flotante). El #18b5a8 puro sobre #0d1b2a queda corto de contraste. */
+  --didacta-growth-on-dark: #7fd8d0;
   --didacta-coral: #ff6f61;
   --didacta-surface: #f1f3f5;
 
