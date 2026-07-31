@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { channelFor, type RealtimeNotificationEvent } from './notification-realtime.types';

@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Página de una clase en directo (ADR-017). Es el destino del enlace de
  * inscripción compartible (`/clase/<uuid>`): un anónimo que lo abre pasa por
  * signin y vuelve aquí (deep-link del layout de `(app)`).

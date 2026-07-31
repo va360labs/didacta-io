@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Tipos y helpers compartidos del subsistema realtime de notificaciones
  * (SSE + Redis pub/sub). Aislados aquí para que publisher, subscriber y
  * controller compartan una única fuente de verdad del nombre de canal.

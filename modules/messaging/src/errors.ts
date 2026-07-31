@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Errores de dominio de mod.messaging. Códigos estables en MAYÚSCULAS con
  * prefijo MESSAGING_ — el filtro HTTP del host los mapea a status codes y el
  * frontend los humaniza por código.

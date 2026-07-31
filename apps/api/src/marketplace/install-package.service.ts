@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import type { InstalledModule } from '@didacta/database';

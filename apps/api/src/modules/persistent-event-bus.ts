@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { DomainEvent, EventBus, Logger } from '@didacta/core-kernel';
 import type { PrismaService } from '../prisma/prisma.service';
 

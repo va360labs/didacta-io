@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Module Loader — Carga dinámica de bundles UI de módulos instalados.
  *
  * Este loader permite cargar componentes React de módulos instalados vía

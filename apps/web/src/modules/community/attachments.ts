@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Parsing del marcador de adjuntos embebido en el cuerpo de un post.
 ///
 /// El compositor (`post-composer-modal.tsx`) serializa imágenes y archivos

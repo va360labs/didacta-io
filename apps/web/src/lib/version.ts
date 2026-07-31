@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Versión del producto, hard-coded.
 ///
 /// **NO usar `process.env.NEXT_PUBLIC_VERSION`** ni leer del package.json:

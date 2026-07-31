@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Vista de /unete — estructura del mockup de referencia del operador:
  *   - Sidebar de pago STICKY: cabecera oscura con logo del tenant, selector de
  *     planes (tachado + badge "Mejor valor"), Total hoy, ahorro, primer cargo,

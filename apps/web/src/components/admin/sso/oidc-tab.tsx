@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Panel admin · SSO con OpenID Connect (8º piloto License SDK).
  *
  * Reglas:

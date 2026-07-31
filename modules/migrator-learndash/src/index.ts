@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Entry-point del módulo mod.migrator-learndash.
  *
  * Shape esperado por el host marketplace (alpha.38):

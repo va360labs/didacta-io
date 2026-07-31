@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * AiContentService — genera borradores y los gestiona por su ciclo de vida.
  *
  * Diseño:

@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import {

@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente del expediente de usuario. Backend:
  * `apps/api/src/moderation/dossier.service.ts`.
  *

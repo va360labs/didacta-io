@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { createHash, randomInt } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';

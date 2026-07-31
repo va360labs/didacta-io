@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { AuthStrategy } from './auth.js';
 import type { RetryPolicy } from './retry.js';
 import { defaultRetry } from './retry.js';
@@ -63,7 +68,10 @@ export class RestConnector {
   }
 
   /** Construye URL completa con query params. */
-  private buildUrl(path: string, query?: Record<string, string | number | boolean | undefined>): string {
+  private buildUrl(
+    path: string,
+    query?: Record<string, string | number | boolean | undefined>,
+  ): string {
     const base = this.opts.baseUrl.endsWith('/')
       ? this.opts.baseUrl.slice(0, -1)
       : this.opts.baseUrl;
@@ -97,7 +105,11 @@ export class RestConnector {
       try {
         return JSON.parse(text);
       } catch {
-        throw new MalformedResponseError('respuesta no es JSON', response.status, text.slice(0, 256));
+        throw new MalformedResponseError(
+          'respuesta no es JSON',
+          response.status,
+          text.slice(0, 256),
+        );
       }
     }
     try {
@@ -222,7 +234,12 @@ export class RestConnector {
     return this.request<T>(method, path, { ...options, raw: true }) as Promise<RawResponse<T>>;
   }
 
-  async healthcheck(): Promise<{ ok: boolean; latencyMs: number; serverInfo?: unknown; error?: string }> {
+  async healthcheck(): Promise<{
+    ok: boolean;
+    latencyMs: number;
+    serverInfo?: unknown;
+    error?: string;
+  }> {
     const t0 = Date.now();
     try {
       const body = await this.request<unknown>('GET', '/wp-json/');

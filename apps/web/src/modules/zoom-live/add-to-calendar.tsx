@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * "Añadir al calendario" de una clase en directo.
  *
  * Los cuatro destinos son endpoints públicos de la API

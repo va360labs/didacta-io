@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente del módulo theming. Vive en client-side porque el SSR del root
  * layout no tiene contexto de tenant (la sesión vive en sessionStorage).
  *

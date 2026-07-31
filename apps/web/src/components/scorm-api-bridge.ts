@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * SCORM 1.2 runtime API expuesta al iframe del paquete via `window.API`.
  *
  * El paquete SCORM busca `window.API` (1.2) o `window.API_1484_11` (2004) en

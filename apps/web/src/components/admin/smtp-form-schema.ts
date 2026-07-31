@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Schema Zod del form SMTP, extraído del componente de UI para que pueda
  * importarse desde tests unitarios sin arrastrar React / JSX / 'use client'.
  *

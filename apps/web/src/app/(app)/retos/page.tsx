@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Icon, type IconName } from '@/components/icon';
 import {

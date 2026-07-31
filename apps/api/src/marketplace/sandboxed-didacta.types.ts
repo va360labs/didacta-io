@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Contrato de la API pública del core que el host expone a los módulos
  * third-party del marketplace. Definida en alpha.52 (Sprint 2).
  *

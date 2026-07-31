@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import * as React from 'react';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';

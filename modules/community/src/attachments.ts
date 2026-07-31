@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Parsing y aplanado de los adjuntos embebidos en el body de un post.
  *
  * El compositor del frontend serializa imágenes y archivos como un comentario

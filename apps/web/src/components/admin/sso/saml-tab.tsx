@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Panel admin · SSO con SAML 2.0 (9º piloto License SDK).
  *
  * Sigue al pie de la letra `docs/UI-EE-GATING.md`:

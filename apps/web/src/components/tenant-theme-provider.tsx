@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { authStorage } from '@/lib/auth-storage';
 import {

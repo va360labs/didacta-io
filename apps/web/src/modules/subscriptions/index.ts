@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Extension point del módulo `mod.subscriptions` hacia el core.
 ///
 /// `mod.subscriptions` no aporta sidebar items: la única superficie es

@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente HTTP self-service de mod.payment-connections para el usuario final.
  *
  * - GET  /api/v1/modules/payment-connections/me/subscription   → mi suscripción externa

@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Lector de SOLO LECTURA de WooCommerce Subscriptions (WordPress) para
  * mod.payment-connections.
  *

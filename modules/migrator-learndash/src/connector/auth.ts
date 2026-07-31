@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Estrategia de autenticación tipada para el connector REST.
  * Para LearnDash usamos Application Passwords (basic auth sobre HTTPS).
  * NUNCA loguear el header Authorization ni el password.

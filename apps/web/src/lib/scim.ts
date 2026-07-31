@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente HTTP del endpoint admin de tokens SCIM (séptimo piloto License SDK).
  *
  * Backend: `apps/api/src/admin/scim/scim-admin.controller.ts`. Los endpoints

@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { ApiHttpError } from '@/lib/api-client';

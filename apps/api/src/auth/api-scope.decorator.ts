@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { SetMetadata } from '@nestjs/common';
 
 export const API_SCOPES_KEY = 'requiredApiScopes';

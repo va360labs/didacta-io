@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { forwardRef, Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { AuthModule } from '../../auth/auth.module';
@@ -27,9 +32,6 @@ import { AssessmentsLearningBridge } from './assessments-learning.bridge';
 @Module({
   imports: [AuthModule, forwardRef(() => ModulesModule)],
   controllers: [AssessmentsController, AssessmentsAttemptsController],
-  providers: [
-    AssessmentsLearningBridge,
-    { provide: APP_FILTER, useClass: AssessmentsErrorFilter },
-  ],
+  providers: [AssessmentsLearningBridge, { provide: APP_FILTER, useClass: AssessmentsErrorFilter }],
 })
 export class AssessmentsModule {}

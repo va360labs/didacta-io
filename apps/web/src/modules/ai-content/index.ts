@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Extension point del módulo `mod.ai-content` hacia el core.
 ///
 /// `mod.ai-content` no aporta sidebar items ni client HTTP en web: la

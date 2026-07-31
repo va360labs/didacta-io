@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Global, Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -17,7 +22,12 @@ import { TenantResolverService } from './tenant-resolver.service';
     TenantPrismaService,
     SuperAdminPrismaService,
   ],
-  exports: [TenantContextService, TenantResolverService, TenantPrismaService, SuperAdminPrismaService],
+  exports: [
+    TenantContextService,
+    TenantResolverService,
+    TenantPrismaService,
+    SuperAdminPrismaService,
+  ],
 })
 export class TenancyModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

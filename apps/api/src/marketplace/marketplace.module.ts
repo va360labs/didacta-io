@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Module } from '@nestjs/common';
 import { AdminModule } from '../admin/admin.module';
 import { AuthModule } from '../auth/auth.module';
@@ -10,10 +15,7 @@ import { ModuleAssetsController } from './module-assets.controller';
 import { InstalledModuleService } from './installed-module.service';
 import { InstallPackageService } from './install-package.service';
 import { ModuleJobLifecycleRegistry } from './job-runner/mod-jobs-lifecycle.registry';
-import {
-  ModJobsMetrics,
-  modJobsMetricsProviders,
-} from './job-runner/mod-jobs.metrics';
+import { ModJobsMetrics, modJobsMetricsProviders } from './job-runner/mod-jobs.metrics';
 import { ModJobsQueueService } from './job-runner/mod-jobs.queue';
 import { ModJobsWorkerService } from './job-runner/mod-jobs.worker';
 import { MarketplaceErrorFilter } from './marketplace-error.filter';

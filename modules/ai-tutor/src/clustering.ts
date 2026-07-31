@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Agrupado de preguntas parecidas para el informe mensual del tutor IA.
  *
  * El admin no quiere una lista de 400 preguntas: quiere saber QUÉ le están

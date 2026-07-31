@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Plantilla de email con marca del TENANT, compartida por todos los emisores
  * (NotificationHub, reset de contraseña, inscripción, decisiones, renovaciones…).
  *

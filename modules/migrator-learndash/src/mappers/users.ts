@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { WpUser } from '../connector/index.js';
 import type { CanonicalUser, MapResult } from './canonical.js';
 import { externalId, mapWpRoles, safeEmail } from './helpers.js';

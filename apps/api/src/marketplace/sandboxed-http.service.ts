@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Injectable, Logger } from '@nestjs/common';
 import { lookup as dnsLookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
@@ -87,10 +92,24 @@ class ScopedSandboxedHttp implements SandboxedHttp {
     // Combinamos el signal del caller (cancel del job, etc.), el parent
     // signal del dispatcher (cliente cerró la conexión) y el timeout.
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(new HttpError('HTTP_TIMEOUT', `Request a ${url.host} excedió ${timeoutMs}ms.`)), timeoutMs);
+    const timer = setTimeout(
+      () =>
+        ctrl.abort(new HttpError('HTTP_TIMEOUT', `Request a ${url.host} excedió ${timeoutMs}ms.`)),
+      timeoutMs,
+    );
     timer.unref();
-    const onParentAbort = () => ctrl.abort(this.parentSignal?.reason ?? new HttpError('HTTP_ABORTED', 'Parent signal abortó la request (cliente cerró la conexión).'));
-    const onCallerAbort = () => ctrl.abort(opts.signal?.reason ?? new HttpError('HTTP_ABORTED', 'Caller signal abortó la request.'));
+    const onParentAbort = () =>
+      ctrl.abort(
+        this.parentSignal?.reason ??
+          new HttpError(
+            'HTTP_ABORTED',
+            'Parent signal abortó la request (cliente cerró la conexión).',
+          ),
+      );
+    const onCallerAbort = () =>
+      ctrl.abort(
+        opts.signal?.reason ?? new HttpError('HTTP_ABORTED', 'Caller signal abortó la request.'),
+      );
     if (this.parentSignal) {
       if (this.parentSignal.aborted) onParentAbort();
       else this.parentSignal.addEventListener('abort', onParentAbort, { once: true });
@@ -155,7 +174,10 @@ function parseUrl(raw: string): URL {
   try {
     const u = new URL(raw);
     if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-      throw new HttpError('HTTP_INVALID_URL', `Protocolo no soportado: ${u.protocol} (solo http/https).`);
+      throw new HttpError(
+        'HTTP_INVALID_URL',
+        `Protocolo no soportado: ${u.protocol} (solo http/https).`,
+      );
     }
     return u;
   } catch (err) {
@@ -212,7 +234,11 @@ async function assertNotPrivateIp(hostname: string): Promise<void> {
   try {
     resolved = await dnsLookup(hostname);
   } catch (err) {
-    throw new HttpError('HTTP_NETWORK', `DNS lookup falló para ${hostname}: ${(err as Error).message}`, err);
+    throw new HttpError(
+      'HTTP_NETWORK',
+      `DNS lookup falló para ${hostname}: ${(err as Error).message}`,
+      err,
+    );
   }
   if (isPrivateIp(resolved.address)) {
     throw new HttpError(
@@ -234,24 +260,30 @@ export function isPrivateIp(ip: string): boolean {
     const parts = ip.split('.').map((n) => Number(n));
     if (parts.length !== 4 || parts.some((p) => Number.isNaN(p))) return true;
     const [a, b] = parts as [number, number, number, number];
-    if (a === 10) return true;                           // 10.0.0.0/8
-    if (a === 127) return true;                          // 127.0.0.0/8 loopback
-    if (a === 0) return true;                            // 0.0.0.0/8
-    if (a === 169 && b === 254) return true;             // 169.254.0.0/16 link-local + AWS metadata
-    if (a === 172 && b >= 16 && b <= 31) return true;    // 172.16.0.0/12
-    if (a === 192 && b === 168) return true;             // 192.168.0.0/16
-    if (a === 100 && b >= 64 && b <= 127) return true;   // 100.64.0.0/10 CGNAT
-    if (a === 224) return true;                          // 224.0.0.0/4 multicast
-    if (a >= 240) return true;                           // 240.0.0.0/4 reserved + 255.255.255.255 broadcast
+    if (a === 10) return true; // 10.0.0.0/8
+    if (a === 127) return true; // 127.0.0.0/8 loopback
+    if (a === 0) return true; // 0.0.0.0/8
+    if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local + AWS metadata
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+    if (a === 192 && b === 168) return true; // 192.168.0.0/16
+    if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
+    if (a === 224) return true; // 224.0.0.0/4 multicast
+    if (a >= 240) return true; // 240.0.0.0/4 reserved + 255.255.255.255 broadcast
     return false;
   }
 
   if (isIP(ip) === 6) {
     const lower = ip.toLowerCase();
-    if (lower === '::1' || lower === '::') return true;          // loopback / unspecified
+    if (lower === '::1' || lower === '::') return true; // loopback / unspecified
     if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // ULA fc00::/7
-    if (lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')) return true; // link-local fe80::/10
-    if (lower.startsWith('ff')) return true;                     // multicast ff00::/8
+    if (
+      lower.startsWith('fe8') ||
+      lower.startsWith('fe9') ||
+      lower.startsWith('fea') ||
+      lower.startsWith('feb')
+    )
+      return true; // link-local fe80::/10
+    if (lower.startsWith('ff')) return true; // multicast ff00::/8
     return false;
   }
 
@@ -377,5 +409,9 @@ function normalizeFetchError(err: unknown, host: string, timeoutMs: number): Htt
   if (code === 'UND_ERR_HEADERS_TIMEOUT' || code === 'UND_ERR_BODY_TIMEOUT') {
     return new HttpError('HTTP_TIMEOUT', `Timeout (${timeoutMs}ms) en respuesta de ${host}.`, err);
   }
-  return new HttpError('HTTP_NETWORK', `Error de red contra ${host}: ${e?.message ?? String(err)}`, err);
+  return new HttpError(
+    'HTTP_NETWORK',
+    `Error de red contra ${host}: ${e?.message ?? String(err)}`,
+    err,
+  );
 }

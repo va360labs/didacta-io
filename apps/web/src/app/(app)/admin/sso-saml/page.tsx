@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Redirect de compatibilidad: /admin/sso-saml → /admin/sso?tab=saml.
  *
  * Los tres protocolos de SSO se unificaron en una sola pantalla con pestañas.

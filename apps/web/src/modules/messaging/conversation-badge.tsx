@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { CommunityAvatar } from '@/components/community-avatar';
 import { Icon } from '@/components/icon';
 import { SpaceIcon } from '@/components/space-icon';

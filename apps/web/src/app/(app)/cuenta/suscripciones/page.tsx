@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Redirect de compatibilidad: /cuenta/suscripciones → /cuenta?tab=suscripcion.
  *
  * La gestión de suscripciones ahora vive como pestaña en /cuenta (antes esta

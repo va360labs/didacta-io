@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente de sanciones de moderación. Backend:
  * `apps/api/src/moderation/restriction.controller.ts`.
  *

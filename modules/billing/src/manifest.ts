@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { parseModuleManifest, type ModuleManifest } from '@didacta/core-kernel';
 
 export const manifest: ModuleManifest = parseModuleManifest({

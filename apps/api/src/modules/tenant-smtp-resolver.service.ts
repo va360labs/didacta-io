@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Injectable, Logger } from '@nestjs/common';
 import type { TenantConfigService } from '@didacta/core-kernel';
 import { SmtpAdapterService, type SmtpConfig } from './smtp-adapter.service';

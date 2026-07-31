@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Tipos de la config de WP-SSO por tenant. La config vive cifrada en BD
  * (`PrismaTenantConfigService`, isSecret) — NO en variables de entorno. El admin
  * la gestiona desde el panel (`/admin/sso-wordpress`), mismo patrón que OIDC.

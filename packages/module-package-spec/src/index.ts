@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// @didacta/module-package-spec
 ///
 /// Contrato versionado del layout del ZIP de un módulo Didacta. Única

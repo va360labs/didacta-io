@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Botón "Comprar curso" — entry point al checkout de Stripe vía mod.billing.
  *
  * Comportamiento:

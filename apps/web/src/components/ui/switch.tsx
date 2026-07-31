@@ -1,9 +1,17 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { forwardRef, useState, type ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
-export interface SwitchProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onChange' | 'value'> {
+export interface SwitchProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  'onChange' | 'value'
+> {
   checked?: boolean;
   onCheckedChange?: (next: boolean) => void;
   /** Etiqueta accesible cuando no hay un Label asociado vía aria-labelledby. */

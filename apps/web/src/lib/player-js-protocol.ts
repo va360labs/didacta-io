@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Implementación mínima del protocolo Player.js (postMessage), que es el que
  * expone el reproductor de Bunny Stream en su iframe.
  *

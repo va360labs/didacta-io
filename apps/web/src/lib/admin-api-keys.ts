@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { apiFetch } from './api-client';
 
 /** Scopes que el admin puede otorgar. Debe coincidir con ALLOWED_API_KEY_SCOPES del backend. */

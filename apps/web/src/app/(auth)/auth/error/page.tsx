@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Página de error OIDC (8º piloto License SDK, `feat:sso.oidc`).
  *
  * El backend redirige aquí cuando algo falla en el flow:

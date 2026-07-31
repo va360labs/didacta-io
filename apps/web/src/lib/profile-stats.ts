@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { certificatesApi } from '@/modules/certificates';
 import { gamificationApi } from '@/modules/gamification';
 import { learningApi } from './learning';

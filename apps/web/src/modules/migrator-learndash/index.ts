@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Sidebar item del migrador LearnDash en el shell admin del host.
 ///
 /// alpha.60 (ADR-015): este archivo es lo ÚNICO específico del módulo que

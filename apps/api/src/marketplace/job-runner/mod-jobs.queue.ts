@@ -1,8 +1,9 @@
-import {
-  Injectable,
-  type OnApplicationBootstrap,
-  type OnModuleDestroy,
-} from '@nestjs/common';
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+import { Injectable, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 import { Queue, type ConnectionOptions, type JobsOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
@@ -101,9 +102,7 @@ export class ModJobsQueueService implements OnApplicationBootstrap, OnModuleDest
       },
     });
 
-    this.logger.log(
-      `mod-jobs queue activa (BullMQ + Redis) — queue=${MOD_JOBS_QUEUE_NAME}`,
-    );
+    this.logger.log(`mod-jobs queue activa (BullMQ + Redis) — queue=${MOD_JOBS_QUEUE_NAME}`);
   }
 
   /// `true` si la queue se inicializó correctamente. Útil para que el
@@ -121,14 +120,9 @@ export class ModJobsQueueService implements OnApplicationBootstrap, OnModuleDest
   /// pasen N segundos — usado por el worker cuando el `onJobTick` retorna
   /// `{ status: 'continue', delaySec: 30 }` (módulo pidió esperar antes
   /// del próximo tick).
-  async enqueue(
-    payload: ModJobPayload,
-    opts: { delaySec?: number } = {},
-  ): Promise<void> {
+  async enqueue(payload: ModJobPayload, opts: { delaySec?: number } = {}): Promise<void> {
     if (!this.queue) {
-      throw new Error(
-        'ModJobsQueueService no inicializada (REDIS_URL ausente o NODE_ENV=test).',
-      );
+      throw new Error('ModJobsQueueService no inicializada (REDIS_URL ausente o NODE_ENV=test).');
     }
     const jobId = `${payload.moduleName}:${payload.jobId}:${payload.tickIndex}`;
     const jobOpts: JobsOptions = { jobId };

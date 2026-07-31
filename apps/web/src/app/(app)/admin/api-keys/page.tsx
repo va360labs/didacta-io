@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Admin · Claves API.
  *
  * Dos pestañas: las claves en sí y la documentación EN VIVO para integradores

@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { type ExecutionContext, SetMetadata, createParamDecorator } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { MFA_EXEMPT_KEY, PUBLIC_ROUTE_KEY, REQUIRES_MFA_KEY } from './jwt-auth.guard';

@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
@@ -54,7 +59,18 @@ export interface SelectProps {
   onChange?: React.ChangeEventHandler<HTMLSelectElement>;
 }
 
-export function Select({ value = '', onValueChange, children, disabled, className, id, onChange, name, required, defaultValue }: SelectProps) {
+export function Select({
+  value = '',
+  onValueChange,
+  children,
+  disabled,
+  className,
+  id,
+  onChange,
+  name,
+  required,
+  defaultValue,
+}: SelectProps) {
   const [open, setOpen] = React.useState(false);
 
   // Usage detection: la API nativa se distingue por tener hijos `<option>`
@@ -91,10 +107,13 @@ export function Select({ value = '', onValueChange, children, disabled, classNam
     );
   }
 
-  const handleValueChange = React.useCallback((newValue: string) => {
-    onValueChange?.(newValue);
-    setOpen(false);
-  }, [onValueChange]);
+  const handleValueChange = React.useCallback(
+    (newValue: string) => {
+      onValueChange?.(newValue);
+      setOpen(false);
+    },
+    [onValueChange],
+  );
 
   return (
     <SelectContext.Provider value={{ value, onValueChange: handleValueChange, open, setOpen }}>
@@ -169,10 +188,7 @@ export function SelectContent({ children, className }: SelectContentProps) {
 
   return (
     <>
-      <div 
-        className="fixed inset-0 z-40" 
-        onClick={() => ctx.setOpen(false)}
-      />
+      <div className="fixed inset-0 z-40" onClick={() => ctx.setOpen(false)} />
       <div
         className={cn(
           'absolute top-full left-0 z-50 mt-1 w-full min-w-[8rem] overflow-hidden rounded-md border border-border bg-surface shadow-lg',

@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Política global de MFA por rol — decidida por el operador del deploy.
 ///
 /// **Default = NO obligatorio**. Históricamente FR-CORE-02 lo exigía a

@@ -1,6 +1,18 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { LdCourse } from '../connector/index.js';
 import type { CanonicalCourse, MapResult } from './canonical.js';
-import { externalId, mapWpStatus, unwrapTitle, decodeHtmlEntities, asNumber, asString } from './helpers.js';
+import {
+  externalId,
+  mapWpStatus,
+  unwrapTitle,
+  decodeHtmlEntities,
+  asNumber,
+  asString,
+} from './helpers.js';
 
 export function mapCourse(raw: LdCourse): MapResult<CanonicalCourse> {
   const warnings: string[] = [];
@@ -23,16 +35,15 @@ export function mapCourse(raw: LdCourse): MapResult<CanonicalCourse> {
   const certId = asNumber(raw.certificate);
   const priceType = asString(raw.price_type);
 
-  const pricing = priceType && priceType !== 'free' && raw.price
-    ? {
-        priceText: String(raw.price),
-        amount: asNumber(raw.price),
-      }
-    : undefined;
+  const pricing =
+    priceType && priceType !== 'free' && raw.price
+      ? {
+          priceText: String(raw.price),
+          amount: asNumber(raw.price),
+        }
+      : undefined;
 
-  const prereqs = Array.isArray(raw.prerequisites)
-    ? raw.prerequisites.map(String)
-    : [];
+  const prereqs = Array.isArray(raw.prerequisites) ? raw.prerequisites.map(String) : [];
 
   // El fixup inyecta `__sections` en raw_payload del course tras parsear
   // /sfwd-courses/:id/steps. Propagamos al canonical para que el load
@@ -66,7 +77,10 @@ export function mapCourse(raw: LdCourse): MapResult<CanonicalCourse> {
       featuredMediaSourceId: featuredMediaId !== undefined ? String(featuredMediaId) : undefined,
       certificateSourceId: certId !== undefined && certId !== 0 ? String(certId) : undefined,
       priceType:
-        priceType === 'free' || priceType === 'paynow' || priceType === 'subscribe' || priceType === 'closed'
+        priceType === 'free' ||
+        priceType === 'paynow' ||
+        priceType === 'subscribe' ||
+        priceType === 'closed'
           ? priceType
           : 'free',
       pricing,

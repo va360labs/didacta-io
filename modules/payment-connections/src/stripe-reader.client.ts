@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente de SOLO LECTURA sobre el SDK de Stripe para mod.payment-connections.
  *
  * Distinto a propósito de los adapters de mod.billing / mod.subscriptions:

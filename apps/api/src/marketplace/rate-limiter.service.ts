@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Injectable, Logger } from '@nestjs/common';
 
 /**
@@ -40,7 +45,7 @@ export interface RateLimitConfig {
 interface BucketState {
   tokens: number;
   lastRefill: number; // ms epoch
-  lastUsed: number;   // ms epoch — para GC
+  lastUsed: number; // ms epoch — para GC
   /// Cooldown hasta este timestamp (ms epoch). Si > now, drainamos el
   /// bucket completo (no entregamos tokens hasta que pase). Lo setea
   /// `applyRetryAfter()` cuando el upstream responde 429.
@@ -126,7 +131,12 @@ export class RateLimiterService {
 
   /// Telemetría: snapshot del estado para tests/debug. NO usar para
   /// decisiones de runtime — el state cambia por debajo.
-  snapshot(): Array<{ key: string; tokens: number; cooldownMsLeft: number; lastUsedMsAgo: number }> {
+  snapshot(): Array<{
+    key: string;
+    tokens: number;
+    cooldownMsLeft: number;
+    lastUsedMsAgo: number;
+  }> {
     const now = Date.now();
     return Array.from(this.buckets.entries()).map(([key, b]) => ({
       key,

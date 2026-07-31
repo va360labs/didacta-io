@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Injectable, Logger } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import type {
@@ -222,7 +227,10 @@ export class ModuleRouterService {
   /// Devuelve handler+params para un (method, path) entrante, o null si no
   /// matchea ninguna route registrada. El dispatcher debe llamar a esto
   /// con el path SIN el prefijo `/api/v1/`.
-  match(method: string, path: string): {
+  match(
+    method: string,
+    path: string,
+  ): {
     moduleName: string;
     handler: ModuleRouteHandler;
     params: Record<string, string>;

@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
@@ -43,7 +48,7 @@ export class SetupController {
     const hostStr = Array.isArray(host) ? (host[0] ?? null) : (host ?? null);
     // Quitamos el puerto: el TenantDomain.hostname no incluye `:port`. El
     // request a `localhost:4000` debe persistir como `localhost`.
-    const hostNoPort = hostStr ? hostStr.split(':')[0] ?? null : null;
+    const hostNoPort = hostStr ? (hostStr.split(':')[0] ?? null) : null;
     return this.service.init(dto, hostNoPort, extractClientContext(req));
   }
 }

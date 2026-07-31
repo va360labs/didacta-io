@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Validación de identificadores fiscales españoles para mod.fundae.
  *
  * Cubre los tres formatos que aparecen como NIF de empresa o de persona

@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { NextResponse, type NextRequest } from 'next/server';
 
 /**
@@ -62,7 +67,5 @@ export async function middleware(req: NextRequest) {
 ///   - `healthz` /
 ///     `readyz` / `livez` → probes Easypanel/k8s, no UI.
 export const config = {
-  matcher: [
-    '/((?!api|_next|_not-found|_error|favicon\\.ico|setup|healthz|readyz|livez).*)',
-  ],
+  matcher: ['/((?!api|_next|_not-found|_error|favicon\\.ico|setup|healthz|readyz|livez).*)'],
 };

@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Gestor de emails de la plataforma — sección `/admin/emails`.
 ///
 /// Lista TODOS los emails/notificaciones que envía el producto (catálogo del

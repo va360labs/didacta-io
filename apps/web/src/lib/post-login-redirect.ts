@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Destino pendiente tras el login ("deep link"): cuando un usuario anónimo
  * intenta entrar a una ruta protegida (p. ej. el enlace compartido de un post,
  * `/comunidad/<id>`), guardamos esa ruta ANTES de mandarlo a /signin y la

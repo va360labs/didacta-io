@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Scoring engine puro de mod.assessments.
  *
  * Sin dependencias de Prisma ni ningún side effect — todo entrada / salida —

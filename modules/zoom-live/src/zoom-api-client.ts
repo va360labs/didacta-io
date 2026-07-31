@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente de la Zoom API (Server-to-Server OAuth).
  *
  * Stub por ahora: devuelve un meetingId determinístico y URLs `stub-zoom/`

@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { MfaSetupFlow } from '@/components/mfa-setup-flow';
 import { AuthHeading } from '../../auth-heading';
 

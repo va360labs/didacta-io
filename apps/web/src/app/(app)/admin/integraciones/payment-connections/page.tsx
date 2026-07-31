@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Panel admin · Conexiones de pago (mod.payment-connections).
  *
  * El admin conecta varias cuentas Stripe en modo SOLO LECTURA (clave restringida

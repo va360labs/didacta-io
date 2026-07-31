@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 export { ApplicationPasswordAuth, BearerAuth } from './auth.js';
 export type { AuthStrategy } from './auth.js';
 export { RestConnector } from './client.js';

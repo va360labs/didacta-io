@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Manifest del módulo embebido en el bundle.
  *
  * NO usa `parseModuleManifest()` del core-kernel: el módulo corre en

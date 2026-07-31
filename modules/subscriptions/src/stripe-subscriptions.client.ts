@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Wrapper sobre el SDK de Stripe específico para suscripciones recurrentes.
  *
  * Vive separado de mod.billing/stripe.client.ts (NO se importa cross-module

@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente HTTP para la política MFA tenant-wide.
  *
  * Backend: `apps/api/src/auth/mfa-policy/`. La capability EE

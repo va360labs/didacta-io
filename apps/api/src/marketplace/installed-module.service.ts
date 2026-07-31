@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Injectable, Logger } from '@nestjs/common';
 import type {
   InstalledModule,
@@ -128,7 +133,9 @@ export class InstalledModuleService {
       where: { id },
       select: { migrationsApplied: true },
     });
-    const merged = Array.from(new Set([...(current?.migrationsApplied ?? []), ...filenames])).sort();
+    const merged = Array.from(
+      new Set([...(current?.migrationsApplied ?? []), ...filenames]),
+    ).sort();
     return this.prisma.installedModule.update({
       where: { id },
       data: { migrationsApplied: merged, migrationsAppliedAt: new Date() },

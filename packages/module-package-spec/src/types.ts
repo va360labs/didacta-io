@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { PackageSpecError, PackageSpecWarning } from './errors';
 
 /// Spec version. SemVer del paquete. El backend acepta una ventana

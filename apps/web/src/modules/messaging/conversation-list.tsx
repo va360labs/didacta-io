@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { relTime } from '@/components/community-thread-card';
 import type { ConversationView } from './client';
 import { ConversationBadge } from './conversation-badge';

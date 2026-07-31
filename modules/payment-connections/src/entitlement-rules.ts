@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Clasificación de lo que alguien compra en una tienda externa.
  *
  * De esto depende si un acceso caduca o no, así que un error aquí se paga en

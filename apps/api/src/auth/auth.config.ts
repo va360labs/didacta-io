@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Configuración runtime del módulo de auth.
  * Lee variables de entorno una sola vez al arrancar.
  */

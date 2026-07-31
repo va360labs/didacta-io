@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente HTTP de mod.payment-connections (panel admin · super_admin).
  *
  * - POST   /api/v1/modules/payment-connections/connections

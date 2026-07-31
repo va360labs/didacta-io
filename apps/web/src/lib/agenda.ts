@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { eventsApi, type CommunityEvent } from '@/lib/events';
 import { zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
 

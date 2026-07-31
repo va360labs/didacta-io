@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * WpSsoAdminController — gestión de la config WP-SSO del tenant desde el panel
  * (/admin/sso-wordpress). Mismo patrón que OidcAdminController PERO sin gate
  * Enterprise: WP-SSO es Community (sin @RequiresCapability).

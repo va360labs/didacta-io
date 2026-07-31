@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Token bucket simple. Capacity = rps por defecto.
  * Refill continuo proporcional al tiempo transcurrido.
  */

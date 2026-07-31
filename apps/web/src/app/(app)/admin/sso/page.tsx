@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Admin · Identidad (SSO) — un solo destino para los tres protocolos.
  *
  * Eran tres páginas casi idénticas (`/admin/sso`, `/admin/sso-saml`,
@@ -42,7 +47,9 @@ export default function AdminSsoPage() {
 
       <Tabs
         value={tab}
-        onValueChange={(next) => router.replace(next === 'oidc' ? '/admin/sso' : `/admin/sso?tab=${next}`)}
+        onValueChange={(next) =>
+          router.replace(next === 'oidc' ? '/admin/sso' : `/admin/sso?tab=${next}`)
+        }
       >
         <TabsList>
           <TabsTrigger value="oidc">OpenID Connect</TabsTrigger>

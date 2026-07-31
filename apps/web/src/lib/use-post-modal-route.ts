@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { usePathname } from 'next/navigation';
 import { useRef } from 'react';
 import { parsePostPath, postPath } from '@/lib/post-link';

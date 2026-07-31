@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Normalización de transcripciones de clase para el tutor IA.
  *
  * El formato canónico que se guarda en `content.transcript` de una lección de

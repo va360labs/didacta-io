@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import type { Reaction } from '@/modules/community';

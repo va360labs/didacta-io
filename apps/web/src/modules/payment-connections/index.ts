@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Extension point del módulo `mod.payment-connections` hacia el core.
 ///
 /// Registra un item de sidebar en "Administración" que apunta a la página host

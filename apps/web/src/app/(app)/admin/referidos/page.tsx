@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Administración del programa de referidos (mod.referrals).
 ///
 /// - Config del programa: comisión, ámbito, ventanas, mínimo, copy. Los

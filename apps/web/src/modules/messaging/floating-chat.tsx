@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState, type Ref } from 'react';
 import { CommunityAvatar } from '@/components/community-avatar';
 import { Icon } from '@/components/icon';
@@ -212,8 +217,7 @@ export function FloatingChat() {
 
   const openConversationFromToast = useCallback(
     (conversationId: string) => {
-      const conversation =
-        conversationsRef.current?.find((c) => c.id === conversationId) ?? null;
+      const conversation = conversationsRef.current?.find((c) => c.id === conversationId) ?? null;
       setOpenPersisted(true);
       setToasts([]);
       if (conversation) void thread.select(conversation);

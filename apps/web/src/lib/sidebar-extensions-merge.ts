@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { IconName } from '@/components/icon';
 import type { SidebarGroup, SidebarItem } from '@/components/app-sidebar';
 import type { ModuleWebExtension } from '@/lib/module-registry';

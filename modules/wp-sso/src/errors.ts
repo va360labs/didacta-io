@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Errores tipados del módulo wp-sso. El host los mapea a una razón estable
  * (`reason=...`) en el redirect a `/auth/error`, igual que OIDC/SAML.
  */

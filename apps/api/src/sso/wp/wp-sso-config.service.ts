@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { WpSsoTokenError } from '@didacta/mod-wp-sso';
 import { PrismaService } from '../../prisma/prisma.service';

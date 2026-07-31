@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { errors as joseErrors, jwtVerify } from 'jose';
 import { WpSsoTokenError } from './errors.js';
 

@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Tarjeta de configuración SMTP per-tenant. Consume el controlador dedicado
  * `/api/v1/admin/tenant-settings/smtp` (alpha.75 backend) en lugar del
  * almacenamiento genérico de `tenant_setting`. El backend devuelve un DTO

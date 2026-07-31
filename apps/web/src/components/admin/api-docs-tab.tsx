@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Admin · Integración API — documentación EN VIVO para integradores externos
  * (n8n, Zapier, una página de ventas…).
  *

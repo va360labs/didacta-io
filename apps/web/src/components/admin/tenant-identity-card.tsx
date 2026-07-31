@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Tarjeta de identidad del tenant en `/admin/configuracion`. Permite al
  * super_admin renombrar la organización (campo `tenant.name`) desde la UI
  * sin tocar curl. Consume el endpoint `PATCH /api/v1/admin/tenants/:id`

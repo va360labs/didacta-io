@@ -40,7 +40,7 @@ const DEMO: EntitlementRuleset = {
 
 describe('classifyPurchase · catálogo real de DEMO', () => {
   it('LIFETIME gana sobre PRO: "DEMO PRO LIFETIME" no es una suscripción', () => {
-    // El orden de las reglas es lo único que evita cortarle el acceso a los 73
+    // El orden de las reglas es lo único que evita cortarle el acceso a los
     // compradores de lifetime.
     expect(classifyPurchase({ productName: 'DEMO PRO LIFETIME' }, DEMO).kind).toBe('LIFETIME');
     expect(classifyPurchase({ productName: 'DEMO PRO LIFETIME UP' }, DEMO).kind).toBe('LIFETIME');
@@ -83,7 +83,7 @@ describe('classifyPurchase · catálogo real de DEMO', () => {
     expect(expires('ONE_OFF')).toBe(false);
   });
 
-  it('el pedido real de Tamara Gascón sale como compra suelta', () => {
+  it('un pedido real de un curso suelto sale como compra suelta', () => {
     expect(
       classifyPurchase({ productName: 'Master en Automatizaciones y Agentes IA' }, DEMO).kind,
     ).toBe('ONE_OFF');

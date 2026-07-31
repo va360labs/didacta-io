@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { ConflictException, Injectable } from '@nestjs/common';
 import type { ClientContext } from '../auth/client-context';
 import { PasswordService } from '../auth/password.service';

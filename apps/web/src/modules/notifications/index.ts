@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Extension point del módulo `mod.notifications`.
 ///
 /// alpha.83 — el tab "Plantillas" de /admin/configuracion se consolidó en la

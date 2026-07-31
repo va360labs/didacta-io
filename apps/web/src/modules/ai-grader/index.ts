@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Extension point del módulo `mod.ai-grader` hacia el core.
 ///
 /// Aporta el item "Correcciones" al sidebar del formador. La página

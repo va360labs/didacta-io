@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Mapea una notificación (templateKey + metadata) a un destino navegable dentro
  * de la app. Lo comparten la lista `/notificaciones` y el toast en vivo para que
  * "ir directamente a responder" sea un único lugar de verdad.

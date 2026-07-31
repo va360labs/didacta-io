@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Injectable } from '@nestjs/common';
 import type { AuditLogService, TenantConfigService } from '@didacta/core-kernel';
 import { Prisma } from '@didacta/database';

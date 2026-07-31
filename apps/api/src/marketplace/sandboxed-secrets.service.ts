@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecretCipherService } from '../modules/secret-cipher.service';
@@ -82,7 +87,14 @@ export class ScopedSecretsApiFactory {
           `Si la route es anónima, inyectá AnonymousSandboxedSecrets en lugar de llamar a build().`,
       );
     }
-    return new ScopedSecretsApi(this.prisma, this.cipher, moduleName, tenantId, lifecycleConfig, this.logger);
+    return new ScopedSecretsApi(
+      this.prisma,
+      this.cipher,
+      moduleName,
+      tenantId,
+      lifecycleConfig,
+      this.logger,
+    );
   }
 
   /// Helper para el dispatcher: decidir si construye real o devuelve el

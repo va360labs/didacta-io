@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Tab "Aula virtual" de /admin/configuracion: formulario de credenciales Zoom
 /// Server-to-Server del módulo mod.zoom-live.
 ///

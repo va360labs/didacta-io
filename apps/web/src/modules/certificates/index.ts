@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Extension point del módulo `mod.certificates` hacia el core.
 ///
 /// El catálogo agrega 2 sidebar items: `/mis-certificados` (alumno,

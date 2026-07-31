@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { Dialog } from './dialog';
@@ -33,10 +38,10 @@ export interface AlertDialogContentProps {
 export function AlertDialogContent({ children, className }: AlertDialogContentProps) {
   const context = React.useContext(AlertDialogContext);
   if (!context) throw new Error('AlertDialogContent must be used within AlertDialog');
-  
+
   return (
-    <Dialog 
-      open={context.open} 
+    <Dialog
+      open={context.open}
       onOpenChange={context.onOpenChange}
       ariaLabel="Alerta"
       maxWidthClass="max-w-md"
@@ -62,9 +67,7 @@ export interface AlertDialogTitleProps {
 
 export function AlertDialogTitle({ children, className }: AlertDialogTitleProps) {
   return (
-    <h2 className={cn('font-display text-lg font-semibold text-text', className)}>
-      {children}
-    </h2>
+    <h2 className={cn('font-display text-lg font-semibold text-text', className)}>{children}</h2>
   );
 }
 
@@ -83,13 +86,10 @@ export interface AlertDialogFooterProps {
 }
 
 export function AlertDialogFooter({ children, className }: AlertDialogFooterProps) {
-  return (
-    <div className={cn('flex justify-end gap-3 pt-2', className)}>{children}</div>
-  );
+  return <div className={cn('flex justify-end gap-3 pt-2', className)}>{children}</div>;
 }
 
-export interface AlertDialogActionProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface AlertDialogActionProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'default' | 'destructive';
 }
 
@@ -100,7 +100,7 @@ export function AlertDialogAction({
   ...props
 }: AlertDialogActionProps) {
   const context = React.useContext(AlertDialogContext);
-  
+
   return (
     <button
       type="button"
@@ -130,7 +130,7 @@ export function AlertDialogCancel({
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const context = React.useContext(AlertDialogContext);
-  
+
   return (
     <button
       type="button"

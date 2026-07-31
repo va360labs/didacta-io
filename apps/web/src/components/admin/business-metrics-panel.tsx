@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * KPIs del negocio — la pestaña "Negocio" del panel de administración.
  *
  * Vivía en su propia página `/admin/metricas`, compitiendo con `/admin` por ser

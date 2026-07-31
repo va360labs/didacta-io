@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Chunker de texto para indexación RAG (LMS-90).
  *
  * Estrategia: dividir por párrafos, agrupar hasta alcanzar `targetTokens`,

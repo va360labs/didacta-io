@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente del slice de inscripción de miembros.
  *
  * Todos los endpoints de este flujo son PÚBLICOS (sin sesión): el aspirante

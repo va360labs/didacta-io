@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { useCallback, useEffect, useRef, useState, type UIEvent } from 'react';
 import { usePublicUsers } from '@/lib/public-users';
 import { messagingApi, type ConversationView, type MessageView } from './client';

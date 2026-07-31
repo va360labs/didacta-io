@@ -1,12 +1,20 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { ApiHttpError } from './api-client';
 import { authStorage } from './auth-storage';
 
 export type InstalledModuleStatus = 'INSTALLING' | 'INSTALLED' | 'FAILED' | 'DEPRECATED';
 export type InstalledModuleVendor = 'DIDACTA' | 'COMMUNITY';
 /// Origen de instalación (DISC-002). Determina badge y nivel de confianza.
-export type InstalledModuleSource = 'MARKETPLACE_OFFICIAL' | 'MARKETPLACE_COMMUNITY' | 'DIRECT_UPLOAD';
+export type InstalledModuleSource =
+  | 'MARKETPLACE_OFFICIAL'
+  | 'MARKETPLACE_COMMUNITY'
+  | 'DIRECT_UPLOAD';
 
 export interface InstalledModuleSummary {
   id: string;
@@ -104,10 +112,12 @@ export const marketplaceApi = {
     });
   },
 
-  async list(filters: {
-    status?: InstalledModuleStatus;
-    vendor?: InstalledModuleVendor;
-  } = {}): Promise<{ modules: InstalledModuleSummary[] }> {
+  async list(
+    filters: {
+      status?: InstalledModuleStatus;
+      vendor?: InstalledModuleVendor;
+    } = {},
+  ): Promise<{ modules: InstalledModuleSummary[] }> {
     const qs = new URLSearchParams();
     if (filters.status) qs.set('status', filters.status);
     if (filters.vendor) qs.set('vendor', filters.vendor);

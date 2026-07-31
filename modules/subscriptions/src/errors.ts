@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Errores del dominio mod.subscriptions.
  *
  * Heredan de SubscriptionsError para que el filtro de NestJS

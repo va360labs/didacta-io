@@ -1,8 +1,9 @@
-import {
-  Injectable,
-  type OnApplicationBootstrap,
-  type OnModuleDestroy,
-} from '@nestjs/common';
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+import { Injectable, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 import { Worker, type ConnectionOptions, type Job } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
@@ -12,30 +13,16 @@ import { TenantContextService } from '../../tenancy/tenant-context.service';
 import { RateLimitedHttp, RateLimiterService } from '../rate-limiter.service';
 import { SandboxedDbService } from '../sandboxed-db.service';
 import { BlockedSandboxedDb, type SandboxedDb } from '../sandboxed-db.types';
-import {
-  ScopedDidactaApiFactory,
-  type CoreServicesResolver,
-} from '../sandboxed-didacta.service';
+import { ScopedDidactaApiFactory, type CoreServicesResolver } from '../sandboxed-didacta.service';
 import { BlockedDidactaApi, type DidactaApi } from '../sandboxed-didacta.types';
 import { SandboxedHttpService } from '../sandboxed-http.service';
-import {
-  BlockedSandboxedHttp,
-  type SandboxedHttp,
-} from '../sandboxed-http.types';
+import { BlockedSandboxedHttp, type SandboxedHttp } from '../sandboxed-http.types';
 import { ScopedSecretsApiFactory } from '../sandboxed-secrets.service';
 import { type SandboxedSecrets } from '../sandboxed-secrets.types';
 import { ModuleJobLifecycleRegistry } from './mod-jobs-lifecycle.registry';
 import { ModJobsMetrics } from './mod-jobs.metrics';
-import {
-  MOD_JOBS_QUEUE_NAME,
-  ModJobsQueueService,
-  type ModJobPayload,
-} from './mod-jobs.queue';
-import type {
-  JobTickResult,
-  ModuleJobTickContext,
-  ModuleJobTickHandler,
-} from './mod-jobs.types';
+import { MOD_JOBS_QUEUE_NAME, ModJobsQueueService, type ModJobPayload } from './mod-jobs.queue';
+import type { JobTickResult, ModuleJobTickContext, ModuleJobTickHandler } from './mod-jobs.types';
 
 /// Concurrencia del worker. 4 ticks en paralelo es un balance razonable:
 /// suficiente para que un host con varios módulos no quede serializado en
@@ -93,9 +80,7 @@ const ERROR_BACKOFF_SEC = 10;
  * espera RLS activo + ctx.didacta resolviendo tenantId del ALS.
  */
 @Injectable()
-export class ModJobsWorkerService
-  implements OnApplicationBootstrap, OnModuleDestroy
-{
+export class ModJobsWorkerService implements OnApplicationBootstrap, OnModuleDestroy {
   private worker?: Worker<ModJobPayload>;
   private workerConnection?: Redis;
 
@@ -237,18 +222,12 @@ export class ModJobsWorkerService
       // tick) o seguir reintentando.
       await this.requeueWithBackoff(payload, ERROR_BACKOFF_SEC);
       this.metrics.recordTick(payload.moduleName, outcome);
-      this.metrics.recordTickDuration(
-        payload.moduleName,
-        (Date.now() - startedAt) / 1000,
-      );
+      this.metrics.recordTickDuration(payload.moduleName, (Date.now() - startedAt) / 1000);
       return;
     }
 
     this.metrics.recordTick(payload.moduleName, outcome);
-    this.metrics.recordTickDuration(
-      payload.moduleName,
-      (Date.now() - startedAt) / 1000,
-    );
+    this.metrics.recordTickDuration(payload.moduleName, (Date.now() - startedAt) / 1000);
 
     if (result.status === 'continue') {
       await this.requeueWithBackoff(payload, result.delaySec ?? 0);
@@ -275,10 +254,7 @@ export class ModJobsWorkerService
   /// destroy en curso) loguea y abandona — el job queda perdido pero el
   /// módulo puede recuperarlo en el próximo bootstrap leyendo su tabla
   /// mod_<slug>_jobs (estado persistido por el módulo).
-  private async requeueWithBackoff(
-    payload: ModJobPayload,
-    delaySec: number,
-  ): Promise<void> {
+  private async requeueWithBackoff(payload: ModJobPayload, delaySec: number): Promise<void> {
     if (!this.queueService.isEnabled()) {
       this.logger.error(
         {
@@ -323,7 +299,9 @@ export class ModJobsWorkerService
       tablePrefix: string;
       didactaConfig: import('../module-manifest.schema').ModuleDidactaConfig | null;
       requiresSecrets: boolean;
-      secretsLifecycleConfig: import('../module-manifest.schema').ModuleSecretsLifecycleConfig | null;
+      secretsLifecycleConfig:
+        | import('../module-manifest.schema').ModuleSecretsLifecycleConfig
+        | null;
       moduleVersion: string;
     },
   ): ModuleJobTickContext {
@@ -350,15 +328,10 @@ export class ModJobsWorkerService
         getCoursesService: () => this.moduleRegistry.getCoursesService(),
         getLearningService: () => this.moduleRegistry.getLearningService(),
         getAssessmentsService: () => this.moduleRegistry.getAssessmentsService(),
-        getWebBaseUrl: () =>
-          process.env['WEB_BASE_URL'] ?? 'http://localhost:3000',
+        getWebBaseUrl: () => process.env['WEB_BASE_URL'] ?? 'http://localhost:3000',
         getStorage: () => this.contextFactory.getStorage(),
       };
-      didacta = this.didactaFactory.build(
-        payload.moduleName,
-        manifest.didactaConfig,
-        resolver,
-      );
+      didacta = this.didactaFactory.build(payload.moduleName, manifest.didactaConfig, resolver);
     } else {
       didacta = new BlockedDidactaApi(payload.moduleName);
     }

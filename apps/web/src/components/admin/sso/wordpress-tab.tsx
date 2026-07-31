@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Panel admin · SSO desde WordPress (mod.wp-sso) — Community (sin gate EE).
  *
  * Toda la config vive cifrada en BD por tenant (NO env). El admin:

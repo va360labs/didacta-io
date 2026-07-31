@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente HTTP del endpoint informativo de rate limit (sexto piloto License SDK).
  *
  * Backend: `apps/api/src/rate-limit/rate-limit-info.controller.ts`. El endpoint

@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Redirect de compatibilidad: /admin/sso-wordpress → /admin/sso?tab=wordpress.
  *
  * Los tres protocolos de SSO se unificaron en una sola pantalla con pestañas.

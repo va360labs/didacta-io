@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { createContext, useCallback, useContext, useId, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -50,7 +55,7 @@ export function Tabs({
   children,
   className,
 }: TabsProps): React.JSX.Element {
-  const [internal, setInternal] = useState(defaultValue ?? "");
+  const [internal, setInternal] = useState(defaultValue ?? '');
   const current = value ?? internal;
   const baseId = useId();
 

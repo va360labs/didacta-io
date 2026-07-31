@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Linter SQL para migraciones de un módulo `*.zip`.
 ///
 /// Garantiza dos invariantes críticas del contrato (ADR-008/009):
@@ -73,21 +78,72 @@ const IDENTIFIER = '"?([a-z_][a-z0-9_]*)"?';
 const QUALIFIED_IDENT = `(?:"?[a-z_][a-z0-9_]*"?\\.)?${IDENTIFIER}`;
 
 const STATEMENT_PATTERNS: Array<{ kind: StatementKind; regex: RegExp }> = [
-  { kind: 'CREATE_TABLE', regex: new RegExp(`^\\s*create\\s+(?:unlogged\\s+)?table(?:\\s+if\\s+not\\s+exists)?\\s+${QUALIFIED_IDENT}`, 'i') },
-  { kind: 'CREATE_INDEX', regex: new RegExp(`^\\s*create\\s+(?:unique\\s+)?index(?:\\s+if\\s+not\\s+exists)?\\s+${QUALIFIED_IDENT}`, 'i') },
-  { kind: 'CREATE_SEQUENCE', regex: new RegExp(`^\\s*create\\s+sequence(?:\\s+if\\s+not\\s+exists)?\\s+${QUALIFIED_IDENT}`, 'i') },
+  {
+    kind: 'CREATE_TABLE',
+    regex: new RegExp(
+      `^\\s*create\\s+(?:unlogged\\s+)?table(?:\\s+if\\s+not\\s+exists)?\\s+${QUALIFIED_IDENT}`,
+      'i',
+    ),
+  },
+  {
+    kind: 'CREATE_INDEX',
+    regex: new RegExp(
+      `^\\s*create\\s+(?:unique\\s+)?index(?:\\s+if\\s+not\\s+exists)?\\s+${QUALIFIED_IDENT}`,
+      'i',
+    ),
+  },
+  {
+    kind: 'CREATE_SEQUENCE',
+    regex: new RegExp(
+      `^\\s*create\\s+sequence(?:\\s+if\\s+not\\s+exists)?\\s+${QUALIFIED_IDENT}`,
+      'i',
+    ),
+  },
   { kind: 'CREATE_TYPE', regex: new RegExp(`^\\s*create\\s+type\\s+${QUALIFIED_IDENT}`, 'i') },
-  { kind: 'CREATE_VIEW', regex: new RegExp(`^\\s*create\\s+(?:or\\s+replace\\s+)?view\\s+${QUALIFIED_IDENT}`, 'i') },
-  { kind: 'CREATE_TRIGGER', regex: new RegExp(`^\\s*create\\s+trigger\\s+${QUALIFIED_IDENT}`, 'i') },
-  { kind: 'ALTER_TABLE', regex: new RegExp(`^\\s*alter\\s+table(?:\\s+if\\s+exists)?\\s+(?:only\\s+)?${QUALIFIED_IDENT}`, 'i') },
-  { kind: 'DROP_TABLE', regex: new RegExp(`^\\s*drop\\s+table(?:\\s+if\\s+exists)?\\s+${QUALIFIED_IDENT}`, 'i') },
-  { kind: 'DROP_INDEX', regex: new RegExp(`^\\s*drop\\s+index(?:\\s+if\\s+exists)?\\s+${QUALIFIED_IDENT}`, 'i') },
-  { kind: 'DROP_TYPE', regex: new RegExp(`^\\s*drop\\s+type(?:\\s+if\\s+exists)?\\s+${QUALIFIED_IDENT}`, 'i') },
-  { kind: 'DROP_VIEW', regex: new RegExp(`^\\s*drop\\s+view(?:\\s+if\\s+exists)?\\s+${QUALIFIED_IDENT}`, 'i') },
+  {
+    kind: 'CREATE_VIEW',
+    regex: new RegExp(`^\\s*create\\s+(?:or\\s+replace\\s+)?view\\s+${QUALIFIED_IDENT}`, 'i'),
+  },
+  {
+    kind: 'CREATE_TRIGGER',
+    regex: new RegExp(`^\\s*create\\s+trigger\\s+${QUALIFIED_IDENT}`, 'i'),
+  },
+  {
+    kind: 'ALTER_TABLE',
+    regex: new RegExp(
+      `^\\s*alter\\s+table(?:\\s+if\\s+exists)?\\s+(?:only\\s+)?${QUALIFIED_IDENT}`,
+      'i',
+    ),
+  },
+  {
+    kind: 'DROP_TABLE',
+    regex: new RegExp(`^\\s*drop\\s+table(?:\\s+if\\s+exists)?\\s+${QUALIFIED_IDENT}`, 'i'),
+  },
+  {
+    kind: 'DROP_INDEX',
+    regex: new RegExp(`^\\s*drop\\s+index(?:\\s+if\\s+exists)?\\s+${QUALIFIED_IDENT}`, 'i'),
+  },
+  {
+    kind: 'DROP_TYPE',
+    regex: new RegExp(`^\\s*drop\\s+type(?:\\s+if\\s+exists)?\\s+${QUALIFIED_IDENT}`, 'i'),
+  },
+  {
+    kind: 'DROP_VIEW',
+    regex: new RegExp(`^\\s*drop\\s+view(?:\\s+if\\s+exists)?\\s+${QUALIFIED_IDENT}`, 'i'),
+  },
   { kind: 'INSERT', regex: new RegExp(`^\\s*insert\\s+into\\s+${QUALIFIED_IDENT}`, 'i') },
   { kind: 'UPDATE', regex: new RegExp(`^\\s*update\\s+(?:only\\s+)?${QUALIFIED_IDENT}`, 'i') },
-  { kind: 'DELETE', regex: new RegExp(`^\\s*delete\\s+from\\s+(?:only\\s+)?${QUALIFIED_IDENT}`, 'i') },
-  { kind: 'COMMENT', regex: new RegExp(`^\\s*comment\\s+on\\s+(?:table|column|index|view|sequence|type)\\s+(?:.*?\\.)?${IDENTIFIER}`, 'i') },
+  {
+    kind: 'DELETE',
+    regex: new RegExp(`^\\s*delete\\s+from\\s+(?:only\\s+)?${QUALIFIED_IDENT}`, 'i'),
+  },
+  {
+    kind: 'COMMENT',
+    regex: new RegExp(
+      `^\\s*comment\\s+on\\s+(?:table|column|index|view|sequence|type)\\s+(?:.*?\\.)?${IDENTIFIER}`,
+      'i',
+    ),
+  },
 ];
 
 const REFERENCES_REGEX = new RegExp(`references\\s+${QUALIFIED_IDENT}`, 'gi');

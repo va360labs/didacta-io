@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Lector de SOLO LECTURA de PayPal para mod.payment-connections.
  *
  * PayPal NO tiene un endpoint para listar todas las suscripciones de una cuenta

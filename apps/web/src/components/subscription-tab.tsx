@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Pestaña "Suscripción" de /cuenta.
  *
  * Muestra DOS fuentes de suscripción del usuario:

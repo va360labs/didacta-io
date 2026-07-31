@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Injectable, Logger } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import { MIGRATIONS_PREFIX, MIGRATION_FILENAME_REGEX } from '@didacta/module-package-spec';
@@ -120,7 +125,9 @@ export class ModuleMigrationService {
 
     const previouslyAppliedSet = new Set(previouslyApplied);
     const pending = files.filter((f) => !previouslyAppliedSet.has(f.filename));
-    const skipped = files.filter((f) => previouslyAppliedSet.has(f.filename)).map((f) => f.filename);
+    const skipped = files
+      .filter((f) => previouslyAppliedSet.has(f.filename))
+      .map((f) => f.filename);
     if (pending.length === 0) {
       return { applied: [], skipped };
     }

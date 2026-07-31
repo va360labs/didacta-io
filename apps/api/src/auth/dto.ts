@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { z } from 'zod';
 
 // `tenantSlug` es OPCIONAL desde HU-SA-001 + LMS-110 (login transparente).

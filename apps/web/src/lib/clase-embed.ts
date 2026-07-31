@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Detección de la clase en directo referenciada por un post de comunidad.
 ///
 /// Un post puede anunciar una clase de dos formas:

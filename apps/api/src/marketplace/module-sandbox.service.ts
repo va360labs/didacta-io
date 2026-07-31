@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Injectable, Logger } from '@nestjs/common';
 import { createContext, runInContext, type Context } from 'node:vm';
 import type { ModuleJobTickHandler } from './job-runner/mod-jobs.types';

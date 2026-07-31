@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { createHash } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { z, type ZodIssue } from 'zod';

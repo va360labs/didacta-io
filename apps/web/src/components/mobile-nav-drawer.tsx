@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { useEffect } from 'react';
 import { SIDEBAR_BG_STYLE, SidebarContent, type SidebarGroup } from '@/components/app-sidebar';
 import type { StoredSession } from '@/lib/auth-storage';

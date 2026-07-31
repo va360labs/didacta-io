@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente HTTP para dominios personalizados (cuarto piloto License SDK).
  *
  * Backend: `apps/api/src/admin/custom-domains/`. La capability EE

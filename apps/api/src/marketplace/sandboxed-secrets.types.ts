@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Contrato del store de secretos que el host expone a los módulos third-party
  * del marketplace. Introducido en alpha.56 (Sprint 4 / SE-001) para cerrar el
  * hueco descubierto al cablear el extract phase real del migrator-learndash:

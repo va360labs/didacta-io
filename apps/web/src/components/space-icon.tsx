@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Icon, type IconName } from '@/components/icon';
 import { COMMUNITY_SPACE_ICONS } from '@/modules/community';
 

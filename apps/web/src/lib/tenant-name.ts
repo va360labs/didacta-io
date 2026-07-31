@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Nombre legible del tenant a partir de su slug.
  *
  * El producto no guarda un "display name" del tenant: la convención de la app

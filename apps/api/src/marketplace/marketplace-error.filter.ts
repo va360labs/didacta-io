@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { ArgumentsHost, Catch, ExceptionFilter, HttpStatus, Logger } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { MarketplacePackageError, type MarketplaceErrorCode } from './module-package.errors';
@@ -38,11 +43,10 @@ export class MarketplaceErrorFilter implements ExceptionFilter<MarketplacePackag
     // Eventos de seguridad merecen log explícito: el operador necesita verlos
     // en el dashboard para detectar intentos repetidos de subida con firma
     // mala (posible compromiso de la clave del vendor).
-    if (
-      exception.code === 'SIGNATURE_VERIFY_FAILED' ||
-      exception.code === 'VENDOR_NOT_TRUSTED'
-    ) {
-      this.logger.warn(`Marketplace · evento de seguridad: ${exception.code} — ${exception.message}`);
+    if (exception.code === 'SIGNATURE_VERIFY_FAILED' || exception.code === 'VENDOR_NOT_TRUSTED') {
+      this.logger.warn(
+        `Marketplace · evento de seguridad: ${exception.code} — ${exception.message}`,
+      );
     }
 
     reply.status(status).send({

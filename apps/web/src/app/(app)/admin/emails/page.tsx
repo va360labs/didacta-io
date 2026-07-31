@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Sección de administración `/admin/emails` — personalización de todos los
 /// emails y notificaciones que envía la plataforma. Antes vivía como tab
 /// "Plantillas" de /admin/configuracion y solo cubría las keys del hub; en

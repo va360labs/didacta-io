@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Aviso sonoro del chat flotante: un tono corto y suave cuando llega un mensaje
  * con la píldora plegada.
  *

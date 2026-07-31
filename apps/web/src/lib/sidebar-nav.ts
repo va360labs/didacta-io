@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Definición de la navegación del shell autenticado.
  *
  * Vivía dentro de `app/(app)/layout.tsx` (client component de ~900 líneas), lo

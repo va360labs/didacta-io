@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Controller, Get, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ALL_CAPABILITIES, LicenseService } from '@didacta/license-sdk';
@@ -68,9 +73,7 @@ export class MeModulesController {
 
     const activeModules = Array.from(new Set([...builtInActive, ...thirdPartyActive]));
 
-    const enabledCapabilities = ALL_CAPABILITIES.filter((c) =>
-      this.license.isCapabilityEnabled(c),
-    );
+    const enabledCapabilities = ALL_CAPABILITIES.filter((c) => this.license.isCapabilityEnabled(c));
     return { activeModules, enabledCapabilities };
   }
 }

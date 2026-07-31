@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Injectable, Logger } from '@nestjs/common';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -42,10 +47,7 @@ function defaultPublicKeysDir(): string {
   // .pem en `packages/license-sdk/public-keys/` (rescatados antes del
   // pruner, ver Dockerfile). Dev mantiene la carpeta original
   // `packages/license-sdk/src/public-keys/`.
-  const subPaths = [
-    'packages/license-sdk/public-keys',
-    'packages/license-sdk/src/public-keys',
-  ];
+  const subPaths = ['packages/license-sdk/public-keys', 'packages/license-sdk/src/public-keys'];
   const cwdPrefixes = ['', '../', '../../', '../../../'];
   for (const prefix of cwdPrefixes) {
     for (const sub of subPaths) {

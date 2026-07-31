@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { makeError } from './errors';
 import type { PackageSpecError, PackageSpecWarning } from './errors';
 import {
@@ -96,13 +101,7 @@ export function normalizeMigrations(sources: readonly SourceFile[]): Normalizati
         );
         continue;
       }
-      addNormalized(
-        files,
-        seenZipPaths,
-        errors,
-        { zipPath: flattened, content: src.content },
-        rel,
-      );
+      addNormalized(files, seenZipPaths, errors, { zipPath: flattened, content: src.content }, rel);
       continue;
     }
 

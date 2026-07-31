@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { ComponentType } from 'react';
 
 /// Registry de extensiones de UI aportadas por los módulos al core.
@@ -36,8 +41,7 @@ export interface ModuleSidebarItem {
   /// inalcanzable, que es justo lo que le pasó a 'Puntos y retos' apuntando a
   /// 'Administración' (grupo solo-super_admin) con `requiresRole:
   /// 'tenant_admin'`.
-  group:
-    // Menú principal.
+  group: // Menú principal.
     | 'Aprendizaje'
     | 'Personas'
     | 'Formador'

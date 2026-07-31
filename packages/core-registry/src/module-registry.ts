@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import semver from 'semver';
 import type { DidactaModule, ModuleContext, Logger } from '@didacta/core-kernel';
 import { resolveDependencyOrder } from './dependency-resolver.js';

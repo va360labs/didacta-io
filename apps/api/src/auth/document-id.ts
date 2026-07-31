@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Validador de DNI/NIE español. Lo usamos al editar el perfil del usuario
  * porque Fundae requiere identificar a cada participante por su número
  * legal de identidad. La función de checksum es la oficial:

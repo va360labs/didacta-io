@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Injectable } from '@nestjs/common';
 import { LICENSE_CAPABILITIES, LicenseService } from '@didacta/license-sdk';
 import { PrismaService } from '../../prisma/prisma.service';

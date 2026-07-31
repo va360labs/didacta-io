@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Resuelve la URL base pública del frontend (web) para construir links
  * absolutos en emails (reset de contraseña, invitación, bienvenida).
  *

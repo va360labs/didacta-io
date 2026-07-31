@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { ActionView, Modalidad } from './dto.js';
 import type { GroupView, CostView, CostTipo } from './group.dto.js';
 import type { CompanyView } from './company.dto.js';

@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Partición del catálogo de cursos en las dos secciones que ve el alumno:
  * "Mis cursos" (donde está matriculado) y "Otros cursos de <organización>".
  *

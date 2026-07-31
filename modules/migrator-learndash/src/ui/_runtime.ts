@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Shim que expone el runtime del host (`window.__didacta__`) al bundle UI
  * del módulo. SIN imports directos a `react` / `@/components/ui/*` / `@/lib/*`.
  *

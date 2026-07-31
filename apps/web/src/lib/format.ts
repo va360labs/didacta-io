@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Helpers de formateo para presentación. Vive en `apps/web/src/lib` porque
  * son puramente del lado cliente (UI). El backend devuelve datos crudos
  * (minutos enteros, fechas ISO, etc.) y la web los humaniza acá.

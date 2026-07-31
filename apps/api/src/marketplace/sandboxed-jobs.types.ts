@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Contrato del cliente de jobs que el host expone a los módulos third-party
  * del marketplace. Introducido en alpha.55 para cerrar el hueco del Sprint 3
  * (JR-006 — primer encolado desde un handler del módulo).

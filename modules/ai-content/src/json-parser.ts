@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Parser tolerante para extraer JSON del output de un LLM.
  *
  * El AI Gateway no garantiza que el modelo devuelva JSON puro: a veces

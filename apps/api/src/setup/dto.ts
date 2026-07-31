@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { z } from 'zod';
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
@@ -12,12 +17,7 @@ export const setupInitSchema = z.object({
       .max(64)
       .regex(SLUG_RE, 'Slug debe ser DNS-safe: minúsculas, números y guiones')
       .optional(),
-    primaryHostname: z
-      .string()
-      .min(1)
-      .max(253)
-      .regex(HOSTNAME_RE, 'Hostname inválido')
-      .optional(),
+    primaryHostname: z.string().min(1).max(253).regex(HOSTNAME_RE, 'Hostname inválido').optional(),
   }),
   admin: z.object({
     name: z.string().min(1).max(120),

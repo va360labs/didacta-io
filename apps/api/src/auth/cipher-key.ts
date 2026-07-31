@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Carga (o genera + persiste) la clave AES-256 que cifra los secretos at-rest
  * en `tenant_setting`. Resolución por prioridad:
  *

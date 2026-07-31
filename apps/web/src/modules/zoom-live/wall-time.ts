@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Conversión hora-de-pared ↔ instante para el formulario de clases en directo.
 ///
 /// El input `datetime-local` da "2026-08-03T18:00" SIN zona. Pasarlo por

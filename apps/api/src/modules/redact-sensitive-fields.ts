@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Helper para redactar campos sensibles de un objeto antes de devolverlo
  * al cliente. Usado por el endpoint GET de tenant-settings para exponer
  * los campos no-credenciales (host, user, from...) de un setting cifrado

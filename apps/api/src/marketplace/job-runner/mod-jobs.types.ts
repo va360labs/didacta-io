@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { SandboxedDb } from '../sandboxed-db.types';
 import type { SandboxedHttp } from '../sandboxed-http.types';
 import type { DidactaApi } from '../sandboxed-didacta.types';

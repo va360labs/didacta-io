@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import {
   All,
   Body,
@@ -25,10 +30,7 @@ import {
 import type { ModuleDidactaConfig, ModuleHttpConfig } from './module-manifest.schema';
 import { RateLimitedHttp, RateLimiterService } from './rate-limiter.service';
 import { SandboxedDbService } from './sandboxed-db.service';
-import {
-  ScopedDidactaApiFactory,
-  type CoreServicesResolver,
-} from './sandboxed-didacta.service';
+import { ScopedDidactaApiFactory, type CoreServicesResolver } from './sandboxed-didacta.service';
 import { BlockedDidactaApi, type DidactaApi } from './sandboxed-didacta.types';
 import { SandboxedHttpService } from './sandboxed-http.service';
 import { BlockedSandboxedHttp, type SandboxedHttp } from './sandboxed-http.types';
@@ -100,7 +102,10 @@ export class ModulesDispatcherController {
   ): Promise<void> {
     const method = (req.method ?? '').toUpperCase();
     if (!ALLOWED_METHODS.includes(method as AllowedMethod)) {
-      throw new HttpException('Método no soportado por el dispatcher', HttpStatus.METHOD_NOT_ALLOWED);
+      throw new HttpException(
+        'Método no soportado por el dispatcher',
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
     }
 
     // Decodificación opcional del Bearer. Si viene válido, populamos `user`;
@@ -147,10 +152,7 @@ export class ModulesDispatcherController {
     // - Con manifest.didacta → ScopedDidactaApi con permission matrix +
     //   idempotencia por (externalSource, externalId) + delegación a
     //   services del core (Courses/Learning/Assessments/AdminUsers).
-    const didacta: DidactaApi = this.buildScopedDidacta(
-      matched.moduleName,
-      matched.didactaConfig,
-    );
+    const didacta: DidactaApi = this.buildScopedDidacta(matched.moduleName, matched.didactaConfig);
     // ctx.jobs: cliente para encolar primer tick (alpha.55).
     // - Sin manifest.jobLifecycle → BlockedSandboxedJobs (rechaza con
     //   JOBS_NOT_DECLARED + mensaje accionable sobre cómo declarar el bloque).
@@ -185,9 +187,7 @@ export class ModulesDispatcherController {
       params: matched.params,
       query: (req.query as Record<string, string | string[]>) ?? {},
       body,
-      user: user
-        ? { sub: user.sub, tenantId: user.tenantId, roles: user.roles }
-        : null,
+      user: user ? { sub: user.sub, tenantId: user.tenantId, roles: user.roles } : null,
       http,
       db,
       didacta,
@@ -307,9 +307,7 @@ export class ModulesDispatcherController {
   /// hay header, no es Bearer, o el token es inválido/expirado, devuelve
   /// `undefined`. NUNCA lanza — el handler del módulo decide la política
   /// en función de si recibe `user` o `null`.
-  private async resolveOptionalUser(
-    req: FastifyRequest,
-  ): Promise<SessionClaims | undefined> {
+  private async resolveOptionalUser(req: FastifyRequest): Promise<SessionClaims | undefined> {
     const header = req.headers['authorization'];
     if (typeof header !== 'string' || !header.startsWith('Bearer ')) return undefined;
     const token = header.slice('Bearer '.length).trim();
@@ -343,7 +341,9 @@ function stripGlobalPrefix(path: string): string {
 /// Fastify mockeado). El cliente HTTP saliente seguirá funcionando, solo
 /// que sin propagación de cancelación del frontend.
 function makeRequestAbortSignal(reply: FastifyReply): AbortSignal | undefined {
-  const raw = (reply as { raw?: { on?: (ev: string, cb: () => void) => unknown; writableEnded?: boolean } }).raw;
+  const raw = (
+    reply as { raw?: { on?: (ev: string, cb: () => void) => unknown; writableEnded?: boolean } }
+  ).raw;
   if (!raw || typeof raw.on !== 'function') return undefined;
   const ctrl = new AbortController();
   raw.on('close', () => {

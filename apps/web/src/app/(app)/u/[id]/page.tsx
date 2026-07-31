@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { useSearchParams } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';

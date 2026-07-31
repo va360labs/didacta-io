@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * PaymentConnectionsService — lógica de dominio de mod.payment-connections.
  *
  * Responsabilidades:

@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Errores tipados del pipeline de validación de un `*.zip`.
 ///
 /// Cada error lleva un `code` estable que el endpoint de install traduce a un

@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Página de retorno tras un Stripe Checkout exitoso.
  *
  * Stripe redirige aquí cuando configuramos `success_url` apuntando a

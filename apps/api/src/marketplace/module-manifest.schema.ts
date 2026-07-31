@@ -1,13 +1,15 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { z } from 'zod';
 import {
   DIDACTA_EXTERNAL_SOURCE_REGEX,
   DIDACTA_PERMISSIONS,
   type DidactaPermission,
 } from './sandboxed-didacta.types.js';
-import {
-  SECRETS_BASE_KEY_REGEX,
-  SECRETS_CAPS,
-} from './sandboxed-secrets.types.js';
+import { SECRETS_BASE_KEY_REGEX, SECRETS_CAPS } from './sandboxed-secrets.types.js';
 
 /// Schema Zod del manifest de un módulo `*.zip`.
 ///
@@ -37,7 +39,13 @@ export const MODULE_ISOLATION = ['vm', 'worker_thread'] as const;
 /// Surfaces donde un módulo puede exponer UI. Cada surface corresponde a un
 /// rol/contexto del sistema: admin (backoffice), formador (instructor view),
 /// alumno (student view), auditor (reporting), empresa_manager (B2B).
-export const MODULE_SURFACES = ['admin', 'formador', 'alumno', 'auditor', 'empresa_manager'] as const;
+export const MODULE_SURFACES = [
+  'admin',
+  'formador',
+  'alumno',
+  'auditor',
+  'empresa_manager',
+] as const;
 export type ModuleSurface = (typeof MODULE_SURFACES)[number];
 
 /// Tipos de campos soportados en config.schema para generación de forms.
@@ -176,14 +184,11 @@ const httpSchema = z
       }),
   })
   .strict()
-  .refine(
-    (h) => !h.allowedHosts.includes('*') || h.unrestrictedHosts === true,
-    {
-      message:
-        'Si allowedHosts contiene "*", debés declarar unrestrictedHosts: true como reconocimiento explícito de que el módulo puede salir a cualquier host (sujeto al SSRF guard del core).',
-      path: ['unrestrictedHosts'],
-    },
-  );
+  .refine((h) => !h.allowedHosts.includes('*') || h.unrestrictedHosts === true, {
+    message:
+      'Si allowedHosts contiene "*", debés declarar unrestrictedHosts: true como reconocimiento explícito de que el módulo puede salir a cualquier host (sujeto al SSRF guard del core).',
+    path: ['unrestrictedHosts'],
+  });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Schema para ctx.didacta (alpha.52, Sprint 2 / DD-001)
@@ -210,20 +215,14 @@ const didactaSchema = z
   .object({
     /// Source del módulo origen (lower-snake-case, max 40 chars). Ej.
     /// "learndash". Forma parte de la clave de idempotencia.
-    externalSource: z
-      .string()
-      .min(1)
-      .max(40)
-      .regex(DIDACTA_EXTERNAL_SOURCE_REGEX, {
-        message:
-          'externalSource inválido. Usá lower-snake-case (a-z 0-9 _ -), max 40 chars. Ej: "learndash", "moodle", "thinkific".',
-      }),
+    externalSource: z.string().min(1).max(40).regex(DIDACTA_EXTERNAL_SOURCE_REGEX, {
+      message:
+        'externalSource inválido. Usá lower-snake-case (a-z 0-9 _ -), max 40 chars. Ej: "learndash", "moodle", "thinkific".',
+    }),
     /// Lista de métodos permitidos. Cualquier valor fuera de
     /// DIDACTA_PERMISSIONS → manifest rechazado.
     permissions: z
-      .array(
-        z.enum(DIDACTA_PERMISSIONS as readonly [DidactaPermission, ...DidactaPermission[]]),
-      )
+      .array(z.enum(DIDACTA_PERMISSIONS as readonly [DidactaPermission, ...DidactaPermission[]]))
       .min(1)
       .max(DIDACTA_PERMISSIONS.length),
   })
@@ -266,8 +265,7 @@ const jobLifecycleSchema = z
       .min(1)
       .max(60)
       .regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, {
-        message:
-          'onTickFn debe ser un identifier JS válido (^[a-zA-Z_][a-zA-Z0-9_]*$).',
+        message: 'onTickFn debe ser un identifier JS válido (^[a-zA-Z_][a-zA-Z0-9_]*$).',
       }),
     /// Tope de ticks por hora — defensa anti-bucle infinito. Default
     /// 600 (1 tick/6s en media). Cap duro 3600.
@@ -512,15 +510,12 @@ export const moduleManifestSchema = z
     secretsLifecycle: secretsLifecycleSchema.optional(),
   })
   .strict()
-  .refine(
-    (m) => m.secretsLifecycle === undefined || m.requiresSecrets === true,
-    {
-      message:
-        'secretsLifecycle declarado sin requiresSecrets=true. Si tu módulo necesita secrets, ' +
-        'añadí "requiresSecrets": true al manifest; si no, eliminá el bloque secretsLifecycle.',
-      path: ['secretsLifecycle'],
-    },
-  );
+  .refine((m) => m.secretsLifecycle === undefined || m.requiresSecrets === true, {
+    message:
+      'secretsLifecycle declarado sin requiresSecrets=true. Si tu módulo necesita secrets, ' +
+      'añadí "requiresSecrets": true al manifest; si no, eliminá el bloque secretsLifecycle.',
+    path: ['secretsLifecycle'],
+  });
 
 export type ModuleManifest = z.infer<typeof moduleManifestSchema>;
 export type ModuleDidactaConfig = z.infer<typeof didactaSchema>;
@@ -575,9 +570,7 @@ export function validateSurfaceBundles(
 
     const expectedBundle = `dist/ui/${surface}.js`;
     if (!zipEntries.has(expectedBundle)) {
-      errors.push(
-        `Surface "${surface}" declarada pero falta bundle UI: ${expectedBundle}`,
-      );
+      errors.push(`Surface "${surface}" declarada pero falta bundle UI: ${expectedBundle}`);
     }
   }
 

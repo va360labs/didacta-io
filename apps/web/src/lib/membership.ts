@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente de la MEMBRESÍA: página pública /unete + administración.
  *
  * Los endpoints públicos van SIN bearer (el visitante no tiene cuenta; el

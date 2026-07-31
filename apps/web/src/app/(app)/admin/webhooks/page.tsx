@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Panel admin · Webhooks salientes (10º piloto License SDK).
  *
  * Sigue el patrón del 6º piloto (rate-limit) — feature usable en community

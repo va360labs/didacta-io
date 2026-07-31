@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Errores de dominio de mod.resources. El host los mapea a HTTP en
  * `apps/api/src/modules/resources/resources-error.filter.ts` por `code`.
  */

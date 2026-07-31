@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { makeError } from './errors';
 import type { PackageSpecError, PackageSpecWarning } from './errors';
 import {

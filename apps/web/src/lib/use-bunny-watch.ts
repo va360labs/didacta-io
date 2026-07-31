@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { useEffect, useRef } from 'react';
 import { advanceWatch, breakWatchContinuity, initWatchState, type WatchState } from '@/lib/video';
 import {

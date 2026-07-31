@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { useEffect, useState } from 'react';
 import { ApiHttpError } from '@/lib/api-client';
 import { communityApi, type CommunityTag } from './client';

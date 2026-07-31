@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * URL canónica de un post de la comunidad. Única fuente de verdad para
  * compartir/enlazar posts: la usan el feed (sync de URL al abrir el modal),
  * el botón "Copiar enlace" del detalle y los links de notificaciones.

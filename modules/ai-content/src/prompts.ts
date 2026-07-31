@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Prompts para los 3 tipos de generación. Mantenidos juntos para que un
  * tweak fino del formato de salida se haga en un solo lugar y los tests
  * unit puedan asertar el shape esperado.

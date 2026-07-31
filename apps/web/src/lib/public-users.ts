@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente de perfil público de usuarios del tenant (mod.community lo usa para
  * pintar avatares en el feed y la página /u/[id]). Backend:
  * `apps/api/src/auth/public-profile.controller.ts`.

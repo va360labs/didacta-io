@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Modal compartido para enviar el email de recordatorio de pago/renovación.
  *
  * Lo usan dos pantallas que envían el MISMO email con la misma plantilla del tenant:

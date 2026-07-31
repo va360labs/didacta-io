@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { LdGroup, WpUser } from '../connector/index.js';
 import type { CanonicalGroup, CanonicalEnrollment, MapResult } from './canonical.js';
 import { externalId, unwrapTitle, decodeHtmlEntities } from './helpers.js';
@@ -28,7 +33,12 @@ export function mapDirectEnrollment(
 ): MapResult<CanonicalEnrollment> {
   const warnings: string[] = [];
   if (!user || typeof user.id !== 'number') {
-    return { ok: false, errorCode: 'MALFORMED_PAYLOAD', errorMessage: 'enrollment sin user.id', warnings };
+    return {
+      ok: false,
+      errorCode: 'MALFORMED_PAYLOAD',
+      errorMessage: 'enrollment sin user.id',
+      warnings,
+    };
   }
   return {
     ok: true,
@@ -49,7 +59,12 @@ export function mapGroupEnrollment(
 ): MapResult<CanonicalEnrollment> {
   const warnings: string[] = [];
   if (!user || typeof user.id !== 'number') {
-    return { ok: false, errorCode: 'MALFORMED_PAYLOAD', errorMessage: 'enrollment sin user.id', warnings };
+    return {
+      ok: false,
+      errorCode: 'MALFORMED_PAYLOAD',
+      errorMessage: 'enrollment sin user.id',
+      warnings,
+    };
   }
   return {
     ok: true,

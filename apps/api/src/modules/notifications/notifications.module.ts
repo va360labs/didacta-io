@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { forwardRef, Module } from '@nestjs/common';
 import { AuthModule } from '../../auth/auth.module';
 import { ModulesModule } from '../modules.module';

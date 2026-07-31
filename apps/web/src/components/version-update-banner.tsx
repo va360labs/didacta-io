@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Banner discreto en el footer del sidebar que avisa al operador de una
 /// versión nueva publicada en Docker Hub. Polling cada 4h con cache en
 /// localStorage; el descarte es por versión exacta (cuando salga una más
@@ -37,8 +42,7 @@ export function VersionUpdateBanner() {
     <div className="border-t border-amber-400/20 bg-amber-400/[0.08] px-4 py-2 text-[11px] text-amber-100">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate">
-          <strong>Nueva versión:</strong>{' '}
-          <span className="font-mono">{tag}</span>
+          <strong>Nueva versión:</strong> <span className="font-mono">{tag}</span>
         </span>
         <div className="flex shrink-0 items-center gap-2">
           <a

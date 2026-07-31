@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@didacta/database';
 import { PrismaService } from '../prisma/prisma.service';
@@ -86,14 +91,7 @@ export class SandboxedDbService {
         `SandboxedDbService.build: tablePrefix inválido "${tablePrefix}". Esperado /^mod_[a-z0-9_]+_$/.`,
       );
     }
-    return new ScopedSandboxedDb(
-      this.prisma,
-      this.logger,
-      moduleName,
-      tablePrefix,
-      tenantId,
-      null,
-    );
+    return new ScopedSandboxedDb(this.prisma, this.logger, moduleName, tablePrefix, tenantId, null);
   }
 }
 
@@ -389,10 +387,7 @@ export function detectStatementKind(sql: string): string {
 /// como separador. Reemplaza chars dentro de los parens por espacios,
 /// preservando la estructura de balanceo. Maneja parens anidados.
 export function maskFromFunctions(sql: string): string {
-  const FN_REGEX = new RegExp(
-    `\\b(?:${FROM_FN_NAMES.join('|')})\\s*\\(`,
-    'gi',
-  );
+  const FN_REGEX = new RegExp(`\\b(?:${FROM_FN_NAMES.join('|')})\\s*\\(`, 'gi');
   const chars = [...sql];
   for (const match of sql.matchAll(FN_REGEX)) {
     const start = match.index;

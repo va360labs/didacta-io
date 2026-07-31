@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Seed de bootstrap.
  * Idempotente: se puede correr varias veces sin duplicar nada.
  *

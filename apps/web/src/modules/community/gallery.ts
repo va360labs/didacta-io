@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { CommunityAttachment } from './client';
 
 export type GalleryType = 'all' | 'image' | 'file';

@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Página de retorno tras un Stripe Checkout cancelado.
  *
  * Stripe redirige aquí cuando el alumno cancela el pago en su hosted checkout.

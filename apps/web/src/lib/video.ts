@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Helpers para detectar y embeber URLs de video de proveedores externos
  * (YouTube por ahora; Vimeo y otros pueden añadirse acá).
  *

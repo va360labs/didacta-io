@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Modelo canónico interno: la forma "Didacta-shape" intermedia entre
  * el rawPayload de LearnDash y el destino real (mod.courses, mod.learning,
  * mod.assessments). Mantenerlo aquí desacopla los mappers de los cambios
@@ -6,13 +11,13 @@
  */
 
 export interface CanonicalUser {
-  externalId: string;            // 'learndash:<id>'
+  externalId: string; // 'learndash:<id>'
   sourceId: string;
   email: string;
   username?: string;
   displayName?: string;
-  registeredAt?: string;         // ISO date
-  roles: string[];               // 'student' | 'instructor' | 'group_leader' | ...
+  registeredAt?: string; // ISO date
+  roles: string[]; // 'student' | 'instructor' | 'group_leader' | ...
 }
 
 export interface CanonicalCourse {
@@ -98,15 +103,15 @@ export interface CanonicalGroup {
   name: string;
   slug: string;
   description?: string;
-  modelHint: 'cohort' | 'organization';   // decisión local, default 'cohort'
+  modelHint: 'cohort' | 'organization'; // decisión local, default 'cohort'
 }
 
 export interface CanonicalEnrollment {
   externalId: string;
   kind: 'direct' | 'group';
   userSourceId: string;
-  courseSourceId?: string;        // para directas
-  groupSourceId?: string;          // para de grupo
+  courseSourceId?: string; // para directas
+  groupSourceId?: string; // para de grupo
   accessFrom?: string;
   accessTo?: string;
   status: 'active' | 'expired' | 'revoked';
@@ -118,7 +123,7 @@ export interface CanonicalProgress {
   courseSourceId: string;
   stepSourceId?: string;
   status: 'not_started' | 'in_progress' | 'completed';
-  completion: number;             // 0..1
+  completion: number; // 0..1
   startedAt?: string;
   completedAt?: string;
 }

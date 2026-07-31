@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Module Runtime Provider — Inicializa el runtime de módulos dinámicos.
  *
  * Este provider debe envolver la aplicación (o al menos las partes que

@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Catálogo de extensiones de UI agregadas por los módulos del repo.
 ///
 /// Cada módulo vive bajo `apps/web/src/modules/<name>/` y exporta un

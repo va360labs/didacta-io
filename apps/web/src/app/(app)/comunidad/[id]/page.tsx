@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { useParams, useSearchParams } from 'next/navigation';
 import { CommunityFeed } from '@/components/community-feed';
 

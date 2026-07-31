@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * MembershipService — venta de MEMBRESÍA por suscripción (página pública /unete).
  *
  * A diferencia de SubscriptionsService (suscripción POR CURSO de un usuario ya

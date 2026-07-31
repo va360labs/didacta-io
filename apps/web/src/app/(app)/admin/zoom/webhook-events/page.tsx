@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Redirect de compatibilidad: /admin/zoom/webhook-events → /admin/webhooks?tab=zoom.
  *
  * Las entregas de Zoom son ahora una pestaña de Webhooks: tener dos entradas de

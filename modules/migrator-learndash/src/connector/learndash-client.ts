@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { MinimalLogger } from './client.js';
 import { RestConnector } from './client.js';
 import type { AuthStrategy } from './auth.js';
@@ -160,7 +165,12 @@ export class LearndashClient {
 
   // ---- Healthcheck ----
 
-  async healthcheck(): Promise<{ ok: boolean; latencyMs: number; siteName?: string; error?: string }> {
+  async healthcheck(): Promise<{
+    ok: boolean;
+    latencyMs: number;
+    siteName?: string;
+    error?: string;
+  }> {
     const result = await this.connector.healthcheck();
     if (!result.ok) return { ok: false, latencyMs: result.latencyMs, error: result.error };
     const info = result.serverInfo as { name?: string; description?: string } | undefined;

@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Área del miembro del programa de referidos (mod.referrals).
 ///
 /// Muestra el enlace propio (creándolo bajo demanda), los resultados reales

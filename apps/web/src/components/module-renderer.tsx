@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Module Renderer — Componente que carga y renderiza UI de módulos dinámicos.
  *
  * Envuelve la carga del bundle con Suspense y Error Boundary para manejar
@@ -180,13 +185,7 @@ function ModuleLoadingSkeleton() {
   );
 }
 
-function ModuleNotFoundCard({
-  moduleName,
-  surface,
-}: {
-  moduleName: string;
-  surface: string;
-}) {
+function ModuleNotFoundCard({ moduleName, surface }: { moduleName: string; surface: string }) {
   return (
     <Card className="border-amber-200 bg-amber-50">
       <CardHeader>
@@ -224,8 +223,8 @@ function ModuleErrorCard({
       <CardHeader>
         <CardTitle className="text-red-900">Error cargando módulo</CardTitle>
         <CardDescription className="text-red-700">
-          No se pudo cargar la UI del módulo <code className="font-mono">{moduleName}</code>{' '}
-          para <code className="font-mono">{surface}</code>.
+          No se pudo cargar la UI del módulo <code className="font-mono">{moduleName}</code> para{' '}
+          <code className="font-mono">{surface}</code>.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -237,11 +236,7 @@ function ModuleErrorCard({
             Reintentar
           </Button>
           {isLoadError && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => window.location.reload()}
-            >
+            <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>
               Recargar página
             </Button>
           )}

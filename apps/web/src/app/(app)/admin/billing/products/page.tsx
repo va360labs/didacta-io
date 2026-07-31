@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Panel admin · Productos de pago (mod.billing).
  *
  * Vincula cursos del tenant a `Stripe Price IDs` para que el botón

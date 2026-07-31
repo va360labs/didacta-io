@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Contrato del cliente de BD que el host expone a los módulos third-party
  * del marketplace. Definido en alpha.51.
  *
@@ -43,18 +48,18 @@
 /// errores de constraint del motor (unique, FK) se mapean a códigos
 /// estables para que el módulo no dependa de los strings de Postgres.
 export type DbErrorCode =
-  | 'DB_PREFIX_VIOLATION'   // SQL referencia tabla fuera del tablePrefix del manifest.
-  | 'DB_INVALID_SQL'        // SQL no parseable, DDL prohibida, statement vacío, etc.
+  | 'DB_PREFIX_VIOLATION' // SQL referencia tabla fuera del tablePrefix del manifest.
+  | 'DB_INVALID_SQL' // SQL no parseable, DDL prohibida, statement vacío, etc.
   | 'DB_STATEMENT_TOO_LONG' // SQL > 50 KB.
-  | 'DB_TIMEOUT'            // La query superó `timeoutMs`.
-  | 'DB_TOO_MANY_ROWS'      // SELECT devolvería más filas que `maxRows`.
-  | 'DB_TX_ABORTED'         // La transacción se abortó (rollback explícito o callback rejected).
-  | 'DB_TX_NESTED'          // `transaction()` llamado desde dentro de otra `transaction()`.
-  | 'DB_UNIQUE_VIOLATION'   // Postgres 23505 — constraint unique violado.
-  | 'DB_FK_VIOLATION'       // Postgres 23503 — foreign key violado.
-  | 'DB_NOT_NULL'           // Postgres 23502 — not null violado.
-  | 'DB_CHECK_VIOLATION'    // Postgres 23514 — check constraint violado.
-  | 'DB_NETWORK';           // Conexión perdida, deadlock, otro error de driver.
+  | 'DB_TIMEOUT' // La query superó `timeoutMs`.
+  | 'DB_TOO_MANY_ROWS' // SELECT devolvería más filas que `maxRows`.
+  | 'DB_TX_ABORTED' // La transacción se abortó (rollback explícito o callback rejected).
+  | 'DB_TX_NESTED' // `transaction()` llamado desde dentro de otra `transaction()`.
+  | 'DB_UNIQUE_VIOLATION' // Postgres 23505 — constraint unique violado.
+  | 'DB_FK_VIOLATION' // Postgres 23503 — foreign key violado.
+  | 'DB_NOT_NULL' // Postgres 23502 — not null violado.
+  | 'DB_CHECK_VIOLATION' // Postgres 23514 — check constraint violado.
+  | 'DB_NETWORK'; // Conexión perdida, deadlock, otro error de driver.
 
 export class DbError extends Error {
   constructor(
@@ -115,9 +120,7 @@ export interface SandboxedDb {
   /// resuelve; rollback si lanza. La `tx` es el mismo `SandboxedDb` shape
   /// pero scoped a la conexión de la transacción. NO se permiten
   /// transactions anidadas (el host lanza `DB_TX_NESTED`).
-  transaction<TResult>(
-    fn: (tx: SandboxedDb) => Promise<TResult>,
-  ): Promise<TResult>;
+  transaction<TResult>(fn: (tx: SandboxedDb) => Promise<TResult>): Promise<TResult>;
 }
 
 /// Cliente que rechaza TODO con `DB_PREFIX_VIOLATION`. Se inyecta a los

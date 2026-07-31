@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * DRIP de lecciones — lógica pura de cálculo de disponibilidad.
  *
  * Modelo de intervalo RELATIVO: la unidad nº i (lección o módulo, en orden) se

@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Auditoría de publicaciones creadas VÍA API (`POST /community-api/posts`,
 /// autenticadas con API key — scope `community:post`). Lista los posts con
 /// `source='api'` agrupados por autor (el dueño de la key que publicó), con

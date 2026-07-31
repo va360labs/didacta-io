@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { forwardRef, Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import IORedis, { type Redis } from 'ioredis';

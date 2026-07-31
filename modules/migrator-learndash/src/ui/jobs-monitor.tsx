@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /// Monitor en tiempo real de jobs del migrator-learndash.
 ///

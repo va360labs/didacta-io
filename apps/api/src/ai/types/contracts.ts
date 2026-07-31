@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Contratos del AI Gateway (LMS-90.B). Cualquier provider que se quiera
  * añadir implementa estas interfaces y se registra en `ProviderRegistry`.
  *

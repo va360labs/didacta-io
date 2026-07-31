@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente que cierra el flow OIDC en el browser. Lee tokens + datos del user
  * del query string y los persiste vía authStorage (mismo storage que el flow
  * password-based).

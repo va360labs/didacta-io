@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import {
   Controller,
   Get,
@@ -47,8 +52,7 @@ export class ModuleAssetsController {
   @Get(':slug/ui/:surface.js')
   @Header('Content-Type', 'application/javascript; charset=utf-8')
   @ApiOperation({
-    summary:
-      'Sirve el bundle UI de un módulo para una surface específica. No requiere auth.',
+    summary: 'Sirve el bundle UI de un módulo para una surface específica. No requiere auth.',
   })
   async getUIBundle(
     @Param('slug') slug: string,

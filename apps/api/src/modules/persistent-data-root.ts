@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Helper compartido para resolver el directorio del volumen persistente.
  *
  * Caso de uso: en producción (Docker/Easypanel/k8s) la app necesita

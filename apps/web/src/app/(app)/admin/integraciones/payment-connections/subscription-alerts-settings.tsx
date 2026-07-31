@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Ajustes de avisos de suscripción (mod.payment-connections).
  *
  * Configuración del barrido diario de avisos: cada día a las 9:00 se envía a los

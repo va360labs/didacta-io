@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { DidactaModule, ModuleContext } from '@didacta/core-kernel';
 import { manifest } from './manifest.js';
 import type { MessagingService } from './messaging.service.js';

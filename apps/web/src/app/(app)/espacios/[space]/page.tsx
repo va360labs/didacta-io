@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { use, useEffect, useMemo, useState } from 'react';
 import { CommunityGalleryModal } from '@/components/community-gallery-modal';
 import { ThreadCard } from '@/components/community-thread-card';

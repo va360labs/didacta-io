@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Errores de dominio de mod.surveys. El host los mapea a HTTP en
  * `apps/api/src/modules/surveys/surveys-error.filter.ts` por `code`.
  */

@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Contrato del cliente HTTP saliente que el host expone a los módulos
  * third-party del marketplace. Definido en alpha.49.
  *
@@ -34,13 +39,13 @@
 /// Códigos de error tipados que `ctx.http` puede lanzar. El módulo decide
 /// qué hacer con cada uno (devolver 4xx/5xx al usuario, reintentar, etc.).
 export type HttpErrorCode =
-  | 'HTTP_TIMEOUT'           // Pasó `timeoutMs` sin respuesta.
-  | 'HTTP_BLOCKED_HOST'      // Host fuera de allowlist o IP privada/loopback.
-  | 'HTTP_BODY_TOO_LARGE'    // Respuesta superó `maxBodyBytes`; stream abortado.
-  | 'HTTP_RATE_LIMITED'      // Upstream devolvió 429 y se agotaron los retries.
-  | 'HTTP_NETWORK'           // ECONNREFUSED, ENOTFOUND, EHOSTUNREACH, etc.
-  | 'HTTP_ABORTED'           // El AbortSignal del caller se disparó (cancelación).
-  | 'HTTP_INVALID_URL';      // URL malformada.
+  | 'HTTP_TIMEOUT' // Pasó `timeoutMs` sin respuesta.
+  | 'HTTP_BLOCKED_HOST' // Host fuera de allowlist o IP privada/loopback.
+  | 'HTTP_BODY_TOO_LARGE' // Respuesta superó `maxBodyBytes`; stream abortado.
+  | 'HTTP_RATE_LIMITED' // Upstream devolvió 429 y se agotaron los retries.
+  | 'HTTP_NETWORK' // ECONNREFUSED, ENOTFOUND, EHOSTUNREACH, etc.
+  | 'HTTP_ABORTED' // El AbortSignal del caller se disparó (cancelación).
+  | 'HTTP_INVALID_URL'; // URL malformada.
 
 /// Error tipado que lanza `ctx.http` ante condiciones controladas. El
 /// módulo puede `catch (e)` y discriminar por `e.code`. Para errores no

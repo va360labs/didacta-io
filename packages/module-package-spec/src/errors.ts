@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Códigos de error que el spec puede emitir. Subconjunto estricto de
 /// `MarketplaceErrorCode` del backend (apps/api/src/marketplace/module-package.errors.ts).
 /// Mantener en sync — el spec NO incluye los códigos que dependen del manifest

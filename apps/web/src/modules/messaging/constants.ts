@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /** Constantes compartidas de la mensajería en el cliente. */
 
 /** Espejo de `MESSAGE_MAX_LENGTH` del dominio (modules/messaging). */

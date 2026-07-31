@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 export interface RetryPolicy {
   shouldRetry(attempt: number, error: unknown, response?: Response): boolean;
   delayMs(attempt: number, response?: Response): number;

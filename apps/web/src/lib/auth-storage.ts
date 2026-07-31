@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 const ACCESS_KEY = 'didacta.access_token';
 const REFRESH_KEY = 'didacta.refresh_token';
 const SESSION_KEY = 'didacta.session';

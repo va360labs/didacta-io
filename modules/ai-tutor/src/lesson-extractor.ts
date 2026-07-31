@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Extractor de texto plano de una lección, independiente de su tipo (LMS-90.C).
  *
  * Cada `LessonType` codifica su contenido en `content: Json` con un shape

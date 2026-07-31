@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Redirect de compatibilidad: /admin/metricas → /admin?tab=negocio.
  *
  * Las métricas del negocio son ahora una pestaña del panel: tener dos

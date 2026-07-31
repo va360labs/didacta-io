@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import {
   BadRequestException,
   Body,
@@ -52,7 +57,6 @@ function validateParam(name: string, value: string) {
   }
   return r.data;
 }
-
 
 @ApiTags('Tenant Settings')
 @ApiBearerAuth()
@@ -189,12 +193,7 @@ export class TenantSettingsController {
         validScope,
         validKey,
       );
-      if (
-        !decryptFailed &&
-        previous &&
-        typeof previous === 'object' &&
-        !Array.isArray(previous)
-      ) {
+      if (!decryptFailed && previous && typeof previous === 'object' && !Array.isArray(previous)) {
         finalValue = mergeSecretFields(
           previous as Record<string, unknown>,
           body.value as Record<string, unknown>,

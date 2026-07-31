@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Polling para detectar versión nueva publicada en Docker Hub y avisar
 /// al operador desde el sidebar.
 ///

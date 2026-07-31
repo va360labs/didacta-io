@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Botón promo del programa de referidos en la cabecera del shell.
 ///
 /// Dorado con borde de brillo giratorio (ver .referral-promo-ring en

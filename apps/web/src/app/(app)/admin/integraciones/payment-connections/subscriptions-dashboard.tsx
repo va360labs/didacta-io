@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Dashboard de control de suscripciones (mod.payment-connections).
  *
  * Vista única de TODAS las suscripciones de TODAS las cuentas conectadas

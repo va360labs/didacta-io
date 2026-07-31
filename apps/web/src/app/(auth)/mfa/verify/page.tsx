@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { MfaVerifyForm } from './mfa-verify-form';
 import { AuthHeading } from '../../auth-heading';
 

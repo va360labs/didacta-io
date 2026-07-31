@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Module Config Form — Genera formularios desde config.schema del módulo.
  *
  * El schema de configuración se define en `module.json` y describe los campos
@@ -21,7 +26,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -229,9 +240,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
         <div className={`flex items-center justify-between gap-4 ${wrapperClass}`}>
           <div>
             <Label htmlFor={id}>{field.label}</Label>
-            {field.description && (
-              <p className="text-xs text-text-muted">{field.description}</p>
-            )}
+            {field.description && <p className="text-xs text-text-muted">{field.description}</p>}
           </div>
           <Switch
             id={id}
@@ -258,9 +267,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
               ))}
             </SelectContent>
           </Select>
-          {field.description && (
-            <p className="text-xs text-text-muted">{field.description}</p>
-          )}
+          {field.description && <p className="text-xs text-text-muted">{field.description}</p>}
         </div>
       );
 
@@ -292,9 +299,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
               );
             })}
           </div>
-          {field.description && (
-            <p className="text-xs text-text-muted">{field.description}</p>
-          )}
+          {field.description && <p className="text-xs text-text-muted">{field.description}</p>}
         </div>
       );
 
@@ -309,9 +314,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
             placeholder={field.placeholder}
             rows={field.rows ?? 4}
           />
-          {field.description && (
-            <p className="text-xs text-text-muted">{field.description}</p>
-          )}
+          {field.description && <p className="text-xs text-text-muted">{field.description}</p>}
         </div>
       );
 
@@ -334,9 +337,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
             rows={field.rows ?? 6}
             className="font-mono text-sm"
           />
-          {field.description && (
-            <p className="text-xs text-text-muted">{field.description}</p>
-          )}
+          {field.description && <p className="text-xs text-text-muted">{field.description}</p>}
         </div>
       );
 
@@ -358,9 +359,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
             step={field.step}
             required={isRequired}
           />
-          {field.description && (
-            <p className="text-xs text-text-muted">{field.description}</p>
-          )}
+          {field.description && <p className="text-xs text-text-muted">{field.description}</p>}
         </div>
       );
 
@@ -377,9 +376,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
             autoComplete="new-password"
             required={isRequired}
           />
-          {field.description && (
-            <p className="text-xs text-text-muted">{field.description}</p>
-          )}
+          {field.description && <p className="text-xs text-text-muted">{field.description}</p>}
         </div>
       );
 
@@ -395,9 +392,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
             placeholder={field.placeholder ?? 'https://...'}
             required={isRequired}
           />
-          {field.description && (
-            <p className="text-xs text-text-muted">{field.description}</p>
-          )}
+          {field.description && <p className="text-xs text-text-muted">{field.description}</p>}
         </div>
       );
 
@@ -413,9 +408,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
             placeholder={field.placeholder ?? 'email@ejemplo.com'}
             required={isRequired}
           />
-          {field.description && (
-            <p className="text-xs text-text-muted">{field.description}</p>
-          )}
+          {field.description && <p className="text-xs text-text-muted">{field.description}</p>}
         </div>
       );
 
@@ -435,9 +428,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
             pattern={field.pattern}
             required={isRequired}
           />
-          {field.description && (
-            <p className="text-xs text-text-muted">{field.description}</p>
-          )}
+          {field.description && <p className="text-xs text-text-muted">{field.description}</p>}
         </div>
       );
   }

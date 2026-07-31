@@ -1,4 +1,16 @@
-import type { LdCourse, LdLesson, LdTopic, LdQuiz, LdQuestion, WpUser } from '../connector/index.js';
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+import type {
+  LdCourse,
+  LdLesson,
+  LdTopic,
+  LdQuiz,
+  LdQuestion,
+  WpUser,
+} from '../connector/index.js';
 
 export function externalId(sourceId: string | number): string {
   return `learndash:${sourceId}`;
@@ -85,7 +97,10 @@ export function asNumber(v: unknown): number | undefined {
  * de forma inconsistente entre versiones. Esta función busca un campo
  * en varios lugares en orden de preferencia.
  */
-export function readField<T = unknown>(obj: Record<string, unknown> | undefined, ...keys: string[]): T | undefined {
+export function readField<T = unknown>(
+  obj: Record<string, unknown> | undefined,
+  ...keys: string[]
+): T | undefined {
   if (!obj) return undefined;
   for (const k of keys) {
     if (k in obj) return obj[k] as T;
@@ -116,15 +131,7 @@ export function mapWpStatus(wpStatus: string | undefined): 'draft' | 'published'
  * cloze_answer, essay, assessment_answer.
  */
 export function mapLdQuestionType(ldType: string | undefined): {
-  type:
-    | 'single'
-    | 'multiple'
-    | 'free_text'
-    | 'sort'
-    | 'matrix'
-    | 'cloze'
-    | 'essay'
-    | 'assessment';
+  type: 'single' | 'multiple' | 'free_text' | 'sort' | 'matrix' | 'cloze' | 'essay' | 'assessment';
   warning?: string;
 } {
   switch (ldType) {
@@ -145,7 +152,10 @@ export function mapLdQuestionType(ldType: string | undefined): {
     case 'assessment_answer':
       return { type: 'assessment' };
     default:
-      return { type: 'single', warning: `Tipo de pregunta desconocido '${ldType ?? '<vacío>'}'; tratado como single` };
+      return {
+        type: 'single',
+        warning: `Tipo de pregunta desconocido '${ldType ?? '<vacío>'}'; tratado como single`,
+      };
   }
 }
 

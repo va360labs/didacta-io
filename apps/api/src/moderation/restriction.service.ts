@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { ClientContext } from '../auth/client-context';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';

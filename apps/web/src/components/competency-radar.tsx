@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Radar de competencias en SVG puro (sin dependencia de charts, por el control
  * de bundle del proyecto). Dibuja N ejes (uno por competencia) con su score
  * 0-100. Para N<3 no tiene sentido un radar → devuelve null (la UI cae a barras).

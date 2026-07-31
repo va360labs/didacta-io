@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { notificationsApi } from '@/lib/notifications';
 import { useNotificationsStream } from '@/lib/use-notifications-stream';

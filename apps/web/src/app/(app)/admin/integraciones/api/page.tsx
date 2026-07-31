@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Redirect de compatibilidad: /admin/integraciones/api → /admin/api-keys?tab=docs.
  *
  * La documentación en vivo para integradores es ahora una pestaña de Claves

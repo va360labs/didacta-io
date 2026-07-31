@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import Link from 'next/link';
 import { type ReactNode } from 'react';
 import { Icon, type IconName } from '@/components/icon';

@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Panel super_admin · Marketplace de módulos (ADR-009 PR F + DISC-002).
  *
  * Permite al operador self-host:

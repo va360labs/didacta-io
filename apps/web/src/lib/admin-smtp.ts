@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Cliente HTTP del controlador admin de SMTP per-tenant (alpha.75: backend en
  * `apps/api/src/admin/admin-smtp.controller.ts`).
  *

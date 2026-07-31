@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Entry point del surface `admin` del módulo migrator-learndash.
 ///
 /// Este archivo es el TARGET del bundle UI que se distribuye en
@@ -30,7 +35,11 @@ interface AdminSurfaceProps {
 function AdminSurface(_props: AdminSurfaceProps): React.ReactElement {
   const [tab, setTab] = useState<'wizard' | 'monitor'>('wizard');
   return (
-    <Tabs value={tab} onValueChange={(v: string) => setTab(v as 'wizard' | 'monitor')} className="space-y-6">
+    <Tabs
+      value={tab}
+      onValueChange={(v: string) => setTab(v as 'wizard' | 'monitor')}
+      className="space-y-6"
+    >
       <TabsList>
         <TabsTrigger value="wizard">Crear migración</TabsTrigger>
         <TabsTrigger value="monitor">Monitor de migraciones</TabsTrigger>

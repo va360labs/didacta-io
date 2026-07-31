@@ -1,6 +1,22 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { LdQuiz, LdQuestion } from '../connector/index.js';
-import type { CanonicalAssessment, CanonicalQuestion, CanonicalQuestionOption, MapResult } from './canonical.js';
-import { externalId, unwrapTitle, decodeHtmlEntities, asNumber, mapLdQuestionType } from './helpers.js';
+import type {
+  CanonicalAssessment,
+  CanonicalQuestion,
+  CanonicalQuestionOption,
+  MapResult,
+} from './canonical.js';
+import {
+  externalId,
+  unwrapTitle,
+  decodeHtmlEntities,
+  asNumber,
+  mapLdQuestionType,
+} from './helpers.js';
 
 export function mapQuiz(raw: LdQuiz): MapResult<CanonicalAssessment> {
   const warnings: string[] = [];

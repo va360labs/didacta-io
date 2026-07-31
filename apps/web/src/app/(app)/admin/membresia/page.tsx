@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Administración de la MEMBRESÍA (página pública /unete):
  *   - Planes: precio, periodicidad, precio tachado, días de prueba, orden.
  *   - Página: activo, headline, grupo de acceso concedido, precios individuales

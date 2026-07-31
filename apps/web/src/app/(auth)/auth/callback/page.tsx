@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Página de callback OIDC (8º piloto License SDK, `feat:sso.oidc`).
  *
  * El backend, tras validar el id_token y emitir tokens internos, hace

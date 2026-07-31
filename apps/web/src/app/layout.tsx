@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { Metadata } from 'next';
 import { Inter, Sora } from 'next/font/google';
 import type { ReactNode } from 'react';

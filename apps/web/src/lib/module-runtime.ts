@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Module Runtime — Expone dependencias del host a módulos dinámicos.
  *
  * Los módulos instalados vía marketplace traen su UI como bundles JS
@@ -27,11 +32,24 @@ import { z } from 'zod';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -223,7 +241,7 @@ export function initModuleRuntime(): DidactaRuntime {
 
     api: {
       fetch: apiFetch,
-      fetchAuth: <T,>(path: string, init: RequestInit = {}): Promise<T> => {
+      fetchAuth: <T>(path: string, init: RequestInit = {}): Promise<T> => {
         const token = authStorage.getAccessToken();
         if (!token) {
           throw new ApiHttpError({ message: 'Sesión expirada', status: 401 });

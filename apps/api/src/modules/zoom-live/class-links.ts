@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Enlaces públicos de una clase en directo que viajan por email.
  *
  * Todos cuelgan de `WEB_PUBLIC_URL` (el dominio del tenant, no el de la API):

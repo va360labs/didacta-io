@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 /// Cliente HTTP del módulo migrator-learndash.
 /// Habla con el dispatcher dinámico del marketplace bajo
 /// `/api/v1/modules/migrator-learndash/*`. El módulo está cargado en VM

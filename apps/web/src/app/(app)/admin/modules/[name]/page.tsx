@@ -1,6 +1,11 @@
 'use client';
 
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Página de administración de módulo individual.
  *
  * Muestra la configuración, rutas y UI de un módulo instalado vía marketplace.

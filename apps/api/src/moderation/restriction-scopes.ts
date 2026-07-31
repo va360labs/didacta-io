@@ -1,4 +1,9 @@
 /**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
  * Mapa de áreas sancionables → rutas que se bloquean.
  *
  * Este fichero es el corazón de la sanción y el sitio donde un error se paga

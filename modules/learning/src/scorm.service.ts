@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { randomUUID } from 'node:crypto';
 import AdmZip from 'adm-zip';
 import type { ModuleContext } from '@didacta/core-kernel';

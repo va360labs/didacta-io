@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import { ApiHttpError, apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
 import type { LessonType } from './courses';

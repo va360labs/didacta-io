@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
 import type { LdLesson, LdTopic } from '../connector/index.js';
 import type { CanonicalLearningUnit, MapResult } from './canonical.js';
 import { externalId, unwrapTitle, decodeHtmlEntities, asNumber } from './helpers.js';
