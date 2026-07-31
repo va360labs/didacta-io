@@ -4,7 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '@didacta/database';
+import { withTenantContext } from '@didacta/database';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContextService } from './tenant-context.service';
 
@@ -56,13 +56,12 @@ export class TenantPrismaService {
   /**
    * Variante que acepta tenantId explícito. Útil para workers/jobs
    * que conocen el tenant pero no pasan por el middleware HTTP.
+   *
+   * Delega en `withTenantContext` de @didacta/database — la única
+   * implementación del tenant-scope (set_config parametrizado).
    */
   async withTenantId<T>(tenantId: string, callback: (tx: TenantTx) => Promise<T>): Promise<T> {
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // SET LOCAL solo aplica a esta transacción
-      await tx.$executeRawUnsafe(`SET LOCAL app.current_tenant_id = '${tenantId}'`);
-      return callback(tx as TenantTx);
-    });
+    return withTenantContext(this.prisma, tenantId, (tx) => callback(tx as unknown as TenantTx));
   }
 
   /**

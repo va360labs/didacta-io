@@ -26,6 +26,7 @@
     "db:migrate:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
     "db:rls:apply": "psql \"$DATABASE_URL\" -f prisma/rls.sql",
+    "db:grants:apply": "psql \"$DATABASE_URL\" -f prisma/grants.sql",
     "db:seed": "tsx src/seed.ts",
     "clean": "rm -rf dist .turbo"
   },

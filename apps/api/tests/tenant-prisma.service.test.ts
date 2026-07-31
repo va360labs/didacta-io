@@ -6,7 +6,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 describe('TenantPrismaService', () => {
   function createMocks() {
     const mockTx = {
-      $executeRawUnsafe: vi.fn().mockResolvedValue(undefined),
+      $queryRaw: vi.fn().mockResolvedValue(undefined),
       user: { findMany: vi.fn().mockResolvedValue([{ id: '1', name: 'Test' }]) },
     };
 
@@ -22,7 +22,7 @@ describe('TenantPrismaService', () => {
   }
 
   describe('withTenant()', () => {
-    it('ejecuta SET LOCAL con el tenantId del contexto', async () => {
+    it('setea el GUC de tenant con el tenantId del contexto como parámetro bind', async () => {
       const { service, mockTx, tenantContext } = createMocks();
 
       await tenantContext.run({ tenantId: 'tenant-abc', traceId: 'tr-1' }, async () => {
@@ -31,9 +31,10 @@ describe('TenantPrismaService', () => {
         });
       });
 
-      expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
-        "SET LOCAL app.current_tenant_id = 'tenant-abc'",
-      );
+      // $queryRaw es tagged template: (strings, ...valores bind).
+      const [strings, ...values] = mockTx.$queryRaw.mock.calls[0]!;
+      expect(strings.join('$1')).toContain("set_config('app.current_tenant_id'");
+      expect(values).toEqual(['tenant-abc']);
     });
 
     it('lanza error fuera de contexto de tenant', async () => {
@@ -61,9 +62,9 @@ describe('TenantPrismaService', () => {
         return tx.user.findMany();
       });
 
-      expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
-        "SET LOCAL app.current_tenant_id = 'explicit-tenant'",
-      );
+      const [strings, ...values] = mockTx.$queryRaw.mock.calls[0]!;
+      expect(strings.join('$1')).toContain("set_config('app.current_tenant_id'");
+      expect(values).toEqual(['explicit-tenant']);
       expect(result).toEqual([{ id: '1', name: 'Test' }]);
     });
   });
@@ -81,9 +82,8 @@ describe('TenantPrismaService — aislamiento concurrente', () => {
     const executedTenants: string[] = [];
 
     const mockTx = {
-      $executeRawUnsafe: vi.fn((sql: string) => {
-        const match = sql.match(/= '([^']+)'/);
-        if (match) executedTenants.push(match[1]!);
+      $queryRaw: vi.fn((_strings: TemplateStringsArray, tenantId: string) => {
+        executedTenants.push(tenantId);
         return Promise.resolve();
       }),
     };

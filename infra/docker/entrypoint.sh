@@ -85,6 +85,14 @@ run_migrations() {
     psql_url="$(strip_url_query "$DATABASE_URL")"
     psql "$psql_url" -v ON_ERROR_STOP=1 -f packages/database/prisma/rls.sql
     log "RLS aplicado correctamente."
+    log "Aplicando roles y grants de runtime…"
+    psql "$psql_url" -v ON_ERROR_STOP=1 -f packages/database/prisma/grants.sql
+    if [[ -n "${POSTGRES_APP_PASSWORD:-}" ]]; then
+      log "Actualizando contraseña del rol didacta_app…"
+      psql "$psql_url" -v ON_ERROR_STOP=1 -v pw="$POSTGRES_APP_PASSWORD" \
+        -c "ALTER ROLE didacta_app PASSWORD :'pw'" >/dev/null
+    fi
+    log "Grants aplicados correctamente."
     log "Aplicando seed idempotente (espacios de sistema)…"
     psql "$psql_url" -v ON_ERROR_STOP=1 -f packages/database/prisma/seed.sql
     log "Seed aplicado correctamente."

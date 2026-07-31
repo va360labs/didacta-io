@@ -6,8 +6,9 @@ Cliente Prisma compartido, schema v1 del core y políticas RLS.
 
 - `prisma/schema.prisma` — schema v1 con modelos del core (ver PRD §9.1)
 - `prisma/rls.sql` — políticas Row-Level Security + triggers append-only
+- `prisma/grants.sql` — rol de runtime `didacta_app` (NOBYPASSRLS) + grants idempotentes; lo aplica el entrypoint junto a `rls.sql`
 - `src/client.ts` — factoría de `PrismaClient`
-- `src/tenant-context.ts` — wrapper `withTenantContext(prisma, tenantId, cb)` que setea `app.current_tenant_id` vía `SET LOCAL`
+- `src/tenant-context.ts` — wrapper `withTenantContext(prisma, tenantId, cb)`: la ÚNICA implementación del tenant-scope (transacción + `set_config('app.current_tenant_id', $1, true)` con bind, nunca interpolado). `TenantPrismaService` y `SuperAdminPrismaService` del API delegan aquí.
 
 ## Flujo de migración
 

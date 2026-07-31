@@ -15,7 +15,10 @@ type TransactionClient = Omit<
  * seteado. Las políticas RLS del schema se aplican automáticamente a toda query
  * dentro del callback.
  *
- * Todo request path debe usar este wrapper (lo integra el middleware del API).
+ * Única implementación canónica del tenant-scope: TenantPrismaService y
+ * SuperAdminPrismaService del API delegan aquí. El GUC se setea con
+ * `set_config(..., true)` (equivalente transaccional de SET LOCAL) y el
+ * tenantId viaja como parámetro bind — nunca interpolado en el SQL.
  */
 export async function withTenantContext<T>(
   prisma: PrismaClient,
@@ -23,7 +26,7 @@ export async function withTenantContext<T>(
   callback: (tx: TransactionClient) => Promise<T>,
 ): Promise<T> {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    await tx.$executeRawUnsafe(`SET LOCAL app.current_tenant_id = '${tenantId}'`);
+    await tx.$queryRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`;
     return callback(tx as TransactionClient);
   });
 }

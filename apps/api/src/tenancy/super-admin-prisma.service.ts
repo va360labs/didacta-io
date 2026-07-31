@@ -4,6 +4,7 @@
  */
 
 import { Injectable, Logger } from '@nestjs/common';
+import { withTenantContext } from '@didacta/database';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -69,9 +70,8 @@ export class SuperAdminPrismaService {
       `SuperAdmin bypass: ejecutando query como tenant ${tenantId}. ` +
         `Asegúrate de que el caller tiene autorización.`,
     );
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe(`SET LOCAL app.current_tenant_id = '${tenantId}'`);
-      return callback(tx as unknown as PrismaService);
-    });
+    return withTenantContext(this.prisma, tenantId, (tx) =>
+      callback(tx as unknown as PrismaService),
+    );
   }
 }

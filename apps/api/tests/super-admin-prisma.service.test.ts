@@ -5,7 +5,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 describe('SuperAdminPrismaService', () => {
   function createMocks() {
     const mockTx = {
-      $executeRawUnsafe: vi.fn().mockResolvedValue(undefined),
+      $queryRaw: vi.fn().mockResolvedValue(undefined),
       tenant: { findMany: vi.fn().mockResolvedValue([{ id: 't-1' }, { id: 't-2' }]) },
     };
 
@@ -57,9 +57,9 @@ describe('SuperAdminPrismaService', () => {
         return prisma.tenant.findMany();
       });
 
-      expect(mockTx.$executeRawUnsafe).toHaveBeenCalledWith(
-        "SET LOCAL app.current_tenant_id = 'admin-target-tenant'",
-      );
+      const [strings, ...values] = mockTx.$queryRaw.mock.calls[0]!;
+      expect(strings.join('$1')).toContain("set_config('app.current_tenant_id'");
+      expect(values).toEqual(['admin-target-tenant']);
     });
 
     it('retorna el resultado del callback', async () => {
