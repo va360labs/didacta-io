@@ -9,7 +9,7 @@ import type { FastifyRequest } from 'fastify';
  * Datos del cliente HTTP que enriquecen los registros de audit log.
  *
  * - `ip`: IP del cliente. Si la request llegó a través de un proxy reverso
- *   (Easypanel, Nginx, Cloudflare), se respeta el primer valor de
+ *   (Nginx, Traefik, Cloudflare), se respeta el primer valor de
  *   `x-forwarded-for` antes de caer al socket. Truncamos a 64 chars para
  *   acotar el tamaño del campo en DB.
  * - `userAgent`: header `user-agent` tal cual llega del cliente, truncado a

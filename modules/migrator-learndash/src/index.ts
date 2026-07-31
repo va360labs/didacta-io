@@ -1089,8 +1089,8 @@ async function listInvalidStg(
   // alpha.59 fix: añadido `validation_errors IS NULL` al WHERE para evitar
   // bucle infinito en transform phase. ANTES: si una fila fallaba el mapper,
   // setStgCanonical guardaba validation_errors pero dejaba is_valid=FALSE;
-  // el SELECT volvía a traer las mismas filas en cada tick → 1792 ticks
-  // reportados por Valen en alpha.58 contra 600+ users sin email.
+  // el SELECT volvía a traer las mismas filas en cada tick → miles de ticks
+  // observados en alpha.58 en una migración real con 600+ users sin email.
   //
   // AHORA:
   //   - Fila virgen (recién extraída): is_valid=FALSE, validation_errors=NULL → se procesa
@@ -2003,7 +2003,7 @@ const routes: ModuleRoute[] = [
         }
         if (root.status >= 400) {
           // 422 (no 502): es un error del USUARIO (URL mal, WP caído desde su
-          // perspectiva). 5xx haría que el reverse proxy de Easypanel/Traefik
+          // perspectiva). 5xx haría que el reverse proxy (Traefik, Nginx)
           // reemplace el body JSON con su propia página HTML "Bad Gateway"
           // y el frontend pete con "Unexpected token '<'" al hacer JSON.parse.
           return err(
@@ -2021,7 +2021,7 @@ const routes: ModuleRoute[] = [
         }
       } catch (e: unknown) {
         const ce = e as { code?: string; message?: string };
-        // 422 (no 502): mismo razonamiento que arriba — Easypanel/Traefik
+        // 422 (no 502): mismo razonamiento que arriba — el reverse proxy
         // reemplaza 5xx con HTML, rompiendo el JSON.parse del frontend.
         // Causa típica: HTTP_BLOCKED_HOST (user puso http://localhost o IP
         // privada — bloqueado por SSRF guard), HTTP_NETWORK (DNS no resuelve),

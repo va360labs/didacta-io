@@ -8,10 +8,10 @@
 //   SERVICE_USER_PASSWORD (obligatoria — generada y guardada en el .env)
 //   SERVICE_TENANT_SLUG   (default demo, el del seed de bootstrap)
 //
-// Uso (en el server, dentro del contenedor de la app):
-//   docker compose -f docker-compose.prod.yml run --rm \
-//     -v /opt/didacta-prod/infra/docker/create-service-user.cjs:/tmp/cu.cjs \
-//     app sh -lc "cd /repo && node /tmp/cu.cjs"
+// Uso (con el stack de docker-compose.alpha.yml levantado):
+//   docker compose -f docker-compose.alpha.yml run --rm \
+//     -v ./infra/docker/create-service-user.cjs:/tmp/cu.cjs \
+//     didacta sh -lc "cd /app && node /tmp/cu.cjs"
 // ============================================================================
 const argon2 = require('argon2');
 const { PrismaClient } = require('@prisma/client');

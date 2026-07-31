@@ -1,6 +1,6 @@
 /**
- * En el deploy de Easypanel, API y Web corren en el mismo contenedor pero
- * Easypanel solo proxea un puerto al dominio público. Apuntamos el dominio a :3000
+ * En un deploy de un solo contenedor, API y Web corren juntos pero el reverse
+ * proxy solo publica un puerto al dominio público. Apuntamos el dominio a :3000
  * (Next.js) y dejamos que Next reescriba los requests a /api/* al servicio
  * interno de la API en :4000. Para clientes (browser), el origin único es
  * https://<dominio>; no hay CORS ni mismatch de cookies.

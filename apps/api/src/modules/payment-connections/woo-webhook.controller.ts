@@ -35,7 +35,7 @@ import { ModuleRegistryService } from '../module-registry.service';
  * cualquiera podría inventarse un pedido pagado.
  *
  * Fase B: registra la compra y la deja visible en la ficha. **No reparte
- * accesos todavía**; eso es la fase C y va después de que Valen revise.
+ * accesos todavía**; eso es la fase C, pendiente de implementar.
  *
  * El tenant viaja en la query (`?tenant=<slug>`) porque WooCommerce no sabe
  * nada de multi-tenancy y la URL del webhook la fijamos nosotros al crearlo.

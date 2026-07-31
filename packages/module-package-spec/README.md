@@ -14,11 +14,11 @@ Before this package, the contract for "what a valid module ZIP looks like" lived
 
 - Comments in backend services (`module-migration.service.ts`)
 - Hardcoded logic in the official packager
-- HANDOFF notes in Notion ("Caveats")
+- Scattered notes outside the repo
 
 The result: divergence between the packager and the validator. Third-party developers using `prisma migrate dev` (the standard Prisma flow) generated ZIPs the validator silently rejected at upload time. This package eliminates that asymmetry by being the only implementation either side imports.
 
-See **ADR-013 — Contrato del paquete de módulo** in Notion for the full decision log.
+See **ADR-013 — Contrato del paquete de módulo** (internal decision log) for the full rationale.
 
 ## Public API
 

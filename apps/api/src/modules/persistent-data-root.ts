@@ -6,7 +6,7 @@
 /**
  * Helper compartido para resolver el directorio del volumen persistente.
  *
- * Caso de uso: en producción (Docker/Easypanel/k8s) la app necesita
+ * Caso de uso: en producción (Docker/PaaS/k8s) la app necesita
  * persistir archivos que sobreviven a redeploys — uploads del storage,
  * clave maestra de cifrado, evidencias, etc. El operador monta un
  * volumen y la app tiene que encontrarlo aunque no setee env vars.
@@ -19,7 +19,7 @@
  *   4. `/app/data` (parent del path estándar, también detectado por existsSync)
  *   5. `./data/storage` relativo al CWD (último recurso — dev local)
  *
- * Razón del paso 3-4: Easypanel y muchos PaaS configuran el mount del
+ * Razón del paso 3-4: muchos PaaS configuran el mount del
  * volumen desde su UI **separada** de las env vars del service. El
  * operador monta `/app/data/storage` y la app tiene que detectarlo aunque
  * `STORAGE_ROOT` nunca aparezca en `process.env`. Sin estos pasos el

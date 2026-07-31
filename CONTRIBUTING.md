@@ -4,9 +4,9 @@
 
 ## Antes de empezar
 
-### Estado actual: alpha cerrada
+### Estado actual: alpha
 
-Este repositorio está en **alpha cerrada** mientras trabajamos hacia `v1.0.0`. Las contribuciones externas se aceptan **solo de alpha testers invitados** durante esta fase. Cuando hagamos público el repo (Fase 7 / `v1.0.0`), se abrirán las contribuciones a toda la comunidad.
+Este repositorio está en **alpha** mientras trabajamos hacia `v1.0.0`. Las contribuciones externas son bienvenidas — issues, feedback de instalación y PRs acotados — con la cautela de que la API y el schema aún pueden cambiar entre versiones alpha.
 
 ### Licencia
 
@@ -68,7 +68,7 @@ Estas reglas son **innegociables**. Romperlas = PR rechazado.
 
 ### Convención `.ee` (open-core)
 
-- Archivos `*.ee.ts` y carpetas `ee/` / `*.ee/` viven **solo dentro del CORE** (`apps/api/src/...`, `packages/core-kernel/`, `packages/license-sdk/src/`).
+- Archivos `*.ee.ts` y carpetas `ee/` / `*.ee/` viven **solo dentro del CORE** (`apps/api/src/`, `packages/core-kernel/`, `packages/core-registry/`, `packages/license-sdk/src/` — la lista canónica es `EE_ALLOWED_ROOTS` en `scripts/ee-fence.ts`).
 - **Ningún módulo** (`modules/*`) puede tener archivos `.ee` ni sufijo `.ee` en su carpeta. Todos los módulos son Community.
 - Capabilities Enterprise se gatean con `@RequiresCapability(LICENSE_CAPABILITIES.X)` en endpoints y `license.requireCapability(...)` en services.
 

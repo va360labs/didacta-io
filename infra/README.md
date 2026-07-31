@@ -49,4 +49,4 @@ docker compose ps
 
 ## Entornos remotos (staging, prod)
 
-Pendientes de configurar en Easypanel (ver PLAN-FASES §Fase 0). Una vez creados se documentan aquí.
+Cada instalación define y opera sus propios entornos remotos. La experiencia self-host de referencia es `docker-compose.alpha.yml` (ver `docs/INSTALL.md`).

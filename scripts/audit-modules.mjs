@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Wrapper de didacta-community para invocar el linter del contrato de
- * módulo desde `didacta-skills/scripts/audit-module-contract.mjs`.
+ * Wrapper para invocar el linter del contrato de módulo desde
+ * `didacta-skills/scripts/audit-module-contract.mjs`.
  *
- * Asume que didacta-skills está clonado como sibling de didacta-community:
- *   D:/Test/didacta-community/
- *   D:/Test/didacta-skills/
+ * Asume que didacta-skills está clonado como sibling de este repo:
+ *   <padre>/didacta-io/
+ *   <padre>/didacta-skills/
  *
  * Si no está, falla con un mensaje claro.
  *

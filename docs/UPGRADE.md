@@ -38,7 +38,7 @@ migraciones de una versión más nueva no es compatible con la imagen antigua.
 
 ## Caso especial: instalaciones anteriores al baseline (era `db push`)
 
-Hasta la retomada fair-code (2026-07-31, tag `v0.0.1-alpha.88-va360`) el
+Hasta la retomada fair-code (2026-07-31) el
 schema se aplicaba con `prisma db push` y la base de datos **no tiene tabla
 `_prisma_migrations`**. Esas instalaciones deben adoptar el baseline UNA sola
 vez antes de arrancar la primera imagen con migraciones:

@@ -4,7 +4,7 @@ Tests end-to-end con Playwright. Cubren el **golden path** del alumno: signup â†
 
 ## Pre-requisitos
 
-- API y web corriendo (locales o stack de Easypanel).
+- API y web corriendo (locales o stack Docker).
 - Base de datos con seed inicial (al menos un usuario admin).
 
 ## Variables de entorno

@@ -65,6 +65,7 @@ apps/api/data/
 apps/e2e/test-results/
 apps/e2e/branding-shots/
 test-results/
+playwright-report/
 
 # Trabajo local / scripts temporales
 work/
@@ -76,8 +77,8 @@ work/
 # Evidencia local de e2e (se regenera al correr el spec)
 drip-evidence/
 
-# Informes de evidencia de operaciones en producción: contienen datos
-# personales de alumnos (nombre + email), nunca deben entrar al repo.
+# Evidencias e informes generados contra instalaciones reales: pueden
+# contener datos personales y nunca deben entrar al repo.
 evidencias/
 .quality/
 doc/

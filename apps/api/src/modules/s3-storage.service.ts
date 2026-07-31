@@ -28,7 +28,7 @@ export interface S3StorageOptions {
 }
 
 /**
- * Adapter de storage backed por S3-compatible (MinIO en Easypanel, AWS S3, Hetzner, etc.).
+ * Adapter de storage backed por S3-compatible (MinIO, AWS S3, Hetzner, etc.).
  *
  * Por qué presigned URLs: el bucket queda **privado** (sin permisos públicos
  * de lectura). El backend firma una URL temporal con AWS Signature v4 y se la
@@ -40,7 +40,7 @@ export interface S3StorageOptions {
  *     firma valida que el alumno tiene acceso al recurso.
  *
  * Path-style obligatorio en MinIO: la URL queda como
- * `https://lab-minio.../bucket/key` en vez de `https://bucket.lab-minio.../key`.
+ * `https://minio.example.com/bucket/key` en vez de `https://bucket.minio.example.com/key`.
  */
 export class S3StorageService implements StorageAdapter {
   private readonly client: S3Client;

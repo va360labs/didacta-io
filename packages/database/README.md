@@ -37,7 +37,7 @@ pnpm --filter @didacta/database db:rls:apply
 # 4. Commitear el contenido de prisma/migrations/<timestamp>_<descripción>/
 ```
 
-### DBs existentes (Easypanel) que vienen del flujo `prisma db push`
+### DBs existentes que vienen del flujo `prisma db push`
 
 La primera vez tras este PR hay que marcar la baseline como ya aplicada (sin reejecutar el SQL), porque las tablas ya existen:
 

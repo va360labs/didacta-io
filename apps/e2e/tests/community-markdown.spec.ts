@@ -5,8 +5,9 @@ import { injectSession } from '../helpers/auth';
 /**
  * Render de Markdown en los posts de la comunidad (RichBody).
  *
- * El caso real que lo motivó: el digest semanal publicado por API (bot n8n)
- * usa `## títulos`, `- listas` y `**negritas**` que se mostraban en crudo.
+ * El caso real que lo motivó: un digest semanal publicado por API (bot de
+ * automatización) usa `## títulos`, `- listas` y `**negritas**` que se
+ * mostraban en crudo.
  * Verifica que en el detalle del post (modal) y en la tarjeta del feed:
  *  - los títulos `##` se renderizan como heading (sin `##` visible),
  *  - las `**negritas**` se renderizan como <strong> (sin asteriscos visibles),

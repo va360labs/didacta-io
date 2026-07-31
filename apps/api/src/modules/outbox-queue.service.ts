@@ -28,7 +28,7 @@ interface OutboxJobData {
  *
  * Si `REDIS_URL` no está seteada, la cola NO se inicializa y el sistema cae
  * en el fallback in-process del PersistentEventBus (compat con dev local sin
- * Redis). En producción Easypanel `REDIS_URL` siempre está, así que el
+ * Redis). En producción `REDIS_URL` siempre está, así que el
  * dispatcher BullMQ es el camino normal.
  *
  * Por qué BullMQ vs el setInterval(30s) anterior:

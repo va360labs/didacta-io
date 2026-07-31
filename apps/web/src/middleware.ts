@@ -65,7 +65,7 @@ export async function middleware(req: NextRequest) {
 ///   - `favicon.ico`    → asset.
 ///   - `setup`          → el destino del redirect (sin loop).
 ///   - `healthz` /
-///     `readyz` / `livez` → probes Easypanel/k8s, no UI.
+///     `readyz` / `livez` → probes del orquestador (k8s/PaaS), no UI.
 export const config = {
   matcher: ['/((?!api|_next|_not-found|_error|favicon\\.ico|setup|healthz|readyz|livez).*)'],
 };

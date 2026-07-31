@@ -1,6 +1,6 @@
 # @didacta/core-kernel
 
-Contrato de módulo y primitivas del core de Didacta. Documento madre: [`docs/ARQUITECTURA-MODULAR.md`](../../docs/ARQUITECTURA-MODULAR.md).
+Contrato de módulo y primitivas del core de Didacta (arquitectura modular: ADR-011 / ADR-015 / ADR-016, decision log interno).
 
 ## ¿Qué hay aquí?
 

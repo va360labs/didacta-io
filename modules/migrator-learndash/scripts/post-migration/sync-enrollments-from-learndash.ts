@@ -1,6 +1,11 @@
 /* eslint-disable no-console */
 
 /*
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/*
  * sync-enrollments-from-learndash.ts
  * ----------------------------------
  *
@@ -31,7 +36,7 @@
  *   como `alreadyExisted`.
  *
  * CÓMO CORRERLO
- *   cd D:/Test/.work-extract-migrator
+ *   cd modules/migrator-learndash
  *   E2E_BASE_URL="https://dev.didacta.io" \
  *   E2E_ADMIN_EMAIL="admin@acme.com" \
  *   E2E_ADMIN_PASSWORD="************" \

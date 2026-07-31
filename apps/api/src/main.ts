@@ -99,7 +99,7 @@ async function bootstrap(): Promise<void> {
   app.useLogger(app.get(Logger));
 
   // Habilita lifecycle hooks (onModuleDestroy) para cerrar limpio la conexión
-  // de BullMQ + Redis cuando el contenedor recibe SIGTERM (Easypanel deploy).
+  // de BullMQ + Redis cuando el contenedor recibe SIGTERM (redeploy).
   app.enableShutdownHooks();
 
   app.setGlobalPrefix('api/v1', {

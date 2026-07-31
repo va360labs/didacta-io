@@ -16,7 +16,7 @@ import type { FastifyRequest } from 'fastify';
  *   proxy interno restringiendo `/metrics`). El default metrics de prom-client
  *   incluye memoria/GC/event loop, info útil para un atacante.
  * - Si `METRICS_TOKEN` NO está set: comportamiento público anterior. Backward
- *   compatible con Easypanel + reverse proxy interno (escenario habitual).
+ *   compatible con despliegues tras reverse proxy interno (escenario habitual).
  *
  * El check se hace timing-safe (longitud + comparación caracter a caracter
  * via `crypto.timingSafeEqual`) para evitar timing attacks. La comparación

@@ -25,7 +25,7 @@
  *
  * Ejemplo:
  *   pnpm tsx scripts/local-validate-zip.ts \
- *     D:/Test/.tmp-test-module/output/mod.foo-1.0.0.zip 0.0.0
+ *     ./output/mod.foo-1.0.0.zip 0.0.0
  */
 
 import { readFileSync, existsSync } from 'node:fs';
@@ -174,7 +174,9 @@ async function main(): Promise<void> {
     );
     process.exit(1);
   }
-  console.log(`✓ coreVersionRequired ${parsed.data.coreVersionRequired} compatible con ${args.coreVersion}`);
+  console.log(
+    `✓ coreVersionRequired ${parsed.data.coreVersionRequired} compatible con ${args.coreVersion}`,
+  );
 
   // 7. Migrations planas (anti-traversal)
   const migrations: { filename: string; sql: string }[] = [];
@@ -204,7 +206,9 @@ async function main(): Promise<void> {
       const stmts = lintMigrationSql(m.sql, parsed.data.tablePrefix);
       const counts: Record<string, number> = {};
       for (const s of stmts) counts[s.kind] = (counts[s.kind] ?? 0) + 1;
-      console.log(`✓ sql-lint ${m.filename}: ${stmts.length} statements (${JSON.stringify(counts)})`);
+      console.log(
+        `✓ sql-lint ${m.filename}: ${stmts.length} statements (${JSON.stringify(counts)})`,
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`✗ MODULE_LINT_FAILED en ${m.filename}: ${msg}`);

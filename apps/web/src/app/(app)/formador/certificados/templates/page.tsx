@@ -237,7 +237,7 @@ export default function CertificateTemplatesPage() {
                   id="tpl-signer"
                   value={draft.signerName ?? ''}
                   onChange={(e) => setDraft({ ...draft, signerName: e.target.value })}
-                  placeholder="Ej. Valentín Ayesa"
+                  placeholder="Ej. Nombre Apellido"
                 />
               </div>
               <div className="space-y-1.5">

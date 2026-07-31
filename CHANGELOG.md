@@ -59,7 +59,7 @@
 #### Notes
 
 - **Congelación de la era a-medida.** Entre `0.0.1-alpha.82` y este tag, el repo
-  sirvió en exclusiva al despliegue a medida de `aula.va360.academy`, sin
+  sirvió en exclusiva a un despliegue a medida para un cliente, sin
   registrar aquí las versiones intermedias (que no se reconstruyen).
 - Este tag congela ese estado tal cual. A partir de aquí arranca la retomada
   whitelabel de Didacta.io: limpieza del acoplamiento a VA360 y reactivación de

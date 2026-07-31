@@ -24,6 +24,8 @@
 
 import { execSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 interface Args {
   org: string;
@@ -127,8 +129,7 @@ function detectAwsExe(): string {
 }
 
 function writeTempFile(content: string, ext: string): string {
-  // Escribimos el message en un archivo accesible desde Windows (D:/Test/).
-  const path = `D:/Test/.kms-sign-input-${Date.now()}${ext}`;
+  const path = join(tmpdir(), `.kms-sign-input-${Date.now()}${ext}`);
   writeFileSync(path, content, 'utf8');
   return path;
 }

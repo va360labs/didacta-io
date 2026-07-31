@@ -20,8 +20,7 @@
  * Esta alternativa a Module Federation es más compatible con Next.js 15 App
  * Router y no depende de plugins de webpack en mantenimiento incierto.
  *
- * @see DISC-001 — Sistema de Plugins
- * @see https://www.notion.so/355b609a124c810092fcc30d8e9e3080
+ * @see DISC-001 — Sistema de Plugins (decision log interno).
  */
 
 import React from 'react';

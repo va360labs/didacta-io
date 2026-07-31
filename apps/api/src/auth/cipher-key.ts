@@ -26,7 +26,7 @@
  *
  * El archivo de la clave vive DENTRO de `STORAGE_ROOT` (mismo volumen Docker
  * que el local-disk-storage). Esto garantiza que en cualquier setup con un
- * solo volumen montado (Easypanel, single-host docker-compose, k8s con un
+ * solo volumen montado (un PaaS, single-host docker-compose, k8s con un
  * PVC), la clave persiste entre redeploys. El operador puede separar key
  * y storage en distintos volúmenes vía `TENANT_SETTINGS_ENC_KEY_FILE`
  * apuntando a otro path absoluto.

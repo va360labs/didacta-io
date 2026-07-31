@@ -433,7 +433,7 @@ export class MembershipService {
     let productId = plan.stripeProductId;
     if (!productId) {
       // Un Product de Stripe POR PLAN, nombrado con el nombre del plan: así el
-      // checkout muestra "VA360.pro Anual" (el nombre que ve el comprador es el
+      // checkout muestra "Plan Anual" (el nombre que ve el comprador es el
       // del Product de su price). El nombre lo controla el admin desde el nombre
       // del plan; renombrarlo lo resincroniza en Stripe (ver updatePlan).
       productId = await this.stripe.createProduct(plan.name, {

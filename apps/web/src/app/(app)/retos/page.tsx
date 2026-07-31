@@ -23,7 +23,7 @@ import {
 ///
 /// Todo lo que se pinta sale de la API de mod.gamification. Lo que no está en la
 /// BD no se inventa: por eso no hay duración estimada por reto, ni contadores de
-/// entregas de la comunidad (ver el HANDOFF: requieren campo/endpoint nuevos).
+/// entregas de la comunidad (requieren campo/endpoint nuevos).
 
 const STATUS_LABEL: Record<string, { label: string; tone: 'info' | 'ok' | 'off' }> = {
   PENDING: { label: 'En revisión', tone: 'info' },

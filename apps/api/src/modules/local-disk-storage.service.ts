@@ -13,7 +13,7 @@ import { resolvePersistentDataRoot } from './persistent-data-root';
  *
  * El root se resuelve via `resolvePersistentDataRoot()` que prueba en este
  * orden: argumento explícito → `STORAGE_ROOT` env → `/app/data/storage` (si
- * existe — detección automática del volumen Docker en Easypanel/k8s sin
+ * existe — detección automática del volumen Docker en PaaS/k8s sin
  * necesidad de env var) → `/app/data` → `./data/storage` (dev local). Ver
  * `persistent-data-root.ts` para detalle.
  *
@@ -21,7 +21,7 @@ import { resolvePersistentDataRoot } from './persistent-data-root';
  * traversal: solo se permiten letras/dígitos/`-_./` y nunca se sale del root.
  *
  * `getSignedUrl` no firma realmente — devuelve la ruta relativa que el reverse
- * proxy de Easypanel sirve. En Fase 2 se reemplaza por un service S3-compatible.
+ * proxy del despliegue sirve. En Fase 2 se reemplaza por un service S3-compatible.
  */
 export class LocalDiskStorageService implements StorageAdapter {
   private readonly root: string;

@@ -11,7 +11,7 @@ Manda un email a **`security@didacta.io`** con:
 - **Descripción** del problema y su impacto.
 - **Pasos para reproducirlo**, idealmente con un PoC mínimo.
 - **Versión afectada** (`docker compose images` o tag de la imagen).
-- **Tu nombre + manera de reconocerte** si quieres aparecer en `SECURITY-CREDITS.md` (opcional).
+- **Tu nombre + manera de reconocerte** si quieres aparecer en los créditos de seguridad (`SECURITY-CREDITS.md`, se crea con el primer reporte acreditado) (opcional).
 
 Si la vulnerabilidad es crítica y prefieres cifrar, pide la PGP key en el mismo email.
 
@@ -42,7 +42,7 @@ Cuando salgamos a beta y `v1.0.0`, esta tabla se actualizará con la política L
 
 ## Lo que NO contamos como vulnerabilidad
 
-- Bugs funcionales que no comprometen seguridad → reporta como bug normal en [`docs/alpha/FEEDBACK.md`](docs/alpha/FEEDBACK.md).
+- Bugs funcionales que no comprometen seguridad → reporta como bug normal abriendo una issue en GitHub (plantilla de bug).
 - Errores de configuración del usuario (ej. `AUTH_SECRET` débil que él mismo eligió).
 - Dependencias con CVEs no explotables en nuestro contexto. Ejecutamos `pnpm audit` regularmente; los CVEs explotables sí los tratamos como vulnerabilidades.
 - Bypass del chequeo de licencia EE en código local. La licencia se aplica por **contrato + soporte + parches**, no por DRM.

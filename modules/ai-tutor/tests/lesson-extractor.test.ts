@@ -91,7 +91,7 @@ describe('extractLessonText (LMS-90.C)', () => {
       title: 'Clase',
       content: {
         html:
-          '<div><iframe src="https://iframe.mediadelivery.net/embed/376431/abc">fallback</iframe></div>' +
+          '<div><iframe src="https://iframe.mediadelivery.net/embed/00000/abc">fallback</iframe></div>' +
           '<!-- nota interna del importador -->' +
           '<p>Contenido de verdad.</p>',
       },

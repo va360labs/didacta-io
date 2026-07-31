@@ -10,7 +10,7 @@
 - **Enterprise**: capabilities transversales del core en ficheros `*.ee.*`, desbloqueadas por licencia JWT firmada (ES256/KMS, ver `packages/license-sdk`). Cubiertas por `LICENSE_EE`.
 - **Cloud**: SaaS gestionado por VA360 LABS; vive en el repo privado `didacta-cloud`, que consume este repo. Aquí no hay código de Cloud.
 
-Historia: entre 2026-05 y 2026-07 este código sirvió como proyecto a medida para aula.va360.academy (congelado en el tag `v0.0.1-alpha.88-va360`). Desde 2026-07-31 el repo vuelve a ser el producto whitelabel; esa instalación pasará a ser el primer cliente del canal de release.
+Historia: entre 2026-05 y 2026-07 este código sirvió como proyecto a medida para la instalación de un cliente (congelado en el tag `v0.0.1-alpha.88-va360`). Desde 2026-07-31 el repo vuelve a ser el producto whitelabel; esa instalación pasará a ser el primer cliente del canal de release.
 
 ## ⚠️ REGLAS CRÍTICAS (NO NEGOCIABLES)
 
@@ -56,7 +56,7 @@ Ningún copy, dominio, IP, email, slug de tenant, credencial ni heurística de u
 
 ### 8. Documentación
 
-- La documentación interna (PRD, ADRs, HANDOFFs) vive en Notion → [LMS Ship](https://www.notion.so/LMS-Ship-34cb609a124c80aa996bfec23268cad4).
+- La documentación interna (PRD, ADRs, HANDOFFs) vive en el workspace privado de Notion de VA360 LABS (no es accesible desde este repo).
 - El repo lleva SOLO la documentación que un repo público necesita: README, CONTRIBUTING, SECURITY, licencias, READMEs técnicos de módulos/packages y guías de instalación. Nada de planes de sesión, prompts ni runbooks de clientes.
 
 ## Stack cerrado

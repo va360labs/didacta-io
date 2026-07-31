@@ -9,9 +9,7 @@ useDefault = true
 id = "didacta-license-jwt"
 description = "JWT que pueda ser una licencia Didacta firmada (no debería estar en repo)"
 # Cubre EdDSA (formato histórico) y ES256 (el formato real de las licencias
-# actuales, firmadas con ECDSA P-256 en KMS). OJO: el historial de la era
-# va360 contiene JWTs ES256 de prueba; el escaneo full-history solo saldrá
-# limpio sobre la historia fresca del repo público (ver plan de retomada).
+# actuales, firmadas con ECDSA P-256 en KMS).
 regex = '''eyJhbGciOiJ(FZERTQSI|FUzI1NiI)[A-Za-z0-9_-]{30,}'''
 tags = ["didacta", "license", "jwt"]
 
@@ -26,8 +24,4 @@ description = "Falsos positivos conocidos"
 paths = [
     # Las claves PÚBLICAS embebidas son intencionales y NO son secreto
     '''packages/license-sdk/src/public-keys/.*\.pem''',
-    # docs/ ya no existe en el working tree (migrado a Notion), pero la CI
-    # escanea TODO el historial (fetch-depth: 0) y los docs históricos
-    # contenían ejemplos de JWT. No eliminar mientras se escanee el historial.
-    '''docs/.*\.md''',
 ]
