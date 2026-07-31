@@ -3,7 +3,7 @@
 # Didacta Community — Dockerfile multi-stage único (api + web) sobre Alpine
 # ----------------------------------------------------------------------------
 # Construye apps/api (NestJS) y apps/web (Next.js) en un solo contenedor.
-# El entrypoint corre `prisma db push` y aplica RLS antes de levantar.
+# El entrypoint aplica `prisma migrate deploy` y las políticas RLS antes de levantar.
 #
 # Imagen base: `node:22-alpine` (musl). Recorta ~700MB frente a
 # `node:22-bookworm-slim`. Contrapartidas:

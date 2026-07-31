@@ -10,6 +10,44 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.89] — 2026-07-31
+
+#### Notes
+
+- **Primera versión de la retomada fair-code.** El producto vuelve a ser
+  whitelabel: incluye todo lo construido durante la era a-medida (moderación
+  con expediente, gamificación, encuestas, recursos, mensajería + chat,
+  referidos, tutor IA con revisión humana, calendario y clases en directo,
+  invitaciones por lotes, métricas, espejo de pedidos WooCommerce…) sin
+  ningún acoplamiento a un cliente concreto.
+
+#### Added
+
+- Guías de instalación y actualización self-host (`docs/INSTALL.md`,
+  `docs/UPGRADE.md`) y `CONTRIBUTORS.md`.
+- Cabecera SPDX `LicenseRef-Didacta-Sustainable-Use` en todo el código de
+  producción (823 ficheros); los `.ee` conservan la suya de Enterprise.
+
+#### Changed
+
+- **Migraciones**: baseline único `20260731120000_baseline_faircode` generado
+  del schema real (con `pgvector` declarado en el datasource) y validado
+  contra un Postgres pgvector virgen. El entrypoint de producción aplica
+  `prisma migrate deploy`; `db push` queda solo para desarrollo. Las BD de la
+  era `db push` se adoptan con
+  `prisma migrate resolve --applied 20260731120000_baseline_faircode`
+  (ver `docs/UPGRADE.md`).
+- Copy, emails, seeds y placeholders derivan del tenant (branding por
+  instalación); fixtures de test sin PII real ni marca de ningún cliente.
+- CI fair-code reactivada: `ci.yml`, `ee-fence.yml`, `gitleaks.yml`,
+  `license-check.yml` (ee-fence: 0 violaciones en 1.288 ficheros).
+
+#### Removed
+
+- Operación interna del despliegue a medida: composes de prod/dev del
+  cliente, scripts de deploy por rsync, workflows de deploy interno, seeds y
+  backfills con datos del cliente, sync de precios de una tienda concreta.
+
 ### [0.0.1-alpha.88-va360] — 2026-07-31
 
 #### Notes
