@@ -96,6 +96,12 @@ function makeHarness(
     lookup: vi.fn().mockResolvedValue({ isDelinquent: false, name: null }),
   } as never;
 
+  // Settings del tenant: el mock replica la cascada real setting→env para que
+  // los tests del aprobador sigan controlándose vía MEMBER_APPROVAL_EMAIL.
+  const settings = {
+    resolveApproverEmail: vi.fn(async () => process.env['MEMBER_APPROVAL_EMAIL']?.trim() || null),
+  } as never;
+
   // El lookup de suscripción corre en background; por defecto no encuentra nada.
   const subscriptionLookup = {
     runAndStore: vi.fn().mockResolvedValue({ matches: [], failures: [] }),
@@ -113,6 +119,7 @@ function makeHarness(
     passwords,
     decision,
     paymentFlags,
+    settings,
     subscriptionLookup,
     smtp as never,
     smtpResolver,
@@ -126,6 +133,7 @@ function makeHarness(
     passwords,
     decision,
     paymentFlags,
+    settings,
     subscriptionLookup,
     smtp,
     smtpResolver,
@@ -160,6 +168,25 @@ describe('MemberRegistrationService.createPending', () => {
     expect(createArg.bio).toBe('Hola soy Ana');
     // Rol alumno asignado.
     expect(h.txUserRole.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('sin Telegram (verificadores componibles): crea User PENDING con telegramId null y NO consulta impagos por telegramId', async () => {
+    const h = makeHarness({ existingUser: null });
+    const input: MemberRegistrationInput = { ...BASE_INPUT, telegramId: null, inGroup: 'unknown' };
+
+    const result = await h.service.createPending(TENANT_ID, input, WEB_BASE_URL, CTX);
+
+    expect(result).toEqual({ userId: 'new-user', created: true, status: 'PENDING' });
+    const createArg = h.txUser.create.mock.calls[0][0].data;
+    expect(createArg.telegramId).toBeNull();
+    expect(createArg.telegramInGroup).toBeNull();
+
+    // La notificación al aprobador sale igualmente, pero sin lookup de impago
+    // (el flag sigue clavado a telegramId hasta F2.3).
+    await vi.waitFor(() => {
+      expect(h.smtp.send).toHaveBeenCalledTimes(1);
+    });
+    expect((h.paymentFlags as { lookup: ReturnType<typeof vi.fn> }).lookup).not.toHaveBeenCalled();
   });
 
   it('tras crear emite tokens de decisión y notifica al aprobador con MEMBER_APPROVAL_EMAIL', async () => {

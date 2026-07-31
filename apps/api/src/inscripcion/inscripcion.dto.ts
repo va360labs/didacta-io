@@ -48,9 +48,11 @@ export interface TelegramVerifyResponse {
 }
 
 // ─── PASO 1.5a: solicitar código OTP ─────────────────────────────────────────
+// `ticket` (del verificador de Telegram) solo se exige cuando la política del
+// tenant incluye `telegram`; con OTP suelto el paso es directo.
 export const otpRequestSchema = z.object({
   email: z.string().email().max(320),
-  ticket: z.string().min(1).max(2048),
+  ticket: z.string().min(1).max(2048).optional(),
 });
 export type OtpRequestDto = z.infer<typeof otpRequestSchema>;
 
@@ -63,7 +65,7 @@ export interface OtpRequestResponse {
 export const otpVerifySchema = z.object({
   email: z.string().email().max(320),
   code: z.string().regex(/^\d{6}$/, 'El código debe tener 6 dígitos.'),
-  ticket: z.string().min(1).max(2048),
+  ticket: z.string().min(1).max(2048).optional(),
 });
 export type OtpVerifyDto = z.infer<typeof otpVerifySchema>;
 
@@ -74,11 +76,17 @@ export interface OtpVerifyResponse {
 }
 
 // ─── PASO 2: crear la inscripción (User PENDING) ─────────────────────────────
+// La evidencia exigida depende de la política del tenant (el controller la
+// valida): con `otp` → verificationToken (trae el email verificado); solo
+// `telegram` → ticket + email del formulario; sin verificadores (registro
+// libre) → email del formulario y nada más.
 export const registerSchema = z.object({
   name: z.string().trim().min(1).max(120),
   password: z.string().min(12).max(200),
   bio: z.string().max(280).optional(),
-  verificationToken: z.string().min(1).max(2048),
+  email: z.string().email().max(320).optional(),
+  verificationToken: z.string().min(1).max(2048).optional(),
+  ticket: z.string().min(1).max(2048).optional(),
 });
 export type RegisterDto = z.infer<typeof registerSchema>;
 
@@ -110,7 +118,8 @@ export interface TelegramTicketClaims {
 }
 
 export interface VerificationTokenClaims {
-  telegramId: string;
+  /** null cuando la política del tenant no incluye el verificador de Telegram. */
+  telegramId: string | null;
   inGroup: TelegramMembership;
   email: string;
   purpose: 'member-register';

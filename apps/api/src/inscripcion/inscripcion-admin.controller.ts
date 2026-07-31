@@ -133,7 +133,10 @@ export class InscripcionAdminController {
       // Contraseña aleatoria: el alta manual no la usa (el miembro queda PENDING
       // y, al aprobarse, entra por reset/SSO). Solo cumple el contrato del flujo.
       password: randomBytes(24).toString('base64url'),
-      telegramId: dto.telegramId ?? 'manual',
+      // Sin Telegram en el alta manual el perfil queda sin telegramId (antes
+      // se usaba el sentinel 'manual'; los verificadores componibles lo hacen
+      // innecesario y ensuciaba los datos).
+      telegramId: dto.telegramId ?? null,
       inGroup: dto.inGroup ?? ('unknown' as const),
     };
     // skipAutoNotify: notificamos NOSOTROS de forma síncrona con el override del

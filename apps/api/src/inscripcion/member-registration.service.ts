@@ -20,6 +20,7 @@ import {
 } from '../modules/notifications/email-template-catalog';
 import { MemberDecisionService } from './member-decision.service';
 import { MemberPaymentFlagService } from './member-payment-flag.service';
+import { MemberRegistrationSettingsService } from './member-registration-settings.service';
 import type {
   MemberPurchaseMatch,
   MemberSubscriptionMatch,
@@ -47,7 +48,8 @@ export interface MemberRegistrationInput {
   email: string;
   password: string;
   bio?: string;
-  telegramId: string;
+  /** null cuando la política del tenant no incluye el verificador de Telegram. */
+  telegramId: string | null;
   /** Pertenencia al grupo en el momento del registro (tri-estado del API). */
   inGroup: TelegramMembership;
 }
@@ -102,6 +104,7 @@ export class MemberRegistrationService {
     private readonly passwords: PasswordService,
     private readonly decision: MemberDecisionService,
     private readonly paymentFlags: MemberPaymentFlagService,
+    private readonly settings: MemberRegistrationSettingsService,
     private readonly subscriptionLookup: MemberSubscriptionLookupService,
     private readonly smtp: SmtpAdapterService,
     private readonly smtpResolver: TenantSmtpResolverService,
@@ -110,37 +113,41 @@ export class MemberRegistrationService {
   ) {}
 
   /**
-   * Lista las solicitudes de inscripción PENDING del tenant (miembros que se
-   * registraron por `/inscripcion-miembros`, identificados por tener `telegramId`)
-   * junto con su lookup de suscripción. Lo consume el panel admin de solicitudes.
+   * Lista las solicitudes de inscripción PENDING del tenant junto con su lookup
+   * de suscripción. Una solicitud se identifica por tener perfil de registro
+   * (`mod_member_registration_profile`, creado por el flujo público y el alta
+   * manual) — NO por `telegramId`, que es opcional desde los verificadores
+   * componibles. Los datos de Telegram salen del perfil (fuente de verdad D13).
+   * Lo consume el panel admin de solicitudes.
    */
   async listPendingRequests(tenantId: string): Promise<MemberRequestView[]> {
     const users = await this.prisma.user.findMany({
-      where: { tenantId, status: 'PENDING', telegramId: { not: null } },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        telegramId: true,
-        telegramInGroup: true,
-        createdAt: true,
-      },
+      where: { tenantId, status: 'PENDING' },
+      select: { id: true, name: true, email: true, createdAt: true },
       orderBy: { createdAt: 'desc' },
       take: 300,
     });
     if (users.length === 0) return [];
-    const lookups = await this.prisma.memberSubscriptionLookup.findMany({
+    const profiles = await this.prisma.memberRegistrationProfile.findMany({
       where: { tenantId, userId: { in: users.map((u) => u.id) } },
+      select: { userId: true, telegramId: true, telegramInGroup: true },
+    });
+    const profileByUser = new Map(profiles.map((p) => [p.userId, p]));
+    const requests = users.filter((u) => profileByUser.has(u.id));
+    if (requests.length === 0) return [];
+    const lookups = await this.prisma.memberSubscriptionLookup.findMany({
+      where: { tenantId, userId: { in: requests.map((u) => u.id) } },
     });
     const byUser = new Map(lookups.map((l) => [l.userId, l]));
-    return users.map((u) => {
+    return requests.map((u) => {
       const l = byUser.get(u.id);
+      const profile = profileByUser.get(u.id);
       return {
         userId: u.id,
         name: u.name,
         email: u.email,
-        telegramId: u.telegramId,
-        telegramInGroup: u.telegramInGroup,
+        telegramId: profile?.telegramId ?? null,
+        telegramInGroup: profile?.telegramInGroup ?? null,
         createdAt: u.createdAt,
         lookup: l
           ? {
@@ -336,19 +343,23 @@ export class MemberRegistrationService {
       const approveUrl = `${base}/api/v1/inscripcion/decision?token=${encodeURIComponent(approveToken)}`;
       const rejectUrl = `${base}/api/v1/inscripcion/decision?token=${encodeURIComponent(rejectToken)}`;
 
-      const flag = await this.paymentFlags.lookup(tenantId, input.telegramId);
+      const flag = input.telegramId
+        ? await this.paymentFlags.lookup(tenantId, input.telegramId)
+        : null;
       const branding = await resolveEmailBranding(
         this.prisma as unknown as BrandingPrisma,
         tenantId,
         webBaseUrl,
       );
 
-      // El aprobador es el override (alta manual del admin) o el de la env.
-      const approver = approverOverride?.trim() || process.env['MEMBER_APPROVAL_EMAIL']?.trim();
+      // El aprobador es el override (alta manual del admin) o el del tenant
+      // (setting `member-registration/approval`, con fallback a la env legacy).
+      const approver =
+        approverOverride?.trim() || (await this.settings.resolveApproverEmail(tenantId));
       if (!approver) {
         this.logger.warn(
           { tenantId, userId },
-          'member-registration: sin aprobador (ni override ni MEMBER_APPROVAL_EMAIL) — no notificado',
+          'member-registration: sin aprobador (ni override ni setting ni MEMBER_APPROVAL_EMAIL) — no notificado',
         );
         return;
       }

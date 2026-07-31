@@ -7,13 +7,12 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import type { TelegramAuthDto, TelegramMembership } from './inscripcion.dto';
+import type { TelegramGateConfig } from './member-registration-settings.service';
 
-// ─── Configuración (vía env, nunca hardcodeada — regla #3) ──────────────────
-// El bot token y el group id viven SOLO en variables de entorno. NUNCA se
-// loguean ni se incrustan en URLs que terminen en el log.
-const BOT_TOKEN = process.env['TELEGRAM_BOT_TOKEN']?.trim();
-const GROUP_ID = process.env['TELEGRAM_GROUP_ID']?.trim();
-const BOT_USERNAME = process.env['TELEGRAM_BOT_USERNAME']?.trim();
+// ─── Configuración ───────────────────────────────────────────────────────────
+// El bot es config de TENANT (tenant_setting, con fallback a env legacy) y se
+// resuelve en MemberRegistrationSettingsService. Este servicio recibe la config
+// por llamada y NUNCA la loguea ni la incrusta en URLs que terminen en el log.
 
 /** Drift máximo permitido del `auth_date` (segundos) — mitigación replay. */
 const AUTH_DATE_MAX_DRIFT_SECONDS = 86400;
@@ -33,14 +32,15 @@ interface TelegramApiResponse {
 }
 
 /**
- * Verificación de pertenencia al grupo de Telegram (gate de inscripción).
+ * Verificación de pertenencia al grupo de Telegram (verificador `telegram` del
+ * flujo de inscripción).
  *
  * Dos responsabilidades:
  *  - `verifyLoginHash`: valida de forma timing-safe la firma del Telegram Login
- *    Widget (HMAC-SHA256 con secret = sha256(BOT_TOKEN)) y rechaza payloads
+ *    Widget (HMAC-SHA256 con secret = sha256(botToken)) y rechaza payloads
  *    viejos (anti-replay vía `auth_date`).
  *  - `getChatMember`: consulta la API de Telegram si un usuario pertenece al
- *    grupo configurado, devolviendo el tri-estado `'true' | 'false' | 'unknown'`.
+ *    grupo del tenant, devolviendo el tri-estado `'true' | 'false' | 'unknown'`.
  *
  * Es CORE del host (no un módulo). Ver PRD "Inscripción de miembros".
  */
@@ -48,21 +48,11 @@ interface TelegramApiResponse {
 export class TelegramService {
   constructor(private readonly logger: PinoLogger) {}
 
-  /** `true` solo si hay token y group id configurados (la feature está activa). */
-  isConfigured(): boolean {
-    return Boolean(BOT_TOKEN) && Boolean(GROUP_ID);
-  }
-
-  /** Username del bot (sin `@`) para el Telegram Login Widget del frontend. */
-  get botUsername(): string | null {
-    return BOT_USERNAME ?? null;
-  }
-
   /**
    * Verifica la firma del Telegram Login Widget de forma timing-safe.
    *
    * Algoritmo (https://core.telegram.org/widgets/login#checking-authorization):
-   *  - secret = sha256(BOT_TOKEN) como Buffer crudo de 32 bytes.
+   *  - secret = sha256(botToken) como Buffer crudo de 32 bytes.
    *  - data-check-string = todos los campos excepto `hash`, con valores a
    *    string, claves ordenadas alfabéticamente, unidas por salto de línea.
    *  - expected = HMAC-SHA256(secret, dcs) en hex, comparado timing-safe con
@@ -72,8 +62,8 @@ export class TelegramService {
    * Devuelve `true` si la firma es válida y reciente; `false` en cualquier otro
    * caso (sin tirar, para que el caller decida la respuesta HTTP).
    */
-  verifyLoginHash(fields: TelegramAuthDto): boolean {
-    if (!BOT_TOKEN) return false;
+  verifyLoginHash(config: TelegramGateConfig, fields: TelegramAuthDto): boolean {
+    if (!config.botToken) return false;
     if (!fields.hash) return false;
 
     // Anti-replay: el payload no puede ser más viejo (ni futuro) que el drift.
@@ -91,8 +81,8 @@ export class TelegramService {
       .map(([key, value]) => `${key}=${value}`)
       .join('\n');
 
-    // secret = sha256(BOT_TOKEN) crudo (32 bytes), NO la representación hex.
-    const secret = createHash('sha256').update(BOT_TOKEN).digest();
+    // secret = sha256(botToken) crudo (32 bytes), NO la representación hex.
+    const secret = createHash('sha256').update(config.botToken).digest();
     const expected = createHmac('sha256', secret).update(dcs).digest('hex');
 
     // Comparación timing-safe: requiere mismo length para no tirar.
@@ -105,7 +95,7 @@ export class TelegramService {
   }
 
   /**
-   * Consulta si un usuario de Telegram pertenece al grupo configurado.
+   * Consulta si un usuario de Telegram pertenece al grupo del tenant.
    *
    * Mapeo de la respuesta de `getChatMember`:
    *  - `ok` y status ∈ {creator, administrator, member} → `'true'`.
@@ -115,12 +105,15 @@ export class TelegramService {
    *
    * NUNCA loguea la URL ni el token: solo el status HTTP / mensaje de error.
    */
-  async getChatMember(telegramUserId: string): Promise<TelegramMembership> {
-    if (!BOT_TOKEN || !GROUP_ID) return 'unknown';
+  async getChatMember(
+    config: TelegramGateConfig,
+    telegramUserId: string,
+  ): Promise<TelegramMembership> {
+    if (!config.botToken || !config.groupId) return 'unknown';
 
     const url =
-      `https://api.telegram.org/bot${BOT_TOKEN}/getChatMember` +
-      `?chat_id=${encodeURIComponent(GROUP_ID)}&user_id=${encodeURIComponent(telegramUserId)}`;
+      `https://api.telegram.org/bot${config.botToken}/getChatMember` +
+      `?chat_id=${encodeURIComponent(config.groupId)}&user_id=${encodeURIComponent(telegramUserId)}`;
 
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(TELEGRAM_API_TIMEOUT_MS) });

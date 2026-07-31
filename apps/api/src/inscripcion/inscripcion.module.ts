@@ -12,20 +12,23 @@ import { InscripcionController } from './inscripcion.controller';
 import { MemberDecisionService } from './member-decision.service';
 import { MemberPaymentFlagService } from './member-payment-flag.service';
 import { MemberPurgeWorker } from './member-purge.worker';
+import { MemberRegistrationSettingsService } from './member-registration-settings.service';
 import { MemberRegistrationService } from './member-registration.service';
 import { MemberSubscriptionLookupService } from './member-subscription-lookup.service';
 import { PaymentFlagController } from './payment-flag.controller';
 import { TelegramService } from './telegram.service';
 
 /**
- * Inscripción de miembros (gate Telegram + OTP por email + validación manual).
+ * Inscripción de miembros con verificadores componibles por tenant (Telegram
+ * y/u OTP por email, o registro libre) + validación manual.
  *
- * Infra CORE del host (NO un módulo de marketplace): conecta el gate de Telegram,
- * la verificación por email y la validación manual con el alta de usuario.
+ * Infra CORE del host (NO un módulo de marketplace): conecta los verificadores,
+ * la política del tenant y la validación manual con el alta de usuario.
  *
  * Importa:
  * - AuthModule → PasswordService, PrismaAuditLogService, SmtpAdapterService,
- *   TenantSmtpResolverService, JwtAuthGuard (todos exportados por AuthModule).
+ *   TenantSmtpResolverService, PrismaTenantConfigService, JwtAuthGuard (todos
+ *   exportados por AuthModule).
  * - ModulesModule → ModuleRegistryService (acceso a mod.learning / mod.courses).
  *
  * TenantResolverService y PrismaService se inyectan desde sus módulos globales,
@@ -37,6 +40,7 @@ import { TelegramService } from './telegram.service';
   providers: [
     TelegramService,
     EmailVerificationService,
+    MemberRegistrationSettingsService,
     MemberRegistrationService,
     MemberDecisionService,
     MemberPaymentFlagService,

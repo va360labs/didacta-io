@@ -24,6 +24,8 @@ export const SENSITIVE_FIELD_NAMES = new Set([
   'api_key',
   'secret',
   'token',
+  'bottoken',
+  'bot_token',
   'clientsecret',
   'client_secret',
   'privatekey',

@@ -3,8 +3,10 @@ import { expect, test } from '@playwright/test';
 import { adminTokenForBootstrap, API_URL } from '../helpers/api';
 
 /**
- * Spec end-to-end del flujo de inscripción de miembros (gate Telegram + OTP por
- * email + validación manual) y de la gestión admin de impagos.
+ * Spec end-to-end del flujo de inscripción de miembros (verificadores
+ * componibles por tenant: Telegram y/u OTP por email + validación manual) y de
+ * la gestión admin de impagos. Los casos se auto-skipean según la política
+ * efectiva que publique `GET /inscripcion/config`.
  *
  * API-driven (igual que inscribe-by-api.spec.ts): los endpoints públicos del
  * flujo (`/inscripcion/*`) son anónimos y resuelven el tenant por el Host del
@@ -34,10 +36,15 @@ const AUTH_SECRET = process.env.E2E_AUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 
 interface ConfigResponse {
   configured: boolean;
+  verifiers: Array<'telegram' | 'otp'>;
   botUsername: string | null;
 }
 
-/** Lee `GET /inscripcion/config` (estado del gate de Telegram). */
+/**
+ * Lee `GET /inscripcion/config` (disponibilidad + verificadores exigidos por
+ * la política del tenant). Sin setting de tenant aplica el default legacy:
+ * telegram+otp si hay bot en el env del backend; registro cerrado si no.
+ */
 async function fetchConfig(): Promise<ConfigResponse> {
   const res = await fetch(`${API_URL}/api/v1/inscripcion/config`);
   expect(res.status, 'GET /inscripcion/config responde 200').toBe(200);
@@ -77,12 +84,17 @@ function signTicket(payload: Record<string, unknown>, secret: string, ttlSeconds
 }
 
 test.describe('Inscripción de miembros · gate Telegram + OTP + validación manual', () => {
-  test('GET /inscripcion/config devuelve { configured, botUsername }', async () => {
+  test('GET /inscripcion/config devuelve { configured, verifiers, botUsername }', async () => {
     const config = await fetchConfig();
     expect(config).toHaveProperty('configured');
     expect(typeof config.configured).toBe('boolean');
+    // Verificadores componibles: array acotado a los conocidos.
+    expect(Array.isArray(config.verifiers)).toBe(true);
+    for (const v of config.verifiers) {
+      expect(['telegram', 'otp']).toContain(v);
+    }
     expect(config).toHaveProperty('botUsername');
-    // botUsername es string (si hay TELEGRAM_BOT_USERNAME) o null.
+    // botUsername es string (si hay bot con username) o null.
     expect(['string', 'object'].includes(typeof config.botUsername)).toBe(true);
   });
 
@@ -142,7 +154,14 @@ test.describe('Inscripción de miembros · gate Telegram + OTP + validación man
     expect(body.inGroup).toBe('unknown');
   });
 
-  test('POST otp/request sin ticket válido → 401', async () => {
+  test('POST otp/request sin ticket válido → 401 (política con telegram)', async () => {
+    const config = await fetchConfig();
+    // Con el flujo cerrado/no operativo el endpoint responde 503 antes de mirar
+    // el ticket; y sin `telegram` en la política el ticket ya no se exige.
+    test.skip(
+      !config.configured || !config.verifiers.includes('telegram'),
+      'la política del tenant no exige telegram (o el flujo está cerrado)',
+    );
     const res = await fetch(`${API_URL}/api/v1/inscripcion/otp/request`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -155,6 +174,11 @@ test.describe('Inscripción de miembros · gate Telegram + OTP + validación man
   });
 
   test('POST otp/request con ticket de Telegram válido → 200', async () => {
+    const config = await fetchConfig();
+    test.skip(
+      !config.configured || !config.verifiers.includes('otp'),
+      'la política del tenant no incluye otp (o el flujo está cerrado)',
+    );
     test.skip(
       !AUTH_SECRET,
       'falta E2E_AUTH_SECRET/AUTH_SECRET en el entorno del test: no se puede firmar el ticket de Telegram',
@@ -187,7 +211,12 @@ test.describe('Inscripción de miembros · gate Telegram + OTP + validación man
     // paso otp/verify queda cubierto en unit tests con SmtpAdapter mockeado.
   });
 
-  test('POST register sin verificationToken válido → 401', async () => {
+  test('POST register sin verificationToken válido → 401 (política con otp)', async () => {
+    const config = await fetchConfig();
+    test.skip(
+      !config.configured || !config.verifiers.includes('otp'),
+      'la política del tenant no incluye otp (o el flujo está cerrado)',
+    );
     const res = await fetch(`${API_URL}/api/v1/inscripcion/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

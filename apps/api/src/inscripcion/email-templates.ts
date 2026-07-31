@@ -100,7 +100,8 @@ Si no has solicitado este acceso, ignora este mensaje.`;
 export interface DecisionEmailParams {
   name: string;
   email: string;
-  telegramId: string;
+  /** null cuando el tenant no exige el verificador de Telegram. */
+  telegramId: string | null;
   inGroup: TelegramMembership;
   isDelinquent: boolean;
   approveUrl: string;
@@ -178,7 +179,9 @@ export function buildDecisionEmail(
   const { name, email, telegramId, inGroup, isDelinquent, approveUrl, rejectUrl, branding } =
     params;
   const tenantName = branding.tenantName;
-  const heading = membershipHeading(inGroup, tenantName);
+  // El bloque de Telegram (estado de pertenencia + ID) solo aparece si el
+  // tenant exige ese verificador; en registros libre/OTP no hay nada que decir.
+  const heading = telegramId !== null ? membershipHeading(inGroup, tenantName) : null;
   const matches = params.subscriptionMatches ?? [];
   const failures = params.subscriptionFailures ?? [];
   const failedNote = failures.length
@@ -218,7 +221,7 @@ export function buildDecisionEmail(
 
   // alpha.83 — subject e intro editables per-tenant; el resto (estado, datos,
   // suscripciones, compras y botones de decisión) es estructural.
-  const overrideVars = { name, email, telegramId, tenantName };
+  const overrideVars = { name, email, telegramId: telegramId ?? '', tenantName };
   const applied = override
     ? applyEmailOverride(override, overrideVars, `Nueva inscripción pendiente — ${name}`)
     : null;
@@ -226,12 +229,10 @@ export function buildDecisionEmail(
   const introText =
     applied?.bodyText ?? `Hay una nueva inscripción pendiente de tu aprobación en ${tenantName}.`;
   const bodyText = `${introText}
-
-Estado: ${heading}
+${heading !== null ? `\nEstado: ${heading}` : ''}
 ${delinquentLineText}
   Nombre: ${name}
-  Email: ${email}
-  Telegram ID: ${telegramId}
+  Email: ${email}${telegramId !== null ? `\n  Telegram ID: ${telegramId}` : ''}
 ${subscriptionText}${purchasesText}
 Aprobar: ${approveUrl}
 Rechazar: ${rejectUrl}`;
@@ -291,13 +292,19 @@ Rechazar: ${rejectUrl}`;
     : `<p style="margin:0 0 12px;">Hay una nueva inscripción pendiente de tu aprobación en ${escapeHtml(
         tenantName,
       )}.</p>`;
+  const headingHtml =
+    heading !== null
+      ? `<p style="margin: 16px 0; font-size: 15px; font-weight: 600;">${escapeHtml(heading)}</p>\n  `
+      : '';
+  const telegramRowHtml =
+    telegramId !== null
+      ? `\n    <tr><td style="padding: 2px 8px; color: #5b6b7c;">Telegram ID</td><td style="padding: 2px 8px;"><strong>${escapeHtml(telegramId)}</strong></td></tr>`
+      : '';
   const bodyHtml = `${introHtml}
-  <p style="margin: 16px 0; font-size: 15px; font-weight: 600;">${escapeHtml(heading)}</p>
-  ${delinquentBanner}
+  ${headingHtml}${delinquentBanner}
   <table style="margin: 16px 0; font-size: 15px;">
     <tr><td style="padding: 2px 8px; color: #5b6b7c;">Nombre</td><td style="padding: 2px 8px;"><strong>${escapeHtml(name)}</strong></td></tr>
-    <tr><td style="padding: 2px 8px; color: #5b6b7c;">Email</td><td style="padding: 2px 8px;"><strong>${escapeHtml(email)}</strong></td></tr>
-    <tr><td style="padding: 2px 8px; color: #5b6b7c;">Telegram ID</td><td style="padding: 2px 8px;"><strong>${escapeHtml(telegramId)}</strong></td></tr>
+    <tr><td style="padding: 2px 8px; color: #5b6b7c;">Email</td><td style="padding: 2px 8px;"><strong>${escapeHtml(email)}</strong></td></tr>${telegramRowHtml}
   </table>
   ${subscriptionBlock}
   ${purchasesBlock}

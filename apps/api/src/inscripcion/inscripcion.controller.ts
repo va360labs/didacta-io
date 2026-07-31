@@ -4,6 +4,7 @@
  */
 
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -30,21 +31,28 @@ import {
   type OtpVerifyDto,
   type RegisterDto,
   type TelegramAuthDto,
+  type TelegramMembership,
   type TelegramTicketClaims,
   type VerificationTokenClaims,
 } from './inscripcion.dto';
 import { EmailVerificationService } from './email-verification.service';
 import { MemberDecisionService } from './member-decision.service';
+import {
+  MemberRegistrationSettingsService,
+  type EffectiveRegistrationPolicy,
+} from './member-registration-settings.service';
 import { MemberRegistrationService } from './member-registration.service';
 import { signTicket, verifyTicket } from './signed-ticket';
 import { TelegramService } from './telegram.service';
 
 // ============================================================================
-// Controller PÚBLICO del flujo de inscripción de miembros (gate Telegram + OTP
-// por email + validación manual). SIN guards: igual que AuthController, las
-// rutas son anónimas y el tenant se resuelve por Host (resolveByHost) y se pasa
-// EXPLÍCITO a los services. Los pasos del flujo se encadenan con tickets
-// firmados (HMAC con AUTH_SECRET) en vez de estado en BD.
+// Controller PÚBLICO del flujo de inscripción de miembros con VERIFICADORES
+// COMPONIBLES por tenant (telegram y/u OTP por email, o registro libre) +
+// validación manual. SIN guards: igual que AuthController, las rutas son
+// anónimas, el tenant se resuelve por Host (resolveByHost) y se pasa EXPLÍCITO
+// a los services. Los pasos del flujo se encadenan con tickets firmados (HMAC
+// con AUTH_SECRET) en vez de estado en BD. Qué verificadores se exigen lo
+// decide la política del tenant (MemberRegistrationSettingsService).
 // ============================================================================
 
 @ApiTags('Inscripción de miembros')
@@ -55,6 +63,7 @@ export class InscripcionController {
     private readonly emailVerification: EmailVerificationService,
     private readonly registration: MemberRegistrationService,
     private readonly decision: MemberDecisionService,
+    private readonly settings: MemberRegistrationSettingsService,
     private readonly tenantResolver: TenantResolverService,
   ) {}
 
@@ -74,15 +83,31 @@ export class InscripcionController {
     return secret;
   }
 
+  /**
+   * Política efectiva del tenant. `configured` (habilitado Y operativo) es la
+   * condición de disponibilidad de TODO el flujo — fail-closed si un
+   * verificador exigido no puede ejercitarse (p.ej. telegram sin bot).
+   */
+  private async requirePolicy(tenantId: string): Promise<EffectiveRegistrationPolicy> {
+    const policy = await this.settings.resolveEffectivePolicy(tenantId);
+    if (!policy.enabled || !policy.operational) {
+      throw new ServiceUnavailableException('La inscripción no está disponible en esta comunidad.');
+    }
+    return policy;
+  }
+
   @Get('config')
   @ApiOperation({
     summary:
-      'Estado de configuración del gate de Telegram (si el widget de login está disponible y con qué bot).',
+      'Configuración pública del flujo para este tenant: si está disponible, qué verificadores exige (pasos del wizard) y el bot del Login Widget si aplica.',
   })
-  config() {
+  async config(@Req() req: FastifyRequest) {
+    const tenantId = await this.resolveTenantId(req);
+    const policy = await this.settings.resolveEffectivePolicy(tenantId);
     return {
-      configured: this.telegram.isConfigured(),
-      botUsername: this.telegram.botUsername,
+      configured: policy.enabled && policy.operational,
+      verifiers: policy.verifiers,
+      botUsername: policy.botUsername,
     };
   }
 
@@ -90,25 +115,31 @@ export class InscripcionController {
   @HttpCode(200)
   @ApiOperation({
     summary:
-      'Paso 1: verifica la firma del Telegram Login Widget, comprueba si el usuario está en el grupo y devuelve un ticket de corta vida.',
+      'Verificador `telegram`: valida la firma del Telegram Login Widget, comprueba si el usuario está en el grupo y devuelve un ticket de corta vida.',
   })
   async telegramVerify(
     @Req() req: FastifyRequest,
     @Body(new ZodValidationPipe(telegramAuthSchema)) dto: TelegramAuthDto,
   ) {
-    if (!this.telegram.isConfigured()) {
+    const secret = this.requireAuthSecret();
+    const tenantId = await this.resolveTenantId(req);
+    const policy = await this.requirePolicy(tenantId);
+    if (!policy.verifiers.includes('telegram')) {
+      throw new ServiceUnavailableException(
+        'Esta comunidad no verifica por Telegram su inscripción.',
+      );
+    }
+    // Operativo garantizado por requirePolicy → la config del bot existe.
+    const telegramConfig = await this.settings.resolveTelegram(tenantId);
+    if (!telegramConfig) {
       throw new ServiceUnavailableException('El acceso por Telegram no está configurado.');
     }
-    const secret = this.requireAuthSecret();
-    // Resolvemos el tenant por Host para validar que el dominio corresponde a
-    // una comunidad existente antes de seguir.
-    await this.resolveTenantId(req);
 
-    if (!this.telegram.verifyLoginHash(dto)) {
+    if (!this.telegram.verifyLoginHash(telegramConfig, dto)) {
       throw new UnauthorizedException('Firma de Telegram inválida.');
     }
 
-    const inGroup = await this.telegram.getChatMember(dto.id);
+    const inGroup = await this.telegram.getChatMember(telegramConfig, dto.id);
     const ticket = signTicket({ telegramId: dto.id, inGroup, purpose: 'telegram' }, secret, 900);
     return { ok: true, inGroup, ticket };
   }
@@ -117,7 +148,7 @@ export class InscripcionController {
   @HttpCode(200)
   @ApiOperation({
     summary:
-      'Paso 1.5a: solicita un código OTP al email indicado (requiere el ticket de Telegram).',
+      'Verificador `otp` (a): solicita un código al email indicado. Exige el ticket de Telegram solo si la política del tenant incluye ese verificador.',
   })
   async otpRequest(
     @Req() req: FastifyRequest,
@@ -125,11 +156,11 @@ export class InscripcionController {
   ) {
     const secret = this.requireAuthSecret();
     const tenantId = await this.resolveTenantId(req);
-
-    const claims = verifyTicket<TelegramTicketClaims>(dto.ticket, secret);
-    if (!claims || claims.purpose !== 'telegram') {
-      throw new UnauthorizedException('Ticket de Telegram inválido o expirado.');
+    const policy = await this.requirePolicy(tenantId);
+    if (!policy.verifiers.includes('otp')) {
+      throw new ServiceUnavailableException('Esta comunidad no verifica por email su inscripción.');
     }
+    this.requireTelegramClaims(policy, secret, dto.ticket);
 
     const expiresInSeconds = await this.emailVerification.requestCode(
       tenantId,
@@ -143,7 +174,7 @@ export class InscripcionController {
   @HttpCode(200)
   @ApiOperation({
     summary:
-      'Paso 1.5b: verifica el código OTP y devuelve un verificationToken que autoriza el registro.',
+      'Verificador `otp` (b): verifica el código y devuelve un verificationToken que autoriza el registro.',
   })
   async otpVerify(
     @Req() req: FastifyRequest,
@@ -151,11 +182,11 @@ export class InscripcionController {
   ) {
     const secret = this.requireAuthSecret();
     const tenantId = await this.resolveTenantId(req);
-
-    const claims = verifyTicket<TelegramTicketClaims>(dto.ticket, secret);
-    if (!claims || claims.purpose !== 'telegram') {
-      throw new UnauthorizedException('Ticket de Telegram inválido o expirado.');
+    const policy = await this.requirePolicy(tenantId);
+    if (!policy.verifiers.includes('otp')) {
+      throw new ServiceUnavailableException('Esta comunidad no verifica por email su inscripción.');
     }
+    const telegramClaims = this.requireTelegramClaims(policy, secret, dto.ticket);
 
     const ok = await this.emailVerification.verifyCode(
       tenantId,
@@ -169,8 +200,8 @@ export class InscripcionController {
 
     const verificationToken = signTicket(
       {
-        telegramId: claims.telegramId,
-        inGroup: claims.inGroup,
+        telegramId: telegramClaims?.telegramId ?? null,
+        inGroup: telegramClaims?.inGroup ?? 'unknown',
         email: dto.email,
         purpose: 'member-register',
       },
@@ -184,7 +215,7 @@ export class InscripcionController {
   @HttpCode(201)
   @ApiOperation({
     summary:
-      'Paso 2: crea la inscripción (usuario PENDING) y dispara el email de validación manual al operador.',
+      'Paso final: crea la inscripción (usuario PENDING) con la evidencia que exige la política del tenant y dispara el email de validación manual al aprobador.',
   })
   async register(
     @Req() req: FastifyRequest,
@@ -192,10 +223,42 @@ export class InscripcionController {
   ) {
     const secret = this.requireAuthSecret();
     const tenantId = await this.resolveTenantId(req);
+    const policy = await this.requirePolicy(tenantId);
 
-    const claims = verifyTicket<VerificationTokenClaims>(dto.verificationToken, secret);
-    if (!claims || claims.purpose !== 'member-register') {
-      throw new UnauthorizedException('Token de verificación inválido o expirado.');
+    // Evidencia según la política: cada verificador exigido debe venir probado.
+    let email: string;
+    let telegramId: string | null = null;
+    let inGroup: TelegramMembership = 'unknown';
+
+    if (policy.verifiers.includes('otp')) {
+      // El verificationToken del OTP es la evidencia final (arrastra la de
+      // Telegram si ese verificador también estaba exigido).
+      if (!dto.verificationToken) {
+        throw new UnauthorizedException('Token de verificación inválido o expirado.');
+      }
+      const claims = verifyTicket<VerificationTokenClaims>(dto.verificationToken, secret);
+      if (!claims || claims.purpose !== 'member-register') {
+        throw new UnauthorizedException('Token de verificación inválido o expirado.');
+      }
+      if (policy.verifiers.includes('telegram') && !claims.telegramId) {
+        throw new UnauthorizedException('Falta la verificación de Telegram.');
+      }
+      email = claims.email;
+      telegramId = claims.telegramId ?? null;
+      inGroup = claims.inGroup ?? 'unknown';
+    } else if (policy.verifiers.includes('telegram')) {
+      // Solo Telegram: el ticket del widget es la evidencia; el email viene
+      // del formulario (sin verificar — la aprobación manual sigue delante).
+      const claims = dto.ticket ? verifyTicket<TelegramTicketClaims>(dto.ticket, secret) : null;
+      if (!claims || claims.purpose !== 'telegram') {
+        throw new UnauthorizedException('Ticket de Telegram inválido o expirado.');
+      }
+      email = this.requireEmail(dto);
+      telegramId = claims.telegramId;
+      inGroup = claims.inGroup;
+    } else {
+      // Registro libre: sin verificadores; el gate es la aprobación manual.
+      email = this.requireEmail(dto);
     }
 
     // Base del API para los enlaces de decisión (aprobar/rechazar) del email,
@@ -205,11 +268,11 @@ export class InscripcionController {
       tenantId,
       {
         name: dto.name,
-        email: claims.email,
+        email,
         password: dto.password,
         bio: dto.bio,
-        telegramId: claims.telegramId,
-        inGroup: claims.inGroup,
+        telegramId,
+        inGroup,
       },
       apiBase,
       extractClientContext(req),
@@ -237,6 +300,33 @@ export class InscripcionController {
   }
 
   // -------------------- helpers --------------------
+
+  /**
+   * Si la política exige `telegram`, valida el ticket del widget y devuelve sus
+   * claims; si no lo exige, devuelve null e ignora cualquier ticket recibido
+   * (el desacople OTP↔Telegram vive exactamente aquí).
+   */
+  private requireTelegramClaims(
+    policy: EffectiveRegistrationPolicy,
+    secret: string,
+    ticket: string | undefined,
+  ): TelegramTicketClaims | null {
+    if (!policy.verifiers.includes('telegram')) return null;
+    const claims = ticket ? verifyTicket<TelegramTicketClaims>(ticket, secret) : null;
+    if (!claims || claims.purpose !== 'telegram') {
+      throw new UnauthorizedException('Ticket de Telegram inválido o expirado.');
+    }
+    return claims;
+  }
+
+  /** Email del formulario (solo en políticas sin OTP, donde no viene probado). */
+  private requireEmail(dto: RegisterDto): string {
+    const email = dto.email?.trim().toLowerCase();
+    if (!email) {
+      throw new BadRequestException('Falta el email de la solicitud.');
+    }
+    return email;
+  }
 
   /**
    * Resuelve el tenant a partir del Host del request. Lanza 404 si el dominio

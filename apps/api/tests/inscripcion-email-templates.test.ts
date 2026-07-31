@@ -114,6 +114,19 @@ describe('buildDecisionEmail', () => {
     expect(text).toContain('Pertenencia NO verificable');
   });
 
+  it('sin Telegram (telegramId null): omite el encabezado de pertenencia y la fila Telegram ID', () => {
+    const { html, text } = buildDecisionEmail(
+      baseDecisionParams({ telegramId: null, inGroup: 'unknown' }),
+    );
+    expect(html).not.toContain('Telegram ID');
+    expect(text).not.toContain('Telegram ID');
+    expect(html).not.toContain('Pertenencia NO verificable');
+    expect(text).not.toContain('Estado:');
+    // Los datos y los enlaces de decisión siguen presentes.
+    expect(text).toContain('Nombre:');
+    expect(text).toContain('Aprobar:');
+  });
+
   it('escapa los datos del solicitante en el html (anti-inyección)', () => {
     const { html } = buildDecisionEmail(
       baseDecisionParams({ name: 'Al<b>ex</b>', email: 'a"b@x.com' }),
