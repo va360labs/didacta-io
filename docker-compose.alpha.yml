@@ -26,7 +26,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-didacta_dev}
       POSTGRES_DB: ${POSTGRES_DB:-didacta}
     ports:
-      - '${POSTGRES_PORT:-5432}:5432'
+      # Solo loopback: la app llega por la red interna de compose. Publicar
+      # Postgres a la red con la contraseña por defecto expone la instalación.
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Inicialización idempotente de extensiones (uuid-ossp, pgcrypto, vector).
@@ -46,7 +48,8 @@ services:
     restart: unless-stopped
     command: redis-server --appendonly yes
     ports:
-      - '${REDIS_PORT:-6379}:6379'
+      # Solo loopback: Redis va sin autenticación; nunca publicarlo a la red.
+      - '127.0.0.1:${REDIS_PORT:-6379}:6379'
     volumes:
       - redis_data:/data
     healthcheck:
@@ -68,8 +71,10 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-didacta}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-didacta_dev}
     ports:
-      - '${MINIO_API_PORT:-9000}:9000'
-      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+      # Solo loopback: credenciales por defecto y bucket con descarga anónima.
+      # Para servir media S3 públicamente usa un proveedor externo o un proxy.
+      - '127.0.0.1:${MINIO_API_PORT:-9000}:9000'
+      - '127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001'
     volumes:
       - minio_data:/data
     healthcheck:
@@ -98,8 +103,10 @@ services:
     container_name: didacta-mailpit
     restart: unless-stopped
     ports:
-      - '${MAILPIT_SMTP_PORT:-1025}:1025'
-      - '${MAILPIT_UI_PORT:-8025}:8025'
+      # Solo loopback: la UI de Mailpit muestra TODOS los correos (resets de
+      # contraseña incluidos). En un servidor remoto, entra por túnel SSH.
+      - '127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025'
+      - '127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025'
     environment:
       MP_MAX_MESSAGES: 5000
       MP_SMTP_AUTH_ACCEPT_ANY: 1

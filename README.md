@@ -45,8 +45,8 @@ Stack: API + web + Postgres + Redis + Mailpit (SMTP). Storage local por defecto 
 
 ```bash
 # 1. Clonar
-git clone https://github.com/va360labs/didacta-community.git
-cd didacta-community
+git clone https://github.com/va360labs/didacta-io.git
+cd didacta-io
 
 # 2. Configurar .env
 cp .env.example .env
@@ -117,7 +117,7 @@ Para operadores que ya tienen Postgres 16 + Redis 7 administrados y solo quieren
 - Las 3 variables de entorno obligatorias listadas arriba.
 
 ```bash
-docker pull didactaio/community:0.0.1-alpha.0
+docker pull didactaio/community:0.0.1-alpha.89
 
 # Crear volumen para uploads + clave de cifrado autogenerada.
 # El volumen sobrevive a reinicios.
@@ -135,7 +135,7 @@ docker run -d \
   -e STORAGE_ROOT=/app/data/storage \
   -e NODE_ENV=production \
   --restart unless-stopped \
-  didactaio/community:0.0.1-alpha.0
+  didactaio/community:0.0.1-alpha.89
 ```
 
 > El volumen `didacta_data` guarda los archivos subidos —cursos, certificados y evidencias— **y** una clave de cifrado autogenerada en el primer arranque para los secretos at-rest. Sin ese volumen montado, todo se borra al recrear el contenedor.
@@ -176,7 +176,7 @@ Más información y demo en vivo: [didacta.io](https://didacta.io).
 | Edición                   | Para quién                                                            | Incluye                                                                                                           |
 | ------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | **Community** (este repo) | Equipos que despliegan y operan ellos mismos.                         | Todo el código fuente. Comunidad activa de contribuidores.                                                        |
-| **Cloud**                 | Quien quiere arrancar en minutos, sin infraestructura.                | Hosting gestionado, backups automáticos diarios, actualizaciones sin intervención. Desde 20 €/mes.                |
+| **Cloud**                 | Quien quiere arrancar en minutos, sin infraestructura.                | Hosting gestionado por VA360 LABS con actualizaciones sin intervención. **En preparación.**                       |
 | **Enterprise**            | Organizaciones con SLA, integraciones a medida y partner certificado. | Account manager dedicado, onboarding guiado, integraciones con sistemas existentes, infraestructura monitorizada. |
 
 Detalles y precios: [didacta.io](https://didacta.io).
@@ -235,4 +235,4 @@ Didacta Community © 2026 VA360 LABS S.L. — distribuido bajo [Didacta Sustaina
 
 Capabilities Enterprise: [Didacta Enterprise License](LICENSE_EE).
 
-Didacta™ es marca registrada de VA360 LABS S.L. Ver [`TRADEMARKS.md`](TRADEMARKS.md).
+Didacta™ es una marca de VA360 LABS S.L. Ver [`TRADEMARKS.md`](TRADEMARKS.md).

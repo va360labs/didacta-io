@@ -168,8 +168,8 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 # Stage 6: runner — imagen final desde alpine LIMPIO (no hereda del builder)
 # ----------------------------------------------------------------------------
 # DIDACTA_VERSION: version de la app, inyectada en build time.
-# Sobreescribible con: docker build --build-arg DIDACTA_VERSION=0.0.1-alpha.55
-ARG DIDACTA_VERSION=0.0.1-alpha.55
+# Sobreescribible con: docker build --build-arg DIDACTA_VERSION=0.0.1-alpha.89
+ARG DIDACTA_VERSION=0.0.1-alpha.89
 
 FROM node:22-alpine AS runner
 # Re-declarar ARG para que este disponible en este stage (Docker multi-stage)
@@ -232,7 +232,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 # root SOLO para chownear el volumen persistente `/app/data` (que Docker monta
 # como root:root la primera vez) y luego baja a `didacta:didacta` con su-exec.
 # Sin este patrón, la primera escritura en /app/data/storage falla con EACCES
-# en cualquier deploy nuevo (compose, k8s, Coolify, Easypanel sin fsGroup).
+# en cualquier deploy nuevo (compose, k8s, o un PaaS sin fsGroup).
 # Ver entrypoint.sh, bloque `init-as-root`.
 
 ENV HOME=/home/didacta \
