@@ -38,6 +38,45 @@ export interface DossierSubscription {
   daysToRenewal: number | null;
 }
 
+/** Compra hecha en la tienda externa (WooCommerce), reflejada por el espejo. */
+export interface DossierExternalOrder {
+  id: string;
+  provider: string;
+  externalId: string;
+  status: string;
+  paid: boolean;
+  totalAmount: number;
+  currency: string;
+  placedAt: string;
+  paidAt: string | null;
+  refundedAt: string | null;
+  entitlementKind: string;
+  accessEndsAt: string | null;
+  daysToExpiry: number | null;
+  products: string[];
+}
+
+/** Etiquetas de los tipos de derecho de acceso. Espejo de `KIND_LABELS` en la API. */
+export const ENTITLEMENT_LABELS: Record<string, string> = {
+  LIFETIME: 'Acceso permanente',
+  SUBSCRIPTION: 'Suscripción',
+  TIMED: 'Acceso con vigencia',
+  ONE_OFF: 'Compra suelta',
+  INFRA: 'Servicio',
+};
+
+/** Estados de WooCommerce en cristiano. */
+export const WOO_STATUS_LABELS: Record<string, string> = {
+  completed: 'Pagado',
+  processing: 'Pagado (en curso)',
+  refunded: 'Devuelto',
+  cancelled: 'Cancelado',
+  failed: 'Fallido',
+  pending: 'Pendiente de pago',
+  'on-hold': 'En espera',
+  'lead-magnet': 'Gratuito',
+};
+
 export interface UserDossier {
   identity: {
     id: string;
@@ -73,6 +112,9 @@ export interface UserDossier {
       entitled: boolean;
       currentPeriodEnd: string | null;
     }>;
+    externalOrders: DossierExternalOrder[];
+    totalPaidExternalCents: number;
+    customerSince: string | null;
   };
   learning: {
     enrollments: Array<{

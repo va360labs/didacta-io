@@ -127,6 +127,47 @@ const assignTierSchema = z
   .strict();
 
 /** Filtros + paginación del listado del dashboard de control de suscripciones. */
+/**
+ * `days` acota el barrido a lo modificado recientemente. Sin él se refleja el
+ * histórico entero, que es lo que quieres la primera vez y una barbaridad para
+ * un cron diario.
+ */
+const mirrorQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(3650).optional(),
+});
+type MirrorQuery = z.infer<typeof mirrorQuerySchema>;
+
+const expiringQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(365).default(30),
+});
+type ExpiringQuery = z.infer<typeof expiringQuerySchema>;
+
+/** Mínimo de 20 caracteres: un secreto corto se fuerza por diccionario. */
+const webhookSecretSchema = z.object({
+  secret: z.string().min(20).max(200),
+});
+type WebhookSecretDto = z.infer<typeof webhookSecretSchema>;
+
+const ENTITLEMENT_KINDS = ['LIFETIME', 'SUBSCRIPTION', 'TIMED', 'ONE_OFF', 'INFRA'] as const;
+
+const rulesetSchema = z.object({
+  rules: z
+    .array(
+      z.object({
+        /** Se prueba contra el nombre del producto, sin distinguir mayúsculas. */
+        pattern: z.string().trim().min(1).max(200),
+        kind: z.enum(ENTITLEMENT_KINDS),
+        /** Solo para TIMED: meses de vigencia desde la compra. */
+        durationMonths: z.coerce.number().int().min(1).max(600).optional(),
+        note: z.string().trim().max(300).optional(),
+      }),
+    )
+    .max(100),
+  /** Qué hacer con lo que no matchea. Por defecto, no caducar nunca. */
+  fallback: z.enum(ENTITLEMENT_KINDS).default('ONE_OFF'),
+});
+type RulesetDto = z.infer<typeof rulesetSchema>;
+
 const subscribersQuerySchema = z
   .object({
     statusCategory: z.string().trim().max(40).optional(),
@@ -521,6 +562,139 @@ export class PaymentConnectionsController {
       matched: entries.length,
       errors,
     };
+  }
+
+  // ---------------- Espejo del histórico de la tienda ----------------
+
+  @Post('orders-mirror/sync')
+  @ApiOperation({
+    summary:
+      'Refleja el histórico de pedidos de la tienda WooCommerce en Didacta. ' +
+      'SOLO LEE: no crea usuarios ni reparte accesos. Idempotente. ' +
+      'Con ?days=N sincroniza solo lo modificado en los últimos N días.',
+  })
+  async mirrorOrdersNow(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(mirrorQuerySchema)) query: MirrorQuery,
+  ) {
+    const user = this.assertSuperAdmin(rawUser);
+    const ruleset = await this.registry
+      .getPaymentConnectionsService()
+      .loadEntitlementRuleset(user.tenantId);
+
+    const result = await this.registry
+      .getPaymentConnectionsService()
+      .mirrorWooCommerceOrders(user.tenantId, this.registry.getOrderMirrorService(), {
+        ...(query.days ? { modifiedAfter: new Date(Date.now() - query.days * 86_400_000) } : {}),
+        ...(ruleset ? { ruleset } : {}),
+      });
+
+    if (!result) {
+      return { ok: false, reason: 'Este tenant no tiene una conexión de WooCommerce verificada.' };
+    }
+    return { ok: true, ...result };
+  }
+
+  @Get('orders-mirror/expiring')
+  @ApiOperation({
+    summary:
+      'Accesos con vigencia (pago único, no suscripción) que caducan en los próximos N días. ' +
+      'De estos la tienda NO avisa: es el hueco que cubre Didacta.',
+  })
+  async listExpiring(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(expiringQuerySchema)) query: ExpiringQuery,
+  ) {
+    const user = this.assertSuperAdmin(rawUser);
+    const rows = await this.registry
+      .getOrderMirrorService()
+      .listExpiringSoon(user.tenantId, query.days);
+    return {
+      days: query.days,
+      total: rows.length,
+      items: rows.map((r) => ({
+        externalId: r.externalId,
+        customerEmail: r.customerEmail,
+        userId: r.userId,
+        accessEndsAt: r.accessEndsAt?.toISOString() ?? null,
+        totalAmount: r.totalAmount,
+        currency: r.currency,
+      })),
+    };
+  }
+
+  @Put('orders-mirror/webhook-secret')
+  @ApiOperation({
+    summary:
+      'Guarda el secreto con el que WooCommerce firma sus webhooks. Debe ser el MISMO que ' +
+      'el configurado en la tienda o los avisos se rechazan por firma inválida.',
+  })
+  async putWebhookSecret(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(webhookSecretSchema)) dto: WebhookSecretDto,
+  ) {
+    const user = this.assertSuperAdmin(rawUser);
+    await this.registry
+      .getPaymentConnectionsService()
+      .setWooWebhookSecret(user.tenantId, dto.secret, user.sub);
+    return { ok: true };
+  }
+
+  @Get('orders-mirror/webhook-status')
+  @ApiOperation({ summary: '¿Está configurado el secreto del webhook? No devuelve el secreto.' })
+  async webhookStatus(@CurrentUser() rawUser: SessionClaims | undefined) {
+    const user = this.assertSuperAdmin(rawUser);
+    const secret = await this.registry
+      .getPaymentConnectionsService()
+      .getWooWebhookSecret(user.tenantId);
+    return { configured: secret !== null };
+  }
+
+  @Get('orders-mirror/rules')
+  @ApiOperation({
+    summary:
+      'Reglas que deciden si un producto da acceso permanente, con vigencia o de suscripción.',
+  })
+  async getRules(@CurrentUser() rawUser: SessionClaims | undefined) {
+    const user = this.assertSuperAdmin(rawUser);
+    const rs = await this.registry
+      .getPaymentConnectionsService()
+      .loadEntitlementRuleset(user.tenantId);
+    return {
+      configured: rs !== null,
+      rules:
+        rs?.rules.map((r) => ({
+          pattern: r.match.source,
+          kind: r.kind,
+          durationMonths: r.durationMonths ?? null,
+          note: r.note ?? null,
+        })) ?? [],
+      fallback: rs?.fallback ?? 'ONE_OFF',
+    };
+  }
+
+  @Put('orders-mirror/rules')
+  @ApiOperation({
+    summary:
+      'Guarda las reglas de clasificación. Se aplican en la siguiente sincronización; ' +
+      'no reclasifica lo ya reflejado hasta que se vuelva a sincronizar.',
+  })
+  async putRules(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(rulesetSchema)) dto: RulesetDto,
+  ) {
+    const user = this.assertSuperAdmin(rawUser);
+    // Un patrón inválido se rechaza aquí y no en mitad de una sincronización
+    // de 871 pedidos.
+    for (const r of dto.rules) {
+      try {
+        new RegExp(r.pattern, 'i');
+      } catch {
+        throw new BadRequestException(`El patrón "${r.pattern}" no es una expresión válida.`);
+      }
+    }
+    await this.registry.getPaymentConnectionsService().saveEntitlementRuleset(user.tenantId, dto);
+    return { ok: true, rules: dto.rules.length };
   }
 
   // ---------------- Dashboard de control de suscripciones ----------------

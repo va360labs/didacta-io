@@ -367,12 +367,149 @@ export class WooCommerceReadSdkAdapter implements StripeReadAdapter {
     }));
   }
 
+  /**
+   * Barrido completo del histórico de pedidos, para el espejo.
+   *
+   * `findPurchasesByEmail` existe para responder «¿qué compró esta persona?» en
+   * el momento; sirve para uno y es carísimo para todos (una tanda de llamadas
+   * por email — con 535 compradores, inviable). Esto pagina la tienda entera:
+   * 871 pedidos son 9 peticiones.
+   *
+   * Devuelve las líneas con `productId` y `productType` para que la
+   * clasificación pueda apoyarse en lo que declara la tienda y no solo en el
+   * nombre del producto.
+   */
+  async listAllOrders(
+    options: { modifiedAfter?: Date; onPage?: (acumulados: number) => void } = {},
+  ): Promise<ExternalOrderRecord[]> {
+    const out: ExternalOrderRecord[] = [];
+    const after = options.modifiedAfter
+      ? `&modified_after=${encodeURIComponent(options.modifiedAfter.toISOString().slice(0, 19))}`
+      : '';
+
+    for (let page = 1; page <= MAX_ORDER_PAGES; page++) {
+      const res = await this.get(`/orders?status=any&per_page=${PER_PAGE}&page=${page}${after}`);
+      if (!res.ok) {
+        throw new Error(`WooCommerce: /orders devolvió ${res.status} en la página ${page}`);
+      }
+      const rows = (await res.json()) as WooOrderFull[];
+      if (!Array.isArray(rows) || rows.length === 0) break;
+      for (const row of rows) out.push(mapFullOrder(row));
+      options.onPage?.(out.length);
+      if (rows.length < PER_PAGE) break;
+    }
+    return out;
+  }
+
+  /** Tipo de cada producto del catálogo (`simple`, `subscription`, …) por id. */
+  async productTypesById(): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    for (let page = 1; page <= MAX_ORDER_PAGES; page++) {
+      const res = await this.get(`/products?per_page=${PER_PAGE}&page=${page}&status=any`);
+      if (!res.ok) break;
+      const rows = (await res.json()) as Array<{ id: number; type?: string }>;
+      if (!Array.isArray(rows) || rows.length === 0) break;
+      for (const p of rows) if (p.type) map.set(String(p.id), p.type);
+      if (rows.length < PER_PAGE) break;
+    }
+    return map;
+  }
+
   private get(path: string): Promise<Response> {
     return this.fetchFn(`${this.base}${path}`, {
       headers: { Authorization: this.authHeader, Accept: 'application/json' },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   }
+}
+
+/** Tope de páginas del barrido: 50 × 100 = 5.000 pedidos. Cortafuegos anti-bucle. */
+const MAX_ORDER_PAGES = 50;
+
+/** Pedido completo del espejo, con lo necesario para clasificarlo y mostrarlo. */
+export interface ExternalOrderRecord {
+  externalId: string;
+  orderNumber: string | null;
+  status: string;
+  /** Céntimos. Null si la tienda manda un total ilegible. */
+  total: number | null;
+  currency: string;
+  customerEmail: string;
+  customerName: string | null;
+  placedAt: string | null;
+  paidAt: string | null;
+  refundedAt: string | null;
+  items: ExternalOrderItem[];
+}
+
+export interface ExternalOrderItem {
+  name: string;
+  productId: string | null;
+  /** Céntimos. */
+  total: number | null;
+  quantity: number;
+}
+
+interface WooOrderFull extends WooOrder {
+  date_paid_gmt?: string | null;
+  date_modified_gmt?: string | null;
+  billing?: { email?: string; first_name?: string; last_name?: string; company?: string };
+  refunds?: Array<{ id: number }>;
+  line_items?: Array<{ name?: string; product_id?: number; total?: string; quantity?: number }>;
+}
+
+function centsOf(value: string | undefined | null): number | null {
+  if (value == null) return null;
+  const n = Math.round(parseFloat(value) * 100);
+  return Number.isNaN(n) ? null : n;
+}
+
+/** WooCommerce da las fechas GMT sin sufijo; sin la `Z` se leen como locales. */
+function isoOf(gmt: string | null | undefined): string | null {
+  return gmt ? `${gmt}Z` : null;
+}
+
+/**
+ * Convierte el payload de un pedido de WooCommerce al registro del espejo.
+ *
+ * Se exporta para que el webhook use EXACTAMENTE el mismo mapeo que el barrido:
+ * el cuerpo que manda Woo en `order.created` tiene la misma forma que el de
+ * `/orders`. Si cada camino mapeara por su cuenta, una compra nueva y una
+ * reimportación acabarían escribiendo filas distintas para el mismo pedido.
+ */
+export function mapWooOrderPayload(payload: unknown): ExternalOrderRecord | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const row = payload as WooOrderFull;
+  if (row.id == null) return null;
+  return mapFullOrder(row);
+}
+
+function mapFullOrder(row: WooOrderFull): ExternalOrderRecord {
+  const nombre = [row.billing?.first_name, row.billing?.last_name]
+    .map((s) => (s ?? '').trim())
+    .filter(Boolean)
+    .join(' ');
+
+  return {
+    externalId: String(row.id),
+    orderNumber: row.number ?? null,
+    status: row.status ?? 'unknown',
+    total: centsOf(row.total),
+    currency: (row.currency ?? 'EUR').toLowerCase(),
+    customerEmail: (row.billing?.email ?? '').trim().toLowerCase(),
+    customerName: nombre || (row.billing?.company ?? '').trim() || null,
+    placedAt: isoOf(row.date_created_gmt) ?? row.date_created ?? null,
+    paidAt: isoOf(row.date_paid_gmt),
+    // WooCommerce no da fecha de devolución en el pedido; el estado `refunded`
+    // es la señal, y la fecha se aproxima con la última modificación.
+    refundedAt: row.status === 'refunded' ? isoOf(row.date_modified_gmt) : null,
+    items: (row.line_items ?? []).map((li) => ({
+      name: (li.name ?? '').trim(),
+      productId: li.product_id != null ? String(li.product_id) : null,
+      total: centsOf(li.total),
+      quantity: li.quantity ?? 1,
+    })),
+  };
 }
 
 /** Pedido de WooCommerce (subconjunto que consumimos de /wp-json/wc/v3/orders). */

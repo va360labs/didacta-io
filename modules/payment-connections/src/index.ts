@@ -74,7 +74,33 @@ export { WooCommerceReadSdkAdapter } from './woocommerce-reader.client.js';
 export type {
   WooCommerceReaderCredentials,
   WooCatalogProduct,
+  ExternalOrderRecord,
+  ExternalOrderItem,
 } from './woocommerce-reader.client.js';
+
+/**
+ * Espejo del histórico de pedidos de la tienda externa (fase A: solo lee y
+ * muestra) y las reglas que deciden si un acceso caduca o no.
+ */
+export { OrderMirrorService } from './order-mirror.service.js';
+export { mapWooOrderPayload } from './woocommerce-reader.client.js';
+export { verifyWooSignature, WOO_ORDER_TOPICS } from './woo-webhook-signature.js';
+export type { MirrorResult, MirrorOptions } from './order-mirror.service.js';
+export {
+  classifyPurchase,
+  timedExpiryFrom,
+  strongestKind,
+  expires,
+  grantsLearningAccess,
+  DEFAULT_RULESET,
+  KIND_LABELS,
+} from './entitlement-rules.js';
+export type {
+  EntitlementKind,
+  EntitlementRule,
+  EntitlementRuleset,
+  Classification,
+} from './entitlement-rules.js';
 export {
   PaymentConnectionsError,
   PaymentConnectionNotFoundError,

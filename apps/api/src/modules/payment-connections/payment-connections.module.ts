@@ -2,9 +2,11 @@ import { forwardRef, Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { AdminModule } from '../../admin/admin.module';
 import { AuthModule } from '../../auth/auth.module';
+import { PrismaService } from '../../prisma/prisma.service';
 import { ModulesModule } from '../modules.module';
 import { PaymentConnectionsController } from './payment-connections.controller';
 import { PaymentConnectionsErrorFilter } from './payment-connections-error.filter';
+import { WooWebhookController } from './woo-webhook.controller';
 import { SubscribersSyncWorker } from './subscribers-sync.worker';
 import { SubscriptionsDailyWorker } from './subscriptions-daily.worker';
 
@@ -18,8 +20,9 @@ import { SubscriptionsDailyWorker } from './subscriptions-daily.worker';
 ///   (cuenta PENDING + email) sin duplicar la lógica de IAM del core.
 @Module({
   imports: [AuthModule, forwardRef(() => ModulesModule), forwardRef(() => AdminModule)],
-  controllers: [PaymentConnectionsController],
+  controllers: [PaymentConnectionsController, WooWebhookController],
   providers: [
+    PrismaService,
     { provide: APP_FILTER, useClass: PaymentConnectionsErrorFilter },
     SubscribersSyncWorker,
     SubscriptionsDailyWorker,

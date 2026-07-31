@@ -92,6 +92,36 @@ export interface UserDossier {
       entitled: boolean;
       currentPeriodEnd: string | null;
     }>;
+    /**
+     * Compras hechas en la tienda externa (WooCommerce), reflejadas por el
+     * espejo de `mod.payment-connections`.
+     *
+     * Es donde vive el histórico de verdad: las ventas dentro de Didacta vía
+     * Stripe son un puñado, y todo lo demás se compró en va360.academy.
+     */
+    externalOrders: Array<{
+      id: string;
+      provider: string;
+      externalId: string;
+      status: string;
+      paid: boolean;
+      totalAmount: number;
+      currency: string;
+      placedAt: string;
+      paidAt: string | null;
+      refundedAt: string | null;
+      /** LIFETIME | SUBSCRIPTION | TIMED | ONE_OFF | INFRA */
+      entitlementKind: string;
+      /** Solo para TIMED: cuándo se acaba el acceso que dio esta compra. */
+      accessEndsAt: string | null;
+      /** Días que faltan para que caduque. Negativo si ya caducó. */
+      daysToExpiry: number | null;
+      products: string[];
+    }>;
+    /** Suma de TODO lo cobrado y no devuelto, dentro y fuera de Didacta. */
+    totalPaidExternalCents: number;
+    /** Fecha de la primera compra: la antigüedad real como cliente. */
+    customerSince: string | null;
   };
   learning: {
     enrollments: Array<{
@@ -190,6 +220,23 @@ function daysBetween(from: Date, to: Date): number {
   return Math.floor((to.getTime() - from.getTime()) / 86_400_000);
 }
 
+/**
+ * Nombres de producto de un pedido del espejo.
+ *
+ * `items` es JSON del proveedor: se valida en vez de castear, porque una fila
+ * antigua o un pedido raro no deben tumbar el expediente entero.
+ */
+function productNamesOf(items: unknown): string[] {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((i) =>
+      i && typeof i === 'object' && typeof (i as { name?: unknown }).name === 'string'
+        ? (i as { name: string }).name
+        : null,
+    )
+    .filter((n): n is string => !!n);
+}
+
 @Injectable()
 export class DossierService {
   constructor(
@@ -221,6 +268,7 @@ export class DossierService {
       orders,
       subscriptions,
       externalSubs,
+      externalOrders,
       enrollments,
       certificates,
       quizAttempts,
@@ -249,6 +297,10 @@ export class DossierService {
         where: { tenantId, userId },
         orderBy: { lastSeenAt: 'desc' },
         take: RECENT,
+      }),
+      this.prisma.modPaymentConnectionsOrder.findMany({
+        where: { tenantId, userId },
+        orderBy: { placedAt: 'desc' },
       }),
       this.prisma.modLearningEnrollment.findMany({
         where: { tenantId, userId },
@@ -330,6 +382,20 @@ export class DossierService {
       .filter((o) => o.status === 'COMPLETED' && !o.refundedAt)
       .reduce((sum, o) => sum + (o.amountPaid ?? 0), 0);
 
+    // Lo cobrado en la tienda externa. El espejo ya normalizó `paid`, así que
+    // aquí no hay que volver a interpretar estados de WooCommerce.
+    const totalPaidExternalCents = externalOrders
+      .filter((o) => o.paid)
+      .reduce((sum, o) => sum + o.totalAmount, 0);
+
+    // La antigüedad real como cliente es su primera compra, no el día que
+    // alguien le creó la cuenta. Tamara compró el 17 de julio y su cuenta se
+    // creó el 28: sin esto, la ficha diría que lleva tres días.
+    const primeraCompra = externalOrders
+      .filter((o) => o.paid)
+      .map((o) => o.placedAt)
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+
     await this.auditLog.record({
       tenantId,
       actorId,
@@ -400,6 +466,24 @@ export class DossierService {
           entitled: s.entitled,
           currentPeriodEnd: s.currentPeriodEnd?.toISOString() ?? null,
         })),
+        externalOrders: externalOrders.map((o) => ({
+          id: o.id,
+          provider: o.provider,
+          externalId: o.externalId,
+          status: o.status,
+          paid: o.paid,
+          totalAmount: o.totalAmount,
+          currency: o.currency,
+          placedAt: o.placedAt.toISOString(),
+          paidAt: o.paidAt?.toISOString() ?? null,
+          refundedAt: o.refundedAt?.toISOString() ?? null,
+          entitlementKind: o.entitlementKind,
+          accessEndsAt: o.accessEndsAt?.toISOString() ?? null,
+          daysToExpiry: o.accessEndsAt ? daysBetween(now, o.accessEndsAt) : null,
+          products: productNamesOf(o.items),
+        })),
+        totalPaidExternalCents,
+        customerSince: primeraCompra?.toISOString() ?? null,
       },
       learning: {
         enrollments: enrollments.map((e) => ({
