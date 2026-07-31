@@ -210,8 +210,8 @@ function Empty({ children }: { children: React.ReactNode }) {
  * Antigüedad real: se cuenta desde la primera compra, no desde el alta.
  *
  * Muchas cuentas se crearon en la importación masiva mucho después de que la
- * persona comprara. Tamara compró el 17 de julio y su cuenta es del 28: sin
- * esto la ficha diría que lleva tres días siendo clienta.
+ * persona comprara: quien compró semanas antes de tener cuenta parecería
+ * llevar tres días siendo clienta.
  */
 function antiguedadDias(d: UserDossier): number {
   if (!d.commerce.customerSince) return d.identity.membershipDays;

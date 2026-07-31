@@ -389,8 +389,8 @@ export class DossierService {
       .reduce((sum, o) => sum + o.totalAmount, 0);
 
     // La antigüedad real como cliente es su primera compra, no el día que
-    // alguien le creó la cuenta. Tamara compró el 17 de julio y su cuenta se
-    // creó el 28: sin esto, la ficha diría que lleva tres días.
+    // alguien le creó la cuenta: en una importación masiva hay alumnas que
+    // compraron semanas antes de tener cuenta y la ficha diría que llevan días.
     const primeraCompra = externalOrders
       .filter((o) => o.paid)
       .map((o) => o.placedAt)

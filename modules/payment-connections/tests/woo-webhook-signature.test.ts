@@ -97,7 +97,7 @@ describe('verifyWooSignature · cuerpo con acentos (el caso que falló en produc
   // pasó en local y rechazó todas las entregas reales de WooCommerce.
   const ACENTOS = JSON.stringify({
     id: 15809,
-    billing: { first_name: 'José', last_name: 'Muñoz Aragón', country: 'España' },
+    billing: { first_name: 'José', last_name: 'García Ejemplo', country: 'España' },
     line_items: [{ name: 'VPS Iniciación — edición 2026 · 100 % práctico' }],
   });
 

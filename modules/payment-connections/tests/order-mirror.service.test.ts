@@ -6,12 +6,12 @@ import type { ExternalOrderRecord } from '../src/woocommerce-reader.client.js';
 const TENANT = '11111111-1111-1111-1111-111111111111';
 const CONN = '22222222-2222-2222-2222-222222222222';
 
-const VA360: EntitlementRuleset = {
+const DEMO: EntitlementRuleset = {
   rules: [
     { match: /^vps\b/i, kind: 'INFRA' },
     { match: /lifetime/i, kind: 'LIFETIME' },
-    { match: /acceso\s+anual\s+a\s+va360/i, kind: 'TIMED', durationMonths: 12 },
-    { match: /va360\s*pro/i, kind: 'SUBSCRIPTION' },
+    { match: /acceso\s+anual\s+a\s+demo/i, kind: 'TIMED', durationMonths: 12 },
+    { match: /demo\s*pro/i, kind: 'SUBSCRIPTION' },
   ],
   fallback: 'ONE_OFF',
 };
@@ -23,8 +23,8 @@ function order(over: Partial<ExternalOrderRecord> = {}): ExternalOrderRecord {
     status: 'completed',
     total: 29700,
     currency: 'eur',
-    customerEmail: 'info@dekoarte.es',
-    customerName: 'tamara gascon',
+    customerEmail: 'cliente@example.com',
+    customerName: 'cliente ejemplo',
     placedAt: '2026-07-17T10:00:00.000Z',
     paidAt: '2026-07-17T10:01:00.000Z',
     refundedAt: null,
@@ -75,14 +75,14 @@ function setup(orders: ExternalOrderRecord[], usuarios: Array<{ id: string; emai
   return { service, prisma, adapter, creados, actualizados, existentes };
 }
 
-describe('OrderMirrorService · el pedido real de Tamara', () => {
+describe('OrderMirrorService · un pedido real de la tienda', () => {
   it('lo guarda con importe, fecha y clasificación de compra suelta', async () => {
     const { service, adapter, creados } = setup(
       [order()],
-      [{ id: 'u-tamara', email: 'info@dekoarte.es' }],
+      [{ id: 'u-cliente', email: 'cliente@example.com' }],
     );
 
-    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
 
     expect(r.leidos).toBe(1);
     expect(r.creados).toBe(1);
@@ -91,7 +91,7 @@ describe('OrderMirrorService · el pedido real de Tamara', () => {
     expect(r.porTipo.ONE_OFF).toBe(1);
 
     const fila = creados[0]!;
-    expect(fila.userId).toBe('u-tamara');
+    expect(fila.userId).toBe('u-cliente');
     expect(fila.totalAmount).toBe(29700);
     expect(fila.entitlementKind).toBe('ONE_OFF');
     expect(fila.paid).toBe(true);
@@ -105,23 +105,23 @@ describe('OrderMirrorService · clasificación al reflejar', () => {
     const { service, adapter, creados } = setup([
       order({
         externalId: '900',
-        items: [{ name: 'VA360 PRO LIFETIME', productId: '11921', total: 99797, quantity: 1 }],
+        items: [{ name: 'DEMO PRO LIFETIME', productId: '11921', total: 99797, quantity: 1 }],
       }),
     ]);
-    await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
     expect(creados[0]!.entitlementKind).toBe('LIFETIME');
     expect(creados[0]!.accessEndsAt).toBeNull();
   });
 
-  it('«Acceso ANUAL a VA360» caduca al año de haberse pagado', async () => {
+  it('«Acceso ANUAL a DEMO» caduca al año de haberse pagado', async () => {
     const { service, adapter, creados } = setup([
       order({
         externalId: '901',
         paidAt: '2026-03-10T09:00:00.000Z',
-        items: [{ name: 'Acceso ANUAL a VA360', productId: '7941', total: 19797, quantity: 1 }],
+        items: [{ name: 'Acceso ANUAL a DEMO', productId: '7941', total: 19797, quantity: 1 }],
       }),
     ]);
-    await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
     expect(creados[0]!.entitlementKind).toBe('TIMED');
     expect((creados[0]!.accessEndsAt as Date).toISOString().slice(0, 10)).toBe('2027-03-10');
   });
@@ -132,10 +132,10 @@ describe('OrderMirrorService · clasificación al reflejar', () => {
         externalId: '902',
         paidAt: null,
         placedAt: '2026-05-01T00:00:00.000Z',
-        items: [{ name: 'Acceso ANUAL a VA360', productId: '7941', total: 19797, quantity: 1 }],
+        items: [{ name: 'Acceso ANUAL a DEMO', productId: '7941', total: 19797, quantity: 1 }],
       }),
     ]);
-    await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
     expect((creados[0]!.accessEndsAt as Date).toISOString().slice(0, 10)).toBe('2027-05-01');
   });
 
@@ -143,10 +143,10 @@ describe('OrderMirrorService · clasificación al reflejar', () => {
     const { service, adapter, creados } = setup([
       order({
         externalId: '903',
-        items: [{ name: 'VA360 PRO ANUAL', productId: '11551', total: 19797, quantity: 1 }],
+        items: [{ name: 'DEMO PRO ANUAL', productId: '11551', total: 19797, quantity: 1 }],
       }),
     ]);
-    await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
     expect(creados[0]!.entitlementKind).toBe('SUBSCRIPTION');
     expect(creados[0]!.accessEndsAt).toBeNull();
   });
@@ -161,7 +161,7 @@ describe('OrderMirrorService · clasificación al reflejar', () => {
         ],
       }),
     ]);
-    await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
     expect(creados[0]!.entitlementKind).toBe('ONE_OFF');
   });
 
@@ -171,11 +171,11 @@ describe('OrderMirrorService · clasificación al reflejar', () => {
         externalId: '905',
         items: [
           { name: 'VPS Plus', productId: '13315', total: 1199, quantity: 1 },
-          { name: 'VA360 PRO LIFETIME', productId: '11921', total: 99797, quantity: 1 },
+          { name: 'DEMO PRO LIFETIME', productId: '11921', total: 99797, quantity: 1 },
         ],
       }),
     ]);
-    await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
     const items = creados[0]!.items as Array<{ name: string; kind: string; reason: string }>;
     expect(items).toHaveLength(2);
     expect(items[0]!.kind).toBe('INFRA');
@@ -187,7 +187,7 @@ describe('OrderMirrorService · clasificación al reflejar', () => {
 describe('OrderMirrorService · dinero y estados', () => {
   it('un pedido fallido no cuenta como cobrado', async () => {
     const { service, adapter } = setup([order({ externalId: '906', status: 'failed' })]);
-    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
     expect(r.pagados).toBe(0);
     expect(r.totalCobrado).toBe(0);
   });
@@ -196,7 +196,7 @@ describe('OrderMirrorService · dinero y estados', () => {
     const { service, adapter, creados } = setup([
       order({ externalId: '907', status: 'refunded', refundedAt: '2026-07-20T00:00:00.000Z' }),
     ]);
-    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
     expect(r.pagados).toBe(0);
     expect(creados[0]!.paid).toBe(false);
     expect(creados[0]!.refundedAt).toBeInstanceOf(Date);
@@ -204,7 +204,7 @@ describe('OrderMirrorService · dinero y estados', () => {
 
   it('`processing` sí cuenta: el dinero está cobrado aunque el pedido siga abierto', async () => {
     const { service, adapter } = setup([order({ externalId: '908', status: 'processing' })]);
-    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
     expect(r.pagados).toBe(1);
     expect(r.totalCobrado).toBe(29700);
   });
@@ -215,7 +215,7 @@ describe('OrderMirrorService · cruce con las cuentas', () => {
     // El email de facturación puede ser el de la pasarela de pago. Perder el
     // pedido por eso sería peor que guardarlo huérfano.
     const { service, adapter, creados } = setup([order({ externalId: '909' })], []);
-    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
     expect(r.sinCuenta).toBe(1);
     expect(r.creados).toBe(1);
     expect(creados[0]!.userId).toBeNull();
@@ -223,16 +223,16 @@ describe('OrderMirrorService · cruce con las cuentas', () => {
 
   it('cruza el email sin distinguir mayúsculas', async () => {
     const { service, adapter, creados } = setup(
-      [order({ externalId: '910', customerEmail: 'info@dekoarte.es' })],
-      [{ id: 'u1', email: 'INFO@Dekoarte.ES' }],
+      [order({ externalId: '910', customerEmail: 'cliente@example.com' })],
+      [{ id: 'u1', email: 'CLIENTE@Example.COM' }],
     );
-    await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
     expect(creados[0]!.userId).toBe('u1');
   });
 
   it('descarta los pedidos sin email en vez de inventarse un dueño', async () => {
     const { service, adapter } = setup([order({ externalId: '911', customerEmail: '' })]);
-    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
     expect(r.descartadosSinEmail).toBe(1);
     expect(r.creados).toBe(0);
   });
@@ -243,7 +243,7 @@ describe('OrderMirrorService · idempotencia', () => {
     const { service, adapter, existentes, creados, actualizados } = setup([order()]);
     existentes.set('15809', 'fila-ya-existente');
 
-    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
     expect(r.creados).toBe(0);
     expect(r.actualizados).toBe(1);
     expect(creados).toHaveLength(0);
@@ -264,7 +264,7 @@ describe('OrderMirrorService · idempotencia', () => {
     // rompe el espejo entero.
     const { service, adapter, creados } = setup([order({ externalId: '912' })]);
     adapter.productTypesById = vi.fn(() => Promise.reject(new Error('500')));
-    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: VA360 });
+    const r = await service.mirrorWooCommerce(TENANT, CONN, adapter as never, { ruleset: DEMO });
     expect(r.creados).toBe(1);
     expect(creados[0]!.entitlementKind).toBe('ONE_OFF');
   });
@@ -273,10 +273,10 @@ describe('OrderMirrorService · idempotencia', () => {
 describe('OrderMirrorService · reclamar pedidos huérfanos', () => {
   it('asigna al usuario los pedidos que quedaron sin dueño', async () => {
     const { service, prisma } = setup([]);
-    const n = await service.claimOrphanOrders(TENANT, 'u-nuevo', '  INFO@Dekoarte.ES ');
+    const n = await service.claimOrphanOrders(TENANT, 'u-nuevo', '  CLIENTE@Example.COM ');
     expect(n).toBe(3);
     expect(prisma.modPaymentConnectionsOrder.updateMany).toHaveBeenCalledWith({
-      where: { tenantId: TENANT, userId: null, customerEmail: 'info@dekoarte.es' },
+      where: { tenantId: TENANT, userId: null, customerEmail: 'cliente@example.com' },
       data: { userId: 'u-nuevo' },
     });
   });
