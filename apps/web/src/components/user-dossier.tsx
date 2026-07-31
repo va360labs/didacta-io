@@ -15,10 +15,12 @@ import {
 import { authStorage } from '@/lib/auth-storage';
 import {
   dossierApi,
+  ENTITLEMENT_LABELS,
   formatDate,
   formatDateTime,
   formatMembership,
   formatMoney,
+  WOO_STATUS_LABELS,
   type UserDossier,
 } from '@/lib/dossier';
 
@@ -204,6 +206,21 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="py-6 text-center text-sm text-text-muted">{children}</p>;
 }
 
+/**
+ * Antigüedad real: se cuenta desde la primera compra, no desde el alta.
+ *
+ * Muchas cuentas se crearon en la importación masiva mucho después de que la
+ * persona comprara. Tamara compró el 17 de julio y su cuenta es del 28: sin
+ * esto la ficha diría que lleva tres días siendo clienta.
+ */
+function antiguedadDias(d: UserDossier): number {
+  if (!d.commerce.customerSince) return d.identity.membershipDays;
+  const desdeCompra = Math.floor(
+    (Date.now() - new Date(d.commerce.customerSince).getTime()) / 86_400_000,
+  );
+  return Math.max(desdeCompra, d.identity.membershipDays);
+}
+
 function ResumenTab({ d }: { d: UserDossier }) {
   const sub = d.commerce.subscriptions.find(
     (s) => s.status === 'ACTIVE' || s.status === 'TRIALING',
@@ -211,8 +228,11 @@ function ResumenTab({ d }: { d: UserDossier }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Antigüedad" value={formatMembership(d.identity.membershipDays)} />
-        <Stat label="Total pagado" value={formatMoney(d.commerce.totalPaidCents)} />
+        <Stat label="Antigüedad" value={formatMembership(antiguedadDias(d))} />
+        <Stat
+          label="Total pagado"
+          value={formatMoney(d.commerce.totalPaidCents + d.commerce.totalPaidExternalCents)}
+        />
         <Stat label="Cursos" value={d.learning.enrollments.length} />
         <Stat label="Último acceso" value={formatDate(d.identity.lastLoginAt)} />
         <Stat label="Publicaciones" value={d.activity.counts.posts} />
@@ -263,9 +283,88 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Pastilla del tipo de derecho: lo que decide si ese acceso caduca o no. */
+function KindPill({ kind }: { kind: string }) {
+  const variant =
+    kind === 'LIFETIME'
+      ? 'success'
+      : kind === 'SUBSCRIPTION' || kind === 'TIMED'
+        ? 'warning'
+        : 'muted';
+  return <Badge variant={variant}>{ENTITLEMENT_LABELS[kind] ?? kind}</Badge>;
+}
+
+/**
+ * Compras hechas en la tienda externa. Es el histórico de verdad: las ventas
+ * dentro de Didacta son un puñado y todo lo demás se compró en la tienda.
+ */
+function TiendaExterna({ d }: { d: UserDossier }) {
+  const pedidos = d.commerce.externalOrders;
+  if (pedidos.length === 0) return null;
+
+  return (
+    <div>
+      <h3 className="mb-2 text-sm font-semibold text-text">
+        Compras en la tienda ({pedidos.length}) · {formatMoney(d.commerce.totalPaidExternalCents)}{' '}
+        cobrado
+        {d.commerce.customerSince ? (
+          <span className="font-normal text-text-muted">
+            {' '}
+            · cliente desde {formatDate(d.commerce.customerSince)}
+          </span>
+        ) : null}
+      </h3>
+      <div className="space-y-2">
+        {pedidos.map((o) => (
+          <Card key={o.id}>
+            <CardContent className="p-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-text">
+                    {o.products.join(' · ') || `Pedido ${o.externalId}`}
+                  </p>
+                  <p className="text-xs text-text-muted">
+                    {formatDate(o.paidAt ?? o.placedAt)} · {o.provider} #{o.externalId} ·{' '}
+                    {WOO_STATUS_LABELS[o.status] ?? o.status}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <KindPill kind={o.entitlementKind} />
+                  <span className="font-semibold text-text">
+                    {formatMoney(o.paid ? o.totalAmount : null, o.currency)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Solo los accesos con vigencia caducan por su cuenta: la tienda
+                  no avisa de estos, así que se marcan aquí. */}
+              {o.accessEndsAt ? (
+                <p
+                  className={`mt-1.5 text-xs ${
+                    o.daysToExpiry !== null && o.daysToExpiry < 0
+                      ? 'font-semibold text-red-600 dark:text-red-400'
+                      : 'text-text-muted'
+                  }`}
+                >
+                  {o.daysToExpiry !== null && o.daysToExpiry < 0
+                    ? `Acceso caducado el ${formatDate(o.accessEndsAt)}`
+                    : `Acceso hasta el ${formatDate(o.accessEndsAt)}${
+                        o.daysToExpiry !== null ? ` (quedan ${o.daysToExpiry} días)` : ''
+                      }`}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ComprasTab({ d }: { d: UserDossier }) {
   return (
     <div className="space-y-4">
+      <TiendaExterna d={d} />
       <div>
         <h3 className="mb-2 text-sm font-semibold text-text">
           Suscripciones ({d.commerce.subscriptions.length})

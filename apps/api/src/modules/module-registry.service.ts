@@ -40,6 +40,7 @@ import {
 import {
   PaymentConnectionsService,
   PaymentTiersService,
+  OrderMirrorService,
   StripeReadSdkAdapter,
   PayPalReadSdkAdapter,
   WooCommerceReadSdkAdapter,
@@ -136,6 +137,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private subscriptionsStripeAdapter?: SubscriptionsStripeAdapter;
   private paymentConnections?: PaymentConnectionsService;
   private paymentTiers?: PaymentTiersService;
+  private orderMirror?: OrderMirrorService;
   private referrals?: ReferralsService;
   private messaging?: MessagingService;
   private surveys?: SurveysService;
@@ -694,6 +696,8 @@ export class ModuleRegistryService implements OnModuleInit {
     );
     const paymentConnectionsModule = buildPaymentConnectionsModule(this.paymentConnections);
     this.paymentTiers = new PaymentTiersService(prisma);
+    // Espejo del histórico de pedidos de la tienda externa (fase A: solo lee).
+    this.orderMirror = new OrderMirrorService(prisma);
 
     await this.registry.register([
       helloWorldModule,
@@ -1002,6 +1006,13 @@ export class ModuleRegistryService implements OnModuleInit {
       throw new Error('mod.payment-connections (tiers) no está inicializado');
     }
     return this.paymentTiers;
+  }
+
+  getOrderMirrorService(): OrderMirrorService {
+    if (!this.orderMirror) {
+      throw new Error('mod.payment-connections (espejo de pedidos) no está inicializado');
+    }
+    return this.orderMirror;
   }
 
   /** Programa de referidos. SIEMPRE inicializado tras el boot (sin gate de env). */

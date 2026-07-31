@@ -21,6 +21,22 @@
 
 import type { Prisma, PrismaClient } from '@didacta/database';
 import { WooCommerceReadSdkAdapter, type WooCatalogProduct } from './woocommerce-reader.client.js';
+import type { MirrorOptions, MirrorResult, OrderMirrorService } from './order-mirror.service.js';
+import type { EntitlementRule, EntitlementRuleset } from './entitlement-rules.js';
+
+/**
+ * Forma con la que se guardan las reglas en `tenant_setting`.
+ * Los patrones viajan como texto porque un RegExp no sobrevive a JSON.
+ */
+export interface StoredRuleset {
+  rules: Array<{
+    pattern: string;
+    kind: string;
+    durationMonths?: number;
+    note?: string;
+  }>;
+  fallback?: string;
+}
 import {
   PaymentConnectionsError,
   PaymentConnectionAlreadyExistsError,
@@ -37,6 +53,8 @@ type ConnectionRow = Awaited<ReturnType<PrismaClient['modPaymentConnectionsConne
 export const PAYMENT_CONNECTIONS_MODULE = 'payment-connections';
 /** Key en tenant_setting donde se guarda la plantilla del email de renovación. */
 const RENEWAL_TEMPLATE_KEY = 'renewal-template';
+/** Key en tenant_setting con las reglas de clasificación de producto del tenant. */
+const ENTITLEMENT_RULES_KEY = 'entitlement-rules';
 /** Key en tenant_setting con la URL del Customer Portal de Stripe (enlace de cancelación). */
 const CANCEL_PORTAL_URL_KEY = 'cancel-portal-url';
 /** Estados Stripe que cuentan como "suscripción activa" para reconciliar. */
@@ -902,6 +920,79 @@ export class PaymentConnectionsService {
     // tienen equivalente y el contrato común no lo incluye.
     if (!(adapter instanceof WooCommerceReadSdkAdapter)) return [];
     return adapter.listCatalogProducts();
+  }
+
+  /**
+   * Reglas de clasificación de producto del tenant.
+   *
+   * Viven en `tenant_setting` y no en código porque los nombres de producto son
+   * del negocio de cada uno: el módulo se instala en tiendas que no conocemos.
+   * Se guardan como texto (`patrón → tipo`) para que un admin pueda revisarlas
+   * sin desplegar.
+   *
+   * Devuelve null si el tenant no ha configurado ninguna: entonces se aplica
+   * `DEFAULT_RULESET`, que solo detecta lifetime y recurrentes declarados por
+   * la tienda, y trata todo lo demás como compra que no caduca.
+   */
+  async loadEntitlementRuleset(tenantId: string): Promise<EntitlementRuleset | null> {
+    const stored = await this.config.get<StoredRuleset>(
+      tenantId,
+      PAYMENT_CONNECTIONS_MODULE,
+      ENTITLEMENT_RULES_KEY,
+    );
+    if (!stored || !Array.isArray(stored.rules) || stored.rules.length === 0) return null;
+
+    const rules: EntitlementRule[] = [];
+    for (const r of stored.rules) {
+      if (typeof r?.pattern !== 'string' || typeof r?.kind !== 'string') continue;
+      try {
+        rules.push({
+          match: new RegExp(r.pattern, 'i'),
+          kind: r.kind as EntitlementRule['kind'],
+          ...(typeof r.durationMonths === 'number' ? { durationMonths: r.durationMonths } : {}),
+          ...(typeof r.note === 'string' ? { note: r.note } : {}),
+        });
+      } catch {
+        // Un patrón inválido no debe tumbar la clasificación entera: se ignora
+        // esa regla y las demás siguen aplicando.
+      }
+    }
+    if (rules.length === 0) return null;
+    return { rules, fallback: (stored.fallback as EntitlementRule['kind']) ?? 'ONE_OFF' };
+  }
+
+  /** Guarda las reglas del tenant. */
+  async saveEntitlementRuleset(tenantId: string, ruleset: StoredRuleset): Promise<void> {
+    await this.config.set(tenantId, PAYMENT_CONNECTIONS_MODULE, ENTITLEMENT_RULES_KEY, ruleset, {
+      isSecret: false,
+    });
+  }
+
+  /**
+   * Refleja el histórico de pedidos de la tienda WooCommerce del tenant.
+   *
+   * Fase A: solo lee y guarda. No crea usuarios ni reparte accesos — eso es
+   * decisión de un humano y llega en fases posteriores.
+   *
+   * Devuelve null si el tenant no tiene conexión de WooCommerce verificada:
+   * para el llamador es «nada que sincronizar», no un error.
+   */
+  async mirrorWooCommerceOrders(
+    tenantId: string,
+    mirror: OrderMirrorService,
+    options: MirrorOptions = {},
+  ): Promise<MirrorResult | null> {
+    const conexion = await this.prisma.modPaymentConnectionsConnection.findFirst({
+      where: { tenantId, provider: 'woocommerce', status: 'VERIFIED' },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!conexion) return null;
+
+    const credentials = await this.loadCredentials(tenantId, conexion.id, 'woocommerce');
+    const adapter = this.adapterFactory('woocommerce', credentials);
+    if (!(adapter instanceof WooCommerceReadSdkAdapter)) return null;
+
+    return mirror.mirrorWooCommerce(tenantId, conexion.id, adapter, options);
   }
 
   async resolveRenewalUrlByRef(

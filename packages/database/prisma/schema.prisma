@@ -2928,6 +2928,68 @@ model ModPaymentConnectionsSubscriber {
   @@map("mod_payment_connections_subscriber")
 }
 
+/// Pedido de una tienda externa (WooCommerce), copiado tal cual para que la
+/// ficha del alumno pueda decir qué compró, cuándo y por cuánto.
+///
+/// Es el espejo del histórico de la tienda, no una fuente de verdad: la tienda
+/// sigue siendo quien cobra. Por eso todo es `upsert` por (provider, externalId)
+/// y una resincronización nunca duplica.
+///
+/// Distinto de `ModBillingOrder`, que son las ventas hechas DENTRO de Didacta
+/// vía Stripe Checkout y exige `stripeSessionId`.
+model ModPaymentConnectionsOrder {
+  id           String  @id @default(uuid()) @db.Uuid
+  tenantId     String  @map("tenant_id") @db.Uuid
+  /// Conexión que lo trajo. Null si la conexión se borró después.
+  connectionId String? @map("connection_id") @db.Uuid
+  provider     String
+  /// Id del pedido en la tienda de origen. Con `provider`, la clave natural.
+  externalId   String  @map("external_id")
+
+  /// Usuario de Didacta que hizo la compra. **Null es un caso legítimo**, no un
+  /// error: el email de facturación puede ser el de la pasarela de pago y no
+  /// coincidir con ninguna cuenta. El pedido se guarda igual y se puede
+  /// reclamar más tarde.
+  userId        String? @map("user_id") @db.Uuid
+  customerEmail String  @map("customer_email")
+  customerName  String? @map("customer_name")
+
+  /// Estado crudo de la tienda (`completed`, `refunded`, `failed`…).
+  status String
+  /// Normalizado: ¿este pedido representa dinero cobrado y no devuelto?
+  paid   Boolean @default(false)
+
+  /// En céntimos, como todo el dinero del sistema.
+  totalAmount Int       @map("total_amount")
+  currency    String    @default("eur")
+  placedAt    DateTime  @map("placed_at")
+  paidAt      DateTime? @map("paid_at")
+  refundedAt  DateTime? @map("refunded_at")
+
+  /// Derecho de acceso más fuerte del pedido: LIFETIME | SUBSCRIPTION | TIMED |
+  /// ONE_OFF | INFRA. Ver `entitlement-rules.ts`.
+  entitlementKind String    @map("entitlement_kind")
+  /// Cuándo caduca el acceso que da este pedido. Solo para TIMED (pago único
+  /// con vigencia): la tienda no emitirá ningún aviso, lo calculamos nosotros.
+  /// Null en todo lo demás, incluidas las suscripciones — esas viven en
+  /// `ModPaymentConnectionsSubscriber`, que la pasarela sí mantiene al día.
+  accessEndsAt    DateTime? @map("access_ends_at")
+
+  /// Líneas del pedido: nombre, producto, importe y su clasificación.
+  items    Json
+  syncedAt DateTime @default(now()) @map("synced_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, provider, externalId], map: "payment_conn_order_unique")
+  @@index([tenantId, userId])
+  @@index([tenantId, customerEmail])
+  @@index([tenantId, entitlementKind])
+  @@index([tenantId, accessEndsAt])
+  @@map("mod_payment_connections_order")
+}
+
 /// Historial de cada corrida del sync de suscriptores (por conexión): traza de
 /// frescura/errores para el dashboard.
 model ModPaymentConnectionsSyncHistory {
