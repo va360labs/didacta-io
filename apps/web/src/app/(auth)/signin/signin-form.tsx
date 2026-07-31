@@ -48,7 +48,7 @@ export function SignInForm() {
   // arriba del form clásico. Sin tenant resuelto NO mostramos el botón —
   // requiere conocer el slug para construir el endpoint /auth/oidc/:slug/start.
   const [ssoEnabled, setSsoEnabled] = useState<boolean>(false);
-  // mod.wp-sso: auto-bounce TRANSPARENTE a WordPress (VA360.academy). Si hay
+  // mod.wp-sso: auto-bounce TRANSPARENTE al WordPress del tenant. Si hay
   // sesión WP, el usuario vuelve autenticado sin tocar este form.
   const [wpBouncing, setWpBouncing] = useState<boolean>(false);
   const [wpLoginRequired, setWpLoginRequired] = useState<boolean>(false);
@@ -153,12 +153,12 @@ export function SignInForm() {
     }
   }
 
-  // Rebotando a VA360.academy (WordPress) para SSO transparente.
+  // Rebotando al WordPress del tenant para SSO transparente.
   if (wpBouncing) {
     return (
       <div className="flex items-center gap-3 py-4">
         <div className="h-2 w-2 animate-pulse rounded-full bg-brand-500" />
-        <p className="text-sm text-text-muted">Conectando con VA360.academy…</p>
+        <p className="text-sm text-text-muted">Conectando con tu plataforma de origen…</p>
       </div>
     );
   }
@@ -179,8 +179,8 @@ export function SignInForm() {
       {/* Volvimos de WordPress sin sesión activa: explicamos por qué ven el form. */}
       {wpLoginRequired ? (
         <div className="rounded-lg border border-border-soft bg-surface-2 p-3 text-sm text-text-muted">
-          No detectamos una sesión activa en VA360.academy. Inicia sesión aquí con tu email y
-          contraseña.
+          No detectamos una sesión activa en tu plataforma de origen. Inicia sesión aquí con tu
+          email y contraseña.
         </div>
       ) : null}
 

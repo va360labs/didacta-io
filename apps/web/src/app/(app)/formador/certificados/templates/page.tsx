@@ -192,7 +192,7 @@ export default function CertificateTemplatesPage() {
                   maxLength={120}
                   value={draft.name}
                   onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                  placeholder="Ej. Default VA360, Plantilla Fundae 2026"
+                  placeholder="Ej. Plantilla por defecto, Plantilla Fundae 2026"
                 />
               </div>
               <div className="space-y-1.5 sm:col-span-2">

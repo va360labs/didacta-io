@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Icon } from '@/components/icon';
 import { ApiHttpError } from '@/lib/api-client';
+import { useTenantDisplayName } from '@/lib/tenant-context';
 import { certificatesApi, type PublicCertificateView } from '@/modules/certificates';
 
 type State = 'loading' | 'ok' | 'notfound' | 'error';
@@ -16,6 +17,9 @@ type State = 'loading' | 'ok' | 'notfound' | 'error';
  */
 export default function VerifyCertificatePage() {
   const params = useParams<{ id: string }>();
+  // La API pública no devuelve el emisor: usamos el nombre del tenant resuelto
+  // por host (misma resolución que el resto de pantallas sin sesión).
+  const tenantName = useTenantDisplayName();
   const [cert, setCert] = useState<PublicCertificateView | null>(null);
   const [state, setState] = useState<State>('loading');
 
@@ -108,7 +112,7 @@ export default function VerifyCertificatePage() {
                 <dt className="text-text-subtle">Nº de certificado</dt>
                 <dd className="text-right font-mono text-text">{cert.number}</dd>
               </dl>
-              <p className="text-xs text-text-subtle">Verificado por VA360 Academy</p>
+              <p className="text-xs text-text-subtle">Verificado por {tenantName}</p>
             </>
           ) : null}
         </CardContent>

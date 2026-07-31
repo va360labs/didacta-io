@@ -30,7 +30,7 @@ export interface SubscriptionRow {
   courseId: string | null;
   /** Plan de membresía (solo filas de membresía). */
   planId: string | null;
-  /** Nombre real del plan ("VA360.pro Anual") — lo resuelve el backend. */
+  /** Nombre real del plan ("Membresía Anual") — lo resuelve el backend. */
   planName?: string | null;
   /** Título real del curso (filas por curso) — lo resuelve el backend. */
   courseTitle?: string | null;

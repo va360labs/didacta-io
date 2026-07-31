@@ -75,9 +75,9 @@ function TelegramLoginWidget({
 }
 
 /** Aviso según el estado de pertenencia al grupo de Telegram. */
-function membershipNotice(inGroup: TelegramMembership): string | null {
+function membershipNotice(inGroup: TelegramMembership, communityName: string): string | null {
   if (inGroup === 'false') {
-    return 'No estás en el grupo de VA360, pero puedes solicitar acceso igual; revisaremos tu caso.';
+    return `No estás en el grupo de ${communityName}, pero puedes solicitar acceso igual; revisaremos tu caso.`;
   }
   if (inGroup === 'unknown') {
     return 'No pudimos verificar tu pertenencia ahora; puedes continuar y revisaremos tu caso.';
@@ -95,6 +95,9 @@ function membershipNotice(inGroup: TelegramMembership): string | null {
  */
 export function InscripcionForm() {
   const { tenant } = useTenantContext();
+  // Nombre del tenant resuelto por host, con fallback genérico mientras carga
+  // o si el dominio no está mapeado (misma resolución que la cabecera).
+  const communityName = tenant?.name ?? 'la comunidad';
 
   // Configuración del flujo (botUsername viene del backend, nunca hardcodeado).
   const [configLoading, setConfigLoading] = useState(true);
@@ -231,7 +234,7 @@ export function InscripcionForm() {
           }
         : inGroup === 'false'
           ? {
-              title: 'No estás en el grupo de VA360.pro',
+              title: `No estás en el grupo de ${communityName}`,
               body: 'Recibimos tu solicitud igualmente. Revisaremos tu caso y te avisaremos por email.',
             }
           : {
@@ -257,9 +260,7 @@ export function InscripcionForm() {
   return (
     <div className="space-y-6">
       <header className="text-center">
-        <p className="label-uppercase text-text-muted">
-          Inscripción a {tenant?.name ?? 'la comunidad'}
-        </p>
+        <p className="label-uppercase text-text-muted">Inscripción a {communityName}</p>
         <h1 className="font-display mt-2 text-2xl font-bold tracking-tight">Solicita tu acceso</h1>
         <p className="mt-1 text-sm text-text-subtle">
           Verifica tu identidad y crea tu solicitud en tres pasos.
@@ -294,7 +295,8 @@ export function InscripcionForm() {
               <div>
                 <h2 className="text-lg font-semibold">Verifica tu Telegram</h2>
                 <p className="text-sm text-text-muted">
-                  Usamos Telegram para confirmar tu identidad y tu pertenencia al grupo de VA360.
+                  Usamos Telegram para confirmar tu identidad y tu pertenencia al grupo de{' '}
+                  {communityName}.
                 </p>
               </div>
 
@@ -325,7 +327,7 @@ export function InscripcionForm() {
                         role="status"
                         className="rounded-lg border border-warning-100 bg-warning-50 p-3 text-sm text-warning-700"
                       >
-                        {membershipNotice(inGroup)}
+                        {membershipNotice(inGroup, communityName)}
                       </p>
                     )
                   ) : null}

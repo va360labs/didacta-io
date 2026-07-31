@@ -16,7 +16,7 @@ import type { RenewalTemplate } from './payment-connections';
 
 // ── Tipos de respuesta (según contrato del backend) ──────────────────────────
 
-/** Estado de pertenencia al grupo de Telegram de VA360. */
+/** Estado de pertenencia al grupo de Telegram de la comunidad. */
 export type TelegramMembership = 'true' | 'false' | 'unknown';
 
 export interface InscripcionConfig {

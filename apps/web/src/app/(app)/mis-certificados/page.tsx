@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
+import { useTenantDisplayName } from '@/lib/tenant-context';
 import { certificatesApi, type Certificate } from '@/modules/certificates';
 
 function formatDate(iso: string): string {
@@ -25,13 +26,14 @@ function formatDate(iso: string): string {
  * Abre el flujo "Add to Profile" de LinkedIn pre-rellenado con los datos del
  * certificado. `certUrl` apunta a la página pública de verificación
  * (`/verificar/<id>`), así la credencial en LinkedIn es verificable.
+ * `organizationName` es el nombre del tenant emisor (resuelto por host).
  */
-function openLinkedIn(cert: Certificate) {
+function openLinkedIn(cert: Certificate, organizationName: string) {
   const issued = new Date(cert.snapshot?.issuedAt ?? cert.issuedAt);
   const params = new URLSearchParams({
     startTask: 'CERTIFICATION_NAME',
     name: cert.snapshot?.courseTitle ?? 'Curso',
-    organizationName: 'VA360 Academy',
+    organizationName,
     certId: cert.number,
     certUrl: `${window.location.origin}/verificar/${cert.id}`,
   });
@@ -47,6 +49,7 @@ function openLinkedIn(cert: Certificate) {
 }
 
 export default function MisCertificadosPage() {
+  const tenantName = useTenantDisplayName();
   const [certs, setCerts] = useState<Certificate[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -196,7 +199,7 @@ export default function MisCertificadosPage() {
                       <Icon name="award" size={16} />
                       {downloadingId === cert.id ? 'Descargando…' : 'Descargar PDF'}
                     </Button>
-                    <Button variant="secondary" onClick={() => openLinkedIn(cert)}>
+                    <Button variant="secondary" onClick={() => openLinkedIn(cert, tenantName)}>
                       Añadir a LinkedIn
                     </Button>
                     <Badge variant="premium" dot className="ml-auto">

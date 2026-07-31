@@ -774,7 +774,7 @@ function MetadataEditor({
                 type="url"
                 value={externalPurchaseUrl}
                 onChange={(e) => setExternalPurchaseUrl(e.target.value)}
-                placeholder="https://va360.academy/curso1"
+                placeholder="https://academia.ejemplo.com/curso"
               />
               <p className="text-xs text-text-subtle">
                 Si la venta de este curso ocurre en una página externa, pega aquí su URL. En la

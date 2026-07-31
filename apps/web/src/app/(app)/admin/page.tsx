@@ -198,8 +198,8 @@ function rangeLabel(r: StatsRange): string {
 /**
  * Tarjeta con la URL pública de onboarding de miembros (`/inscripcion-miembros`).
  * La URL se arma con el origin actual → funciona en cualquier dominio del tenant
- * (aula.va360.academy, etc.) sin hardcodear. El admin la comparte con los
- * miembros actuales para que se den de alta (gate Telegram + aprobación manual).
+ * sin hardcodear. El admin la comparte con los miembros actuales para que se
+ * den de alta (gate Telegram + aprobación manual).
  */
 function MemberOnboardingCard(): ReactNode {
   const [url, setUrl] = useState('');
@@ -219,8 +219,8 @@ function MemberOnboardingCard(): ReactNode {
       <CardContent className="p-6">
         <h2 className="font-display text-lg font-semibold">Onboarding de miembros</h2>
         <p className="mt-1 text-sm text-text-muted">
-          Comparte este enlace con los miembros actuales de VA360 para que se den de alta. Pasan por
-          el gate de Telegram y quedan pendientes de aprobación.
+          Comparte este enlace con los miembros actuales de tu comunidad para que se den de alta.
+          Pasan por el gate de Telegram y quedan pendientes de aprobación.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <code className="min-w-60 flex-1 break-all rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">

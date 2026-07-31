@@ -376,7 +376,7 @@ export default function BrandingPage() {
           {/*
            * Copy del panel de marca de /signin. Vive aquí y no hardcodeado en el
            * web porque es texto DEL TENANT: Didacta es multi-tenant y no puede
-           * llevar la frase de VA360 (ni la de nadie) en su código.
+           * llevar la frase de ningún tenant en su código.
            */}
           <Card>
             <CardHeader>

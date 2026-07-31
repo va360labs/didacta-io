@@ -199,10 +199,10 @@ export function TenantIdentityCard({
                 maxLength={MAX_NAME_LEN}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="VA360 Academy"
+                placeholder="Mi Academia"
               />
               <p className="text-xs text-text-subtle">
-                Ej: &quot;VA360 Academy&quot;, &quot;Mi Centro de Formación&quot;, &quot;Acme Corp
+                Ej: &quot;Mi Academia&quot;, &quot;Mi Centro de Formación&quot;, &quot;Acme Corp
                 Training&quot;.
               </p>
               {isTooLong ? (

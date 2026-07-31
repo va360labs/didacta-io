@@ -223,7 +223,7 @@ function KeysTab() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 maxLength={100}
-                placeholder="p.ej. Página de ventas VA360"
+                placeholder="p.ej. Página de ventas"
               />
             </div>
             <div className="space-y-1.5">

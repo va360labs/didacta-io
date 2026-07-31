@@ -91,7 +91,9 @@ export function ApiDocsTab() {
   const [spaces, setSpaces] = useState<CommunitySpace[]>([]);
   const [pickedGroups, setPickedGroups] = useState<string[]>([]);
   const [pickedCourses, setPickedCourses] = useState<string[]>([]);
-  const [baseUrl, setBaseUrl] = useState('https://aula.va360.academy');
+  // Tab del admin: siempre corre en el dominio del tenant, así que la base de
+  // la API se deriva del origin actual (la fija el useEffect de abajo).
+  const [baseUrl, setBaseUrl] = useState('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') setBaseUrl(window.location.origin);
@@ -197,7 +199,9 @@ export function ApiDocsTab() {
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-text-muted">Base:</span>
-            <code className="rounded bg-surface-2 px-2 py-1 font-mono text-xs">{baseUrl}</code>
+            <code className="rounded bg-surface-2 px-2 py-1 font-mono text-xs">
+              {baseUrl || '…'}
+            </code>
             <CopyButton value={baseUrl} label="" />
           </div>
           <div className="flex flex-wrap gap-3 border-t border-border pt-3 text-sm">

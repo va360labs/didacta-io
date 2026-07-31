@@ -77,7 +77,7 @@ export function ForgotPasswordForm() {
             id="tenantSlug"
             name="tenantSlug"
             autoComplete="organization"
-            placeholder="va360"
+            placeholder="mi-academia"
           />
         </div>
       )}

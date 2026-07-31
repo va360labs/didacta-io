@@ -507,8 +507,8 @@ export default function MembresiaAdminPage() {
           {showCourses && (
             <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-2 p-4">
               <p className="text-sm font-semibold">
-                Precio individual de referencia por curso (lo que cuestan por separado, p. ej. en
-                va360.academy)
+                Precio individual de referencia por curso (lo que cuestan por separado, p. ej. en tu
+                web de venta)
               </p>
               {courses.length === 0 ? (
                 <p className="text-sm text-text-muted">No hay cursos publicados.</p>

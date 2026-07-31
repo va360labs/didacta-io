@@ -5,7 +5,7 @@ import { fetchTenantContext } from '@/lib/tenant-context';
 
 /**
  * "Didacta" nunca va solo en el título del navegador: siempre acompañado del
- * nombre del tenant ("Iniciar sesión | VA360 powered by Didacta").
+ * nombre del tenant ("Iniciar sesión | Mi Academia powered by Didacta").
  *
  * El nombre del tenant se resuelve por dominio contra la API, así que el
  * servidor no lo conoce al generar el `metadata` estático (haría dinámica toda
