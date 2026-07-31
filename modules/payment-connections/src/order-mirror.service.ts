@@ -319,6 +319,84 @@ export class OrderMirrorService {
       orderBy: { accessEndsAt: 'asc' },
     });
   }
+
+  /**
+   * Accesos con vigencia a los que toca avisar, y a los que no se ha avisado ya
+   * para esa misma fecha de caducidad.
+   *
+   * El worker diario ya avisa a las suscripciones de verdad leyendo
+   * `ModPaymentConnectionsSubscriber`. Estos no estaban cubiertos porque viven
+   * en otra tabla, y son precisamente los que **nadie más va a avisar**: para
+   * WooCommerce el pedido está cerrado y no habrá renovación ni recordatorio.
+   *
+   * El mensaje que toca es distinto al de una suscripción: aquí no se va a
+   * cobrar nada, el acceso simplemente termina.
+   */
+  async listTimedAccessToWarn(
+    tenantId: string,
+    dias: number,
+  ): Promise<
+    Array<{
+      id: string;
+      externalId: string;
+      customerEmail: string;
+      customerName: string | null;
+      userId: string | null;
+      accessEndsAt: Date;
+      products: string[];
+    }>
+  > {
+    const ahora = new Date();
+    const limite = new Date(ahora.getTime() + dias * 86_400_000);
+
+    const rows = await this.prisma.modPaymentConnectionsOrder.findMany({
+      where: {
+        tenantId,
+        paid: true,
+        entitlementKind: 'TIMED',
+        accessEndsAt: { not: null, gt: ahora, lte: limite },
+      },
+      orderBy: { accessEndsAt: 'asc' },
+    });
+
+    return rows
+      .filter(
+        (r) =>
+          r.accessEndsAt !== null &&
+          // Ya avisado para ESTA fecha concreta: si la fecha cambia (recompra,
+          // corrección), el aviso vuelve a estar disponible.
+          r.expiryWarnedFor?.getTime() !== r.accessEndsAt.getTime(),
+      )
+      .map((r) => ({
+        id: r.id,
+        externalId: r.externalId,
+        customerEmail: r.customerEmail,
+        customerName: r.customerName,
+        userId: r.userId,
+        accessEndsAt: r.accessEndsAt as Date,
+        products: productNamesOf(r.items),
+      }));
+  }
+
+  /** Marca el aviso como enviado para esa fecha de caducidad. */
+  async markExpiryWarned(orderId: string, accessEndsAt: Date): Promise<void> {
+    await this.prisma.modPaymentConnectionsOrder.update({
+      where: { id: orderId },
+      data: { expiryWarnedFor: accessEndsAt },
+    });
+  }
+}
+
+/** Nombres de producto de un pedido, tolerando filas con JSON inesperado. */
+function productNamesOf(items: unknown): string[] {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((i) =>
+      i && typeof i === 'object' && typeof (i as { name?: unknown }).name === 'string'
+        ? (i as { name: string }).name
+        : null,
+    )
+    .filter((n): n is string => !!n);
 }
 
 function parseDate(value: string | null | undefined): Date | null {

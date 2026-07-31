@@ -674,6 +674,26 @@ export const TRANSACTIONAL_EMAIL_DEFS: EmailTemplateCatalogEntry[] = [
       'Si hay portal de Stripe configurado, el botón «Gestionar mi suscripción» se añade al final.',
   },
   {
+    key: 'payment_connections.access_expiring',
+    name: 'Aviso de fin de acceso (pago único con vigencia)',
+    description:
+      'Aviso automático N días antes de que termine un acceso comprado de una vez (p. ej. «Acceso ANUAL»). ' +
+      'Es DISTINTO del aviso de renovación: este acceso no se renueva solo, hay que volver a comprarlo.',
+    category: 'billing',
+    source: 'transactional',
+    channels: ['EMAIL'],
+    defaultSubject: 'Tu acceso a {{tenantName}} termina el {{renewalDate}}',
+    defaultBody:
+      'Hola,\n\nTu acceso{{#plan}} a {{plan}}{{/plan}} termina el {{renewalDate}}.\n\nA diferencia de una suscripción, este acceso no se renueva solo: si quieres seguir, tendrás que renovarlo antes de esa fecha.\n\nSi ya lo has renovado, puedes ignorar este mensaje.',
+    variables: [
+      { name: 'plan', description: 'Producto comprado (puede estar vacío)' },
+      { name: 'renewalDate', description: 'Fecha en que termina el acceso' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+    structuralNote:
+      'No lleva botón: no hay portal que gestionar, la renovación es una compra nueva en la tienda.',
+  },
+  {
     key: 'subscriptions.admin_digest',
     name: 'Resumen diario de suscripciones (admins)',
     description:

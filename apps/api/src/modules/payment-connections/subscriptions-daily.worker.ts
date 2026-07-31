@@ -132,6 +132,9 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
         );
         await this.sendAdminDigest(service, resolved.config, tenantId, branding);
         await this.sendMemberWarnings(service, resolved.config, tenantId, branding);
+        // Los accesos con vigencia no los cubre el aviso de renovación: viven
+        // en otra tabla y nadie más va a avisar de ellos.
+        await this.sendTimedAccessWarnings(resolved.config, tenantId, branding);
       } catch (err) {
         this.logger.error(
           { tenantId, err: err instanceof Error ? err.message : String(err) },
@@ -268,6 +271,99 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
     if (toWarn.length) {
       this.logger.log({ tenantId, sent, total: toWarn.length }, 'subscriptions daily: avisos 7d');
     }
+  }
+
+  /**
+   * Aviso a quien compró un acceso con vigencia (pago único, no suscripción).
+   *
+   * Va aparte del aviso de renovación porque el mensaje es el contrario: aquí
+   * **no se va a cobrar nada** y el acceso simplemente termina. Decirle «se te
+   * cobrará el día X» a alguien que tiene que volver a comprar es mandarle a
+   * esperar un cobro que no llega — que es justo lo que hizo que 50 de estos
+   * accesos caducaran sin que nadie se enterara.
+   */
+  private async sendTimedAccessWarnings(
+    config: SmtpConfig,
+    tenantId: string,
+    branding: EmailBranding,
+  ): Promise<void> {
+    const mirror = this.registry.getOrderMirrorService();
+    const toWarn = await mirror.listTimedAccessToWarn(tenantId, WINDOW_DAYS);
+    if (toWarn.length === 0) return;
+
+    const override = await fetchEmailOverride(
+      this.prisma as unknown as TemplateOverridePrisma,
+      tenantId,
+      'payment_connections.access_expiring',
+    );
+
+    let sent = 0;
+    for (const a of toWarn) {
+      const producto = a.products.join(', ') || 'tu acceso';
+      const fecha = fmtDate(a.accessEndsAt);
+
+      let subject = `Tu acceso a ${branding.tenantName} termina el ${fecha}`;
+      let bodyText =
+        `Hola${a.customerName ? ` ${a.customerName}` : ''},\n\n` +
+        `Tu acceso a ${producto} termina el ${fecha}.\n\n` +
+        `A diferencia de una suscripción, este acceso no se renueva solo: ` +
+        `si quieres seguir, tendrás que renovarlo antes de esa fecha.\n\n` +
+        `Si ya lo has renovado, puedes ignorar este mensaje.`;
+
+      if (override) {
+        const applied = applyEmailOverride(
+          override,
+          {
+            plan: producto,
+            renewalDate: fecha,
+            amount: '',
+            cancelUrl: '',
+            tenantName: branding.tenantName,
+          },
+          subject,
+        );
+        subject = applied.subject;
+        bodyText = applied.bodyText;
+      }
+
+      const { html, text } = renderBrandedEmail(branding, {
+        title: subject,
+        bodyHtml: textToHtmlParagraphs(bodyText),
+        bodyText,
+      });
+
+      try {
+        const r = await this.smtp.send(
+          config,
+          { to: a.customerEmail, subject, text, html },
+          branding.tenantName,
+        );
+        if (r.ok) {
+          await mirror.markExpiryWarned(a.id, a.accessEndsAt);
+          sent++;
+        } else {
+          this.logger.warn(
+            { tenantId, to: a.customerEmail, err: r.error },
+            'aviso caducidad: envío falló',
+          );
+        }
+      } catch (err) {
+        this.logger.warn(
+          {
+            tenantId,
+            to: a.customerEmail,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          'aviso caducidad: excepción',
+        );
+      }
+      await new Promise((res) => setTimeout(res, 300));
+    }
+
+    this.logger.log(
+      { tenantId, sent, total: toWarn.length },
+      'subscriptions daily: avisos de caducidad de acceso',
+    );
   }
 
   async onModuleDestroy(): Promise<void> {

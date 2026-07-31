@@ -2975,6 +2975,11 @@ model ModPaymentConnectionsOrder {
   /// `ModPaymentConnectionsSubscriber`, que la pasarela sí mantiene al día.
   accessEndsAt    DateTime? @map("access_ends_at")
 
+  /// `accessEndsAt` para el que ya se mandó el aviso de caducidad. Evita
+  /// reenviar el mismo aviso cada día. Mismo patrón que
+  /// `ModPaymentConnectionsSubscriber.renewalWarnedPeriodEnd`.
+  expiryWarnedFor DateTime? @map("expiry_warned_for")
+
   /// Líneas del pedido: nombre, producto, importe y su clasificación.
   items    Json
   syncedAt DateTime @default(now()) @map("synced_at")
