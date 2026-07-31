@@ -8,7 +8,6 @@ import { BillingWebhookController } from './billing-webhook.controller';
 import { BillingErrorFilter } from './billing-error.filter';
 import { BillingLearningBridge } from './billing-learning.bridge';
 import { BillingRefundBridge } from './billing-refund.bridge';
-import { WooCommercePriceSyncService } from './woocommerce-price-sync.service';
 
 /// Backend del módulo `mod.billing`. Encapsula los controllers de checkout
 /// alumno, admin de productos Stripe, webhook idempotente, el filter y el
@@ -28,7 +27,6 @@ import { WooCommercePriceSyncService } from './woocommerce-price-sync.service';
   providers: [
     BillingLearningBridge,
     BillingRefundBridge,
-    WooCommercePriceSyncService,
     { provide: APP_FILTER, useClass: BillingErrorFilter },
   ],
 })
