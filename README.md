@@ -10,18 +10,19 @@
 
 ## Estado actual
 
-🚧 **Alpha pública** — primer hito público en `v0.0.1-alpha.0`. Lanzamiento previsto: mayo de 2026.
+🚧 **Alpha** — entre mayo y julio de 2026 el producto maduró sirviendo en
+producción real a su primer despliegue (congelado en el tag
+`v0.0.1-alpha.88-va360`); desde el 31 de julio de 2026 el repo vuelve a ser el
+producto whitelabel y prepara su primera versión pública. Guías:
+[instalación](docs/INSTALL.md) · [actualización](docs/UPGRADE.md).
 
 Imagen oficial publicada en Docker Hub: [`didactaio/community`](https://hub.docker.com/r/didactaio/community). **Pública** — no requiere `docker login`.
 
 ## Verificar acceso a la imagen
 
 ```bash
-# Tag oficial fijado, recomendado para alpha testers
-docker pull didactaio/community:0.0.1-alpha.0
-
-# Alternativa: tag rolling de la última alpha
-docker pull didactaio/community:alpha
+# Fija SIEMPRE una versión concreta (tags en Docker Hub); no hay tag `latest`.
+docker pull didactaio/community:<versión>
 ```
 
 Si se descarga sin pedir credenciales, ya puedes seguir cualquiera de los dos caminos de despliegue descritos abajo.
@@ -59,8 +60,8 @@ cp .env.example .env
 #    - node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 #    Edita .env y completa AUTH_SECRET=...
 
-# 4. Fijar la versión de la imagen
-echo "DIDACTA_IMAGE_TAG=0.0.1-alpha.0" >> .env
+# 4. Fijar la versión de la imagen (tags publicados en Docker Hub)
+echo "DIDACTA_IMAGE_TAG=<versión>" >> .env
 
 # 5. Arrancar
 docker compose -f docker-compose.alpha.yml up -d

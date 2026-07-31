@@ -8,7 +8,11 @@ useDefault = true
 [[rules]]
 id = "didacta-license-jwt"
 description = "JWT que pueda ser una licencia Didacta firmada (no debería estar en repo)"
-regex = '''eyJhbGciOiJFZERTQSI[A-Za-z0-9_-]{30,}'''
+# Cubre EdDSA (formato histórico) y ES256 (el formato real de las licencias
+# actuales, firmadas con ECDSA P-256 en KMS). OJO: el historial de la era
+# va360 contiene JWTs ES256 de prueba; el escaneo full-history solo saldrá
+# limpio sobre la historia fresca del repo público (ver plan de retomada).
+regex = '''eyJhbGciOiJ(FZERTQSI|FUzI1NiI)[A-Za-z0-9_-]{30,}'''
 tags = ["didacta", "license", "jwt"]
 
 [[rules]]
