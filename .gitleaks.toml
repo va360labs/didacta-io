@@ -22,7 +22,8 @@ description = "Falsos positivos conocidos"
 paths = [
     # Las claves PÚBLICAS embebidas son intencionales y NO son secreto
     '''packages/license-sdk/src/public-keys/.*\.pem''',
-    # Plantillas de docs que muestran ejemplos de JWT
+    # docs/ ya no existe en el working tree (migrado a Notion), pero la CI
+    # escanea TODO el historial (fetch-depth: 0) y los docs históricos
+    # contenían ejemplos de JWT. No eliminar mientras se escanee el historial.
     '''docs/.*\.md''',
-    '''arquitectura-didacta/.*\.md''',
 ]

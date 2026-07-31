@@ -2,13 +2,24 @@
 
 > Todos los cambios notables del repo `didacta-community` se documentan aquí.
 > Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
-> Esquema de versiones: ver [`docs/versioning.md`](docs/versioning.md).
+> Esquema de versiones: [SemVer](https://semver.org) estricto con pre-releases `0.0.1-alpha.N`.
 
 ## [Unreleased]
 
 ### Added
 
 - (Acumulando cambios para el siguiente tag.)
+
+### [0.0.1-alpha.88-va360] — 2026-07-31
+
+#### Notes
+
+- **Congelación de la era a-medida.** Entre `0.0.1-alpha.82` y este tag, el repo
+  sirvió en exclusiva al despliegue a medida de `aula.va360.academy`, sin
+  registrar aquí las versiones intermedias (que no se reconstruyen).
+- Este tag congela ese estado tal cual. A partir de aquí arranca la retomada
+  whitelabel de Didacta.io: limpieza del acoplamiento a VA360 y reactivación de
+  la CI fair-code.
 
 ### [0.0.1-alpha.82]
 
@@ -144,4 +155,4 @@
 
 ## Política de versiones
 
-Ver [`docs/versioning.md`](docs/versioning.md). TL;DR: SemVer estricto, pre-releases `-alpha.N` / `-beta.N` / `-rc.N`, `:latest` en Docker NUNCA apunta a pre-release.
+SemVer estricto, pre-releases `-alpha.N` / `-beta.N` / `-rc.N`, `:latest` en Docker NUNCA apunta a pre-release. La política completa vive en el Notion del equipo.

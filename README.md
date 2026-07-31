@@ -1,11 +1,11 @@
 # Didacta Community
 
-> 📚 **El LMS de nueva generación. Open-source, modular y listo para Fundae.**
+> 📚 **El LMS de nueva generación. Fair-code, modular y listo para Fundae.**
 
 [![Docker](https://img.shields.io/badge/docker-hub-blue)](https://hub.docker.com/r/didactaio/community)
 [![License](https://img.shields.io/badge/license-Sustainable%20Use%201.0-orange)](LICENSE)
-[![Versioning](https://img.shields.io/badge/versioning-SemVer-green)](docs/versioning.md)
-[![Stage](https://img.shields.io/badge/stage-alpha-red)](docs/alpha/INSTALL.md)
+[![Versioning](https://img.shields.io/badge/versioning-SemVer-green)](https://semver.org)
+![Stage](https://img.shields.io/badge/stage-alpha-red)
 [![Web](https://img.shields.io/badge/web-didacta.io-black)](https://didacta.io)
 
 ## Estado actual
@@ -103,14 +103,7 @@ Después, descomenta las líneas `S3_*` en `docker-compose.alpha.yml`, dentro de
 
 Para producción real, apunta a tu Hetzner Object Storage, AWS S3 u otro proveedor compatible configurando las variables `S3_*` en `.env`.
 
-Manual completo con troubleshooting, primer administrador, actualización de versión y operaciones del día a día:
-
-- [`docs/alpha/INSTALL.md`](docs/alpha/INSTALL.md)
-- [`docs/alpha/RUNBOOK.md`](docs/alpha/RUNBOOK.md)
-
-Para reportar bugs o enviar feedback:
-
-- [`docs/alpha/FEEDBACK.md`](docs/alpha/FEEDBACK.md)
+El quickstart de esta página es, por ahora, el manual de instalación de referencia. Para dudas, bugs o feedback, abre una issue en GitHub — hay plantillas de bug, feedback y feature request. Para vulnerabilidades de seguridad, sigue [`SECURITY.md`](SECURITY.md).
 
 ## Camino B — Docker pull + run manual
 
@@ -166,14 +159,14 @@ curl -fsS http://localhost:4000/healthz     # debe responder 200
 
 ## Sobre el proyecto
 
-Didacta es un LMS (Learning Management System) **open-source de nueva generación**: arquitectura modular, sin licencias por usuario y con cumplimiento legal integrado en el núcleo. Diseñado para academias, formadores y organizaciones que quieren operar su propia plataforma de formación con control total.
+Didacta es un LMS (Learning Management System) **fair-code de nueva generación**: código fuente disponible bajo la [Didacta Sustainable Use License v1.0](LICENSE), arquitectura modular, sin licencias por usuario y con cumplimiento legal integrado en el núcleo. Diseñado para academias, formadores y organizaciones que quieren operar su propia plataforma de formación con control total.
 
 Más información y demo en vivo: [didacta.io](https://didacta.io).
 
 ### Por qué Didacta
 
 - **Modular de verdad.** Instala solo lo que necesitas. Cada función es un módulo limpio: sin parches, sin temas que rompen en cada actualización, sin deuda técnica acumulada.
-- **Software libre.** Tu plataforma, tu código. Audítalo, modifícalo, despliégalo y redistribúyelo. Sin licencias por usuario.
+- **Fair-code.** Tu plataforma, tu código: audítalo, modifícalo y despliégalo con uso interno libre bajo la [Didacta Sustainable Use License v1.0](LICENSE). Sin licencias por usuario. La distribución comercial, el SaaS o el white-label de terceros requieren acuerdo (ver [Modelo de licencias](#modelo-de-licencias)).
 - **Cumplimiento serio.** Fundae, RGPD y WCAG 2.2 AA integrados en el núcleo, no añadidos con plugins de terceros. Trazabilidad, auditoría y exportación de datos listos desde el día uno.
 - **IA discreta.** Inteligencia artificial que ayuda sin interrumpir: crea contenido, sugiere itinerarios y resume actividad.
 
@@ -195,16 +188,16 @@ Didacta es **fair-code**: source-available, uso interno empresarial libre, distr
 - **Capabilities Enterprise** (archivos `*.ee.*` dentro del CORE): [Didacta Enterprise License](LICENSE_EE). Requieren licencia firmada activa para usarse en producción.
 - **Cloud**: SaaS gestionado por VA360 (`cloud.didacta.io`).
 
-Resumen humano: [`LICENSE_NOTICE.md`](LICENSE_NOTICE.md). FAQ: [`docs/licensing/faq.md`](docs/licensing/faq.md). Política de uso comercial: [`COMMERCIAL_USE.md`](COMMERCIAL_USE.md). Marca registrada: [`TRADEMARKS.md`](TRADEMARKS.md).
+Resumen humano: [`LICENSE_NOTICE.md`](LICENSE_NOTICE.md). Política de uso comercial: [`COMMERCIAL_USE.md`](COMMERCIAL_USE.md). Marca registrada: [`TRADEMARKS.md`](TRADEMARKS.md). Dudas de licensing: `licensing@didacta.io`.
 
 ## Documentación
 
-- 🚀 [`docs/alpha/INSTALL.md`](docs/alpha/INSTALL.md) — Manual completo de instalación.
-- 📘 [`docs/alpha/RUNBOOK.md`](docs/alpha/RUNBOOK.md) — Operación día a día.
-- 🐛 [`docs/alpha/FEEDBACK.md`](docs/alpha/FEEDBACK.md) — Cómo reportar bugs.
+- 🤝 [`CONTRIBUTING.md`](CONTRIBUTING.md) — Guía de contribución.
 - 🔒 [`SECURITY.md`](SECURITY.md) — Política de seguridad y reporte responsable.
 - 📋 [`CHANGELOG.md`](CHANGELOG.md) — Historial de cambios.
-- 🤝 [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — Código de conducta.
+- 📜 [`LICENSE_NOTICE.md`](LICENSE_NOTICE.md) — Resumen humano del modelo de licencias.
+- 🧭 [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — Código de conducta.
+- 🐛 Bugs y feedback — issues de GitHub (plantillas de bug, feedback y feature request).
 
 ## Stack tecnológico
 

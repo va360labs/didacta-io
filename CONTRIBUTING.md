@@ -97,13 +97,13 @@ CI corre `scripts/license-check.ts` y rechaza el PR si hay dependencia incompati
 
 ## Reportar bugs
 
-Si eres **alpha tester**, sigue [`docs/alpha/FEEDBACK.md`](docs/alpha/FEEDBACK.md).
+Abre una issue en GitHub con la plantilla de **bug** (o la de **feedback** si no es un fallo concreto): pasos para reproducir, comportamiento esperado y comportamiento observado.
 
 Si encuentras una vulnerabilidad de seguridad, **NO abras issue público**. Manda un email a `security@didacta.io`. Ver [`SECURITY.md`](SECURITY.md).
 
 ## Decisiones arquitectónicas
 
-Cualquier cambio que afecte al contrato de módulo, al modelo de licencias, al SDK o a APIs públicas requiere **ADR** previa. Las ADRs viven en `docs/adrs/`. Plantilla: ADR-008.
+Cualquier cambio que afecte al contrato de módulo, al modelo de licencias, al SDK o a APIs públicas requiere una **decisión de arquitectura (ADR)** previa. Como contribuidor externo, proponla abriendo una issue o GitHub Discussion con el contexto, las opciones consideradas y sus trade-offs; el equipo la evaluará y, si se acepta, la registrará en el índice interno de ADRs (Notion del equipo).
 
 ## Política de marca
 
