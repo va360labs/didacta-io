@@ -18,6 +18,7 @@ import {
   WOO_ORDER_TOPICS,
 } from '@didacta/mod-payment-connections';
 import { Public } from '../../auth/decorators';
+import { PrismaService } from '../../prisma/prisma.service';
 import { ModuleRegistryService } from '../module-registry.service';
 
 /**
@@ -38,7 +39,10 @@ import { ModuleRegistryService } from '../module-registry.service';
 export class WooWebhookController {
   constructor(
     private readonly registry: ModuleRegistryService,
-    private readonly prisma: PrismaLike,
+    // Tiene que ser la clase concreta: NestJS resuelve la inyección por el
+    // token del tipo en runtime, y una interfaz de TypeScript no existe ahí.
+    // Declararla como interfaz tumba el arranque de TODA la aplicación.
+    private readonly prisma: PrismaService,
     private readonly logger: PinoLogger,
   ) {}
 
@@ -134,14 +138,4 @@ export class WooWebhookController {
       matchedUser: res.userId !== null,
     };
   }
-}
-
-/** Lo mínimo que este controller necesita de Prisma: resolver el tenant. */
-interface PrismaLike {
-  tenant: {
-    findFirst(args: {
-      where: { slug: string; deletedAt: null };
-      select: { id: true };
-    }): Promise<{ id: string } | null>;
-  };
 }
