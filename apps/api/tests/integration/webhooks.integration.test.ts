@@ -30,6 +30,9 @@ import { createTestApp, type TestApp } from './helpers/test-app';
 import { issueTestLicense } from './helpers/issue-test-license';
 import { issueTestAccessJwt } from './helpers/issue-test-jwt';
 import { seedMinimalTenant } from './helpers/seed-tenant';
+// Los imports `.ee` viven en el helper *.module.ts (excepción aceptada del
+// ee-fence): este spec no importa nada `.ee` directamente.
+import { buildIntegrationWebhooksModule } from './helpers/webhooks-ee-test.module';
 
 import { TokenService } from '../../src/auth/token.service';
 import { JwtAuthGuard } from '../../src/auth/jwt-auth.guard';
@@ -38,15 +41,6 @@ import { PrismaAuditLogService } from '../../src/modules/prisma-audit-log.servic
 import { PrismaTenantConfigService } from '../../src/modules/prisma-tenant-config.service';
 import { SecretCipherService } from '../../src/modules/secret-cipher.service';
 import { MfaPolicyService } from '../../src/auth/mfa-policy/mfa-policy.service';
-import { WebhooksController } from '../../src/webhooks/webhooks.controller';
-import { WebhooksService } from '../../src/webhooks/webhooks.service';
-import { WebhooksAdminControllerEE } from '../../src/webhooks/webhooks-admin.controller.ee';
-import { WebhooksDispatcherEE } from '../../src/webhooks/webhooks.dispatcher.ee';
-import {
-  WebhooksMetricsEE,
-  webhooksMetricsEEProviders,
-} from '../../src/webhooks/webhooks.metrics.ee';
-import { WEBHOOKS_EE_DISPATCHER_TOKEN } from '../../src/webhooks/webhooks.types';
 
 // ---------------------------------------------------------------------------
 // Auth core mínimo (idéntico patrón a capabilities-ee.integration.test.ts).
@@ -81,21 +75,7 @@ import { WEBHOOKS_EE_DISPATCHER_TOKEN } from '../../src/webhooks/webhooks.types'
 })
 class IntegrationAuthCoreModule {}
 
-@Module({
-  imports: [IntegrationAuthCoreModule],
-  controllers: [WebhooksController, WebhooksAdminControllerEE],
-  providers: [
-    ...webhooksMetricsEEProviders,
-    WebhooksMetricsEE,
-    WebhooksDispatcherEE,
-    {
-      provide: WEBHOOKS_EE_DISPATCHER_TOKEN,
-      useExisting: WebhooksDispatcherEE,
-    },
-    WebhooksService,
-  ],
-})
-class IntegrationWebhooksModule {}
+const IntegrationWebhooksModule = buildIntegrationWebhooksModule(IntegrationAuthCoreModule);
 
 // ---------------------------------------------------------------------------
 // Helpers
