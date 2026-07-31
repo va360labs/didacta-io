@@ -23,6 +23,12 @@
 
 #### Added
 
+- **Telemetría anónima de instalaciones**: latido diario con id de instancia
+  aleatorio + versión + edición + node/SO hacia `registry.didacta.io`. Sin
+  PII ni datos de negocio; falla en silencio sin red; opt-out con
+  `DIDACTA_TELEMETRY_DISABLED=true` (documentado en README § Telemetría).
+  El registro opt-in identificado (email + organización) sigue siendo
+  voluntario y separado.
 - Guías de instalación y actualización self-host (`docs/INSTALL.md`,
   `docs/UPGRADE.md`) y `CONTRIBUTORS.md`.
 - Cabecera SPDX `LicenseRef-Didacta-Sustainable-Use` en todo el código de

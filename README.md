@@ -191,6 +191,25 @@ Didacta es **fair-code**: source-available, uso interno empresarial libre, distr
 
 Resumen humano: [`LICENSE_NOTICE.md`](LICENSE_NOTICE.md). Política de uso comercial: [`COMMERCIAL_USE.md`](COMMERCIAL_USE.md). Marca registrada: [`TRADEMARKS.md`](TRADEMARKS.md). Dudas de licensing: `licensing@didacta.io`.
 
+## Telemetría
+
+Cada instalación envía **un latido diario anónimo** a `registry.didacta.io` para que sepamos cuántas instalaciones de Didacta existen. El payload completo es este y nada más:
+
+| Campo                 | Contenido                                                                                                                                             |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `instanceId`          | UUID **aleatorio** generado en la primera ejecución (`.didacta-instance-id` en el volumen de datos). No identifica a ninguna persona ni organización. |
+| `version` / `edition` | Versión de Didacta y edición (`community` o el plan Enterprise).                                                                                      |
+| `node` / `os`         | Versión de Node y plataforma (`linux/x64`…).                                                                                                          |
+| `sentAt`              | Fecha del latido.                                                                                                                                     |
+
+Sin PII, sin datos de negocio (ni usuarios, ni cursos, ni dominios), sin bloquear nada: si no hay salida a internet, el latido falla en silencio y la plataforma funciona igual. **Se desactiva con una variable de entorno**:
+
+```bash
+DIDACTA_TELEMETRY_DISABLED=true
+```
+
+Aparte existe un **registro opt-in** voluntario (Administración → Registro) donde el operador puede identificarse con email y organización a cambio de canal directo con el equipo; ese nivel envía métricas agregadas y tiene opt-out y borrado RGPD desde el propio panel.
+
 ## Documentación
 
 - 🤝 [`CONTRIBUTING.md`](CONTRIBUTING.md) — Guía de contribución.

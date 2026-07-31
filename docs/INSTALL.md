@@ -68,6 +68,17 @@ La versión se fija con `DIDACTA_IMAGE_TAG` en `.env` (tags publicados en
 No existe tag `latest`: fija siempre una versión concreta. Para actualizar,
 lee [UPGRADE.md](UPGRADE.md).
 
+### Telemetría
+
+La instalación envía un latido diario anónimo (id de instancia aleatorio +
+versión + edición + SO) para contar instalaciones vivas — el detalle exacto
+del payload está en el README § Telemetría. Sin PII y sin efecto si no hay
+red. Para desactivarlo, añade a tu `.env`:
+
+```bash
+DIDACTA_TELEMETRY_DISABLED=true
+```
+
 ### Licencia Enterprise
 
 Community funciona completa sin licencia. Si tienes una licencia Enterprise,

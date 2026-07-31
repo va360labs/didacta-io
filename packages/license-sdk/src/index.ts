@@ -48,9 +48,11 @@ export {
   RegistryClient,
   registerInputSchema,
   telemetrySnapshotSchema,
+  heartbeatSchema,
   type RegisterInput,
   type RegisterResponse,
   type TelemetrySnapshot,
+  type Heartbeat,
   type RegistryClientOptions,
 } from './registry/client.js';
 

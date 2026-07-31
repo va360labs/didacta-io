@@ -2,23 +2,24 @@
  * Copyright (c) VA360 LABS S.L.
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  *
- * RegistryClient — cliente del sistema de registro opt-in de instalaciones
- * Community contra `cloud.didacta.io/registry/*`.
+ * RegistryClient — cliente del registro de instalaciones contra
+ * `registry.didacta.io/registry/*`. Dos niveles:
  *
- * NO envía PII. Solo agregados:
- *   - installationId (UUID), version, node version, OS.
- *   - users count, courses count, activeUsers30d.
- *   - moduleNames@versions (no contenido).
- *   - capabilitiesActive, licensePlan.
- *   - errorCount24h.
+ *   1. HEARTBEAT anónimo (`sendHeartbeat`, sin token): latido diario que
+ *      envía TODA instalación salvo opt-out por env. Solo cuenta
+ *      instalaciones vivas: id de instancia aleatorio + versión + edición +
+ *      node/OS. Cero PII, cero datos de negocio.
+ *   2. Registro OPT-IN (`register` + `sendTelemetry`, con token): el operador
+ *      se identifica (email + organización) a cambio de canal directo, y
+ *      envía telemetría agregada más rica (usuarios, cursos, módulos…).
  *
- * Política de reintentos: simple. Si falla, no bloquea.
- * Frecuencia recomendada por defecto: nightly.
+ * NO envía PII en ningún nivel de telemetría. Política de reintentos:
+ * simple. Si falla, no bloquea. Frecuencia recomendada: nightly.
  */
 
 import { z } from 'zod';
 
-const DEFAULT_REGISTRY_URL = 'https://cloud.didacta.io/registry';
+const DEFAULT_REGISTRY_URL = 'https://registry.didacta.io/registry';
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 export const registerInputSchema = z.object({
@@ -52,6 +53,19 @@ export const telemetrySnapshotSchema = z.object({
 });
 
 export type TelemetrySnapshot = z.infer<typeof telemetrySnapshotSchema>;
+
+export const heartbeatSchema = z.object({
+  /** UUID aleatorio persistido en la instalación. No identifica a nadie. */
+  instanceId: z.string().uuid(),
+  version: z.string(),
+  /** 'community' o el plan de la licencia EE activa. */
+  edition: z.string(),
+  node: z.string(),
+  os: z.string(),
+  sentAt: z.string().datetime(),
+});
+
+export type Heartbeat = z.infer<typeof heartbeatSchema>;
 
 export interface RegistryClientOptions {
   /** Base URL del servicio registry. Default https://cloud.didacta.io/registry. */
@@ -100,6 +114,16 @@ export class RegistryClient {
       );
     }
     await this.requestJson('POST', '/telemetry', parsed);
+  }
+
+  /**
+   * Latido anónimo de instalación viva. NO requiere token ni opt-in: es el
+   * contador de instalaciones del producto. El servidor deduplica por
+   * instanceId y solo conserva agregados.
+   */
+  async sendHeartbeat(heartbeat: Heartbeat): Promise<void> {
+    const parsed = heartbeatSchema.parse(heartbeat);
+    await this.requestJson('POST', '/heartbeat', parsed);
   }
 
   /**

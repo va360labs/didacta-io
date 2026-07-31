@@ -12,10 +12,11 @@
 import { Module } from '@nestjs/common';
 import { RegistryController } from './registry.controller';
 import { RegistryService } from './registry.service';
+import { TelemetryHeartbeatService } from './telemetry-heartbeat.service';
 
 @Module({
   controllers: [RegistryController],
-  providers: [RegistryService],
+  providers: [RegistryService, TelemetryHeartbeatService],
   exports: [RegistryService],
 })
 export class RegistryModule {}
