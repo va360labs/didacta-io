@@ -34,7 +34,7 @@
   "eventsConsumed": [],
   "hooksProvided": [],
   "hooksConsumed": [],
-  "requiredCapabilities": ["feat:migrators.learndash"],
+  "requiredCapabilities": [],
   "requiredEnvVars": [],
   "isolation": "vm",
   "http": {

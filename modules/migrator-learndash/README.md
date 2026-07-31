@@ -4,26 +4,25 @@
 > Wizard didáctico paso a paso, ETL con staging, idempotencia por
 > checksum, reportes auditables firmados.
 
-| Campo                | Valor                                            |
-| -------------------- | ------------------------------------------------ |
-| Nombre               | `mod.migrator-learndash`                         |
-| Edición              | **Enterprise**                                   |
-| Versión              | 1.0.0                                            |
-| Capability requerida | `feat:migrators.learndash`                       |
-| Categoría            | migration                                        |
-| Estado               | Beta                                             |
-| Core requerido       | `^1.0.0`                                         |
-| Prefijo de tablas    | `mod_migrator_learndash_*`                       |
-| API namespace        | `/modules/migrator-learndash`                    |
-| Entrega              | ZIP firmado (`mod.migrator-learndash-1.0.0.zip`) |
+| Campo             | Valor                                            |
+| ----------------- | ------------------------------------------------ |
+| Nombre            | `mod.migrator-learndash`                         |
+| Edición           | **Community**                                    |
+| Versión           | 1.0.0                                            |
+| Categoría         | migration                                        |
+| Estado            | Beta                                             |
+| Core requerido    | `^1.0.0`                                         |
+| Prefijo de tablas | `mod_migrator_learndash_*`                       |
+| API namespace     | `/modules/migrator-learndash`                    |
+| Entrega           | ZIP firmado (`mod.migrator-learndash-1.0.0.zip`) |
 
 ---
 
 ## Edición
 
-**Enterprise**. Requiere licencia activa con la capability
-`feat:migrators.learndash` en su payload JWT. La instalación se rechaza
-con `402 CapabilityRequiredError` si la licencia no la incluye.
+**Community**. Como todos los módulos de Didacta, no se gatea por
+licencia: las capabilities Enterprise son exclusivamente transversales
+del core (ver `packages/license-sdk/src/capabilities.ts`).
 
 ## Estado
 
@@ -120,17 +119,12 @@ hasta que se instalen.
 El módulo NO requiere variables de entorno propias. Toma toda su
 configuración del job (la pasa el wizard al crear cada migración).
 
-## Capacidades EE
+## Licencia
 
-Este módulo **es Enterprise**. La instancia de Didacta donde se
-instale debe tener una licencia activa que incluya
-`feat:migrators.learndash` en sus capabilities.
-
-> **Nota sobre la lista oficial de 11 capabilities**: la capability
-> `feat:migrators.learndash` es una **excepción documentada** porque
-> los migradores son módulos completos distribuibles, no features
-> transversales del core. Ver `didacta-knowledge.md` § 15 para la
-> justificación.
+Módulo **Community**: se instala en cualquier edición sin capability de
+licencia. La lista cerrada de 11 capabilities Enterprise cubre solo
+features transversales del core; gatear un módulo por licencia queda
+fuera del alcance de `LICENSE_EE`.
 
 ## Cómo se entrega
 
@@ -156,7 +150,7 @@ mod.migrator-learndash-1.0.0.zip
 ### Para empaquetarlo:
 
 ```bash
-cd D:/Test/didacta-modules-skill/work/migrator-learndash
+cd modules/migrator-learndash
 pnpm build
 node ../../scripts/package-module.mjs --module migrator-learndash --version 1.0.0
 # → dist/mod.migrator-learndash-1.0.0.zip
@@ -173,8 +167,7 @@ Para producción se usa `aws kms sign` sobre `alias/didacta-issuer-2026`
 3. El backend valida firma, aplica migrations Prisma en transacción,
    carga el módulo en VM aislada, registra rutas en el dispatcher
    runtime → status `INSTALLED`.
-4. Tenant admin activa el módulo desde `/admin/modules` (requiere la
-   capability EE en su licencia).
+4. Tenant admin activa el módulo desde `/admin/modules`.
 
 ## Runbook de migración (para el operador)
 
@@ -204,12 +197,10 @@ Para producción se usa `aws kms sign` sobre `alias/didacta-issuer-2026`
   ese punto se queda; el resto no se carga. El origen no se ha tocado.
 - **Recovery / rollback**: el módulo **NO** tiene rollback automático
   validado para producción. El único path soportado es restore desde
-  un `pg_dump` pre-migración. Ver el runbook operativo para el
-  procedimiento exacto, incluyendo la opción de borrado quirúrgico
-  (`DELETE ... WHERE external_source='learndash'`) cuando no se puede
-  tirar progreso post-backup:
-
-  → [docs/operations/migration-runbook.md](../../docs/operations/migration-runbook.md)
+  un `pg_dump` pre-migración; si no se puede tirar el progreso
+  posterior al backup, la alternativa es el borrado quirúrgico
+  (`DELETE ... WHERE external_source='learndash'`) tabla a tabla,
+  siempre dentro de una transacción y con dump previo.
 
   > El endpoint `POST /jobs/:id/rollback` existe pero está marcado
   > como **Beta** y no se ha validado contra volúmenes reales
