@@ -44,7 +44,7 @@ test.describe('mod.zoom-live · webhook HMAC (G5.3)', () => {
       return;
     }
 
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const stamp = Date.now();
 

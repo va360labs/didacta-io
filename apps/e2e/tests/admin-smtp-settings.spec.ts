@@ -25,7 +25,7 @@ import { injectSession } from '../helpers/auth';
 
 test.describe('Admin SMTP settings — UI + contrato admin-smtp', () => {
   test('guarda config falsa, intenta probar → error del MTA visible, cleanup', async ({ page }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const adminEmail = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.test';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const apiHeaders = {

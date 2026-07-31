@@ -13,7 +13,7 @@ import { adminTokenForBootstrap, API_URL, signup } from '../helpers/api';
  *     peor que el spam que pretendía frenar.
  */
 test.describe('moderación · sanciones', () => {
-  const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+  const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
 
   test('sancionar corta publicar, deja leer y pagar, y levantarla lo restaura', async () => {
     const stamp = Date.now();
@@ -209,7 +209,7 @@ test.describe('moderación · sanciones', () => {
  * suspendido seguía dentro hasta una hora.
  */
 test.describe('cuentas · suspensión y sesiones', () => {
-  const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+  const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
 
   test('suspender echa al usuario con su token actual, y reactivar le deja volver', async () => {
     const stamp = Date.now();
@@ -339,7 +339,7 @@ test.describe('cuentas · suspensión y sesiones', () => {
 });
 
 test.describe('moderación · expediente', () => {
-  const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+  const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
 
   test('el expediente reúne identidad, compras, formación, actividad y sanciones', async () => {
     const stamp = Date.now();

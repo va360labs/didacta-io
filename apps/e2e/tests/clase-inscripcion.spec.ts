@@ -20,7 +20,7 @@ interface SessionView {
 
 test.describe('mod.zoom-live · inscripción a clases en directo (ADR-017)', () => {
   test('gating end-to-end: sin inscribir no hay joinUrl; al inscribirse aparece; roster para admin', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const adminHeaders = {

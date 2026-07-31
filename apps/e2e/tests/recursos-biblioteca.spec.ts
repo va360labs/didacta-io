@@ -20,21 +20,21 @@ async function fullSession(
   page: Parameters<typeof injectSession>[0],
   auth: {
     tokens: { accessToken: string; refreshToken: string };
-    user: Record<string, unknown>;
+    user: Parameters<typeof injectSession>[1]['user'];
   },
 ) {
   await page.goto('/signin');
   await injectSession(page, {
     accessToken: auth.tokens.accessToken,
     refreshToken: auth.tokens.refreshToken,
-    user: { ...(auth.user as never), onboardingCompletedAt: new Date().toISOString() },
+    user: { ...auth.user, onboardingCompletedAt: new Date().toISOString() },
   });
 }
 
 test.describe('Biblioteca de recursos por colecciones (mod.resources)', () => {
   test('colecciones default, alta staff, compartir de alumno y descargas', async ({ page }) => {
     test.setTimeout(120_000);
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };

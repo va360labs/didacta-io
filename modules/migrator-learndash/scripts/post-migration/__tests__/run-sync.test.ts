@@ -20,7 +20,7 @@ const baseCfg: SyncConfig = {
   adminEmail: 'admin@test.io',
   adminPassword: 'pw',
   tenantSlug: 'acme',
-  wpBaseUrl: 'https://va360.test',
+  wpBaseUrl: 'https://example.test',
   wpUsername: 'wp_admin',
   wpAppPassword: 'app-pw',
   dryRun: false,
@@ -82,7 +82,7 @@ describe('runSync (orchestrator integration with mocks)', () => {
         ]);
       }
       // WP ENROLLED USERS (1 página, 3 items, segunda página vacía → break por items < perPage)
-      if (url.startsWith('https://va360.test/wp-json/ldlms/v1/sfwd-courses/55/users')) {
+      if (url.startsWith('https://example.test/wp-json/ldlms/v1/sfwd-courses/55/users')) {
         if (url.includes('page=1')) {
           return mkResponse(200, [{ id: 101 }, { id: 102 }, { id: 103 }]);
         }
@@ -165,7 +165,7 @@ describe('runSync (orchestrator integration with mocks)', () => {
           { id: 'course-1', externalSource: 'learndash', externalId: 'learndash:55' },
         ]);
       }
-      if (url.startsWith('https://va360.test/wp-json/ldlms/v1/sfwd-courses/55/users')) {
+      if (url.startsWith('https://example.test/wp-json/ldlms/v1/sfwd-courses/55/users')) {
         if (url.includes('page=1')) return mkResponse(200, [{ id: 101 }]);
         return mkResponse(200, []);
       }
@@ -218,7 +218,7 @@ describe('runSync (orchestrator integration with mocks)', () => {
           { id: 'c1', externalSource: 'learndash', externalId: 'learndash:7' },
         ]);
       }
-      if (url.startsWith('https://va360.test/wp-json/ldlms/v1/sfwd-courses/7/users')) {
+      if (url.startsWith('https://example.test/wp-json/ldlms/v1/sfwd-courses/7/users')) {
         // 403 NO se reintenta (no es 5xx). Devuelve y processCourse traga.
         return mkResponse(403, { message: 'forbidden' });
       }

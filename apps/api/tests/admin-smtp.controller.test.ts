@@ -54,7 +54,7 @@ function makeFactoryStub(args: {
 function makePrismaStub() {
   return {
     tenant: {
-      findUnique: vi.fn().mockResolvedValue({ slug: 'va360', name: 'VA360' }),
+      findUnique: vi.fn().mockResolvedValue({ slug: 'demo', name: 'Demo' }),
     },
   };
 }

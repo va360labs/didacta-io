@@ -63,7 +63,7 @@ describe('canSaveTenantName', () => {
 
   it('true cuando el draft trimmed cambia y todo lo demás está OK', () => {
     expect(
-      canSaveTenantName({ currentName: baseline, draftName: 'VA360 Academy', saving: false }),
+      canSaveTenantName({ currentName: baseline, draftName: 'Academia Demo', saving: false }),
     ).toBe(true);
   });
 

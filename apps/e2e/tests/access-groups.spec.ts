@@ -58,7 +58,7 @@ function status(
 
 test.describe('mod.access-groups (Fase 2)', () => {
   test('MULTI_COURSE: asignar fan-out, reconciliar cursos y revocar por refcount', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 
@@ -115,7 +115,7 @@ test.describe('mod.access-groups (Fase 2)', () => {
   });
 
   test('ALL_COURSES: asignar matricula en todos los cursos publicados', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now() + 1;
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 

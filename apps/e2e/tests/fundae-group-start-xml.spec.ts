@@ -49,7 +49,7 @@ function decodeJwtSub(jwt: string): string {
 
 test.describe('Fundae · XML inicio de grupo (LMS-83)', () => {
   test('genera XML válido con datos hidratados de DB', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const stamp = Date.now();
     const adminUserId = decodeJwtSub(bearer);

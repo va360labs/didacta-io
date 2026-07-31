@@ -17,7 +17,7 @@ import { injectSession } from '../helpers/auth';
 
 test.describe('Navegación simplificada (bloque 9)', () => {
   test('sidebar sin Eventos/Grupos, Foro plegable y /eventos redirige', async ({ page }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const alumno = await signup({
       tenantSlug,

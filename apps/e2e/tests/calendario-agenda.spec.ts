@@ -26,7 +26,7 @@ test.describe('/calendario · agenda con pasadas, en curso y próximas', () => {
   test('muestra una clase del mes siguiente y una pasada, fuera del mes visible', async ({
     page,
   }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };

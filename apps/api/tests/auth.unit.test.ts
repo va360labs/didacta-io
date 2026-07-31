@@ -80,7 +80,7 @@ describe('AuthService.signup · gate AUTH_SIGNUP_ENABLED', () => {
     else process.env[FLAG] = original;
   });
 
-  const dto = { email: 'x@y.com', password: 'Password123!', tenantSlug: 'va360' };
+  const dto = { email: 'x@y.com', password: 'Password123!', tenantSlug: 'demo' };
 
   it('sin la env (default) → 403 sin tocar la BD', async () => {
     // prisma null: si el gate no cortara ANTES de resolver tenant, esto
@@ -95,7 +95,7 @@ describe('AuthService.signup · gate AUTH_SIGNUP_ENABLED', () => {
 
   it('AUTH_SIGNUP_ENABLED=true deja pasar el gate (y crea el usuario CON rol alumno)', async () => {
     process.env[FLAG] = 'true';
-    const TENANT = { id: 't1', slug: 'va360', name: 'VA360', status: 'ACTIVE' };
+    const TENANT = { id: 't1', slug: 'demo', name: 'Demo', status: 'ACTIVE' };
     const ALUMNO = { id: 'r1', name: 'alumno' };
     const created = {
       id: 'u1',

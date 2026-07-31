@@ -54,10 +54,10 @@ jobs:
       API_INTERNAL_URL: http://localhost:4000
       BOOTSTRAP_PASSWORD: E2eAdminPassword123!
       BOOTSTRAP_EMAIL: e2e-admin@example.test
-      BOOTSTRAP_TENANT_SLUG: va360
+      BOOTSTRAP_TENANT_SLUG: demo
       E2E_BASE_URL: http://localhost:3000
       E2E_API_URL: http://localhost:3000
-      E2E_TENANT_SLUG: va360
+      E2E_TENANT_SLUG: demo
       E2E_ADMIN_EMAIL: e2e-admin@example.test
       E2E_ADMIN_PASSWORD: E2eAdminPassword123!
 

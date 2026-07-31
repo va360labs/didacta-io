@@ -20,7 +20,7 @@ import { injectSession } from '../helpers/auth';
 
 interface AdminAuth {
   tokens: { accessToken: string; refreshToken: string };
-  user: Record<string, unknown>;
+  user: Parameters<typeof injectSession>[1]['user'];
 }
 
 /**
@@ -36,7 +36,7 @@ function adminAuth(): Promise<AdminAuth> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        tenantSlug: process.env.E2E_TENANT_SLUG ?? 'va360',
+        tenantSlug: process.env.E2E_TENANT_SLUG ?? 'demo',
         email: process.env.E2E_ADMIN_EMAIL,
         password: process.env.E2E_ADMIN_PASSWORD,
       }),
@@ -53,7 +53,7 @@ async function signInAsAdmin(page: import('@playwright/test').Page): Promise<voi
   await injectSession(page, {
     accessToken: auth.tokens.accessToken,
     refreshToken: auth.tokens.refreshToken,
-    user: { ...(auth.user as never), onboardingCompletedAt: new Date().toISOString() },
+    user: { ...auth.user, onboardingCompletedAt: new Date().toISOString() },
   });
 }
 

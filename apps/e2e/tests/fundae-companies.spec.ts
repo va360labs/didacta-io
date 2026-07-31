@@ -46,7 +46,7 @@ async function api<T>(
 
 test.describe('Fundae · CRUD de empresas bonificadas (LMS-79)', () => {
   test('crear → list → get → update → duplicado → delete', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
 
     const stamp = Date.now();

@@ -34,7 +34,7 @@ test.describe('Admin · recordatorio de pago desde solicitudes de inscripción',
   });
 
   test('admin: caminos de validación y "no encontrado"', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const auth = { Authorization: `Bearer ${adminToken}` };
     const json = { ...auth, 'Content-Type': 'application/json' };

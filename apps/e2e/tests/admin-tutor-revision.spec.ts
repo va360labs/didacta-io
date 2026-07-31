@@ -15,7 +15,7 @@ import { injectSession } from '../helpers/auth';
  * dependeríamos de una clave de OpenAI viva para que el CI pase.
  */
 
-const TENANT = process.env.E2E_TENANT_SLUG ?? 'va360';
+const TENANT = process.env.E2E_TENANT_SLUG ?? 'demo';
 const UUID_INEXISTENTE = '00000000-0000-4000-8000-000000000000';
 
 /**
@@ -181,7 +181,7 @@ test.describe('Tutor IA · pantalla del admin', () => {
     expect(signin.ok(), await signin.text()).toBe(true);
     const sesion = (await signin.json()) as {
       tokens: { accessToken: string; refreshToken: string };
-      user: Record<string, unknown>;
+      user: Parameters<typeof injectSession>[1]['user'];
     };
 
     await page.goto('/');
@@ -189,7 +189,7 @@ test.describe('Tutor IA · pantalla del admin', () => {
       accessToken: sesion.tokens.accessToken,
       refreshToken: sesion.tokens.refreshToken,
       user: {
-        ...(sesion.user as never),
+        ...sesion.user,
         // Sin esto el gate de onboarding secuestra la navegación.
         onboardingCompletedAt: new Date().toISOString(),
       },

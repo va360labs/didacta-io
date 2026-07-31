@@ -26,7 +26,7 @@ describe('parseClaseEmbed — marcador', () => {
 
 describe('parseClaseEmbed — enlace pegado a mano', () => {
   it('reconoce una URL absoluta y la quita del texto', () => {
-    const parsed = parseClaseEmbed(`Os dejo la clase: https://aula.va360.academy/clase/${ID}`);
+    const parsed = parseClaseEmbed(`Os dejo la clase: https://aula.example.com/clase/${ID}`);
     expect(parsed.sessionId).toBe(ID);
     expect(parsed.cleanBody).toBe('Os dejo la clase:');
   });
@@ -38,14 +38,14 @@ describe('parseClaseEmbed — enlace pegado a mano', () => {
   });
 
   it('no colapsa el texto en párrafos cuando el enlace iba solo en su línea', () => {
-    const parsed = parseClaseEmbed(`Primera\n\nhttps://aula.va360.academy/clase/${ID}\n\nÚltima`);
+    const parsed = parseClaseEmbed(`Primera\n\nhttps://aula.example.com/clase/${ID}\n\nÚltima`);
     expect(parsed.cleanBody).toBe('Primera\n\nÚltima');
   });
 });
 
 describe('parseClaseEmbed — sin clase', () => {
   it('devuelve el body intacto', () => {
-    const body = 'Un post normal con un enlace https://va360.academy/cursos';
+    const body = 'Un post normal con un enlace https://example.com/cursos';
     expect(parseClaseEmbed(body)).toEqual({ cleanBody: body, sessionId: null });
   });
 

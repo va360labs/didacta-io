@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
 import { EmailVerificationService } from '../src/inscripcion/email-verification.service';
 
 const TENANT_ID = 'tenant-1';
-const EMAIL = 'aspirante@va360.com';
+const EMAIL = 'aspirante@example.com';
 const CTX = { ip: '203.0.113.7', userAgent: 'vitest-agent' };
 
 /** SHA-256 hex — mismo formato que `EmailVerificationService.hashCode`. */
@@ -48,7 +48,7 @@ function makeFakePrisma() {
     codes,
     tenant: {
       async findUnique(_args: { where: { id: string } }) {
-        return { name: 'VA360 Academy' };
+        return { name: 'Academia Demo' };
       },
     },
     emailVerificationCode: {

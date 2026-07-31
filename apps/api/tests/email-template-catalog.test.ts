@@ -24,7 +24,7 @@ import type { EmailBranding } from '../src/common/branded-email';
 // respetar las partes ESTRUCTURALES (código OTP, botones de decisión, CTA).
 // ============================================================================
 
-function branding(tenantName = 'VA360.pro'): EmailBranding {
+function branding(tenantName = 'Academia Demo'): EmailBranding {
   return { tenantName, logoUrl: null, brandColor: '#1E5AA8' };
 }
 
@@ -61,11 +61,11 @@ describe('applyEmailOverride', () => {
   it('interpola subject y body del override', () => {
     const out = applyEmailOverride(
       { subject: 'Hola {{name}}', body: 'Bienvenido a {{tenantName}}' },
-      { name: 'Ana', tenantName: 'VA360.pro' },
+      { name: 'Ana', tenantName: 'Academia Demo' },
       'fallback',
     );
     expect(out.subject).toBe('Hola Ana');
-    expect(out.bodyText).toBe('Bienvenido a VA360.pro');
+    expect(out.bodyText).toBe('Bienvenido a Academia Demo');
   });
 
   it('usa el subject por defecto si el override no lo define', () => {
@@ -135,7 +135,7 @@ describe('builders de inscripción con override', () => {
       subject: 'Tu código de {{tenantName}}',
       body: 'Este es tu código para entrar.',
     });
-    expect(out.subject).toBe('Tu código de VA360.pro');
+    expect(out.subject).toBe('Tu código de Academia Demo');
     expect(out.text).toContain('482913');
     expect(out.html).toContain('482913');
     expect(out.html).toContain('Este es tu código para entrar.');
@@ -164,7 +164,7 @@ describe('builders de inscripción con override', () => {
       { subject: 'Solicitud de {{name}}', body: 'Intro personalizada para {{tenantName}}.' },
     );
     expect(out.subject).toBe('Solicitud de Ana');
-    expect(out.text).toContain('Intro personalizada para VA360.pro.');
+    expect(out.text).toContain('Intro personalizada para Academia Demo.');
     expect(out.text).toContain('https://x/approve?t=AAA');
     expect(out.text).toContain('https://x/reject?t=BBB');
     expect(out.html).toContain('https://x/approve?t=AAA');
@@ -186,7 +186,7 @@ describe('builders de inscripción con override', () => {
       subject: null,
       body: 'Lo sentimos {{name}}, esta vez no.',
     });
-    expect(out.subject).toBe('Sobre tu inscripción en VA360.pro');
+    expect(out.subject).toBe('Sobre tu inscripción en Academia Demo');
     expect(out.text).toContain('Lo sentimos Ana, esta vez no.');
   });
 
@@ -194,8 +194,8 @@ describe('builders de inscripción con override', () => {
     const otp = buildOtpEmail('111222', branding());
     expect(otp.subject).toBe('Tu código de acceso');
     const welcome = buildWelcomeEmail('Ana', 'https://x/signin', branding());
-    expect(welcome.subject).toBe('Tu inscripción en VA360.pro ha sido aprobada');
+    expect(welcome.subject).toBe('Tu inscripción en Academia Demo ha sido aprobada');
     const rejection = buildRejectionEmail('Ana', branding());
-    expect(rejection.text).toContain('Gracias por tu interés en VA360.pro');
+    expect(rejection.text).toContain('Gracias por tu interés en Academia Demo');
   });
 });

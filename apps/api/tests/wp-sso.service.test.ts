@@ -9,7 +9,7 @@ import type { PrismaAuditLogService } from '../src/modules/prisma-audit-log.serv
 import type { WpSsoConfigService } from '../src/sso/wp/wp-sso-config.service';
 
 const SECRET = 'wp-sso-secreto-compartido-de-prueba-1234567890';
-const TENANT_SLUG = 'va360';
+const TENANT_SLUG = 'demo';
 
 function makeToken(
   opts: {
@@ -24,7 +24,7 @@ function makeToken(
 ) {
   const now = Math.floor(Date.now() / 1000);
   return new SignJWT({
-    email: opts.email ?? 'nuevo@va360.academy',
+    email: opts.email ?? 'nuevo@example.com',
     ...(opts.name ? { name: opts.name } : {}),
     jti: opts.jti ?? `jti-${Math.floor(now)}-${opts.email ?? 'x'}`,
     ...(opts.sub ? { sub: opts.sub } : {}),
@@ -77,7 +77,7 @@ function build(configOverrides: Record<string, unknown> = {}): { svc: WpSsoServi
         findUnique: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue({
           id: 'user-new',
-          email: 'nuevo@va360.academy',
+          email: 'nuevo@example.com',
           name: 'Nuevo',
           status: 'ACTIVE',
           roles: [{ role: { name: 'alumno' } }],
@@ -132,7 +132,7 @@ describe('WpSsoService.exchange', () => {
     const { svc, m } = build();
     const out = await svc.exchange(
       TENANT_SLUG,
-      await makeToken({ email: 'nuevo@va360.academy', name: 'Nuevo' }),
+      await makeToken({ email: 'nuevo@example.com', name: 'Nuevo' }),
     );
     expect(m.prisma.user.create).toHaveBeenCalledTimes(1);
     const createArg = m.prisma.user.create.mock.calls[0][0];
@@ -149,12 +149,12 @@ describe('WpSsoService.exchange', () => {
     const { svc, m } = build();
     m.prisma.user.findUnique.mockResolvedValue({
       id: 'user-1',
-      email: 'existe@va360.academy',
+      email: 'existe@example.com',
       name: 'Existe',
       status: 'ACTIVE',
       roles: [{ role: { name: 'alumno' } }],
     });
-    const out = await svc.exchange(TENANT_SLUG, await makeToken({ email: 'existe@va360.academy' }));
+    const out = await svc.exchange(TENANT_SLUG, await makeToken({ email: 'existe@example.com' }));
     expect(m.prisma.user.create).not.toHaveBeenCalled();
     expect(m.prisma.user.update).toHaveBeenCalledTimes(1);
     expect(out.user.id).toBe('user-1');
@@ -180,10 +180,7 @@ describe('WpSsoService.exchange', () => {
 
   it('con sub: provisión crea identidad estable (linkMethod auto_provision)', async () => {
     const { svc, m } = build();
-    await svc.exchange(
-      TENANT_SLUG,
-      await makeToken({ email: 'nuevo@va360.academy', sub: 'wp-100' }),
-    );
+    await svc.exchange(TENANT_SLUG, await makeToken({ email: 'nuevo@example.com', sub: 'wp-100' }));
     expect(m.prisma.userExternalIdentity.findUnique).toHaveBeenCalledTimes(1);
     expect(m.prisma.user.create).toHaveBeenCalledTimes(1);
     expect(m.prisma.userExternalIdentity.create).toHaveBeenCalledTimes(1);
@@ -198,14 +195,14 @@ describe('WpSsoService.exchange', () => {
     m.prisma.userExternalIdentity.findUnique.mockResolvedValue({ id: 'idn-1', userId: 'user-7' });
     m.prisma.user.findUnique.mockResolvedValue({
       id: 'user-7',
-      email: 'ana@va360.academy',
+      email: 'ana@example.com',
       name: 'Ana',
       status: 'ACTIVE',
       roles: [{ role: { name: 'alumno' } }],
     });
     const out = await svc.exchange(
       TENANT_SLUG,
-      await makeToken({ email: 'ana@va360.academy', sub: 'wp-7' }),
+      await makeToken({ email: 'ana@example.com', sub: 'wp-7' }),
     );
     expect(m.prisma.user.create).not.toHaveBeenCalled();
     expect(m.prisma.userExternalIdentity.create).not.toHaveBeenCalled();
@@ -217,14 +214,14 @@ describe('WpSsoService.exchange', () => {
     const { svc, m } = build();
     m.prisma.user.findUnique.mockResolvedValue({
       id: 'user-9',
-      email: 'pepe@va360.academy',
+      email: 'pepe@example.com',
       name: 'Pepe',
       status: 'ACTIVE',
       roles: [{ role: { name: 'alumno' } }],
     });
     const out = await svc.exchange(
       TENANT_SLUG,
-      await makeToken({ email: 'pepe@va360.academy', sub: 'wp-9' }),
+      await makeToken({ email: 'pepe@example.com', sub: 'wp-9' }),
     );
     expect(m.prisma.user.create).not.toHaveBeenCalled();
     expect(m.prisma.userExternalIdentity.create).toHaveBeenCalledTimes(1);
@@ -241,13 +238,13 @@ describe('WpSsoService.exchange', () => {
     const { svc, m } = build();
     m.prisma.user.findUnique.mockResolvedValue({
       id: 'user-p',
-      email: 'pending@va360.academy',
+      email: 'pending@example.com',
       name: 'Pend',
       status: 'PENDING',
       roles: [],
     });
     await expect(
-      svc.exchange(TENANT_SLUG, await makeToken({ email: 'pending@va360.academy', sub: 'wp-p' })),
+      svc.exchange(TENANT_SLUG, await makeToken({ email: 'pending@example.com', sub: 'wp-p' })),
     ).rejects.toThrow(/no está activa/);
     expect(m.prisma.userExternalIdentity.create).not.toHaveBeenCalled();
   });

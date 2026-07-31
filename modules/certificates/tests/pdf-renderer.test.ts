@@ -21,7 +21,7 @@ describe('renderCertificatePdf', () => {
       courseTitle: 'Avanzado',
       issuedAt: new Date(),
       primaryColor: '#3b82f6',
-      signerName: 'Valentín Ayesa',
+      signerName: 'Firmante Ejemplo',
       signerTitle: 'Director Académico',
     });
     expect(buf.length).toBeGreaterThan(1000);

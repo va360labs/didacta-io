@@ -118,9 +118,9 @@ describe('resolveWebBaseUrlForAuthRedirect (redirects que portan tokens)', () =>
   });
 
   it('WEB_PUBLIC_URL gana sobre cualquier header', () => {
-    process.env.WEB_PUBLIC_URL = 'https://aula.va360.academy';
+    process.env.WEB_PUBLIC_URL = 'https://aula.example.com';
     const req = makeReq({ 'x-forwarded-host': 'atacante.evil', 'x-forwarded-proto': 'https' });
-    expect(resolveWebBaseUrlForAuthRedirect(req)).toBe('https://aula.va360.academy');
+    expect(resolveWebBaseUrlForAuthRedirect(req)).toBe('https://aula.example.com');
   });
 
   it('SEGURIDAD: sin env, un host NO allowlisted se IGNORA → localhost (no se exfiltran tokens)', () => {
@@ -129,19 +129,19 @@ describe('resolveWebBaseUrlForAuthRedirect (redirects que portan tokens)', () =>
   });
 
   it('sin env, un host SÍ allowlisted se usa', () => {
-    process.env.WEB_PUBLIC_ALLOWED_HOSTS = 'aula.va360.academy, dev.didacta.io';
+    process.env.WEB_PUBLIC_ALLOWED_HOSTS = 'aula.example.com, dev.didacta.io';
     const req = makeReq({ 'x-forwarded-host': 'dev.didacta.io', 'x-forwarded-proto': 'https' });
     expect(resolveWebBaseUrlForAuthRedirect(req)).toBe('https://dev.didacta.io');
   });
 
   it('la allowlist es case-insensitive y tolera espacios', () => {
-    process.env.WEB_PUBLIC_ALLOWED_HOSTS = '  AULA.VA360.Academy ';
-    const req = makeReq({ host: 'aula.va360.academy' });
-    expect(resolveWebBaseUrlForAuthRedirect(req)).toBe('https://aula.va360.academy');
+    process.env.WEB_PUBLIC_ALLOWED_HOSTS = '  AULA.Example.Com ';
+    const req = makeReq({ host: 'aula.example.com' });
+    expect(resolveWebBaseUrlForAuthRedirect(req)).toBe('https://aula.example.com');
   });
 
   it('host del request distinto al allowlisted → localhost', () => {
-    process.env.WEB_PUBLIC_ALLOWED_HOSTS = 'aula.va360.academy';
+    process.env.WEB_PUBLIC_ALLOWED_HOSTS = 'aula.example.com';
     const req = makeReq({ host: 'didacta-api:4000' });
     expect(resolveWebBaseUrlForAuthRedirect(req)).toBe('http://localhost:3000');
   });

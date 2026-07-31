@@ -23,7 +23,7 @@ function sessionFixture(over: Partial<ZoomSession> = {}): ZoomSession {
     startTime: '2026-08-03T14:00:00.000Z',
     durationMinutes: 90,
     timezone: 'Europe/Madrid',
-    hostEmail: 'valen@va360labs.com',
+    hostEmail: 'organizador@example.com',
     zoomMeetingId: '123',
     joinUrl: null,
     recordingUrl: null,

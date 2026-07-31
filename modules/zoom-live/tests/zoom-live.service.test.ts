@@ -1525,7 +1525,7 @@ describe('ZoomLiveService · recordatorio 2h antes', () => {
   });
 
   it('getCalendarInfo devuelve lo público de la clase con el nombre del tenant', async () => {
-    const prisma = makeFakePrisma([], [], [{ id: TENANT, name: 'VA360' }]);
+    const prisma = makeFakePrisma([], [], [{ id: TENANT, name: 'Demo' }]);
     const service = new ZoomLiveService(
       prisma as never,
       makeCtx() as never,
@@ -1541,7 +1541,7 @@ describe('ZoomLiveService · recordatorio 2h antes', () => {
       durationMinutes: 60,
       timezone: 'Europe/Madrid',
       status: 'SCHEDULED',
-      organizerName: 'VA360',
+      organizerName: 'Demo',
     });
     // No hay campo alguno que exponga el enlace de Zoom (ADR-017).
     expect(JSON.stringify(info)).not.toMatch(/stub-zoom|joinUrl/);

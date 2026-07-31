@@ -31,7 +31,7 @@ import { injectSession } from '../helpers/auth';
  * (API_URL + web + DB con seed admin), igual que el resto de la suite e2e.
  */
 
-const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
 
 test.describe('Detalle de progreso por lección de un alumno (HU-FORM-003)', () => {
   // ── ACTIVO: guarda de autorización (alumno no puede ver el detalle) ──────────

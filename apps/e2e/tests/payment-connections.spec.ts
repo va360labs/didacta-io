@@ -25,7 +25,7 @@ test.describe('mod.payment-connections — contrato admin + render del panel', (
   test('GET /connections (super_admin) lista; key inválida → 400; render del panel', async ({
     page,
   }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const apiHeaders = {
       Authorization: `Bearer ${bearer}`,

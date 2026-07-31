@@ -640,16 +640,14 @@ describe('BillingService — alta de producto por importe y URLs por petición',
       userEmail: 'u@test',
       courseId: 'course-1',
       successUrl:
-        'https://aula.va360.academy/cursos/checkout/success?session_id={CHECKOUT_SESSION_ID}',
-      cancelUrl: 'https://aula.va360.academy/cursos/checkout/cancel',
+        'https://aula.example.com/cursos/checkout/success?session_id={CHECKOUT_SESSION_ID}',
+      cancelUrl: 'https://aula.example.com/cursos/checkout/cancel',
     });
 
     expect(stripe.lastCheckout?.successUrl).toBe(
-      'https://aula.va360.academy/cursos/checkout/success?session_id={CHECKOUT_SESSION_ID}',
+      'https://aula.example.com/cursos/checkout/success?session_id={CHECKOUT_SESSION_ID}',
     );
-    expect(stripe.lastCheckout?.cancelUrl).toBe(
-      'https://aula.va360.academy/cursos/checkout/cancel',
-    );
+    expect(stripe.lastCheckout?.cancelUrl).toBe('https://aula.example.com/cursos/checkout/cancel');
   });
 });
 

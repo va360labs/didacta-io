@@ -17,7 +17,7 @@ import { injectSession } from '../helpers/auth';
  *     de la URL).
  */
 
-const TENANT_SLUG = process.env.E2E_TENANT_SLUG ?? 'va360';
+const TENANT_SLUG = process.env.E2E_TENANT_SLUG ?? 'demo';
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:3010';
 
 interface CreatedPost {

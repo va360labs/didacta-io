@@ -597,10 +597,10 @@ describe('PrismaNotificationHubService', () => {
         templateKey: 'community.mention',
         locale: 'es-ES',
         to: 'u1',
-        variables: { authorName: 'JuanjoSC', commentId: 'c1', postId: null, handle: 'valen' },
+        variables: { authorName: 'AutorEjemplo', commentId: 'c1', postId: null, handle: 'ana' },
       });
       const [n] = prisma._rows;
-      expect(n.body).toContain('JuanjoSC te mencionó en un comentario');
+      expect(n.body).toContain('AutorEjemplo te mencionó en un comentario');
       expect(n.body).not.toContain('{{');
     });
 
@@ -613,7 +613,7 @@ describe('PrismaNotificationHubService', () => {
         templateKey: 'community.mention',
         locale: 'es-ES',
         to: 'u1',
-        variables: { authorName: 'Ana', commentId: null, postId: 'p1', handle: 'valen' },
+        variables: { authorName: 'Ana', commentId: null, postId: 'p1', handle: 'ana' },
       });
       const [n] = prisma._rows;
       expect(n.body).toContain('Ana te mencionó en un post');

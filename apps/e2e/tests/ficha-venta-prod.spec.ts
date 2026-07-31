@@ -15,10 +15,11 @@ test.describe('PROD · ficha de venta del curso', () => {
   test('muestra precio real, acceso total y los CTAs del contenido bloqueado', async ({ page }) => {
     const email = process.env.PROD_TEST_EMAIL ?? '';
     const password = process.env.PROD_TEST_PASSWORD ?? '';
-    const slug = process.env.PROD_COURSE_SLUG ?? 'curso-de-claude-code-de-cero-a-experto';
+    const slug = process.env.PROD_COURSE_SLUG ?? '';
+    expect(slug, 'falta PROD_COURSE_SLUG (slug de un curso a la venta en el tenant)').not.toBe('');
 
     const sesion = await signin({
-      tenantSlug: process.env.PROD_TENANT_SLUG ?? 'va360',
+      tenantSlug: process.env.PROD_TENANT_SLUG ?? 'demo',
       email,
       password,
     });

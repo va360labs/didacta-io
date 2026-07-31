@@ -11,10 +11,10 @@ import { injectSession } from '../helpers/auth';
  *     consultas para el staff y respuesta del profesor en tiempo real.
  *
  * Requiere API con REDIS_URL (el realtime degrada a polling sin Redis y los
- * asserts "sin recargar" fallarían) y el seed del tenant va360.
+ * asserts "sin recargar" fallarían) y el seed del tenant demo.
  */
 
-const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
 
 test.describe('mod.messaging · mensajes', () => {
   test('DM en tiempo real entre dos miembros', async ({ page, browser }) => {

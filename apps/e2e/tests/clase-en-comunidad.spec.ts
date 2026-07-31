@@ -40,7 +40,7 @@ async function crearClase(
 
 test.describe('clases en directo · calendario y comunidad', () => {
   test('la rejilla del mes pinta una clase de los días del mes siguiente', async ({ page }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
@@ -86,7 +86,7 @@ test.describe('clases en directo · calendario y comunidad', () => {
   test('el feed de la comunidad muestra las próximas citas y el anuncio con inscripción', async ({
     page,
   }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
@@ -143,7 +143,7 @@ test.describe('clases en directo · calendario y comunidad', () => {
   });
 
   test('sin marcar «anunciar» la clase no se publica en el feed', async ({ page }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
@@ -194,7 +194,7 @@ test.describe('clases en directo · editar y anunciar', () => {
   test('editar una clase no anunciada permite publicarla; volver a editar sincroniza el post', async ({
     page,
   }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };

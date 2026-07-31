@@ -12,7 +12,7 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
 
 test.describe('Dashboard tenant_admin (HU-TA-003)', () => {
   test('payload de stats con range=all tiene los 5 campos esperados', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${bearer}` };
 
@@ -33,7 +33,7 @@ test.describe('Dashboard tenant_admin (HU-TA-003)', () => {
   });
 
   test('range=invalid responde 400 por validación zod', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${bearer}` };
 
@@ -42,7 +42,7 @@ test.describe('Dashboard tenant_admin (HU-TA-003)', () => {
   });
 
   test('range=7d devuelve completionRate en [0..100]', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${bearer}` };
 

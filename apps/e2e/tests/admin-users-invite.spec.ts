@@ -16,7 +16,7 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
 
 test.describe('Admin: invitar y gestionar usuarios del tenant', () => {
   test('invitar formador → listar → cambiar status → asignar/quitar rol', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const headers = {
       Authorization: `Bearer ${bearer}`,
@@ -82,7 +82,7 @@ test.describe('Admin: invitar y gestionar usuarios del tenant', () => {
   });
 
   test('invite con email duplicado → 409', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const headers = {
       Authorization: `Bearer ${bearer}`,

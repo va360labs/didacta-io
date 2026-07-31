@@ -15,7 +15,7 @@ import { adminTokenForBootstrap, API_URL, signup } from '../helpers/api';
  */
 test.describe('mod.community · moderación', () => {
   test('hide → alumno no ve → unhide → alumno vuelve a ver', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const adminHeaders = {
@@ -97,7 +97,7 @@ test.describe('mod.community · moderación', () => {
   });
 
   test('alumno NO puede llamar a moderate (403)', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const alumno = await signup({
       tenantSlug,

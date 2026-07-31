@@ -15,7 +15,7 @@ import { adminTokenForBootstrap, API_URL, signup } from '../helpers/api';
  *  - El formulario sigue funcionando: login real y redirección.
  */
 
-const TENANT_SLUG = process.env.E2E_TENANT_SLUG ?? 'va360';
+const TENANT_SLUG = process.env.E2E_TENANT_SLUG ?? 'demo';
 
 const HEADLINE = 'Formación E2E aplicada, con la comunidad que la usa cada día.';
 const SUBHEADLINE = 'Copy de prueba del panel de acceso.';

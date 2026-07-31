@@ -56,7 +56,7 @@ async function notifications(token: string): Promise<NotificationRow[]> {
 }
 
 test.describe('mod.community · notificaciones de comentarios y respuestas', () => {
-  const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+  const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
 
   test('comentar el post de otro notifica al autor (community.comment.on_post)', async () => {
     const stamp = Date.now();

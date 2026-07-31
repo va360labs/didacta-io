@@ -709,7 +709,7 @@ describe('OidcService.handleCallback', () => {
         aud: CLIENT_ID,
         exp: Math.floor(Date.now() / 1000) + 3600,
         nonce: flow.nonce,
-        email: 'user@gmail.com',
+        email: 'user@example.org',
       },
     });
     await expect(svc.handleCallback({ state: flow.state, code: 'abc' })).rejects.toThrow(

@@ -22,7 +22,7 @@ const KEY = 'auth.password_reset';
 
 test.describe('Admin · Emails de la plataforma — /admin/emails', () => {
   test('catálogo visible, personalizar y restaurar «Restablecer contraseña»', async ({ page }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const apiHeaders = {
       Authorization: `Bearer ${bearer}`,

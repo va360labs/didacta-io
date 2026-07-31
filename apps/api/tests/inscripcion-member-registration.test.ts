@@ -68,7 +68,7 @@ function makeHarness(
         .fn()
         .mockResolvedValue(opts.roleMissing ? null : { id: 'role-alumno', name: 'alumno' }),
     },
-    tenant: { findUnique: vi.fn().mockResolvedValue({ name: 'VA360 Academy' }) },
+    tenant: { findUnique: vi.fn().mockResolvedValue({ name: 'Academia Demo' }) },
     $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => {
       if (opts.throwP2002) {
         throw new Prisma.PrismaClientKnownRequestError('unique violation', {
@@ -137,7 +137,7 @@ function makeHarness(
 
 describe('MemberRegistrationService.createPending', () => {
   beforeEach(() => {
-    process.env['MEMBER_APPROVAL_EMAIL'] = 'aprobador@va360.com';
+    process.env['MEMBER_APPROVAL_EMAIL'] = 'aprobador@example.com';
   });
   afterEach(() => {
     delete process.env['MEMBER_APPROVAL_EMAIL'];
@@ -185,7 +185,7 @@ describe('MemberRegistrationService.createPending', () => {
 
     // Email enviado al aprobador (destinatario del env).
     const [, message] = h.smtp.send.mock.calls[0];
-    expect(message.to).toBe('aprobador@va360.com');
+    expect(message.to).toBe('aprobador@example.com');
     // Los enlaces firmados van embebidos en el cuerpo.
     expect(message.text).toContain('raw-approve');
     expect(message.text).toContain('raw-reject');

@@ -38,22 +38,22 @@ function hash(s: string): string {
 
 function makeFakePrisma() {
   const tenants: TenantRow[] = [
-    { id: 'tenant-1', slug: 'va360', name: 'VA360 Academy', status: 'ACTIVE' },
+    { id: 'tenant-1', slug: 'demo', name: 'Academia Demo', status: 'ACTIVE' },
     { id: 'tenant-2', slug: 'suspendida', name: 'Suspendida', status: 'SUSPENDED' },
   ];
   const users: UserRow[] = [
     {
       id: 'user-1',
       tenantId: 'tenant-1',
-      email: 'valen@va360.com',
-      name: 'Valentín',
+      email: 'ana@example.com',
+      name: 'Ana',
       passwordHash: 'old-hash',
       status: 'ACTIVE',
     },
     {
       id: 'user-2',
       tenantId: 'tenant-1',
-      email: 'suspendido@va360.com',
+      email: 'suspendido@example.com',
       name: null,
       passwordHash: 'old-hash',
       status: 'SUSPENDED',
@@ -201,10 +201,10 @@ function makeService() {
 describe('PasswordResetService.request', () => {
   it('genera un token cuando el user existe y está activo', async () => {
     const { service, prisma } = makeService();
-    const result = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
+    const result = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
     expect(result).not.toBeNull();
     expect(result?.userId).toBe('user-1');
-    expect(result?.userName).toBe('Valentín');
+    expect(result?.userName).toBe('Ana');
     expect(result?.rawToken).toMatch(/^[a-f0-9]{64}$/);
     expect(prisma.tokens).toHaveLength(1);
     // El token persistido es el hash, no el raw.
@@ -213,29 +213,29 @@ describe('PasswordResetService.request', () => {
 
   it('devuelve null sin crear token si el user no existe (anti user enumeration)', async () => {
     const { service, prisma } = makeService();
-    const result = await service.request({ tenantSlug: 'va360', email: 'inexistente@va360.com' });
+    const result = await service.request({ tenantSlug: 'demo', email: 'inexistente@example.com' });
     expect(result).toBeNull();
     expect(prisma.tokens).toHaveLength(0);
   });
 
   it('devuelve null si el user está suspendido', async () => {
     const { service, prisma } = makeService();
-    const result = await service.request({ tenantSlug: 'va360', email: 'suspendido@va360.com' });
+    const result = await service.request({ tenantSlug: 'demo', email: 'suspendido@example.com' });
     expect(result).toBeNull();
     expect(prisma.tokens).toHaveLength(0);
   });
 
   it('devuelve null si el tenant está suspendido', async () => {
     const { service, prisma } = makeService();
-    const result = await service.request({ tenantSlug: 'suspendida', email: 'valen@va360.com' });
+    const result = await service.request({ tenantSlug: 'suspendida', email: 'ana@example.com' });
     expect(result).toBeNull();
     expect(prisma.tokens).toHaveLength(0);
   });
 
   it('invalida tokens previos no usados al pedir uno nuevo', async () => {
     const { service, prisma } = makeService();
-    const a = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
-    const b = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
+    const a = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
+    const b = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
     expect(a).not.toBeNull();
     expect(b).not.toBeNull();
     // Ambos rows existen, el primero tiene usedAt seteado por la invalidación.
@@ -247,7 +247,7 @@ describe('PasswordResetService.request', () => {
   it('expira en 60 minutos por default', async () => {
     const { service, prisma } = makeService();
     const before = Date.now();
-    await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
+    await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
     const expiresAt = prisma.tokens[0].expiresAt.getTime();
     expect(expiresAt - before).toBeGreaterThanOrEqual(59 * 60_000);
     expect(expiresAt - before).toBeLessThanOrEqual(61 * 60_000);
@@ -260,13 +260,13 @@ describe('PasswordResetService.request', () => {
     prisma.users.push({
       id: 'user-pending',
       tenantId: 'tenant-1',
-      email: 'pending@va360.com',
+      email: 'pending@example.com',
       name: 'Alumno Migrado',
       passwordHash: null,
       status: 'PENDING',
     });
     const result = await service.request(
-      { tenantSlug: 'va360', email: 'pending@va360.com' },
+      { tenantSlug: 'demo', email: 'pending@example.com' },
       undefined,
       { allowPending: true },
     );
@@ -280,12 +280,12 @@ describe('PasswordResetService.request', () => {
     prisma.users.push({
       id: 'user-pending-2',
       tenantId: 'tenant-1',
-      email: 'pending2@va360.com',
+      email: 'pending2@example.com',
       name: null,
       passwordHash: null,
       status: 'PENDING',
     });
-    const result = await service.request({ tenantSlug: 'va360', email: 'pending2@va360.com' });
+    const result = await service.request({ tenantSlug: 'demo', email: 'pending2@example.com' });
     expect(result).toBeNull();
     expect(prisma.tokens).toHaveLength(0);
   });
@@ -293,7 +293,7 @@ describe('PasswordResetService.request', () => {
   it('SUSPENDED + allowPending=true → null (allowPending NO desbloquea SUSPENDED)', async () => {
     const { service, prisma } = makeService();
     const result = await service.request(
-      { tenantSlug: 'va360', email: 'suspendido@va360.com' },
+      { tenantSlug: 'demo', email: 'suspendido@example.com' },
       undefined,
       { allowPending: true },
     );
@@ -304,7 +304,7 @@ describe('PasswordResetService.request', () => {
   it('ACTIVE + allowPending=true → sigue generando token (regresión)', async () => {
     const { service, prisma } = makeService();
     const result = await service.request(
-      { tenantSlug: 'va360', email: 'valen@va360.com' },
+      { tenantSlug: 'demo', email: 'ana@example.com' },
       undefined,
       { allowPending: true },
     );
@@ -316,7 +316,7 @@ describe('PasswordResetService.request', () => {
   it('user inexistente + allowPending=true → null (anti-enum)', async () => {
     const { service, prisma } = makeService();
     const result = await service.request(
-      { tenantSlug: 'va360', email: 'nadie@va360.com' },
+      { tenantSlug: 'demo', email: 'nadie@example.com' },
       undefined,
       { allowPending: true },
     );
@@ -328,7 +328,7 @@ describe('PasswordResetService.request', () => {
 describe('PasswordResetService.reset', () => {
   it('cambia la password y marca el token como usado', async () => {
     const { service, prisma } = makeService();
-    const result = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
+    const result = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
     expect(result).not.toBeNull();
     await service.reset(result!.rawToken, 'NuevaPasswordSegura123');
     expect(prisma.users[0].passwordHash).toBe('argon2:NuevaPasswordSegura123');
@@ -344,7 +344,7 @@ describe('PasswordResetService.reset', () => {
 
   it('rechaza un token ya usado (single-use)', async () => {
     const { service } = makeService();
-    const result = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
+    const result = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
     await service.reset(result!.rawToken, 'NuevaPasswordSegura123');
     await expect(service.reset(result!.rawToken, 'OtraPasswordSegura123')).rejects.toBeInstanceOf(
       UnauthorizedException,
@@ -353,7 +353,7 @@ describe('PasswordResetService.reset', () => {
 
   it('rechaza un token expirado', async () => {
     const { service, prisma } = makeService();
-    const result = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
+    const result = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
     // Forzamos expiración manualmente.
     prisma.tokens[0].expiresAt = new Date(Date.now() - 1000);
     await expect(service.reset(result!.rawToken, 'NuevaPasswordSegura123')).rejects.toBeInstanceOf(
@@ -372,13 +372,13 @@ describe('PasswordResetService.reset', () => {
     prisma.users.push({
       id: 'user-invitado',
       tenantId: 'tenant-1',
-      email: 'invitado@va360.com',
+      email: 'invitado@example.com',
       name: 'Invitada',
       passwordHash: null,
       status: 'PENDING',
     });
     const result = await service.request(
-      { tenantSlug: 'va360', email: 'invitado@va360.com' },
+      { tenantSlug: 'demo', email: 'invitado@example.com' },
       undefined,
       { allowPending: true },
     );
@@ -394,14 +394,14 @@ describe('PasswordResetService.reset', () => {
     prisma.users.push({
       id: 'user-inscrito',
       tenantId: 'tenant-1',
-      email: 'inscrito@va360.com',
+      email: 'inscrito@example.com',
       name: 'Solicitante',
       // La eligió él mismo al inscribirse; el alta está a la espera del aprobador.
       passwordHash: 'hash-elegido-al-inscribirse',
       status: 'PENDING',
     });
     const result = await service.request(
-      { tenantSlug: 'va360', email: 'inscrito@va360.com' },
+      { tenantSlug: 'demo', email: 'inscrito@example.com' },
       undefined,
       { allowPending: true },
     );
@@ -414,7 +414,7 @@ describe('PasswordResetService.reset', () => {
 
   it('ACTIVE → el reset normal no toca el status', async () => {
     const { service, prisma } = makeService();
-    const result = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
+    const result = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
     await service.reset(result!.rawToken, 'NuevaPasswordSegura123');
     expect(prisma.users[0].status).toBe('ACTIVE');
   });
@@ -430,10 +430,10 @@ describe('PasswordResetService.buildResetEmail', () => {
 
   it('construye un email con greeting nominal cuando hay name', () => {
     const { service } = makeService();
-    const out = service.buildResetEmail('abc123', 'Valentín', 'https://didacta.local', branding());
+    const out = service.buildResetEmail('abc123', 'Ana', 'https://didacta.local', branding());
     expect(out.subject).toBe('Restablecer tu contraseña en Didacta');
-    expect(out.text).toContain('Hola Valentín');
-    expect(out.html).toContain('Hola Valentín');
+    expect(out.text).toContain('Hola Ana');
+    expect(out.html).toContain('Hola Ana');
     expect(out.text).toContain('https://didacta.local/reset-password?token=abc123');
     // Firma con el nombre del tenant + footer discreto de plataforma.
     expect(out.text).toContain('— Didacta');
@@ -458,34 +458,34 @@ describe('PasswordResetService.buildResetEmail', () => {
     const { service } = makeService();
     const out = service.buildResetEmail(
       'abc',
-      'Valentín',
+      'Ana',
       'https://dev.didacta.io',
-      branding('VA360 Academy'),
+      branding('Academia Demo'),
     );
-    expect(out.subject).toBe('Restablecer tu contraseña en VA360 Academy');
-    expect(out.text).toContain('— VA360 Academy');
-    expect(out.html).toContain('— VA360 Academy');
-    expect(out.text).toContain('cuenta en VA360 Academy');
+    expect(out.subject).toBe('Restablecer tu contraseña en Academia Demo');
+    expect(out.text).toContain('— Academia Demo');
+    expect(out.html).toContain('— Academia Demo');
+    expect(out.text).toContain('cuenta en Academia Demo');
     expect(out.text).toContain('Powered by Didacta');
     expect(out.html).toContain('Powered by Didacta');
   });
 
   it('request() expone tenantName desde el tenant resuelto', async () => {
     const { service } = makeService();
-    const result = await service.request({ tenantSlug: 'va360', email: 'valen@va360.com' });
-    expect(result?.tenantName).toBe('VA360 Academy');
+    const result = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
+    expect(result?.tenantName).toBe('Academia Demo');
   });
 
   it('embebe el logo del tenant en el header HTML cuando se pasa logoUrl absoluto', () => {
     const { service } = makeService();
     const out = service.buildResetEmail(
       'abc',
-      'Valentín',
+      'Ana',
       'https://dev.didacta.io',
-      branding('VA360 Academy', 'https://cdn.didacta.io/logo.png'),
+      branding('Academia Demo', 'https://cdn.didacta.io/logo.png'),
     );
     expect(out.html).toContain('<img src="https://cdn.didacta.io/logo.png"');
-    expect(out.html).toContain('alt="VA360 Academy"');
+    expect(out.html).toContain('alt="Academia Demo"');
     // El texto plano no se ve afectado por el logo.
     expect(out.text).not.toContain('<img');
   });
@@ -494,12 +494,12 @@ describe('PasswordResetService.buildResetEmail', () => {
     const { service } = makeService();
     const out = service.buildResetEmail(
       'abc',
-      'Valentín',
+      'Ana',
       'https://x.test',
-      branding('VA360 Academy', null),
+      branding('Academia Demo', null),
     );
     expect(out.html).not.toContain('<img');
-    expect(out.html).toContain('— VA360 Academy');
+    expect(out.html).toContain('— Academia Demo');
   });
 
   it('NO renderiza img cuando logoUrl no es http(s) (defensa anti-inyección)', () => {
@@ -508,7 +508,7 @@ describe('PasswordResetService.buildResetEmail', () => {
       'abc',
       null,
       'https://x.test',
-      branding('VA360 Academy', 'javascript:alert(1)'),
+      branding('Academia Demo', 'javascript:alert(1)'),
     );
     expect(out.html).not.toContain('<img');
     expect(out.html).not.toContain('javascript:');

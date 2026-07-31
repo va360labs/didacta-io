@@ -22,7 +22,7 @@ import { API_URL, adminTokenForBootstrap, signup } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
 const WEBHOOK_SECRET = process.env.E2E_STRIPE_WEBHOOK_SECRET ?? 'whsec_e2e_local_secret';
-const TENANT_SLUG = process.env.E2E_TENANT_SLUG ?? 'va360';
+const TENANT_SLUG = process.env.E2E_TENANT_SLUG ?? 'demo';
 
 async function sendStripeWebhook(event: Record<string, unknown>): Promise<Response> {
   const payload = JSON.stringify(event);

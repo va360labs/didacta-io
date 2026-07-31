@@ -45,7 +45,7 @@ async function postJson<T>(path: string, body: unknown, bearer: string): Promise
 
 test.describe('Auth · MFA enforcement (LMS-109)', () => {
   test('admin sin mfaVerified queda bloqueado en endpoint admin hasta completar setup', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const adminEmail = process.env.E2E_ADMIN_EMAIL;
     const adminPassword = process.env.E2E_ADMIN_PASSWORD;
     if (!adminEmail || !adminPassword) {

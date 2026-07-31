@@ -13,7 +13,7 @@ function mkResponse(status: number, body: unknown) {
 const silentLog = vi.fn();
 
 const baseCfg = {
-  wpBaseUrl: 'https://va360.test',
+  wpBaseUrl: 'https://example.test',
   wpUsername: 'wp_admin',
   wpAppPassword: 'app-pw',
 };
@@ -36,7 +36,7 @@ describe('listWpCourseEnrolledUserIds — shape detection', () => {
   });
 
   it('soporta shape string[] (regresión real del endpoint LD V1)', async () => {
-    // Shape observado contra va360.academy: el endpoint
+    // Shape observado contra un LearnDash real: el endpoint
     // /wp-json/ldlms/v1/sfwd-courses/:id/users devuelve un array de
     // strings con los WP user IDs, no objetos con { id }.
     const fetchMock: FetchLike = async (url) => {

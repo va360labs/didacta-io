@@ -17,7 +17,7 @@ const INPUT = {
   startTime: new Date('2026-08-03T14:00:00.000Z'),
   durationMinutes: 90,
   timezone: 'Europe/Madrid',
-  hostEmail: 'companero@va360labs.com',
+  hostEmail: 'anfitrion@example.com',
 };
 
 /** Devuelve el token OAuth y luego la respuesta indicada para la llamada API. */
@@ -52,7 +52,7 @@ describe('createMeeting — host inexistente en Zoom', () => {
 
     expect(err).toBeInstanceOf(ZoomHostNotFoundError);
     expect((err as ZoomHostNotFoundError).code).toBe('ZOOM_HOST_NOT_FOUND');
-    expect((err as Error).message).toContain('companero@va360labs.com');
+    expect((err as Error).message).toContain('anfitrion@example.com');
     expect((err as Error).message).toContain('cuenta de Zoom');
   });
 

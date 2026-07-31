@@ -23,7 +23,7 @@ interface Summary {
 
 test.describe('invitaciones · envío por lotes', () => {
   test('arranca el lote al instante y el progreso se sigue desde el summary', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };

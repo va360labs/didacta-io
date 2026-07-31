@@ -16,7 +16,7 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
 
 test.describe('Super_admin tenants CRUD (HU-SA-001)', () => {
   test('flow completo: list → create → suspend → reactivate', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const headers = {
       Authorization: `Bearer ${bearer}`,
@@ -72,7 +72,7 @@ test.describe('Super_admin tenants CRUD (HU-SA-001)', () => {
   });
 
   test('rechaza slug inválido (no DNS-safe)', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const headers = {
       Authorization: `Bearer ${bearer}`,

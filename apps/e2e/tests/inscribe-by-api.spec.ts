@@ -22,7 +22,7 @@ import { injectSession } from '../helpers/auth';
  */
 test.describe('Inscripción externa por API', () => {
   test('una API key inscribe a un comprador nuevo y es idempotente', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 
@@ -71,7 +71,7 @@ test.describe('Inscripción externa por API', () => {
   });
 
   test('reembolso: la baja revoca la matrícula y es idempotente', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 
@@ -124,7 +124,7 @@ test.describe('Inscripción externa por API', () => {
   });
 
   test('catálogo: /inscribe/courses lista los cursos con estado y exige scope courses:read', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 
@@ -158,7 +158,7 @@ test.describe('Inscripción externa por API', () => {
   });
 
   test('la ficha de curso ya no ofrece "Matricularme"', async ({ page }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 

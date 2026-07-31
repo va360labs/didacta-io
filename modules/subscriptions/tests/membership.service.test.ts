@@ -619,7 +619,7 @@ describe('MembershipService · checkout', () => {
     expect(first.url).toContain('price_1');
     expect(ctx.stripe.createProduct).toHaveBeenCalledTimes(1);
     // Un Product POR PLAN, nombrado con el nombre del plan: es lo que ve el
-    // comprador en el checkout ("VA360.pro Anual"), no un nombre compartido.
+    // comprador en el checkout ("Membresía Anual"), no un nombre compartido.
     expect(ctx.stripe.createProduct).toHaveBeenCalledWith('Anual', expect.any(Object));
     expect(ctx.stripe.createRecurringPrice).toHaveBeenCalledWith(
       expect.objectContaining({ amountCents: 99_900, intervalMonths: 12, nickname: 'Anual' }),
@@ -646,7 +646,7 @@ describe('MembershipService · checkout', () => {
 
   it('renombrar el plan renombra su Product en Stripe', async () => {
     const plan = await ctx.service.createPlan(TENANT, {
-      name: 'VA360.pro Anual',
+      name: 'Membresía Anual',
       intervalMonths: 12,
       amountCents: 39_900,
     });
@@ -657,8 +657,8 @@ describe('MembershipService · checkout', () => {
       successUrl: 'https://x/s',
       cancelUrl: 'https://x/c',
     });
-    await ctx.service.updatePlan(TENANT, plan.id, { name: 'VA360.pro Anual (2027)' });
-    expect(ctx.stripe.updateProduct).toHaveBeenCalledWith('prod_1', 'VA360.pro Anual (2027)');
+    await ctx.service.updatePlan(TENANT, plan.id, { name: 'Membresía Anual (2027)' });
+    expect(ctx.stripe.updateProduct).toHaveBeenCalledWith('prod_1', 'Membresía Anual (2027)');
 
     // Cambiar solo el importe NO toca el nombre del Product.
     ctx.stripe.updateProduct.mockClear();

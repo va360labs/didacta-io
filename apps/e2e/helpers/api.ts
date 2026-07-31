@@ -659,7 +659,7 @@ export interface BootstrapResult {
  * - alumno (rol por defecto, sin MFA) con session activa
  */
 export async function bootstrapScenario(): Promise<BootstrapResult> {
-  const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+  const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
   const stamp = Date.now();
   const adminEmail = `e2e-admin-${stamp}@example.test`;
   const alumnoEmail = `e2e-alumno-${stamp}@example.test`;

@@ -25,7 +25,7 @@ const VTT = `WEBVTT
 NOTE grabado con Whisper
 
 00:00:01.000 --> 00:00:04.000
-<v Valen>Vamos a ver el nodo HTTP.
+<v Ponente>Vamos a ver el nodo HTTP.
 
 00:01:05.500 --> 00:01:09.000
 Fíjate en la cabecera.

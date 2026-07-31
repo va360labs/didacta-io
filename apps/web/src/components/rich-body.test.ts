@@ -27,9 +27,9 @@ describe('tokenizeRichText', () => {
   });
 
   it('resalta menciones @handle', () => {
-    expect(tokenizeRichText('hola @valen ¿cómo vas?')).toEqual([
+    expect(tokenizeRichText('hola @ana ¿cómo vas?')).toEqual([
       { type: 'text', value: 'hola ' },
-      { type: 'mention', handle: 'valen' },
+      { type: 'mention', handle: 'ana' },
       { type: 'text', value: ' ¿cómo vas?' },
     ]);
   });

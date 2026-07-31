@@ -46,7 +46,7 @@ function makeHarness(opts: {
       findUnique: vi.fn().mockResolvedValue(opts.existingUser ?? null),
     },
     role: { findUnique: vi.fn().mockResolvedValue({ id: 'role-alumno', name: 'alumno' }) },
-    tenant: { findUnique: vi.fn().mockResolvedValue({ name: 'VA360 Academy' }) },
+    tenant: { findUnique: vi.fn().mockResolvedValue({ name: 'Academia Demo' }) },
     modThemingTenantTheme: {
       findUnique: vi.fn().mockResolvedValue({ logoUrl: null, brandHue: 213, brandSaturation: 70 }),
     },
@@ -94,7 +94,7 @@ function makeHarness(opts: {
             userId: 'new-user',
             userName: 'Ana',
             tenantId: TENANT_ID,
-            tenantName: 'VA360 Academy',
+            tenantName: 'Academia Demo',
           },
     ),
   } as never;

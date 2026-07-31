@@ -68,7 +68,7 @@ async function api<T>(
 
 test.describe('Fundae · Grupos bonificables (LMS-81)', () => {
   test('CRUD grupo + costes + transiciones de estado', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const stamp = Date.now();
 

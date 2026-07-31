@@ -262,7 +262,7 @@ describe('CommunityService.createPost', () => {
 
     const post = await svc.createPost(
       't1',
-      { id: 'u1', displayName: 'Valen' },
+      { id: 'u1', displayName: 'Ana' },
       {
         title: 'Hola',
         body: 'Mundo',
@@ -272,7 +272,7 @@ describe('CommunityService.createPost', () => {
 
     expect(post.title).toBe('Hola');
     expect(post.tags).toEqual(['general']);
-    expect(post.authorDisplayName).toBe('Valen');
+    expect(post.authorDisplayName).toBe('Ana');
     expect(events[0]?.name).toBe('community.post.created');
   });
 

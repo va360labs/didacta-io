@@ -109,8 +109,8 @@ describe('TelegramService', () => {
       const svc = await loadService();
       const base = {
         id: '424242',
-        first_name: 'Valen',
-        username: 'valen',
+        first_name: 'Ana',
+        username: 'ana',
         auth_date: nowSeconds(),
       };
       const hash = computeValidHash(base);

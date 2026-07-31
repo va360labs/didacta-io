@@ -45,7 +45,7 @@ interface AttendanceReport {
 
 test.describe('mod.zoom-live · asistencia real (ADR-018)', () => {
   test('proxy de entrada, gating, marcado manual y reconciliación con Zoom', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const adminHeaders = {
@@ -208,7 +208,7 @@ test.describe('mod.zoom-live · asistencia real (ADR-018)', () => {
   });
 
   test('el panel de asistencia se renderiza en /clase/[id] para staff', async ({ page }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminEmail = process.env.E2E_ADMIN_EMAIL;
     const adminPassword = process.env.E2E_ADMIN_PASSWORD;

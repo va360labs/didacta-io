@@ -23,7 +23,7 @@ test.describe('mod.assessments — corrección manual end-to-end', () => {
     page,
     browser,
   }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 

@@ -39,11 +39,11 @@ const SUB_BILLING = {
   total: '327.00',
   billing_period: 'year',
   billing: {
-    first_name: 'Antonio',
-    last_name: 'Hernández Morgado',
-    email: 'va360.respect108@passmail.net',
+    first_name: 'Cliente',
+    last_name: 'De Ejemplo',
+    email: 'cliente@example.com',
   },
-  line_items: [{ name: 'VA360 2026 - Anual', product_id: 7 }],
+  line_items: [{ name: 'Membresía 2026 - Anual', product_id: 7 }],
 };
 
 function fakeFetch(handlers: {
@@ -92,13 +92,13 @@ describe('WooCommerceReadSdkAdapter · findSubscriptionsByEmail', () => {
     });
     const adapter = new WooCommerceReadSdkAdapter(CREDS, fetchFn);
 
-    const subs = await adapter.findSubscriptionsByEmail('va360.respect108@passmail.net');
+    const subs = await adapter.findSubscriptionsByEmail('cliente@example.com');
     expect(subs).toHaveLength(1);
     expect(subs[0]).toMatchObject({
       subscriptionId: '15203',
       status: 'active',
-      email: 'va360.respect108@passmail.net',
-      productName: 'VA360 2026 - Anual',
+      email: 'cliente@example.com',
+      productName: 'Membresía 2026 - Anual',
     });
   });
 
@@ -115,14 +115,14 @@ describe('WooCommerceReadSdkAdapter · findSubscriptionsByEmail', () => {
     });
     const adapter = new WooCommerceReadSdkAdapter(CREDS, fetchFn);
 
-    const subs = await adapter.findSubscriptionsByEmail('va360.respect108@passmail.net');
+    const subs = await adapter.findSubscriptionsByEmail('cliente@example.com');
     expect(subs.map((s) => s.subscriptionId)).toEqual(['15203']);
   });
 
   it('dedup: la misma sub por email de cuenta (path A) y por facturación (path B) sale una vez', async () => {
     const fetchFn = fakeFetch({
       customers: (email) =>
-        email === 'va360.respect108@passmail.net' ? resp(200, [{ id: 42 }]) : resp(200, []),
+        email === 'cliente@example.com' ? resp(200, [{ id: 42 }]) : resp(200, []),
       subsByCustomer: (customer, status) =>
         customer === '42' && status === 'active' ? resp(200, [SUB_BILLING]) : resp(200, []),
       subsByStatus: (status, page) =>
@@ -130,7 +130,7 @@ describe('WooCommerceReadSdkAdapter · findSubscriptionsByEmail', () => {
     });
     const adapter = new WooCommerceReadSdkAdapter(CREDS, fetchFn);
 
-    const subs = await adapter.findSubscriptionsByEmail('va360.respect108@passmail.net');
+    const subs = await adapter.findSubscriptionsByEmail('cliente@example.com');
     expect(subs).toHaveLength(1);
     expect(subs[0]!.subscriptionId).toBe('15203');
   });
@@ -152,7 +152,7 @@ describe('WooCommerceReadSdkAdapter · findSubscriptionsByEmail', () => {
  * no dejan suscripción viva, así que sin esto el aprobador ve "sin suscripción"
  * y rechaza a un cliente que sí pagó.
  */
-const EMAIL = 'lifetime@passmail.net';
+const EMAIL = 'lifetime@example.com';
 
 /** Pedido de invitado (customer_id 0) con el email buscado en facturación. */
 const ORDER_GUEST = {
@@ -163,7 +163,7 @@ const ORDER_GUEST = {
   total: '997.00',
   date_created_gmt: '2023-04-11T09:15:00',
   billing: { email: EMAIL },
-  line_items: [{ name: 'VA360 Lifetime' }, { name: 'Bonus: plantillas' }],
+  line_items: [{ name: 'Acceso Lifetime' }, { name: 'Bonus: plantillas' }],
 };
 
 describe('WooCommerceReadSdkAdapter · findPurchasesByEmail', () => {
@@ -184,7 +184,7 @@ describe('WooCommerceReadSdkAdapter · findPurchasesByEmail', () => {
       total: 99_700,
       currency: 'EUR',
       createdAt: '2023-04-11T09:15:00Z',
-      products: ['VA360 Lifetime', 'Bonus: plantillas'],
+      products: ['Acceso Lifetime', 'Bonus: plantillas'],
     });
   });
 

@@ -13,7 +13,7 @@ import { adminTokenForBootstrap, API_URL, signup } from '../helpers/api';
  */
 test.describe('mod.community · menciones end-to-end', () => {
   test('post con @handle persiste mención y aparece en /mentions/me del receptor', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
 
     // Crear dos alumnos: A (autor) y B (mencionado).
@@ -61,7 +61,7 @@ test.describe('mod.community · menciones end-to-end', () => {
   });
 
   test('search/users resuelve por prefijo del handle', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 

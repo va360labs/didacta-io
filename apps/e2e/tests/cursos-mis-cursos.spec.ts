@@ -9,7 +9,7 @@ import { injectSession } from '../helpers/auth';
  */
 test.describe('Catálogo dividido en "Mis cursos" y "Otros cursos"', () => {
   test('el alumno ve su curso arriba y el resto del catálogo abajo', async ({ page }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 
@@ -66,10 +66,14 @@ test.describe('Catálogo dividido en "Mis cursos" y "Otros cursos"', () => {
 
     // 3) "Mis cursos" va ANTES que "Otros cursos" en el documento.
     const orden = await page.evaluate(() => {
-      const headings = Array.from(document.querySelectorAll('h2'));
+      const headings = Array.from(document.querySelectorAll('h2')) as {
+        textContent: string | null;
+      }[];
       return {
         mis: headings.findIndex((h) => h.textContent?.trim() === 'Mis cursos'),
-        otros: headings.findIndex((h) => h.textContent?.trim().startsWith('Otros cursos de')),
+        otros: headings.findIndex((h) =>
+          (h.textContent ?? '').trim().startsWith('Otros cursos de'),
+        ),
       };
     });
     expect(orden.mis).toBeGreaterThanOrEqual(0);
@@ -89,7 +93,7 @@ test.describe('Catálogo dividido en "Mis cursos" y "Otros cursos"', () => {
   });
 
   test('un alumno sin matrículas ve "Mis cursos" vacía con explicación', async ({ page }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 

@@ -17,7 +17,7 @@ import { injectSession } from '../helpers/auth';
  */
 test.describe('Constructor de cursos del formador (UI kit Didacta)', () => {
   test('hero muestra métricas, edita metadatos inline y elimina lección', async ({ page }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = {
@@ -124,7 +124,7 @@ test.describe('Constructor de cursos del formador (UI kit Didacta)', () => {
     // de un <div> (no seleccionable) cuando el form no pasaba onChange, y el
     // submit no enviaba `type`. Aquí ejercitamos el formulario real: elegir tipo
     // en el <select>, escribir título y pulsar "Crear".
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = {

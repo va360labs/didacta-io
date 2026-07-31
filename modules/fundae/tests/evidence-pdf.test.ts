@@ -24,7 +24,7 @@ describe('renderEvidencePdf', () => {
   it('genera un PDF con magic bytes %PDF', async () => {
     const buf = await renderEvidencePdf({
       action: ACTION,
-      centerName: 'VA360 Labs',
+      centerName: 'Centro Demo',
       cifCentro: ACTION.cifCentro,
       participantName: 'María García',
       participantEmail: 'maria@example.com',
@@ -33,7 +33,7 @@ describe('renderEvidencePdf', () => {
       resultado: 'APTO',
       enrolledAt: new Date('2026-05-01T00:00:00Z'),
       completedAt: new Date('2026-05-29T00:00:00Z'),
-      signerName: 'Valentín Ayesa',
+      signerName: 'Firmante Ejemplo',
       signerTitle: 'Tenant admin',
     });
     expect(buf).toBeInstanceOf(Buffer);
@@ -44,7 +44,7 @@ describe('renderEvidencePdf', () => {
   it('soporta participante sin DNI sin romper', async () => {
     const buf = await renderEvidencePdf({
       action: ACTION,
-      centerName: 'VA360 Labs',
+      centerName: 'Centro Demo',
       participantName: 'Juan',
       participantEmail: 'juan@example.com',
       participantDni: null,

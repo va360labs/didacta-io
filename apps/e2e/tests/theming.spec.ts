@@ -12,7 +12,7 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
 
 test.describe('Theming por tenant (mod.theming)', () => {
   test('GET → PUT (cambio de hue) → GET → reset → defaults restaurados', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const headers = {
       Authorization: `Bearer ${bearer}`,
@@ -55,7 +55,7 @@ test.describe('Theming por tenant (mod.theming)', () => {
   });
 
   test('PUT con brandHue fuera de rango → 400', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const headers = {
       Authorization: `Bearer ${bearer}`,

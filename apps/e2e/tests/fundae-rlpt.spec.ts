@@ -47,7 +47,7 @@ async function api<T>(
 
 test.describe('Fundae · Notificaciones RLPT (LMS-80)', () => {
   test('upload NOTIFICACION_INICIAL → list → upload ACUSE_RECIBO → delete', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const stamp = Date.now();
 

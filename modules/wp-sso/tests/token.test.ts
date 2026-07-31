@@ -4,7 +4,7 @@ import { WpSsoTokenError } from '../src/errors.js';
 import { verifyWpSsoToken, WP_SSO_DEFAULT_AUDIENCE } from '../src/token.js';
 
 const SECRET = 'shared-secret-de-prueba-bastante-largo-1234567890';
-const ISS = 'https://va360.academy';
+const ISS = 'https://wp.example.com';
 
 function enc(secret: string): Uint8Array {
   return new TextEncoder().encode(secret);
@@ -29,7 +29,7 @@ async function makeToken(
   const iat = now + (opts.iatOffset ?? 0);
   const exp = iat + (opts.ttl ?? 120);
   const builder = new SignJWT({
-    ...(opts.email !== undefined ? { email: opts.email } : { email: 'alumno@va360.academy' }),
+    ...(opts.email !== undefined ? { email: opts.email } : { email: 'alumno@example.com' }),
     ...(opts.name ? { name: opts.name } : {}),
     ...(opts.jti === null ? {} : { jti: opts.jti ?? 'nonce-unico-1' }),
     ...(opts.sub === null ? {} : { sub: opts.sub ?? 'wp-42' }),
@@ -46,12 +46,12 @@ async function makeToken(
 describe('verifyWpSsoToken', () => {
   it('acepta un token válido y devuelve email normalizado + jti + name + sub', async () => {
     const token = await makeToken({
-      email: 'Alumno@VA360.Academy',
+      email: 'Alumno@Example.Com',
       name: 'Ana Pérez',
       sub: 'wp-7',
     });
     const claims = await verifyWpSsoToken(token, { sharedSecret: SECRET, expectedIssuer: ISS });
-    expect(claims.email).toBe('alumno@va360.academy'); // trim + lowercase
+    expect(claims.email).toBe('alumno@example.com'); // trim + lowercase
     expect(claims.name).toBe('Ana Pérez');
     expect(claims.jti).toBe('nonce-unico-1');
     expect(claims.iss).toBe(ISS);

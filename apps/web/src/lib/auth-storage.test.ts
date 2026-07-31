@@ -36,10 +36,10 @@ const SESSION_KEY = 'didacta.session';
 const SESSION = {
   user: {
     id: 'u1',
-    email: 'alumno@va360labs.com',
+    email: 'alumno@example.com',
     name: 'Alumno',
     tenantId: 't1',
-    tenantSlug: 'va360',
+    tenantSlug: 'demo',
     roles: ['alumno'],
     mfaEnabled: false,
   },
@@ -90,7 +90,7 @@ describe('authStorage — "Mantener la sesión abierta"', () => {
 
     expect(authStorage.getAccessToken()).toBe('acc');
     expect(authStorage.getRefreshToken()).toBe('ref');
-    expect(authStorage.getSession()?.user.email).toBe('alumno@va360labs.com');
+    expect(authStorage.getSession()?.user.email).toBe('alumno@example.com');
   });
 
   it('los pasos posteriores al login (MFA, onboarding) NO promueven la sesión a persistente', () => {

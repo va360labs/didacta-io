@@ -10,7 +10,7 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
 
 test.describe('Audit log con filtros', () => {
   test('filtros action + resourceType devuelven entries pertinentes', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const headers = {
       Authorization: `Bearer ${bearer}`,
@@ -46,7 +46,7 @@ test.describe('Audit log con filtros', () => {
   });
 
   test('filtro dateFrom devuelve solo entries posteriores', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${bearer}` };
 

@@ -181,8 +181,8 @@ describe('onJobTick · state machine (JR-004)', () => {
   // del backlog (`MIGRATOR-TESTS-REFACTOR` P3): reescribir como integration
   // tests con Postgres real + mocks de ctx.http capturando responses WP
   // de fixture. Mientras tanto, la evidencia funcional es el handoff de
-  // 2026-05-19 con import real contra va360.academy: 13 cursos / 60
-  // modules / 448 lessons importadas con audit chain verificada.
+  // 2026-05-19 con un import real contra un LearnDash productivo: 13 cursos /
+  // 60 modules / 448 lessons importadas con audit chain verificada.
   // ─────────────────────────────────────────────────────────────────────────
 
   it('CAS rechaza (rowCount=0 — otro tick transicionó) → continue para re-leer', async () => {

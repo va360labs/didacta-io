@@ -12,7 +12,7 @@ import { adminTokenForBootstrap, API_URL, signup } from '../helpers/api';
 
 test.describe('Quiz FILL_IN_BLANK (mod.assessments v0.2)', () => {
   test('respuesta aceptada → 100% del puntaje; respuesta diferente → 0', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const adminBearer = await adminTokenForBootstrap(tenantSlug);
     const admin = {
       Authorization: `Bearer ${adminBearer}`,

@@ -24,7 +24,7 @@ test.describe('Auth · MFA admin', () => {
   test('admin completa setup MFA → enable con código TOTP → sesión queda mfaVerified', async ({
     page,
   }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const adminEmail = process.env.E2E_ADMIN_EMAIL;
     const adminPassword = process.env.E2E_ADMIN_PASSWORD;
     if (!adminEmail || !adminPassword) {

@@ -42,7 +42,7 @@ const ME_PATHS = '/api/v1/modules/learning/me/paths';
 // ─── setup compartido ─────────────────────────────────────────────────────────
 
 test.describe('Rutas de aprendizaje — lifecycle (UC-17)', () => {
-  const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+  const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
   const stamp = Date.now();
 
   let adminToken: string;

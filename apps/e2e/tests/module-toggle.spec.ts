@@ -15,7 +15,7 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
 
 test.describe('Toggle de módulos por tenant (HU-TA-002 + guard runtime)', () => {
   test('desactivar mod.community → endpoint responde 403; reactivar → 200', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${bearer}` };
 

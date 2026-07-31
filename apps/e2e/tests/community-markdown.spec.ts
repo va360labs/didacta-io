@@ -14,7 +14,7 @@ import { injectSession } from '../helpers/auth';
  *  - los enlaces markdown dentro de un ítem siguen siendo clicables.
  */
 
-const TENANT_SLUG = process.env.E2E_TENANT_SLUG ?? 'va360';
+const TENANT_SLUG = process.env.E2E_TENANT_SLUG ?? 'demo';
 
 const MARKDOWN_BODY = [
   '¡Buenas familia! Arrancamos con el repaso.',

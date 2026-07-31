@@ -12,7 +12,7 @@ const BASE = `${API_URL}/api/v1/modules/community`;
 
 test.describe('Comunidad · editar post + avisos masivos', () => {
   test('editar un post: PATCH cambia el título y marca editedAt', async () => {
-    const token = await adminTokenForBootstrap(process.env.E2E_TENANT_SLUG ?? 'va360');
+    const token = await adminTokenForBootstrap(process.env.E2E_TENANT_SLUG ?? 'demo');
     const auth = { Authorization: `Bearer ${token}` };
     const json = { ...auth, 'Content-Type': 'application/json' };
 
@@ -57,7 +57,7 @@ test.describe('Comunidad · editar post + avisos masivos', () => {
   });
 
   test('broadcast: crear (admin) encola y aparece en el listado', async () => {
-    const token = await adminTokenForBootstrap(process.env.E2E_TENANT_SLUG ?? 'va360');
+    const token = await adminTokenForBootstrap(process.env.E2E_TENANT_SLUG ?? 'demo');
     const auth = { Authorization: `Bearer ${token}` };
     const json = { ...auth, 'Content-Type': 'application/json' };
 

@@ -115,7 +115,7 @@ function makeHarness() {
     },
     tenant: {
       async findUnique() {
-        return { name: 'VA360 LABS' };
+        return { name: 'Academia Demo' };
       },
     },
     memberRegistrationDecisionToken: {

@@ -73,10 +73,10 @@ describe('adminTenantsApi.getOne', () => {
 
 describe('adminTenantsApi.rename', () => {
   it('hace PATCH /api/v1/admin/tenants/:id con body { name } y bearer', async () => {
-    const updated: TenantListItem = { ...SAMPLE_TENANT, name: 'VA360 Academy' };
+    const updated: TenantListItem = { ...SAMPLE_TENANT, name: 'Academia Demo' };
     mockOk(updated);
 
-    const result = await adminTenantsApi.rename(FAKE_TOKEN, SAMPLE_TENANT.id, 'VA360 Academy');
+    const result = await adminTenantsApi.rename(FAKE_TOKEN, SAMPLE_TENANT.id, 'Academia Demo');
 
     expect(result).toEqual(updated);
     const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls;
@@ -84,7 +84,7 @@ describe('adminTenantsApi.rename', () => {
     const [url, init] = calls[0] as [string, RequestInit];
     expect(url).toContain(`/api/v1/admin/tenants/${SAMPLE_TENANT.id}`);
     expect(init.method).toBe('PATCH');
-    expect(JSON.parse(init.body as string)).toEqual({ name: 'VA360 Academy' });
+    expect(JSON.parse(init.body as string)).toEqual({ name: 'Academia Demo' });
     const headers = init.headers as Headers;
     expect(headers.get('Authorization')).toBe(`Bearer ${FAKE_TOKEN}`);
     expect(headers.get('Content-Type')).toBe('application/json');

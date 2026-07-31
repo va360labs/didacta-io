@@ -24,7 +24,7 @@ function isoIn(days: number, hour = 18): string {
 test.describe('Encuesta post-clase (mod.surveys)', () => {
   test('flujo completo: crear, responder en UI, dedupe y resultados', async ({ page }) => {
     test.setTimeout(120_000);
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };

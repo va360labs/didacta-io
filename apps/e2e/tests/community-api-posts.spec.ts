@@ -13,7 +13,7 @@ import { expect, test } from '@playwright/test';
 import { adminTokenForBootstrap, API_URL, createTenantApiKey, signin } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
-const TENANT_SLUG = process.env.E2E_TENANT_SLUG ?? 'va360';
+const TENANT_SLUG = process.env.E2E_TENANT_SLUG ?? 'demo';
 
 test.describe('Comunidad — publicación por API key', () => {
   test('publicar con key, contrato de scopes y auditoría en el admin', async ({ page }) => {

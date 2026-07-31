@@ -45,7 +45,7 @@ test.describe('Listado de alumnos por curso (HU-FORM-002)', () => {
     });
 
     // El formador (admin con rol incluido) consulta el listado.
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${bearer}` };
     const res = await fetch(

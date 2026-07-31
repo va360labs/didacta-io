@@ -14,7 +14,7 @@ import { injectSession } from '../helpers/auth';
 
 test.describe('Métricas del negocio (bloque 7)', () => {
   test('endpoint con shape correcto, 403 para alumno y página con KPIs', async ({ page }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 
@@ -63,13 +63,13 @@ test.describe('Métricas del negocio (bloque 7)', () => {
     });
     const adminAuth = (await adminAuthRes.json()) as {
       tokens: { accessToken: string; refreshToken: string };
-      user: Record<string, unknown>;
+      user: Parameters<typeof injectSession>[1]['user'];
     };
     await page.goto('/signin');
     await injectSession(page, {
       accessToken: adminAuth.tokens.accessToken,
       refreshToken: adminAuth.tokens.refreshToken,
-      user: { ...(adminAuth.user as never), onboardingCompletedAt: new Date().toISOString() },
+      user: { ...adminAuth.user, onboardingCompletedAt: new Date().toISOString() },
     });
     // /admin/metricas es ahora un redirect a la pestaña "Negocio" del panel:
     // los KPIs dejaron de tener pantalla propia para no competir con /admin.

@@ -20,14 +20,14 @@ async function fullSession(
   page: Parameters<typeof injectSession>[0],
   auth: {
     tokens: { accessToken: string; refreshToken: string };
-    user: Record<string, unknown>;
+    user: Parameters<typeof injectSession>[1]['user'];
   },
 ) {
   await page.goto('/signin');
   await injectSession(page, {
     accessToken: auth.tokens.accessToken,
     refreshToken: auth.tokens.refreshToken,
-    user: { ...(auth.user as never), onboardingCompletedAt: new Date().toISOString() },
+    user: { ...auth.user, onboardingCompletedAt: new Date().toISOString() },
   });
 }
 
@@ -36,7 +36,7 @@ const BASE = '/api/v1/modules/gamification';
 test.describe('Puntos, niveles y retos (mod.gamification)', () => {
   test('catálogo, entrega con prueba, aprobación y clasificación', async ({ page }) => {
     test.setTimeout(180_000);
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
@@ -169,7 +169,7 @@ test.describe('Puntos, niveles y retos (mod.gamification)', () => {
 
   test('los niveles nacen vacíos y el admin los crea', async ({ page }) => {
     test.setTimeout(120_000);
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
 
     const adminAuthRes = await fetch(`${API_URL}/api/v1/auth/signin`, {
@@ -217,7 +217,7 @@ test.describe('Puntos, niveles y retos (mod.gamification)', () => {
 
   test('el alumno ve el beneficio bloqueado y no lo puede pedir sin nivel', async ({ page }) => {
     test.setTimeout(120_000);
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };

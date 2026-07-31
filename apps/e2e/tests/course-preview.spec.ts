@@ -11,7 +11,7 @@ import { injectSession } from '../helpers/auth';
  */
 test.describe('Vista previa de curso (editor, sin publicar)', () => {
   test('un admin ve el contenido de un curso DRAFT sin matricularse', async ({ page }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = {

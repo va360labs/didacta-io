@@ -21,7 +21,7 @@ interface SessionView {
 
 test.describe('mod.zoom-live · añadir clase al calendario', () => {
   test('los endpoints de calendario son públicos, generan el evento y nunca exponen el joinUrl', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const adminHeaders = {
@@ -108,7 +108,7 @@ test.describe('mod.zoom-live · añadir clase al calendario', () => {
   });
 
   test('la plantilla del recordatorio de 2h está en el catálogo de /admin/emails', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 
     const res = await fetch(`${API_URL}/api/v1/admin/notifications/templates/catalog`, {
@@ -134,7 +134,7 @@ test.describe('mod.zoom-live · añadir clase al calendario', () => {
   });
 
   test('el recordatorio avisa a los inscritos una sola vez y se rearma si la clase se mueve', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const adminHeaders = {
@@ -227,7 +227,7 @@ test.describe('mod.zoom-live · añadir clase al calendario', () => {
   test('al inscribirse en /clase/[id] se ofrece guardar la clase en el calendario', async ({
     page,
   }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 

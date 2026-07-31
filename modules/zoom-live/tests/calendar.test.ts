@@ -13,7 +13,7 @@ const base: CalendarEventInput = {
   startTime: new Date('2026-12-01T16:00:00.000Z'),
   durationMinutes: 90,
   classUrl: 'https://aula.example.test/clase/11111111-2222-3333-4444-555555555555',
-  organizerName: 'VA360',
+  organizerName: 'Demo',
   now: new Date('2026-11-30T10:00:00.000Z'),
 };
 

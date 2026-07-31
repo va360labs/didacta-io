@@ -463,12 +463,12 @@ describe('AccessGroupsService.createGroup', () => {
   it('deriva el slug del nombre y rechaza duplicados', async () => {
     const h = makeHarness();
     const g = await h.service.createGroup(TENANT, {
-      name: 'VA360 Pro',
+      name: 'Demo Pro',
       kind: 'ALL_COURSES',
     } as never);
-    expect(g.slug).toBe('va360-pro');
+    expect(g.slug).toBe('demo-pro');
     await expect(
-      h.service.createGroup(TENANT, { name: 'VA360 Pro', kind: 'ALL_COURSES' } as never),
+      h.service.createGroup(TENANT, { name: 'Demo Pro', kind: 'ALL_COURSES' } as never),
     ).rejects.toThrow(/slug/i);
   });
 

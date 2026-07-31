@@ -610,7 +610,7 @@ describe('findUserPurchases', () => {
     total: 99_700,
     currency: 'EUR',
     createdAt: '2023-04-11T09:15:00Z',
-    products: ['VA360 Lifetime'],
+    products: ['Acceso Lifetime'],
   };
 
   /** Adapter con (o sin) findPurchasesByEmail; valida en el add. */
@@ -635,7 +635,7 @@ describe('findUserPurchases', () => {
   it('agrega las compras de una conexión VERIFIED con el email normalizado', async () => {
     const find = vi.fn(async (_email: string) => [ORDER]);
     const svc = buildService({ [VALID_KEY]: purchaseAdapter(find) });
-    const row = await addConn(svc, 'Woo VA360', VALID_KEY);
+    const row = await addConn(svc, 'Woo Demo', VALID_KEY);
 
     const { purchases, failures } = await svc.service.findUserPurchases(TENANT, ' BUYER@x.com ');
 
@@ -643,11 +643,11 @@ describe('findUserPurchases', () => {
     expect(purchases).toHaveLength(1);
     expect(purchases[0]).toMatchObject({
       connectionId: row.id,
-      connectionName: 'Woo VA360',
+      connectionName: 'Woo Demo',
       orderId: '8801',
       status: 'completed',
       total: 99_700,
-      products: ['VA360 Lifetime'],
+      products: ['Acceso Lifetime'],
     });
     expect(find).toHaveBeenCalledWith('buyer@x.com');
   });

@@ -21,7 +21,7 @@ import { fotoPngBase64 } from '../helpers/png';
  */
 test.describe('Branding · uploader de logo del tenant', () => {
   test('upload PNG → endpoint público sirve blob → DELETE limpia', async ({ page, request }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = {
       Authorization: `Bearer ${adminToken}`,

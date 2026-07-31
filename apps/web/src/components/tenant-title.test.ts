@@ -7,22 +7,22 @@ import { withTenantBrand } from './tenant-title';
  */
 describe('withTenantBrand', () => {
   it('reemplaza el sufijo genérico por el del tenant', () => {
-    expect(withTenantBrand('Iniciar sesión | Didacta', 'VA360')).toBe(
-      'Iniciar sesión | VA360 powered by Didacta',
+    expect(withTenantBrand('Iniciar sesión | Didacta', 'Demo')).toBe(
+      'Iniciar sesión | Demo powered by Didacta',
     );
   });
 
   it('el título por defecto (solo "Didacta") pasa a llevar el tenant', () => {
-    expect(withTenantBrand('Didacta', 'VA360')).toBe('VA360 powered by Didacta');
+    expect(withTenantBrand('Didacta', 'Demo')).toBe('Demo powered by Didacta');
   });
 
   it('es idempotente — reaplicar no encadena sufijos', () => {
-    const once = withTenantBrand('Iniciar sesión | Didacta', 'VA360');
-    expect(withTenantBrand(once, 'VA360')).toBe(once);
+    const once = withTenantBrand('Iniciar sesión | Didacta', 'Demo');
+    expect(withTenantBrand(once, 'Demo')).toBe(once);
   });
 
   it('no toca títulos que no siguen el template', () => {
-    expect(withTenantBrand('Otra cosa', 'VA360')).toBe('Otra cosa');
+    expect(withTenantBrand('Otra cosa', 'Demo')).toBe('Otra cosa');
   });
 
   it('un tenant llamado "Didacta" no genera "Didacta powered by Didacta"', () => {
@@ -34,8 +34,8 @@ describe('withTenantBrand', () => {
   });
 
   it('respeta el nombre real del tenant, espacios incluidos', () => {
-    expect(withTenantBrand('Mi panel | Didacta', 'VA360 LABS')).toBe(
-      'Mi panel | VA360 LABS powered by Didacta',
+    expect(withTenantBrand('Mi panel | Didacta', 'Academia Demo')).toBe(
+      'Mi panel | Academia Demo powered by Didacta',
     );
   });
 });

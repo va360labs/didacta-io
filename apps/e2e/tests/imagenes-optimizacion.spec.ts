@@ -17,7 +17,7 @@ import { fotoPngBase64 } from '../helpers/png';
 
 test.describe('Imágenes · optimización en toda la plataforma', () => {
   test('el upload genérico recomprime a WebP y devuelve el ahorro', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const data = fotoPngBase64();
     const originalBytes = Buffer.from(data, 'base64').length;
@@ -46,7 +46,7 @@ test.describe('Imágenes · optimización en toda la plataforma', () => {
   });
 
   test('`optimize.enabled=false` es la única vía para guardar el original', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const data = fotoPngBase64();
 
@@ -69,7 +69,7 @@ test.describe('Imágenes · optimización en toda la plataforma', () => {
   });
 
   test('un SVG se guarda intacto — es vectorial y recomprimirlo lo empeoraría', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
     const svg = Buffer.from(
       '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>',
@@ -88,7 +88,7 @@ test.describe('Imágenes · optimización en toda la plataforma', () => {
   });
 
   test('el inventario de /admin/imagenes responde con totales coherentes', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
 
     const res = await fetch(`${API_URL}/api/v1/admin/images/inventory`, {
@@ -121,7 +121,7 @@ test.describe('Imágenes · optimización en toda la plataforma', () => {
   });
 
   test('/admin/imagenes pinta el inventario y sustituye a la vieja de cursos', async ({ page }) => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
 
     // Una imagen recién subida SIN optimizar deja algo real que reoptimizar,

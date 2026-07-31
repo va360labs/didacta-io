@@ -220,7 +220,7 @@ test.describe('Admin · impagos de inscripción (member_payment_flag)', () => {
   });
 
   test('admin: upsert + GET refleja el alta y DELETE lo borra', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 
     // telegramId único por run para no chocar con otros tests/runs paralelos.

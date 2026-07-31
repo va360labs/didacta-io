@@ -11,7 +11,7 @@ import { adminTokenForBootstrap, API_URL, signup } from '../helpers/api';
 
 test.describe('Quiz MULTIPLE_CHOICE (mod.assessments)', () => {
   test('responder con todas las correctas → score completo', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const adminBearer = await adminTokenForBootstrap(tenantSlug);
     const admin = {
       Authorization: `Bearer ${adminBearer}`,

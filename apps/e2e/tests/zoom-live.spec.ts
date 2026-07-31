@@ -12,7 +12,7 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
  */
 test.describe('mod.zoom-live · sesiones síncronas', () => {
   test('crea sesión con stub Zoom, list la devuelve, cancel la marca CANCELLED', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const headers = {
@@ -66,7 +66,7 @@ test.describe('mod.zoom-live · sesiones síncronas', () => {
   });
 
   test('rechaza lessonId sin courseId con 422', async () => {
-    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const stamp = Date.now();
 

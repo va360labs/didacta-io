@@ -5,23 +5,21 @@ import { injectSession } from '../helpers/auth';
 /**
  * Verificación de humo en PRODUCCIÓN de las secciones de /cursos.
  *
- * No crea nada: entra con la cuenta de pruebas ya existente (alumno del grupo
- * de n8n) por el formulario real de /signin y comprueba que ve sus cursos
- * arriba y el resto abajo, con el nombre de la organización resuelto.
+ * No crea nada: entra con la cuenta de pruebas ya existente por el formulario
+ * real de /signin y comprueba que ve sus cursos arriba y el resto abajo, con
+ * el nombre de la organización resuelto.
  *
  * Se ejecuta A PROPÓSITO fuera de la suite normal (requiere `PROD_SMOKE=1` y
  * las credenciales por env) para que nadie lo corra sin querer contra prod:
  *   PROD_SMOKE=1 PROD_TEST_EMAIL=… PROD_TEST_PASSWORD=… \
- *   E2E_BASE_URL=https://aula.va360.academy pnpm exec playwright test …
+ *   E2E_BASE_URL=https://aula.example.com pnpm exec playwright test …
  */
 const enabled = process.env.PROD_SMOKE === '1';
 
 test.describe('PROD · /cursos dividido en secciones', () => {
   test.skip(!enabled, 'Solo se ejecuta con PROD_SMOKE=1 (verificación manual contra producción)');
 
-  test('la cuenta de pruebas ve "Mis cursos" con sus 3 cursos y "Otros cursos de …" debajo', async ({
-    page,
-  }) => {
+  test('la cuenta de pruebas ve "Mis cursos" y "Otros cursos de …" debajo', async ({ page }) => {
     const email = process.env.PROD_TEST_EMAIL ?? '';
     const password = process.env.PROD_TEST_PASSWORD ?? '';
     expect(email, 'falta PROD_TEST_EMAIL').not.toBe('');
@@ -30,7 +28,7 @@ test.describe('PROD · /cursos dividido en secciones', () => {
     // Login por API e inyección de sesión: el objetivo del smoke es el catálogo,
     // no el formulario de acceso (que ya cubre otro spec).
     const sesion = await signin({
-      tenantSlug: process.env.PROD_TENANT_SLUG ?? 'va360',
+      tenantSlug: process.env.PROD_TENANT_SLUG ?? 'demo',
       email,
       password,
     });
@@ -64,10 +62,13 @@ test.describe('PROD · /cursos dividido en secciones', () => {
     expect(orden.mis).toBeGreaterThanOrEqual(0);
     expect(orden.otros).toBeGreaterThan(orden.mis);
 
-    // La cuenta de pruebas está en el grupo de n8n → 3 cursos propios.
-    const seccionMis = page.locator('section', { has: misCursos }).last();
-    await expect(seccionMis.getByText(/n8n/i).first()).toBeVisible();
-    await expect(seccionMis.getByText('Primeros Pasos en VA360')).toBeVisible();
+    // Un curso propio conocido, si el entorno lo indica (depende de los datos
+    // reales del tenant contra el que corre el smoke).
+    const cursoConocido = process.env.PROD_EXPECTED_COURSE ?? '';
+    if (cursoConocido) {
+      const seccionMis = page.locator('section', { has: misCursos }).last();
+      await expect(seccionMis.getByText(cursoConocido).first()).toBeVisible();
+    }
 
     await page.screenshot({
       path: 'apps/e2e/test-results/prod-cursos-secciones.png',

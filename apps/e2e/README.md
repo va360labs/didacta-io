@@ -13,7 +13,7 @@ Tests end-to-end con Playwright. Cubren el **golden path** del alumno: signup �
 | -------------------- | ----------------------- | -------------------------------------------------------- |
 | `E2E_BASE_URL`       | `http://localhost:3000` | URL del frontend (Playwright navega aquí)                |
 | `E2E_API_URL`        | `http://localhost:3000` | URL de la API (los helpers la usan para bootstrap)       |
-| `E2E_TENANT_SLUG`    | `va360`                 | Tenant donde se crean cursos y se registran alumnos      |
+| `E2E_TENANT_SLUG`    | `demo`                  | Tenant donde se crean cursos y se registran alumnos      |
 | `E2E_ADMIN_EMAIL`    | —                       | **obligatorio** — email del super_admin con MFA-required |
 | `E2E_ADMIN_PASSWORD` | —                       | **obligatorio** — password del super_admin               |
 
@@ -29,7 +29,7 @@ pnpm dev
 pnpm --filter @didacta/e2e install-browsers
 
 # 3. Correr los tests
-E2E_ADMIN_EMAIL=valen@va360labs.com \
+E2E_ADMIN_EMAIL=admin@example.com \
 E2E_ADMIN_PASSWORD='tu-password' \
 pnpm --filter @didacta/e2e test
 ```

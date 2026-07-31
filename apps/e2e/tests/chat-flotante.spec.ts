@@ -13,10 +13,10 @@ import { injectSession } from '../helpers/auth';
  *  7. Móvil: píldora colapsada sin tapar el tab bar y panel a pantalla completa.
  *
  * Requiere API con REDIS_URL (sin Redis el realtime degrada a polling de 60 s y
- * presencia/typing no llegan) y el seed del tenant va360.
+ * presencia/typing no llegan) y el seed del tenant demo.
  */
 
-const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'va360';
+const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
 
 type E2eUser = Awaited<ReturnType<typeof signup>>;
 
@@ -360,10 +360,9 @@ test.describe('chat flotante', () => {
     // su stream SSE esté abierto: el aviso es push, así que un mensaje enviado
     // antes de conectar no lo puede recibir nadie (el no-leído sí lo recoge la
     // carga inicial de la lista).
-    const streamUp = page.waitForResponse(
-      (r) => r.url().includes('/modules/messaging/stream'),
-      { timeout: 40_000 },
-    );
+    const streamUp = page.waitForResponse((r) => r.url().includes('/modules/messaging/stream'), {
+      timeout: 40_000,
+    });
     await signInAs(page, userB);
     await expect(page.getByTestId('chat-pill')).toBeVisible({ timeout: 25_000 });
     await expect(page.getByTestId('chat-panel')).toHaveCount(0);
