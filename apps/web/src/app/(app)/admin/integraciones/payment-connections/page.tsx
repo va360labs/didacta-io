@@ -364,10 +364,10 @@ function PaymentConnectionsPanel() {
                   id="displayName"
                   placeholder={
                     provider === 'stripe'
-                      ? 'Stripe ES'
+                      ? 'Mi cuenta Stripe'
                       : provider === 'paypal'
-                        ? 'PayPal ES'
-                        : 'WooCommerce ES'
+                        ? 'Mi cuenta PayPal'
+                        : 'Mi tienda WooCommerce'
                   }
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}

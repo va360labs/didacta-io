@@ -32,16 +32,17 @@ import {
 } from '../notifications/email-template-catalog';
 
 const QUEUE_NAME = 'didacta.payment-connections.daily';
-// 9:00 hora de España por defecto. Configurable por env.
+// 9:00 UTC por defecto. Cada instalación ajusta su zona con
+// SUBSCRIPTIONS_DAILY_TZ (identificador IANA, ej. Europe/Madrid).
 const REPEAT_PATTERN = process.env['SUBSCRIPTIONS_DAILY_CRON'] ?? '0 9 * * *';
-const REPEAT_TZ = process.env['SUBSCRIPTIONS_DAILY_TZ'] ?? 'Europe/Madrid';
+const REPEAT_TZ = process.env['SUBSCRIPTIONS_DAILY_TZ'] ?? 'UTC';
 /** Ventana del resumen + del aviso previo (días antes de la renovación/caducidad). */
 const WINDOW_DAYS = Math.max(1, Number(process.env['SUBSCRIPTIONS_RENEWAL_WINDOW_DAYS'] ?? 7));
 
 type JobData = Record<string, never>;
 
 /**
- * Worker BullMQ diario (9:00 Europe/Madrid por defecto). Por cada tenant con
+ * Worker BullMQ diario (9:00 UTC por defecto). Por cada tenant con
  * conexiones VERIFIED:
  *   1. **Resumen para el admin**: email a los super_admin/tenant_admin con el nº de
  *      suscripciones activas y las que se renuevan/caducan en los próximos N días.

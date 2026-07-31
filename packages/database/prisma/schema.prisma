@@ -3603,7 +3603,8 @@ model ModReferralsConfig {
   /// Mínimo de liquidación en céntimos. 0 = sin mínimo.
   minPayoutCents          Int      @default(5000) @map("min_payout_cents")
   /// Exigir membresía activa (ACTIVE/TRIALING) del referidor al DEVENGAR.
-  requireActiveMembership Boolean  @default(true) @map("require_active_membership")
+  /// Default false: no toda academia vende membresías (whitelabel).
+  requireActiveMembership Boolean  @default(false) @map("require_active_membership")
   /// Copy editable del área del miembro (/referidos). Sin datos inventados:
   /// lo escribe el operador; vacío = solo la UI funcional.
   memberCopy              String?  @map("member_copy")

@@ -89,7 +89,9 @@ const DEFAULT_CONFIG: ReferralsConfigView = {
   attributionWindowDays: 30,
   guaranteeDays: 14,
   minPayoutCents: 5000,
-  requireActiveMembership: true,
+  // false por defecto: no toda academia vende membresías. El operador que sí
+  // las venda puede exigir membresía viva del referidor desde la config.
+  requireActiveMembership: false,
   memberCopy: null,
 };
 

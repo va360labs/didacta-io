@@ -112,7 +112,7 @@ export interface DecisionEmailParams {
   subscriptionFailures?: MemberSubscriptionLookupFailure[];
   /**
    * Compras PUNTUALES (pedidos) del solicitante. Es lo que justifica a quien
-   * adquirió un "acceso lifetime" y por eso NO aparece con suscripción vigente.
+   * adquirió acceso con pago único y por eso NO aparece con suscripción vigente.
    */
   purchases?: MemberPurchaseMatch[];
 }
@@ -206,9 +206,9 @@ export function buildDecisionEmail(
   } else {
     subscriptionText = '\nSuscripción detectada: ninguna en las cuentas de pago conectadas.\n';
   }
-  // Compras puntuales: quien compró un "lifetime" no tiene suscripción viva, así
-  // que sin este bloque el aprobador vería "sin suscripción" y rechazaría a un
-  // cliente legítimo. Solo se muestra si hay algo que mostrar.
+  // Compras puntuales: quien compró acceso con pago único no tiene suscripción
+  // viva, así que sin este bloque el aprobador vería "sin suscripción" y
+  // rechazaría a un cliente legítimo. Solo se muestra si hay algo que mostrar.
   const purchases = params.purchases ?? [];
   const purchasesText = purchases.length
     ? `\nCompras detectadas (${purchases.length}):\n${purchases
