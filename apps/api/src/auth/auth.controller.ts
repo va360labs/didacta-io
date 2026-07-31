@@ -60,7 +60,7 @@ export class AuthController {
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
     if (!tenant) return { tenant: null, host: hostStr ?? null };
     // Logo del tenant (mod.theming) para que las páginas anónimas (signin,
-    // inscripción) muestren la marca del tenant en vez de "Didacta".
+    // registro) muestren la marca del tenant en vez de "Didacta".
     const [logoUrl, branding] = await Promise.all([
       this.passwordReset.resolveTenantLogoUrl(tenant.id, resolveWebBaseUrl(req)),
       this.signinContext.get(tenant.id),

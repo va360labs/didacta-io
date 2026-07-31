@@ -132,8 +132,8 @@ export class WpSsoService {
         user = await this.provisionUser(tenant.id, claims.email, claims.name ?? null);
         provisioned = true;
       } else if (user.status !== 'ACTIVE') {
-        // Un PENDING (p.ej. esperando aprobación de inscripcion-miembros) NO entra
-        // por SSO hasta su aprobación. Regla de coexistencia deseada.
+        // Un PENDING (p.ej. a la espera de un flujo de registro con aprobación
+        // manual) NO entra por SSO hasta que se le active. Regla de coexistencia.
         throw new UnauthorizedException('Tu cuenta no está activa. Contacta al administrador.');
       }
     }

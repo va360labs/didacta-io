@@ -34,14 +34,14 @@ const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
 const NO_CLIENT_CONTEXT: ClientContext = { ip: null, userAgent: null };
 
-/** Rol por defecto de un alta por signup (mismo que inscripción de miembros). */
+/** Rol por defecto de un alta por signup (el mismo que asignan los flujos de registro). */
 const DEFAULT_SIGNUP_ROLE = 'alumno';
 
 /**
- * El registro público está CERRADO por defecto: todas las altas reales entran
- * por inscripción (Telegram/manual), por la API de inscripción (n8n/Woo) o por
- * la invitación de admin — y todas asignan rol. El signup abierto creaba
- * usuarios ACTIVE sin rol (JWT roles:[] → 403 en storage y compañía).
+ * El registro público está CERRADO por defecto: en un despliegue real las altas
+ * entran por flujos que asignan rol — invitación de admin, SSO o los módulos y
+ * APIs de registro instalados. El signup abierto creaba usuarios ACTIVE sin rol
+ * (JWT roles:[] → 403 en storage y compañía).
  * `AUTH_SIGNUP_ENABLED=true` lo reabre en stacks de dev/E2E que lo usan para
  * fabricar usuarios de prueba.
  */
@@ -135,7 +135,7 @@ export class AuthService {
     const passwordHash = await this.passwords.hash(dto.password);
     // Rol por defecto en el alta: sin él, el usuario quedaba ACTIVE con JWT
     // roles:[] y 403 en todo lo que exige rol (causa raíz del bug de usuarios
-    // sin rol). Mismo rol y mismo patrón que la inscripción de miembros.
+    // sin rol). Mismo rol y mismo patrón que el resto de flujos de registro.
     const defaultRole = await this.prisma.role.findUnique({
       where: { name: DEFAULT_SIGNUP_ROLE },
     });

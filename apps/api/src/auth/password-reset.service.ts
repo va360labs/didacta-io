@@ -154,10 +154,10 @@ export class PasswordResetService {
    * definía la contraseña y seguía sin poder entrar (`signin` exige
    * `status === 'ACTIVE'`) hasta que un admin le daba a "Reactivar acceso".
    *
-   * La condición `passwordHash === null` es la que deja intacta la aprobación
-   * de `inscripcion/member-registration`: ese PENDING sí tiene contraseña
-   * (la eligió el propio solicitante al inscribirse) y solo el aprobador puede
-   * levantarlo. Un reset no puede colarse por delante de esa decisión.
+   * La condición `passwordHash === null` es la que deja intactos los flujos de
+   * registro con aprobación manual: ese PENDING sí tiene contraseña (la eligió
+   * el propio solicitante al registrarse) y solo el aprobador puede levantarlo.
+   * Un reset no puede colarse por delante de esa decisión.
    */
   async reset(
     rawToken: string,
