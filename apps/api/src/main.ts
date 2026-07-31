@@ -120,7 +120,7 @@ async function bootstrap(): Promise<void> {
 
   const config = new DocumentBuilder()
     .setTitle('Didacta API')
-    .setDescription('API REST del LMS modular de VA360 LABS')
+    .setDescription('API REST de Didacta, el LMS modular fair-code')
     .setVersion('v1')
     .addBearerAuth()
     // Esquema para integradores externos: el header Authorization lleva

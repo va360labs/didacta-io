@@ -7,7 +7,7 @@ import { ModuleRegistryService } from '../module-registry.service';
 
 /**
  * Puente membresía → mod.access-groups. El entitlement de la membresía es un
- * GRUPO de acceso (config del admin, típicamente el ALL_COURSES `va360-pro`):
+ * GRUPO de acceso (config del admin, típicamente el grupo ALL_COURSES de la membresía):
  *
  *   - `subscriptions.membership.activated` (compra o recovery) → assignMembers.
  *   - `subscriptions.subscription.activated` con planId (recovery de impago) →

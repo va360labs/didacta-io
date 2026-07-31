@@ -218,9 +218,9 @@ export class PasswordResetService {
     // enlace que dure días, no los 60 minutos de un reset que el usuario acaba
     // de pedir. Sin este paso la opción existía pero no era alcanzable.
     // `asInvitation` cambia el CORREO, no el token: la invitación al aula tiene
-    // su propia maqueta (bienvenida, qué encontrará dentro, pasos) porque no es
-    // lo mismo que un "olvidé mi contraseña" que el usuario acaba de pedir.
-    // Compartir plantilla obligaba a que un reset sonara a campaña.
+    // su propio copy (bienvenida, pasos para entrar) porque no es lo mismo que
+    // un "olvidé mi contraseña" que el usuario acaba de pedir. Compartir el
+    // copy obligaba a que un reset sonara a bienvenida.
     opts: { allowPending?: boolean; ttlMinutes?: number; asInvitation?: boolean } = {},
   ): Promise<void> {
     const result = await this.request(args, ctx, opts);

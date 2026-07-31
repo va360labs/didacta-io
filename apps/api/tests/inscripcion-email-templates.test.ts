@@ -23,8 +23,8 @@ function branding(tenantName = 'Didacta'): EmailBranding {
 
 function baseDecisionParams(overrides: Partial<DecisionEmailParams> = {}): DecisionEmailParams {
   return {
-    name: 'Valen',
-    email: 'valen@va360.com',
+    name: 'Alex',
+    email: 'solicitante@example.com',
     telegramId: '424242',
     inGroup: 'true',
     isDelinquent: false,
@@ -57,9 +57,9 @@ describe('buildOtpEmail', () => {
   });
 
   it('firma con el nombre del tenant', () => {
-    const custom = buildOtpEmail('000000', branding('VA360 Academy'));
-    expect(custom.text).toContain('VA360 Academy');
-    expect(custom.html).toContain('VA360 Academy');
+    const custom = buildOtpEmail('000000', branding('Academia Demo'));
+    expect(custom.text).toContain('Academia Demo');
+    expect(custom.html).toContain('Academia Demo');
     // Footer discreto con la marca de la plataforma.
     expect(custom.html).toContain('Powered by Didacta');
   });
@@ -97,8 +97,9 @@ describe('buildDecisionEmail', () => {
 
   it("encabezado cuando inGroup = 'true'", () => {
     const { html, text } = buildDecisionEmail(baseDecisionParams({ inGroup: 'true' }));
-    expect(html).toContain('Miembro del grupo VA360');
-    expect(text).toContain('Miembro del grupo VA360');
+    // El nombre del grupo se deriva del tenant (branding), sin marca fija.
+    expect(html).toContain('Miembro del grupo de Didacta');
+    expect(text).toContain('Miembro del grupo de Didacta');
   });
 
   it("encabezado cuando inGroup = 'false'", () => {
@@ -115,23 +116,23 @@ describe('buildDecisionEmail', () => {
 
   it('escapa los datos del solicitante en el html (anti-inyección)', () => {
     const { html } = buildDecisionEmail(
-      baseDecisionParams({ name: 'Va<b>len</b>', email: 'a"b@x.com' }),
+      baseDecisionParams({ name: 'Al<b>ex</b>', email: 'a"b@x.com' }),
     );
-    expect(html).toContain('Va&lt;b&gt;len&lt;/b&gt;');
+    expect(html).toContain('Al&lt;b&gt;ex&lt;/b&gt;');
     expect(html).toContain('a&quot;b@x.com');
   });
 
   it('el subject incluye el nombre del solicitante', () => {
-    const { subject } = buildDecisionEmail(baseDecisionParams({ name: 'Valen' }));
-    expect(subject).toBe('Nueva inscripción pendiente — Valen');
+    const { subject } = buildDecisionEmail(baseDecisionParams({ name: 'Alex' }));
+    expect(subject).toBe('Nueva inscripción pendiente — Alex');
   });
 
   it('firma con el nombre del tenant', () => {
     const { text } = buildDecisionEmail(
-      baseDecisionParams({ branding: branding('VA360 Academy') }),
+      baseDecisionParams({ branding: branding('Academia Demo') }),
     );
-    expect(text).toContain('aprobación en VA360 Academy');
-    expect(text).toContain('— VA360 Academy');
+    expect(text).toContain('aprobación en Academia Demo');
+    expect(text).toContain('— Academia Demo');
   });
 
   // ── Sección de suscripción detectada ────────────────────────────────────
@@ -228,14 +229,14 @@ describe('buildDecisionEmail · compras puntuales', () => {
   const PURCHASE = {
     provider: 'woocommerce',
     connectionId: 'conn-1',
-    connectionName: 'Woo VA360',
+    connectionName: 'Woo Demo',
     orderId: '8801',
     orderNumber: '8801',
     status: 'completed',
     total: 99_700,
     currency: 'EUR',
     createdAt: '2023-04-11T09:15:00Z',
-    products: ['VA360 Lifetime'],
+    products: ['Acceso Lifetime'],
   };
 
   it('lista las compras con nº, estado, importe y productos en text y html', () => {
@@ -245,7 +246,7 @@ describe('buildDecisionEmail · compras puntuales', () => {
       expect(body).toContain('#8801');
       expect(body).toContain('completed');
       expect(body).toContain('997.00 EUR');
-      expect(body).toContain('VA360 Lifetime');
+      expect(body).toContain('Acceso Lifetime');
     }
   });
 
@@ -254,7 +255,7 @@ describe('buildDecisionEmail · compras puntuales', () => {
       baseDecisionParams({ subscriptionMatches: [], purchases: [PURCHASE] }),
     );
     expect(text).toContain('Suscripción detectada: ninguna');
-    expect(text).toContain('VA360 Lifetime');
+    expect(text).toContain('Acceso Lifetime');
   });
 
   it('sin compras no añade el bloque (no mete ruido en las solicitudes normales)', () => {
@@ -284,12 +285,12 @@ describe('buildDecisionEmail · compras puntuales', () => {
 describe('buildWelcomeEmail', () => {
   it('incluye el saludo con nombre y el signinUrl', () => {
     const { text, html, subject } = buildWelcomeEmail(
-      'Valen',
+      'Alex',
       'https://didacta.io/signin',
-      branding('VA360 Academy'),
+      branding('Academia Demo'),
     );
-    expect(subject).toContain('VA360 Academy');
-    expect(text).toContain('Hola Valen,');
+    expect(subject).toContain('Academia Demo');
+    expect(text).toContain('Hola Alex,');
     expect(html).toContain('href="https://didacta.io/signin"');
   });
 
@@ -301,9 +302,9 @@ describe('buildWelcomeEmail', () => {
 
 describe('buildRejectionEmail', () => {
   it('incluye el saludo con nombre y el tenantName', () => {
-    const { text, subject } = buildRejectionEmail('Valen', branding('VA360 Academy'));
-    expect(subject).toContain('VA360 Academy');
-    expect(text).toContain('Hola Valen,');
-    expect(text).toContain('VA360 Academy');
+    const { text, subject } = buildRejectionEmail('Alex', branding('Academia Demo'));
+    expect(subject).toContain('Academia Demo');
+    expect(text).toContain('Hola Alex,');
+    expect(text).toContain('Academia Demo');
   });
 });

@@ -132,8 +132,8 @@ function describePurchase(p: MemberPurchaseMatch): string {
 }
 
 /** Texto del estado de pertenencia al grupo según el tri-estado. */
-function membershipHeading(inGroup: TelegramMembership): string {
-  if (inGroup === 'true') return 'Miembro del grupo VA360';
+function membershipHeading(inGroup: TelegramMembership, tenantName: string): string {
+  if (inGroup === 'true') return `Miembro del grupo de ${tenantName}`;
   if (inGroup === 'false') return 'NO está en el grupo - revisar caso';
   return 'Pertenencia NO verificable (error Telegram)';
 }
@@ -173,7 +173,7 @@ export function buildDecisionEmail(
   const { name, email, telegramId, inGroup, isDelinquent, approveUrl, rejectUrl, branding } =
     params;
   const tenantName = branding.tenantName;
-  const heading = membershipHeading(inGroup);
+  const heading = membershipHeading(inGroup, tenantName);
   const matches = params.subscriptionMatches ?? [];
   const failures = params.subscriptionFailures ?? [];
   const failedNote = failures.length

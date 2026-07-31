@@ -274,8 +274,7 @@ export class AdminTenantsService {
    * Rename del tenant (`tenant.name`). Solo super_admin. No invalida sessions.
    *
    * Pensado para corregir el nombre del tenant después de creado — p. ej. al
-   * migrar el tenant que sirve la plataforma desde "Didacta" genérico a
-   * "VA360 Academy" (alpha.77).
+   * pasar del "Didacta" genérico del bootstrap al nombre real de la academia.
    */
   async rename(
     actorId: string,
