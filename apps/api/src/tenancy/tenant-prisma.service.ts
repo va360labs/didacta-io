@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { withTenantContext } from '@didacta/database';
 import { PrismaService } from '../prisma/prisma.service';
-import { TenantContextService } from './tenant-context.service';
+import { TenantContextService, type TenantContext } from './tenant-context.service';
 
 /**
  * Cliente transaccional de la request actual, con tenant seteado.
@@ -58,10 +59,22 @@ export class TenantPrismaService {
    * que conocen el tenant pero no pasan por el middleware HTTP.
    *
    * Delega en `withTenantContext` de @didacta/database — la única
-   * implementación del tenant-scope (set_config parametrizado).
+   * implementación del tenant-scope (set_config parametrizado) — y ejecuta el
+   * callback bajo un TenantContext con `gucApplied`: la extensión RLS no
+   * re-envuelve las queries (el GUC ya viaja en esta transacción) y los
+   * workers sin request quedan con contexto correcto en telemetría.
    */
   async withTenantId<T>(tenantId: string, callback: (tx: TenantTx) => Promise<T>): Promise<T> {
-    return withTenantContext(this.prisma, tenantId, (tx) => callback(tx as unknown as TenantTx));
+    const parent = this.tenantContext.get();
+    const ctx: TenantContext = {
+      tenantId,
+      userId: parent?.userId,
+      traceId: parent?.traceId ?? `tx-${randomUUID()}`,
+      gucApplied: true,
+    };
+    return this.tenantContext.run(ctx, () =>
+      withTenantContext(this.prisma, tenantId, (tx) => callback(tx as unknown as TenantTx)),
+    );
   }
 
   /**

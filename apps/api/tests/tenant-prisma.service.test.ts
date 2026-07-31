@@ -67,6 +67,16 @@ describe('TenantPrismaService', () => {
       expect(values).toEqual(['explicit-tenant']);
       expect(result).toEqual([{ id: '1', name: 'Test' }]);
     });
+
+    it('establece contexto ALS con gucApplied durante el callback', async () => {
+      const { service, tenantContext } = createMocks();
+
+      await service.withTenantId('t-guc', async () => {
+        expect(tenantContext.get()?.tenantId).toBe('t-guc');
+        expect(tenantContext.get()?.gucApplied).toBe(true);
+        return null;
+      });
+    });
   });
 
   describe('global', () => {

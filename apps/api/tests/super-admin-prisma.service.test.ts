@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SuperAdminPrismaService } from '../src/tenancy/super-admin-prisma.service';
+import { TenantContextService } from '../src/tenancy/tenant-context.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('SuperAdminPrismaService', () => {
@@ -16,9 +17,10 @@ describe('SuperAdminPrismaService', () => {
       },
     } as unknown as PrismaService;
 
-    const service = new SuperAdminPrismaService(mockPrisma);
+    const tenantContext = new TenantContextService();
+    const service = new SuperAdminPrismaService(mockPrisma, tenantContext);
 
-    return { service, mockPrisma, mockTx };
+    return { service, mockPrisma, mockTx, tenantContext };
   }
 
   describe('client', () => {
@@ -68,6 +70,16 @@ describe('SuperAdminPrismaService', () => {
       const result = await service.asAdmin('t-1', async () => 'admin-result');
 
       expect(result).toBe('admin-result');
+    });
+
+    it('establece contexto ALS con gucApplied durante el callback', async () => {
+      const { service, tenantContext } = createMocks();
+
+      await service.asAdmin('t-guc', async () => {
+        expect(tenantContext.get()?.tenantId).toBe('t-guc');
+        expect(tenantContext.get()?.gucApplied).toBe(true);
+        return null;
+      });
     });
 
     it('loguea warning de bypass (verificar con spy)', async () => {

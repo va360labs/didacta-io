@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { withTenantContext } from '@didacta/database';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantContextService, type TenantContext } from './tenant-context.service';
 
 /**
  * Servicio para queries que necesitan bypass de RLS.
@@ -34,7 +36,10 @@ import { PrismaService } from '../prisma/prisma.service';
 export class SuperAdminPrismaService {
   private readonly logger = new Logger(SuperAdminPrismaService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantContext: TenantContextService,
+  ) {}
 
   /**
    * Acceso al cliente Prisma SIN contexto de tenant.
@@ -70,8 +75,15 @@ export class SuperAdminPrismaService {
       `SuperAdmin bypass: ejecutando query como tenant ${tenantId}. ` +
         `Asegúrate de que el caller tiene autorización.`,
     );
-    return withTenantContext(this.prisma, tenantId, (tx) =>
-      callback(tx as unknown as PrismaService),
+    const parent = this.tenantContext.get();
+    const ctx: TenantContext = {
+      tenantId,
+      userId: parent?.userId,
+      traceId: parent?.traceId ?? `tx-${randomUUID()}`,
+      gucApplied: true,
+    };
+    return this.tenantContext.run(ctx, () =>
+      withTenantContext(this.prisma, tenantId, (tx) => callback(tx as unknown as PrismaService)),
     );
   }
 }
