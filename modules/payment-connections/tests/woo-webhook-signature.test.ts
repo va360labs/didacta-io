@@ -91,6 +91,67 @@ describe('verifyWooSignature', () => {
   });
 });
 
+describe('verifyWooSignature · cuerpo con acentos (el caso que falló en producción)', () => {
+  // Un pedido real lleva «Iniciación», «España», nombres con tildes… Mi primera
+  // versión firmaba sobre el string y la prueba que hice era ASCII puro, así que
+  // pasó en local y rechazó todas las entregas reales de WooCommerce.
+  const ACENTOS = JSON.stringify({
+    id: 15809,
+    billing: { first_name: 'José', last_name: 'Muñoz Aragón', country: 'España' },
+    line_items: [{ name: 'VPS Iniciación — edición 2026 · 100 % práctico' }],
+  });
+
+  it('acepta la firma de un cuerpo con caracteres no ASCII', () => {
+    const body = Buffer.from(ACENTOS, 'utf8');
+    const firma = createHmac('sha256', SECRET).update(body).digest('base64');
+    expect(verifyWooSignature({ signatureHeader: firma, rawBody: body, secret: SECRET })).toBe(
+      true,
+    );
+  });
+
+  it('firmar sobre el Buffer y sobre su string dan el mismo HMAC cuando el UTF-8 es válido', () => {
+    const body = Buffer.from(ACENTOS, 'utf8');
+    expect(
+      verifyWooSignature({ signatureHeader: hmacDe(body), rawBody: body, secret: SECRET }),
+    ).toBe(true);
+    expect(
+      verifyWooSignature({ signatureHeader: hmacDe(body), rawBody: ACENTOS, secret: SECRET }),
+    ).toBe(true);
+  });
+
+  it('con bytes que NO son UTF-8 válido, solo el Buffer verifica', () => {
+    // Aquí es donde se rompía: pasar por string sustituye el byte inválido por
+    // el carácter de reemplazo y el HMAC cambia para siempre.
+    const body = Buffer.concat([
+      Buffer.from('{"a":"'),
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from('"}'),
+    ]);
+    const firma = hmacDe(body);
+    expect(verifyWooSignature({ signatureHeader: firma, rawBody: body, secret: SECRET })).toBe(
+      true,
+    );
+    expect(
+      verifyWooSignature({
+        signatureHeader: firma,
+        rawBody: body.toString('utf8'),
+        secret: SECRET,
+      }),
+      'pasar por string pierde los bytes: por eso hay que firmar el Buffer',
+    ).toBe(false);
+  });
+
+  it('un Buffer vacío se rechaza', () => {
+    expect(
+      verifyWooSignature({ signatureHeader: 'x', rawBody: Buffer.alloc(0), secret: SECRET }),
+    ).toBe(false);
+  });
+});
+
+function hmacDe(body: Buffer): string {
+  return createHmac('sha256', SECRET).update(body).digest('base64');
+}
+
 describe('WOO_ORDER_TOPICS', () => {
   it('cubre alta, cambio y borrado de pedido', () => {
     expect(WOO_ORDER_TOPICS.has('order.created')).toBe(true);
