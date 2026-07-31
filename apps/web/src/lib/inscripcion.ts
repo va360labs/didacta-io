@@ -10,10 +10,12 @@
  * aún no tiene cuenta. Por eso usamos `apiFetch` SIN bearer. Same-origin en el
  * browser (paths `/api/v1/inscripcion/...`).
  *
- * El flujo en 3 pasos:
- *   1. Verificar identidad de Telegram (widget) → ticket.
- *   2. Verificar email por OTP usando el ticket → verificationToken.
- *   3. Crear la solicitud de inscripción con el verificationToken.
+ * Los pasos del wizard son DINÁMICOS: el backend publica en `config` los
+ * verificadores que la política del tenant exige (`telegram` y/u `otp`, o
+ * ninguno = registro libre) y el formulario compone sus pasos con eso:
+ *   1. (si telegram) Verificar identidad de Telegram (widget) → ticket.
+ *   2. (si otp) Verificar email por OTP → verificationToken.
+ *   3. Crear la solicitud con la evidencia que corresponda.
  */
 
 import { ApiHttpError, apiFetch } from './api-client';
@@ -24,10 +26,15 @@ import type { RenewalTemplate } from './payment-connections';
 /** Estado de pertenencia al grupo de Telegram de la comunidad. */
 export type TelegramMembership = 'true' | 'false' | 'unknown';
 
+/** Verificadores componibles que puede exigir la política del tenant. */
+export type InscripcionVerifier = 'telegram' | 'otp';
+
 export interface InscripcionConfig {
-  /** Si el flujo está configurado (bot de Telegram disponible). */
+  /** Si el flujo está disponible (habilitado y con sus verificadores operativos). */
   configured: boolean;
-  /** Username del bot para el Telegram Login Widget. null si no configurado. */
+  /** Verificadores exigidos por el tenant, en el orden de los pasos del wizard. */
+  verifiers: InscripcionVerifier[];
+  /** Username del bot para el Telegram Login Widget. null si no aplica. */
   botUsername: string | null;
 }
 
@@ -66,7 +73,12 @@ export interface CreateInscripcionInput {
   name: string;
   password: string;
   bio?: string;
-  verificationToken: string;
+  /** Evidencia del OTP (obligatoria si la política incluye `otp`). */
+  verificationToken?: string;
+  /** Evidencia de Telegram (solo cuando la política exige `telegram` SIN `otp`). */
+  ticket?: string;
+  /** Email del formulario (solo cuando la política NO incluye `otp`). */
+  email?: string;
 }
 
 export interface CreateInscripcionResult {
@@ -84,9 +96,14 @@ export interface CreateInscripcionResult {
  */
 export async function fetchInscripcionConfig(): Promise<InscripcionConfig> {
   try {
-    return await apiFetch<InscripcionConfig>('/api/v1/inscripcion/config', { method: 'GET' });
+    const config = await apiFetch<InscripcionConfig>('/api/v1/inscripcion/config', {
+      method: 'GET',
+    });
+    // Backends previos a los verificadores componibles no envían `verifiers`:
+    // el equivalente legacy era telegram+otp.
+    return { ...config, verifiers: config.verifiers ?? ['telegram', 'otp'] };
   } catch {
-    return { configured: false, botUsername: null };
+    return { configured: false, verifiers: [], botUsername: null };
   }
 }
 
@@ -98,19 +115,22 @@ export function verifyTelegram(payload: TelegramAuthPayload): Promise<VerifyTele
   });
 }
 
-/** Solicita el envío de un código OTP al email del aspirante. */
-export function requestOtp(email: string, ticket: string): Promise<RequestOtpResult> {
+/**
+ * Solicita el envío de un código OTP al email del aspirante. El `ticket` de
+ * Telegram solo viaja si la política del tenant exige ese verificador.
+ */
+export function requestOtp(email: string, ticket?: string): Promise<RequestOtpResult> {
   return apiFetch<RequestOtpResult>('/api/v1/inscripcion/otp/request', {
     method: 'POST',
-    body: JSON.stringify({ email, ticket }),
+    body: JSON.stringify(ticket ? { email, ticket } : { email }),
   });
 }
 
 /** Verifica el código OTP y devuelve el verificationToken para el paso final. */
-export function verifyOtp(email: string, code: string, ticket: string): Promise<VerifyOtpResult> {
+export function verifyOtp(email: string, code: string, ticket?: string): Promise<VerifyOtpResult> {
   return apiFetch<VerifyOtpResult>('/api/v1/inscripcion/otp/verify', {
     method: 'POST',
-    body: JSON.stringify({ email, code, ticket }),
+    body: JSON.stringify(ticket ? { email, code, ticket } : { email, code }),
   });
 }
 

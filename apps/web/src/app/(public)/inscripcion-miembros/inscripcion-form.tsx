@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,14 +19,19 @@ import {
   requestOtp,
   verifyOtp,
   verifyTelegram,
+  type InscripcionVerifier,
   type TelegramAuthPayload,
   type TelegramMembership,
 } from '@/lib/inscripcion';
 
-const STEPS = ['Telegram', 'Email', 'Tus datos'];
-
 /** Longitud mínima de contraseña exigida por el backend. */
 const PASSWORD_MIN_LENGTH = 12;
+
+/** Un paso del wizard. Los de verificación aparecen según la política del tenant. */
+interface WizardStep {
+  key: InscripcionVerifier | 'datos';
+  label: string;
+}
 
 declare global {
   interface Window {
@@ -91,12 +96,16 @@ function membershipNotice(inGroup: TelegramMembership, communityName: string): s
 }
 
 /**
- * Wizard público de inscripción de miembros en 3 pasos:
- *   0 — Telegram: login widget → verifyTelegram → ticket + pertenencia.
- *   1 — Email: OTP (solicitar código → verificar) → verificationToken.
- *   2 — Datos: nombre, contraseña y bio → createInscripcion.
+ * Wizard público de inscripción de miembros con PASOS DINÁMICOS: la política
+ * del tenant (endpoint `config`) decide qué verificadores aparecen.
+ *   - (si telegram) Telegram: login widget → verifyTelegram → ticket.
+ *   - (si otp) Email: OTP (solicitar código → verificar) → verificationToken.
+ *   - Datos: nombre, contraseña, bio — y el email aquí cuando NO hay paso OTP
+ *     (registro libre o solo-telegram) → createInscripcion con la evidencia
+ *     que corresponda.
  * Al completar muestra una pantalla final cuyo mensaje depende de la
- * pertenencia al grupo (la foto de perfil se difiere al onboarding posterior).
+ * pertenencia al grupo si Telegram participó (la foto de perfil se difiere al
+ * onboarding posterior).
  */
 export function InscripcionForm() {
   const { tenant } = useTenantContext();
@@ -104,20 +113,23 @@ export function InscripcionForm() {
   // o si el dominio no está mapeado (misma resolución que la cabecera).
   const communityName = tenant?.name ?? 'la comunidad';
 
-  // Configuración del flujo (botUsername viene del backend, nunca hardcodeado).
+  // Configuración del flujo (verificadores y botUsername vienen del backend,
+  // nunca hardcodeados).
   const [configLoading, setConfigLoading] = useState(true);
   const [configured, setConfigured] = useState(false);
+  const [verifiers, setVerifiers] = useState<InscripcionVerifier[]>([]);
   const [botUsername, setBotUsername] = useState<string | null>(null);
 
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // Paso 0 — Telegram.
+  // Paso Telegram.
   const [verifyingTelegram, setVerifyingTelegram] = useState(false);
   const [ticket, setTicket] = useState<string | null>(null);
   const [inGroup, setInGroup] = useState<TelegramMembership | null>(null);
 
-  // Paso 1 — OTP.
+  // Paso OTP (email verificado) — `email` también se usa en el paso de datos
+  // cuando no hay OTP (ahí viaja sin verificar y decide el aprobador).
   const [email, setEmail] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
@@ -125,12 +137,27 @@ export function InscripcionForm() {
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
 
-  // Paso 2 — Datos.
+  // Paso Datos.
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [bio, setBio] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+
+  const hasTelegram = verifiers.includes('telegram');
+  const hasOtp = verifiers.includes('otp');
+  // El email se pide en el paso de datos cuando ningún paso OTP lo verificó.
+  const emailInDatos = !hasOtp;
+
+  const steps = useMemo<WizardStep[]>(
+    () => [
+      ...(hasTelegram ? [{ key: 'telegram' as const, label: 'Telegram' }] : []),
+      ...(hasOtp ? [{ key: 'otp' as const, label: 'Email' }] : []),
+      { key: 'datos', label: 'Tus datos' },
+    ],
+    [hasTelegram, hasOtp],
+  );
+  const currentStep = steps[Math.min(step, steps.length - 1)]!;
 
   useEffect(() => {
     let cancelled = false;
@@ -138,6 +165,7 @@ export function InscripcionForm() {
       const config = await fetchInscripcionConfig();
       if (cancelled) return;
       setConfigured(config.configured);
+      setVerifiers(config.verifiers);
       setBotUsername(config.botUsername);
       setConfigLoading(false);
     })();
@@ -166,11 +194,12 @@ export function InscripcionForm() {
   }
 
   async function handleSendOtp() {
-    if (!ticket || email.trim() === '') return;
+    if (email.trim() === '') return;
+    if (hasTelegram && !ticket) return;
     setSendingOtp(true);
     setError(null);
     try {
-      await requestOtp(email.trim(), ticket);
+      await requestOtp(email.trim(), hasTelegram ? (ticket ?? undefined) : undefined);
       setOtpSent(true);
     } catch (e) {
       setError(
@@ -185,11 +214,16 @@ export function InscripcionForm() {
   }
 
   async function handleVerifyOtp() {
-    if (!ticket || code.trim() === '') return;
+    if (code.trim() === '') return;
+    if (hasTelegram && !ticket) return;
     setVerifyingOtp(true);
     setError(null);
     try {
-      const res = await verifyOtp(email.trim(), code.trim(), ticket);
+      const res = await verifyOtp(
+        email.trim(),
+        code.trim(),
+        hasTelegram ? (ticket ?? undefined) : undefined,
+      );
       setVerificationToken(res.verificationToken);
     } catch (e) {
       setError(inscripcionErrorMessage(e, 'El código no es válido o expiró. Solicita uno nuevo.'));
@@ -199,7 +233,10 @@ export function InscripcionForm() {
   }
 
   async function handleSubmit() {
-    if (!verificationToken) return;
+    // Evidencia según la política: verificationToken (con OTP), ticket +
+    // email (solo Telegram) o email a secas (registro libre).
+    if (hasOtp && !verificationToken) return;
+    if (!hasOtp && hasTelegram && !ticket) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -207,7 +244,12 @@ export function InscripcionForm() {
         name: name.trim(),
         password,
         bio: bio.trim() === '' ? undefined : bio.trim(),
-        verificationToken,
+        ...(hasOtp
+          ? { verificationToken: verificationToken ?? undefined }
+          : {
+              email: email.trim(),
+              ...(hasTelegram ? { ticket: ticket ?? undefined } : {}),
+            }),
       });
       setDone(true);
     } catch (e) {
@@ -221,18 +263,23 @@ export function InscripcionForm() {
     }
   }
 
-  // canNext por paso: 0 requiere ticket; 1 requiere verificationToken; 2 valida en submit.
+  // canNext por paso: telegram requiere ticket; otp requiere verificationToken;
+  // datos valida nombre + contraseña (+ email si se pide aquí).
+  const datosReady =
+    name.trim().length > 0 &&
+    password.length >= PASSWORD_MIN_LENGTH &&
+    (!emailInDatos || email.trim().length > 0);
   const canNext =
-    step === 0
+    currentStep.key === 'telegram'
       ? ticket !== null
-      : step === 1
+      : currentStep.key === 'otp'
         ? verificationToken !== null
-        : name.trim().length > 0 && password.length >= PASSWORD_MIN_LENGTH;
+        : datosReady;
 
   // ── Pantalla final tras crear la solicitud ──────────────────────────────────
   if (done) {
     const finalCopy =
-      inGroup === 'true'
+      !hasTelegram || inGroup === 'true'
         ? {
             title: 'Registro pendiente de validación',
             body: 'Recibimos tu solicitud. Un administrador la revisará y te avisaremos por email cuando tengas acceso.',
@@ -262,40 +309,76 @@ export function InscripcionForm() {
     );
   }
 
+  if (configLoading) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center text-sm text-text-muted">Cargando…</CardContent>
+      </Card>
+    );
+  }
+
+  if (!configured) {
+    return (
+      <div className="space-y-6">
+        <header className="text-center">
+          <p className="label-uppercase text-text-muted">Inscripción a {communityName}</p>
+          <h1 className="font-display mt-2 text-2xl font-bold tracking-tight">
+            Solicita tu acceso
+          </h1>
+        </header>
+        <Card>
+          <CardContent className="p-6">
+            <p
+              role="alert"
+              className="rounded-lg border border-warning-100 bg-warning-50 p-3 text-sm text-warning-700"
+            >
+              La inscripción no está disponible en este momento. Vuelve a intentarlo más tarde.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <header className="text-center">
         <p className="label-uppercase text-text-muted">Inscripción a {communityName}</p>
         <h1 className="font-display mt-2 text-2xl font-bold tracking-tight">Solicita tu acceso</h1>
         <p className="mt-1 text-sm text-text-subtle">
-          Verifica tu identidad y crea tu solicitud en tres pasos.
+          {steps.length > 1
+            ? `Verifica tu identidad y crea tu solicitud en ${steps.length === 3 ? 'tres' : 'dos'} pasos.`
+            : 'Completa tus datos y crea tu solicitud.'}
         </p>
       </header>
 
-      <ol className="flex items-center justify-center gap-2">
-        {STEPS.map((label, i) => (
-          <li key={label} className="flex items-center gap-2">
-            <span
-              className={
-                'grid h-7 w-7 place-items-center rounded-full text-xs font-bold ' +
-                (i < step
-                  ? 'bg-success-500 text-white'
-                  : i === step
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-surface-3 text-text-subtle')
-              }
-            >
-              {i < step ? '✓' : i + 1}
-            </span>
-            {i < STEPS.length - 1 ? <span className="h-px w-6 bg-border-soft" /> : null}
-          </li>
-        ))}
-      </ol>
+      {steps.length > 1 ? (
+        <ol className="flex items-center justify-center gap-2">
+          {steps.map(({ key, label }, i) => (
+            <li key={key} className="flex items-center gap-2">
+              <span
+                className={
+                  'grid h-7 w-7 place-items-center rounded-full text-xs font-bold ' +
+                  (i < step
+                    ? 'bg-success-500 text-white'
+                    : i === step
+                      ? 'bg-brand-500 text-white'
+                      : 'bg-surface-3 text-text-subtle')
+                }
+              >
+                {i < step ? '✓' : i + 1}
+              </span>
+              <span className="sr-only">{label}</span>
+              {i < steps.length - 1 ? <span className="h-px w-6 bg-border-soft" /> : null}
+            </li>
+          ))}
+        </ol>
+      ) : null}
 
       <Card>
         <CardContent className="space-y-5 p-6">
-          {/* ── PASO 0 — Telegram ── */}
-          {step === 0 ? (
+          {/* ── PASO Telegram ── */}
+          {currentStep.key === 'telegram' ? (
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-semibold">Verifica tu Telegram</h2>
@@ -305,9 +388,7 @@ export function InscripcionForm() {
                 </p>
               </div>
 
-              {configLoading ? (
-                <p className="text-center text-sm text-text-muted">Cargando…</p>
-              ) : !configured || !botUsername ? (
+              {!botUsername ? (
                 <p
                   role="alert"
                   className="rounded-lg border border-warning-100 bg-warning-50 p-3 text-sm text-warning-700"
@@ -341,8 +422,8 @@ export function InscripcionForm() {
             </div>
           ) : null}
 
-          {/* ── PASO 1 — OTP por email ── */}
-          {step === 1 ? (
+          {/* ── PASO OTP por email ── */}
+          {currentStep.key === 'otp' ? (
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-semibold">Verifica tu email</h2>
@@ -409,8 +490,8 @@ export function InscripcionForm() {
             </div>
           ) : null}
 
-          {/* ── PASO 2 — Datos de la cuenta ── */}
-          {step === 2 ? (
+          {/* ── PASO Datos de la cuenta ── */}
+          {currentStep.key === 'datos' ? (
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-semibold">Tus datos</h2>
@@ -418,6 +499,25 @@ export function InscripcionForm() {
                   Con esto creamos tu solicitud. Podrás completar tu perfil al entrar.
                 </p>
               </div>
+
+              {emailInDatos ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="ins-email-datos">
+                    Email <span className="text-danger-700">*</span>
+                  </Label>
+                  <Input
+                    id="ins-email-datos"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="tu@email.com"
+                  />
+                  <p className="text-xs text-text-subtle">
+                    Te avisaremos a este correo cuando tu solicitud sea revisada.
+                  </p>
+                </div>
+              ) : null}
 
               <div className="space-y-1.5">
                 <Label htmlFor="ins-name">
@@ -488,7 +588,7 @@ export function InscripcionForm() {
             >
               Atrás
             </Button>
-            {step < STEPS.length - 1 ? (
+            {step < steps.length - 1 ? (
               <Button
                 type="button"
                 disabled={!canNext}

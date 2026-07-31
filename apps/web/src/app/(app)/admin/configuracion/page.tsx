@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { MemberRegistrationSettingsCard } from '@/components/admin/member-registration-settings-card';
 import { SmtpSettingsCard } from '@/components/admin/smtp-settings-card';
 import { TenantIdentityCard } from '@/components/admin/tenant-identity-card';
 import { adminModulesApi, type TenantModuleListItem } from '@/lib/admin-modules';
@@ -55,6 +56,12 @@ const CORE_TABS: ConfigTabSpec[] = [
     key: 'notifications',
     label: 'Notificaciones',
     description: 'Servidor SMTP saliente para emails transaccionales.',
+  },
+  {
+    key: 'registro',
+    label: 'Registro',
+    description:
+      'Cómo entran los miembros: verificadores exigidos (Telegram/OTP), bot y aprobador.',
   },
   {
     key: 'modules',
@@ -260,6 +267,8 @@ export default function ConfiguracionPage() {
       {tab === 'general' ? <TenantIdentityCard /> : null}
 
       {tab === 'notifications' ? <SmtpSettingsCard /> : null}
+
+      {tab === 'registro' ? <MemberRegistrationSettingsCard /> : null}
 
       {tab === 'modules' ? <ModulesTab /> : null}
 
