@@ -126,6 +126,17 @@ describe('createRlsEnforcementExtension', () => {
     await hook({ model: 'Tenant', operation: 'findMany', args: {}, query });
     expect(onGap).toHaveBeenCalled();
   });
+
+  it('acceso global sancionado sin contexto: pasa sin registrar hueco', async () => {
+    const { hook, onGap, fakeClient } = setupHook({
+      getContext: () => undefined,
+      isSanctioned: () => true,
+    });
+    const result = await hook({ model: 'User', operation: 'findMany', args: {}, query });
+    expect(result).toEqual(queryResult);
+    expect(onGap).not.toHaveBeenCalled();
+    expect(fakeClient.$transaction).not.toHaveBeenCalled();
+  });
 });
 
 describe('RlsGapTelemetry', () => {

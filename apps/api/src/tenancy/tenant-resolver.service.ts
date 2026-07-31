@@ -5,6 +5,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { runSanctionedGlobalAccess } from './tenant-context.storage';
 
 export interface ResolvedTenant {
   id: string;
@@ -39,10 +40,15 @@ export class TenantResolverService {
     const hostname = this.normalize(host);
     if (!hostname) return null;
 
-    const domain = await this.prisma.tenantDomain.findFirst({
-      where: { hostname, isVerified: true },
-      include: { tenant: true },
-    });
+    // Bootstrap host→tenant: por definición corre ANTES de conocer el tenant,
+    // así que es un acceso global sancionado (en el flip RLS pasará por
+    // didacta_super o por una policy de SELECT propia en tenant_domain).
+    const domain = await runSanctionedGlobalAccess(() =>
+      this.prisma.tenantDomain.findFirst({
+        where: { hostname, isVerified: true },
+        include: { tenant: true },
+      }),
+    );
 
     if (!domain || domain.tenant.status !== 'ACTIVE') return null;
 

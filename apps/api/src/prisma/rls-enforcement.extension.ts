@@ -71,6 +71,12 @@ export interface RlsEnforcementOptions {
   tenantModels: ReadonlySet<string>;
   /** Telemetría: operación sobre modelo multi-tenant sin contexto. */
   onGap: (gap: RlsGap) => void;
+  /**
+   * true si la operación actual es un acceso global sancionado
+   * (runSanctionedGlobalAccess): sin contexto pero legítimo — no cuenta
+   * como hueco.
+   */
+  isSanctioned?: () => boolean;
 }
 
 /**
@@ -96,7 +102,7 @@ export function createRlsEnforcementExtension(opts: RlsEnforcementOptions) {
             const ctx = opts.getContext();
 
             if (!ctx?.tenantId) {
-              if (scoped) opts.onGap({ model, operation });
+              if (scoped && !opts.isSanctioned?.()) opts.onGap({ model, operation });
               return query(args);
             }
             if (ctx.gucApplied || !scoped) {

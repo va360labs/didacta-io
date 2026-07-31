@@ -8,6 +8,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { withTenantContext } from '@didacta/database';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContextService, type TenantContext } from './tenant-context.service';
+import { runSanctionedGlobalAccess } from './tenant-context.storage';
 
 /**
  * Servicio para queries que necesitan bypass de RLS.
@@ -58,9 +59,12 @@ export class SuperAdminPrismaService {
   /**
    * Ejecuta un callback con el cliente sin RLS.
    * Sugar syntax para consistencia con TenantPrismaService.
+   *
+   * Corre como acceso global SANCIONADO: la telemetría RLS no cuenta sus
+   * queries como huecos (es el escape auditado para operaciones cross-tenant).
    */
   async run<T>(callback: (prisma: PrismaService) => Promise<T>): Promise<T> {
-    return callback(this.prisma);
+    return runSanctionedGlobalAccess(() => callback(this.prisma));
   }
 
   /**

@@ -106,6 +106,7 @@ import {
 } from '@didacta/mod-ai-grader';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { AiGatewayService } from '../ai/ai-gateway.service';
+import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import { ModuleContextFactory } from './module-context.factory';
 
 const CORE_VERSION = '1.0.0';
@@ -754,13 +755,16 @@ export class ModuleRegistryService implements OnModuleInit {
       .map((m) => m.manifest.name);
     if (coreNames.length === 0) return;
 
-    const result = await prisma.tenantModule.updateMany({
-      where: {
-        enabled: false,
-        module: { name: { in: coreNames } },
-      },
-      data: { enabled: true },
-    });
+    // Self-heal cross-tenant de arranque: acceso global sancionado.
+    const result = await runSanctionedGlobalAccess(() =>
+      prisma.tenantModule.updateMany({
+        where: {
+          enabled: false,
+          module: { name: { in: coreNames } },
+        },
+        data: { enabled: true },
+      }),
+    );
     if (result.count > 0) {
       this.pino.log(
         { healed: result.count, coreModules: coreNames },

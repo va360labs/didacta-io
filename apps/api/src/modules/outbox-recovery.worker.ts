@@ -6,6 +6,7 @@
 import { Injectable, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
+import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from './module-registry.service';
 import { OutboxMetrics } from './outbox.metrics';
 import { OutboxQueueService } from './outbox-queue.service';
@@ -58,14 +59,17 @@ export class OutboxRecoveryWorker implements OnApplicationBootstrap, OnModuleDes
    * pedir un valor fresco sin esperar al próximo sweep.
    */
   async sampleLag(): Promise<{ pending: number; oldestAgeSeconds: number }> {
-    const [pendingCount, oldest] = await Promise.all([
-      this.prisma.outboxEvent.count({ where: { processedAt: null } }),
-      this.prisma.outboxEvent.findFirst({
-        where: { processedAt: null },
-        orderBy: { createdAt: 'asc' },
-        select: { createdAt: true },
-      }),
-    ]);
+    // Métricas cross-tenant del outbox: acceso global sancionado.
+    const [pendingCount, oldest] = await runSanctionedGlobalAccess(() =>
+      Promise.all([
+        this.prisma.outboxEvent.count({ where: { processedAt: null } }),
+        this.prisma.outboxEvent.findFirst({
+          where: { processedAt: null },
+          orderBy: { createdAt: 'asc' },
+          select: { createdAt: true },
+        }),
+      ]),
+    );
     const oldestAgeSeconds = oldest
       ? Math.max(0, Math.floor((Date.now() - oldest.createdAt.getTime()) / 1000))
       : 0;

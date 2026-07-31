@@ -4,7 +4,7 @@
  */
 
 import { Global, Module } from '@nestjs/common';
-import { tenantContextStorage } from '../tenancy/tenant-context.storage';
+import { isSanctionedGlobalAccess, tenantContextStorage } from '../tenancy/tenant-context.storage';
 import {
   buildTenantScopedModelSet,
   createRlsEnforcementExtension,
@@ -42,6 +42,7 @@ import { PrismaService } from './prisma.service';
             getContext: () => tenantContextStorage.getStore(),
             tenantModels: buildTenantScopedModelSet(),
             onGap: (gap) => telemetry.record(gap),
+            isSanctioned: () => isSanctionedGlobalAccess(),
           }),
         ) as unknown as PrismaService;
       },

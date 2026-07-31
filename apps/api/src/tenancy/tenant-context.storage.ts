@@ -25,3 +25,29 @@ export interface TenantContext {
  * pueda leer el contexto sin acoplar PrismaModule a TenancyModule.
  */
 export const tenantContextStorage = new AsyncLocalStorage<TenantContext>();
+
+const sanctionedGlobalAccessStorage = new AsyncLocalStorage<true>();
+
+/**
+ * Marca una operación de infraestructura como acceso global SANCIONADO:
+ * legítimamente cross-tenant y sin contexto (barridos del outbox, resolución
+ * host→tenant, healers de arranque). La telemetría RLS no la cuenta como
+ * hueco.
+ *
+ * Cada call site de este helper es inventario del flip (RLS F3): son las
+ * operaciones que deberán ejecutarse por la conexión `didacta_super` (o una
+ * policy explícita) cuando el runtime conecte como `didacta_app`.
+ *
+ * El await ocurre DENTRO del scope del ALS a propósito: una PrismaPromise es
+ * lazy y ejecuta su hook cuando se le hace await — si el caller la esperase
+ * fuera del scope, el hook no vería la marca (caracterizado contra Prisma
+ * 5.22).
+ */
+export async function runSanctionedGlobalAccess<T>(fn: () => Promise<T> | T): Promise<T> {
+  return sanctionedGlobalAccessStorage.run(true, async () => await fn());
+}
+
+/** ¿La operación actual corre bajo runSanctionedGlobalAccess()? */
+export function isSanctionedGlobalAccess(): boolean {
+  return sanctionedGlobalAccessStorage.getStore() === true;
+}

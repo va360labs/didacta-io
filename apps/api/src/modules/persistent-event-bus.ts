@@ -5,6 +5,7 @@
 
 import type { DomainEvent, EventBus, Logger } from '@didacta/core-kernel';
 import type { PrismaService } from '../prisma/prisma.service';
+import { runSanctionedGlobalAccess, tenantContextStorage } from '../tenancy/tenant-context.storage';
 
 type AnyEventHandler = (event: DomainEvent<unknown>) => Promise<void> | void;
 
@@ -118,9 +119,12 @@ export class PersistentEventBus implements EventBus {
    * exponencial y reintente. La fila outbox queda marcada con attempts +1.
    */
   async processOutboxId(outboxId: bigint): Promise<void> {
-    const row = await this.prisma.outboxEvent.findUnique({
-      where: { id: outboxId },
-    });
+    // Lookup por id sin conocer aún el tenant: acceso global sancionado.
+    const row = await runSanctionedGlobalAccess(() =>
+      this.prisma.outboxEvent.findUnique({
+        where: { id: outboxId },
+      }),
+    );
     if (!row) {
       this.logger.warn('processOutboxId: fila no encontrada', {
         outboxId: outboxId.toString(),
@@ -152,11 +156,14 @@ export class PersistentEventBus implements EventBus {
    * Sin dispatcher, los procesa in-process.
    */
   async recoverPending(limit = 50): Promise<{ processed: number; failed: number }> {
-    const pending = await this.prisma.outboxEvent.findMany({
-      where: { processedAt: null },
-      orderBy: { createdAt: 'asc' },
-      take: limit,
-    });
+    // Barrido cross-tenant de pendientes: acceso global sancionado.
+    const pending = await runSanctionedGlobalAccess(() =>
+      this.prisma.outboxEvent.findMany({
+        where: { processedAt: null },
+        orderBy: { createdAt: 'asc' },
+        take: limit,
+      }),
+    );
 
     let processed = 0;
     let failed = 0;
@@ -205,6 +212,19 @@ export class PersistentEventBus implements EventBus {
   }
 
   private async runHandlers(outboxId: bigint, event: DomainEvent<unknown>): Promise<boolean> {
+    // Contexto de tenant del EVENTO para todo el despacho: los handlers (y los
+    // 17 bridges suscritos) ejecutan sus queries con la extensión RLS
+    // escopando al tenant correcto, sin tocar cada bridge.
+    const tenantId = event.metadata?.tenantId;
+    if (tenantId) {
+      return tenantContextStorage.run({ tenantId, traceId: `outbox-${outboxId.toString()}` }, () =>
+        this.runHandlersInner(outboxId, event),
+      );
+    }
+    return this.runHandlersInner(outboxId, event);
+  }
+
+  private async runHandlersInner(outboxId: bigint, event: DomainEvent<unknown>): Promise<boolean> {
     const set = this.handlers.get(event.name);
     if (!set || set.size === 0) {
       // Sin subscribers locales aún -> marcamos procesado igualmente.
