@@ -56,7 +56,7 @@ test.describe('Admin: invitar y gestionar usuarios del tenant', () => {
     const sinPassword = await fetch(`${API_URL}/api/v1/auth/signin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: 'LoQueSea123456', tenantSlug }),
+      body: JSON.stringify({ email, password: 'Password-de-prueba-1', tenantSlug }),
     });
     expect(sinPassword.status, 'user sin passwordHash no puede firmar').toBe(401);
 

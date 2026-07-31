@@ -29,4 +29,7 @@ regexes = [
     # Secretos DUMMY del workflow de E2E (.github/workflows/e2e.yml): valores
     # sintéticos autodescriptivos, no credenciales reales.
     '''e2e-(test|refresh|auth)-secret-must-be-''',
+    # CONVENCIÓN del repo: todo secreto sintético de fixtures/tests lleva
+    # "de-prueba" en el valor. Un secreto real jamás debe llevar esa marca.
+    '''(?i)de-prueba''',
 ]

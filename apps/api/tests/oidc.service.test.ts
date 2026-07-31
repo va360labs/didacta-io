@@ -476,7 +476,7 @@ describe('OidcService.setConfig', () => {
 
   it('rotación: si DTO lleva nuevo secret, persiste el nuevo', async () => {
     const { svc, tc, tenantId } = setupService();
-    const newSecret = 'rotated-secret-1234567890';
+    const newSecret = 'rotated-secret-de-prueba-123';
     await svc.setConfig(
       tenantId,
       {
