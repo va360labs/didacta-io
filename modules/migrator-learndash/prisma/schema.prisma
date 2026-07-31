@@ -1,0 +1,313 @@
+// Schema Prisma del módulo mod.migrator-learndash
+// IMPORTANTE: en Didacta, los módulos no llevan datasource ni generator propios.
+// Este archivo se mergea al schema del host (apps/api). Aquí declaramos solo los models.
+// Todas las tablas tienen prefijo `mod_migrator_learndash_*` (regla R2).
+// Toda tabla lleva tenant_id (regla R3 — RLS strict).
+// Cero FKs cross-module (regla R4).
+
+// === Job principal ====================================================
+
+model MigrationJob {
+  id             String    @id @default(uuid())
+  tenantId       String    @map("tenant_id")
+  status         String    // 'pending'|'preflight'|'extracting'|'transforming'|'loading'|'reconciling'|'completed'|'failed'|'cancelled'|'cancelling'|'rolling_back'|'rolled_back'
+  phase          String?   // detalle de fase actual: 'extract:courses', 'load:users', etc.
+  sourceProfile  Json      @map("source_profile")  // baseUrl, authType, etc. (sin secretos)
+  options        Json      // dedupe strategy, password strategy, scope
+  startedAt      DateTime  @default(now()) @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  progress       Json?     // { current, total, lastUpdate }
+  error          Json?     // { code, message, stack truncated }
+  createdBy      String    @map("created_by")
+  retentionDays  Int       @default(30) @map("retention_days")
+  purgedAt       DateTime? @map("purged_at")
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdBy, startedAt])
+  @@map("mod_migrator_learndash_jobs")
+}
+
+// === Mapeo source_id -> target_id ====================================
+
+model ImportMapping {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  jobId       String   @map("job_id")
+  entityType  String   @map("entity_type")  // 'course', 'lesson', 'topic', 'quiz', 'question', 'user', 'group', 'enrollment', 'progress', 'media'
+  sourceId    String   @map("source_id")
+  targetId    String?  @map("target_id")
+  externalId  String   @map("external_id")  // 'learndash:<sourceId>' — pasado al destino para upsert
+  status      String   // 'staged'|'transformed'|'loaded'|'failed'|'skipped'|'rolled_back'|'rollback_skipped'
+  checksum    String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt        @map("updated_at")
+
+  @@unique([tenantId, jobId, entityType, sourceId])
+  @@index([tenantId, entityType, sourceId])
+  @@index([tenantId, jobId, status])
+  @@index([tenantId, externalId])
+  @@map("mod_migrator_learndash_mappings")
+}
+
+// === Dead Letter Queue ===============================================
+
+model DeadLetter {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  jobId        String   @map("job_id")
+  entityType   String   @map("entity_type")
+  sourceId     String?  @map("source_id")
+  phase        String   // 'extract'|'transform'|'validate'|'load'
+  errorCode    String   @map("error_code")
+  errorMessage String   @map("error_message")
+  rawPayload   Json     @map("raw_payload")
+  canonical    Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, jobId, phase])
+  @@index([tenantId, errorCode])
+  @@map("mod_migrator_learndash_dlq")
+}
+
+// === Audit log con cadena SHA-256 ====================================
+
+model AuditEvent {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  jobId       String   @map("job_id")
+  actor       String
+  action      String
+  entityType  String?  @map("entity_type")
+  entityId    String?  @map("entity_id")
+  meta        Json?
+  prevHash    String?  @map("prev_hash")
+  hash        String
+  occurredAt  DateTime @default(now()) @map("occurred_at")
+
+  @@index([tenantId, jobId, occurredAt])
+  @@index([tenantId, action])
+  @@map("mod_migrator_learndash_audit_events")
+}
+
+// === Reporte de reconciliación =======================================
+
+model ValidationReport {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  jobId         String   @map("job_id")
+  entityType    String   @map("entity_type")
+  sourceCount   Int      @map("source_count")
+  stagedCount   Int      @map("staged_count")
+  validCount    Int      @map("valid_count")
+  loadedCount   Int      @map("loaded_count")
+  skippedCount  Int      @map("skipped_count")
+  failedCount   Int      @map("failed_count")
+  skipReasons   Json?    @map("skip_reasons")
+  failureReasons Json?   @map("failure_reasons")
+  sampleDiffs   Json?    @map("sample_diffs")
+  generatedAt   DateTime @default(now()) @map("generated_at")
+
+  @@unique([tenantId, jobId, entityType])
+  @@map("mod_migrator_learndash_validation_reports")
+}
+
+// === Staging por entidad =============================================
+
+model StgUser {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  jobId            String   @map("job_id")
+  sourceId         String   @map("source_id")
+  rawPayload       Json     @map("raw_payload")
+  canonical        Json?
+  isValid          Boolean  @default(false) @map("is_valid")
+  validationErrors Json?    @map("validation_errors")
+  loadedAt         DateTime? @map("loaded_at")
+  targetId         String?  @map("target_id")
+  checksum         String
+
+  @@unique([tenantId, jobId, sourceId])
+  @@index([tenantId, jobId, isValid])
+  @@map("mod_migrator_learndash_stg_users")
+}
+
+model StgCourse {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  jobId            String   @map("job_id")
+  sourceId         String   @map("source_id")
+  rawPayload       Json     @map("raw_payload")
+  canonical        Json?
+  isValid          Boolean  @default(false) @map("is_valid")
+  validationErrors Json?    @map("validation_errors")
+  loadedAt         DateTime? @map("loaded_at")
+  targetId         String?  @map("target_id")
+  checksum         String
+
+  @@unique([tenantId, jobId, sourceId])
+  @@index([tenantId, jobId, isValid])
+  @@map("mod_migrator_learndash_stg_courses")
+}
+
+model StgLesson {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  jobId            String   @map("job_id")
+  sourceId         String   @map("source_id")
+  parentCourseId   String?  @map("parent_course_id")
+  orderIdx         Int      @default(0) @map("order_idx")
+  rawPayload       Json     @map("raw_payload")
+  canonical        Json?
+  isValid          Boolean  @default(false) @map("is_valid")
+  validationErrors Json?    @map("validation_errors")
+  loadedAt         DateTime? @map("loaded_at")
+  targetId         String?  @map("target_id")
+  checksum         String
+
+  @@unique([tenantId, jobId, sourceId])
+  @@index([tenantId, jobId, parentCourseId, orderIdx])
+  @@map("mod_migrator_learndash_stg_lessons")
+}
+
+model StgTopic {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  jobId            String   @map("job_id")
+  sourceId         String   @map("source_id")
+  parentLessonId   String?  @map("parent_lesson_id")
+  parentCourseId   String?  @map("parent_course_id")
+  orderIdx         Int      @default(0) @map("order_idx")
+  rawPayload       Json     @map("raw_payload")
+  canonical        Json?
+  isValid          Boolean  @default(false) @map("is_valid")
+  validationErrors Json?    @map("validation_errors")
+  loadedAt         DateTime? @map("loaded_at")
+  targetId         String?  @map("target_id")
+  checksum         String
+
+  @@unique([tenantId, jobId, sourceId])
+  @@index([tenantId, jobId, parentLessonId, orderIdx])
+  @@map("mod_migrator_learndash_stg_topics")
+}
+
+model StgQuiz {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  jobId            String   @map("job_id")
+  sourceId         String   @map("source_id")
+  parentCourseId   String?  @map("parent_course_id")
+  parentLessonId   String?  @map("parent_lesson_id")
+  parentTopicId    String?  @map("parent_topic_id")
+  rawPayload       Json     @map("raw_payload")
+  canonical        Json?
+  isValid          Boolean  @default(false) @map("is_valid")
+  validationErrors Json?    @map("validation_errors")
+  loadedAt         DateTime? @map("loaded_at")
+  targetId         String?  @map("target_id")
+  checksum         String
+
+  @@unique([tenantId, jobId, sourceId])
+  @@index([tenantId, jobId])
+  @@map("mod_migrator_learndash_stg_quizzes")
+}
+
+model StgQuestion {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  jobId            String   @map("job_id")
+  sourceId         String   @map("source_id")
+  parentQuizId     String?  @map("parent_quiz_id")
+  questionType     String   @map("question_type")  // single|multiple|free|sort|matrix|cloze|essay|assessment
+  rawPayload       Json     @map("raw_payload")
+  canonical        Json?
+  isValid          Boolean  @default(false) @map("is_valid")
+  validationErrors Json?    @map("validation_errors")
+  loadedAt         DateTime? @map("loaded_at")
+  targetId         String?  @map("target_id")
+  checksum         String
+
+  @@unique([tenantId, jobId, sourceId])
+  @@index([tenantId, jobId, parentQuizId])
+  @@map("mod_migrator_learndash_stg_questions")
+}
+
+model StgGroup {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  jobId            String   @map("job_id")
+  sourceId         String   @map("source_id")
+  rawPayload       Json     @map("raw_payload")
+  canonical        Json?
+  isValid          Boolean  @default(false) @map("is_valid")
+  validationErrors Json?    @map("validation_errors")
+  loadedAt         DateTime? @map("loaded_at")
+  targetId         String?  @map("target_id")
+  checksum         String
+
+  @@unique([tenantId, jobId, sourceId])
+  @@index([tenantId, jobId, isValid])
+  @@map("mod_migrator_learndash_stg_groups")
+}
+
+model StgEnrollment {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  jobId            String   @map("job_id")
+  sourceUserId     String   @map("source_user_id")
+  sourceCourseId   String?  @map("source_course_id")
+  sourceGroupId    String?  @map("source_group_id")
+  enrollmentKind   String   @map("enrollment_kind")  // 'direct'|'group'
+  rawPayload       Json     @map("raw_payload")
+  canonical        Json?
+  isValid          Boolean  @default(false) @map("is_valid")
+  validationErrors Json?    @map("validation_errors")
+  loadedAt         DateTime? @map("loaded_at")
+  targetId         String?  @map("target_id")
+  checksum         String
+
+  @@unique([tenantId, jobId, sourceUserId, sourceCourseId, sourceGroupId, enrollmentKind])
+  @@index([tenantId, jobId, sourceUserId])
+  @@map("mod_migrator_learndash_stg_enrollments")
+}
+
+model StgProgress {
+  id                 String   @id @default(uuid())
+  tenantId           String   @map("tenant_id")
+  jobId              String   @map("job_id")
+  sourceUserId       String   @map("source_user_id")
+  sourceCourseId     String   @map("source_course_id")
+  sourceStepId       String?  @map("source_step_id")
+  rawPayload         Json     @map("raw_payload")
+  canonical          Json?
+  isValid            Boolean  @default(false) @map("is_valid")
+  validationErrors   Json?    @map("validation_errors")
+  loadedAt           DateTime? @map("loaded_at")
+  targetId           String?  @map("target_id")
+  checksum           String
+
+  @@unique([tenantId, jobId, sourceUserId, sourceCourseId, sourceStepId])
+  @@index([tenantId, jobId, sourceUserId])
+  @@map("mod_migrator_learndash_stg_progress")
+}
+
+model StgMedia {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  jobId            String   @map("job_id")
+  sourceId         String   @map("source_id")
+  sourceUrl        String   @map("source_url")
+  mimeType         String?  @map("mime_type")
+  sizeBytes        Int?     @map("size_bytes")
+  rawPayload       Json     @map("raw_payload")
+  canonical        Json?
+  isValid          Boolean  @default(false) @map("is_valid")
+  validationErrors Json?    @map("validation_errors")
+  loadedAt         DateTime? @map("loaded_at")
+  targetId         String?  @map("target_id")
+  storageKey       String?  @map("storage_key")  // ruta en S3/MinIO si copiamos binario
+  checksum         String
+
+  @@unique([tenantId, jobId, sourceId])
+  @@index([tenantId, jobId, isValid])
+  @@map("mod_migrator_learndash_stg_media")
+}

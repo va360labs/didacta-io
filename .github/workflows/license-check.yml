@@ -1,0 +1,45 @@
+name: license-check
+
+on:
+  pull_request:
+    paths:
+      - '**/package.json'
+      - 'pnpm-lock.yaml'
+      - 'scripts/license-check.ts'
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1' # weekly Monday 06:00 UTC
+
+jobs:
+  license-check:
+    name: Audit dependency licenses
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.21.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run license-check
+        run: pnpm tsx scripts/license-check.ts --output docs/licensing/third-party-licenses.md
+
+      - name: Upload license inventory artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: third-party-licenses
+          path: docs/licensing/third-party-licenses.md

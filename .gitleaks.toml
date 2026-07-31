@@ -1,0 +1,35 @@
+# Didacta — gitleaks config
+# Reglas adicionales sobre las default de gitleaks.
+# Ver https://github.com/gitleaks/gitleaks#configuration para sintaxis.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "didacta-license-jwt"
+description = "JWT que pueda ser una licencia Didacta firmada (no debería estar en repo)"
+# Cubre EdDSA (formato histórico) y ES256 (el formato real de las licencias
+# actuales, firmadas con ECDSA P-256 en KMS).
+regex = '''eyJhbGciOiJ(FZERTQSI|FUzI1NiI)[A-Za-z0-9_-]{30,}'''
+tags = ["didacta", "license", "jwt"]
+
+[[rules]]
+id = "didacta-private-key-pem"
+description = "Posible clave privada en PEM"
+regex = '''-----BEGIN (RSA |EC |OPENSSH |)PRIVATE KEY-----'''
+tags = ["didacta", "secret", "key"]
+
+[allowlist]
+description = "Falsos positivos conocidos"
+paths = [
+    # Las claves PÚBLICAS embebidas son intencionales y NO son secreto
+    '''packages/license-sdk/src/public-keys/.*\.pem''',
+]
+regexes = [
+    # Secretos DUMMY del workflow de E2E (.github/workflows/e2e.yml): valores
+    # sintéticos autodescriptivos, no credenciales reales.
+    '''e2e-(test|refresh|auth)-secret-must-be-''',
+    # CONVENCIÓN del repo: todo secreto sintético de fixtures/tests lleva
+    # "de-prueba" en el valor. Un secreto real jamás debe llevar esa marca.
+    '''(?i)de-prueba''',
+]

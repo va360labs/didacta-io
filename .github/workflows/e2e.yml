@@ -1,0 +1,132 @@
+name: E2E
+
+# Política activa desde 2026-05-01: NO ejecutar tests en GitHub Actions.
+# E2E con Playwright se corre en local sobre Docker Desktop antes de mergear
+# (ver docs/TESTING-LOCAL.md). Este workflow queda como `workflow_dispatch`
+# para poder lanzarlo manualmente si se quiere validar en runner Linux real.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright golden path
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: didacta
+          POSTGRES_PASSWORD: didacta
+          POSTGRES_DB: didacta
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://didacta:didacta@localhost:5432/didacta?schema=public
+      JWT_SECRET: e2e-test-secret-must-be-at-least-32-chars-long-aaaa
+      JWT_REFRESH_SECRET: e2e-refresh-secret-must-be-32-chars-long-bbbb
+      # AUTH_SECRET es el nombre canónico que lee apps/api/src/auth/auth.config.ts
+      # (mín. 32 caracteres). El api falla a bootear sin esta env.
+      AUTH_SECRET: e2e-auth-secret-must-be-at-least-32-chars-long-cccc
+      AUTH_URL: http://localhost:4000
+      # Master key AES-256-GCM (64 chars hex) para TenantSettings cifrado.
+      # Obligatoria en NODE_ENV=production desde el PR A0; sin ella el api no
+      # bootea. En CI usamos un valor determinístico — no es secreto real.
+      TENANT_SETTINGS_ENC_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
+      NODE_ENV: production
+      # El registro público está cerrado por defecto (ver auth.service). Los
+      # specs E2E lo usan para fabricar usuarios de prueba → se reabre solo aquí.
+      AUTH_SIGNUP_ENABLED: 'true'
+      PORT: 4000
+      WEB_PORT: 3000
+      API_INTERNAL_URL: http://localhost:4000
+      BOOTSTRAP_PASSWORD: E2eAdminPassword123!
+      BOOTSTRAP_EMAIL: e2e-admin@example.test
+      BOOTSTRAP_TENANT_SLUG: demo
+      E2E_BASE_URL: http://localhost:3000
+      E2E_API_URL: http://localhost:3000
+      E2E_TENANT_SLUG: demo
+      E2E_ADMIN_EMAIL: e2e-admin@example.test
+      E2E_ADMIN_PASSWORD: E2eAdminPassword123!
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.21.0
+          run_install: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @didacta/database db:generate
+
+      - name: Apply migrations
+        run: pnpm --filter @didacta/database db:migrate:deploy
+
+      - name: Seed admin user
+        run: pnpm --filter @didacta/database db:seed
+
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Start API
+        run: pnpm --filter @didacta/api start &
+        env:
+          PORT: 4000
+
+      - name: Start Web
+        run: pnpm --filter @didacta/web start &
+        env:
+          PORT: 3000
+
+      - name: Wait for services
+        run: |
+          # API liveness: el endpoint canónico es /healthz (no /api/v1/health).
+          # Probamos contra el api directamente (4000) y el web (3000) en
+          # paralelo para no avanzar si alguno no respondió.
+          for i in {1..60}; do
+            if curl -sf http://localhost:4000/healthz > /dev/null \
+              && curl -sf http://localhost:3000 > /dev/null; then
+              echo "API + Web up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Services no respondieron tras 120s"
+          exit 1
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @didacta/e2e exec playwright install --with-deps chromium
+
+      - name: Run E2E
+        run: pnpm --filter @didacta/e2e test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/e2e/playwright-report/
+          retention-days: 14

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://didacta.io/schemas/module.schema.json",
+  "name": "theming",
+  "version": "0.1.0",
+  "edition": "community",
+  "displayName": "Personalización visual",
+  "description": "Branding y theming per-tenant: logo, favicon, color primario (hue HSL), fuentes y custom CSS sanitizado. Override de los design tokens del sistema.",
+  "category": "core",
+  "coreVersionRequired": "^0.0.1",
+  "tablePrefix": "mod_theming_",
+  "permissions": ["theming:read", "theming:write"],
+  "events": [
+    {
+      "name": "theming.logo.uploaded",
+      "version": 1,
+      "description": "Emitido tras subir un logo nuevo al storage del tenant. Útil para invalidar caches CDN o disparar regeneración de OG images."
+    }
+  ],
+  "hooks": [],
+  "apiNamespace": "/modules/theming",
+  "lifecycle": {
+    "install": "src/index.ts:onRegister"
+  },
+  "surfaces": ["admin", "student"]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "courses",
+  "version": "1.0.0",
+  "edition": "community",
+  "coreVersionRequired": "^0.0.1",
+  "displayName": "Cursos y catálogo",
+  "category": "core",
+  "tablePrefix": "mod_courses_",
+  "permissions": ["courses:read", "courses:write", "courses:publish"],
+  "events": [
+    { "name": "courses.course.created" },
+    { "name": "courses.course.updated" },
+    { "name": "courses.course.published" },
+    { "name": "courses.course.unpublished" },
+    { "name": "courses.course.deleted" },
+    { "name": "courses.lesson.created" },
+    { "name": "courses.lesson.updated" },
+    { "name": "courses.lesson.deleted" }
+  ],
+  "apiNamespace": "/modules/courses",
+  "surfaces": ["admin", "formador", "alumno"]
+}

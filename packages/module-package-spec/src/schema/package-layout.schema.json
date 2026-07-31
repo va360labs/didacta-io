@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://didacta.io/schemas/module-package/v1.json",
+  "title": "Didacta Module Package Layout (v1)",
+  "description": "Declarative contract for the layout of a Didacta module ZIP. Consumed by the backend validator and any packager. Spec version embeds in major version of @didacta/module-package-spec.",
+  "specVersion": "1.0.0",
+  "type": "object",
+  "properties": {
+    "maxPackageBytes": {
+      "type": "integer",
+      "const": 52428800,
+      "description": "50 MB. Hard cap to prevent zip bombs and disk abuse. Mirrors apps/api MAX_PACKAGE_BYTES."
+    },
+    "requiredFiles": {
+      "type": "array",
+      "items": { "type": "string" },
+      "const": ["manifest.jwt", "package.json", "dist/index.js"],
+      "description": "Files whose absence triggers PACKAGE_MISSING_FILE. Case-sensitive POSIX paths."
+    },
+    "pathRules": {
+      "type": "object",
+      "properties": {
+        "forbidPathTraversal": {
+          "type": "boolean",
+          "const": true,
+          "description": "Reject any entry whose path contains '..' or starts with '/'. Anti-zip-slip."
+        },
+        "forbidBackslash": {
+          "type": "boolean",
+          "const": true,
+          "description": "ZIP entries must use forward slashes. A backslash indicates a malformed ZIP from a Windows-only writer."
+        },
+        "forbidAbsolute": {
+          "type": "boolean",
+          "const": true,
+          "description": "Reject entries starting with '/' or with drive letters (C:, D:)."
+        }
+      },
+      "required": ["forbidPathTraversal", "forbidBackslash", "forbidAbsolute"]
+    },
+    "directoryRules": {
+      "type": "object",
+      "properties": {
+        "prisma/migrations/": {
+          "type": "object",
+          "properties": {
+            "allowSubdirs": {
+              "type": "boolean",
+              "const": false,
+              "description": "Migrations must be flat. Prisma's native subdir layout (<ts>_<name>/migration.sql) MUST be flattened by the packager (see normalizer.normalizeMigrations)."
+            },
+            "allowedExtensions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "const": [".sql"],
+              "description": "Only .sql files are accepted. migration_lock.toml, README.md, hidden files etc. must be stripped by the packager."
+            },
+            "filenamePattern": {
+              "type": "string",
+              "const": "^[A-Za-z0-9_.-]+\\.sql$",
+              "description": "Conservative whitelist for filenames. Excludes paths, traversal, control chars."
+            }
+          },
+          "required": ["allowSubdirs", "allowedExtensions", "filenamePattern"]
+        },
+        "dist/ui/": {
+          "type": "object",
+          "properties": {
+            "allowSubdirs": {
+              "type": "boolean",
+              "const": false,
+              "description": "UI bundles are flat: dist/ui/<surface>.js"
+            },
+            "allowedExtensions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "const": [".js"]
+            }
+          },
+          "required": ["allowSubdirs", "allowedExtensions"]
+        }
+      }
+    },
+    "errorCodes": {
+      "type": "array",
+      "description": "Error codes this layout schema can produce. Mirror of MarketplaceErrorCode in the backend.",
+      "items": { "type": "string" },
+      "const": [
+        "PACKAGE_TOO_LARGE",
+        "PACKAGE_INVALID_ZIP",
+        "PACKAGE_MISSING_FILE",
+        "MODULE_LINT_FAILED"
+      ]
+    }
+  },
+  "required": ["maxPackageBytes", "requiredFiles", "pathRules", "directoryRules", "errorCodes"]
+}

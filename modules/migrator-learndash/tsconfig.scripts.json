@@ -1,0 +1,13 @@
+{
+  "//": "TS config para los scripts operativos standalone (scripts/post-migration/*). NO van al ZIP firmado del módulo; solo se typechequean. La ejecución real es con tsx/node.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "./scripts",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "composite": false
+  },
+  "include": ["scripts/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

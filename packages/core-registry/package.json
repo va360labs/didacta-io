@@ -1,0 +1,36 @@
+{
+  "name": "@didacta/core-registry",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Module Registry: discovery, validación, resolución de dependencias y lifecycle de módulos",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@didacta/core-kernel": "workspace:*",
+    "semver": "^7.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/semver": "^7.5.8",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

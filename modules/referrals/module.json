@@ -1,0 +1,20 @@
+{
+  "name": "referrals",
+  "version": "1.0.0",
+  "edition": "community",
+  "coreVersionRequired": "^1.0.0",
+  "displayName": "Programa de referidos",
+  "category": "core",
+  "tablePrefix": "mod_referrals_",
+  "permissions": ["referrals:code:read", "referrals:commission:manage", "referrals:config:manage"],
+  "events": [
+    { "name": "referrals.referral.attributed" },
+    { "name": "referrals.commission.created" },
+    { "name": "referrals.commission.approved" },
+    { "name": "referrals.commission.revoked" },
+    { "name": "referrals.payout.recorded" }
+  ],
+  "hooks": [],
+  "apiNamespace": "/modules/referrals",
+  "surfaces": ["alumno", "admin"]
+}

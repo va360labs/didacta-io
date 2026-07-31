@@ -1,0 +1,178 @@
+# ============================================================================
+# Didacta Community — docker-compose para Alpha testers
+# ----------------------------------------------------------------------------
+# Arranca el stack COMPLETO (API + web + dependencias) usando la imagen
+# oficial de Docker Hub. Diseñado para alpha testers que quieren probar
+# Didacta en su máquina sin desarrollarlo.
+#
+# Uso:
+#   1. Copia .env.example → .env y rellena los valores REQUIRED.
+#   2. docker compose -f docker-compose.alpha.yml up -d
+#   3. Abre http://localhost:3000 (web) o http://localhost:4000/api/docs (API).
+#
+# La imagen `didactaio/community` es pública en Docker Hub: no requiere login.
+#
+# Para desarrollo local (con `pnpm dev`), usa el `docker-compose.yml` clásico
+# que solo levanta dependencias.
+# ============================================================================
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: didacta-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-didacta}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-didacta_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-didacta}
+    ports:
+      # Solo loopback: la app llega por la red interna de compose. Publicar
+      # Postgres a la red con la contraseña por defecto expone la instalación.
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Inicialización idempotente de extensiones (uuid-ossp, pgcrypto, vector).
+      # Postgres ejecuta scripts en /docker-entrypoint-initdb.d/ SOLO la primera
+      # vez que crea el cluster. Si vuelves a tocar el SQL hay que recrear el
+      # volumen postgres_data (docker compose down -v).
+      - ./infra/docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-didacta} -d ${POSTGRES_DB:-didacta}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: didacta-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      # Solo loopback: Redis va sin autenticación; nunca publicarlo a la red.
+      - '127.0.0.1:${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # MinIO opcional — solo se levanta con `--profile s3`. Por defecto la app
+  # usa storage local en disco (volumen didacta_data, ver servicio `didacta`).
+  # Activar con: `docker compose -f docker-compose.alpha.yml --profile s3 up -d`.
+  minio:
+    image: minio/minio:latest
+    container_name: didacta-minio
+    profiles: ['s3']
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-didacta}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-didacta_dev}
+    ports:
+      # Solo loopback: credenciales por defecto y bucket con descarga anónima.
+      # Para servir media S3 públicamente usa un proveedor externo o un proxy.
+      - '127.0.0.1:${MINIO_API_PORT:-9000}:9000'
+      - '127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: didacta-minio-init
+    profiles: ['s3']
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-didacta} ${MINIO_ROOT_PASSWORD:-didacta_dev};
+      mc mb --ignore-existing local/didacta-dev;
+      mc anonymous set download local/didacta-dev;
+      exit 0;
+      "
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: didacta-mailpit
+    restart: unless-stopped
+    ports:
+      # Solo loopback: la UI de Mailpit muestra TODOS los correos (resets de
+      # contraseña incluidos). En un servidor remoto, entra por túnel SSH.
+      - '127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025'
+      - '127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025'
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
+  didacta:
+    image: didactaio/community:${DIDACTA_IMAGE_TAG:-0.0.1-alpha.89}
+    container_name: didacta-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      # DIDACTA_CORE_VERSION: Fuente de verdad para compatibilidad de modulos.
+      DIDACTA_CORE_VERSION: ${DIDACTA_IMAGE_TAG:-0.0.1-alpha.89}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-didacta}:${POSTGRES_PASSWORD:-didacta_dev}@postgres:5432/${POSTGRES_DB:-didacta}?schema=public
+      REDIS_URL: redis://redis:6379
+      AUTH_SECRET: ${AUTH_SECRET}
+      # TENANT_SETTINGS_ENC_KEY es opcional: si se omite, Didacta genera y
+      # persiste una clave en /app/data/.didacta-secret-key (volumen didacta_data
+      # abajo). Setealo explícitamente solo si querés controlarlo desde tu
+      # secrets manager.
+      TENANT_SETTINGS_ENC_KEY: ${TENANT_SETTINGS_ENC_KEY:-}
+      # Puertos INTERNOS fijos: el mapeo de abajo publica 4000/3000 en los
+      # puertos del host que digan API_PORT/WEB_PORT del .env. Si estas vars
+      # entraran al contenedor, la app escucharía en un puerto distinto del
+      # que el mapeo espera y el healthcheck fallaría.
+      API_PORT: '4000'
+      WEB_PORT: '3000'
+      # Storage por defecto: local en disco (volumen `didacta_data` montado
+      # en /app/data). Si querés S3-compatible (MinIO local con --profile s3,
+      # AWS, Hetzner Object Storage, etc.) seteá las S3_* en .env y descomentá
+      # las líneas correspondientes en este bloque environment.
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      STORAGE_ROOT: /app/data/storage
+      # S3_ENDPOINT: ${S3_ENDPOINT:-}
+      # S3_BUCKET: ${S3_BUCKET:-}
+      # S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      # S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+      # S3_REGION: ${S3_REGION:-us-east-1}
+      # S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      SMTP_HOST: mailpit
+      SMTP_PORT: '1025'
+      SMTP_FROM: ${SMTP_FROM:-Didacta <noreply@didacta.local>}
+      DIDACTA_LICENSE_KEY: ${DIDACTA_LICENSE_KEY:-}
+      DIDACTA_DEV_BYPASS: ${DIDACTA_DEV_BYPASS:-false}
+    volumes:
+      # Persiste el storage local (uploads de cursos/certificados/evidencias)
+      # + la clave de cifrado autogenerada (.didacta-secret-key). Sobrevive
+      # a `docker compose up/down/restart` sin perder datos.
+      - didacta_data:/app/data
+    ports:
+      - '${API_PORT:-4000}:4000'
+      - '${WEB_PORT:-3000}:3000'
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:4000/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  didacta_data:

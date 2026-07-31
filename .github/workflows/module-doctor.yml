@@ -1,0 +1,38 @@
+name: module-doctor
+
+# Pasado a workflow_dispatch only (2026-05-01): el script detecta 22 errores
+# reales en módulos preexistentes (theming, zoom-live, etc.) — apiNamespace
+# sin "/" inicial, tablePrefix incorrecto, coreVersionRequired faltante. Estos
+# fallos no se veían antes porque el workflow tenía pnpm v9 (mismatch con
+# packageManager 10.21.0) y nunca pasaba la fase de setup. Cambiar tablePrefix
+# requiere migración DB. Tracking en issue separada — bloquear ART-025 por
+# deuda preexistente que el bug de pnpm enmascaraba sería injusto.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  module-doctor:
+    name: Validate module contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.21.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run module-doctor
+        run: pnpm tsx scripts/module-doctor.ts

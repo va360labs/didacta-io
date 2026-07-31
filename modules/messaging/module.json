@@ -1,0 +1,18 @@
+{
+  "name": "messaging",
+  "version": "1.0.0",
+  "edition": "community",
+  "coreVersionRequired": "^1.0.0",
+  "displayName": "Mensajería · salas, directos y canal de profesores",
+  "category": "community",
+  "tablePrefix": "mod_messaging_",
+  "permissions": [
+    "messaging:conversation:read",
+    "messaging:message:write",
+    "messaging:moderation:write"
+  ],
+  "events": [{ "name": "messaging.conversation.created" }, { "name": "messaging.message.sent" }],
+  "hooks": [],
+  "apiNamespace": "/modules/messaging",
+  "surfaces": ["alumno"]
+}

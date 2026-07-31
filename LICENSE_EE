@@ -1,0 +1,52 @@
+The Didacta Enterprise License (the "Enterprise License")
+
+Copyright (c) VA360 LABS S.L.
+
+SCOPE NOTE (added 2026-04-29):
+This Enterprise License applies exclusively to source code files matching
+the `*.ee.*` filename suffix or located inside `ee/` directories WITHIN
+the project's core paths: `apps/api/src/`, `packages/core-kernel/`,
+`packages/core-registry/`, `packages/license-sdk/src/`. It does NOT apply
+to any module under `modules/` — all modules in this repository are
+distributed under the Didacta Sustainable Use License v1.0 (LICENSE),
+regardless of their filename. Third-party modules installed via the
+official marketplace or via ZIP upload are governed by their own
+respective licenses set by their authors.
+
+With regard to the Didacta Software:
+
+This software and associated documentation files (the "Software") may only be
+used in production, if you (and any entity that you represent) have agreed to,
+and are in compliance with, the Didacta Subscription Terms available at
+https://didacta.io/legal/subscription-terms (the "Enterprise Terms"), or other
+agreement governing the use of the Software, as agreed by you and Didacta /
+VA360 LABS S.L., and otherwise have a valid Didacta Enterprise License (the
+"License") for the correct number of user seats. Subject to the foregoing
+sentence, you are free to modify this Software and publish patches to the
+Software. You agree that VA360 LABS S.L. and/or its licensors (as applicable)
+retain all right, title and interest in and to all such modifications and/or
+patches, and all such modifications and/or patches may only be used,
+copied, modified, displayed, distributed, or otherwise exploited with a valid
+License for the correct number of user seats. Notwithstanding the foregoing,
+you may copy and modify the Software for development and testing purposes,
+without requiring a subscription. You agree that VA360 LABS S.L. and/or its
+licensors (as applicable) retain all right, title and interest in and to all
+such modifications. You are not granted any other rights beyond what is
+expressly stated herein. Subject to the foregoing, it is forbidden to copy,
+merge, publish, distribute, sublicense, and/or sell the Software.
+
+This Enterprise License applies only to the part of this Software that is not
+distributed under the Sustainable Use License (LICENSE). Any part of this
+Software distributed under the MIT License or which is served client-side as
+an image, font, cascading stylesheet (CSS), file which produces or is compiled,
+arranged, augmented, or combined into client-side JavaScript, in whole or in
+part, is copyrighted under the Sustainable Use License. The full text of this
+Enterprise License shall be included in all copies or substantial portions of
+the Software.
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+For licensing inquiries: licensing@didacta.io

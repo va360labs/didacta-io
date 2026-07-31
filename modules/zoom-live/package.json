@@ -1,0 +1,37 @@
+{
+  "name": "@didacta/mod-zoom-live",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Módulo de aula virtual: sesiones síncronas Zoom asociadas a curso (mod.zoom-live)",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@didacta/core-kernel": "workspace:*",
+    "@didacta/database": "workspace:*",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

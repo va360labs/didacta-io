@@ -1,0 +1,70 @@
+{
+  "name": "didacta",
+  "version": "0.0.1-alpha.89",
+  "private": true,
+  "description": "Didacta — Plataforma LMS modular de VA360 LABS",
+  "author": "VA360 LABS S.L. <valen@va360labs.com>",
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@10.21.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "eslint .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:local": "bash scripts/test-local.sh",
+    "test:local:unit": "bash scripts/test-local.sh unit",
+    "test:local:integ": "bash scripts/test-local.sh integ",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky || true",
+    "infra:up": "docker compose -f docker-compose.infra.yml up -d",
+    "infra:down": "docker compose -f docker-compose.infra.yml down",
+    "infra:logs": "docker compose -f docker-compose.infra.yml logs -f",
+    "db:migrate": "pnpm --filter @didacta/database db:migrate:dev",
+    "db:generate": "pnpm --filter @didacta/database db:generate",
+    "db:rls": "pnpm --filter @didacta/database db:rls:apply",
+    "db:studio": "pnpm --filter @didacta/database db:studio",
+    "db:seed": "pnpm --filter @didacta/database db:seed"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.11",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,mjs,cjs}": [
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "@scarf/scarf",
+      "@swc/core",
+      "argon2",
+      "esbuild",
+      "prisma",
+      "sharp",
+      "unrs-resolver"
+    ]
+  }
+}

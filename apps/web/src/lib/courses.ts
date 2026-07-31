@@ -1,0 +1,288 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+import { ApiHttpError, apiFetch } from './api-client';
+import { authStorage } from './auth-storage';
+
+export type CourseStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+export type LessonType = 'VIDEO' | 'HTML' | 'PDF' | 'TEXT' | 'QUIZ' | 'SCORM';
+
+export interface Course {
+  id: string;
+  tenantId: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  thumbnailUrl: string | null;
+  featuredVideoUrl: string | null;
+  language: string;
+  estimatedMinutes: number | null;
+  status: CourseStatus;
+  category: string | null;
+  certificateTemplateId: string | null;
+  /** URL de la página de ventas externa donde se compra el curso. */
+  externalPurchaseUrl: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CourseCategory {
+  id: string;
+  tenantId: string;
+  name: string;
+  color: string;
+  icon: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CourseLesson {
+  id: string;
+  moduleId: string;
+  type: LessonType;
+  title: string;
+  position: number;
+  durationMinutes: number | null;
+  content?: Record<string, unknown>;
+  /** Fecha de publicación absoluta (ISO). Futura = bloqueada hasta esa fecha. */
+  publishAt?: string | null;
+}
+
+export interface CourseModule {
+  id: string;
+  courseId: string;
+  title: string;
+  description: string | null;
+  position: number;
+  lessons: CourseLesson[];
+}
+
+export interface CourseDetail extends Course {
+  modules: CourseModule[];
+}
+
+function withAuth(): string {
+  const token = authStorage.getAccessToken();
+  if (!token) throw new ApiHttpError({ message: 'Sesión expirada', status: 401 });
+  return token;
+}
+
+export const coursesApi = {
+  async list(
+    opts: { status?: CourseStatus; q?: string; category?: string } = {},
+  ): Promise<Course[]> {
+    const params = new URLSearchParams();
+    if (opts.status) params.set('status', opts.status);
+    if (opts.q) params.set('q', opts.q);
+    if (opts.category) params.set('category', opts.category);
+    const path = `/api/v1/modules/courses${params.toString() ? `?${params}` : ''}`;
+    return apiFetch<Course[]>(path, { method: 'GET' }, withAuth());
+  },
+
+  async listCategories(): Promise<string[]> {
+    return apiFetch<string[]>('/api/v1/modules/courses/categories', { method: 'GET' }, withAuth());
+  },
+
+  async listManagedCategories(): Promise<CourseCategory[]> {
+    return apiFetch<CourseCategory[]>(
+      '/api/v1/modules/courses/managed-categories',
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+
+  async createCategory(input: {
+    name: string;
+    color: string;
+    icon?: string | null;
+  }): Promise<CourseCategory> {
+    return apiFetch<CourseCategory>(
+      '/api/v1/modules/courses/managed-categories',
+      { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async updateCategory(
+    id: string,
+    patch: { name?: string; color?: string; icon?: string | null },
+  ): Promise<CourseCategory> {
+    return apiFetch<CourseCategory>(
+      `/api/v1/modules/courses/managed-categories/${id}`,
+      { method: 'PUT', body: JSON.stringify(patch) },
+      withAuth(),
+    );
+  },
+
+  async deleteCategory(id: string): Promise<void> {
+    await apiFetch<{ deleted: true }>(
+      `/api/v1/modules/courses/managed-categories/${id}`,
+      { method: 'DELETE' },
+      withAuth(),
+    );
+  },
+
+  async get(id: string): Promise<CourseDetail> {
+    return apiFetch<CourseDetail>(`/api/v1/modules/courses/${id}`, { method: 'GET' }, withAuth());
+  },
+
+  async create(input: {
+    slug: string;
+    title: string;
+    description?: string;
+    language?: string;
+    estimatedMinutes?: number;
+    category?: string;
+  }): Promise<Course> {
+    return apiFetch<Course>(
+      '/api/v1/modules/courses',
+      { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async addModule(
+    courseId: string,
+    input: { title: string; description?: string },
+  ): Promise<CourseModule> {
+    return apiFetch<CourseModule>(
+      `/api/v1/modules/courses/${courseId}/modules`,
+      { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async addLesson(
+    moduleId: string,
+    input: {
+      type: LessonType;
+      title: string;
+      content?: Record<string, unknown>;
+      durationMinutes?: number;
+    },
+  ): Promise<CourseLesson> {
+    return apiFetch<CourseLesson>(
+      `/api/v1/modules/courses/modules/${moduleId}/lessons`,
+      { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async updateLesson(
+    lessonId: string,
+    input: {
+      title?: string;
+      content?: Record<string, unknown>;
+      durationMinutes?: number | null;
+      publishAt?: string | null;
+    },
+  ): Promise<CourseLesson> {
+    return apiFetch<CourseLesson>(
+      `/api/v1/modules/courses/lessons/${lessonId}`,
+      { method: 'PUT', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+
+  async publish(courseId: string): Promise<Course> {
+    return apiFetch<Course>(
+      `/api/v1/modules/courses/${courseId}/publish`,
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
+
+  async archive(courseId: string): Promise<Course> {
+    return apiFetch<Course>(
+      `/api/v1/modules/courses/${courseId}/archive`,
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
+
+  async unarchive(courseId: string): Promise<Course> {
+    return apiFetch<Course>(
+      `/api/v1/modules/courses/${courseId}/unarchive`,
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
+
+  async moveLesson(lessonId: string, direction: 'up' | 'down'): Promise<CourseLesson> {
+    return apiFetch<CourseLesson>(
+      `/api/v1/modules/courses/lessons/${lessonId}/move`,
+      { method: 'POST', body: JSON.stringify({ direction }) },
+      withAuth(),
+    );
+  },
+
+  async deleteModule(moduleId: string): Promise<void> {
+    await apiFetch<{ deleted: true }>(
+      `/api/v1/modules/courses/modules/${moduleId}`,
+      { method: 'DELETE' },
+      withAuth(),
+    );
+  },
+
+  async deleteLesson(lessonId: string): Promise<void> {
+    await apiFetch<{ deleted: true }>(
+      `/api/v1/modules/courses/lessons/${lessonId}`,
+      { method: 'DELETE' },
+      withAuth(),
+    );
+  },
+
+  async moveLessonToModule(
+    lessonId: string,
+    targetModuleId: string,
+    position?: number,
+  ): Promise<void> {
+    await apiFetch<{ moved: true }>(
+      `/api/v1/modules/courses/lessons/${lessonId}/move-to-module`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ targetModuleId, ...(position !== undefined ? { position } : {}) }),
+      },
+      withAuth(),
+    );
+  },
+
+  async reorderLessons(moduleId: string, lessonIds: string[]): Promise<void> {
+    await apiFetch<{ reordered: true }>(
+      `/api/v1/modules/courses/modules/${moduleId}/reorder-lessons`,
+      { method: 'POST', body: JSON.stringify({ lessonIds }) },
+      withAuth(),
+    );
+  },
+
+  async reorderModules(courseId: string, moduleIds: string[]): Promise<void> {
+    await apiFetch<{ reordered: true }>(
+      `/api/v1/modules/courses/${courseId}/reorder-modules`,
+      { method: 'POST', body: JSON.stringify({ moduleIds }) },
+      withAuth(),
+    );
+  },
+
+  async update(
+    courseId: string,
+    input: {
+      title?: string;
+      description?: string | null;
+      category?: string | null;
+      estimatedMinutes?: number | null;
+      certificateTemplateId?: string | null;
+      thumbnailUrl?: string | null;
+      featuredVideoUrl?: string | null;
+      externalPurchaseUrl?: string | null;
+    },
+  ): Promise<Course> {
+    return apiFetch<Course>(
+      `/api/v1/modules/courses/${courseId}`,
+      { method: 'PUT', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+};

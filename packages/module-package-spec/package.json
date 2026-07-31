@@ -1,0 +1,32 @@
+{
+  "name": "@didacta/module-package-spec",
+  "version": "1.0.0",
+  "description": "Didacta module package spec — versioned contract for the module ZIP layout. Single source of truth shared by the backend validator and any packager (official skill or third-party tooling). Zero runtime deps.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./schema/package-layout.schema.json": "./src/schema/package-layout.schema.json"
+  },
+  "files": [
+    "dist",
+    "src/schema"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .turbo"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

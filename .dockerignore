@@ -1,0 +1,46 @@
+# Build artifacts
+**/node_modules
+**/dist
+**/.next
+**/build
+**/.turbo
+**/coverage
+**/.nyc_output
+
+# Editors
+.idea/
+.vscode/
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+.github
+
+# Docs (no necesarias en runtime)
+docs/
+prompts/
+*.md
+!README.md
+
+# Tests
+**/tests/
+**/*.test.ts
+**/*.spec.ts
+
+# Local env / secrets
+.env
+.env.local
+.env.*.local
+
+# Misc
+*.zip
+*.tar.gz
+*.log
+*.tsbuildinfo
+**/*.tsbuildinfo
+*.swp

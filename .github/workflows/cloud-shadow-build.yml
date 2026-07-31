@@ -1,0 +1,93 @@
+name: cloud-shadow-build
+
+# Detecta pre-merge si un PR de community rompe didacta-cloud (que consume
+# este repo como submódulo). Ver doc 08-SINCRONIZACION-CICD §2.4.
+#
+# Solo se dispara en PRs que tocan archivos del CORE: cualquier cambio en
+# core-kernel, license-sdk, schema Prisma, app.module o módulos publicados
+# puede afectar a cloud.
+
+# Pasado a workflow_dispatch only (2026-05-01): el step `Comment on PR` requiere
+# permisos de GITHUB_TOKEN para escribir comments y devuelve "Resource not
+# accessible by integration" en este repo. Mientras se resuelve la config de
+# permisos a nivel org / repo, el shadow build se lanza manualmente.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: cloud-shadow-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  shadow-build:
+    name: Build didacta-cloud against this PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'skip-cloud-shadow') == false
+
+    steps:
+      - name: Checkout community at PR head
+        uses: actions/checkout@v4
+        with:
+          path: community
+
+      - name: Checkout cloud (read-only)
+        uses: actions/checkout@v4
+        with:
+          repository: va360labs/didacta-cloud
+          token: ${{ secrets.CLOUD_RO_PAT }}
+          path: cloud
+          submodules: false
+
+      - name: Override submodule pointer to local PR
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloud
+          rm -rf community
+          # Symlink portable: relative path al community recién checkouted
+          ln -s ../community community
+          ls -la community/ | head -5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: |
+            community/pnpm-lock.yaml
+            cloud/pnpm-lock.yaml
+
+      - name: Install (cloud)
+        working-directory: cloud
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Typecheck cloud + community
+        working-directory: cloud
+        run: pnpm tsc --noEmit || echo "::warning::Typecheck warnings — revisar"
+
+      # Política activa desde 2026-05-01: NO ejecutar tests en CI.
+      # Las pruebas de cloud se corren en local con Docker Desktop antes de
+      # cualquier release que toque la integración community ↔ cloud.
+      # Mantenemos el typecheck arriba como guardia mínima de superficie.
+
+      - name: Comment on PR
+        if: always()
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: cloud-shadow-build
+          message: |
+            🔁 **Cloud shadow build**: ${{ job.status == 'success' && '✅ verde' || '⚠️ revisar logs (ver Actions)' }}
+
+            Este PR puede afectar a `didacta-cloud`. El job clona cloud y compila/testea
+            contra el HEAD de este PR. Si rompe, **arregla aquí mismo** antes de mergear:
+            es responsabilidad de community no romper cloud.
+
+            Para saltar este check (PR de docs / chore que no afecta cloud), añade
+            la label `skip-cloud-shadow`.

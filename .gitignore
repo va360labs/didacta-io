@@ -1,0 +1,85 @@
+# macOS
+.DS_Store
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.cursor/
+
+# Node
+node_modules/
+dist/
+build/
+*.log
+.pnpm-store/
+.npm/
+
+# Turbo
+.turbo/
+
+# Next.js
+.next/
+out/
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Archives (not versioned)
+*.zip
+*.tar.gz
+
+# Prisma local dev DB
+packages/database/prisma/*.db*
+
+# OS / misc
+Thumbs.db
+*.swp
+*.swo
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Temp commit / PR body files (used for multi-line messages)
+.commit-msg.txt
+.pr-body.md
+
+# Didacta — security: nunca commitear claves privadas
+*-private.pem
+*-private.key
+*.private.pem
+didacta-keys-*/
+.env.local.license
+kms-sign-input-*.b64
+apps/api/data/
+
+# Test artifacts
+apps/e2e/test-results/
+apps/e2e/branding-shots/
+test-results/
+playwright-report/
+
+# Trabajo local / scripts temporales
+work/
+
+# Claude Code settings locales
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Evidencia local de e2e (se regenera al correr el spec)
+drip-evidence/
+
+# Evidencias e informes generados contra instalaciones reales: pueden
+# contener datos personales y nunca deben entrar al repo.
+evidencias/
+.quality/
+doc/
+apps/e2e/test-results-demo-nav/

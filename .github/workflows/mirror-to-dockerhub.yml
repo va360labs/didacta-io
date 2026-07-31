@@ -1,0 +1,60 @@
+name: mirror-to-dockerhub
+
+# Espeja una imagen ya construida en GHCR al registry público de Docker Hub.
+# Se invoca a mano con un tag (ej. v0.0.1-alpha.54) o sin él para usar el
+# último tag pusheado. NO buildea: solo copia layers con `crane` (sin daemon).
+#
+# Hasta que se cierre MIG-053 (mirror automático desde release.yml), este
+# workflow es la única ruta limpia para que las imágenes alpha lleguen a
+# `didactaio/community` sin depender del Docker Desktop local del operador.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag a espejar (ej. v0.0.1-alpha.54). Sin "v" se acepta también.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  mirror:
+    name: Copy GHCR → Docker Hub
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Normalize tag
+        id: t
+        run: |
+          REF="${{ github.event.inputs.tag }}"
+          VERSION="${REF#v}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Install crane
+        run: |
+          curl -sSL \
+            https://github.com/google/go-containerregistry/releases/download/v0.21.5/go-containerregistry_Linux_x86_64.tar.gz \
+            | sudo tar -xzf - -C /usr/local/bin crane
+          crane version
+
+      - name: Login GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | crane auth login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Login Docker Hub
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | crane auth login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Copy image
+        run: |
+          SRC="ghcr.io/va360labs/didacta-community:${{ steps.t.outputs.version }}"
+          DST="docker.io/didactaio/community:${{ steps.t.outputs.version }}"
+          echo "Copying $SRC -> $DST"
+          crane copy "$SRC" "$DST"
+
+      - name: Print digest
+        run: |
+          DIGEST=$(crane digest "docker.io/didactaio/community:${{ steps.t.outputs.version }}")
+          echo "DIGEST $DIGEST"
+          echo "::notice title=Mirror OK::didactaio/community:${{ steps.t.outputs.version }} @ $DIGEST"

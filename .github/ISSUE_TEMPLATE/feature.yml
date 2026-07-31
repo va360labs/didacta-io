@@ -1,0 +1,45 @@
+name: ✨ Feature request
+description: Pedir una funcionalidad nueva o un cambio significativo.
+title: '[FEATURE] '
+labels: ['feature-request', 'alpha-tester']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema que resuelve
+      description: ¿Qué quieres hacer y no puedes? ¿A quién le pasa esto?
+      placeholder: 'Quiero que mis alumnos puedan ver el progreso de sus compañeros en cursos colaborativos.'
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Tu propuesta de solución (opcional)
+      placeholder: 'Añadir una vista pública de leaderboard por curso.'
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Para ti, ¿qué prioridad tiene?
+      options:
+        - 🔴 Bloqueante: no puedo usar Didacta sin esto
+        - 🟠 Alta: lo necesito en próximas semanas
+        - 🟡 Media: lo agradecería en algún momento
+        - 🟢 Baja: nice-to-have
+    validations:
+      required: true
+  - type: dropdown
+    id: edition
+    attributes:
+      label: ¿Crees que esto debería ser?
+      options:
+        - Community (gratis para todos)
+        - Enterprise (capability gateada)
+        - Cloud-only (solo en SaaS gestionado)
+        - No lo sé
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: ¿Hay alternativas que ya hayas probado?
+      description: 'Otros LMS que tengan esto, workarounds que hayas usado, etc.'

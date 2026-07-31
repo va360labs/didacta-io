@@ -1,0 +1,95 @@
+{
+  "name": "mod.migrator-learndash",
+  "version": "1.1.1",
+  "displayName": "Migrador desde WordPress + LearnDash",
+  "description": "Importa cursos, lecciones, temas, quizzes, preguntas, usuarios, grupos, matrículas, media y progreso desde una instalación WordPress + LearnDash hacia Didacta. Wizard didáctico paso a paso, ETL con staging, idempotencia por checksum, reportes auditables.",
+  "coreVersionRequired": "^0.0.1-alpha.81",
+  "tablePrefix": "mod_migrator_learndash_",
+  "apiNamespace": "/modules/migrator-learndash",
+  "vendor": "didacta",
+  "permissions": [
+    {
+      "name": "migrator-learndash.import.create",
+      "description": "Iniciar nuevas migraciones desde LearnDash."
+    },
+    {
+      "name": "migrator-learndash.import.read",
+      "description": "Consultar el estado de migraciones existentes."
+    },
+    {
+      "name": "migrator-learndash.import.cancel",
+      "description": "Cancelar una migración en curso."
+    },
+    {
+      "name": "migrator-learndash.import.rollback",
+      "description": "Revertir una migración completada."
+    },
+    { "name": "migrator-learndash.report.read", "description": "Leer reportes de reconciliación." },
+    {
+      "name": "migrator-learndash.report.export",
+      "description": "Exportar reportes (CSV/PDF) para auditor."
+    }
+  ],
+  "eventsEmitted": [],
+  "eventsConsumed": [],
+  "hooksProvided": [],
+  "hooksConsumed": [],
+  "requiredCapabilities": [],
+  "requiredEnvVars": [],
+  "isolation": "vm",
+  "http": {
+    "allowedHosts": ["*"],
+    "unrestrictedHosts": true,
+    "rateLimitPerHost": { "requestsPerSecond": 5, "burst": 10 },
+    "maxBodyBytes": 10485760
+  },
+  "requiresDb": true,
+  "didacta": {
+    "externalSource": "learndash",
+    "permissions": [
+      "users.upsertByExternalRef",
+      "users.findByExternalRef",
+      "users.deleteByExternalRef",
+      "courses.upsertByExternalRef",
+      "courses.findByExternalRef",
+      "courses.publish",
+      "courses.deleteByExternalRef",
+      "modules.upsertByExternalRef",
+      "modules.findByExternalRef",
+      "modules.deleteByExternalRef",
+      "lessons.upsertByExternalRef",
+      "lessons.findByExternalRef",
+      "lessons.deleteByExternalRef",
+      "quizzes.upsertByExternalRef",
+      "quizzes.findByExternalRef",
+      "quizzes.deleteByExternalRef",
+      "quizzes.upsertQuestions",
+      "enrollments.upsertByExternalRef",
+      "enrollments.findByExternalRef",
+      "enrollments.deleteByExternalRef",
+      "media.uploadFromUrl",
+      "media.uploadFromBytes"
+    ]
+  },
+  "jobLifecycle": {
+    "onTickFn": "onJobTick",
+    "maxTicksPerHour": 600
+  },
+  "requiresSecrets": true,
+  "secretsLifecycle": {
+    "maxKeys": 16,
+    "maxValueBytes": 1024,
+    "allowedKeyPattern": "^job:[a-f0-9-]{36}:learndash:[a-zA-Z0-9_]{1,40}$"
+  },
+  "surfaces": {
+    "admin": {
+      "entry": "dist/ui/admin.js",
+      "roles": ["super_admin"],
+      "menu": {
+        "label": "Migrar desde LearnDash",
+        "icon": "download-cloud",
+        "order": 100
+      }
+    }
+  }
+}

@@ -1,0 +1,174 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # v1.0.0, v0.0.1, etc.
+      - 'v*.*.*-*' # v0.0.1-alpha.0, v1.0.0-rc.0, etc.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag a publicar manualmente (formato vX.Y.Z[-pre.N])'
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/didacta-community
+
+jobs:
+  build-and-push:
+    name: Build & push Docker image to GHCR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version from tag
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            REF="${{ github.event.inputs.tag }}"
+          else
+            REF="${GITHUB_REF#refs/tags/}"
+          fi
+          # Quitar prefijo 'v' para el tag de Docker
+          VERSION="${REF#v}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+          # Detectar pre-release sufijo
+          if [[ "${VERSION}" =~ -alpha\. ]]; then
+            echo "channel=alpha" >> $GITHUB_OUTPUT
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          elif [[ "${VERSION}" =~ -beta\. ]]; then
+            echo "channel=beta" >> $GITHUB_OUTPUT
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          elif [[ "${VERSION}" =~ -rc\. ]]; then
+            echo "channel=rc" >> $GITHUB_OUTPUT
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "channel=stable" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Versión sin pre-release sufijo (para tag :MAJOR.MINOR.PATCH)
+          BASE="${VERSION%%-*}"
+          echo "base=${BASE}" >> $GITHUB_OUTPUT
+
+          # Componer tags Docker según política versionado (docs/versioning.md)
+          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}"
+          if [[ "${VERSION}" =~ -alpha\.[0-9]+$ ]]; then
+            # ej. 0.0.1-alpha.0 → además exporta tag :0.0.1-alpha y :alpha
+            CORE="${VERSION%-alpha.*}-alpha"
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${CORE}"
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:alpha"
+          elif [[ "${VERSION}" =~ -beta\.[0-9]+$ ]]; then
+            CORE="${VERSION%-beta.*}-beta"
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${CORE}"
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:beta"
+          elif [[ "${VERSION}" =~ -rc\.[0-9]+$ ]]; then
+            CORE="${VERSION%-rc.*}-rc"
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${CORE}"
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rc"
+          else
+            # Estable (post 1.0.0). Añade tags :MAJOR.MINOR, :MAJOR y :latest
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${BASE}"
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${MAJOR}.${MINOR}"
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${MAJOR}"
+            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          fi
+
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "Computed Docker tags:"
+          echo "${TAGS}" | tr ',' '\n'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.version.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=Didacta Community
+            org.opencontainers.image.description=Source-available LMS by VA360 LABS
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.licenses=LicenseRef-Didacta-Sustainable-Use
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ────────────────────────────────────────────────────────────────────
+      # 🚧 TODO MIG-053 — Mirror a Docker Hub
+      # ----------------------------------------------------------------------
+      # Cuando hagamos público el repo (Fase 7), añadir mirror a Docker Hub:
+      # docker.io/didacta/community con los mismos tags que GHCR.
+      #
+      # Pasos para activar (NO hacer todavía):
+      #   1. Crear cuenta organización 'didacta' en Docker Hub.
+      #   2. Generar Access Token con scope read/write/delete.
+      #   3. Añadir secrets en GitHub: DOCKERHUB_USERNAME + DOCKERHUB_TOKEN.
+      #   4. Descomentar bloque siguiente y añadir tags de Docker Hub al
+      #      cómputo de tags del paso "Resolve version from tag".
+      # ────────────────────────────────────────────────────────────────────
+      # - name: Login to Docker Hub
+      #   uses: docker/login-action@v3
+      #   with:
+      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # - name: Mirror image to Docker Hub
+      #   uses: docker/build-push-action@v6
+      #   with:
+      #     context: .
+      #     push: true
+      #     tags: ${{ steps.version.outputs.dockerhub_tags }}
+      #     cache-from: type=gha
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
+          generate_release_notes: true
+          body: |
+            ## ${{ github.ref_name }}
+
+            Imagen Docker: `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}`
+
+            Canal: **${{ steps.version.outputs.channel }}**
+
+            ### Quick start
+
+            ```bash
+            docker compose -f docker-compose.alpha.yml up -d
+            ```
+
+            Ver `docs/alpha/INSTALL.md` para guía paso a paso.
+
+            ### Política de versiones
+
+            Ver [`docs/versioning.md`](https://github.com/${{ github.repository }}/blob/main/docs/versioning.md).
+
+            ${{ steps.version.outputs.is_prerelease == 'true' && '⚠️ **Esta es una pre-release**. No usar en producción con datos reales.' || '' }}

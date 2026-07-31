@@ -1,0 +1,69 @@
+# syntax=docker/dockerfile:1.7
+# ============================================================================
+# Dockerfile.dev — imagen de desarrollo para hot-reload en dev.didacta.io
+# ============================================================================
+# Se construye UNA VEZ en el servidor dev. Los src/ de api y web se montan
+# como bind-volumes desde el directorio del repo clonado en el servidor.
+# Cambios de código llegan al navegador en segundos (HMR / nest watch).
+#
+# NO usar en producción. Para producción: Dockerfile (multi-stage + pruner).
+#
+# Flujo:
+#   build (una vez, ~5 min):
+#     docker build -f Dockerfile.dev -t didactaio/community-dev:latest .
+#
+#   arrancar:
+#     docker compose -f docker-compose.dev.yml up -d
+#
+#   deploy caliente (segundos):
+#     ./scripts/dev-push.sh   ← rsync src/ al servidor, servicios auto-recargan
+# ============================================================================
+
+FROM node:22-alpine AS base
+RUN npm install --global pnpm@10.21.0
+WORKDIR /repo
+ENV HUSKY=0 NEXT_TELEMETRY_DISABLED=1
+
+# --------------------------------------------------------------------------
+# devdeps: instala TODOS los deps (incluidos devDeps) y compila packages.
+# Esta imagen NO construye apps/api ni apps/web — arrancan desde src en
+# modo watch. Solo packages (waves 1-3) necesitan dist/ preconstruido.
+# --------------------------------------------------------------------------
+FROM base AS devdeps
+ENV CI=true
+
+# Herramientas: build-deps (argon2 native) + runtime dev (psql, bash, curl)
+RUN apk add --no-cache \
+    bash ca-certificates curl g++ libc6-compat make \
+    openssl postgresql16-client python3
+
+# Fetch store antes de copiar código (capa cacheada si no cambia lockfile)
+COPY pnpm-lock.yaml ./
+RUN --mount=type=cache,id=pnpm-dev,target=/root/.local/share/pnpm/store \
+    pnpm fetch
+
+# Copiar repo completo e instalar con devDeps (necesario para nest watch / next dev)
+COPY . .
+RUN find . -name "*.tsbuildinfo" -not -path "*/node_modules/*" -delete || true
+RUN --mount=type=cache,id=pnpm-dev,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
+
+# Generar Prisma client
+RUN pnpm --filter @didacta/database db:generate
+
+# Wave 1: paquetes core sin deps internas
+RUN pnpm --filter @didacta/core-kernel --filter @didacta/database run build
+# Wave 2: paquetes que dependen de wave 1
+RUN pnpm --filter @didacta/core-registry --filter @didacta/license-sdk \
+    --filter @didacta/module-package-spec run build
+# Wave 3: módulos (pueden no existir todavía, toleramos fallo)
+RUN pnpm --filter "@didacta/mod-*" run build 2>/dev/null || true
+
+# Entrypoint dev (migraciones + arranque en modo watch)
+COPY infra/docker/entrypoint.dev.sh /usr/local/bin/entrypoint.dev.sh
+RUN chmod +x /usr/local/bin/entrypoint.dev.sh
+
+EXPOSE 4000 3010
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.dev.sh"]
+CMD ["start"]

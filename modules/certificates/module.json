@@ -1,0 +1,14 @@
+{
+  "name": "certificates",
+  "version": "1.0.0",
+  "edition": "community",
+  "coreVersionRequired": "^0.0.1",
+  "displayName": "Plantillas y emisión PDF de certificados",
+  "category": "core",
+  "tablePrefix": "mod_certificates_",
+  "permissions": ["certificates:read", "certificates:write", "certificates:issue"],
+  "events": [{ "name": "certificates.issued" }, { "name": "certificates.revoked" }],
+  "hooks": [{ "event": "learning.course.completed" }],
+  "apiNamespace": "/modules/certificates",
+  "surfaces": ["admin", "alumno"]
+}
