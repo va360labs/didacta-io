@@ -128,6 +128,12 @@ export class MemberDecisionService {
         where: { id: record.userId },
         data: { status: newStatus, approvalDecidedAt: decidedAt },
       });
+      // Dual-write D13: sella también el perfil del vertical (0 filas si el
+      // usuario no tiene perfil, p.ej. altas previas sin flujo de registro).
+      await tx.memberRegistrationProfile.updateMany({
+        where: { tenantId: record.tenantId, userId: record.userId },
+        data: { approvalDecidedAt: decidedAt },
+      });
       // Sella AMBOS tokens (el consumido y su pareja) para inutilizarlos.
       await tx.memberRegistrationDecisionToken.updateMany({
         where: { tenantId: record.tenantId, userId: record.userId, decidedAt: null },
@@ -237,6 +243,11 @@ export class MemberDecisionService {
       await tx.user.update({
         where: { id: userId },
         data: { status: newStatus, approvalDecidedAt: decidedAt },
+      });
+      // Dual-write D13: sella también el perfil del vertical (0 filas si no hay).
+      await tx.memberRegistrationProfile.updateMany({
+        where: { tenantId, userId },
+        data: { approvalDecidedAt: decidedAt },
       });
       await tx.memberRegistrationDecisionToken.updateMany({
         where: { tenantId, userId, decidedAt: null },

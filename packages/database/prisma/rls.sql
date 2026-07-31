@@ -98,6 +98,14 @@ END $$;
 -- ----------------------------------------------------------------------------
 -- Inscripción de miembros: telegram_id único por tenant cuando está presente.
 -- Permite múltiples NULL (usuarios no creados por el flujo de Telegram).
+-- DEPRECADO (D13): columnas de user en transición a mod_member_registration_profile;
+-- este índice se retira en D13 F4 junto con las columnas.
 CREATE UNIQUE INDEX IF NOT EXISTS user_tenant_telegram_id_key
   ON "user" ("tenant_id", "telegram_id")
+  WHERE telegram_id IS NOT NULL;
+
+-- Perfil de registro (mod.member-registration): mismo invariante sobre la
+-- tabla nueva — telegram_id único por tenant cuando está presente.
+CREATE UNIQUE INDEX IF NOT EXISTS mod_member_registration_profile_tenant_tg_key
+  ON "mod_member_registration_profile" ("tenant_id", "telegram_id")
   WHERE telegram_id IS NOT NULL;

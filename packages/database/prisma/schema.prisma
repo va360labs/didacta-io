@@ -215,6 +215,8 @@ model User {
   /// dejarlo entrar. Backfill de usuarios previos = created_at (no se les
   /// interrumpe). Solo `null` → fecha; nunca vuelve a null.
   onboardingCompletedAt DateTime?  @map("onboarding_completed_at")
+  /// DEPRECADO (D13): la fuente de verdad pasa a mod_member_registration_profile;
+  /// se dual-escribe durante la transición y se elimina en D13 F4.
   /// ID numérico de Telegram capturado en la inscripción de miembros (gate
   /// Telegram). Null para usuarios no creados por ese flujo. Único por tenant
   /// cuando está set: el índice único parcial vive en rls.sql porque Prisma no
@@ -2085,9 +2087,9 @@ model MemberRegistrationDecisionToken {
   requestUa String?              @map("request_ua")
   createdAt DateTime             @default(now()) @map("created_at")
 
-  @@index([tenantId, userId])
-  @@index([expiresAt])
-  @@map("member_registration_decision_token")
+  @@index([tenantId, userId], map: "mod_member_registration_decision_token_tenant_user_idx")
+  @@index([expiresAt], map: "mod_member_registration_decision_token_expires_at_idx")
+  @@map("mod_member_registration_decision_token")
 }
 
 /// Lista de referencia de estado de pago de miembros, gestionada por el admin
@@ -2105,9 +2107,9 @@ model MemberPaymentFlag {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  @@unique([tenantId, telegramId], map: "member_payment_flag_tenant_tg_key")
-  @@index([tenantId, isDelinquent])
-  @@map("member_payment_flag")
+  @@unique([tenantId, telegramId], map: "mod_member_registration_payment_flag_tenant_tg_key")
+  @@index([tenantId, isDelinquent], map: "mod_member_registration_payment_flag_tenant_delinq_idx")
+  @@map("mod_member_registration_payment_flag")
 }
 
 /// Resultado del lookup automático de suscripción al registrarse un miembro en
@@ -2136,9 +2138,30 @@ model MemberSubscriptionLookup {
   updatedAt     DateTime  @updatedAt @map("updated_at")
   completedAt   DateTime? @map("completed_at")
 
-  @@unique([tenantId, userId], map: "member_subscription_lookup_tenant_user_key")
-  @@index([tenantId])
-  @@map("member_subscription_lookup")
+  @@unique([tenantId, userId], map: "mod_member_registration_subscription_lookup_tenant_user_key")
+  @@index([tenantId], map: "mod_member_registration_subscription_lookup_tenant_idx")
+  @@map("mod_member_registration_subscription_lookup")
+}
+
+/// Perfil de registro del vertical de inscripción (futuro mod.member-registration).
+/// Extrae de `user` los datos PROPIOS del flujo (Telegram + sello de decisión):
+/// un módulo no escribe columnas de tablas core (ADR-016). 1:1 con user por
+/// (tenant_id, user_id), join lógico sin FK. Durante la transición D13 se
+/// dual-escribe junto a las columnas DEPRECADAS de `user`; estas se eliminarán
+/// en D13 F4. El índice único parcial de telegram_id vive en rls.sql.
+model MemberRegistrationProfile {
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  telegramId        String?   @map("telegram_id") @db.VarChar(32)
+  telegramInGroup   Boolean?  @map("telegram_in_group")
+  approvalDecidedAt DateTime? @map("approval_decided_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@unique([tenantId, userId], map: "mod_member_registration_profile_tenant_id_user_id_key")
+  @@index([tenantId, telegramId], map: "mod_member_registration_profile_tenant_id_telegram_id_idx")
+  @@map("mod_member_registration_profile")
 }
 
 // ============================================================================

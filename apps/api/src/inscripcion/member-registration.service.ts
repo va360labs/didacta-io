@@ -212,6 +212,17 @@ export class MemberRegistrationService {
           },
           select: { id: true },
         });
+        // Dual-write D13: el perfil del vertical es la fuente de verdad futura;
+        // las columnas de `user` quedan deprecadas hasta D13 F4.
+        await tx.memberRegistrationProfile.create({
+          data: {
+            id: created.id,
+            tenantId,
+            userId: created.id,
+            telegramId: input.telegramId,
+            telegramInGroup: membershipToBoolean(input.inGroup),
+          },
+        });
         if (role) {
           await tx.userRole.create({ data: { userId: created.id, roleId: role.id } });
         }

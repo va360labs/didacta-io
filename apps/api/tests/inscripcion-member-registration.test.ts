@@ -50,7 +50,8 @@ function makeHarness(
     create: vi.fn().mockResolvedValue({ id: 'new-user' }),
   };
   const txUserRole = { create: vi.fn().mockResolvedValue({}) };
-  const tx = { user: txUser, userRole: txUserRole };
+  const txProfile = { create: vi.fn().mockResolvedValue({}) };
+  const tx = { user: txUser, userRole: txUserRole, memberRegistrationProfile: txProfile };
 
   // findUnique se llama 2 veces como mucho: (1) idempotencia inicial,
   // (2) recuperación tras P2002. La primera devuelve existingUser; la segunda,

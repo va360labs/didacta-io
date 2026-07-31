@@ -133,17 +133,29 @@ export class MemberPurgeWorker implements OnApplicationBootstrap, OnModuleDestro
       let totalPurged = 0;
       for (const { id: tenantId } of tenants) {
         const count = await this.superAdmin.asAdmin(tenantId, async (p) => {
-          const result = await p.user.updateMany({
+          // Primero los ids exactos, para purgar user y perfil (dual-write D13)
+          // con el MISMO criterio sin depender de un join.
+          const targets = await p.user.findMany({
             where: {
               status: { in: ['PENDING', 'DEACTIVATED'] },
               approvalDecidedAt: null,
               telegramId: { not: null },
               createdAt: { lt: cutoff },
             },
+            select: { id: true },
+          });
+          if (targets.length === 0) return 0;
+          const ids = targets.map((t) => t.id);
+          const result = await p.user.updateMany({
+            where: { id: { in: ids } },
             data: {
               telegramId: null,
               telegramInGroup: null,
             },
+          });
+          await p.memberRegistrationProfile.updateMany({
+            where: { tenantId, userId: { in: ids } },
+            data: { telegramId: null, telegramInGroup: null },
           });
           return result.count;
         });

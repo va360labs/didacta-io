@@ -103,6 +103,12 @@ function makeHarness() {
         return { count };
       },
     },
+    // Dual-write D13: el perfil del vertical se sella junto al user.
+    memberRegistrationProfile: {
+      async updateMany() {
+        return { count: 0 };
+      },
+    },
   };
 
   const prisma = {
