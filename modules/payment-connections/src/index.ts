@@ -83,6 +83,8 @@ export type {
  * muestra) y las reglas que deciden si un acceso caduca o no.
  */
 export { OrderMirrorService } from './order-mirror.service.js';
+export { mapWooOrderPayload } from './woocommerce-reader.client.js';
+export { verifyWooSignature, WOO_ORDER_TOPICS } from './woo-webhook-signature.js';
 export type { MirrorResult, MirrorOptions } from './order-mirror.service.js';
 export {
   classifyPurchase,

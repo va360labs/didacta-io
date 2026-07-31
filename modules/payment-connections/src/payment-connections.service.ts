@@ -55,6 +55,8 @@ export const PAYMENT_CONNECTIONS_MODULE = 'payment-connections';
 const RENEWAL_TEMPLATE_KEY = 'renewal-template';
 /** Key en tenant_setting con las reglas de clasificación de producto del tenant. */
 const ENTITLEMENT_RULES_KEY = 'entitlement-rules';
+/** Key (cifrada) con el secreto de firma del webhook de WooCommerce. */
+const WOO_WEBHOOK_SECRET_KEY = 'woo-webhook-secret';
 /** Key en tenant_setting con la URL del Customer Portal de Stripe (enlace de cancelación). */
 const CANCEL_PORTAL_URL_KEY = 'cancel-portal-url';
 /** Estados Stripe que cuentan como "suscripción activa" para reconciliar. */
@@ -920,6 +922,42 @@ export class PaymentConnectionsService {
     // tienen equivalente y el contrato común no lo incluye.
     if (!(adapter instanceof WooCommerceReadSdkAdapter)) return [];
     return adapter.listCatalogProducts();
+  }
+
+  /**
+   * Secreto con el que WooCommerce firma sus webhooks hacia Didacta.
+   *
+   * Se guarda cifrado (`isSecret`) porque quien lo tenga puede fabricar
+   * webhooks legítimos y, en fases posteriores, regalarse accesos.
+   */
+  async getWooWebhookSecret(tenantId: string): Promise<string | null> {
+    const v = await this.config.get<string>(
+      tenantId,
+      PAYMENT_CONNECTIONS_MODULE,
+      WOO_WEBHOOK_SECRET_KEY,
+    );
+    return typeof v === 'string' && v.length > 0 ? v : null;
+  }
+
+  async setWooWebhookSecret(
+    tenantId: string,
+    secret: string,
+    actorId?: string | null,
+  ): Promise<void> {
+    await this.config.set(tenantId, PAYMENT_CONNECTIONS_MODULE, WOO_WEBHOOK_SECRET_KEY, secret, {
+      isSecret: true,
+      actorId: actorId ?? null,
+    });
+  }
+
+  /** Conexión de WooCommerce verificada del tenant, si la hay. */
+  async findVerifiedWooConnectionId(tenantId: string): Promise<string | null> {
+    const row = await this.prisma.modPaymentConnectionsConnection.findFirst({
+      where: { tenantId, provider: 'woocommerce', status: 'VERIFIED' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    return row?.id ?? null;
   }
 
   /**

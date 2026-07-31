@@ -469,6 +469,21 @@ function isoOf(gmt: string | null | undefined): string | null {
   return gmt ? `${gmt}Z` : null;
 }
 
+/**
+ * Convierte el payload de un pedido de WooCommerce al registro del espejo.
+ *
+ * Se exporta para que el webhook use EXACTAMENTE el mismo mapeo que el barrido:
+ * el cuerpo que manda Woo en `order.created` tiene la misma forma que el de
+ * `/orders`. Si cada camino mapeara por su cuenta, una compra nueva y una
+ * reimportación acabarían escribiendo filas distintas para el mismo pedido.
+ */
+export function mapWooOrderPayload(payload: unknown): ExternalOrderRecord | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const row = payload as WooOrderFull;
+  if (row.id == null) return null;
+  return mapFullOrder(row);
+}
+
 function mapFullOrder(row: WooOrderFull): ExternalOrderRecord {
   const nombre = [row.billing?.first_name, row.billing?.last_name]
     .map((s) => (s ?? '').trim())
