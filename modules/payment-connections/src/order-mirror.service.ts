@@ -221,6 +221,65 @@ export class OrderMirrorService {
   }
 
   /**
+   * Refleja UN pedido que llega por webhook.
+   *
+   * Mismo camino que el barrido, para que una compra nueva y una reimportación
+   * dejen exactamente la misma fila: si el webhook escribiera distinto,
+   * tendríamos dos verdades para el mismo pedido.
+   *
+   * Idempotente: WooCommerce reintenta los webhooks fallidos, y `order.updated`
+   * llega varias veces por el mismo pedido (al pagarse, al completarse…).
+   */
+  async mirrorSingleOrder(
+    tenantId: string,
+    connectionId: string | null,
+    order: ExternalOrderRecord,
+    options: { ruleset?: EntitlementRuleset; productTypes?: Map<string, string> } = {},
+  ): Promise<{ orderId: string; kind: EntitlementKind; userId: string | null; creado: boolean }> {
+    if (!order.customerEmail) {
+      throw new Error('El pedido llega sin email de facturación: no se puede atribuir.');
+    }
+
+    const clasificado = this.classify(order, options.productTypes ?? new Map(), options.ruleset);
+    const userIdByEmail = await this.resolveUsers(tenantId, [order.customerEmail]);
+    const userId = userIdByEmail.get(order.customerEmail) ?? null;
+    const pagado = PAID_STATUSES.has(order.status) && order.status !== 'refunded';
+
+    const data = {
+      connectionId,
+      userId,
+      customerEmail: order.customerEmail,
+      customerName: order.customerName,
+      status: order.status,
+      paid: pagado,
+      totalAmount: order.total ?? 0,
+      currency: order.currency,
+      placedAt: parseDate(order.placedAt) ?? new Date(),
+      paidAt: parseDate(order.paidAt),
+      refundedAt: parseDate(order.refundedAt),
+      entitlementKind: clasificado.kind,
+      accessEndsAt: clasificado.accessEndsAt,
+      items: clasificado.items as unknown as object,
+      syncedAt: new Date(),
+    };
+
+    const existente = await this.prisma.modPaymentConnectionsOrder.findFirst({
+      where: { tenantId, provider: 'woocommerce', externalId: order.externalId },
+      select: { id: true },
+    });
+
+    if (existente) {
+      await this.prisma.modPaymentConnectionsOrder.update({ where: { id: existente.id }, data });
+      return { orderId: existente.id, kind: clasificado.kind, userId, creado: false };
+    }
+
+    const fila = await this.prisma.modPaymentConnectionsOrder.create({
+      data: { ...data, tenantId, provider: 'woocommerce', externalId: order.externalId },
+    });
+    return { orderId: fila.id, kind: clasificado.kind, userId, creado: true };
+  }
+
+  /**
    * Reclama los pedidos huérfanos de un email cuando esa persona se da de alta.
    *
    * Sin esto, quien compró antes de tener cuenta se quedaría con el histórico

@@ -142,6 +142,12 @@ const expiringQuerySchema = z.object({
 });
 type ExpiringQuery = z.infer<typeof expiringQuerySchema>;
 
+/** Mínimo de 20 caracteres: un secreto corto se fuerza por diccionario. */
+const webhookSecretSchema = z.object({
+  secret: z.string().min(20).max(200),
+});
+type WebhookSecretDto = z.infer<typeof webhookSecretSchema>;
+
 const ENTITLEMENT_KINDS = ['LIFETIME', 'SUBSCRIPTION', 'TIMED', 'ONE_OFF', 'INFRA'] as const;
 
 const rulesetSchema = z.object({
@@ -615,6 +621,33 @@ export class PaymentConnectionsController {
         currency: r.currency,
       })),
     };
+  }
+
+  @Put('orders-mirror/webhook-secret')
+  @ApiOperation({
+    summary:
+      'Guarda el secreto con el que WooCommerce firma sus webhooks. Debe ser el MISMO que ' +
+      'el configurado en la tienda o los avisos se rechazan por firma inválida.',
+  })
+  async putWebhookSecret(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(webhookSecretSchema)) dto: WebhookSecretDto,
+  ) {
+    const user = this.assertSuperAdmin(rawUser);
+    await this.registry
+      .getPaymentConnectionsService()
+      .setWooWebhookSecret(user.tenantId, dto.secret, user.sub);
+    return { ok: true };
+  }
+
+  @Get('orders-mirror/webhook-status')
+  @ApiOperation({ summary: '¿Está configurado el secreto del webhook? No devuelve el secreto.' })
+  async webhookStatus(@CurrentUser() rawUser: SessionClaims | undefined) {
+    const user = this.assertSuperAdmin(rawUser);
+    const secret = await this.registry
+      .getPaymentConnectionsService()
+      .getWooWebhookSecret(user.tenantId);
+    return { configured: secret !== null };
   }
 
   @Get('orders-mirror/rules')
