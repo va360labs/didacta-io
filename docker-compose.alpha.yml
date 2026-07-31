@@ -126,8 +126,12 @@ services:
       # abajo). Setealo explícitamente solo si querés controlarlo desde tu
       # secrets manager.
       TENANT_SETTINGS_ENC_KEY: ${TENANT_SETTINGS_ENC_KEY:-}
-      API_PORT: ${API_PORT:-4000}
-      WEB_PORT: ${WEB_PORT:-3000}
+      # Puertos INTERNOS fijos: el mapeo de abajo publica 4000/3000 en los
+      # puertos del host que digan API_PORT/WEB_PORT del .env. Si estas vars
+      # entraran al contenedor, la app escucharía en un puerto distinto del
+      # que el mapeo espera y el healthcheck fallaría.
+      API_PORT: '4000'
+      WEB_PORT: '3000'
       # Storage por defecto: local en disco (volumen `didacta_data` montado
       # en /app/data). Si querés S3-compatible (MinIO local con --profile s3,
       # AWS, Hetzner Object Storage, etc.) seteá las S3_* en .env y descomentá
