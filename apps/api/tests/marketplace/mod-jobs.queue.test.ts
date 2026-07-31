@@ -116,9 +116,7 @@ describe('ModJobsQueueService.enqueue', () => {
       tenantId: 'tenant-456',
       tickIndex: 0,
     };
-    await expect(svc.enqueue(payload)).rejects.toThrow(
-      /no inicializada/i,
-    );
+    await expect(svc.enqueue(payload)).rejects.toThrow(/no inicializada/i);
   });
 
   it('encola con jobId único derivado de (module, job, tickIndex)', async () => {

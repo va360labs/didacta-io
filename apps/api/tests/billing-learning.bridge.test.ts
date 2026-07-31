@@ -80,17 +80,11 @@ describe('BillingLearningBridge.enroll', () => {
     e.metadata.tenantId = 'tenant-otro';
     await bridge.enroll(e);
 
-    expect(enrollFromPurchase).toHaveBeenCalledWith(
-      'tenant-otro',
-      'user-1',
-      'course-1',
-    );
+    expect(enrollFromPurchase).toHaveBeenCalledWith('tenant-otro', 'user-1', 'course-1');
   });
 
   it('idempotente: AlreadyEnrolledError se captura como no-op (webhook duplicado)', async () => {
-    const enrollFromPurchase = vi
-      .fn()
-      .mockRejectedValue(new AlreadyEnrolledError());
+    const enrollFromPurchase = vi.fn().mockRejectedValue(new AlreadyEnrolledError());
     const bridge = new BillingLearningBridge(
       makeRegistry(enrollFromPurchase),
       noopFactory,
@@ -116,11 +110,7 @@ describe('BillingLearningBridge.enroll', () => {
     const log = vi.fn();
     const logger = { ...noopLogger, log } as never;
     const enrollFromPurchase = vi.fn().mockResolvedValue({});
-    const bridge = new BillingLearningBridge(
-      makeRegistry(enrollFromPurchase),
-      noopFactory,
-      logger,
-    );
+    const bridge = new BillingLearningBridge(makeRegistry(enrollFromPurchase), noopFactory, logger);
 
     await bridge.enroll(event({ orderId: 'ord-99' }));
 

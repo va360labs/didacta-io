@@ -25,3 +25,8 @@ paths = [
     # Las claves PÚBLICAS embebidas son intencionales y NO son secreto
     '''packages/license-sdk/src/public-keys/.*\.pem''',
 ]
+regexes = [
+    # Secretos DUMMY del workflow de E2E (.github/workflows/e2e.yml): valores
+    # sintéticos autodescriptivos, no credenciales reales.
+    '''e2e-(test|refresh|auth)-secret-must-be-''',
+]

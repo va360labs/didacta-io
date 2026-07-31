@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  mergeSecretFields,
-  redactSensitiveFields,
-} from '../src/modules/redact-sensitive-fields';
+import { mergeSecretFields, redactSensitiveFields } from '../src/modules/redact-sensitive-fields';
 
 describe('redactSensitiveFields', () => {
   it('redacta el campo password manteniendo los demás (caso SMTP)', () => {

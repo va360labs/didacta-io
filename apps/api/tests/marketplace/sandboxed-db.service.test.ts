@@ -140,9 +140,7 @@ describe('extractCteAliases', () => {
     expect(aliases.has('c')).toBe(true);
   });
   it('soporta WITH RECURSIVE', () => {
-    const aliases = extractCteAliases(
-      'WITH RECURSIVE tree AS (SELECT 1) SELECT * FROM tree',
-    );
+    const aliases = extractCteAliases('WITH RECURSIVE tree AS (SELECT 1) SELECT * FROM tree');
     expect(aliases.has('tree')).toBe(true);
   });
   it('soporta column list en CTE', () => {
@@ -183,9 +181,7 @@ describe('extractTableRefs', () => {
     expect([...extractTableRefs('SELECT * FROM "mod_x_t"')]).toEqual(['mod_x_t']);
   });
   it('NO confunde JOIN USING (col) con table ref', () => {
-    const refs = extractTableRefs(
-      'SELECT * FROM mod_x_a a JOIN mod_x_b b USING (id)',
-    );
+    const refs = extractTableRefs('SELECT * FROM mod_x_a a JOIN mod_x_b b USING (id)');
     expect(refs.has('mod_x_a')).toBe(true);
     expect(refs.has('mod_x_b')).toBe(true);
     expect(refs.has('id')).toBe(false);
@@ -239,7 +235,8 @@ describe('validateSql — DB_INVALID_SQL', () => {
 
 describe('validateSql — DB_STATEMENT_TOO_LONG', () => {
   it('rechaza SQL > 50 KB', () => {
-    const huge = 'SELECT * FROM mod_example_jobs WHERE id IN (' +
+    const huge =
+      'SELECT * FROM mod_example_jobs WHERE id IN (' +
       Array.from({ length: 10000 }, (_, i) => `'${i}'`).join(',') +
       ')';
     expect(() => validateSql(huge, PREFIX)).toThrow(DbError);
@@ -258,31 +255,25 @@ describe('validateSql — DB_PREFIX_VIOLATION', () => {
     );
   });
   it('rechaza tabla de OTRO módulo', () => {
-    expect(() =>
-      validateSql('SELECT * FROM mod_other_jobs', PREFIX),
-    ).toThrowError(expect.objectContaining({ code: 'DB_PREFIX_VIOLATION' }));
+    expect(() => validateSql('SELECT * FROM mod_other_jobs', PREFIX)).toThrowError(
+      expect.objectContaining({ code: 'DB_PREFIX_VIOLATION' }),
+    );
   });
   it('rechaza JOIN cross-module', () => {
     expect(() =>
-      validateSql(
-        'SELECT * FROM mod_example_a a JOIN mod_other_b b ON a.id=b.aid',
-        PREFIX,
-      ),
+      validateSql('SELECT * FROM mod_example_a a JOIN mod_other_b b ON a.id=b.aid', PREFIX),
     ).toThrowError(expect.objectContaining({ code: 'DB_PREFIX_VIOLATION' }));
   });
   it('rechaza UPDATE de tabla del core', () => {
-    expect(() =>
-      validateSql('UPDATE "user" SET email = $1 WHERE id = $2', PREFIX),
-    ).toThrowError(expect.objectContaining({ code: 'DB_PREFIX_VIOLATION' }));
+    expect(() => validateSql('UPDATE "user" SET email = $1 WHERE id = $2', PREFIX)).toThrowError(
+      expect.objectContaining({ code: 'DB_PREFIX_VIOLATION' }),
+    );
   });
   it('NO rechaza CTE alias que no empieza con prefix', () => {
     // El CTE alias se excluye del check — eso es correcto, es un alias
     // local del query, no toca tabla real.
     expect(() =>
-      validateSql(
-        'WITH agg AS (SELECT count(*) FROM mod_example_jobs) SELECT * FROM agg',
-        PREFIX,
-      ),
+      validateSql('WITH agg AS (SELECT count(*) FROM mod_example_jobs) SELECT * FROM agg', PREFIX),
     ).not.toThrow();
   });
   it('NO se confunde con string literal "mod_other"', () => {
@@ -293,10 +284,7 @@ describe('validateSql — DB_PREFIX_VIOLATION', () => {
   });
   it('NO se confunde con extract(... FROM col)', () => {
     expect(() =>
-      validateSql(
-        'SELECT extract(year FROM created_at) FROM mod_example_jobs',
-        PREFIX,
-      ),
+      validateSql('SELECT extract(year FROM created_at) FROM mod_example_jobs', PREFIX),
     ).not.toThrow();
   });
 });
@@ -349,10 +337,7 @@ function makePrismaMock(opts: PrismaMockState = { txCount: 0, executed: [] }): {
 
   const prisma = {
     $transaction: vi.fn(
-      async (
-        cb: (tx: typeof tx) => Promise<unknown>,
-        _opts?: { timeout?: number },
-      ) => {
+      async (cb: (tx: typeof tx) => Promise<unknown>, _opts?: { timeout?: number }) => {
         state.txCount++;
         return cb(tx);
       },
@@ -542,9 +527,7 @@ describe('SandboxedDbService — transaction', () => {
     // Solo 1 $transaction (la outer); las 3 queries internas usan tx directamente.
     expect(state.txCount).toBe(1);
     // El tenant scope se setea UNA vez al inicio de la tx.
-    const tenantSets = state.executed.filter((e) =>
-      /SET LOCAL app\.current_tenant_id/.test(e.sql),
-    );
+    const tenantSets = state.executed.filter((e) => /SET LOCAL app\.current_tenant_id/.test(e.sql));
     expect(tenantSets.length).toBe(1);
   });
 });
@@ -582,11 +565,17 @@ describe('mapPostgresError', () => {
   });
 
   it('mensaje "duplicate key value" → DB_UNIQUE_VIOLATION', () => {
-    const err = mapPostgresError({ message: 'duplicate key value violates unique constraint "x_pkey"' }, 1000);
+    const err = mapPostgresError(
+      { message: 'duplicate key value violates unique constraint "x_pkey"' },
+      1000,
+    );
     expect(err.code).toBe('DB_UNIQUE_VIOLATION');
   });
   it('mensaje "foreign key constraint" → DB_FK_VIOLATION', () => {
-    const err = mapPostgresError({ message: 'insert or update violates foreign key constraint "x"' }, 1000);
+    const err = mapPostgresError(
+      { message: 'insert or update violates foreign key constraint "x"' },
+      1000,
+    );
     expect(err.code).toBe('DB_FK_VIOLATION');
   });
   it('mensaje "canceling statement due to statement timeout" → DB_TIMEOUT', () => {
@@ -611,9 +600,12 @@ describe('mapPostgresError', () => {
 describe('SandboxedDbService — error mapping en el flujo completo', () => {
   it('mapea unique violation desde $queryRawUnsafe', async () => {
     const { prisma, state } = makePrismaMock({ txCount: 0, executed: [] });
-    state.failNextQueryWith = Object.assign(new Error('duplicate key value violates unique constraint "mod_example_jobs_pkey"'), {
-      meta: { code: '23505' },
-    });
+    state.failNextQueryWith = Object.assign(
+      new Error('duplicate key value violates unique constraint "mod_example_jobs_pkey"'),
+      {
+        meta: { code: '23505' },
+      },
+    );
     const svc = new SandboxedDbService(prisma);
     const db = svc.build('mod.example', PREFIX, 'tnt');
 

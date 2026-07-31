@@ -73,7 +73,9 @@ describe('integridad del árbol de navegación', () => {
           broken.push(
             `${ext.name} → "${item.label}" (${item.href}) declara group='${item.group}', ` +
               `que NO existe en la navegación de un ${role}` +
-              (item.requiresRole ? ` (requiresRole='${item.requiresRole}')` : ' (sin requiresRole)'),
+              (item.requiresRole
+                ? ` (requiresRole='${item.requiresRole}')`
+                : ' (sin requiresRole)'),
           );
         }
       }
@@ -83,7 +85,8 @@ describe('integridad del árbol de navegación', () => {
       broken,
       'Items de módulo que el merge descarta en silencio (grupo destino inexistente ' +
         'para ese rol). O el módulo apunta al grupo equivocado, o el grupo debe ' +
-        'existir para ese rol en sidebar-nav.ts:\n  ' + broken.join('\n  '),
+        'existir para ese rol en sidebar-nav.ts:\n  ' +
+        broken.join('\n  '),
     ).toEqual([]);
   });
 

@@ -127,9 +127,7 @@ describe('AdminTenantsService · gate feat:multi_tenant.real (ART-010)', () => {
         name: dto.name,
         status: 'ACTIVE',
         createdAt: new Date(),
-        domains: [
-          { hostname: dto.primaryHostname, isPrimary: true, isVerified: true },
-        ],
+        domains: [{ hostname: dto.primaryHostname, isPrimary: true, isVerified: true }],
         _count: { users: 1 },
       });
       (prisma.tenant as unknown as { findFirst: typeof findFirstMock }).findFirst = findFirstMock;

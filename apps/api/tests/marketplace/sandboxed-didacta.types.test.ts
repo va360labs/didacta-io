@@ -41,9 +41,7 @@ describe('BlockedDidactaApi', () => {
   });
 
   it('courses.create rechaza con DIDACTA_PERMISSION_DENIED', async () => {
-    await expect(
-      blocked.courses.create({ slug: 'foo', title: 'Foo' }),
-    ).rejects.toMatchObject({
+    await expect(blocked.courses.create({ slug: 'foo', title: 'Foo' })).rejects.toMatchObject({
       code: 'DIDACTA_PERMISSION_DENIED',
     });
   });

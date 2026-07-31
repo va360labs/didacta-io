@@ -11,7 +11,9 @@ function src(relativePath: string, content = `-- sql for ${relativePath}`): Sour
 describe('normalizeMigrations', () => {
   describe('Prisma native layout (subdir/migration.sql) → flat', () => {
     it('flattens a single Prisma-native migration', () => {
-      const result = normalizeMigrations([src('prisma/migrations/20260503000000_init/migration.sql')]);
+      const result = normalizeMigrations([
+        src('prisma/migrations/20260503000000_init/migration.sql'),
+      ]);
 
       expect(result.errors).toEqual([]);
       expect(result.files).toHaveLength(1);
@@ -33,7 +35,9 @@ describe('normalizeMigrations', () => {
         'prisma/migrations/20260201000000_users.sql',
         'prisma/migrations/20260301000000_courses.sql',
       ]);
-      expect(result.files.find((f) => f.zipPath.endsWith('_init.sql'))!.content.toString()).toBe('-- init');
+      expect(result.files.find((f) => f.zipPath.endsWith('_init.sql'))!.content.toString()).toBe(
+        '-- init',
+      );
     });
   });
 
@@ -124,9 +128,7 @@ describe('normalizeMigrations', () => {
 
   describe('Error cases (fatal)', () => {
     it('rejects unexpected subdir under prisma/migrations/ (not Prisma native pattern)', () => {
-      const result = normalizeMigrations([
-        src('prisma/migrations/sub/folder/with/migration.sql'),
-      ]);
+      const result = normalizeMigrations([src('prisma/migrations/sub/folder/with/migration.sql')]);
 
       expect(result.files).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
@@ -167,9 +169,7 @@ describe('normalizeMigrations', () => {
     });
 
     it('rejects filenames with illegal characters in flat layout', () => {
-      const result = normalizeMigrations([
-        src('prisma/migrations/with spaces.sql'),
-      ]);
+      const result = normalizeMigrations([src('prisma/migrations/with spaces.sql')]);
 
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0]!.code).toBe('MODULE_LINT_FAILED');

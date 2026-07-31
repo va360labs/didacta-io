@@ -44,7 +44,13 @@ describe('RestConnector — request', () => {
   beforeEach(() => vi.useRealTimers());
 
   it('hace GET y devuelve JSON', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify([{ id: 1 }]), { status: 200, headers: { 'content-type': 'application/json' } }));
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify([{ id: 1 }]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
     const c = new RestConnector({
       baseUrl: 'https://example.test',
       auth: new ApplicationPasswordAuth('u', 'p'.repeat(8)),
@@ -57,7 +63,13 @@ describe('RestConnector — request', () => {
   });
 
   it('mappea 401 a AuthFailedError', async () => {
-    const fetchMock = vi.fn(async () => new Response('{"code":"unauthorized"}', { status: 401, headers: { 'content-type': 'application/json' } }));
+    const fetchMock = vi.fn(
+      async () =>
+        new Response('{"code":"unauthorized"}', {
+          status: 401,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
     const c = new RestConnector({
       baseUrl: 'https://example.test',
       auth: new ApplicationPasswordAuth('u', 'p'.repeat(8)),
@@ -72,9 +84,15 @@ describe('RestConnector — request', () => {
     const fetchMock = vi.fn(async () => {
       calls += 1;
       if (calls === 1) {
-        return new Response('{}', { status: 429, headers: { 'retry-after': '0', 'content-type': 'application/json' } });
+        return new Response('{}', {
+          status: 429,
+          headers: { 'retry-after': '0', 'content-type': 'application/json' },
+        });
       }
-      return new Response('{"ok":true}', { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response('{"ok":true}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
     });
     const c = new RestConnector({
       baseUrl: 'https://example.test',
@@ -125,7 +143,11 @@ describe('paginate', () => {
             : Array.from({ length: 50 }, (_v, i) => ({ id: 200 + i + 1 }));
       return new Response(JSON.stringify(items), {
         status: 200,
-        headers: { 'content-type': 'application/json', 'X-WP-Total': '250', 'X-WP-TotalPages': '3' },
+        headers: {
+          'content-type': 'application/json',
+          'X-WP-Total': '250',
+          'X-WP-TotalPages': '3',
+        },
       });
     });
     const c = new RestConnector({
@@ -136,7 +158,10 @@ describe('paginate', () => {
     });
     const batches: number[] = [];
     let total: number | undefined;
-    for await (const b of paginate<{ id: number }>(c, '/wp-json/wp/v2/users', { strategy: 'page-number', perPage: 100 })) {
+    for await (const b of paginate<{ id: number }>(c, '/wp-json/wp/v2/users', {
+      strategy: 'page-number',
+      perPage: 100,
+    })) {
       batches.push(b.items.length);
       total = b.total;
       if (b.done) break;

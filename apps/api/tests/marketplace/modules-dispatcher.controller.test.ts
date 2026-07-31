@@ -21,7 +21,9 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 /// user poblado; sin Bearer / con Bearer inválido → user null y el
 /// handler decide qué hacer.
 
-function makeReq(overrides: Partial<FastifyRequest> & { headers?: Record<string, string> }): FastifyRequest {
+function makeReq(
+  overrides: Partial<FastifyRequest> & { headers?: Record<string, string> },
+): FastifyRequest {
   const { headers, ...rest } = overrides;
   return {
     method: 'GET',
@@ -36,7 +38,11 @@ function makeReply(): {
   reply: FastifyReply;
   state: { status: number | undefined; body: unknown; headers: Record<string, string> };
 } {
-  const state = { status: undefined as number | undefined, body: undefined as unknown, headers: {} as Record<string, string> };
+  const state = {
+    status: undefined as number | undefined,
+    body: undefined as unknown,
+    headers: {} as Record<string, string>,
+  };
   const reply = {
     status: vi.fn(function (this: any, s: number) {
       state.status = s;
@@ -55,7 +61,13 @@ function makeReply(): {
 }
 
 function claims(overrides: Partial<SessionClaims> = {}): SessionClaims {
-  return { sub: 'u-1', tenantId: 't-1', roles: ['alumno'], mfaVerified: true, ...overrides } as SessionClaims;
+  return {
+    sub: 'u-1',
+    tenantId: 't-1',
+    roles: ['alumno'],
+    mfaVerified: true,
+    ...overrides,
+  } as SessionClaims;
 }
 
 /// Doble del TokenService. Acepta un mapa `token → claims` para los
@@ -123,7 +135,19 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'GET', path: '/items/:id', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      tokens,
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({
       url: '/api/v1/modules/example/items/42',
       method: 'GET',
@@ -140,12 +164,22 @@ describe('ModulesDispatcherController.dispatch', () => {
 
   it('404 si no hay handler', async () => {
     const router = new ModuleRouterService();
-    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      makeTokens(),
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({ url: '/api/v1/modules/ghost/foo' });
     const { reply } = makeReply();
-    await expect(ctrl.dispatch(req, reply, undefined)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(ctrl.dispatch(req, reply, undefined)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('passes query, body y user al handler cuando el Bearer es válido', async () => {
@@ -155,7 +189,19 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'POST', path: '/echo', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims({ roles: ['formador'] }) });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      tokens,
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({
       url: '/api/v1/modules/example/echo?a=1',
       method: 'POST',
@@ -178,7 +224,19 @@ describe('ModulesDispatcherController.dispatch', () => {
     router.registerModule('mod.example', '/modules/example', [
       { method: 'GET', path: '/public', handler },
     ]);
-    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      makeTokens(),
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({ url: '/api/v1/modules/example/public' });
     const { reply } = makeReply();
     await ctrl.dispatch(req, reply, undefined);
@@ -191,7 +249,19 @@ describe('ModulesDispatcherController.dispatch', () => {
     router.registerModule('mod.example', '/modules/example', [
       { method: 'GET', path: '/public', handler },
     ]);
-    const ctrl = new ModulesDispatcherController(router, makeTokens(), httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      makeTokens(),
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({
       url: '/api/v1/modules/example/public',
       headers: { authorization: 'Bearer this-is-garbage' },
@@ -207,7 +277,19 @@ describe('ModulesDispatcherController.dispatch', () => {
     router.registerModule('mod.example', '/modules/example', [
       { method: 'GET', path: '/public', handler },
     ]);
-    const ctrl = new ModulesDispatcherController(router, makeTokens({ [VALID_TOKEN]: claims() }), httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      makeTokens({ [VALID_TOKEN]: claims() }),
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({
       url: '/api/v1/modules/example/public',
       headers: { authorization: `Basic ${VALID_TOKEN}` },
@@ -224,7 +306,19 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'GET', path: '/public', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      tokens,
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({
       url: '/api/v1/modules/example/public',
       headers: { authorization: 'Bearer    ' },
@@ -233,7 +327,7 @@ describe('ModulesDispatcherController.dispatch', () => {
     await ctrl.dispatch(req, reply, undefined);
     expect(handler.mock.calls[0][0].user).toBeNull();
     // Y NO debe haber intentado verificar un token vacío.
-    expect((tokens.verifyAccess as any)).not.toHaveBeenCalled();
+    expect(tokens.verifyAccess as any).not.toHaveBeenCalled();
   });
 
   it('500 si el handler lanza', async () => {
@@ -248,15 +342,25 @@ describe('ModulesDispatcherController.dispatch', () => {
       },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      tokens,
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({
       url: '/api/v1/modules/example/boom',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
     });
     const { reply } = makeReply();
-    await expect(ctrl.dispatch(req, reply, undefined)).rejects.toBeInstanceOf(
-      HttpException,
-    );
+    await expect(ctrl.dispatch(req, reply, undefined)).rejects.toBeInstanceOf(HttpException);
   });
 
   it('handler con headers personalizados los aplica al reply', async () => {
@@ -273,7 +377,19 @@ describe('ModulesDispatcherController.dispatch', () => {
       },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      tokens,
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({
       url: '/api/v1/modules/example/with-headers',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -290,7 +406,19 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'DELETE', path: '/x', handler: async () => undefined as never },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      tokens,
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({
       url: '/api/v1/modules/example/x',
       method: 'DELETE',
@@ -313,7 +441,19 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'GET', path: '/probe', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      tokens,
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({
       url: '/api/v1/modules/example/probe',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -351,7 +491,19 @@ describe('ModulesDispatcherController.dispatch', () => {
       },
     );
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      tokens,
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({
       url: '/api/v1/modules/zoom/probe',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -378,7 +530,19 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'GET', path: '/probe', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      tokens,
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({
       url: '/api/v1/modules/example/probe',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -411,7 +575,19 @@ describe('ModulesDispatcherController.dispatch', () => {
       },
     );
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      tokens,
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({
       url: '/api/v1/modules/example/probe',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -442,7 +618,19 @@ describe('ModulesDispatcherController.dispatch', () => {
       { method: 'GET', path: '/probe', handler },
     ]);
     const tokens = makeTokens({ [VALID_TOKEN]: claims() });
-    const ctrl = new ModulesDispatcherController(router, tokens, httpSvc, rateLimiter, dbSvc, didactaFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      tokens,
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({
       url: '/api/v1/modules/example/probe',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },
@@ -484,11 +672,23 @@ describe('ModulesDispatcherController.dispatch', () => {
     // invocación. Verifica que el dispatcher pasó moduleId + didactaConfig.
     const buildSpy = vi.fn(() => ({
       users: {
-        upsertByExternalRef: vi.fn(async () => ({ id: 'u-1' } as any)),
+        upsertByExternalRef: vi.fn(async () => ({ id: 'u-1' }) as any),
       },
     }));
     const fakeFactory = { build: buildSpy } as any;
-    const ctrl = new ModulesDispatcherController(router, makeTokens({ [VALID_TOKEN]: claims() }), httpSvc, rateLimiter, dbSvc, fakeFactory, jobsFactory, secretsFactory, moduleRegistry, contextFactory, tenantContext);
+    const ctrl = new ModulesDispatcherController(
+      router,
+      makeTokens({ [VALID_TOKEN]: claims() }),
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      fakeFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+    );
     const req = makeReq({
       url: '/api/v1/modules/example/probe',
       headers: { authorization: `Bearer ${VALID_TOKEN}` },

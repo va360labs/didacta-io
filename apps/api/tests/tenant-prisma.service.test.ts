@@ -39,9 +39,7 @@ describe('TenantPrismaService', () => {
     it('lanza error fuera de contexto de tenant', async () => {
       const { service } = createMocks();
 
-      await expect(
-        service.withTenant(async () => 'result'),
-      ).rejects.toThrow(/no disponible/);
+      await expect(service.withTenant(async () => 'result')).rejects.toThrow(/no disponible/);
     });
 
     it('retorna el resultado del callback', async () => {

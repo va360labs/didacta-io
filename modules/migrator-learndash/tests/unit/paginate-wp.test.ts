@@ -12,7 +12,9 @@ interface Item {
   title: string;
 }
 
-function mockHttp(handler: (url: string) => { status: number; body: string; headers?: Record<string, string> }) {
+function mockHttp(
+  handler: (url: string) => { status: number; body: string; headers?: Record<string, string> },
+) {
   const make = async (url: string) => {
     const r = handler(url);
     return {
@@ -29,7 +31,10 @@ describe('paginateWp', () => {
   it('itera todas las páginas leyendo X-WP-TotalPages', async () => {
     const calls: string[] = [];
     const pages: Record<number, Item[]> = {
-      1: [{ id: 1, title: 'a' }, { id: 2, title: 'b' }],
+      1: [
+        { id: 1, title: 'a' },
+        { id: 2, title: 'b' },
+      ],
       2: [{ id: 3, title: 'c' }],
     };
     const http = mockHttp((url) => {

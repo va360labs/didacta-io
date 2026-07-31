@@ -88,19 +88,14 @@ describe('ModuleMigrationService.extractMigrations', () => {
     });
     const svc = new ModuleMigrationService(makePrismaMock().prisma);
     const files = svc.extractMigrations(buffer);
-    expect(files.map((f) => f.filename)).toEqual([
-      '20260502000001_a.sql',
-      '20260502000002_b.sql',
-    ]);
+    expect(files.map((f) => f.filename)).toEqual(['20260502000001_a.sql', '20260502000002_b.sql']);
   });
 
   it('rechaza paths con traversal o subdirs', () => {
     const zip = new AdmZip();
     zip.addFile('prisma/migrations/sub/foo.sql', Buffer.from('-- nested'));
     const svc = new ModuleMigrationService(makePrismaMock().prisma);
-    expect(() => svc.extractMigrations(zip.toBuffer())).toThrowError(
-      /Path de migration inválido/,
-    );
+    expect(() => svc.extractMigrations(zip.toBuffer())).toThrowError(/Path de migration inválido/);
   });
 });
 
@@ -132,9 +127,7 @@ describe('ModuleMigrationService.applyMigrations', () => {
   it('todas ya aplicadas: no abre transaction', async () => {
     const mock = makePrismaMock();
     const svc = new ModuleMigrationService(mock.prisma);
-    const files = [
-      { path: '', filename: '01_a.sql', sql: 'CREATE TABLE mod_example_a (id INT);' },
-    ];
+    const files = [{ path: '', filename: '01_a.sql', sql: 'CREATE TABLE mod_example_a (id INT);' }];
     const result = await svc.applyMigrations(files, PREFIX, ['01_a.sql']);
     expect(result.applied).toEqual([]);
     expect(result.skipped).toEqual(['01_a.sql']);
@@ -144,9 +137,7 @@ describe('ModuleMigrationService.applyMigrations', () => {
   it('lint falla → no abre transaction', async () => {
     const mock = makePrismaMock();
     const svc = new ModuleMigrationService(mock.prisma);
-    const files = [
-      { path: '', filename: 'bad.sql', sql: 'CREATE TABLE other_thing (id INT);' },
-    ];
+    const files = [{ path: '', filename: 'bad.sql', sql: 'CREATE TABLE other_thing (id INT);' }];
     await expect(svc.applyMigrations(files, PREFIX, [])).rejects.toMatchObject({
       code: 'MODULE_LINT_FAILED',
     });
@@ -177,9 +168,7 @@ describe('ModuleMigrationService.applyMigrations', () => {
   it('mensaje de lint enriquecido con filename', async () => {
     const mock = makePrismaMock();
     const svc = new ModuleMigrationService(mock.prisma);
-    const files = [
-      { path: '', filename: 'broken.sql', sql: 'CREATE TABLE other_thing (id INT);' },
-    ];
+    const files = [{ path: '', filename: 'broken.sql', sql: 'CREATE TABLE other_thing (id INT);' }];
     await expect(svc.applyMigrations(files, PREFIX, [])).rejects.toMatchObject({
       code: 'MODULE_LINT_FAILED',
       message: expect.stringMatching(/^broken\.sql:/),

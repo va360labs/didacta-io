@@ -68,9 +68,7 @@ describe('SuperUsersService · listings cross-tenant (follow-up multi_tenant.rea
 
     it('rechaza con CapabilityRequiredError sin tocar Prisma', async () => {
       const prisma = makePrisma([]);
-      const svc = new SuperUsersService(
-        ...([prisma, license] as unknown as ServiceCtor),
-      );
+      const svc = new SuperUsersService(...([prisma, license] as unknown as ServiceCtor));
       await expect(svc.list({})).rejects.toThrow(CapabilityRequiredError);
       expect(prisma.user.findMany).not.toHaveBeenCalled();
       expect(prisma.user.count).not.toHaveBeenCalled();
@@ -85,11 +83,13 @@ describe('SuperUsersService · listings cross-tenant (follow-up multi_tenant.rea
     it('devuelve usuarios de todos los tenants con info de tenant inline', async () => {
       const prisma = makePrisma([
         makeUser({ id: 'u-1', tenantId: 't-1', tenant: { id: 't-1', slug: 'acme', name: 'Acme' } }),
-        makeUser({ id: 'u-2', tenantId: 't-2', tenant: { id: 't-2', slug: 'globex', name: 'Globex' } }),
+        makeUser({
+          id: 'u-2',
+          tenantId: 't-2',
+          tenant: { id: 't-2', slug: 'globex', name: 'Globex' },
+        }),
       ]);
-      const svc = new SuperUsersService(
-        ...([prisma, license] as unknown as ServiceCtor),
-      );
+      const svc = new SuperUsersService(...([prisma, license] as unknown as ServiceCtor));
       const result = await svc.list({});
       expect(result.items).toHaveLength(2);
       expect(result.items[0]).toMatchObject({ id: 'u-1', tenantId: 't-1', tenantSlug: 'acme' });
@@ -99,9 +99,7 @@ describe('SuperUsersService · listings cross-tenant (follow-up multi_tenant.rea
 
     it('aplica filtro tenantId al where de Prisma', async () => {
       const prisma = makePrisma([]);
-      const svc = new SuperUsersService(
-        ...([prisma, license] as unknown as ServiceCtor),
-      );
+      const svc = new SuperUsersService(...([prisma, license] as unknown as ServiceCtor));
       await svc.list({ tenantId: 't-99' });
       const args = prisma.user.findMany.mock.calls[0][0];
       expect(args.where).toMatchObject({ tenantId: 't-99', deletedAt: null });
@@ -109,9 +107,7 @@ describe('SuperUsersService · listings cross-tenant (follow-up multi_tenant.rea
 
     it('aplica filtro search a email y name (case-insensitive)', async () => {
       const prisma = makePrisma([]);
-      const svc = new SuperUsersService(
-        ...([prisma, license] as unknown as ServiceCtor),
-      );
+      const svc = new SuperUsersService(...([prisma, license] as unknown as ServiceCtor));
       await svc.list({ search: 'alice' });
       const args = prisma.user.findMany.mock.calls[0][0];
       expect(args.where.OR).toEqual([
@@ -122,9 +118,7 @@ describe('SuperUsersService · listings cross-tenant (follow-up multi_tenant.rea
 
     it('limita entre 1 y 200 (default 50)', async () => {
       const prisma = makePrisma([]);
-      const svc = new SuperUsersService(
-        ...([prisma, license] as unknown as ServiceCtor),
-      );
+      const svc = new SuperUsersService(...([prisma, license] as unknown as ServiceCtor));
       await svc.list({});
       expect(prisma.user.findMany.mock.calls[0][0].take).toBe(50);
       await svc.list({ limit: 9999 });
@@ -138,9 +132,7 @@ describe('SuperUsersService · listings cross-tenant (follow-up multi_tenant.rea
         makeUser({ id: 'u-1', roles: [{ role: { name: 'tenant_admin' } }] }),
         makeUser({ id: 'u-2', roles: [{ role: { name: 'alumno' } }] }),
       ]);
-      const svc = new SuperUsersService(
-        ...([prisma, license] as unknown as ServiceCtor),
-      );
+      const svc = new SuperUsersService(...([prisma, license] as unknown as ServiceCtor));
       const result = await svc.list({ role: 'alumno' });
       expect(result.items).toHaveLength(1);
       expect(result.items[0].id).toBe('u-2');

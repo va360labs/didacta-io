@@ -28,7 +28,9 @@ describe('helpers', () => {
   it('mapWpRoles aplica defaults', () => {
     expect(mapWpRoles(undefined)).toEqual(['student']);
     expect(mapWpRoles(['subscriber'])).toEqual(['student']);
-    expect(mapWpRoles(['group_leader', 'subscriber'])).toEqual(expect.arrayContaining(['student', 'group_leader']));
+    expect(mapWpRoles(['group_leader', 'subscriber'])).toEqual(
+      expect.arrayContaining(['student', 'group_leader']),
+    );
   });
   it('mapLdQuestionType cubre todos los tipos LearnDash', () => {
     expect(mapLdQuestionType('single').type).toBe('single');
@@ -47,7 +49,13 @@ describe('helpers', () => {
 
 describe('mapUser', () => {
   it('mapea usuario válido', () => {
-    const result = mapUser({ id: 1, email: 'foo@bar.com', name: 'Foo Bar', username: 'foo', roles: ['subscriber'] });
+    const result = mapUser({
+      id: 1,
+      email: 'foo@bar.com',
+      name: 'Foo Bar',
+      username: 'foo',
+      roles: ['subscriber'],
+    });
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.canonical.email).toBe('foo@bar.com');
@@ -64,7 +72,12 @@ describe('mapUser', () => {
 
 describe('mapCourse', () => {
   it('decodifica entidades HTML del título', () => {
-    const result = mapCourse({ id: 24, slug: 'cur', title: { rendered: 'Programación &amp; Diseño' }, status: 'publish' });
+    const result = mapCourse({
+      id: 24,
+      slug: 'cur',
+      title: { rendered: 'Programación &amp; Diseño' },
+      status: 'publish',
+    });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.canonical.title).toBe('Programación & Diseño');
   });

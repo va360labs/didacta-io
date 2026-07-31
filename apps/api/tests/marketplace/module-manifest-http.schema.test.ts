@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  HTTP_CAPS,
-  moduleManifestSchema,
-} from '../../src/marketplace/module-manifest.schema';
+import { HTTP_CAPS, moduleManifestSchema } from '../../src/marketplace/module-manifest.schema';
 
 /// Tests del bloque `http` añadido al manifest en alpha.49 (HTTP-002).
 ///

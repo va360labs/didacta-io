@@ -14,7 +14,10 @@ import { routes } from '../../src/index.js';
 
 type AnyHandler = (typeof routes)[number]['handler'];
 
-function buildReq(user: { sub: string; tenantId: string; roles: string[] } | null, body: unknown = {}) {
+function buildReq(
+  user: { sub: string; tenantId: string; roles: string[] } | null,
+  body: unknown = {},
+) {
   return {
     method: 'POST' as const,
     path: '/preflight',
@@ -51,7 +54,11 @@ describe('migrator-learndash · role gate', () => {
       expect(route, `ruta ${key} no encontrada`).toBeDefined();
       const handler = route!.handler as AnyHandler;
       const studentUser = { sub: 'u-1', tenantId: 't-1', roles: ['alumno'] };
-      const res = await handler({ ...buildReq(studentUser), method: route!.method, path: route!.path });
+      const res = await handler({
+        ...buildReq(studentUser),
+        method: route!.method,
+        path: route!.path,
+      });
       expect(res.status).toBe(403);
     });
 
@@ -60,7 +67,11 @@ describe('migrator-learndash · role gate', () => {
       const route = routes.find((r) => r.method === method && r.path === path);
       const handler = route!.handler as AnyHandler;
       const trainerUser = { sub: 'u-2', tenantId: 't-1', roles: ['formador'] };
-      const res = await handler({ ...buildReq(trainerUser), method: route!.method, path: route!.path });
+      const res = await handler({
+        ...buildReq(trainerUser),
+        method: route!.method,
+        path: route!.path,
+      });
       expect(res.status).toBe(403);
     });
   }
@@ -77,7 +88,11 @@ describe('migrator-learndash · role gate', () => {
     const adminUser = { sub: 'u-3', tenantId: 't-1', roles: ['tenant_admin'] };
     // Sin credentials válidas: el handler responde 400 VALIDATION_ERROR,
     // lo que prueba que el gate de rol ya pasó (no rebota en 403).
-    const res = await route!.handler({ ...buildReq(adminUser, {}), method: 'POST', path: '/preflight' });
+    const res = await route!.handler({
+      ...buildReq(adminUser, {}),
+      method: 'POST',
+      path: '/preflight',
+    });
     expect(res.status).toBe(400);
     expect((res.body as { code: string }).code).toBe('VALIDATION_ERROR');
   });
@@ -103,9 +118,15 @@ describe('migrator-learndash · role gate', () => {
 /// leyendo X-WP-Total. Cero stubs.
 describe('migrator-learndash · POST /preflight con http mockeado', () => {
   const superAdmin = { sub: 'u-1', tenantId: 't-1', roles: ['super_admin'] };
-  const creds = { baseUrl: 'https://wp.example.com', username: 'admin', appPassword: 'app pass-1234' };
+  const creds = {
+    baseUrl: 'https://wp.example.com',
+    username: 'admin',
+    appPassword: 'app pass-1234',
+  };
 
-  function makeHttp(handler: (url: string) => { status: number; body?: string; headers?: Record<string, string> }) {
+  function makeHttp(
+    handler: (url: string) => { status: number; body?: string; headers?: Record<string, string> },
+  ) {
     const make = async (url: string) => {
       const r = handler(url);
       return {
@@ -166,7 +187,14 @@ describe('migrator-learndash · POST /preflight con http mockeado', () => {
     expect(body.ok).toBe(true);
     expect(body.siteName).toBe('Mi WordPress');
     expect(body.wpVersion).toBe('6.4.1');
-    expect(body.counts).toEqual({ courses: 12, lessons: 56, topics: 88, quizzes: 23, groups: 4, users: 120 });
+    expect(body.counts).toEqual({
+      courses: 12,
+      lessons: 56,
+      topics: 88,
+      quizzes: 23,
+      groups: 4,
+      users: 120,
+    });
     expect(body.capabilities.learndashV1).toBe(true);
     expect(body.warnings).toEqual([]);
     // 8 reqs: /wp-json/ + ldlms/v1 + 6 CPT
@@ -177,7 +205,13 @@ describe('migrator-learndash · POST /preflight con http mockeado', () => {
     const route = routes.find((r) => r.method === 'POST' && r.path === '/preflight')!;
     const http = makeHttp(() => ({ status: 401, body: '' }));
     const res = await route.handler({
-      method: 'POST', path: '/preflight', params: {}, query: {}, body: { credentials: creds }, user: superAdmin, http,
+      method: 'POST',
+      path: '/preflight',
+      params: {},
+      query: {},
+      body: { credentials: creds },
+      user: superAdmin,
+      http,
     });
     expect(res.status).toBe(401);
     expect((res.body as { code: string }).code).toBe('WP_AUTH_FAILED');
@@ -191,10 +225,19 @@ describe('migrator-learndash · POST /preflight con http mockeado', () => {
       return { status: 200, body: '[]', headers: { 'x-wp-total': '5' } };
     });
     const res = await route.handler({
-      method: 'POST', path: '/preflight', params: {}, query: {}, body: { credentials: creds }, user: superAdmin, http,
+      method: 'POST',
+      path: '/preflight',
+      params: {},
+      query: {},
+      body: { credentials: creds },
+      user: superAdmin,
+      http,
     });
     expect(res.status).toBe(200);
-    const body = res.body as { capabilities: { learndashV1: boolean }; warnings: Array<{ code: string }> };
+    const body = res.body as {
+      capabilities: { learndashV1: boolean };
+      warnings: Array<{ code: string }>;
+    };
     expect(body.capabilities.learndashV1).toBe(false);
     expect(body.warnings.some((w) => w.code === 'LEARNDASH_REST_UNAVAILABLE')).toBe(true);
   });
@@ -208,10 +251,19 @@ describe('migrator-learndash · POST /preflight con http mockeado', () => {
       return { status: 200, body: '[]', headers: { 'x-wp-total': '7' } };
     });
     const res = await route.handler({
-      method: 'POST', path: '/preflight', params: {}, query: {}, body: { credentials: creds }, user: superAdmin, http,
+      method: 'POST',
+      path: '/preflight',
+      params: {},
+      query: {},
+      body: { credentials: creds },
+      user: superAdmin,
+      http,
     });
     expect(res.status).toBe(200);
-    const body = res.body as { counts: Record<string, number | string>; warnings: Array<{ code: string }> };
+    const body = res.body as {
+      counts: Record<string, number | string>;
+      warnings: Array<{ code: string }>;
+    };
     expect(body.counts['topics']).toBe('unknown');
     expect(body.counts['courses']).toBe(7);
     expect(body.warnings.some((w) => w.code === 'CPT_NOT_FOUND')).toBe(true);

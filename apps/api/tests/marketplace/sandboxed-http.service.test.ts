@@ -192,11 +192,12 @@ function mockFetchWith(handler: (url: string, init: RequestInit) => Response | P
 
 describe('SandboxedHttpService — happy path', () => {
   it('GET pasa allowlist + SSRF y devuelve response normalizado', async () => {
-    mockFetchWith(() =>
-      new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { 'content-type': 'application/json', 'x-wp-total': '42' },
-      }),
+    mockFetchWith(
+      () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json', 'x-wp-total': '42' },
+        }),
     );
     // Necesitamos un host público real (DNS lookup ocurre). 1.1.1.1 es IP literal pública.
     const http = svc.build('mod.test', HTTP_OPEN);
@@ -255,9 +256,9 @@ describe('SandboxedHttpService — body cap', () => {
       return new Response(stream, { status: 200 });
     });
     const http = svc.build('mod.test', HTTP_OPEN);
-    await expect(
-      http.get('https://1.1.1.1/x', { maxBodyBytes: 1024 }),
-    ).rejects.toMatchObject({ code: 'HTTP_BODY_TOO_LARGE' });
+    await expect(http.get('https://1.1.1.1/x', { maxBodyBytes: 1024 })).rejects.toMatchObject({
+      code: 'HTTP_BODY_TOO_LARGE',
+    });
   });
 
   it('clamp del cap del request al cap del manifest (no permite superar)', async () => {
@@ -295,9 +296,9 @@ describe('SandboxedHttpService — timeout', () => {
         }),
     );
     const http = svc.build('mod.test', HTTP_OPEN);
-    await expect(
-      http.get('https://1.1.1.1/slow', { timeoutMs: 50 }),
-    ).rejects.toMatchObject({ code: 'HTTP_TIMEOUT' });
+    await expect(http.get('https://1.1.1.1/slow', { timeoutMs: 50 })).rejects.toMatchObject({
+      code: 'HTTP_TIMEOUT',
+    });
   });
 
   it('clampa timeoutMs al cap del core (60s)', async () => {

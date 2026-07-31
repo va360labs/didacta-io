@@ -59,27 +59,30 @@ function makeWorkerHarness(
     recordTickDuration: vi.fn(),
   } as unknown as ModJobsMetrics;
 
-  const dbBuild = vi.fn(() => ({ kind: 'real-db' } as unknown));
-  const dbService = { build: dbBuild } as unknown as import('../../src/marketplace/sandboxed-db.service').SandboxedDbService;
+  const dbBuild = vi.fn(() => ({ kind: 'real-db' }) as unknown);
+  const dbService = {
+    build: dbBuild,
+  } as unknown as import('../../src/marketplace/sandboxed-db.service').SandboxedDbService;
 
   const httpService = {
-    build: vi.fn(() => ({ kind: 'real-http' } as unknown)),
+    build: vi.fn(() => ({ kind: 'real-http' }) as unknown),
   } as unknown as import('../../src/marketplace/sandboxed-http.service').SandboxedHttpService;
 
-  const rateLimiter = {} as unknown as import('../../src/marketplace/rate-limiter.service').RateLimiterService;
+  const rateLimiter =
+    {} as unknown as import('../../src/marketplace/rate-limiter.service').RateLimiterService;
 
   const didactaFactory = {
-    build: vi.fn(() => ({ kind: 'real-didacta' } as unknown)),
+    build: vi.fn(() => ({ kind: 'real-didacta' }) as unknown),
   } as unknown as import('../../src/marketplace/sandboxed-didacta.service').ScopedDidactaApiFactory;
 
   const moduleRegistry = {
-    getCoursesService: () => ({} as never),
-    getLearningService: () => ({} as never),
-    getAssessmentsService: () => ({} as never),
+    getCoursesService: () => ({}) as never,
+    getLearningService: () => ({}) as never,
+    getAssessmentsService: () => ({}) as never,
   } as unknown as import('../../src/modules/module-registry.service').ModuleRegistryService;
 
   const contextFactory = {
-    getStorage: () => ({} as never),
+    getStorage: () => ({}) as never,
   } as unknown as import('../../src/modules/module-context.factory').ModuleContextFactory;
 
   const tenantContext = new TenantContextService();
@@ -100,7 +103,14 @@ function makeWorkerHarness(
     didactaFactory,
     // alpha.56 — ScopedSecretsApiFactory stub; los tests del worker no
     // ejercen ctx.secrets (registran entries con requiresSecrets=false).
-    { resolve: () => ({ get: async () => null, set: async () => undefined, delete: async () => undefined, list: async () => [] }) } as never,
+    {
+      resolve: () => ({
+        get: async () => null,
+        set: async () => undefined,
+        delete: async () => undefined,
+        list: async () => [],
+      }),
+    } as never,
     moduleRegistry,
     contextFactory,
     tenantContext,
@@ -108,7 +118,15 @@ function makeWorkerHarness(
     logger,
   );
 
-  return { worker, registry, enqueue, metrics, tenantContext, dbBuild, didactaBuild: didactaFactory.build };
+  return {
+    worker,
+    registry,
+    enqueue,
+    metrics,
+    tenantContext,
+    dbBuild,
+    didactaBuild: didactaFactory.build,
+  };
 }
 
 function makeJob(payload: Partial<ModJobPayload> = {}): Job<ModJobPayload> {
@@ -197,10 +215,7 @@ describe('ModJobsWorkerService.processTick — continue', () => {
     const handler = vi.fn(async () => ({ status: 'continue' as const, delaySec: 30 }));
     const { worker, enqueue } = makeWorkerHarness(handler);
     await worker.processTick(makeJob());
-    expect(enqueue).toHaveBeenCalledWith(
-      expect.any(Object),
-      { delaySec: 30 },
-    );
+    expect(enqueue).toHaveBeenCalledWith(expect.any(Object), { delaySec: 30 });
   });
 });
 
@@ -271,10 +286,9 @@ describe('ModJobsWorkerService.processTick — timeout 5min', () => {
     // El timeout duro es 5min → avanzamos un poco más.
     await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 100);
     await promise;
-    expect(enqueue).toHaveBeenCalledWith(
-      expect.objectContaining({ tickIndex: 1 }),
-      { delaySec: 10 },
-    );
+    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ tickIndex: 1 }), {
+      delaySec: 10,
+    });
     expect(metrics.recordTick).toHaveBeenCalledWith('mod.test', 'timeout');
     vi.useRealTimers();
   });
@@ -327,7 +341,14 @@ describe('ModJobsWorkerService.processTick — TenantContext', () => {
       { build: vi.fn() } as never,
       {} as never,
       { build: vi.fn() } as never,
-      { resolve: () => ({ get: async () => null, set: async () => undefined, delete: async () => undefined, list: async () => [] }) } as never,
+      {
+        resolve: () => ({
+          get: async () => null,
+          set: async () => undefined,
+          delete: async () => undefined,
+          list: async () => [],
+        }),
+      } as never,
       {} as never,
       { getStorage: () => ({}) } as never,
       tenantContext,
@@ -335,9 +356,7 @@ describe('ModJobsWorkerService.processTick — TenantContext', () => {
       { log: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as never,
     );
 
-    await worker.processTick(
-      makeJob({ tenantId: 'tenant-xyz', jobId: 'job-42', tickIndex: 2 }),
-    );
+    await worker.processTick(makeJob({ tenantId: 'tenant-xyz', jobId: 'job-42', tickIndex: 2 }));
 
     expect(capturedTenantId).toBe('tenant-xyz');
     expect(capturedTraceId).toBe('mod-job-job-42-2');

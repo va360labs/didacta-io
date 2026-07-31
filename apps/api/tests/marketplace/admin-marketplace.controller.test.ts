@@ -102,9 +102,9 @@ describe('AdminMarketplaceController.findOne / uninstall', () => {
   it('findOne devuelve 404 NOT_FOUND si no existe', async () => {
     const installed = { findByName: vi.fn(async () => null) };
     const ctrl = makeController({ installed });
-    await expect(
-      ctrl.findOne(userWith(['super_admin']), 'mod.ghost'),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(ctrl.findOne(userWith(['super_admin']), 'mod.ghost')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
   });
 
   it('uninstall borra el row si existe', async () => {
@@ -121,9 +121,9 @@ describe('AdminMarketplaceController.findOne / uninstall', () => {
   it('uninstall lanza NOT_FOUND si no existe', async () => {
     const installed = { findByName: vi.fn(async () => null), deleteById: vi.fn() };
     const ctrl = makeController({ installed });
-    await expect(
-      ctrl.uninstall(userWith(['super_admin']), 'mod.ghost'),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(ctrl.uninstall(userWith(['super_admin']), 'mod.ghost')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
     expect(installed.deleteById).not.toHaveBeenCalled();
   });
 
