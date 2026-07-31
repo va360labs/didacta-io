@@ -70,7 +70,7 @@ model TenantDomain {
   id         String   @id @default(uuid()) @db.Uuid
   tenantId   String   @map("tenant_id") @db.Uuid
   /// Host completo en lowercase, sin puerto ni path.
-  /// Ejemplos: "aprende.va360labs.com", "didacta.local", "localhost".
+  /// Ejemplos: "aula.academia.com", "didacta.local", "localhost".
   hostname   String   @unique @db.VarChar(253)
   /// El primary identifica el dominio canónico para emails y enlaces.
   /// Solo uno por tenant tiene `isPrimary=true`.
@@ -966,7 +966,7 @@ model ModCoursesCourse {
   status                CourseStatus @default(DRAFT)
   category              String?
   /// URL de una página de ventas externa donde se compra el curso (ej.
-  /// "https://va360.academy/curso1"). Si está set, la ficha del curso muestra
+  /// "https://academia.ejemplo.com/curso"). Si está set, la ficha del curso muestra
   /// el CTA "Comprar" que redirige a esta URL. La inscripción posterior se
   /// realiza vía `POST /api/v1/inscribe` con API key. Null = sin venta externa.
   externalPurchaseUrl   String?      @map("external_purchase_url") @db.VarChar(2048)
@@ -1275,7 +1275,7 @@ model ModLearningScormAttempt {
 model ModCertificatesTemplate {
   id           String   @id @default(uuid()) @db.Uuid
   tenantId     String   @map("tenant_id") @db.Uuid
-  /// Nombre legible: "Default", "VA360 oficial", etc.
+  /// Nombre legible: "Default", "Plantilla oficial", etc.
   name         String
   /// Si true, esta plantilla se usa cuando no hay otra explícita asociada
   isDefault    Boolean  @default(false) @map("is_default")
@@ -2037,7 +2037,7 @@ model PasswordResetToken {
 
 // ============================================================================
 // INSCRIPCIÓN DE MIEMBROS — gate Telegram + OTP email + validación manual.
-// Migración de la comunidad de Telegram de VA360 a Didacta "con control".
+// Alta de miembros de una comunidad de Telegram en Didacta "con control".
 // Patrón de tokens clonado de PasswordResetToken (SHA-256, single-use, TTL).
 // Fuente de verdad documental: PRD en Notion (LMS Ship).
 // ============================================================================
@@ -2709,7 +2709,7 @@ model ModSubscriptionsMembershipConfig {
   /// grupo de la membresía — una compra directa nunca se limita.
   trialLessonLimit  Int      @default(5) @map("trial_lesson_limit")
   /// Precios individuales de referencia por curso (lo que costarían por
-  /// separado, p.ej. en va360.academy): [{ courseId, amountCents }].
+  /// separado, p.ej. en la web de venta del tenant): [{ courseId, amountCents }].
   coursePrices      Json     @default("[]") @map("course_prices")
   /// Testimonial opcional (los 3 campos o nada).
   testimonialQuote  String?  @map("testimonial_quote")
@@ -3257,7 +3257,7 @@ model ModEventRegistration {
 // ============================================================================
 // MOD.ACCESS-GROUPS — Fase 2 (grupos de acceso configurables)
 // Entitlement: qué SET de cursos puede ver un miembro. Tres kinds:
-// ALL_COURSES (VA360.pro = todos), COURSE, MULTI_COURSE. Sin FK cross-módulo:
+// ALL_COURSES (membresía = todos), COURSE, MULTI_COURSE. Sin FK cross-módulo:
 // userId/courseId son IDs lógicos. El acceso se materializa como enrollments
 // (source GROUP) vía LearningService; mod_access_groups_grant lleva el
 // refcount para revocación segura. Ver PRD §14.

@@ -4,9 +4,9 @@
 // para que el agente pueda hacer pruebas sin usar la cuenta del dueño.
 //
 // Lee de env:
-//   SERVICE_USER_EMAIL    (default didactadev@va360labs.com)
+//   SERVICE_USER_EMAIL    (default service@didacta.local)
 //   SERVICE_USER_PASSWORD (obligatoria — generada y guardada en el .env)
-//   SERVICE_TENANT_SLUG   (default va360)
+//   SERVICE_TENANT_SLUG   (default demo, el del seed de bootstrap)
 //
 // Uso (en el server, dentro del contenedor de la app):
 //   docker compose -f docker-compose.prod.yml run --rm \
@@ -18,9 +18,9 @@ const { PrismaClient } = require('@prisma/client');
 
 (async () => {
   const prisma = new PrismaClient();
-  const email = process.env.SERVICE_USER_EMAIL || 'didactadev@va360labs.com';
+  const email = process.env.SERVICE_USER_EMAIL || 'service@didacta.local';
   const pass = process.env.SERVICE_USER_PASSWORD;
-  const slug = process.env.SERVICE_TENANT_SLUG || 'va360';
+  const slug = process.env.SERVICE_TENANT_SLUG || 'demo';
   if (!pass) {
     console.error('ERR: falta SERVICE_USER_PASSWORD');
     process.exit(1);

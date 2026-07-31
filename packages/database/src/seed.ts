@@ -2,14 +2,18 @@
  * Seed de bootstrap.
  * Idempotente: se puede correr varias veces sin duplicar nada.
  *
+ * El camino canónico para instalar Didacta es el setup wizard (/setup/init):
+ * arranca el contenedor sin envs `BOOTSTRAP_*` y configura por UI. Este seed
+ * es la alternativa headless (CI, scripts) y se mantiene mínimo.
+ *
  * Crea:
- * - Tenant `va360` (slug, status ACTIVE)
+ * - Tenant de bootstrap (slug de BOOTSTRAP_TENANT_SLUG, default `demo`, status ACTIVE)
  * - Roles del sistema: super_admin, tenant_admin, formador, alumno, auditor, empresa_manager
- * - Usuario super_admin VA360 con password seteado por env (BOOTSTRAP_PASSWORD) o el default
+ * - Usuario super_admin con password seteado por env (BOOTSTRAP_PASSWORD, obligatoria)
  *
  * Uso:
  *   BOOTSTRAP_PASSWORD='miPasswordSegura123!' \
- *   BOOTSTRAP_EMAIL='valen@va360labs.com' \
+ *   BOOTSTRAP_EMAIL='admin@example.com' \
  *   pnpm --filter @didacta/database db:seed
  */
 
@@ -28,10 +32,10 @@ const SYSTEM_ROLES = [
 async function main() {
   const prisma = createPrismaClient();
 
-  const tenantSlug = process.env['BOOTSTRAP_TENANT_SLUG'] ?? 'va360';
-  const tenantName = process.env['BOOTSTRAP_TENANT_NAME'] ?? 'VA360 LABS';
-  const adminEmail = process.env['BOOTSTRAP_EMAIL'] ?? 'valen@va360labs.com';
-  const adminName = process.env['BOOTSTRAP_NAME'] ?? 'Valentín Ayesa';
+  const tenantSlug = process.env['BOOTSTRAP_TENANT_SLUG'] ?? 'demo';
+  const tenantName = process.env['BOOTSTRAP_TENANT_NAME'] ?? 'Demo';
+  const adminEmail = process.env['BOOTSTRAP_EMAIL'] ?? 'admin@example.com';
+  const adminName = process.env['BOOTSTRAP_NAME'] ?? 'Admin';
   const adminPassword = process.env['BOOTSTRAP_PASSWORD'];
 
   if (!adminPassword || adminPassword.length < 12) {
@@ -51,8 +55,8 @@ async function main() {
   console.info(`[seed] Tenant ${tenant.slug} (${tenant.id}) listo`);
 
   // 1.b TenantDomains — mapeo Host header → tenant para login transparente.
-  // Sembramos los hosts donde el bootstrap tenant es accesible: localhost (dev),
-  // dominio prod legacy de Easypanel, y el slug.didacta.local (futuro).
+  // Sembramos los hosts donde el bootstrap tenant es accesible (default: solo
+  // localhost para dev; en un despliegue real pasá tus dominios por env).
   // Cualquier domain extra se gestiona desde /admin/tenants (super_admin).
   const defaultDomains = (process.env['BOOTSTRAP_DOMAINS'] ?? 'localhost,127.0.0.1')
     .split(',')
