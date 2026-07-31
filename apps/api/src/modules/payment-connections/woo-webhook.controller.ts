@@ -60,11 +60,25 @@ export class WooWebhookController {
     @Headers('x-wc-webhook-signature') signature: string | undefined,
     @Headers('x-wc-webhook-topic') topic: string | undefined,
   ) {
-    // WooCommerce manda un ping sin cuerpo al crear el webhook para comprobar
-    // que la URL responde. Hay que contestar 200 o se queda deshabilitado.
     const rawBuffer = req.rawBody ?? Buffer.alloc(0);
     if (rawBuffer.length === 0) return { ok: true, ping: true };
     const rawBody = rawBuffer.toString('utf8');
+
+    // Ping de verificación: al guardar un webhook, WooCommerce hace un POST de
+    // prueba con `{"webhook_id":N}` y **sin cabecera de firma**. No es una
+    // entrega, es un «¿estás ahí?».
+    //
+    // Hay que contestarle 200 o el panel de la tienda enseña un error
+    // permanente («La URL de entrega devolvió un código de respuesta: 401»)
+    // aunque los pedidos estén entrando perfectamente — que es exactamente lo
+    // que pasaba.
+    //
+    // Aceptarlo sin firma no abre nada: se responde y se corta. No se lee el
+    // pedido, no se escribe en la base y no se concede ningún acceso.
+    if (!signature && isWooPing(rawBody)) {
+      this.logger.log({ tenant: tenantSlug }, 'woo-webhook: ping de verificación');
+      return { ok: true, ping: true };
+    }
 
     if (!tenantSlug) {
       throw new BadRequestException('Falta ?tenant= en la URL del webhook.');
@@ -161,4 +175,27 @@ export class WooWebhookController {
  */
 function expectedSignaturePreview(body: Buffer, secret: string): string {
   return createHmac('sha256', secret).update(body).digest('base64').slice(0, 10);
+}
+
+/**
+ * ¿Es el ping de verificación de WooCommerce?
+ *
+ * Se identifica por su forma, no por su tamaño: un objeto plano cuya única
+ * información es el id del webhook. Un pedido de verdad trae decenas de campos
+ * (`billing`, `line_items`, `total`…), así que no hay forma de confundirlos.
+ *
+ * Se exige que NO traiga firma en el sitio donde se llama: un payload firmado
+ * siempre pasa por la verificación, pase lo que pase aquí.
+ */
+function isWooPing(rawBody: string): boolean {
+  if (rawBody.length > 200) return false;
+  try {
+    const parsed: unknown = JSON.parse(rawBody);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+    const claves = Object.keys(parsed as Record<string, unknown>);
+    // Vacío (`{}`) o solo el identificador del webhook.
+    return claves.length === 0 || (claves.length === 1 && claves[0] === 'webhook_id');
+  } catch {
+    return false;
+  }
 }
