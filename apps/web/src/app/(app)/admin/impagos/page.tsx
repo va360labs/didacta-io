@@ -19,13 +19,20 @@ import { authStorage } from '@/lib/auth-storage';
 import { paymentFlagsApi, parsePaymentFlagsCsv, type PaymentFlag } from '@/lib/payment-flags';
 
 interface FormState {
+  email: string;
   telegramId: string;
   name: string;
   isDelinquent: boolean;
   note: string;
 }
 
-const EMPTY_FORM: FormState = { telegramId: '', name: '', isDelinquent: true, note: '' };
+const EMPTY_FORM: FormState = {
+  email: '',
+  telegramId: '',
+  name: '',
+  isDelinquent: true,
+  note: '',
+};
 
 export default function ImpagosPage() {
   const [flags, setFlags] = useState<PaymentFlag[] | null>(null);
@@ -78,7 +85,8 @@ export default function ImpagosPage() {
   function startEdit(flag: PaymentFlag) {
     setEditing(flag);
     setForm({
-      telegramId: flag.telegramId,
+      email: flag.email ?? '',
+      telegramId: flag.telegramId ?? '',
       name: flag.name ?? '',
       isDelinquent: flag.isDelinquent,
       note: flag.note ?? '',
@@ -100,7 +108,8 @@ export default function ImpagosPage() {
     setNotice(null);
     try {
       await paymentFlagsApi.upsert(token, {
-        telegramId: form.telegramId.trim(),
+        ...(form.email.trim() ? { email: form.email.trim() } : {}),
+        ...(form.telegramId.trim() ? { telegramId: form.telegramId.trim() } : {}),
         name: form.name.trim() || null,
         isDelinquent: form.isDelinquent,
         note: form.note.trim() || null,
@@ -115,7 +124,8 @@ export default function ImpagosPage() {
   }
 
   async function handleDelete(flag: PaymentFlag) {
-    if (!window.confirm(`¿Eliminar el registro de "${flag.name ?? flag.telegramId}"?`)) return;
+    const label = flag.name ?? flag.email ?? flag.telegramId ?? flag.id;
+    if (!window.confirm(`¿Eliminar el registro de "${label}"?`)) return;
     const token = authStorage.getAccessToken();
     if (!token) return;
     setPending(true);
@@ -149,7 +159,7 @@ export default function ImpagosPage() {
       const text = await readFileAsText(file);
       const rows = parsePaymentFlagsCsv(text);
       if (rows.length === 0) {
-        setError('No encontramos filas válidas en el CSV (revisá la columna user_id).');
+        setError('No encontramos filas válidas en el CSV (revisá la columna email o user_id).');
         return;
       }
       const res = await paymentFlagsApi.import(token, rows);
@@ -180,8 +190,9 @@ export default function ImpagosPage() {
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight">Impagos</h1>
           <p className="mt-1 max-w-2xl text-text-muted">
-            Marca miembros con cuotas pendientes por su Telegram ID. La inscripción usa estas marcas
-            para bloquear o avisar a quien tenga pagos al día sin regularizar.
+            Marca miembros con cuotas pendientes por su email (o su Telegram ID legacy). La
+            inscripción usa estas marcas para avisarte de quien solicita acceso sin tener los pagos
+            al día.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -227,7 +238,7 @@ export default function ImpagosPage() {
               <Input
                 id="search"
                 type="search"
-                placeholder="Telegram ID o nombre…"
+                placeholder="Email, Telegram ID o nombre…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
@@ -268,7 +279,8 @@ export default function ImpagosPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-y border-border bg-surface-2 text-left text-xs uppercase tracking-wide text-text-muted">
-                    <th className="px-6 py-3 font-semibold">Telegram ID</th>
+                    <th className="px-6 py-3 font-semibold">Email</th>
+                    <th className="px-3 py-3 font-semibold">Telegram ID</th>
                     <th className="px-3 py-3 font-semibold">Nombre</th>
                     <th className="px-3 py-3 font-semibold">Estado</th>
                     <th className="px-3 py-3 font-semibold">Nota</th>
@@ -281,7 +293,16 @@ export default function ImpagosPage() {
                       key={f.id}
                       className="border-b border-border last:border-0 hover:bg-surface-2"
                     >
-                      <td className="px-6 py-3 font-mono text-sm tabular-nums">{f.telegramId}</td>
+                      <td className="px-6 py-3 text-sm">
+                        {f.email ?? (
+                          <span className="text-xs italic text-text-subtle">
+                            Sin email (legacy)
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 font-mono text-sm tabular-nums">
+                        {f.telegramId ?? <span className="text-xs text-text-subtle">—</span>}
+                      </td>
                       <td className="px-3 py-3">
                         {f.name ? (
                           <span className="font-semibold text-text">{f.name}</span>
@@ -344,23 +365,36 @@ export default function ImpagosPage() {
             <CardTitle>{editing ? 'Editar registro' : 'Nuevo registro'}</CardTitle>
             <CardDescription>
               {editing
-                ? 'Modifica el estado o la nota. El Telegram ID identifica unívocamente al miembro.'
-                : 'Marca manualmente a un miembro por su Telegram ID. Si ya existe, se actualiza.'}
+                ? 'Modifica el estado o la nota. El email identifica al miembro; a una fila legacy puedes añadirle email para migrarla.'
+                : 'Marca manualmente a un miembro por su email (o su Telegram ID legacy). Si ya existe, se actualiza.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="telegram-id">Telegram ID</Label>
+                <Label htmlFor="flag-email">Email</Label>
+                <Input
+                  id="flag-email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
+                  placeholder="miembro@email.com"
+                  disabled={!!editing && !!editing.email}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="telegram-id">
+                  Telegram ID <span className="text-text-subtle text-xs">(legacy, opcional)</span>
+                </Label>
                 <Input
                   id="telegram-id"
                   value={form.telegramId}
                   onChange={(e) => setForm((s) => ({ ...s, telegramId: e.target.value }))}
-                  required
                   inputMode="numeric"
                   pattern="\d+"
                   placeholder="123456789"
-                  disabled={!!editing}
+                  disabled={!!editing && !editing.email}
                   className="font-mono"
                 />
               </div>
@@ -402,7 +436,13 @@ export default function ImpagosPage() {
                     Cancelar
                   </Button>
                 ) : null}
-                <Button type="submit" disabled={pending || form.telegramId.trim().length === 0}>
+                <Button
+                  type="submit"
+                  disabled={
+                    pending ||
+                    (form.email.trim().length === 0 && form.telegramId.trim().length === 0)
+                  }
+                >
                   {pending ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear registro'}
                 </Button>
               </div>

@@ -95,13 +95,21 @@ export interface RegisterResponse {
   status: 'PENDING';
 }
 
-// ─── Admin: gestión de impagos (member_payment_flag) ─────────────────────────
-export const paymentFlagUpsertSchema = z.object({
-  telegramId: z.string().trim().min(1).max(32),
-  name: z.string().max(200).nullable().optional(),
-  isDelinquent: z.boolean().default(true),
-  note: z.string().max(500).nullable().optional(),
-});
+// ─── Admin: gestión de impagos (mod_member_registration_payment_flag) ────────
+// Desde F2.3 la clave principal es el email; telegramId queda como clave
+// legacy opcional (imports de exportaciones de Telegram, filas históricas).
+// Al menos una de las dos debe venir.
+export const paymentFlagUpsertSchema = z
+  .object({
+    email: z.string().trim().email().max(320).optional(),
+    telegramId: z.string().trim().min(1).max(32).optional(),
+    name: z.string().max(200).nullable().optional(),
+    isDelinquent: z.boolean().default(true),
+    note: z.string().max(500).nullable().optional(),
+  })
+  .refine((v) => Boolean(v.email?.length || v.telegramId?.length), {
+    message: 'Se requiere email o telegramId.',
+  });
 export type PaymentFlagUpsertDto = z.infer<typeof paymentFlagUpsertSchema>;
 
 export const paymentFlagImportSchema = z.object({

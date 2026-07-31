@@ -2093,20 +2093,28 @@ model MemberRegistrationDecisionToken {
 }
 
 /// Lista de referencia de estado de pago de miembros, gestionada por el admin
-/// (panel /admin/impagos: alta manual + import CSV). El join con la inscripción
-/// es lógico por `telegram_id` dentro del mismo tenant (sin FK). Permite mostrar
+/// (panel /admin/impagos: alta manual + import CSV). Desde F2.3 la clave de
+/// negocio es el EMAIL (con `user_id` vinculado si se resolvió); `telegram_id`
+/// queda como clave LEGACY opcional de la era del gate Telegram. El join con la
+/// inscripción es lógico dentro del mismo tenant (sin FK). Permite mostrar
 /// "consta como impago" en la ficha/email de aprobación. Dato real del admin,
 /// nunca hardcodeado (regla #3).
 model MemberPaymentFlag {
   id           String   @id @default(uuid()) @db.Uuid
   tenantId     String   @map("tenant_id") @db.Uuid
-  telegramId   String   @map("telegram_id") @db.VarChar(32)
+  /// Email del miembro (clave principal). Null solo en filas legacy por telegramId.
+  email        String?
+  /// User del tenant vinculado, si el email correspondía a uno (join lógico sin FK).
+  userId       String?  @map("user_id") @db.Uuid
+  /// LEGACY: clave por telegramId (Postgres permite varias filas con NULL).
+  telegramId   String?  @map("telegram_id") @db.VarChar(32)
   name         String?
   isDelinquent Boolean  @default(true) @map("is_delinquent")
   note         String?
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  @@unique([tenantId, email])
   @@unique([tenantId, telegramId], map: "mod_member_registration_payment_flag_tenant_tg_key")
   @@index([tenantId, isDelinquent], map: "mod_member_registration_payment_flag_tenant_delinq_idx")
   @@map("mod_member_registration_payment_flag")

@@ -343,9 +343,12 @@ export class MemberRegistrationService {
       const approveUrl = `${base}/api/v1/inscripcion/decision?token=${encodeURIComponent(approveToken)}`;
       const rejectUrl = `${base}/api/v1/inscripcion/decision?token=${encodeURIComponent(rejectToken)}`;
 
-      const flag = input.telegramId
-        ? await this.paymentFlags.lookup(tenantId, input.telegramId)
-        : null;
+      // Impago por identidad: email (clave principal) con fallback a la clave
+      // legacy por telegramId — funciona en todos los modos de registro.
+      const flag = await this.paymentFlags.lookup(tenantId, {
+        email: input.email,
+        telegramId: input.telegramId,
+      });
       const branding = await resolveEmailBranding(
         this.prisma as unknown as BrandingPrisma,
         tenantId,

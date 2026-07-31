@@ -248,7 +248,57 @@ test.describe('Admin · impagos de inscripción (member_payment_flag)', () => {
     expect(res.status, 'sin bearer → 401').toBe(401);
   });
 
-  test('admin: upsert + GET refleja el alta y DELETE lo borra', async () => {
+  test('admin: upsert por EMAIL (clave F2.3) es idempotente y borrable', async () => {
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
+    const adminToken = await adminTokenForBootstrap(tenantSlug);
+    const auth = { Authorization: `Bearer ${adminToken}` };
+
+    // Email único por run para no chocar con otros tests/runs paralelos.
+    const email = `e2e-impago-${Date.now()}@example.test`;
+
+    // 1) Alta por email.
+    const createRes = await fetch(`${API_URL}/api/v1/inscripcion/payment-flags`, {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, name: 'Moroso email E2E', isDelinquent: true }),
+    });
+    expect(createRes.status, 'upsert por email → 2xx').toBeLessThan(300);
+    const created = (await createRes.json()) as { id: string };
+
+    // 2) Re-upsert con el mismo email actualiza la MISMA fila (idempotente).
+    const updateRes = await fetch(`${API_URL}/api/v1/inscripcion/payment-flags`, {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, isDelinquent: false }),
+    });
+    expect(updateRes.status).toBeLessThan(300);
+    const updated = (await updateRes.json()) as { id: string };
+    expect(updated.id).toBe(created.id);
+
+    // 3) La lista lo encuentra por email y refleja el update.
+    const listRes = await fetch(
+      `${API_URL}/api/v1/inscripcion/payment-flags?q=${encodeURIComponent(email)}`,
+      { headers: auth },
+    );
+    expect(listRes.status).toBe(200);
+    const list = (await listRes.json()) as Array<{
+      id: string;
+      email: string | null;
+      isDelinquent: boolean;
+    }>;
+    const found = list.find((f) => f.email === email);
+    expect(found, 'el flag por email aparece en la lista').toBeDefined();
+    expect(found!.isDelinquent).toBe(false);
+
+    // 4) DELETE lo borra.
+    const delRes = await fetch(`${API_URL}/api/v1/inscripcion/payment-flags/${created.id}`, {
+      method: 'DELETE',
+      headers: auth,
+    });
+    expect(delRes.status, 'delete → 2xx').toBeLessThan(300);
+  });
+
+  test('admin: upsert + GET refleja el alta y DELETE lo borra (clave legacy por telegramId)', async () => {
     const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const adminToken = await adminTokenForBootstrap(tenantSlug);
 

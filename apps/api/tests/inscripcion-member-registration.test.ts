@@ -170,7 +170,7 @@ describe('MemberRegistrationService.createPending', () => {
     expect(h.txUserRole.create).toHaveBeenCalledTimes(1);
   });
 
-  it('sin Telegram (verificadores componibles): crea User PENDING con telegramId null y NO consulta impagos por telegramId', async () => {
+  it('sin Telegram (verificadores componibles): crea User PENDING con telegramId null y consulta impagos por email', async () => {
     const h = makeHarness({ existingUser: null });
     const input: MemberRegistrationInput = { ...BASE_INPUT, telegramId: null, inGroup: 'unknown' };
 
@@ -181,12 +181,15 @@ describe('MemberRegistrationService.createPending', () => {
     expect(createArg.telegramId).toBeNull();
     expect(createArg.telegramInGroup).toBeNull();
 
-    // La notificación al aprobador sale igualmente, pero sin lookup de impago
-    // (el flag sigue clavado a telegramId hasta F2.3).
+    // La notificación al aprobador sale igualmente, con el lookup de impago
+    // clavado a la identidad (email primero; telegram legacy si lo hubiera).
     await vi.waitFor(() => {
       expect(h.smtp.send).toHaveBeenCalledTimes(1);
     });
-    expect((h.paymentFlags as { lookup: ReturnType<typeof vi.fn> }).lookup).not.toHaveBeenCalled();
+    expect((h.paymentFlags as { lookup: ReturnType<typeof vi.fn> }).lookup).toHaveBeenCalledWith(
+      TENANT_ID,
+      { email: 'ana@x.com', telegramId: null },
+    );
   });
 
   it('tras crear emite tokens de decisión y notifica al aprobador con MEMBER_APPROVAL_EMAIL', async () => {

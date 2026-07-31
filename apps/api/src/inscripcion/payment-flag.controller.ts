@@ -32,9 +32,10 @@ import {
 import { MemberPaymentFlagService } from './member-payment-flag.service';
 
 // ============================================================================
-// Controller ADMIN de la gestión de impagos (tabla member_payment_flag). El
-// flag de impago alimenta la validación manual del flujo de inscripción. Solo
-// roles admin del tenant pueden operar. El tenant sale del JWT (no del Host).
+// Controller ADMIN de la gestión de impagos (mod_member_registration_payment_
+// flag). El flag de impago alimenta la validación manual del flujo de
+// inscripción; desde F2.3 se clava a email/userId (telegramId queda como clave
+// legacy). Solo roles admin del tenant pueden operar. El tenant sale del JWT.
 // ============================================================================
 
 /** Roles autorizados a gestionar impagos. Clon de AdminUsersController. */
@@ -58,7 +59,7 @@ export class PaymentFlagController {
   @Get()
   @ApiOperation({
     summary:
-      'Lista los flags de impago del tenant. Filtros opcionales: ?delinquentOnly=true y ?q=<texto>.',
+      'Lista los flags de impago del tenant. Filtros opcionales: ?delinquentOnly=true y ?q=<texto> (email, telegramId o nombre).',
   })
   async list(
     @CurrentUser() user: SessionClaims | undefined,
@@ -74,7 +75,8 @@ export class PaymentFlagController {
 
   @Post()
   @ApiOperation({
-    summary: 'Crea o actualiza el flag de impago de un telegramId (idempotente por telegramId).',
+    summary:
+      'Crea o actualiza un flag de impago por email (clave principal) y/o telegramId (legacy). Idempotente: matchea primero por email, luego por telegramId.',
   })
   async upsert(
     @Req() req: FastifyRequest,
