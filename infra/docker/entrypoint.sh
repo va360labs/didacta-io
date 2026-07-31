@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # ============================================================================
-# entrypoint.sh — sincroniza schema, aplica políticas RLS y arranca la app
-# Se ejecuta en el contenedor de Easypanel en cada deploy.
+# entrypoint.sh — aplica migraciones versionadas, políticas RLS y arranca la app
+# Se ejecuta en el contenedor en cada arranque/deploy.
 #
-# Decisión actual (Fase 1.A): usamos `prisma db push` en lugar de
-# `prisma migrate deploy`. Razón: el schema cambia rápido entre PRs y todavía
-# no estabilizamos las migraciones versionadas. `db push` sincroniza el schema
-# directamente con la BD sin necesidad de archivos en prisma/migrations.
-# Cuando entremos a producción real migramos a `migrate deploy` con archivos
-# versionados generados por `prisma migrate dev`.
+# Desde la retomada fair-code (2026-07-31) el schema se aplica con
+# `prisma migrate deploy` sobre migraciones versionadas: un self-hoster tiene
+# que poder actualizar entre versiones de forma reproducible. `db push` queda
+# solo para desarrollo local (entrypoint.dev.sh).
+#
+# Instalaciones que venían de la era `db push` (BD ya poblada sin tabla
+# _prisma_migrations): marcar el baseline como aplicado UNA sola vez antes
+# del primer arranque con esta imagen:
+#   prisma migrate resolve --applied 20260731120000_baseline_faircode
+# (procedimiento completo en docs/UPGRADE.md).
 # ============================================================================
 set -euo pipefail
 
@@ -68,13 +72,12 @@ run_migrations() {
 
   ensure_pgvector_extension
 
-  # SIN --accept-data-loss en producción: `db push` aplica cambios ADITIVOS
-  # (nuevas tablas/columnas) pero ABORTA si un cambio requiere borrar datos, en
-  # vez de destruirlos en silencio. Footgun eliminado: un deploy con un schema
-  # que implique pérdida de datos falla ruidosamente y se resuelve con migración
-  # manual, nunca dropeando el DB de prod en el arranque del contenedor.
-  log "Sincronizando schema con prisma db push (aditivo, sin --accept-data-loss)…"
-  pnpm --filter @didacta/database exec prisma db push --skip-generate
+  # `migrate deploy` solo aplica migraciones pendientes y NUNCA improvisa
+  # cambios: si la BD trae una migración fallida a medias, aborta ruidosamente
+  # (P3009) y se resuelve a mano con `prisma migrate resolve`, nunca
+  # destruyendo datos en el arranque del contenedor.
+  log "Aplicando migraciones versionadas con prisma migrate deploy…"
+  pnpm --filter @didacta/database exec prisma migrate deploy
 
   if command -v psql >/dev/null 2>&1; then
     log "Aplicando políticas RLS…"
