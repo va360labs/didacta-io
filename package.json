@@ -4,7 +4,7 @@
   "private": true,
   "description": "Didacta — Plataforma LMS modular de VA360 LABS",
   "author": "VA360 LABS S.L. <valen@va360labs.com>",
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "engines": {
     "node": ">=22.0.0",
@@ -31,11 +31,7 @@
     "db:generate": "pnpm --filter @didacta/database db:generate",
     "db:rls": "pnpm --filter @didacta/database db:rls:apply",
     "db:studio": "pnpm --filter @didacta/database db:studio",
-    "db:seed": "pnpm --filter @didacta/database db:seed",
-    "dev:push": "bash scripts/dev-push.sh",
-    "dev:setup": "bash scripts/setup-dev-server.sh",
-    "dev:logs": "ssh ${DEV_SERVER:-root@135.181.150.202} 'docker compose -f /opt/didacta-dev/docker-compose.dev.yml logs -f'",
-    "dev:rebuild": "ssh ${DEV_SERVER:-root@135.181.150.202} 'cd /opt/didacta-dev && docker build -f Dockerfile.dev -t didactaio/community-dev:latest . && docker compose -f docker-compose.dev.yml up -d'"
+    "db:seed": "pnpm --filter @didacta/database db:seed"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",

@@ -2,188 +2,86 @@
 
 > Instrucciones base para Claude Code (o cualquier otro asistente IA) al trabajar en este repositorio.
 
+## Qué es este repositorio
+
+**Didacta** (didacta.io) es una plataforma LMS modular **fair-code** propiedad de **VA360 LABS S.L.** Este repo es **el producto whitelabel**, no la instalación de ningún cliente. Tres ediciones:
+
+- **Community**: este código, bajo la Didacta Sustainable Use License v1.0 (`LICENSE`). Self-hosted, gratuito, uso interno libre.
+- **Enterprise**: capabilities transversales del core en ficheros `*.ee.*`, desbloqueadas por licencia JWT firmada (ES256/KMS, ver `packages/license-sdk`). Cubiertas por `LICENSE_EE`.
+- **Cloud**: SaaS gestionado por VA360 LABS; vive en el repo privado `didacta-cloud`, que consume este repo. Aquí no hay código de Cloud.
+
+Historia: entre 2026-05 y 2026-07 este código sirvió como proyecto a medida para aula.va360.academy (congelado en el tag `v0.0.1-alpha.88-va360`). Desde 2026-07-31 el repo vuelve a ser el producto whitelabel; esa instalación pasará a ser el primer cliente del canal de release.
+
 ## ⚠️ REGLAS CRÍTICAS (NO NEGOCIABLES)
 
-### 1. Documentación SOLO en Notion
+### 1. Whitelabel: prohibido acoplar a un cliente
 
-**TODA la documentación vive en Notion, NUNCA en el repositorio.**
+Ningún copy, dominio, IP, email, slug de tenant, credencial ni heurística de un cliente concreto puede vivir en el código. Todo lo específico de una instalación es **configuración o datos de tenant** (branding, `/admin/branding`, env). Los defaults usan dominios reservados (`example.com`, `ejemplo.com`) o derivan del tenant resuelto por host. La marca de la empresa (headers «Copyright (c) VA360 LABS S.L.», campo `author`) sí se queda: es la dueña del producto, como n8n GmbH.
 
-- Fuente de verdad: [LMS Ship](https://www.notion.so/LMS-Ship-34cb609a124c80aa996bfec23268cad4)
-- PRD, ADRs, HANDOFFs, Estado, Arquitectura → TODO en Notion
-- Si necesitas documentar algo, hazlo en Notion
-- Si encuentras documentación en el repo, migrala a Notion y elimínala
+### 2. Modelo de ediciones «WordPress matizado»
 
-### 2. No avanzar sin documentación y tests
+- **Los módulos son SIEMPRE Community** y nunca se gatean por licencia. Lo único de pago son las capabilities transversales del core (lista cerrada en `packages/license-sdk/src/capabilities.ts`).
+- Código Enterprise solo en ficheros `*.ee.*` o carpetas `ee/` dentro del core; el fence lo valida `scripts/ee-fence.ts` (CI `ee-fence.yml`).
+- UI de gating estilo n8n: la página **siempre existe** (nunca 404 ni menú oculto), título y descripción fuera de `<EeGate>`, panel real dentro con upsell. Backend responde **402** vía `@RequiresCapability`.
 
-**PROHIBIDO avanzar a nuevas tareas si:**
+### 3. Independencia de módulos (dos niveles, ADR-016)
 
-- La tarea actual no está correctamente documentada en Notion
-- Los tests no pasan o no existen para la funcionalidad
-- Hay decisiones arquitectónicas sin ADR
+- **Third-party del marketplace** (ZIP firmado, `sandboxed-db`): zero-tolerance — solo sus tablas, comunicación solo por eventos/hooks/APIs públicas, UI dentro del ZIP (ADR-015).
+- **First-party built-in** (in-tree): la lógica vive en `modules/<slug>/`; puede tener host NestJS en `apps/api/src/modules/<slug>/` y UI in-tree (ADR-011/015). Puede **leer** (nunca escribir) tablas de otros módulos filtrando por `tenant_id` y **declarando la dependencia en el manifest**. Sin FKs cross-module, sin imports cross-module, eventos declarados en el manifest.
+- Tablas de módulo con prefijo `mod_<slug>_` y `tenant_id` + RLS siempre.
 
-Aunque el usuario lo pida, NO avanzar. Primero documentar y probar.
+### 4. PROHIBIDO usar datos falsos o de cartón
 
-### 3. PROHIBIDO usar datos falsos o de cartón
+- Todo dato en pantalla viene de la BD real a través de la API.
+- Prohibidos: arrays hardcodeados de contenido, contadores fijos, nombres de persona inventados.
+- Excepción única: fixtures en tests (`*.spec.ts`, `*.test.ts`) con datos **neutros** (`@example.com`, tenant `demo`) — nunca PII real ni marca de un cliente.
 
-**NUNCA inventar datos, mocks, fixtures ni constantes hardcodeadas para mostrar en UI.**
+### 5. Base de datos con disciplina de producto
 
-- Todos los datos que aparecen en pantalla vienen de la BD real a través de la API.
-- Si una pantalla necesita datos que aún no existen en la BD: comunicar exactamente qué seed/migración hace falta y esperar aprobación antes de escribir código.
-- Están prohibidos: arrays `const POSTS = [...]`, `const FAKE_SESSION = {...}`, objetos con nombres de persona inventados ("Marta Ruiz", "Carlos N."), contadores fijos (1240 miembros, 38 cursos…).
-- Excepción única: fixtures en tests (`*.spec.ts`, `*.test.ts`). En el código de producción, cero datos inventados.
+- `tenant_id` + política RLS en toda tabla nueva (la RLS se autodescubre en `packages/database/prisma/rls.sql`).
+- Migraciones Prisma **versionadas** para todo cambio de schema; `db push` solo en desarrollo local. Un self-hoster tiene que poder actualizar entre versiones.
+- Cambios destructivos (uniques nuevas, drops) exigen plan de migración explícito.
 
-### 4. Validar entrega con Playwright antes de declarar "listo"
+### 6. Tests y validación antes de declarar «listo»
 
-**Antes de decir que algo está listo, ejecutar los tests E2E:**
+- Tests obligatorios para lógica de negocio (coverage mínimo 70% en services y handlers).
+- Ejecutar los E2E de Playwright de la funcionalidad entregada antes de declarar éxito; si no existe spec, crearla.
+- La CI fair-code (`ci.yml`, `ee-fence.yml`, `gitleaks.yml`, `license-check.yml`, `module-doctor.yml`, `module-contract.yml`) debe pasar en verde.
 
-```
-pnpm exec playwright test --config apps/e2e/playwright.config.ts apps/e2e/tests/<spec>.spec.ts --reporter=line
-```
+### 7. Git con cuidado
 
-- Si algún test falla: corregir primero, informar después.
-- No declarar éxito hasta ver `N passed` en la salida.
-- Si no existe spec para la funcionalidad entregada, crearla.
+- Commits SIEMPRE acotados con pathspec: `git commit <ruta> -m "…"`. Nunca `git add -A`, ni `git commit -a`, ni commit sin ruta.
+- Conventional Commits en español. Nunca añadir "Co-Authored-By" ni atribuciones a la IA.
+- Ramas: `feat/…`, `fix/…`, `chore/…`, `docs/…`. Un PR por feature, descripción en español.
 
-### 5. Prohibido duplicar secciones o rutas
+### 8. Documentación
 
-**Antes de crear una página o sección nueva, verificar que no exista ya:**
+- La documentación interna (PRD, ADRs, HANDOFFs) vive en Notion → [LMS Ship](https://www.notion.so/LMS-Ship-34cb609a124c80aa996bfec23268cad4).
+- El repo lleva SOLO la documentación que un repo público necesita: README, CONTRIBUTING, SECURITY, licencias, READMEs técnicos de módulos/packages y guías de instalación. Nada de planes de sesión, prompts ni runbooks de clientes.
 
-- Buscar en `apps/web/src/app/(app)/` si hay una ruta con el mismo propósito.
-- Buscar en `buildGroups()` / `buildAdminGroups()` de `apps/web/src/lib/sidebar-nav.ts` si ya hay un item del sidebar que apunte a contenido equivalente.
-- Si existe: reutilizar o consolidar, nunca crear un segundo camino al mismo destino.
-- Histórico: `/inicio` (feed hardcodeado del rediseño) duplicaba `/comunidad` (feed real). Resultado: confusión + datos de cartón visibles en producción.
-
-### 6. Nunca `git commit` sin ruta
-
-**El árbol de trabajo se comparte entre sesiones. `git commit` sin pathspec se lleva TODO lo que haya en el índice, incluido lo que esté preparando otra persona.**
-
-- Commitear SIEMPRE acotado: `git commit <ruta> [<ruta>…] -m "…"`. Nunca `git add -A && git commit`, ni `git commit -a`, ni `git commit` a secas.
-- Antes de commitear, mirar `git status`: si aparecen ficheros que no son tuyos, no son tuyos. No los incluyas ni los revierta nadie por su cuenta.
-- Antes de `git merge`, `git checkout <rama>` o `git clean` en el árbol compartido: comprobar que lo que vas a pisar está commiteado en alguna rama (`git log --all -- <fichero>`). Si no lo está, respaldarlo primero (`git add -A && git commit` en una rama `wip/…` y `git reset --mixed` para devolver el árbol a como estaba).
-- Un deploy sube el **working tree** vía rsync, no lo que haya en git: un árbol sucio de otra sesión se despliega con lo tuyo. Desplegar SIEMPRE desde el worktree limpio (`didacta-prod-deploy`).
-- Lo sano: un worktree por sesión (`git worktree add ../didacta-<tarea> -b feat/<tarea>`).
-- Histórico (2026-07-30): un `git commit` sin ruta arrastró 5 `git mv` que otra sesión tenía en el índice — movían `/admin/sso`, `/admin/sso-saml`, `/admin/sso-wordpress` y `/admin/zoom/webhook-events` a componentes, sin su página contenedora. Las 4 rutas se quedaron **en 404** y el commit llegó a `main`. Lo cazó `no-orphan-routes.test.ts` justo antes de desplegar. Ese mismo día, al revés: una revisión del árbol compartido estuvo a punto de descartar ~1.950 líneas de otra sesión que no estaban en ninguna rama.
-
----
-
-## Sobre el proyecto
-
-**Didacta** es una plataforma LMS modular propiedad de **VA360 LABS S.L.**
-
-Arquitectura: NestJS 11 + Next.js 15 + PostgreSQL 16 (con Row-Level Security) + Redis 7 + Anthropic API.
-
-**Principio rector**: modularidad extrema. Core mínimo + módulos activables con contratos estables.
-
-## Documentación (Notion)
-
-Toda la documentación vive en Notion → [LMS Ship](https://www.notion.so/LMS-Ship-34cb609a124c80aa996bfec23268cad4):
-
-- **PRD — Didacta**: Product Requirements Document
-- **ADRs**: Architecture Decision Records (12 ADRs)
-- **HANDOFFs**: Notas de sesión
-- **Módulos — Registry**: 15 módulos documentados
-- **Skills y Asistentes IA**: Sistema de skills para desarrollo
-- **Estado del arte**: Cobertura actual vs competencia
-
-## Reglas de trabajo
-
-- **Idioma**: español para commits, comentarios y documentación. Identificadores técnicos (nombres de funciones, variables, tipos, endpoints) en inglés.
-- **Commits**: Conventional Commits obligatorios. Nunca añadir "Co-Authored-By" ni atribuciones a la IA.
-- **Tests**: obligatorios para lógica de negocio. Coverage mínimo 70% en services y handlers.
-- **Contrato de módulo**: respetar en todo cambio a `modules/*`. Si algo no cumple el contrato, no es un módulo de Didacta.
-- **Dependencias entre módulos (ver ADR-016, dos niveles)**:
-  - **Third-party del marketplace** (ZIP firmado, VM sandbox, `sandboxed-db`): independencia **zero-tolerance** — solo sus tablas; comunicación solo vía eventos, hooks o APIs públicas del core. No negociable.
-  - **Core first-party** (in-tree, schema Prisma compartido): puede **leer** (nunca escribir) tablas de otros módulos filtrando por `tenant_id`, **declarando la dependencia en el manifest** (`optionalModules`/`modules`), sin FKs cross-module, y prefiriendo el service público del módulo dueño cuando exista.
-- **ADRs obligatorias**: para decisiones arquitectónicas no triviales. Viven en Notion (índice "ADRs — Architecture Decision Records"), NO en el repo (regla #1). El `docs/adrs/` heredado es legado a migrar.
-- **Ramas**: `feat/<descripción-corta>`, `fix/<descripción>`, `chore/<descripción>`, `docs/<descripción>`.
-- **Pull Requests**: uno por feature. Descripción en español con resumen, cambios y plan de test.
-
-## Estado actual
-
-Proyecto en **Fase 0 — Discovery técnico y fundaciones**.
-
-Planificación viva en Notion: [LMS Ship](https://www.notion.so/LMS-Ship-34cb609a124c80aa996bfec23268cad4).
-
-## Stack cerrado (ver PRD §6.1)
+## Stack cerrado
 
 - Backend: Node.js 22 + NestJS 11 + TypeScript 5.x estricto
 - Frontend: Next.js 15 (App Router) + React 19 + Tailwind 4 + shadcn/ui
-- Base de datos: PostgreSQL 16 + Prisma 5
+- Base de datos: PostgreSQL 16 + Prisma 5 + RLS + pgvector
 - Cache/colas: Redis 7 + BullMQ
-- Object storage: S3-compatible (MinIO dev, Hetzner prod)
-- Auth: Better-Auth o Auth.js v5 (pendiente ADR-003)
-- IA: Anthropic API (Claude Sonnet 4.5) + pgvector
-- Aula virtual: Zoom API + SDK Web
-- Monorepo: Turborepo + pnpm workspaces
-- Testing: Vitest + Playwright + Supertest
-- Observabilidad: OpenTelemetry + Pino
+- Object storage: S3-compatible (MinIO dev)
+- Aula virtual: Zoom API + SDK Web (ADR-004)
+- IA: **BYOK multi-proveedor** vía el AI Gateway (`apps/api/src/ai/`): cada instalación configura proveedor y clave; ningún proveedor cableado en el producto.
+- Monorepo: Turborepo + pnpm workspaces · Testing: Vitest + Playwright + Supertest
+
+## Instalación de referencia
+
+`docker-compose.alpha.yml` es la experiencia self-host canónica (imagen + postgres + redis + mailpit + MinIO opcional). El primer arranque se configura con el setup wizard (`/setup/init`), no con seeds de datos.
 
 ## Anti-patrones prohibidos
 
-- Import directo de código de otro módulo (third-party: siempre; core first-party: tampoco — usa el core o el barrel público).
-- **Escritura** en tablas de otro módulo (en CUALQUIER nivel). La lectura cross-table está acotada por ADR-016: prohibida en third-party (sandbox), permitida en core first-party con `tenant_id` + dependencia declarada en manifest.
-- Lectura cross-table sin filtrar por `tenant_id`, o sin declarar la dependencia en el manifest (core first-party).
+- Import directo de código de otro módulo (cualquier nivel).
+- **Escritura** en tablas de otro módulo. Lectura cross-table solo first-party, con `tenant_id` + dependencia declarada en manifest.
 - Modificar el core para añadir features de un módulo.
 - Eventos emitidos sin declararlos en el manifest.
 - FKs entre tablas de módulos distintos.
-- Módulos que no respetan `tenant_id` (riesgo de data leak).
+- Tablas sin `tenant_id` (salvo las 9 globales de instancia justificadas).
 - Lógica de negocio en controllers.
-- Estado global compartido entre módulos.
-
----
-
-## ⛔ REGLA DE INDEPENDENCIA DE MÓDULOS (zero-tolerance)
-
-**Cualquier código específico de un módulo `mod.<slug>` vive EXCLUSIVAMENTE en `modules/<slug>/`.** Nunca bajo `apps/web/` ni `apps/api/`.
-
-### Por qué
-
-Los módulos third-party se instalan en runtime desde un ZIP firmado por el marketplace. Si su código vive en `apps/*`, requiere rebuild del Docker image del host → rompe el contrato de marketplace. Ver ADR-009 + ADR-015.
-
-### CHECKLIST OBLIGATORIO antes de escribir/editar cualquier archivo
-
-1. **¿El path empieza con `apps/`?**
-   - SÍ → ¿es código específico de UN módulo (importa `mod.<slug>`, agrega ruta específica de ese módulo, define UI de ese módulo)?
-     - SÍ → **STOP**. Ir a `modules/<slug>/`.
-     - NO (es infra genérica del host: dispatcher, router, surface loader, sidebar genérico) → OK, sigue.
-   - NO → OK, sigue.
-
-2. **¿Es UI de un módulo?** → va en `modules/<slug>/src/ui/<surface>.tsx`, se bundlea a `dist/ui/<surface>.js` con esbuild `--format=iife`, va dentro del ZIP firmado.
-
-3. **¿Es backend de un módulo?** → va en `modules/<slug>/src/`. Expone routes via `module.exports.routes`. NUNCA agrega controllers en `apps/api/`.
-
-### El host SOLO tiene infra genérica relacionada a marketplace
-
-| OK en `apps/api/src/marketplace/`                              | NO en `apps/api/src/marketplace/`                 |
-| -------------------------------------------------------------- | ------------------------------------------------- |
-| `modules-dispatcher.controller.ts` (rutea `/api/v1/modules/*`) | `sandboxed-migrator-learndash.service.ts` ❌      |
-| `module-assets.controller.ts` (sirve `dist/ui/*.js` del ZIP)   | `learndash-helpers.ts` ❌                         |
-| `sandboxed-db.service.ts` (cliente DB genérico para módulos)   | Cualquier cosa que mencione un slug específico ❌ |
-
-| OK en `apps/web/src/`                                                                         | NO en `apps/web/src/`                                                                    |
-| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `lib/module-loader.ts` (carga genérica de surfaces)                                           | `modules/migrator-learndash/wizard.tsx` ❌                                               |
-| `lib/module-runtime.ts` (expone `__didacta__` global)                                         | `app/(app)/admin/integraciones/migrator-learndash/page.tsx` con import del componente ❌ |
-| `app/(app)/admin/integraciones/[module]/page.tsx` que solo hace `loadModuleUI(slug, 'admin')` | Cualquier `.tsx` específico de un módulo ❌                                              |
-
-### Infraestructura disponible (NO inventes paralela)
-
-- `loadModuleUI(moduleName, surface)` en `apps/web/src/lib/module-loader.ts`
-- `initModuleRuntime()` en `apps/web/src/lib/module-runtime.ts` expone `window.__didacta__` con React + shadcn/ui + api
-- `GET /api/v1/modules/:slug/ui/:surface.js` del `ModuleAssetsController` sirve el bundle del ZIP
-- Manifest field `surfaces: { admin: { entry: 'dist/ui/admin.js', routes, menu, roles } }`
-- Bundle del módulo termina con `window.__didacta_module_exports__ = { default: AdminSurface }`
-
-### Code review trigger automático
-
-Si vas a tocar un archivo cuyo path matches:
-
-- `apps/web/src/modules/<slug>/`
-- `apps/web/src/app/.../modules/<slug>/` o `.../integraciones/<slug>/` con código específico
-- `apps/api/src/marketplace/sandboxed-<slug>*.ts` (excepto los genéricos: `sandboxed-db|http|jobs|secrets|didacta`)
-
-**PARÁ. Verificá si lo que vas a hacer pertenece a `modules/<slug>/`. Si dudás, preguntá al usuario.**
-
-### Histórico de violaciones (no repetir)
-
-- 2026-05-13/17 — alpha.58/59: monitor del migrator añadido en `apps/web/src/modules/migrator-learndash/jobs-monitor.tsx` cuando debió ir a `modules/migrator-learndash/src/ui/`. Resultado: rebuild del Docker image para cambios del módulo, anti-patrón de marketplace. Corregido en alpha.60 moviendo todo a surface bundle.
+- Gatear un módulo por licencia (viola `LICENSE_EE`) u ocultar una feature EE (viola la convención de upsell).
+- Acoplar el producto a un cliente concreto (regla 1).
