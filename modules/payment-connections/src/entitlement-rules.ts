@@ -22,7 +22,7 @@ export type EntitlementKind =
    * Pago único con vigencia. Caduca igual que una suscripción, pero **nadie lo
    * renueva solo**: hay que volver a comprar.
    *
-   * Existe porque «Acceso ANUAL a VA360» es un producto `simple` en
+   * Existe porque un «Acceso ANUAL» puede venderse como producto `simple` en
    * WooCommerce, no una suscripción: la tienda no emitirá ningún aviso ni
    * cobrará de nuevo. Si se tratara como suscripción, esperaríamos una
    * renovación que no va a llegar; si se tratara como compra suelta, daría
@@ -47,7 +47,7 @@ export interface EntitlementRule {
 export interface EntitlementRuleset {
   /**
    * Se evalúan EN ORDEN y gana la primera que matchea. El orden importa:
-   * «VA360 PRO LIFETIME» matchea tanto el patrón de lifetime como el de
+   * un «PRO LIFETIME» matchea tanto el patrón de lifetime como el de
    * suscripción PRO, y debe ganar lifetime.
    */
   rules: readonly EntitlementRule[];

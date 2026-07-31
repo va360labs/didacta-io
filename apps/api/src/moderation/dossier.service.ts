@@ -96,8 +96,8 @@ export interface UserDossier {
      * Compras hechas en la tienda externa (WooCommerce), reflejadas por el
      * espejo de `mod.payment-connections`.
      *
-     * Es donde vive el histórico de verdad: las ventas dentro de Didacta vía
-     * Stripe son un puñado, y todo lo demás se compró en va360.academy.
+     * Es donde vive el histórico de verdad cuando el tenant vende fuera:
+     * lo comprado en la tienda externa no pasa por el Stripe de Didacta.
      */
     externalOrders: Array<{
       id: string;

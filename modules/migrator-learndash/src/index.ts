@@ -2952,7 +2952,7 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
               };
 
               // FORMATO REAL de LearnDash REST v1 `/sfwd-courses/{id}/steps`
-              // (verificado contra va360.academy, 2026-06-26):
+              // (verificado contra un LearnDash productivo, 2026-06-26):
               //   h: { "sfwd-lessons": { "<lessonId>": { "sfwd-topic": {…|[]},
               //                                          "sfwd-quiz": {…|[]} }, … },
               //        "sfwd-quiz": {…|[]} }   // quizzes a nivel curso

@@ -10,26 +10,27 @@ import {
 } from '../src/entitlement-rules.js';
 
 /**
- * El ruleset real de VA360, escrito con los nombres de producto que hay hoy en
- * va360.academy. Sirve de test y de documentación de la configuración.
+ * Ruleset de ejemplo con la forma de un catálogo real de tienda (packs PRO
+ * mensual/anual, acceso anual como producto simple, lifetime, hosting).
+ * Sirve de test y de documentación de cómo se configura un ruleset por tenant.
  */
-const VA360: EntitlementRuleset = {
+const DEMO: EntitlementRuleset = {
   rules: [
     { match: /^vps\b/i, kind: 'INFRA', note: 'Hosting, no formación.' },
     { match: /lifetime/i, kind: 'LIFETIME', note: 'Acceso total permanente.' },
     {
-      match: /acceso\s+anual\s+a\s+va360/i,
+      match: /acceso\s+anual\s+a\s+demo/i,
       kind: 'TIMED',
       durationMonths: 12,
       note: 'Producto simple con vigencia de un año: la tienda no lo renueva sola.',
     },
     {
-      match: /va360\s*pro/i,
+      match: /demo\s*pro/i,
       kind: 'SUBSCRIPTION',
       note: 'Todos los PRO no-lifetime son recurrentes.',
     },
     {
-      match: /va360\s*2026|acceso\s+anual\s+va360/i,
+      match: /demo\s*2026|acceso\s+anual\s+demo/i,
       kind: 'SUBSCRIPTION',
       note: 'Planes de temporada.',
     },
@@ -37,55 +38,46 @@ const VA360: EntitlementRuleset = {
   fallback: 'ONE_OFF',
 };
 
-describe('classifyPurchase · catálogo real de VA360', () => {
-  it('LIFETIME gana sobre PRO: "VA360 PRO LIFETIME" no es una suscripción', () => {
+describe('classifyPurchase · catálogo real de DEMO', () => {
+  it('LIFETIME gana sobre PRO: "DEMO PRO LIFETIME" no es una suscripción', () => {
     // El orden de las reglas es lo único que evita cortarle el acceso a los 73
     // compradores de lifetime.
-    expect(classifyPurchase({ productName: 'VA360 PRO LIFETIME' }, VA360).kind).toBe('LIFETIME');
-    expect(classifyPurchase({ productName: 'VA360 PRO LIFETIME UP' }, VA360).kind).toBe('LIFETIME');
+    expect(classifyPurchase({ productName: 'DEMO PRO LIFETIME' }, DEMO).kind).toBe('LIFETIME');
+    expect(classifyPurchase({ productName: 'DEMO PRO LIFETIME UP' }, DEMO).kind).toBe('LIFETIME');
   });
 
   it('los PRO periódicos son suscripción', () => {
-    for (const n of [
-      'VA360 PRO ANUAL',
-      'VA360 PRO SEMESTRAL',
-      'VA360 PRO | MENSUAL | BLACK FRIDAY',
-    ]) {
-      expect(classifyPurchase({ productName: n }, VA360).kind, n).toBe('SUBSCRIPTION');
+    for (const n of ['DEMO PRO ANUAL', 'DEMO PRO SEMESTRAL', 'DEMO PRO | MENSUAL | BLACK FRIDAY']) {
+      expect(classifyPurchase({ productName: n }, DEMO).kind, n).toBe('SUBSCRIPTION');
     }
   });
 
   it('los planes de temporada son suscripción', () => {
-    expect(classifyPurchase({ productName: 'VA360 2026 - Mensual' }, VA360).kind).toBe(
+    expect(classifyPurchase({ productName: 'DEMO 2026 - Mensual' }, DEMO).kind).toBe(
       'SUBSCRIPTION',
     );
-    expect(classifyPurchase({ productName: 'VA360 2026 - Anual' }, VA360).kind).toBe(
-      'SUBSCRIPTION',
-    );
-    expect(classifyPurchase({ productName: 'ACCESO ANUAL VA360 - Alumnos 2025' }, VA360).kind).toBe(
+    expect(classifyPurchase({ productName: 'DEMO 2026 - Anual' }, DEMO).kind).toBe('SUBSCRIPTION');
+    expect(classifyPurchase({ productName: 'ACCESO ANUAL DEMO - Alumnos 2025' }, DEMO).kind).toBe(
       'SUBSCRIPTION',
     );
   });
 
-  it('"Acceso ANUAL a VA360" es TIMED y no SUBSCRIPTION: la tienda no lo renueva sola', () => {
-    const c = classifyPurchase(
-      { productName: 'Acceso ANUAL a VA360', productType: 'simple' },
-      VA360,
-    );
+  it('"Acceso ANUAL a DEMO" es TIMED y no SUBSCRIPTION: la tienda no lo renueva sola', () => {
+    const c = classifyPurchase({ productName: 'Acceso ANUAL a DEMO', productType: 'simple' }, DEMO);
     expect(c.kind).toBe('TIMED');
     expect(c.durationMonths).toBe(12);
   });
 
   it('el VPS queda fuera del circuito de formación', () => {
-    expect(classifyPurchase({ productName: 'VPS Iniciación' }, VA360).kind).toBe('INFRA');
-    expect(classifyPurchase({ productName: 'VPS Plus' }, VA360).kind).toBe('INFRA');
+    expect(classifyPurchase({ productName: 'VPS Iniciación' }, DEMO).kind).toBe('INFRA');
+    expect(classifyPurchase({ productName: 'VPS Plus' }, DEMO).kind).toBe('INFRA');
     expect(grantsLearningAccess('INFRA')).toBe(false);
   });
 
   it('un curso suelto no caduca', () => {
     const c = classifyPurchase(
       { productName: 'Master en Automatizaciones y Agentes IA', productType: 'simple' },
-      VA360,
+      DEMO,
     );
     expect(c.kind).toBe('ONE_OFF');
     expect(expires('ONE_OFF')).toBe(false);
@@ -93,7 +85,7 @@ describe('classifyPurchase · catálogo real de VA360', () => {
 
   it('el pedido real de Tamara Gascón sale como compra suelta', () => {
     expect(
-      classifyPurchase({ productName: 'Master en Automatizaciones y Agentes IA' }, VA360).kind,
+      classifyPurchase({ productName: 'Master en Automatizaciones y Agentes IA' }, DEMO).kind,
     ).toBe('ONE_OFF');
   });
 });

@@ -36,7 +36,7 @@
  *   E2E_ADMIN_EMAIL="admin@acme.com" \
  *   E2E_ADMIN_PASSWORD="************" \
  *   E2E_TENANT_SLUG="acme" \
- *   E2E_LD_BASE_URL="https://va360.academy" \
+ *   E2E_LD_BASE_URL="https://wp.example.com" \
  *   E2E_LD_USERNAME="admin" \
  *   E2E_LD_APP_PASSWORD="xxxx xxxx xxxx xxxx xxxx xxxx" \
  *   SYNC_DRY_RUN="false" \
