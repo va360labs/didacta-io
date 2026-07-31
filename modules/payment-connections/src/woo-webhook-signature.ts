@@ -19,13 +19,22 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  */
 export function verifyWooSignature(opts: {
   signatureHeader: string | undefined;
-  rawBody: string;
+  /**
+   * Cuerpo **crudo**. Acepta Buffer y es lo que hay que pasarle siempre que se
+   * tenga: convertirlo a string antes de firmar mete una conversión de bytes a
+   * texto y vuelta, y cualquier byte que no sea UTF-8 válido se sustituye por
+   * el carácter de reemplazo de forma irreversible. El HMAC deja de cuadrar y
+   * el fallo solo aparece con pedidos que llevan acentos — nunca en una prueba
+   * hecha con texto ASCII.
+   */
+  rawBody: string | Buffer;
   secret: string;
 }): boolean {
   const { signatureHeader, rawBody, secret } = opts;
-  if (!signatureHeader || !secret || !rawBody) return false;
+  if (!signatureHeader || !secret || !rawBody || rawBody.length === 0) return false;
 
-  const expected = createHmac('sha256', secret).update(rawBody, 'utf8').digest('base64');
+  const bytes = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody, 'utf8');
+  const expected = createHmac('sha256', secret).update(bytes).digest('base64');
 
   // `timingSafeEqual` exige buffers del mismo tamaño; una longitud distinta ya
   // descarta la firma sin necesidad de comparar.

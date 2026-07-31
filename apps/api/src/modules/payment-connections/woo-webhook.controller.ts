@@ -18,6 +18,7 @@ import {
   WOO_ORDER_TOPICS,
 } from '@didacta/mod-payment-connections';
 import { Public } from '../../auth/decorators';
+import { createHmac } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModuleRegistryService } from '../module-registry.service';
 
@@ -61,8 +62,9 @@ export class WooWebhookController {
   ) {
     // WooCommerce manda un ping sin cuerpo al crear el webhook para comprobar
     // que la URL responde. Hay que contestar 200 o se queda deshabilitado.
-    const rawBody = req.rawBody?.toString('utf8') ?? '';
-    if (!rawBody) return { ok: true, ping: true };
+    const rawBuffer = req.rawBody ?? Buffer.alloc(0);
+    if (rawBuffer.length === 0) return { ok: true, ping: true };
+    const rawBody = rawBuffer.toString('utf8');
 
     if (!tenantSlug) {
       throw new BadRequestException('Falta ?tenant= en la URL del webhook.');
@@ -82,9 +84,22 @@ export class WooWebhookController {
       throw new UnauthorizedException('El webhook de WooCommerce no está configurado.');
     }
 
-    if (!verifyWooSignature({ signatureHeader: signature, rawBody, secret })) {
+    // Se firma sobre el BUFFER, no sobre el string: convertir a texto y volver
+    // altera cualquier byte que no sea UTF-8 válido y el HMAC deja de cuadrar.
+    if (!verifyWooSignature({ signatureHeader: signature, rawBody: rawBuffer, secret })) {
+      // El diagnóstico acompaña al rechazo porque un «firma inválida» a secas
+      // no permite distinguir un secreto desincronizado de un cuerpo alterado
+      // por el camino, y cada intento a ciegas cuesta un despliegue entero.
+      // No se registra ni el secreto ni el cuerpo: solo su huella.
       this.logger.warn(
-        { tenant: tenantSlug, topic },
+        {
+          tenant: tenantSlug,
+          topic,
+          bytes: rawBuffer.length,
+          recibida: signature?.slice(0, 10) ?? null,
+          esperada: expectedSignaturePreview(rawBuffer, secret),
+          noAscii: /[^\x20-\x7E]/.test(rawBody),
+        },
         'woo-webhook: firma inválida — payload descartado',
       );
       throw new UnauthorizedException('Firma del webhook inválida.');
@@ -138,4 +153,12 @@ export class WooWebhookController {
       matchedUser: res.userId !== null,
     };
   }
+}
+
+/**
+ * Primeros caracteres del HMAC que ESPERÁBAMOS, para poder comparar de un
+ * vistazo con el que llegó sin exponer ni el secreto ni el cuerpo.
+ */
+function expectedSignaturePreview(body: Buffer, secret: string): string {
+  return createHmac('sha256', secret).update(body).digest('base64').slice(0, 10);
 }
