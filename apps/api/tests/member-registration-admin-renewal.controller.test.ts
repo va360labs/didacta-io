@@ -16,7 +16,9 @@ import { MemberRegistrationAdminController } from '../src/modules/member-registr
 const TENANT = 'tenant-a';
 const ADMIN = { sub: 'admin-1', tenantId: TENANT, roles: ['tenant_admin'] };
 const NON_ADMIN = { sub: 'user-2', tenantId: TENANT, roles: ['student'] };
-const USER_ID = 'req-user-1';
+// UUID válido: los endpoints con :userId validan el formato antes de tocar
+// Prisma (un id malformado es 404, nunca el 500 del cast P2023).
+const USER_ID = '0b7a2f66-4a1e-4f0e-9a3d-0d0c1b2a3c4d';
 
 const MATCH = {
   provider: 'stripe',
@@ -93,6 +95,22 @@ describe('MemberRegistrationAdminController · renewal-context', () => {
     await expect(
       h.controller.renewalContext(NON_ADMIN as never, USER_ID, 'sub_1'),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it(':userId que no es UUID → 404 (no el 500 del cast de Prisma)', async () => {
+    await expect(
+      h.controller.renewalContext(ADMIN as never, 'no-soy-uuid', 'sub_1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      h.controller.sendRenewalEmail(ADMIN as never, 'no-soy-uuid', {
+        subject: 'x',
+        body: 'y',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(h.controller.rerun(ADMIN as never, 'no-soy-uuid', {})).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(h.registration.getUserEmail).not.toHaveBeenCalled();
   });
 
   it('sin subscriptionId → plantilla sin enlace (email a quien no tiene suscripción)', async () => {

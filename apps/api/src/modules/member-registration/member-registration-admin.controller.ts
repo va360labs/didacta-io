@@ -69,6 +69,20 @@ const renewalEmailSchema = z
   .strict();
 type RenewalEmailDto = z.infer<typeof renewalEmailSchema>;
 
+const uuidSchema = z.string().uuid();
+
+/**
+ * Un `:userId` malformado en la ruta produciría un P2023 de Prisma (columna
+ * Uuid) que ningún filtro de dominio captura → 500. Mismo criterio que
+ * mod.resources: un id que no es UUID es, simplemente, alguien que no existe.
+ */
+function ensureUuid(id: string): string {
+  if (!uuidSchema.safeParse(id).success) {
+    throw new NotFoundException('Solicitante no encontrado.');
+  }
+  return id;
+}
+
 /**
  * Panel ADMIN de solicitudes de inscripción (autenticado, distinto del controller
  * público del flujo). Lista las solicitudes PENDING con el estado de su lookup de
@@ -180,6 +194,7 @@ export class MemberRegistrationAdminController {
     @Body(new ZodValidationPipe(rerunSchema)) body: RerunDto,
   ) {
     const user = this.requireAdmin(rawUser);
+    ensureUuid(userId);
     const account = await this.registration.getUserEmail(user.tenantId, userId);
     if (!account) throw new NotFoundException('Solicitante no encontrado.');
     // Prioridad: email mapeado ahora → el que ya se usó antes (persiste el mapeo) → el de registro.
@@ -203,6 +218,7 @@ export class MemberRegistrationAdminController {
     @Req() req: FastifyRequest,
   ) {
     const user = this.requireAdmin(rawUser);
+    ensureUuid(userId);
     const ctx = extractClientContext(req);
     const action = dto.action === 'approve' ? 'APPROVE' : 'REJECT';
     const result = await this.decision.decideByAdmin(user.tenantId, userId, action, ctx);
@@ -225,6 +241,7 @@ export class MemberRegistrationAdminController {
     @Query('subscriptionId') subscriptionId: string | undefined,
   ): Promise<{ template: RenewalTemplate; renewalUrl: string | null }> {
     const user = this.requireAdmin(rawUser);
+    ensureUuid(userId);
     const svc = this.registry.getPaymentConnectionsService();
     // Sin suscripción (subscriptionId ausente): no hay enlace de renovación, pero el
     // email sigue siendo enviable (el admin escribe el cuerpo, p.ej. con el link de pago).
@@ -257,6 +274,7 @@ export class MemberRegistrationAdminController {
     @Body(new ZodValidationPipe(renewalEmailSchema)) dto: RenewalEmailDto,
   ): Promise<{ ok: boolean; to: string }> {
     const user = this.requireAdmin(rawUser);
+    ensureUuid(userId);
     const to = (await this.registration.getUserEmail(user.tenantId, userId))?.trim();
     if (!to) throw new NotFoundException('Solicitante no encontrado o sin email.');
     const resolved = await this.smtpResolver.resolve(user.tenantId);

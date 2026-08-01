@@ -8,6 +8,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  NotFoundException,
   Param,
   Post,
   Query,
@@ -62,6 +63,20 @@ function requireAdmin(user: SessionClaims | undefined): SessionClaims {
   return user;
 }
 
+const uuidSchema = z.string().uuid();
+
+/**
+ * Un id malformado en la ruta produciría un P2023 de Prisma (columna Uuid) que
+ * ningún filtro captura → 500. Mismo criterio que mod.resources: un id que no
+ * es UUID es, simplemente, un usuario que no existe.
+ */
+function ensureUuid(id: string): string {
+  if (!uuidSchema.safeParse(id).success) {
+    throw new NotFoundException('Usuario no encontrado.');
+  }
+  return id;
+}
+
 @ApiTags('Admin · Moderación')
 @ApiBearerAuth()
 @Controller('admin/users/:userId/restrictions')
@@ -76,6 +91,7 @@ export class RestrictionController {
   })
   async list(@CurrentUser() user: SessionClaims | undefined, @Param('userId') userId: string) {
     const u = requireAdmin(user);
+    ensureUuid(userId);
     return this.service.list(u.tenantId, userId);
   }
 
@@ -91,6 +107,7 @@ export class RestrictionController {
     @Body(new ZodValidationPipe(createSchema)) dto: CreateDto,
   ) {
     const u = requireAdmin(user);
+    ensureUuid(userId);
     return this.service.create(
       u.tenantId,
       u.sub,
@@ -109,6 +126,7 @@ export class RestrictionController {
     @Body(new ZodValidationPipe(liftSchema)) dto: LiftDto,
   ) {
     const u = requireAdmin(user);
+    ensureUuid(restrictionId);
     return this.service.lift(
       u.tenantId,
       u.sub,
@@ -138,6 +156,7 @@ export class DossierController {
     @Param('userId') userId: string,
   ) {
     const u = requireAdmin(user);
+    ensureUuid(userId);
     return this.service.get(u.tenantId, u.sub, userId, extractClientContext(req));
   }
 }
@@ -167,10 +186,12 @@ export class RestrictionScopesController {
     @Query(new ZodValidationPipe(activeQuerySchema)) query: ActiveQueryDto,
   ) {
     const u = requireAdmin(user);
+    // Un id malformado en el lote también daría P2023: se ignora en vez de
+    // tumbar la consulta entera del feed.
     const ids = query.userIds
       .split(',')
       .map((s) => s.trim())
-      .filter(Boolean)
+      .filter((s) => uuidSchema.safeParse(s).success)
       .slice(0, MAX_BATCH);
     return this.service.activeForMany(u.tenantId, ids);
   }
