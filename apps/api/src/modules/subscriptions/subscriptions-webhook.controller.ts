@@ -18,7 +18,9 @@ import { WebhookSignatureInvalidError } from '@didacta/mod-subscriptions';
 import type Stripe from 'stripe';
 import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
+import type { ClientContext } from '../../auth/client-context';
 import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
+import { BillingProvisioningService } from '../billing/billing-provisioning.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { MembershipProvisioningService } from './membership-provisioning.service';
 
@@ -36,6 +38,7 @@ export class SubscriptionsWebhookController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly provisioning: MembershipProvisioningService,
+    private readonly billingProvisioning: BillingProvisioningService,
     private readonly logger: PinoLogger,
   ) {}
 
@@ -76,10 +79,10 @@ export class SubscriptionsWebhookController {
     // suscripción local. Idempotente por stripeSubscriptionId — un retry de
     // Stripe no duplica user ni sub. Va DESPUÉS de handleWebhookEvent (que
     // persiste el evento para auditoría) y es independiente de su dedupe.
+    const ctx = extractClientContext(req);
+    const webBaseUrl = resolveWebBaseUrl(req);
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
-      const ctx = extractClientContext(req);
-      const webBaseUrl = resolveWebBaseUrl(req);
       await this.registry
         .getMembershipService()
         .fulfillMembershipCheckout(session, ({ tenantId, email, name }) =>
@@ -95,12 +98,17 @@ export class SubscriptionsWebhookController {
     // Best-effort: un fallo de billing NO puede tumbar el fulfillment de la
     // membresía ya hecho arriba, ni provocar que Stripe reintente el evento
     // durante días. Queda registrado en `mod_billing_webhook_event`.
-    await this.dispatchToBilling(event, parsedBody);
+    await this.dispatchToBilling(event, parsedBody, webBaseUrl, ctx);
 
     return { received: true, type: event.type, id: event.id };
   }
 
-  private async dispatchToBilling(event: Stripe.Event, parsedBody: unknown): Promise<void> {
+  private async dispatchToBilling(
+    event: Stripe.Event,
+    parsedBody: unknown,
+    webBaseUrl: string,
+    ctx: ClientContext,
+  ): Promise<void> {
     let billing: ReturnType<ModuleRegistryService['getBillingService']>;
     try {
       billing = this.registry.getBillingService();
@@ -108,7 +116,12 @@ export class SubscriptionsWebhookController {
       return; // mod.billing sin configurar en esta instancia: nada que hacer.
     }
     try {
-      await billing.handleWebhookEvent(event, parsedBody);
+      // Mismo provisioner que el endpoint propio de billing: una compra
+      // ANÓNIMA de curso puede entrar por este webhook compartido.
+      await billing.handleWebhookEvent(event, parsedBody, {
+        provisionUser: ({ tenantId, email, name }) =>
+          this.billingProvisioning.provision({ tenantId, email, name, webBaseUrl, ctx }),
+      });
     } catch (err) {
       // Si el evento ERA de una compra de curso, propagamos: Stripe verá un
       // 5xx y reintentará, que es la única red de seguridad que evita cobrar

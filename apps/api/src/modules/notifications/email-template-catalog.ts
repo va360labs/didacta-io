@@ -599,6 +599,28 @@ export const TRANSACTIONAL_EMAIL_DEFS: EmailTemplateCatalogEntry[] = [
       'El botón «Definir mi contraseña» y la nota con la URL de acceso se añaden siempre.',
   },
   {
+    key: 'billing.welcome',
+    name: 'Bienvenida de compra de curso',
+    description:
+      'Cuando la compra pública de un curso suelto (webhook de Stripe) crea al comprador como usuario.',
+    category: 'billing',
+    source: 'transactional',
+    channels: ['EMAIL'],
+    defaultSubject: 'Tu curso en {{tenantName}}',
+    defaultBody:
+      '{{greeting}}\n\n¡Tu compra en {{tenantName}} está confirmada! Hemos creado tu cuenta y tu curso ya te espera dentro.\n\nPara entrar, define tu contraseña con el botón de abajo (el enlace es válido 7 días).',
+    variables: [
+      { name: 'greeting', description: 'Saludo («Hola Nombre,» o «Hola,»)' },
+      { name: 'name', description: 'Nombre del comprador (puede estar vacío)' },
+      { name: 'email', description: 'Email del comprador' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+      { name: 'setPasswordUrl', description: 'Enlace mágico para definir contraseña' },
+      { name: 'signinUrl', description: 'URL de inicio de sesión' },
+    ],
+    structuralNote:
+      'El botón «Definir mi contraseña» y la nota con la URL de acceso se añaden siempre.',
+  },
+  {
     key: 'subscriptions.renewal_warning',
     name: 'Aviso de renovación al suscriptor',
     description:

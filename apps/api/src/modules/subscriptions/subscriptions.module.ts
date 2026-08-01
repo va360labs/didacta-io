@@ -6,6 +6,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { AuthModule } from '../../auth/auth.module';
+import { BillingModule } from '../billing/billing.module';
 import { ModulesModule } from '../modules.module';
 import { SubscriptionsController } from './subscriptions.controller';
 import { SubscriptionsWebhookController } from './subscriptions-webhook.controller';
@@ -27,7 +28,9 @@ import { MembershipAccessGroupsBridge } from './membership-access-groups.bridge'
 ///
 /// Convención sub-módulo (ADR-011): forwardRef recíproco con ModulesModule.
 @Module({
-  imports: [AuthModule, forwardRef(() => ModulesModule)],
+  // BillingModule aporta el provisioner del comprador anónimo de cursos: el
+  // webhook de este módulo hace fan-out a mod.billing (cuenta Stripe común).
+  imports: [AuthModule, forwardRef(() => ModulesModule), BillingModule],
   controllers: [
     SubscriptionsController,
     SubscriptionsWebhookController,

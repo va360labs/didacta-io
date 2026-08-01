@@ -15,7 +15,10 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { WebhookSignatureInvalidError } from '@didacta/mod-billing';
 import type { FastifyRequest } from 'fastify';
+import { extractClientContext } from '../../auth/client-context';
+import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
 import { ModuleRegistryService } from '../module-registry.service';
+import { BillingProvisioningService } from './billing-provisioning.service';
 
 /**
  * Endpoint público de webhooks de Stripe. NO usa JwtAuthGuard porque Stripe
@@ -30,7 +33,10 @@ import { ModuleRegistryService } from '../module-registry.service';
 @ApiTags('Webhooks · Billing')
 @Controller('modules/billing')
 export class BillingWebhookController {
-  constructor(private readonly registry: ModuleRegistryService) {}
+  constructor(
+    private readonly registry: ModuleRegistryService,
+    private readonly provisioning: BillingProvisioningService,
+  ) {}
 
   @Post('webhook')
   @HttpCode(200)
@@ -64,7 +70,15 @@ export class BillingWebhookController {
       parsedBody = { raw: rawBody };
     }
 
-    await billing.handleWebhookEvent(event, parsedBody);
+    // Provisioner del checkout PÚBLICO: si la order completada no tiene dueño
+    // (comprador anónimo), el fulfillment materializa la cuenta con el email
+    // confirmado en Stripe y envía la bienvenida con el enlace de contraseña.
+    const ctx = extractClientContext(req);
+    const webBaseUrl = resolveWebBaseUrl(req);
+    await billing.handleWebhookEvent(event, parsedBody, {
+      provisionUser: ({ tenantId, email, name }) =>
+        this.provisioning.provision({ tenantId, email, name, webBaseUrl, ctx }),
+    });
     return { received: true, type: event.type, id: event.id };
   }
 }
