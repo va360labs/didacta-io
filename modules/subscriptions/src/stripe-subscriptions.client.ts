@@ -43,7 +43,7 @@ export interface SubscriptionsStripeAdapter {
    */
   endTrialNow(subscriptionId: string): Promise<EndTrialNowResult>;
   /**
-   * Crea un Price recurring para un product. `intervalMonths` 1|3|12 se mapea
+   * Crea un Price recurring para un product. `intervalMonths` (1..12) se mapea
    * a interval month/year + interval_count. Los prices de Stripe son
    * inmutables: para cambiar el importe se crea uno nuevo.
    */
@@ -195,8 +195,9 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
 
   async createRecurringPrice(p: CreateRecurringPriceParams): Promise<string> {
     try {
-      // Stripe no tiene interval 'quarter': trimestral = month × 3. Anual usa
-      // year × 1 (más legible en el dashboard que month × 12).
+      // Stripe solo tiene interval month/year: N meses = month × N (trimestral
+      // = month × 3, semestral = month × 6…). Anual usa year × 1 (más legible
+      // en el dashboard que month × 12).
       const interval = p.intervalMonths === 12 ? 'year' : 'month';
       const intervalCount = p.intervalMonths === 12 ? 1 : p.intervalMonths;
       const price = await this.client.prices.create({

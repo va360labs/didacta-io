@@ -30,7 +30,8 @@ export type {
 export {
   MembershipService,
   MEMBERSHIP_EVENT,
-  PLAN_INTERVALS,
+  PLAN_DEFAULT_CURRENCY,
+  PLAN_INTERVAL_MAX_MONTHS,
   stripHtmlToExcerpt,
 } from './membership.service.js';
 export type {
@@ -59,6 +60,7 @@ export {
   WebhookSignatureInvalidError,
   StripeConfigMissingError,
   StripeApiError,
+  MembershipPlanIntervalInvalidError,
   MembershipPlanNotFoundError,
   MembershipPageInactiveError,
   MembershipConfigIncompleteError,

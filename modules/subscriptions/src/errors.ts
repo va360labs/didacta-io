@@ -82,6 +82,17 @@ export class StripeApiError extends SubscriptionsError {
   }
 }
 
+/** Periodicidad de plan fuera de rango: Stripe no factura periodos de más de un año. */
+export class MembershipPlanIntervalInvalidError extends SubscriptionsError {
+  constructor(intervalMonths: number) {
+    super(
+      `Periodicidad inválida: ${intervalMonths} meses. Usa un entero entre 1 y 12 (Stripe no admite periodos de facturación de más de un año).`,
+      'MEMBERSHIP_PLAN_INTERVAL_INVALID',
+    );
+    this.name = 'MembershipPlanIntervalInvalidError';
+  }
+}
+
 export class MembershipPlanNotFoundError extends SubscriptionsError {
   constructor(planId: string) {
     super(`Plan de membresía no encontrado o inactivo: ${planId}`, 'MEMBERSHIP_PLAN_NOT_FOUND');

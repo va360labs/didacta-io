@@ -33,6 +33,7 @@ import {
   MembershipConfigIncompleteError,
   MembershipNotTrialingError,
   MembershipPageInactiveError,
+  MembershipPlanIntervalInvalidError,
   MembershipPlanNotFoundError,
   StripeApiError,
   StripeConfigMissingError,
@@ -50,8 +51,26 @@ export const MEMBERSHIP_EVENT = {
   REVOKED: 'subscriptions.membership.revoked',
 } as const;
 
-/** Periodicidades soportadas (meses). */
-export const PLAN_INTERVALS = [1, 3, 12] as const;
+/**
+ * Meses máximos por periodo de facturación. Es el tope de Stripe (interval ×
+ * interval_count no puede superar un año), no una decisión de producto: vale
+ * cualquier entero 1..12 (mensual, bimestral, trimestral, semestral, anual…).
+ */
+export const PLAN_INTERVAL_MAX_MONTHS = 12;
+
+/** Moneda de un plan si el admin no indica otra (ISO 4217, minúsculas). */
+export const PLAN_DEFAULT_CURRENCY = 'eur';
+
+/** El DTO del host también valida, pero el módulo no depende de su llamador. */
+function assertPlanInterval(intervalMonths: number): void {
+  if (
+    !Number.isInteger(intervalMonths) ||
+    intervalMonths < 1 ||
+    intervalMonths > PLAN_INTERVAL_MAX_MONTHS
+  ) {
+    throw new MembershipPlanIntervalInvalidError(intervalMonths);
+  }
+}
 
 export interface PlanInput {
   name: string;
@@ -157,13 +176,14 @@ export class MembershipService {
   }
 
   async createPlan(tenantId: string, input: PlanInput): Promise<PlanRow> {
+    assertPlanInterval(input.intervalMonths);
     return this.prisma.modSubscriptionsPlan.create({
       data: {
         tenantId,
         name: input.name,
         intervalMonths: input.intervalMonths,
         amountCents: input.amountCents,
-        currency: input.currency ?? 'eur',
+        currency: input.currency ?? PLAN_DEFAULT_CURRENCY,
         compareAtCents: input.compareAtCents ?? null,
         trialDays: input.trialDays ?? 0,
         active: input.active ?? true,
@@ -174,6 +194,7 @@ export class MembershipService {
   }
 
   async updatePlan(tenantId: string, planId: string, input: Partial<PlanInput>): Promise<PlanRow> {
+    if (input.intervalMonths !== undefined) assertPlanInterval(input.intervalMonths);
     const plan = await this.prisma.modSubscriptionsPlan.findFirst({
       where: { id: planId, tenantId },
     });
@@ -607,11 +628,15 @@ type MembershipSubscriptionRow = Awaited<
   ReturnType<PrismaClient['modSubscriptionsSubscription']['create']>
 >;
 
-/** 'month' | 'quarter' | 'year' para la columna interval (texto libre). */
+/**
+ * Etiqueta informativa para la columna `interval` (texto libre): los periodos
+ * con nombre usan el término clásico y el resto queda como «Nm» (p. ej. '6m').
+ */
 function intervalLabel(intervalMonths: number): string {
   if (intervalMonths === 12) return 'year';
   if (intervalMonths === 3) return 'quarter';
-  return 'month';
+  if (intervalMonths === 1) return 'month';
+  return `${intervalMonths}m`;
 }
 
 function configData(input: MembershipConfigInput) {

@@ -33,7 +33,11 @@ export type MembershipCheckoutDto = z.infer<typeof membershipCheckoutSchema>;
 
 const planShape = {
   name: z.string().trim().min(1).max(80),
-  intervalMonths: z.union([z.literal(1), z.literal(3), z.literal(12)]),
+  /**
+   * Meses por periodo de facturación (1 mensual, 3 trimestral, 6 semestral,
+   * 12 anual…). Tope 12: Stripe no admite periodos de más de un año.
+   */
+  intervalMonths: z.number().int().min(1).max(12),
   amountCents: z.number().int().min(0).max(100_000_000),
   currency: z
     .string()

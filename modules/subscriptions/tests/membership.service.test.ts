@@ -20,6 +20,7 @@ import { MembershipService } from '../src/membership.service.js';
 import {
   MembershipNotTrialingError,
   MembershipPageInactiveError,
+  MembershipPlanIntervalInvalidError,
   MembershipPlanNotFoundError,
   StripeConfigMissingError,
 } from '../src/errors.js';
@@ -354,6 +355,47 @@ describe('MembershipService · planes', () => {
     });
     const plans = await ctx.service.listPlans(TENANT);
     expect(plans.map((p) => p.name)).toEqual(['Mensual', 'Anual']);
+  });
+
+  it('guarda la moneda del plan y usa eur solo como default', async () => {
+    const usd = await ctx.service.createPlan(TENANT, {
+      name: 'Mensual USD',
+      intervalMonths: 1,
+      amountCents: 4_900,
+      currency: 'usd',
+    });
+    const porDefecto = await ctx.service.createPlan(TENANT, {
+      name: 'Mensual',
+      intervalMonths: 1,
+      amountCents: 4_900,
+    });
+    expect(usd.currency).toBe('usd');
+    expect(porDefecto.currency).toBe('eur');
+  });
+
+  it('acepta cualquier periodicidad entera 1..12 (no solo mensual/trimestral/anual)', async () => {
+    const semestral = await ctx.service.createPlan(TENANT, {
+      name: 'Semestral',
+      intervalMonths: 6,
+      amountCents: 49_900,
+    });
+    expect(semestral.intervalMonths).toBe(6);
+  });
+
+  it('rechaza periodicidades fuera de 1..12 o no enteras (tope de Stripe: un año)', async () => {
+    for (const meses of [0, 13, 24, 1.5, -1]) {
+      await expect(
+        ctx.service.createPlan(TENANT, { name: 'X', intervalMonths: meses, amountCents: 1_000 }),
+      ).rejects.toBeInstanceOf(MembershipPlanIntervalInvalidError);
+    }
+    const plan = await ctx.service.createPlan(TENANT, {
+      name: 'OK',
+      intervalMonths: 1,
+      amountCents: 1_000,
+    });
+    await expect(
+      ctx.service.updatePlan(TENANT, plan.id, { intervalMonths: 13 }),
+    ).rejects.toBeInstanceOf(MembershipPlanIntervalInvalidError);
   });
 
   it('cambiar el PRECIO rota el stripePriceId; cambiar solo el nombre lo conserva', async () => {
