@@ -13,7 +13,7 @@ import { apiFetch } from './api-client';
  * Mismo patrón que `admin-users.ts`: las funciones reciben el `bearer` (access
  * token de la sesión, obtenido con `authStorage.getAccessToken()`) y lo pasan a
  * `apiFetch` como tercer argumento. Los endpoints viven bajo
- * `/api/v1/inscripcion/payment-flags` y requieren rol admin (el backend ya
+ * `/api/v1/modules/member-registration/payment-flags` y requieren rol admin (el backend ya
  * gatea con su guard; el gating del front es sólo UX).
  */
 
@@ -65,7 +65,7 @@ function withQuery(path: string, query: ListPaymentFlagsQuery): string {
   return qs ? `${path}?${qs}` : path;
 }
 
-const BASE = '/api/v1/inscripcion/payment-flags';
+const BASE = '/api/v1/modules/member-registration/payment-flags';
 
 export const paymentFlagsApi = {
   async list(bearer: string, query: ListPaymentFlagsQuery = {}): Promise<PaymentFlag[]> {

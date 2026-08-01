@@ -20,7 +20,7 @@
  *
  * Sin setting guardado aplica el default legacy del despliegue: con bot de
  * Telegram en el env → Telegram+OTP; sin bot → registro cerrado. La tarjeta
- * hidrata ese estado efectivo desde el endpoint público `/inscripcion/config`.
+ * hidrata ese estado efectivo desde el endpoint público `/modules/member-registration/config`.
  */
 
 import { useEffect, useState, type FormEvent } from 'react';

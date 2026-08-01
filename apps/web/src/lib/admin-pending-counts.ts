@@ -14,9 +14,9 @@
  *
  * Ambos números salen de endpoints que YA existen y que las propias pantallas
  * consumen — no hay backend nuevo ni conteo inventado:
- *   - Solicitudes: `GET /api/v1/inscripcion-admin/requests` devuelve solo las
+ *   - Solicitudes: `GET /api/v1/modules/member-registration/admin/requests` devuelve solo las
  *     PENDING, así que el badge es su longitud.
- *   - Impagos: `GET /api/v1/inscripcion/payment-flags?delinquentOnly=true`.
+ *   - Impagos: `GET /api/v1/modules/member-registration/payment-flags?delinquentOnly=true`.
  *
  * Los fallos se tragan a propósito: un badge es información accesoria y no debe
  * romper la navegación si el módulo está apagado para el tenant (404) o el

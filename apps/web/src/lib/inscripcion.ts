@@ -8,7 +8,7 @@
  *
  * Todos los endpoints de este flujo son PÚBLICOS (sin sesión): el aspirante
  * aún no tiene cuenta. Por eso usamos `apiFetch` SIN bearer. Same-origin en el
- * browser (paths `/api/v1/inscripcion/...`).
+ * browser (paths `/api/v1/modules/member-registration/...` (rutas únicas del módulo desde F3)).
  *
  * Los pasos del wizard son DINÁMICOS: el backend publica en `config` los
  * verificadores que la política del tenant exige (`telegram` y/u `otp`, o
@@ -96,7 +96,7 @@ export interface CreateInscripcionResult {
  */
 export async function fetchInscripcionConfig(): Promise<InscripcionConfig> {
   try {
-    const config = await apiFetch<InscripcionConfig>('/api/v1/inscripcion/config', {
+    const config = await apiFetch<InscripcionConfig>('/api/v1/modules/member-registration/config', {
       method: 'GET',
     });
     // Backends previos a los verificadores componibles no envían `verifiers`:
@@ -109,7 +109,7 @@ export async function fetchInscripcionConfig(): Promise<InscripcionConfig> {
 
 /** Verifica el payload del widget de Telegram. Devuelve pertenencia + ticket. */
 export function verifyTelegram(payload: TelegramAuthPayload): Promise<VerifyTelegramResult> {
-  return apiFetch<VerifyTelegramResult>('/api/v1/inscripcion/telegram/verify', {
+  return apiFetch<VerifyTelegramResult>('/api/v1/modules/member-registration/telegram/verify', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -120,7 +120,7 @@ export function verifyTelegram(payload: TelegramAuthPayload): Promise<VerifyTele
  * Telegram solo viaja si la política del tenant exige ese verificador.
  */
 export function requestOtp(email: string, ticket?: string): Promise<RequestOtpResult> {
-  return apiFetch<RequestOtpResult>('/api/v1/inscripcion/otp/request', {
+  return apiFetch<RequestOtpResult>('/api/v1/modules/member-registration/otp/request', {
     method: 'POST',
     body: JSON.stringify(ticket ? { email, ticket } : { email }),
   });
@@ -128,7 +128,7 @@ export function requestOtp(email: string, ticket?: string): Promise<RequestOtpRe
 
 /** Verifica el código OTP y devuelve el verificationToken para el paso final. */
 export function verifyOtp(email: string, code: string, ticket?: string): Promise<VerifyOtpResult> {
-  return apiFetch<VerifyOtpResult>('/api/v1/inscripcion/otp/verify', {
+  return apiFetch<VerifyOtpResult>('/api/v1/modules/member-registration/otp/verify', {
     method: 'POST',
     body: JSON.stringify(ticket ? { email, code, ticket } : { email, code }),
   });
@@ -136,7 +136,7 @@ export function verifyOtp(email: string, code: string, ticket?: string): Promise
 
 /** Crea la solicitud de inscripción (queda PENDING de validación). */
 export function createInscripcion(input: CreateInscripcionInput): Promise<CreateInscripcionResult> {
-  return apiFetch<CreateInscripcionResult>('/api/v1/inscripcion/register', {
+  return apiFetch<CreateInscripcionResult>('/api/v1/modules/member-registration/register', {
     method: 'POST',
     body: JSON.stringify(input),
   });
@@ -203,7 +203,7 @@ export interface MemberRequest {
   } | null;
 }
 
-const ADMIN_BASE = '/api/v1/inscripcion-admin';
+const ADMIN_BASE = '/api/v1/modules/member-registration/admin';
 
 /** Lista las solicitudes PENDING con su lookup de suscripción (todas las cuentas). */
 export async function listMemberRequests(bearer: string): Promise<MemberRequest[]> {
