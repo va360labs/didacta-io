@@ -558,6 +558,17 @@ export class LearningController {
     return this.registry.getLearningService().cancelEnrollment(user.tenantId, user.sub, id);
   }
 
+  @Delete('enrollments/:id/by-admin')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Dar de baja la matrícula de un alumno (formador/admin)' })
+  async cancelByAdmin(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    // Dar de baja a OTRO usuario es acción administrativa: sin este check,
+    // cualquier alumno podría cancelar matrículas ajenas adivinando el id
+    // (el DELETE de arriba solo alcanza las propias por el filtro por userId).
+    const u = requireScormEditor(user);
+    return this.registry.getLearningService().cancelEnrollmentByAdmin(u.tenantId, u.sub, id);
+  }
+
   @Post('progress')
   @HttpCode(200)
   @ApiOperation({ summary: 'Reportar progreso en una lección' })

@@ -608,6 +608,49 @@ describe('LearningService', () => {
     );
   });
 
+  describe('cancelEnrollmentByAdmin (baja administrativa, F5 viaje 1)', () => {
+    it('cancela la matrícula de OTRO usuario y emite evento', async () => {
+      const fake = makeFakePrisma();
+      fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
+      const ctx = makeContext();
+      const service = new LearningService(fake.prisma as never, ctx);
+      const e = await service.enrollByAdmin('t-1', 'admin', { userId: 'u-1', courseId: 'c-1' });
+
+      // 'admin' NO es el dueño de la matrícula: cancelEnrollment se lo negaría.
+      const cancelled = await service.cancelEnrollmentByAdmin('t-1', 'admin', e.id);
+      expect(cancelled.status).toBe('CANCELLED');
+      expect(cancelled.cancelledAt).not.toBeNull();
+      expect(ctx.eventBus.publish).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'learning.enrollment.cancelled' }),
+      );
+    });
+
+    it('es idempotente: sobre una CANCELLED devuelve la fila sin re-emitir', async () => {
+      const fake = makeFakePrisma();
+      fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
+      const ctx = makeContext();
+      const service = new LearningService(fake.prisma as never, ctx);
+      const e = await service.enrollByAdmin('t-1', 'admin', { userId: 'u-1', courseId: 'c-1' });
+      await service.cancelEnrollmentByAdmin('t-1', 'admin', e.id);
+
+      const publishesBefore = ctx.eventBus.publish.mock.calls.length;
+      const again = await service.cancelEnrollmentByAdmin('t-1', 'admin', e.id);
+      expect(again.status).toBe('CANCELLED');
+      expect(ctx.eventBus.publish.mock.calls.length).toBe(publishesBefore);
+    });
+
+    it('no cruza tenants: la matrícula de otro tenant es NotFound', async () => {
+      const fake = makeFakePrisma();
+      fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
+      const service = new LearningService(fake.prisma as never, makeContext());
+      const e = await service.enrollByAdmin('t-1', 'admin', { userId: 'u-1', courseId: 'c-1' });
+
+      await expect(service.cancelEnrollmentByAdmin('t-2', 'admin', e.id)).rejects.toBeInstanceOf(
+        EnrollmentNotFoundError,
+      );
+    });
+  });
+
   describe('getEnrollmentProgressDetail (vista del formador)', () => {
     it('lanza EnrollmentNotFoundError si la matrícula no existe', async () => {
       const fake = makeFakePrisma();

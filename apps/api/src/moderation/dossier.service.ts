@@ -130,9 +130,13 @@ export interface UserDossier {
   };
   learning: {
     enrollments: Array<{
+      /** Id de la matrícula: lo necesita la baja administrativa desde la ficha. */
+      id: string;
       courseId: string;
       courseTitle: string | null;
       status: string;
+      /** ADMIN | CODE | INVITATION_LINK | PURCHASE | IMPORT | SUBSCRIPTION | API | GROUP */
+      source: string;
       progressPercent: number;
       enrolledAt: string;
       completedAt: string | null;
@@ -218,6 +222,20 @@ export interface UserDossier {
       lastSeenAt: string | null;
     }>;
   };
+  /**
+   * Grupos de acceso ACTIVOS del usuario (mod.access-groups). Misma lectura
+   * cross-módulo sin escritura que el resto del expediente. Los grupos
+   * borrados (soft-delete) se filtran aunque la membresía siga ACTIVE.
+   */
+  accessGroups: Array<{
+    groupId: string;
+    slug: string;
+    name: string;
+    kind: string;
+    /** MANUAL (alta del admin) | TIER (reconciliada por membresía de pago). */
+    source: string;
+    grantedAt: string;
+  }>;
   restrictions: RestrictionRecord[];
 }
 
@@ -287,6 +305,7 @@ export class DossierService {
       messageCount,
       recentMessages,
       gamification,
+      groupMemberships,
       restrictions,
     ] = await Promise.all([
       this.prisma.modBillingOrder.findMany({
@@ -351,8 +370,23 @@ export class DossierService {
         include: { conversation: { select: { type: true } } },
       }),
       this.prisma.modGamificationProfile.findFirst({ where: { tenantId, userId } }),
+      this.prisma.modAccessGroupMember.findMany({
+        where: { tenantId, userId, status: 'ACTIVE' },
+        orderBy: { grantedAt: 'desc' },
+      }),
       this.restrictions.list(tenantId, userId),
     ]);
+
+    // Nombre y tipo de cada grupo en un viaje aparte (sin FK cross-module).
+    // Un grupo soft-deleted deja la membresía huérfana: se filtra al mapear.
+    const groupIds = [...new Set(groupMemberships.map((m) => m.groupId))];
+    const groups = groupIds.length
+      ? await this.prisma.modAccessGroup.findMany({
+          where: { id: { in: groupIds }, tenantId, deletedAt: null },
+          select: { id: true, slug: true, name: true, kind: true },
+        })
+      : [];
+    const groupOf = new Map(groups.map((g) => [g.id, g]));
 
     // Títulos de curso en un solo viaje: los pedidos y las matrículas los
     // referencian por id y un expediente con UUIDs no se puede leer.
@@ -492,9 +526,11 @@ export class DossierService {
       },
       learning: {
         enrollments: enrollments.map((e) => ({
+          id: e.id,
           courseId: e.courseId,
           courseTitle: titleOf.get(e.courseId) ?? null,
           status: e.status,
+          source: e.source,
           progressPercent: e.progressPercent,
           enrolledAt: e.enrolledAt.toISOString(),
           completedAt: e.completedAt?.toISOString() ?? null,
@@ -581,6 +617,19 @@ export class DossierService {
           lastSeenAt: i.lastSeenAt?.toISOString() ?? null,
         })),
       },
+      accessGroups: groupMemberships
+        .filter((m) => groupOf.has(m.groupId))
+        .map((m) => {
+          const g = groupOf.get(m.groupId)!;
+          return {
+            groupId: m.groupId,
+            slug: g.slug,
+            name: g.name,
+            kind: g.kind,
+            source: m.source,
+            grantedAt: m.grantedAt.toISOString(),
+          };
+        }),
       restrictions,
     };
   }

@@ -960,6 +960,32 @@ export class LearningService {
     return updated;
   }
 
+  /**
+   * Baja administrativa: cancela la matrícula de OTRO usuario del tenant.
+   *
+   * Método separado de `cancelEnrollment` a propósito: aquel filtra por el
+   * userId del llamante (autoservicio) y compartir código con un flag habría
+   * dejado la puerta abierta a que un guard mal puesto permitiera a un alumno
+   * cancelar matrículas ajenas. Idempotente: sobre una CANCELLED devuelve la
+   * fila sin tocarla. No borra progreso: reactivar (re-matricular) lo conserva.
+   */
+  async cancelEnrollmentByAdmin(tenantId: string, actorId: string | null, enrollmentId: string) {
+    const existing = await this.prisma.modLearningEnrollment.findFirst({
+      where: { tenantId, id: enrollmentId },
+    });
+    if (!existing) throw new EnrollmentNotFoundError();
+    if (existing.status === 'CANCELLED') return existing;
+
+    const updated = await this.prisma.modLearningEnrollment.update({
+      where: { id: enrollmentId },
+      data: { status: 'CANCELLED', cancelledAt: new Date() },
+    });
+    await this.publish(tenantId, actorId, 'learning.enrollment.cancelled', {
+      enrollmentId,
+    });
+    return updated;
+  }
+
   // ---------------------- helpers privados ----------------------
 
   private async createEnrollment(params: {

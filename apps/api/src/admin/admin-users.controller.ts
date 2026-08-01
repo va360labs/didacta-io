@@ -35,6 +35,9 @@ const inviteSchema = z.object({
   email: z.string().email().max(200),
   name: z.string().min(1).max(120).optional(),
   role: z.enum(TENANT_ASSIGNABLE_ROLES),
+  /// Grupo de acceso al que añadir al invitado en el mismo alta (viaje 1:
+  /// invitar con aula). Opcional; se valida contra el tenant en el service.
+  accessGroupId: z.string().uuid().optional(),
 });
 type InviteDto = z.infer<typeof inviteSchema>;
 
@@ -120,7 +123,12 @@ export class AdminUsersController {
     return this.service.invite(
       u.tenantId,
       u.sub,
-      { email: dto.email, name: dto.name, role: dto.role as AssignableRole },
+      {
+        email: dto.email,
+        name: dto.name,
+        role: dto.role as AssignableRole,
+        accessGroupId: dto.accessGroupId,
+      },
       webBaseUrl,
       extractClientContext(req),
     );

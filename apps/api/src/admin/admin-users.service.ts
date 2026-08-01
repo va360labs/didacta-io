@@ -12,6 +12,7 @@ import {
 import { Logger as PinoLogger } from 'nestjs-pino';
 import type { ClientContext } from '../auth/client-context';
 import { PasswordResetService } from '../auth/password-reset.service';
+import { AccessGroupsService } from '../modules/access-groups/access-groups.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountStateService } from '../auth/account-state.service';
@@ -84,6 +85,9 @@ export class AdminUsersService {
     private readonly passwordReset: PasswordResetService,
     private readonly logger: PinoLogger,
     private readonly accountState: AccountStateService,
+    // Mismo patrón que InscribeService: el core llama al service del módulo
+    // first-party, nunca a sus tablas. Ver `invite()` con `accessGroupId`.
+    private readonly accessGroups: AccessGroupsService,
   ) {}
 
   /**
@@ -194,11 +198,18 @@ export class AdminUsersService {
    * con `suppressInvite: true`) para importar miles de users sin bombardearlos
    * con emails. El endpoint admin manual NO pasa este flag, así que mantiene
    * el comportamiento por defecto: invitar a mano SÍ envía el email.
+   *
+   * `dto.accessGroupId` (opcional): añade al invitado a ese grupo de acceso en
+   * el mismo alta, con lo que queda matriculado ya en los cursos del grupo
+   * (viaje 1: invitar CON aula, no a un campus vacío). El grupo se valida ANTES
+   * de crear el user para que un id inválido falle sin dejar el alta a medias;
+   * si el fan-out de matrículas falla después, el user queda creado igualmente
+   * y el operador lo ve en el grupo desde /admin/grupos-acceso (fail-soft).
    */
   async invite(
     tenantId: string,
     actorId: string,
-    dto: { email: string; name?: string; role: AssignableRole },
+    dto: { email: string; name?: string; role: AssignableRole; accessGroupId?: string },
     webBaseUrl: string,
     ctx: ClientContext = NO_CTX,
     options: { sendInvite?: boolean } = {},
@@ -221,6 +232,12 @@ export class AdminUsersService {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new NotFoundException('Tenant no encontrado.');
 
+    // Antes de crear nada: un grupo inexistente (o de otro tenant) debe abortar
+    // el alta entera con 404, no crear un user a medio configurar.
+    if (dto.accessGroupId) {
+      await this.accessGroups.getGroup(tenantId, dto.accessGroupId);
+    }
+
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
@@ -242,10 +259,28 @@ export class AdminUsersService {
       action: 'admin.user.invited',
       resourceType: 'user',
       resourceId: user.id,
-      metadata: { email: dto.email, role: dto.role },
+      metadata: {
+        email: dto.email,
+        role: dto.role,
+        ...(dto.accessGroupId ? { accessGroupId: dto.accessGroupId } : {}),
+      },
       ip: ctx.ip ?? undefined,
       userAgent: ctx.userAgent ?? undefined,
     });
+
+    // Alta en el grupo de acceso (y por tanto matrícula en sus cursos). Después
+    // de crear el user y a propósito fail-soft: si el fan-out de matrículas
+    // falla, el alta ya es válida y reintentarlo es trivial desde el panel.
+    if (dto.accessGroupId) {
+      try {
+        await this.accessGroups.assignMembers(tenantId, dto.accessGroupId, [user.id]);
+      } catch (err) {
+        this.logger.warn(
+          { err, userId: user.id, accessGroupId: dto.accessGroupId },
+          'admin.invite: el usuario se creó pero no se pudo añadir al grupo de acceso',
+        );
+      }
+    }
 
     // Enviar email de "define tu contraseña" reusando el flujo de reset.
     // `allowPending: true` se mantiene por si el user ya existía en PENDING de

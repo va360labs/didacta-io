@@ -9,6 +9,7 @@
   "permissions": ["learning:read", "learning:write"],
   "events": [
     { "name": "learning.enrollment.created" },
+    { "name": "learning.enrollment.cancelled" },
     { "name": "learning.lesson.completed" },
     { "name": "learning.course.completed" }
   ],

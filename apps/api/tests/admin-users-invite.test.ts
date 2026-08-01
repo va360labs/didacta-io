@@ -17,6 +17,12 @@
  * Contexto del status: la cuenta nace ACTIVE. No puede entrar igualmente hasta
  * definir contraseña (`signin` exige `passwordHash`), pero ya no necesita que un
  * admin la "reactive" a mano después de que su dueño estrene el enlace.
+ *
+ * Contexto de `accessGroupId` (F5 viaje 1): invitar CON aula. El grupo se
+ * valida ANTES de crear el user (un id inválido no debe dejar un alta a
+ * medias) y el alta en el grupo tras crear es fail-soft (si el fan-out de
+ * matrículas falla, el user queda creado y el operador reintenta desde el
+ * panel de grupos).
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -71,12 +77,25 @@ function makeService() {
   const passwordReset = {
     requestAndSendEmail: vi.fn().mockResolvedValue(undefined),
   };
-  const noopLogger = { warn: vi.fn(), log: vi.fn(), error: vi.fn(), debug: vi.fn() } as never;
+  const logger = { warn: vi.fn(), log: vi.fn(), error: vi.fn(), debug: vi.fn() };
+  const accessGroups = {
+    getGroup: vi.fn().mockResolvedValue({ id: 'grupo-1', name: 'Aula 2026' }),
+    assignMembers: vi.fn().mockResolvedValue({ assigned: 1, added: 1 }),
+  };
 
   return {
-    service: new AdminUsersService(prisma, noopAudit, passwordReset as never, noopLogger),
+    service: new AdminUsersService(
+      prisma,
+      noopAudit,
+      passwordReset as never,
+      logger as never,
+      undefined as never, // accountState: no participa en invite()
+      accessGroups as never,
+    ),
     passwordReset,
     tx,
+    logger,
+    accessGroups,
   };
 }
 
@@ -142,5 +161,67 @@ describe('AdminUsersService.invite — flag sendInvite (alpha.81)', () => {
     // operador manda después con resend-invite.
     expect(detail.status).toBe('ACTIVE');
     expect(detail.email).toBe('nuevo@example.com');
+  });
+});
+
+describe('AdminUsersService.invite — accessGroupId (F5 viaje 1)', () => {
+  it('sin accessGroupId no toca el módulo de grupos', async () => {
+    const { service, accessGroups } = makeService();
+
+    await service.invite(
+      TENANT_ID,
+      ACTOR_ID,
+      { email: 'nuevo@example.com', role: 'alumno' },
+      WEB_BASE_URL,
+    );
+
+    expect(accessGroups.getGroup).not.toHaveBeenCalled();
+    expect(accessGroups.assignMembers).not.toHaveBeenCalled();
+  });
+
+  it('con accessGroupId válido: valida el grupo y añade al user recién creado', async () => {
+    const { service, accessGroups } = makeService();
+
+    await service.invite(
+      TENANT_ID,
+      ACTOR_ID,
+      { email: 'nuevo@example.com', role: 'alumno', accessGroupId: 'grupo-1' },
+      WEB_BASE_URL,
+    );
+
+    expect(accessGroups.getGroup).toHaveBeenCalledWith(TENANT_ID, 'grupo-1');
+    expect(accessGroups.assignMembers).toHaveBeenCalledWith(TENANT_ID, 'grupo-1', ['new-user']);
+  });
+
+  it('grupo inexistente: aborta ANTES de crear el user (nada a medias)', async () => {
+    const { service, accessGroups, tx } = makeService();
+    accessGroups.getGroup.mockRejectedValue(new Error('Grupo de acceso no encontrado'));
+
+    await expect(
+      service.invite(
+        TENANT_ID,
+        ACTOR_ID,
+        { email: 'nuevo@example.com', role: 'alumno', accessGroupId: 'no-existe' },
+        WEB_BASE_URL,
+      ),
+    ).rejects.toThrow('Grupo de acceso no encontrado');
+
+    expect(tx.user.create).not.toHaveBeenCalled();
+    expect(accessGroups.assignMembers).not.toHaveBeenCalled();
+  });
+
+  it('fallo al añadir al grupo: fail-soft — el user queda creado y se registra warn', async () => {
+    const { service, accessGroups, logger } = makeService();
+    accessGroups.assignMembers.mockRejectedValue(new Error('fan-out roto'));
+
+    const detail = await service.invite(
+      TENANT_ID,
+      ACTOR_ID,
+      { email: 'nuevo@example.com', role: 'alumno', accessGroupId: 'grupo-1' },
+      WEB_BASE_URL,
+    );
+
+    expect(detail.email).toBe('nuevo@example.com');
+    expect(logger.warn).toHaveBeenCalledTimes(1);
   });
 });
