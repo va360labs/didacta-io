@@ -10,6 +10,58 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.90] — 2026-08-01
+
+#### Notes
+
+- **Captación de alumnos sobre módulos existentes.** Esta versión compone los
+  viajes de una academia (alta manual con matrícula, venta de membresías)
+  sobre los módulos ya construidos, y formaliza la inscripción de miembros
+  como módulo first-party.
+
+#### Added
+
+- **Registro de miembros componible por tenant**: política con 4 modos
+  (cerrado / libre / OTP por email / Telegram+OTP) fail-closed, bot de
+  Telegram y aprobador como settings de tenant (secreto cifrado at-rest, con
+  fallback a las env legacy del despliegue), wizard público con pasos
+  dinámicos y card «Registro» en `/admin/configuracion`.
+- **`mod.member-registration` formalizado**: paquete `modules/member-registration`
+  con manifest (dependencia de `mod.payment-connections`; `mod.access-groups`
+  como opcional hasta su formalización), eventos
+  `member_registration.request.{created,approved,rejected}` emitidos vía
+  outbox y las 4 plantillas de email del flujo registradas por el módulo en el
+  catálogo de `/admin/emails`. Host NestJS in-tree (ADR-011/015).
+- **Viaje 1 (alta manual) redondeado**: matrícula directa desde admin, ficha
+  de usuario accionable (grupos, matrículas y baja administrativa), invitación
+  con grupo de acceso (membresía + matrícula antes del primer login).
+- **Membresías flexibles**: periodicidad de planes de 1 a 12 meses (tope de
+  facturación de Stripe) y moneda por plan (selector con 8 divisas de dos
+  decimales; `/unete` y precios de referencia heredan la moneda del plan).
+- **Cimientos RLS**: worklist de acceso sin contexto de tenant cerrada a cero
+  huecos + benchmark de coste; el flip de enforcement llegará en una fase
+  posterior.
+
+#### Changed
+
+- **Rutas del flujo de inscripción (BREAKING)**: las rutas legacy
+  `/api/v1/inscripcion*` se retiran; las únicas son
+  `/api/v1/modules/member-registration[/admin|/payment-flags]`. Migración
+  coordinada: ninguna instalación corre aún el canal de release; las
+  integraciones externas (n8n/Woo) deben actualizarse al adoptar esta versión.
+- Enum `MemberDecisionAction` renombrado a `MemberRegistrationDecisionAction`
+  y claves de plantillas `inscripcion.*` → `member_registration.*` (migración
+  versionada incluida; los overrides per-tenant se conservan).
+- Impagos del registro clavados a email/userId (`telegramId` queda como clave
+  legacy); los datos de Telegram del registro viven en
+  `mod_member_registration_profile` (dual-write; las columnas equivalentes de
+  `user` quedan deprecadas hasta su retirada coordinada).
+- `mod.payment-connections`: el ruleset por defecto ya no clasifica accesos
+  por nombre de producto; la regla «lifetime» queda como ejemplo documentado
+  (`EXAMPLE_LIFETIME_RULE`) que cada tenant adopta si le aplica.
+- Defaults whitelabel: referidos sin exigencia de membresía activa por
+  defecto, TZ de crons a UTC y placeholders neutros.
+
 ### [0.0.1-alpha.89] — 2026-07-31
 
 #### Notes
