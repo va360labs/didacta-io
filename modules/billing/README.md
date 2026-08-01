@@ -14,13 +14,17 @@ Alpha. MVP cubre pago único por curso. Suscripciones recurrentes y marketplace 
 
 - Tenant admin liga `courseId` ↔ `stripePriceId` desde el admin panel.
 - Alumno autenticado pulsa "Comprar" → backend crea Checkout Session → redirige al hosted checkout de Stripe.
+- **Viaje 2 público**: un VISITANTE sin cuenta compra desde el catálogo público (`/catalogo` en la web). El checkout es anónimo: la order nace `PENDING` sin dueño y, al confirmarse el pago, el fulfillment materializa la cuenta con el email confirmado en Stripe (find-or-create + bienvenida con enlace «Define tu contraseña»), rellena el `user_id` de la order y emite el evento.
 - Al pagar, Stripe envía webhook `checkout.session.completed` → orden a `COMPLETED` + emit `billing.order.completed`.
 - `mod.learning` escucha el evento y enrolla al alumno (source `PURCHASE`).
-- Idempotencia garantizada: cada `evt_*` de Stripe se persiste y no se reprocesa.
+- Idempotencia garantizada: cada `evt_*` de Stripe se persiste y no se reprocesa; la reentrega de un checkout anónimo no duplica ni cuenta ni matrícula.
 
 ## API pública
 
 - `POST /modules/billing/checkout/:courseId` — alumno autenticado. Devuelve `{ url, sessionId }`. Redirige el front al `url`.
+- `GET /modules/billing/public/catalog` — **sin JWT** (tenant por Host). Cursos `PUBLISHED` con opciones de compra activas y precios. Sin Stripe configurado devuelve lista vacía.
+- `GET /modules/billing/public/offer/:courseId` — **sin JWT**. Oferta del curso (`forSale=false` si no se vende o no está publicado).
+- `POST /modules/billing/public/checkout/:courseId` — **sin JWT**. Checkout anónimo `{ optionId?, email? }` → `{ url, sessionId }`. La cuenta se crea tras el pago.
 - `POST /modules/billing/webhook` — público (firma HMAC verificada). Cuerpo raw + cabecera `stripe-signature`.
 - `GET /modules/billing/products` — admin. Lista productos del tenant.
 - `POST /modules/billing/products` — admin. Crea producto `{ courseId, stripePriceId }` (cache de `unit_amount` y `currency` lookups).
@@ -30,7 +34,7 @@ Alpha. MVP cubre pago único por curso. Suscripciones recurrentes y marketplace 
 ## Modelo de datos
 
 - `mod_billing_product` — un row por curso vendible. `unique(tenantId, courseId)` + `unique(tenantId, stripePriceId)`.
-- `mod_billing_order` — una compra. Estado: `PENDING → COMPLETED | CANCELLED | FAILED | REFUNDED`.
+- `mod_billing_order` — una compra. Estado: `PENDING → COMPLETED | CANCELLED | FAILED | REFUNDED`. `user_id` nullable: el checkout público lo deja en `NULL` hasta que el fulfillment materializa al comprador.
 - `mod_billing_webhook_event` — log idempotente. PK = `stripe_event_id`.
 
 ## Configuración

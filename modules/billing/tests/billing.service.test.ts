@@ -15,7 +15,7 @@
  *     async_payment_failed→FAILED.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type Stripe from 'stripe';
 import {
   BillingService,
@@ -57,7 +57,7 @@ interface ProductRow {
 interface OrderRow {
   id: string;
   tenantId: string;
-  userId: string;
+  userId: string | null;
   productId: string;
   courseId: string;
   stripeSessionId: string;
@@ -250,16 +250,27 @@ class MockStripe implements StripeAdapter {
     });
   }
 
-  lastCheckout: { successUrl: string; cancelUrl: string } | null = null;
+  lastCheckout: {
+    successUrl: string;
+    cancelUrl: string;
+    metadata: Record<string, string>;
+    customerEmail?: string;
+  } | null = null;
   lastOneOffPrice: { name: string; unitAmount: number; currency: string } | null = null;
 
   async createCheckoutSession(params: {
     metadata: Record<string, string>;
     successUrl: string;
     cancelUrl: string;
+    customerEmail?: string;
   }) {
     this.sessionCounter += 1;
-    this.lastCheckout = { successUrl: params.successUrl, cancelUrl: params.cancelUrl };
+    this.lastCheckout = {
+      successUrl: params.successUrl,
+      cancelUrl: params.cancelUrl,
+      metadata: params.metadata,
+      customerEmail: params.customerEmail,
+    };
     return {
       id: `cs_test_${this.sessionCounter}`,
       url: `https://checkout.stripe.test/cs_test_${this.sessionCounter}`,
@@ -911,6 +922,31 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     expect(publisher.events[0].name).toBe('billing.order.failed');
   });
 
+  it('checkout logueado: el fulfillment NO llama al provisioner (la order ya tiene dueño)', async () => {
+    stripe.setPrice('price_a');
+    await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
+    const checkout = await svc.startCheckout({
+      tenantId: 't1',
+      userId: 'u1',
+      userEmail: 'u@test',
+      courseId: 'course-1',
+    });
+    publisher.events = [];
+
+    const provision = vi.fn();
+    await svc.handleWebhookEvent(
+      buildSessionCompletedEvent(checkout.orderId),
+      {},
+      {
+        provisionUser: provision,
+      },
+    );
+
+    expect(provision).not.toHaveBeenCalled();
+    expect(publisher.events[0].payload.userId).toBe('u1');
+    expect(publisher.events[0].payload.userCreated).toBe(false);
+  });
+
   it('eventos no relevantes (ej. invoice.paid) se persisten pero no afectan estado', async () => {
     stripe.setPrice('price_a');
     await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
@@ -925,6 +961,224 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     );
 
     expect(prisma.webhookEvents.has('evt_invoice')).toBe(true);
+    expect(publisher.events).toHaveLength(0);
+  });
+});
+
+describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)', () => {
+  let prisma: MockPrisma;
+  let stripe: MockStripe;
+  let publisher: MockPublisher;
+  let svc: BillingService;
+
+  beforeEach(async () => {
+    prisma = new MockPrisma();
+    stripe = new MockStripe();
+    publisher = new MockPublisher();
+    svc = new BillingService(prisma as unknown as never, stripe, publisher, urls);
+    stripe.setPrice('price_a');
+    await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
+  });
+
+  /** Evento completed de una session ANÓNIMA: sin userId en la metadata. */
+  function anonymousCompletedEvent(
+    orderId: string,
+    opts?: { email?: string | null; name?: string | null; eventId?: string },
+  ): Stripe.Event {
+    return {
+      id: opts?.eventId ?? `evt_anon_${orderId}`,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_anon',
+          metadata: { orderId, tenantId: 't1', courseId: 'course-1', productId: 'prod-1' },
+          amount_total: 999,
+          customer_email: null,
+          customer_details:
+            opts?.email === null
+              ? { email: null }
+              : { email: opts?.email ?? ' Compradora@Example.COM ', name: opts?.name ?? 'Ana' },
+          payment_intent: 'pi_anon_1',
+          status: 'complete',
+        } as unknown as Stripe.Checkout.Session,
+      },
+    } as Stripe.Event;
+  }
+
+  it('startCheckout anónimo: order PENDING sin dueño y metadata sin userId', async () => {
+    const checkout = await svc.startCheckout({
+      tenantId: 't1',
+      courseId: 'course-1',
+      successUrl:
+        'https://aula.example.com/catalogo/checkout/success?session_id={CHECKOUT_SESSION_ID}',
+      cancelUrl: 'https://aula.example.com/catalogo/checkout/cancel',
+    });
+
+    const stored = prisma.orders.get(checkout.orderId)!;
+    expect(stored.status).toBe('PENDING');
+    expect(stored.userId).toBeNull();
+    // La marca de pertenencia (orderId+productId) viaja; userId NO.
+    expect(stripe.lastCheckout?.metadata.orderId).toBe(checkout.orderId);
+    expect(stripe.lastCheckout?.metadata.productId).toBeTruthy();
+    expect(stripe.lastCheckout?.metadata).not.toHaveProperty('userId');
+    // Sin email: lo recoge el checkout hosted de Stripe.
+    expect(stripe.lastCheckout?.customerEmail).toBeUndefined();
+    // ORDER_CREATED sin actor (no hay usuario todavía).
+    expect(publisher.events[0].name).toBe('billing.order.created');
+    expect(publisher.events[0].actorId).toBeNull();
+  });
+
+  it('fulfillment anónimo: materializa al comprador con el email CONFIRMADO en Stripe y emite completed con su userId', async () => {
+    const checkout = await svc.startCheckout({ tenantId: 't1', courseId: 'course-1' });
+    publisher.events = [];
+    const provision = vi.fn().mockResolvedValue({ userId: 'u-nueva', created: true });
+
+    await svc.handleWebhookEvent(
+      anonymousCompletedEvent(checkout.orderId),
+      {},
+      {
+        provisionUser: provision,
+      },
+    );
+
+    // Email normalizado (trim + lowercase) y nombre de Stripe.
+    expect(provision).toHaveBeenCalledTimes(1);
+    expect(provision).toHaveBeenCalledWith({
+      tenantId: 't1',
+      email: 'compradora@example.com',
+      name: 'Ana',
+    });
+    const updated = prisma.orders.get(checkout.orderId)!;
+    expect(updated.status).toBe('COMPLETED');
+    expect(updated.userId).toBe('u-nueva');
+    expect(publisher.events).toHaveLength(1);
+    expect(publisher.events[0].name).toBe('billing.order.completed');
+    expect(publisher.events[0].payload.userId).toBe('u-nueva');
+    expect(publisher.events[0].payload.userCreated).toBe(true);
+  });
+
+  it('reentrega del webhook: NO provisiona dos veces ni re-emite el evento', async () => {
+    const checkout = await svc.startCheckout({ tenantId: 't1', courseId: 'course-1' });
+    publisher.events = [];
+    const provision = vi.fn().mockResolvedValue({ userId: 'u-nueva', created: true });
+    const event = anonymousCompletedEvent(checkout.orderId);
+
+    await svc.handleWebhookEvent(event, {}, { provisionUser: provision });
+    await svc.handleWebhookEvent(event, {}, { provisionUser: provision });
+
+    expect(provision).toHaveBeenCalledTimes(1);
+    expect(publisher.events).toHaveLength(1);
+  });
+
+  it('sin provisioner del host: lanza y el evento queda reintentable (no se quema el pago)', async () => {
+    const checkout = await svc.startCheckout({ tenantId: 't1', courseId: 'course-1' });
+    publisher.events = [];
+    const event = anonymousCompletedEvent(checkout.orderId);
+
+    await expect(svc.handleWebhookEvent(event, {})).rejects.toThrow(/provisioner/);
+    expect(prisma.orders.get(checkout.orderId)!.status).toBe('PENDING');
+
+    // El reintento de Stripe (mismo event id), esta vez con provisioner, completa.
+    const provision = vi.fn().mockResolvedValue({ userId: 'u-nueva', created: true });
+    await svc.handleWebhookEvent(event, {}, { provisionUser: provision });
+    expect(prisma.orders.get(checkout.orderId)!.status).toBe('COMPLETED');
+    expect(publisher.events).toHaveLength(1);
+  });
+
+  it('session pagada sin email del comprador: lanza (Stripe reintenta) en vez de completar sin dueño', async () => {
+    const checkout = await svc.startCheckout({ tenantId: 't1', courseId: 'course-1' });
+    const provision = vi.fn();
+
+    await expect(
+      svc.handleWebhookEvent(
+        anonymousCompletedEvent(checkout.orderId, { email: null }),
+        {},
+        {
+          provisionUser: provision,
+        },
+      ),
+    ).rejects.toThrow(/email/);
+    expect(provision).not.toHaveBeenCalled();
+    expect(prisma.orders.get(checkout.orderId)!.status).toBe('PENDING');
+  });
+
+  it('comprador con cuenta EXISTENTE (mismo email): reutiliza su userId sin crear otra', async () => {
+    const checkout = await svc.startCheckout({ tenantId: 't1', courseId: 'course-1' });
+    publisher.events = [];
+    const provision = vi.fn().mockResolvedValue({ userId: 'u-existente', created: false });
+
+    await svc.handleWebhookEvent(
+      anonymousCompletedEvent(checkout.orderId),
+      {},
+      {
+        provisionUser: provision,
+      },
+    );
+
+    expect(prisma.orders.get(checkout.orderId)!.userId).toBe('u-existente');
+    expect(publisher.events[0].payload.userCreated).toBe(false);
+  });
+
+  it('getCatalog agrupa las opciones ACTIVAS por curso con el % de descuento derivado', async () => {
+    await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-2',
+      unitAmount: 5000,
+      compareAtAmount: 10000,
+      optionName: 'Curso',
+    });
+    await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-2',
+      unitAmount: 9000,
+      optionName: 'Curso Avanzado',
+      sortOrder: 1,
+    });
+    // Una opción desactivada no aparece en el catálogo público.
+    const apagada = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-3',
+      unitAmount: 700,
+    });
+    await svc.updateProduct({
+      tenantId: 't1',
+      productId: apagada.product.id,
+      patch: { active: false },
+    });
+
+    const catalogo = await svc.getCatalog('t1');
+
+    const ids = catalogo.map((c) => c.courseId).sort();
+    expect(ids).toEqual(['course-1', 'course-2']);
+    const curso2 = catalogo.find((c) => c.courseId === 'course-2')!;
+    expect(curso2.options.map((o) => o.name)).toEqual(['Curso', 'Curso Avanzado']);
+    expect(curso2.options[0].discountPercent).toBe(50);
+    expect(curso2.options[1].discountPercent).toBeNull();
+  });
+
+  it('checkout anónimo expirado: order CANCELLED sin provisionar a nadie', async () => {
+    const checkout = await svc.startCheckout({ tenantId: 't1', courseId: 'course-1' });
+    publisher.events = [];
+    const provision = vi.fn();
+
+    await svc.handleWebhookEvent(
+      {
+        id: 'evt_anon_expire',
+        type: 'checkout.session.expired',
+        data: {
+          object: {
+            id: 'cs_anon',
+            metadata: { orderId: checkout.orderId },
+            status: 'expired',
+          } as unknown as Stripe.Checkout.Session,
+        },
+      } as Stripe.Event,
+      {},
+      { provisionUser: provision },
+    );
+
+    expect(prisma.orders.get(checkout.orderId)!.status).toBe('CANCELLED');
+    expect(provision).not.toHaveBeenCalled();
     expect(publisher.events).toHaveLength(0);
   });
 });

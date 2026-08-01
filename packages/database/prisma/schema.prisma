@@ -2520,7 +2520,10 @@ model ModBillingProduct {
 model ModBillingOrder {
   id                    String             @id @default(uuid()) @db.Uuid
   tenantId              String             @map("tenant_id") @db.Uuid
-  userId                String             @map("user_id") @db.Uuid
+  /// Null mientras la order de un checkout PÚBLICO (visitante sin cuenta) está
+  /// PENDING: el fulfillment del webhook materializa al comprador por el email
+  /// confirmado en Stripe y rellena este campo. Checkout logueado → siempre set.
+  userId                String?            @map("user_id") @db.Uuid
   productId             String             @map("product_id") @db.Uuid
   courseId              String             @map("course_id") @db.Uuid
   /// Stripe Checkout Session ID (cs_...). Único globalmente.

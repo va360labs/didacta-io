@@ -87,8 +87,14 @@ export interface UpdateProductInput {
 
 export interface StartCheckoutInput {
   tenantId: string;
-  userId: string;
-  userEmail: string;
+  /**
+   * Comprador autenticado, o null/ausente en el checkout PÚBLICO (viaje 2):
+   * el visitante aún no tiene cuenta — se materializa en el fulfillment del
+   * webhook con el email confirmado en Stripe (patrón de la membresía).
+   */
+  userId?: string | null;
+  /** Email para precargar el checkout de Stripe. Anónimo sin email → lo recoge Stripe. */
+  userEmail?: string;
   courseId: string;
   /**
    * Opción de compra elegida. Si no llega se usa la destacada (o la primera),
@@ -129,6 +135,18 @@ export interface StartCheckoutResult {
   sessionId: string;
   url: string;
 }
+
+/**
+ * Callback del HOST para materializar al comprador anónimo como usuario de la
+ * plataforma (el módulo no puede escribir la tabla `user` — contrato modular).
+ * Devuelve el userId (creado o existente). Mismo patrón que el `UserProvisioner`
+ * de mod.subscriptions (membresía).
+ */
+export type BillingUserProvisioner = (args: {
+  tenantId: string;
+  email: string;
+  name: string | null;
+}) => Promise<{ userId: string; created: boolean }>;
 
 /**
  * Eventos de dominio publicados. Ver `manifest.eventsEmitted`.
@@ -205,24 +223,29 @@ export class BillingService {
     if (opciones.length === 0) {
       return { forSale: false, options: [] };
     }
-    return {
-      forSale: true,
-      options: opciones.map((o) => ({
-        id: o.id,
-        name: o.name,
-        perks: o.perks,
-        unitAmount: o.unitAmount,
-        compareAtAmount: o.compareAtAmount ?? null,
-        currency: o.currency,
-        // El porcentaje se DERIVA; no se guarda, para que no pueda contradecir
-        // a los importes.
-        discountPercent:
-          o.compareAtAmount && o.compareAtAmount > o.unitAmount
-            ? Math.round(((o.compareAtAmount - o.unitAmount) / o.compareAtAmount) * 100)
-            : null,
-        isFeatured: o.isFeatured,
-      })),
-    };
+    return { forSale: true, options: opciones.map((o) => toOfferOption(o)) };
+  }
+
+  /**
+   * Catálogo de venta del tenant: todas las opciones ACTIVAS agrupadas por
+   * curso, en el mismo formato de oferta que ve el alumno. Es la base del
+   * catálogo PÚBLICO (viaje 2): el host cruza estos courseIds con los cursos
+   * PUBLISHED — este módulo no lee tablas de mod.courses.
+   */
+  async getCatalog(
+    tenantId: string,
+  ): Promise<Array<{ courseId: string; options: CourseOfferOption[] }>> {
+    const productos = await this.prisma.modBillingProduct.findMany({
+      where: { tenantId, active: true },
+      orderBy: [{ sortOrder: 'asc' }, { unitAmount: 'asc' }],
+    });
+    const porCurso = new Map<string, CourseOfferOption[]>();
+    for (const p of productos) {
+      const lista = porCurso.get(p.courseId) ?? [];
+      lista.push(toOfferOption(p));
+      porCurso.set(p.courseId, lista);
+    }
+    return [...porCurso.entries()].map(([courseId, options]) => ({ courseId, options }));
   }
 
   async createProduct(input: CreateProductInput): Promise<BillingProductRow> {
@@ -458,7 +481,9 @@ export class BillingService {
     const order = await this.prisma.modBillingOrder.create({
       data: {
         tenantId: input.tenantId,
-        userId: input.userId,
+        // Checkout público: aún no hay comprador — el webhook lo materializa
+        // por el email confirmado en Stripe y rellena el user_id entonces.
+        userId: input.userId ?? null,
         productId: product.id,
         courseId: input.courseId,
         // Stripe session id provisional — se actualiza tras crear la session.
@@ -475,13 +500,15 @@ export class BillingService {
         priceId: product.stripePriceId,
         successUrl: input.successUrl ?? this.urls.successUrl(input.courseId),
         cancelUrl: input.cancelUrl ?? this.urls.cancelUrl(input.courseId),
-        customerEmail: input.userEmail,
+        customerEmail: input.userEmail || undefined,
         metadata: {
           tenantId: input.tenantId,
-          userId: input.userId,
           courseId: input.courseId,
           productId: product.id,
           orderId: order.id,
+          // Sin userId en el checkout anónimo: la fila de la order (no la
+          // metadata) es la fuente de verdad del comprador en el fulfillment.
+          ...(input.userId ? { userId: input.userId } : {}),
         },
       });
     } catch (err) {
@@ -498,11 +525,11 @@ export class BillingService {
       data: { stripeSessionId: session.id },
     });
 
-    await this.publisher.publish(input.tenantId, input.userId, EVENT.ORDER_CREATED, {
+    await this.publisher.publish(input.tenantId, input.userId ?? null, EVENT.ORDER_CREATED, {
       orderId: updated.id,
       productId: product.id,
       courseId: input.courseId,
-      userId: input.userId,
+      userId: input.userId ?? null,
       stripeSessionId: session.id,
       amount: product.unitAmount,
       currency: product.currency,
@@ -516,8 +543,16 @@ export class BillingService {
   /**
    * Procesa un evento de Stripe ya validado por firma. Garantiza idempotencia:
    * si el evento ya se procesó, devuelve sin tocar nada.
+   *
+   * `opts.provisionUser` lo inyecta el HOST para materializar al comprador del
+   * checkout PÚBLICO (order con user_id null). Sin él, un fulfillment anónimo
+   * falla y Stripe reintenta — nunca se completa un pago sin dueño.
    */
-  async handleWebhookEvent(event: Stripe.Event, rawPayload: unknown): Promise<void> {
+  async handleWebhookEvent(
+    event: Stripe.Event,
+    rawPayload: unknown,
+    opts?: { provisionUser?: BillingUserProvisioner },
+  ): Promise<void> {
     // Idempotencia: insertar el row del evento ANTES de hacer trabajo. Si el
     // unique constraint salta, otro worker ya lo procesó.
     try {
@@ -554,7 +589,10 @@ export class BillingService {
     try {
       switch (event.type) {
         case 'checkout.session.completed':
-          await this.onCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+          await this.onCheckoutCompleted(
+            event.data.object as Stripe.Checkout.Session,
+            opts?.provisionUser,
+          );
           break;
         case 'checkout.session.expired':
         case 'checkout.session.async_payment_failed':
@@ -582,11 +620,13 @@ export class BillingService {
     }
   }
 
-  private async onCheckoutCompleted(session: Stripe.Checkout.Session): Promise<void> {
+  private async onCheckoutCompleted(
+    session: Stripe.Checkout.Session,
+    provisionUser?: BillingUserProvisioner,
+  ): Promise<void> {
     const metadata = session.metadata ?? {};
     const orderId = metadata.orderId ?? session.client_reference_id;
     const tenantId = metadata.tenantId;
-    const userId = metadata.userId;
     const courseId = metadata.courseId;
 
     // Pertenencia POSITIVA: una sola cuenta de Stripe alimenta a varios módulos
@@ -598,9 +638,9 @@ export class BillingService {
     // nunca fue nuestro. Queda archivado para auditoría.
     if (!metadata.orderId || !metadata.productId) return;
 
-    if (!orderId || !tenantId || !userId || !courseId) {
+    if (!orderId || !tenantId || !courseId) {
       throw new StripeApiError(
-        `checkout.session.completed sin metadata mínimo (orderId/tenantId/userId/courseId): ${session.id}`,
+        `checkout.session.completed sin metadata mínimo (orderId/tenantId/courseId): ${session.id}`,
       );
     }
 
@@ -611,10 +651,39 @@ export class BillingService {
     // no re-emitimos evento ni re-actualizamos.
     if (order.status === 'COMPLETED') return;
 
+    // Comprador: la FILA de la order es la fuente de verdad (checkout logueado
+    // la trae rellena). En el checkout público llega null: se materializa aquí
+    // con el email CONFIRMADO en Stripe — no el que tecleó al iniciar. Si algo
+    // falta, lanzamos: el evento queda con errorMessage y Stripe reintenta —
+    // jamás se completa un cobro sin dueño.
+    let userId = order.userId;
+    let userCreated = false;
+    if (!userId) {
+      const email = session.customer_details?.email ?? session.customer_email ?? null;
+      if (!email) {
+        throw new StripeApiError(
+          `checkout público sin email del comprador en la session ${session.id} — no se puede materializar la cuenta`,
+        );
+      }
+      if (!provisionUser) {
+        throw new StripeApiError(
+          `checkout público (order ${order.id}) sin provisioner del host — el fulfillment se reintentará`,
+        );
+      }
+      const provisioned = await provisionUser({
+        tenantId,
+        email: email.trim().toLowerCase(),
+        name: session.customer_details?.name ?? null,
+      });
+      userId = provisioned.userId;
+      userCreated = provisioned.created;
+    }
+
     const updated = await this.prisma.modBillingOrder.update({
       where: { id: order.id },
       data: {
         status: 'COMPLETED',
+        userId,
         amountPaid: session.amount_total ?? null,
         customerEmail: session.customer_details?.email ?? session.customer_email ?? null,
         // Guardamos el PaymentIntent aquí porque es el único identificador que
@@ -633,6 +702,7 @@ export class BillingService {
       productId: order.productId,
       courseId,
       userId,
+      userCreated,
       amountPaid: updated.amountPaid,
       currency: updated.currency,
       customerEmail: updated.customerEmail,
@@ -710,6 +780,25 @@ export class BillingService {
 }
 
 // ---------------- helpers ----------------
+
+/** Proyección de una fila de producto a la opción de compra que ve el alumno. */
+function toOfferOption(o: BillingProductRow): CourseOfferOption {
+  return {
+    id: o.id,
+    name: o.name,
+    perks: o.perks,
+    unitAmount: o.unitAmount,
+    compareAtAmount: o.compareAtAmount ?? null,
+    currency: o.currency,
+    // El porcentaje se DERIVA; no se guarda, para que no pueda contradecir
+    // a los importes.
+    discountPercent:
+      o.compareAtAmount && o.compareAtAmount > o.unitAmount
+        ? Math.round(((o.compareAtAmount - o.unitAmount) / o.compareAtAmount) * 100)
+        : null,
+    isFeatured: o.isFeatured,
+  };
+}
 
 function cryptoRandomId(): string {
   // Crypto.randomUUID() existe en Node 22 y es suficiente para placeholders.

@@ -23,7 +23,10 @@ export { manifest };
 export { BillingService };
 export type {
   BillingEventPublisher,
+  BillingUserProvisioner,
   CheckoutUrlBuilder,
+  CourseOffer,
+  CourseOfferOption,
   CreateProductInput,
   UpdateProductInput,
   StartCheckoutInput,

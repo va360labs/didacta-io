@@ -54,11 +54,12 @@ export interface CreateCheckoutSessionParams {
   /**
    * Metadata que viaja con la sesión y se replica en el webhook. Lo usamos
    * para reconciliar el order interno con la session de Stripe sin lookup
-   * adicional.
+   * adicional. `userId` falta en el checkout PÚBLICO (comprador aún sin
+   * cuenta): la order es la fuente de verdad y el webhook lo materializa.
    */
   metadata: {
     tenantId: string;
-    userId: string;
+    userId?: string;
     courseId: string;
     productId: string;
     orderId: string;
