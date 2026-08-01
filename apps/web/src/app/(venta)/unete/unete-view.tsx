@@ -224,6 +224,11 @@ export function UneteView() {
       : null;
 
   // Chips de filtrado: categorías REALES presentes en el catálogo.
+  // Los precios de referencia de cursos no llevan moneda propia: se muestran
+  // comparados contra los planes, así que heredan la del plan elegido (o la
+  // del primero de la página).
+  const pageCurrency = selected?.currency ?? page.plans[0]?.currency ?? 'eur';
+
   const categories = [
     ...new Set(page.courses.map((c) => c.category).filter((x): x is string => !!x)),
   ];
@@ -503,6 +508,7 @@ export function UneteView() {
               <CourseCardWithDetail
                 key={course.id}
                 course={course}
+                currency={pageCurrency}
                 open={open}
                 onToggle={() => setOpenCourseId(open ? null : course.id)}
               />
@@ -516,7 +522,7 @@ export function UneteView() {
             <div>
               <div className="text-[13px] text-text-muted">Comprados por separado</div>
               <div className="text-[22px] font-bold text-text-subtle line-through">
-                {formatCents(page.standaloneTotalCents)}
+                {formatCents(page.standaloneTotalCents, selected.currency)}
               </div>
             </div>
             <Icon name="arrow-right" className="h-6 w-6 text-success-600" />
@@ -529,7 +535,7 @@ export function UneteView() {
             </div>
             {catalogSavings ? (
               <span className="ml-auto rounded-full bg-success-100 px-4 py-2.5 text-sm font-bold text-success-700">
-                Ahorras {formatCents(catalogSavings)}
+                Ahorras {formatCents(catalogSavings, selected.currency)}
               </span>
             ) : null}
           </div>
@@ -596,10 +602,13 @@ export function UneteView() {
  */
 function CourseCardWithDetail({
   course,
+  currency,
   open,
   onToggle,
 }: {
   course: MembershipCourse;
+  /** Moneda de los planes de la página: los precios sueltos se comparan contra ellos. */
+  currency: string;
   open: boolean;
   onToggle: () => void;
 }) {
@@ -643,7 +652,7 @@ function CourseCardWithDetail({
           )}
           {course.amountCents !== null ? (
             <span className="absolute right-2.5 top-2.5 rounded-lg bg-black/75 px-2.5 py-1 text-xs font-bold text-white">
-              {formatCents(course.amountCents)}
+              {formatCents(course.amountCents, currency)}
             </span>
           ) : null}
         </div>
@@ -725,7 +734,7 @@ function CourseCardWithDetail({
               ) : null}
               {course.amountCents !== null ? (
                 <span className="text-[13px] text-text-subtle line-through">
-                  Suelto {formatCents(course.amountCents)}
+                  Suelto {formatCents(course.amountCents, currency)}
                 </span>
               ) : null}
               <span className="flex items-center gap-1.5 text-[13px] font-bold text-success-700">

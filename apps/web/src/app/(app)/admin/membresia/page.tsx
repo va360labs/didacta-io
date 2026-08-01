@@ -34,8 +34,8 @@ import {
   type MembershipConfig,
 } from '@/lib/membership';
 
-/** "999.5" o "999,5" (euros) → céntimos int, o null si no parsea. */
-function eurosToCents(raw: string): number | null {
+/** "999.5" o "999,5" (unidades de la moneda) → céntimos int, o null si no parsea. */
+function amountToCents(raw: string): number | null {
   const t = raw.trim().replace(',', '.');
   if (!t) return null;
   const n = Number(t);
@@ -43,16 +43,35 @@ function eurosToCents(raw: string): number | null {
   return Math.round(n * 100);
 }
 
-function centsToEuros(cents: number | null): string {
+function centsToAmount(cents: number | null): string {
   if (cents === null) return '';
   return (cents / 100).toFixed(2).replace(/\.00$/, '');
+}
+
+/**
+ * Monedas del selector, curadas a monedas de DOS decimales: los importes se
+ * guardan en céntimos y se formatean dividiendo entre 100 (una moneda
+ * cero-decimal tipo JPY necesitaría otro tratamiento).
+ */
+const CURRENCY_OPTIONS = ['eur', 'usd', 'gbp', 'mxn', 'cop', 'ars', 'pen', 'brl'];
+
+/** Periodicidades habituales del selector; la API admite cualquier 1..12. */
+const INTERVAL_PRESETS = [1, 3, 6, 12];
+
+function intervalOptionLabel(n: number): string {
+  if (n === 1) return 'Mensual';
+  if (n === 3) return 'Trimestral';
+  if (n === 6) return 'Semestral';
+  if (n === 12) return 'Anual';
+  return `Cada ${n} meses`;
 }
 
 interface PlanDraft {
   name: string;
   intervalMonths: number;
-  amountEuros: string;
-  compareAtEuros: string;
+  currency: string;
+  amountRaw: string;
+  compareAtRaw: string;
   trialDays: string;
   isFeatured: boolean;
 }
@@ -60,8 +79,9 @@ interface PlanDraft {
 const EMPTY_DRAFT: PlanDraft = {
   name: '',
   intervalMonths: 1,
-  amountEuros: '',
-  compareAtEuros: '',
+  currency: 'eur',
+  amountRaw: '',
+  compareAtRaw: '',
   trialDays: '0',
   isFeatured: false,
 };
@@ -134,7 +154,7 @@ export default function MembresiaAdminPage() {
     setTAuthor(cfg.testimonialAuthor ?? '');
     setTRole(cfg.testimonialRole ?? '');
     const prices: Record<string, string> = {};
-    for (const p of cfg.coursePrices) prices[p.courseId] = centsToEuros(p.amountCents);
+    for (const p of cfg.coursePrices) prices[p.courseId] = centsToAmount(p.amountCents);
     setPriceByCourse(prices);
   }
 
@@ -143,15 +163,19 @@ export default function MembresiaAdminPage() {
     [],
   );
 
+  // Los precios de referencia por curso no llevan moneda propia: en /unete se
+  // muestran junto a los planes, así que heredan la del primer plan del tenant.
+  const refCurrency = (plans?.[0]?.currency ?? 'eur').toUpperCase();
+
   async function savePlan() {
     const t = token();
     if (!t) return;
-    const amountCents = eurosToCents(draft.amountEuros);
+    const amountCents = amountToCents(draft.amountRaw);
     if (!draft.name.trim() || amountCents === null) {
       setError('El plan necesita nombre y precio válido.');
       return;
     }
-    const compareAtCents = draft.compareAtEuros.trim() ? eurosToCents(draft.compareAtEuros) : null;
+    const compareAtCents = draft.compareAtRaw.trim() ? amountToCents(draft.compareAtRaw) : null;
     const trialDays = Number(draft.trialDays) || 0;
     setBusy(true);
     setError(null);
@@ -159,6 +183,7 @@ export default function MembresiaAdminPage() {
       const input = {
         name: draft.name.trim(),
         intervalMonths: draft.intervalMonths,
+        currency: draft.currency,
         amountCents,
         compareAtCents,
         trialDays,
@@ -211,8 +236,9 @@ export default function MembresiaAdminPage() {
     setDraft({
       name: plan.name,
       intervalMonths: plan.intervalMonths,
-      amountEuros: centsToEuros(plan.amountCents),
-      compareAtEuros: centsToEuros(plan.compareAtCents),
+      currency: plan.currency,
+      amountRaw: centsToAmount(plan.amountCents),
+      compareAtRaw: centsToAmount(plan.compareAtCents),
       trialDays: String(plan.trialDays),
       isFeatured: plan.isFeatured,
     });
@@ -233,7 +259,7 @@ export default function MembresiaAdminPage() {
     setError(null);
     try {
       const coursePrices = Object.entries(priceByCourse)
-        .map(([courseId, euros]) => ({ courseId, amountCents: eurosToCents(euros) }))
+        .map(([courseId, amount]) => ({ courseId, amountCents: amountToCents(amount) }))
         .filter((x): x is { courseId: string; amountCents: number } => x.amountCents !== null);
       const updated = await membershipAdminApi.updateConfig(t, {
         active,
@@ -319,7 +345,9 @@ export default function MembresiaAdminPage() {
                     <p className="text-sm text-text-muted">
                       {intervalDescription(plan.intervalMonths)} ·{' '}
                       {plan.compareAtCents ? (
-                        <span className="line-through">{formatCents(plan.compareAtCents)}</span>
+                        <span className="line-through">
+                          {formatCents(plan.compareAtCents, plan.currency)}
+                        </span>
                       ) : null}{' '}
                       <strong>{formatCents(plan.amountCents, plan.currency)}</strong>
                       {plan.trialDays > 0 ? ` · ${plan.trialDays} días de prueba` : ''}
@@ -369,29 +397,51 @@ export default function MembresiaAdminPage() {
                 value={String(draft.intervalMonths)}
                 onChange={(e) => setDraft({ ...draft, intervalMonths: Number(e.target.value) })}
               >
-                <option value="1">Mensual</option>
-                <option value="3">Trimestral</option>
-                <option value="12">Anual</option>
+                {(INTERVAL_PRESETS.includes(draft.intervalMonths)
+                  ? INTERVAL_PRESETS
+                  : [...INTERVAL_PRESETS, draft.intervalMonths].sort((a, b) => a - b)
+                ).map((n) => (
+                  <option key={n} value={String(n)}>
+                    {intervalOptionLabel(n)}
+                  </option>
+                ))}
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="plan-amount">Precio (€)</Label>
+              <Label htmlFor="plan-currency">Moneda</Label>
+              <Select
+                id="plan-currency"
+                value={draft.currency}
+                onChange={(e) => setDraft({ ...draft, currency: e.target.value })}
+              >
+                {(CURRENCY_OPTIONS.includes(draft.currency)
+                  ? CURRENCY_OPTIONS
+                  : [...CURRENCY_OPTIONS, draft.currency]
+                ).map((c) => (
+                  <option key={c} value={c}>
+                    {c.toUpperCase()}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="plan-amount">Precio ({draft.currency.toUpperCase()})</Label>
               <Input
                 id="plan-amount"
                 inputMode="decimal"
                 placeholder="999"
-                value={draft.amountEuros}
-                onChange={(e) => setDraft({ ...draft, amountEuros: e.target.value })}
+                value={draft.amountRaw}
+                onChange={(e) => setDraft({ ...draft, amountRaw: e.target.value })}
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="plan-compare">Precio tachado (€, opcional)</Label>
+              <Label htmlFor="plan-compare">Precio tachado (opcional)</Label>
               <Input
                 id="plan-compare"
                 inputMode="decimal"
                 placeholder="1188"
-                value={draft.compareAtEuros}
-                onChange={(e) => setDraft({ ...draft, compareAtEuros: e.target.value })}
+                value={draft.compareAtRaw}
+                onChange={(e) => setDraft({ ...draft, compareAtRaw: e.target.value })}
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -532,7 +582,7 @@ export default function MembresiaAdminPage() {
                             setPriceByCourse((prev) => ({ ...prev, [c.id]: e.target.value }))
                           }
                         />
-                        <span className="text-sm text-text-muted">€</span>
+                        <span className="text-sm text-text-muted">{refCurrency}</span>
                       </div>
                     </li>
                   ))}

@@ -101,7 +101,11 @@ export function CourseSalesPanel({ courseId }: { courseId: string }) {
  * Va en dorado de marca, no en el coral de "warning": es una oferta premium y
  * el coral la hacía parecer una advertencia.
  */
-function CajaAccesoTotal({ plan }: { plan: { amountCents: number; intervalMonths: number } }) {
+function CajaAccesoTotal({
+  plan,
+}: {
+  plan: { amountCents: number; intervalMonths: number; currency: string };
+}) {
   return (
     <Card className="acceso-total-card">
       <CardContent className="space-y-3 p-6">
@@ -111,7 +115,8 @@ function CajaAccesoTotal({ plan }: { plan: { amountCents: number; intervalMonths
         </div>
         <p className="text-sm text-text">
           Accede a <strong>todos los cursos</strong> desde{' '}
-          <strong>{formatCents(plan.amountCents, 'eur')}</strong> {periodo(plan.intervalMonths)}.
+          <strong>{formatCents(plan.amountCents, plan.currency)}</strong>{' '}
+          {periodo(plan.intervalMonths)}.
         </p>
         <Link
           href="/unete"

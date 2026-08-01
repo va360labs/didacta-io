@@ -21,7 +21,7 @@ const ADMIN_BASE = '/api/v1/membership/admin';
 export interface MembershipPlan {
   id: string;
   name: string;
-  /** 1 (mensual) | 3 (trimestral) | 12 (anual). */
+  /** Meses por periodo (1..12): 1 mensual, 3 trimestral, 6 semestral, 12 anual… */
   intervalMonths: number;
   amountCents: number;
   currency: string;
@@ -102,6 +102,8 @@ export interface PlanInput {
   name: string;
   intervalMonths: number;
   amountCents: number;
+  /** ISO 4217 en minúsculas (p. ej. 'eur', 'usd'). Si falta, la API usa 'eur'. */
+  currency?: string;
   compareAtCents?: number | null;
   trialDays?: number;
   active?: boolean;
@@ -177,18 +179,22 @@ export function formatCents(cents: number, currency = 'eur'): string {
   }).format(cents / 100);
 }
 
-/** Etiqueta de periodicidad: "/mes", "/trimestre", "/año". */
+/** Etiqueta de periodicidad: "/mes", "/trimestre", …, "/N meses". */
 export function intervalSuffix(intervalMonths: number): string {
   if (intervalMonths === 12) return '/año';
+  if (intervalMonths === 6) return '/semestre';
   if (intervalMonths === 3) return '/trimestre';
-  return '/mes';
+  if (intervalMonths === 1) return '/mes';
+  return `/${intervalMonths} meses`;
 }
 
-/** Nombre largo: "Suscripción mensual/trimestral/anual". */
+/** Nombre largo: "Suscripción mensual/trimestral/…/cada N meses". */
 export function intervalDescription(intervalMonths: number): string {
   if (intervalMonths === 12) return 'Suscripción anual';
+  if (intervalMonths === 6) return 'Suscripción semestral';
   if (intervalMonths === 3) return 'Suscripción trimestral';
-  return 'Suscripción mensual';
+  if (intervalMonths === 1) return 'Suscripción mensual';
+  return `Suscripción cada ${intervalMonths} meses`;
 }
 
 /** Fecha del próximo pago: hoy + trial + periodo. */
