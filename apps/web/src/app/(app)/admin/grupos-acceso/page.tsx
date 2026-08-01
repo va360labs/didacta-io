@@ -521,6 +521,7 @@ export default function GruposAccesoPage() {
                             subtitle={m.name && m.email ? m.email : null}
                           />
                           {m.source === 'TIER' && <Badge variant="warning">Por tier</Badge>}
+                          {m.source === 'MEMBERSHIP' && <Badge variant="info">Por membresía</Badge>}
                         </span>
                         <Button
                           variant="ghost"

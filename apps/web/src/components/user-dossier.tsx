@@ -674,6 +674,9 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <p className="font-semibold text-text">{g.name}</p>
                     {g.source === 'TIER' ? <Badge variant="muted">Por tier</Badge> : null}
+                    {g.source === 'MEMBERSHIP' ? (
+                      <Badge variant="muted">Por membresía</Badge>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span className="text-xs text-text-muted">desde {formatDate(g.grantedAt)}</span>

@@ -220,7 +220,7 @@ export interface UserDossier {
     slug: string;
     name: string;
     kind: string;
-    /** MANUAL (alta del admin) | TIER (reconciliada por membresía de pago). */
+    /** MANUAL (alta del admin) | TIER (vínculo tier→grupo) | MEMBERSHIP (membresía de pago). */
     source: string;
     grantedAt: string;
   }>;
