@@ -25,6 +25,7 @@
     "@didacta/core-registry": "workspace:*",
     "@didacta/database": "workspace:*",
     "@didacta/license-sdk": "workspace:*",
+    "@didacta/mod-access-groups": "workspace:*",
     "@didacta/mod-ai-content": "workspace:*",
     "@didacta/mod-ai-grader": "workspace:*",
     "@didacta/mod-ai-tutor": "workspace:*",

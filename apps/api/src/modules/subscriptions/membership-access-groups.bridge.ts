@@ -14,12 +14,18 @@ import { ModuleRegistryService } from '../module-registry.service';
  * Puente membresía → mod.access-groups. El entitlement de la membresía es un
  * GRUPO de acceso (config del admin, típicamente el grupo ALL_COURSES de la membresía):
  *
- *   - `subscriptions.membership.activated` (compra o recovery) → assignMembers.
+ *   - `subscriptions.membership.activated` (compra o recovery) → assignMembers
+ *     con `source=MEMBERSHIP`.
  *   - `subscriptions.subscription.activated` con planId (recovery de impago) →
  *     assignMembers (idempotente: ALREADY_MEMBER si ya está).
  *   - `subscriptions.subscription.canceled` (immediate) con planId → revoke.
  *   - `subscriptions.subscription.unpaid` con planId → revoke (refcount-safe:
  *     unenrolls solo lo que concedió el grupo).
+ *
+ * Este bridge solo crea/retira membresías `MEMBERSHIP` (patrón del bridge de
+ * tiers): la revocación pasa `onlySource`, así el fin de una membresía de pago
+ * nunca retira lo que un admin concedió a mano (MANUAL sticky) ni lo que
+ * concedió el vínculo de tier.
  *
  * Los eventos POR CURSO (courseId, sin planId) los ignora — son del
  * SubscriptionsLearningBridge. Un fallo aquí se loguea y NO se propaga cuando
@@ -92,7 +98,12 @@ export class MembershipAccessGroupsBridge implements OnModuleInit {
       return;
     }
     try {
-      const result = await this.accessGroups.assignMembers(tenantId, groupId, [userId]);
+      const result = await this.accessGroups.assignMembers(
+        tenantId,
+        groupId,
+        [userId],
+        'MEMBERSHIP',
+      );
       this.logger.log(
         { tenantId, userId, groupId, subscriptionId, added: result.added },
         'MembershipAccessGroupsBridge: grupo concedido por membresía',
@@ -118,7 +129,12 @@ export class MembershipAccessGroupsBridge implements OnModuleInit {
       return;
     }
     try {
-      const result = await this.accessGroups.revokeMember(tenantId, groupId, userId);
+      // Solo membresías MEMBERSHIP: si el miembro es MANUAL (p.ej. anterior al
+      // backfill conservador de F6, o promocionado por el admin) o TIER, la
+      // revocación es no-op — ese acceso no lo concedió esta membresía.
+      const result = await this.accessGroups.revokeMember(tenantId, groupId, userId, {
+        onlySource: 'MEMBERSHIP',
+      });
       this.logger.log(
         { tenantId, userId, groupId, subscriptionId, revoked: result.revoked },
         'MembershipAccessGroupsBridge: grupo revocado por fin de membresía',

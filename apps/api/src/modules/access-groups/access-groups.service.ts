@@ -7,17 +7,19 @@ import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { AlreadyEnrolledError, LearningError } from '@didacta/mod-learning';
+import {
+  planMemberActivation,
+  slugify,
+  type AccessGroupKindDto,
+  type AccessGroupMemberSource,
+  type CreateAccessGroupDto,
+  type SetAccessGroupCoursesDto,
+  type UpdateAccessGroupDto,
+} from '@didacta/mod-access-groups';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../tenancy/tenant-context.service';
 import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import { ModuleRegistryService } from '../module-registry.service';
-import {
-  type AccessGroupKindDto,
-  type CreateAccessGroupDto,
-  type SetAccessGroupCoursesDto,
-  type UpdateAccessGroupDto,
-  slugify,
-} from './access-groups.dto';
 
 type LearningServiceLike = ReturnType<ModuleRegistryService['getLearningService']>;
 
@@ -95,10 +97,11 @@ export interface AccessGroupUserCandidate {
  * vivo lo otorga, y `unenrollFromGroup` jamás toca enrollments de
  * PURCHASE/SUBSCRIPTION/API.
  *
- * Es CORE del host (módulo de primera parte, Path A), igual que mod.groups /
- * mod.events. Aislamiento multi-tenant por filtrado explícito de `tenantId` en
- * cada query (patrón GroupsController/MemberDecisionService); el fan-out a
- * servicios de módulo se envuelve en `tenantContext.run`. Ver PRD §14.
+ * Módulo first-party built-in (ADR-011/015): la lógica portable (DTOs y la
+ * semántica del `source` de membresías) vive en `modules/access-groups/`; este
+ * service es el host Prisma. Aislamiento multi-tenant por filtrado explícito de
+ * `tenantId` en cada query (patrón GroupsController/MemberDecisionService); el
+ * fan-out a servicios de módulo se envuelve en `tenantContext.run`. Ver PRD §14.
  */
 @Injectable()
 export class AccessGroupsService {
@@ -389,7 +392,17 @@ export class AccessGroupsService {
 
   // ----------------------------- Membresías -----------------------------
 
-  async assignMembers(tenantId: string, id: string, userIds: string[]) {
+  /**
+   * `source` indica QUIÉN concede: 'MANUAL' (default, alta del admin o
+   * aprobación) o un bridge automático ('TIER' | 'MEMBERSHIP'). La semántica
+   * sticky/promoción la decide `planMemberActivation` (paquete del módulo).
+   */
+  async assignMembers(
+    tenantId: string,
+    id: string,
+    userIds: string[],
+    source: AccessGroupMemberSource = 'MANUAL',
+  ) {
     const group = await this.requireGroup(tenantId, id);
     const unique = Array.from(new Set(userIds));
     let added = 0;
@@ -398,7 +411,7 @@ export class AccessGroupsService {
       const learning = this.registry.getLearningService();
       const courseIds = await this.resolveGroupCourseIds(tenantId, group);
       for (const userId of unique) {
-        const activated = await this.activateMembership(tenantId, id, userId);
+        const activated = await this.activateMembership(tenantId, id, userId, source);
         if (activated) added += 1;
         for (const courseId of courseIds) {
           await this.grantCourseToUser(tenantId, id, userId, courseId, learning);
@@ -413,16 +426,32 @@ export class AccessGroupsService {
       });
     }
 
-    await this.audit(tenantId, 'access_group.members_assigned', id, { count: unique.length });
+    await this.audit(tenantId, 'access_group.members_assigned', id, {
+      count: unique.length,
+      source,
+    });
     return { assigned: unique.length, added };
   }
 
-  async revokeMember(tenantId: string, id: string, userId: string) {
+  /**
+   * `onlySource` restringe la revocación a membresías de ese origen: lo pasan
+   * los bridges automáticos ('MEMBERSHIP') para no retirar jamás lo MANUAL ni
+   * lo del otro bridge. Sin él (admin), se revoca sea cual sea el origen.
+   */
+  async revokeMember(
+    tenantId: string,
+    id: string,
+    userId: string,
+    opts?: { onlySource?: AccessGroupMemberSource },
+  ) {
     await this.requireGroup(tenantId, id);
     const membership = await this.prisma.modAccessGroupMember.findUnique({
       where: { mod_access_groups_member_unique: { groupId: id, userId } },
     });
     if (!membership || membership.status !== 'ACTIVE') {
+      return { revoked: false };
+    }
+    if (opts?.onlySource && membership.source !== opts.onlySource) {
       return { revoked: false };
     }
 
@@ -548,45 +577,40 @@ export class AccessGroupsService {
 
   /**
    * Crea/reactiva la membresía. Devuelve true si pasó a contar como activa.
-   * `source` MANUAL (alta del admin) es "sticky": un alta manual sobre una
-   * membresía TIER la promociona a MANUAL para que el tier-down no la retire.
+   * Las reglas (MANUAL sticky, promoción por alta manual, un bridge nunca roba
+   * la membresía de otro) viven en `planMemberActivation` del paquete.
    */
   private async activateMembership(
     tenantId: string,
     groupId: string,
     userId: string,
-    source: 'MANUAL' | 'TIER' = 'MANUAL',
+    source: AccessGroupMemberSource = 'MANUAL',
   ): Promise<boolean> {
     const existing = await this.prisma.modAccessGroupMember.findUnique({
       where: { mod_access_groups_member_unique: { groupId, userId } },
     });
-    if (!existing) {
-      await this.prisma.modAccessGroupMember.create({
-        data: { groupId, tenantId, userId, status: 'ACTIVE', source },
-      });
-      return true;
+    const plan = planMemberActivation(existing, source);
+    switch (plan.action) {
+      case 'create':
+        await this.prisma.modAccessGroupMember.create({
+          data: { groupId, tenantId, userId, status: 'ACTIVE', source: plan.source },
+        });
+        return true;
+      case 'reactivate':
+        await this.prisma.modAccessGroupMember.update({
+          where: { mod_access_groups_member_unique: { groupId, userId } },
+          data: { status: 'ACTIVE', revokedAt: null, source: plan.source },
+        });
+        return true;
+      case 'promote':
+        await this.prisma.modAccessGroupMember.update({
+          where: { mod_access_groups_member_unique: { groupId, userId } },
+          data: { source: plan.source },
+        });
+        return false;
+      case 'none':
+        return false;
     }
-    if (existing.status !== 'ACTIVE') {
-      // Reactivación: MANUAL es sticky — si la membresía revocada era MANUAL, no
-      // la degradamos a TIER aunque la reactive el bridge (un tier-down futuro no
-      // debe quitar lo que el admin añadió a mano).
-      await this.prisma.modAccessGroupMember.update({
-        where: { mod_access_groups_member_unique: { groupId, userId } },
-        data: {
-          status: 'ACTIVE',
-          revokedAt: null,
-          source: existing.source === 'MANUAL' ? 'MANUAL' : source,
-        },
-      });
-      return true;
-    }
-    if (source === 'MANUAL' && existing.source !== 'MANUAL') {
-      await this.prisma.modAccessGroupMember.update({
-        where: { mod_access_groups_member_unique: { groupId, userId } },
-        data: { source: 'MANUAL' },
-      });
-    }
-    return false;
   }
 
   /**

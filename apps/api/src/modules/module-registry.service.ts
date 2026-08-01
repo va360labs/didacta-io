@@ -58,6 +58,7 @@ import {
   type UserDirectoryPort as PaymentConnectionsUserDirectoryPort,
 } from '@didacta/mod-payment-connections';
 import { buildCertificatesModule, CertificatesService } from '@didacta/mod-certificates';
+import { buildAccessGroupsModule } from '@didacta/mod-access-groups';
 import { buildMemberRegistrationModule } from '@didacta/mod-member-registration';
 import {
   buildSurveysModule,
@@ -723,8 +724,13 @@ export class ModuleRegistryService implements OnModuleInit {
       ...(billingModuleOrNull ? [billingModuleOrNull] : []),
       ...(subscriptionsModuleOrNull ? [subscriptionsModuleOrNull] : []),
       paymentConnectionsModule,
-      // Depende (hard) de mod.payment-connections — siempre registrado arriba.
-      // El host NestJS del módulo vive en ./member-registration/ (ADR-011/015).
+      // Grupos de acceso: depende (hard) de mod.courses y mod.learning. El host
+      // NestJS del módulo vive en ./access-groups/ (ADR-011/015). El orden del
+      // array da igual: register() hace sort topológico por dependencias.
+      buildAccessGroupsModule(),
+      // Depende (hard) de mod.payment-connections y mod.access-groups (F6) —
+      // ambos registrados en este mismo batch. El host NestJS del módulo vive
+      // en ./member-registration/ (ADR-011/015).
       buildMemberRegistrationModule(),
       referralsModule,
       messagingModule,

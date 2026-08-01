@@ -22,17 +22,17 @@ import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import type { SessionClaims } from '../../auth/token.service';
-import { AccessGroupsService } from './access-groups.service';
 import {
-  type AssignAccessGroupMembersDto,
-  type CreateAccessGroupDto,
-  type SetAccessGroupCoursesDto,
-  type UpdateAccessGroupDto,
   assignAccessGroupMembersSchema,
   createAccessGroupSchema,
   setAccessGroupCoursesSchema,
   updateAccessGroupSchema,
-} from './access-groups.dto';
+  type AssignAccessGroupMembersDto,
+  type CreateAccessGroupDto,
+  type SetAccessGroupCoursesDto,
+  type UpdateAccessGroupDto,
+} from '@didacta/mod-access-groups';
+import { AccessGroupsService } from './access-groups.service';
 
 const ADMIN_ROLES = ['super_admin', 'tenant_admin'];
 

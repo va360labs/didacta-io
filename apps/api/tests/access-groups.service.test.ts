@@ -10,6 +10,8 @@
  *  - activateMembership (vía assignMembers/reconcileTierMembership): MANUAL sticky —
  *    reactivar una MANUAL revocada NO la degrada a TIER; un alta MANUAL sobre una
  *    TIER activa la promociona a MANUAL.
+ *  - source=MEMBERSHIP (F6): el bridge de membresía asigna MEMBERSHIP y su
+ *    revocación (onlySource) nunca toca membresías MANUAL ni TIER.
  *  - revokeMember / revokeCourseFromUser: refcount — desmatricula solo si ningún
  *    otro grupo vivo otorga el curso (incluye el advisory lock vía tx.$executeRaw).
  *  - setGroupCourses: reconciliación (otorga añadidos, revoca quitados por refcount).
@@ -57,7 +59,7 @@ interface MemberRow {
   tenantId: string;
   userId: string;
   status: string;
-  source: 'MANUAL' | 'TIER';
+  source: 'MANUAL' | 'TIER' | 'MEMBERSHIP';
   revokedAt: Date | null;
 }
 interface GrantRow {
@@ -270,7 +272,7 @@ function makeHarness(opts: { publishedCourses?: string[] } = {}) {
           tenantId: data.tenantId!,
           userId: data.userId!,
           status: data.status ?? 'ACTIVE',
-          source: (data.source as 'MANUAL' | 'TIER') ?? 'MANUAL',
+          source: (data.source as MemberRow['source']) ?? 'MANUAL',
           revokedAt: null,
         };
         members.push(row);
@@ -836,6 +838,135 @@ describe('AccessGroupsService.activateMembership (MANUAL sticky)', () => {
     await h.service.reconcileTierMembership(TENANT, 'u1', 'gold');
     expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
     expect(member(h, g.id, 'u1')?.source).toBe('MANUAL');
+  });
+});
+
+describe('AccessGroupsService source=MEMBERSHIP (bridge de membresía, F6)', () => {
+  it('assignMembers con source MEMBERSHIP marca la membresía y matricula', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, { name: 'Pro', kind: 'ALL_COURSES' } as never);
+
+    const r = await h.service.assignMembers(TENANT, g.id, ['u1'], 'MEMBERSHIP');
+    expect(r.added).toBe(1);
+    expect(member(h, g.id, 'u1')?.source).toBe('MEMBERSHIP');
+    expect(h.enrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c1');
+    expect(h.groups[0].memberCount).toBe(1);
+  });
+
+  it('revokeMember con onlySource MEMBERSHIP revoca la MEMBERSHIP y desmatricula', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'Pro',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.assignMembers(TENANT, g.id, ['u1'], 'MEMBERSHIP');
+
+    const res = await h.service.revokeMember(TENANT, g.id, 'u1', { onlySource: 'MEMBERSHIP' });
+    expect(res).toEqual({ revoked: true });
+    expect(member(h, g.id, 'u1')?.status).toBe('REVOKED');
+    expect(h.unenrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c1');
+    expect(h.groups[0].memberCount).toBe(0);
+  });
+
+  it('revokeMember con onlySource MEMBERSHIP NUNCA toca una membresía MANUAL (sticky)', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'Pro',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.assignMembers(TENANT, g.id, ['u1']); // MANUAL
+
+    const res = await h.service.revokeMember(TENANT, g.id, 'u1', { onlySource: 'MEMBERSHIP' });
+    expect(res).toEqual({ revoked: false });
+    expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
+    expect(h.unenrollFromGroup).not.toHaveBeenCalled();
+    expect(h.groups[0].memberCount).toBe(1);
+  });
+
+  it('tampoco toca una membresía TIER (cada bridge revoca solo lo suyo)', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'Gold',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.updateGroup(TENANT, g.id, { linkedTierName: 'gold' });
+    await h.service.reconcileTierMembership(TENANT, 'u1', 'gold');
+    expect(member(h, g.id, 'u1')?.source).toBe('TIER');
+
+    const res = await h.service.revokeMember(TENANT, g.id, 'u1', { onlySource: 'MEMBERSHIP' });
+    expect(res).toEqual({ revoked: false });
+    expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
+  });
+
+  it('un alta MANUAL sobre una MEMBERSHIP activa la promociona y el bridge deja de poder revocarla', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'Pro',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.assignMembers(TENANT, g.id, ['u1'], 'MEMBERSHIP');
+    await h.service.assignMembers(TENANT, g.id, ['u1']); // admin, MANUAL
+    expect(member(h, g.id, 'u1')?.source).toBe('MANUAL');
+
+    // El fin de la membresía de pago ya no retira el acceso (MANUAL sticky).
+    const res = await h.service.revokeMember(TENANT, g.id, 'u1', { onlySource: 'MEMBERSHIP' });
+    expect(res).toEqual({ revoked: false });
+    expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
+  });
+
+  it('reactivar una MANUAL revocada vía bridge de membresía conserva MANUAL', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'Pro',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.assignMembers(TENANT, g.id, ['u1']); // MANUAL
+    await h.service.revokeMember(TENANT, g.id, 'u1');
+    expect(member(h, g.id, 'u1')?.status).toBe('REVOKED');
+
+    // Recovery de la membresía: reactiva, pero sigue siendo del admin.
+    await h.service.assignMembers(TENANT, g.id, ['u1'], 'MEMBERSHIP');
+    expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
+    expect(member(h, g.id, 'u1')?.source).toBe('MANUAL');
+  });
+
+  it('una MEMBERSHIP revocada que vuelve por membresía se reactiva como MEMBERSHIP', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'Pro',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.assignMembers(TENANT, g.id, ['u1'], 'MEMBERSHIP');
+    await h.service.revokeMember(TENANT, g.id, 'u1', { onlySource: 'MEMBERSHIP' });
+
+    await h.service.assignMembers(TENANT, g.id, ['u1'], 'MEMBERSHIP');
+    expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
+    expect(member(h, g.id, 'u1')?.source).toBe('MEMBERSHIP');
+    expect(h.groups[0].memberCount).toBe(1);
+  });
+
+  it('reconcileTierMembership no retira membresías MEMBERSHIP (solo TIER stale)', async () => {
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'Pro',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.assignMembers(TENANT, g.id, ['u1'], 'MEMBERSHIP');
+    h.unenrollFromGroup.mockClear();
+
+    // El usuario queda sin tier → solo se retirarían TIER; la MEMBERSHIP sigue.
+    const res = await h.service.reconcileTierMembership(TENANT, 'u1', null);
+    expect(res.removedFromGroups).toBe(0);
+    expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
+    expect(member(h, g.id, 'u1')?.source).toBe('MEMBERSHIP');
+    expect(h.unenrollFromGroup).not.toHaveBeenCalled();
   });
 });
 
