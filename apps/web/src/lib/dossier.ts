@@ -123,9 +123,13 @@ export interface UserDossier {
   };
   learning: {
     enrollments: Array<{
+      /** Id de la matrícula — lo usa la baja administrativa desde la ficha. */
+      id: string;
       courseId: string;
       courseTitle: string | null;
       status: string;
+      /** ADMIN | CODE | INVITATION_LINK | PURCHASE | IMPORT | SUBSCRIPTION | API | GROUP */
+      source: string;
       progressPercent: number;
       enrolledAt: string;
       completedAt: string | null;
@@ -210,6 +214,16 @@ export interface UserDossier {
       lastSeenAt: string | null;
     }>;
   };
+  /** Grupos de acceso ACTIVOS del usuario (mod.access-groups). */
+  accessGroups: Array<{
+    groupId: string;
+    slug: string;
+    name: string;
+    kind: string;
+    /** MANUAL (alta del admin) | TIER (reconciliada por membresía de pago). */
+    source: string;
+    grantedAt: string;
+  }>;
   restrictions: Restriction[];
 }
 

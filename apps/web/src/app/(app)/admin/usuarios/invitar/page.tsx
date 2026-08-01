@@ -7,13 +7,14 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { accessGroupsApi, type AccessGroupListItem } from '@/lib/access-groups';
 import { ApiHttpError } from '@/lib/api-client';
 import { adminUsersApi, ROLE_LABELS, type AssignableRole } from '@/lib/admin-users';
 import { authStorage } from '@/lib/auth-storage';
@@ -25,6 +26,24 @@ export default function InvitarPage() {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState<AssignableRole>('alumno');
+  const [groupId, setGroupId] = useState('');
+  // null = catálogo no disponible (módulo desactivado) → el campo no se pinta.
+  const [groups, setGroups] = useState<AccessGroupListItem[] | null>(null);
+
+  useEffect(() => {
+    let aborted = false;
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    accessGroupsApi
+      .list(token)
+      .then((r) => {
+        if (!aborted && r.groups.length > 0) setGroups(r.groups);
+      })
+      .catch(() => undefined);
+    return () => {
+      aborted = true;
+    };
+  }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -41,6 +60,7 @@ export default function InvitarPage() {
         email: email.trim(),
         name: name.trim() || undefined,
         role,
+        accessGroupId: groupId || undefined,
       });
       router.push('/admin/usuarios');
     } catch (e) {
@@ -137,6 +157,29 @@ export default function InvitarPage() {
                   'Los gerentes ven analytics y miembros de su empresa.'}
               </p>
             </div>
+
+            {groups ? (
+              <div className="space-y-2">
+                <Label htmlFor="accessGroup">Grupo de acceso (opcional)</Label>
+                <Select
+                  id="accessGroup"
+                  value={groupId}
+                  onChange={(e) => setGroupId(e.target.value)}
+                  data-testid="invite-group-select"
+                >
+                  <option value="">Sin grupo</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-xs text-text-subtle">
+                  Queda matriculado ya en los cursos del grupo: cuando defina su contraseña entrará
+                  con su aula lista, no a un campus vacío.
+                </p>
+              </div>
+            ) : null}
 
             {error ? (
               <div

@@ -12,12 +12,18 @@ import { Card, CardContent } from '@/components/ui/card';
 import { NativeSelect } from '@/components/ui/select';
 import { RestrictionDialog } from '@/components/restriction-shield';
 import {
+  accessGroupsApi,
+  type AccessGroupListItem,
+  type CourseCatalogItem,
+} from '@/lib/access-groups';
+import {
   adminUsersApi,
   ASSIGNABLE_ROLES,
   ROLE_LABELS,
   type AssignableRole,
 } from '@/lib/admin-users';
 import { authStorage } from '@/lib/auth-storage';
+import { learningApi } from '@/lib/learning';
 import {
   dossierApi,
   ENTITLEMENT_LABELS,
@@ -72,6 +78,25 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
   CANCELLED: 'Cancelado',
   FAILED: 'Fallido',
   REFUNDED: 'Devuelto',
+};
+
+const ENROLLMENT_STATUS_LABEL: Record<string, string> = {
+  ACTIVE: 'Activa',
+  COMPLETED: 'Completada',
+  CANCELLED: 'De baja',
+  PAUSED: 'Pausada',
+};
+
+/** De dónde salió la matrícula: decide qué acción tiene sentido en la ficha. */
+const ENROLLMENT_SOURCE_LABEL: Record<string, string> = {
+  ADMIN: 'Alta manual',
+  CODE: 'Código',
+  INVITATION_LINK: 'Enlace',
+  PURCHASE: 'Compra',
+  IMPORT: 'Importación',
+  SUBSCRIPTION: 'Suscripción',
+  API: 'API',
+  GROUP: 'Grupo de acceso',
 };
 
 export function UserDossierPanel({
@@ -178,7 +203,7 @@ export function UserDossierPanel({
 
       {tab === 'resumen' ? <ResumenTab d={data} /> : null}
       {tab === 'compras' ? <ComprasTab d={data} /> : null}
-      {tab === 'formacion' ? <FormacionTab d={data} /> : null}
+      {tab === 'formacion' ? <FormacionTab d={data} onChanged={load} /> : null}
       {tab === 'actividad' ? <ActividadTab d={data} /> : null}
       {tab === 'mensajes' ? <MensajesTab d={data} /> : null}
       {tab === 'acceso' ? <AccesoTab d={data} onChanged={load} /> : null}
@@ -466,7 +491,70 @@ function ComprasTab({ d }: { d: UserDossier }) {
   );
 }
 
-function FormacionTab({ d }: { d: UserDossier }) {
+/**
+ * Pestaña de formación. Desde F5 (viaje 1) además de mostrar, ACTÚA: matrícula
+ * directa en un curso, baja administrativa y gestión de grupos de acceso.
+ *
+ * Los dos catálogos (cursos publicados y grupos) se cargan best-effort: si el
+ * módulo correspondiente está desactivado para el tenant, la API responde 403
+ * y el selector simplemente no se muestra (mismo patrón que `TierCell` en el
+ * listado de usuarios). Lo ya concedido se pinta igual, porque viene del
+ * expediente y no depende del módulo activo.
+ */
+function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [courseCatalog, setCourseCatalog] = useState<CourseCatalogItem[] | null>(null);
+  const [groupCatalog, setGroupCatalog] = useState<AccessGroupListItem[] | null>(null);
+  const [courseId, setCourseId] = useState('');
+  const [groupId, setGroupId] = useState('');
+
+  const token = () => authStorage.getAccessToken() ?? '';
+
+  useEffect(() => {
+    let aborted = false;
+    accessGroupsApi
+      .courseCatalog(token())
+      .then((c) => {
+        if (!aborted) setCourseCatalog(c);
+      })
+      .catch(() => undefined);
+    accessGroupsApi
+      .list(token())
+      .then((r) => {
+        if (!aborted) setGroupCatalog(r.groups);
+      })
+      .catch(() => undefined);
+    return () => {
+      aborted = true;
+    };
+  }, []);
+
+  const run = async (key: string, fn: () => Promise<unknown>, okMsg?: string) => {
+    setBusy(key);
+    setErr(null);
+    setMsg(null);
+    try {
+      await fn();
+      if (okMsg) setMsg(okMsg);
+      onChanged();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'No se pudo completar la acción.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Solo tiene sentido ofrecer lo que aún no tiene: cursos sin matrícula viva
+  // y grupos donde no está. Una matrícula CANCELLED sí se re-ofrece (reactiva).
+  const enrolledCourseIds = new Set(
+    d.learning.enrollments.filter((e) => e.status !== 'CANCELLED').map((e) => e.courseId),
+  );
+  const availableCourses = (courseCatalog ?? []).filter((c) => !enrolledCourseIds.has(c.id));
+  const memberGroupIds = new Set(d.accessGroups.map((g) => g.groupId));
+  const availableGroups = (groupCatalog ?? []).filter((g) => !memberGroupIds.has(g.id));
+
   return (
     <div className="space-y-4">
       <div>
@@ -478,14 +566,52 @@ function FormacionTab({ d }: { d: UserDossier }) {
         ) : (
           <div className="space-y-2">
             {d.learning.enrollments.map((e) => (
-              <Card key={e.courseId}>
+              <Card key={e.id}>
                 <CardContent className="p-3 text-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-semibold text-text">{e.courseTitle ?? e.courseId}</p>
-                    <span className="text-xs text-text-muted">
-                      {e.progressPercent}% · desde {formatDate(e.enrolledAt)}
-                      {e.completedAt ? ` · completado ${formatDate(e.completedAt)}` : ''}
-                    </span>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <p className="font-semibold text-text">{e.courseTitle ?? e.courseId}</p>
+                      <Badge
+                        variant={
+                          e.status === 'ACTIVE'
+                            ? 'success'
+                            : e.status === 'COMPLETED'
+                              ? 'muted'
+                              : 'warning'
+                        }
+                      >
+                        {ENROLLMENT_STATUS_LABEL[e.status] ?? e.status}
+                      </Badge>
+                      <Badge variant="muted">{ENROLLMENT_SOURCE_LABEL[e.source] ?? e.source}</Badge>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs text-text-muted">
+                        {e.progressPercent}% · desde {formatDate(e.enrolledAt)}
+                        {e.completedAt ? ` · completado ${formatDate(e.completedAt)}` : ''}
+                      </span>
+                      {e.status !== 'CANCELLED' ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy !== null}
+                          title={
+                            e.source === 'GROUP'
+                              ? 'Vino de un grupo de acceso: si el grupo sigue otorgando el curso, puede volver a matricularse.'
+                              : undefined
+                          }
+                          onClick={() =>
+                            void run(
+                              `unenroll-${e.id}`,
+                              () => learningApi.cancelByAdmin(e.id),
+                              'Matrícula dada de baja. El progreso se conserva.',
+                            )
+                          }
+                          data-testid={`dossier-unenroll-${e.courseId}`}
+                        >
+                          Dar de baja
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-bg-subtle">
                     <div
@@ -498,6 +624,127 @@ function FormacionTab({ d }: { d: UserDossier }) {
             ))}
           </div>
         )}
+        {availableCourses.length > 0 ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <NativeSelect
+              value={courseId}
+              onChange={(e) => setCourseId(e.target.value)}
+              className="w-auto min-w-[220px]"
+              data-testid="dossier-enroll-select"
+            >
+              <option value="">Matricular en un curso…</option>
+              {availableCourses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title}
+                </option>
+              ))}
+            </NativeSelect>
+            <Button
+              size="sm"
+              disabled={busy !== null || !courseId}
+              onClick={() =>
+                void run(
+                  'enroll',
+                  async () => {
+                    await learningApi.enrollByAdmin(d.identity.id, courseId);
+                    setCourseId('');
+                  },
+                  'Matriculado.',
+                )
+              }
+              data-testid="dossier-enroll-submit"
+            >
+              Matricular
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-text">
+          Grupos de acceso ({d.accessGroups.length})
+        </h3>
+        {d.accessGroups.length === 0 ? (
+          <Empty>No pertenece a ningún grupo.</Empty>
+        ) : (
+          <div className="space-y-2">
+            {d.accessGroups.map((g) => (
+              <Card key={g.groupId}>
+                <CardContent className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <p className="font-semibold text-text">{g.name}</p>
+                    {g.source === 'TIER' ? <Badge variant="muted">Por tier</Badge> : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-xs text-text-muted">desde {formatDate(g.grantedAt)}</span>
+                    {g.source !== 'TIER' ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy !== null}
+                        onClick={() =>
+                          void run(
+                            `ungroup-${g.groupId}`,
+                            () => accessGroupsApi.revokeMember(token(), g.groupId, d.identity.id),
+                            'Quitado del grupo. Pierde los cursos que solo venían de ahí.',
+                          )
+                        }
+                        data-testid={`dossier-ungroup-${g.slug}`}
+                      >
+                        Quitar
+                      </Button>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+        {availableGroups.length > 0 ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <NativeSelect
+              value={groupId}
+              onChange={(e) => setGroupId(e.target.value)}
+              className="w-auto min-w-[220px]"
+              data-testid="dossier-group-select"
+            >
+              <option value="">Añadir a un grupo…</option>
+              {availableGroups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </NativeSelect>
+            <Button
+              size="sm"
+              disabled={busy !== null || !groupId}
+              onClick={() =>
+                void run(
+                  'group',
+                  async () => {
+                    await accessGroupsApi.assignMembers(token(), groupId, [d.identity.id]);
+                    setGroupId('');
+                  },
+                  'Añadido al grupo: queda matriculado en sus cursos.',
+                )
+              }
+              data-testid="dossier-group-submit"
+            >
+              Añadir
+            </Button>
+          </div>
+        ) : null}
+        <p className="mt-1.5 text-xs text-text-muted">
+          Quitar de un grupo retira la matrícula de los cursos que solo venían de ese grupo; el
+          progreso se conserva por si vuelve. Las membresías «por tier» las gestiona el pago y no se
+          pueden quitar a mano.
+        </p>
+        {msg ? <p className="text-sm text-green-700 dark:text-green-400">{msg}</p> : null}
+        {err ? (
+          <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+            {err}
+          </p>
+        ) : null}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

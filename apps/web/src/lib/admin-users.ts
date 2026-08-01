@@ -98,7 +98,7 @@ export const adminUsersApi = {
   },
   async invite(
     bearer: string,
-    dto: { email: string; name?: string; role: AssignableRole },
+    dto: { email: string; name?: string; role: AssignableRole; accessGroupId?: string },
   ): Promise<UserListItem> {
     return apiFetch<UserListItem>(
       '/api/v1/admin/users',

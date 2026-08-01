@@ -181,6 +181,15 @@ export const learningApi = {
     );
   },
 
+  /** Matrícula directa de OTRO usuario (formador/admin). Fuente ADMIN. */
+  async enrollByAdmin(userId: string, courseId: string): Promise<Enrollment> {
+    return apiFetch<Enrollment>(
+      '/api/v1/modules/learning/enrollments',
+      { method: 'POST', body: JSON.stringify({ userId, courseId }) },
+      bearer(),
+    );
+  },
+
   async enrollByCode(code: string): Promise<Enrollment> {
     return apiFetch<Enrollment>(
       '/api/v1/modules/learning/enrollments/by-code',
@@ -192,6 +201,15 @@ export const learningApi = {
   async cancel(enrollmentId: string): Promise<Enrollment> {
     return apiFetch<Enrollment>(
       `/api/v1/modules/learning/enrollments/${enrollmentId}`,
+      { method: 'DELETE' },
+      bearer(),
+    );
+  },
+
+  /** Baja administrativa: cancela la matrícula de otro usuario (formador/admin). */
+  async cancelByAdmin(enrollmentId: string): Promise<Enrollment> {
+    return apiFetch<Enrollment>(
+      `/api/v1/modules/learning/enrollments/${enrollmentId}/by-admin`,
       { method: 'DELETE' },
       bearer(),
     );
