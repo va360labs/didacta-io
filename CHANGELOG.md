@@ -10,6 +10,57 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.91] — 2026-08-01
+
+#### Notes
+
+- **Captación completa: el viaje 2 (venta de cursos sueltos) ya es público.**
+  Con esta versión, los tres viajes de una academia funcionan de punta a
+  punta sin sesión previa: alta manual con matrícula, compra de un curso
+  suelto por un visitante, y membresía. Además, los grupos de acceso quedan
+  formalizados como módulo first-party.
+
+#### Added
+
+- **`mod.access-groups` formalizado**: paquete `modules/access-groups` con
+  manifest (dependencias duras de `mod.courses` y `mod.learning`;
+  `mod.payment-connections` y `mod.subscriptions` opcionales) y semántica
+  portable del ORIGEN de cada membresía de grupo: lo asignado a mano es
+  `MANUAL` y es pegajoso; cada puente automático solo crea y retira lo suyo.
+  Registrado como módulo core (no desactivable; intentarlo responde 422).
+- **Membresías de grupo con origen `MEMBERSHIP`**: el puente de la membresía
+  asigna sus miembros con origen propio y solo revoca esos al terminar la
+  suscripción — nunca toca lo concedido manualmente. Backfill conservador
+  para instalaciones existentes (solo asignaciones del grupo configurado con
+  suscripción de membresía viva) y badges «Por membresía» en
+  `/admin/grupos-acceso` y en el dossier de usuario.
+- **Viaje 2 público (venta de cursos sueltos sin cuenta)**: catálogo de
+  cursos a la venta consultable SIN sesión (`/catalogo` en la web;
+  `/api/v1/modules/billing/public/{catalog,offer,checkout}` con tenant por
+  dominio), ficha pública de venta con opciones de compra, precio tachado y
+  % de descuento, y **checkout anónimo de Stripe**: al confirmarse el pago,
+  la plataforma crea la cuenta del comprador con el email confirmado en el
+  checkout (bienvenida con enlace «Define tu contraseña», personalizable por
+  tenant con la plantilla `billing.welcome`) y lo matricula automáticamente.
+  Idempotente ante reentregas del webhook; el reembolso total sigue
+  retirando el acceso. Sin Stripe configurado, el catálogo público responde
+  vacío y la instalación no se ve afectada.
+
+#### Changed
+
+- `mod_billing_order.user_id` pasa a ser opcional (migración versionada, no
+  destructiva): las compras del checkout público nacen sin dueño y el
+  webhook las completa al materializar al comprador.
+- `mod.access-groups` promovido a dependencia dura en el manifest de
+  `mod.member-registration` (cierra el estado transitorio de alpha.90).
+
+#### Fixed
+
+- Los endpoints de administración con `:userId` malformado (no UUID)
+  responden 404 en lugar de un error 500 del cast de Prisma (solicitudes de
+  inscripción, expediente y sanciones; la consulta por lotes descarta los
+  ids malformados).
+
 ### [0.0.1-alpha.90] — 2026-08-01
 
 #### Notes
