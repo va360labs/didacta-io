@@ -3421,8 +3421,10 @@ model ModAccessGroupMember {
   /// ACTIVE | REVOKED
   status    String    @default("ACTIVE") @db.VarChar(20)
   /// Origen de la membresía: MANUAL (alta del admin) | TIER (reconciliada por el
-  /// vínculo tier→grupo). El bridge de tiers solo crea/retira membresías TIER;
-  /// nunca toca las MANUAL. Si una manual y una de tier coinciden, gana MANUAL.
+  /// vínculo tier→grupo) | MEMBERSHIP (concedida por la membresía de pago de
+  /// mod.subscriptions). Cada bridge automático solo crea/retira membresías de
+  /// SU source; ninguno toca las MANUAL (sticky). Semántica en
+  /// modules/access-groups/src/member-source.ts.
   source    String    @default("MANUAL") @db.VarChar(20)
   grantedAt DateTime  @default(now()) @map("granted_at")
   revokedAt DateTime? @map("revoked_at")
