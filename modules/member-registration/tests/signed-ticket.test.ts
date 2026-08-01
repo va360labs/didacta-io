@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { signTicket, verifyTicket } from '../src/inscripcion/signed-ticket';
+import { signTicket, verifyTicket } from '../src/signed-ticket.js';
 
 // ============================================================================
 // Tests de los tickets firmados (HMAC-SHA256) del flujo de inscripción.

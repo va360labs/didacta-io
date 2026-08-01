@@ -6,9 +6,9 @@
 import { z } from 'zod';
 
 // ============================================================================
-// DTOs y tipos del flujo de inscripción de miembros (gate Telegram + OTP +
-// validación manual). Validación con Zod (patrón del repo) + ZodValidationPipe.
-// El backend es CORE del host: vive en apps/api/src/inscripcion/. Ver PRD Notion.
+// DTOs y tipos del flujo de inscripción de miembros (verificadores componibles
+// + validación manual). Validación con Zod (patrón del repo); el host los
+// aplica con su ZodValidationPipe. Framework-agnóstico: sin NestJS ni Prisma.
 // ============================================================================
 
 /** Tri-estado de pertenencia al grupo de Telegram. */

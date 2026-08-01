@@ -3,18 +3,14 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Injectable, Logger } from '@nestjs/common';
-import { PrismaTenantConfigService } from '../modules/prisma-tenant-config.service';
-
 // ============================================================================
 // Settings por TENANT del flujo de inscripción de miembros. Sustituyen a las
 // variables de entorno de instancia (TELEGRAM_* y MEMBER_APPROVAL_EMAIL), que
 // quedan como fallback global del despliegue — misma cascada tenant → env →
-// none que TenantSmtpResolverService. El scope coincide con el slug del futuro
-// módulo (D13: mod.member-registration).
+// none que TenantSmtpResolverService. El scope coincide con el slug del módulo.
 // ============================================================================
 
-/** Scope en `tenant_setting` (namespace del futuro módulo). */
+/** Scope en `tenant_setting` (namespace del módulo). */
 export const MEMBER_REGISTRATION_SCOPE = 'member-registration';
 /** Key del bot de Telegram (SECRETO: el token se cifra at-rest). */
 export const TELEGRAM_SETTING_KEY = 'telegram';
@@ -56,6 +52,19 @@ export interface EffectiveRegistrationPolicy extends RegistrationPolicy {
 }
 
 /**
+ * Puerto de lectura de settings de tenant (lo implementa el host con
+ * PrismaTenantConfigService: los secretos llegan ya descifrados).
+ */
+export interface TenantConfigPort {
+  get(tenantId: string, scope: string, key: string): Promise<unknown>;
+}
+
+/** Puerto de logging (estructuralmente compatible con el Logger del host). */
+export interface SettingsLogger {
+  warn(message: string): void;
+}
+
+/**
  * Resolutor de settings del flujo de inscripción por tenant.
  *
  * Cascada por clave (patrón TenantSmtpResolverService):
@@ -67,12 +76,14 @@ export interface EffectiveRegistrationPolicy extends RegistrationPolicy {
  * Errores de descifrado (clave rotada) se tratan como "tenant sin setting" y
  * caen al fallback: un problema operativo de claves no debe tirar el flujo.
  * NUNCA se loguean tokens ni emails de aprobador.
+ *
+ * Framework-agnóstico: el host lo expone en DI subclasándolo con @Injectable.
  */
-@Injectable()
-export class MemberRegistrationSettingsService {
-  private readonly logger = new Logger(MemberRegistrationSettingsService.name);
-
-  constructor(private readonly tenantConfig: PrismaTenantConfigService) {}
+export class MemberRegistrationSettings {
+  constructor(
+    private readonly tenantConfig: TenantConfigPort,
+    private readonly logger?: SettingsLogger,
+  ) {}
 
   /** Config del bot de Telegram del tenant, o null si no hay (setting ni env). */
   async resolveTelegram(tenantId: string): Promise<TelegramGateConfig | null> {
@@ -140,7 +151,7 @@ export class MemberRegistrationSettingsService {
     try {
       return await this.tenantConfig.get(tenantId, MEMBER_REGISTRATION_SCOPE, key);
     } catch (err) {
-      this.logger.warn(
+      this.logger?.warn(
         `[member-registration] no se pudo leer el setting ${key} del tenant ${tenantId}: ` +
           `${(err as Error).message.slice(0, 200)}. Se usa el fallback (env/default).`,
       );

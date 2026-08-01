@@ -1,0 +1,22 @@
+{
+  "name": "member-registration",
+  "version": "1.0.0",
+  "edition": "community",
+  "coreVersionRequired": "^0.0.1",
+  "displayName": "Inscripción de miembros",
+  "category": "core",
+  "tablePrefix": "mod_member_registration_",
+  "permissions": [
+    "member_registration:request:read",
+    "member_registration:request:decide",
+    "member_registration:payment_flag:manage"
+  ],
+  "events": [
+    { "name": "member_registration.request.created" },
+    { "name": "member_registration.request.approved" },
+    { "name": "member_registration.request.rejected" }
+  ],
+  "hooks": [],
+  "apiNamespace": "/modules/member-registration",
+  "surfaces": ["admin"]
+}

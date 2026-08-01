@@ -4,14 +4,12 @@
  */
 
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
-import { Logger as PinoLogger } from 'nestjs-pino';
-import type { TelegramAuthDto, TelegramMembership } from './inscripcion.dto';
-import type { TelegramGateConfig } from './member-registration-settings.service';
+import type { TelegramAuthDto, TelegramMembership } from './dto.js';
+import type { TelegramGateConfig } from './settings.js';
 
 // ─── Configuración ───────────────────────────────────────────────────────────
 // El bot es config de TENANT (tenant_setting, con fallback a env legacy) y se
-// resuelve en MemberRegistrationSettingsService. Este servicio recibe la config
+// resuelve en MemberRegistrationSettings. Este verificador recibe la config
 // por llamada y NUNCA la loguea ni la incrusta en URLs que terminen en el log.
 
 /** Drift máximo permitido del `auth_date` (segundos) — mitigación replay. */
@@ -32,6 +30,14 @@ interface TelegramApiResponse {
 }
 
 /**
+ * Puerto de logging del verificador (estructuralmente compatible con
+ * nestjs-pino en el host). Solo se usa `warn` en los caminos de error.
+ */
+export interface TelegramVerifierLogger {
+  warn(obj: unknown, msg?: string): void;
+}
+
+/**
  * Verificación de pertenencia al grupo de Telegram (verificador `telegram` del
  * flujo de inscripción).
  *
@@ -42,11 +48,10 @@ interface TelegramApiResponse {
  *  - `getChatMember`: consulta la API de Telegram si un usuario pertenece al
  *    grupo del tenant, devolviendo el tri-estado `'true' | 'false' | 'unknown'`.
  *
- * Es CORE del host (no un módulo). Ver PRD "Inscripción de miembros".
+ * Framework-agnóstico: el host lo expone en DI subclasándolo con @Injectable.
  */
-@Injectable()
-export class TelegramService {
-  constructor(private readonly logger: PinoLogger) {}
+export class TelegramVerifier {
+  constructor(private readonly logger: TelegramVerifierLogger) {}
 
   /**
    * Verifica la firma del Telegram Login Widget de forma timing-safe.

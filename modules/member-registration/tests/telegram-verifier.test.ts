@@ -1,13 +1,13 @@
 import { createHash, createHmac } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TelegramService } from '../src/inscripcion/telegram.service';
-import type { TelegramGateConfig } from '../src/inscripcion/member-registration-settings.service';
-import type { TelegramAuthDto } from '../src/inscripcion/inscripcion.dto';
+import { TelegramVerifier } from '../src/telegram-verifier.js';
+import type { TelegramGateConfig } from '../src/settings.js';
+import type { TelegramAuthDto } from '../src/dto.js';
 
 // ============================================================================
-// Tests de TelegramService. Desde los verificadores componibles (F2) el bot es
+// Tests de TelegramVerifier. Desde los verificadores componibles (F2) el bot es
 // config de TENANT: los métodos reciben `TelegramGateConfig` por llamada (la
-// resolución setting→env vive en MemberRegistrationSettingsService y se prueba
+// resolución setting→env vive en MemberRegistrationSettings y se prueba
 // aparte). `getChatMember` se prueba mockeando global.fetch (cero red).
 // ============================================================================
 
@@ -20,13 +20,13 @@ const CONFIG: TelegramGateConfig = {
   botUsername: 'didacta_test_bot',
 };
 
-/** Logger mínimo (nestjs-pino) — solo se invoca .warn en los caminos de error. */
+/** Logger mínimo (puerto) — solo se invoca .warn en los caminos de error. */
 function makeLogger() {
-  return { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() } as never;
+  return { warn: vi.fn() };
 }
 
-function makeService(): TelegramService {
-  return new TelegramService(makeLogger());
+function makeService(): TelegramVerifier {
+  return new TelegramVerifier(makeLogger());
 }
 
 /**
@@ -52,7 +52,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('TelegramService', () => {
+describe('TelegramVerifier', () => {
   describe('verifyLoginHash', () => {
     const nowSeconds = () => Math.floor(Date.now() / 1000);
 

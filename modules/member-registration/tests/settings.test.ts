@@ -1,5 +1,5 @@
 /**
- * Tests de `MemberRegistrationSettingsService` (F2 — registro componible).
+ * Tests de `MemberRegistrationSettings` (F2 — registro componible).
  *
  * Cubre las tres resoluciones y su cascada tenant_setting → env legacy → none:
  *  - resolveTelegram: setting cifrado del tenant, fallback TELEGRAM_*, null.
@@ -11,7 +11,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MemberRegistrationSettingsService } from '../src/inscripcion/member-registration-settings.service';
+import { MemberRegistrationSettings } from '../src/settings.js';
 
 const TENANT_ID = 'tenant-1';
 
@@ -24,7 +24,7 @@ const ENV_KEYS = [
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
 
 /**
- * Harness con el TenantConfigService mockeado por clave. `values` mapea
+ * Harness con el puerto de config de tenant mockeado por clave. `values` mapea
  * "<key>" → valor devuelto; una función permite simular errores de descifrado.
  */
 function makeService(values: Record<string, unknown> = {}) {
@@ -33,7 +33,7 @@ function makeService(values: Record<string, unknown> = {}) {
     if (typeof v === 'function') return (v as () => unknown)();
     return v;
   });
-  const service = new MemberRegistrationSettingsService({ get } as never);
+  const service = new MemberRegistrationSettings({ get });
   return { service, get };
 }
 
@@ -48,7 +48,7 @@ afterEach(() => {
   }
 });
 
-describe('MemberRegistrationSettingsService', () => {
+describe('MemberRegistrationSettings', () => {
   describe('resolveTelegram', () => {
     it('devuelve la config del setting del tenant (normaliza @ del username)', async () => {
       const { service } = makeService({
