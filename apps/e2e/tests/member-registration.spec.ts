@@ -6,10 +6,10 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
  * Spec end-to-end del flujo de inscripción de miembros (verificadores
  * componibles por tenant: Telegram y/u OTP por email + validación manual) y de
  * la gestión admin de impagos. Los casos se auto-skipean según la política
- * efectiva que publique `GET /inscripcion/config`.
+ * efectiva que publique `GET /modules/member-registration/config`.
  *
  * API-driven (igual que inscribe-by-api.spec.ts): los endpoints públicos del
- * flujo (`/inscripcion/*`) son anónimos y resuelven el tenant por el Host del
+ * flujo (`/modules/member-registration/*`) son anónimos y resuelven el tenant por el Host del
  * request. Al pegarle a `API_URL` (localhost:3000) el Host es `localhost:3000`,
  * que el seed siembra como dominio verificado del tenant bootstrap → resuelve OK
  * sin cabecera extra.
@@ -41,13 +41,13 @@ interface ConfigResponse {
 }
 
 /**
- * Lee `GET /inscripcion/config` (disponibilidad + verificadores exigidos por
+ * Lee `GET /modules/member-registration/config` (disponibilidad + verificadores exigidos por
  * la política del tenant). Sin setting de tenant aplica el default legacy:
  * telegram+otp si hay bot en el env del backend; registro cerrado si no.
  */
 async function fetchConfig(): Promise<ConfigResponse> {
-  const res = await fetch(`${API_URL}/api/v1/inscripcion/config`);
-  expect(res.status, 'GET /inscripcion/config responde 200').toBe(200);
+  const res = await fetch(`${API_URL}/api/v1/modules/member-registration/config`);
+  expect(res.status, 'GET /modules/member-registration/config responde 200').toBe(200);
   return (await res.json()) as ConfigResponse;
 }
 
@@ -84,7 +84,7 @@ function signTicket(payload: Record<string, unknown>, secret: string, ttlSeconds
 }
 
 test.describe('Inscripción de miembros · gate Telegram + OTP + validación manual', () => {
-  test('GET /inscripcion/config devuelve { configured, verifiers, botUsername }', async () => {
+  test('GET /modules/member-registration/config devuelve { configured, verifiers, botUsername }', async () => {
     const config = await fetchConfig();
     expect(config).toHaveProperty('configured');
     expect(typeof config.configured).toBe('boolean');
@@ -108,7 +108,7 @@ test.describe('Inscripción de miembros · gate Telegram + OTP + validación man
       'gate de Telegram no configurado en el backend (faltan TELEGRAM_BOT_TOKEN/GROUP_ID) → devuelve 503',
     );
 
-    const res = await fetch(`${API_URL}/api/v1/inscripcion/telegram/verify`, {
+    const res = await fetch(`${API_URL}/api/v1/modules/member-registration/telegram/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -138,7 +138,7 @@ test.describe('Inscripción de miembros · gate Telegram + OTP + validación man
       BOT_TOKEN,
     );
 
-    const res = await fetch(`${API_URL}/api/v1/inscripcion/telegram/verify`, {
+    const res = await fetch(`${API_URL}/api/v1/modules/member-registration/telegram/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -162,7 +162,7 @@ test.describe('Inscripción de miembros · gate Telegram + OTP + validación man
       !config.configured || !config.verifiers.includes('telegram'),
       'la política del tenant no exige telegram (o el flujo está cerrado)',
     );
-    const res = await fetch(`${API_URL}/api/v1/inscripcion/otp/request`, {
+    const res = await fetch(`${API_URL}/api/v1/modules/member-registration/otp/request`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -192,7 +192,7 @@ test.describe('Inscripción de miembros · gate Telegram + OTP + validación man
       900,
     );
 
-    const res = await fetch(`${API_URL}/api/v1/inscripcion/otp/request`, {
+    const res = await fetch(`${API_URL}/api/v1/modules/member-registration/otp/request`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -217,7 +217,7 @@ test.describe('Inscripción de miembros · gate Telegram + OTP + validación man
       !config.configured || !config.verifiers.includes('otp'),
       'la política del tenant no incluye otp (o el flujo está cerrado)',
     );
-    const res = await fetch(`${API_URL}/api/v1/inscripcion/register`, {
+    const res = await fetch(`${API_URL}/api/v1/modules/member-registration/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -232,9 +232,12 @@ test.describe('Inscripción de miembros · gate Telegram + OTP + validación man
   test('GET decision con token inválido → redirect a /inscripcion-miembros/decision?outcome=invalid', async () => {
     // No seguimos el redirect (no queremos cargar el frontend): inspeccionamos
     // el 302 y el header Location directamente.
-    const res = await fetch(`${API_URL}/api/v1/inscripcion/decision?token=token-inexistente`, {
-      redirect: 'manual',
-    });
+    const res = await fetch(
+      `${API_URL}/api/v1/modules/member-registration/decision?token=token-inexistente`,
+      {
+        redirect: 'manual',
+      },
+    );
     expect(res.status, 'decision con token inválido → 302').toBe(302);
     const location = res.headers.get('location') ?? '';
     expect(location).toContain('/inscripcion-miembros/decision');
@@ -244,7 +247,7 @@ test.describe('Inscripción de miembros · gate Telegram + OTP + validación man
 
 test.describe('Admin · impagos de inscripción (member_payment_flag)', () => {
   test('GET payment-flags sin auth → 401', async () => {
-    const res = await fetch(`${API_URL}/api/v1/inscripcion/payment-flags`);
+    const res = await fetch(`${API_URL}/api/v1/modules/member-registration/payment-flags`);
     expect(res.status, 'sin bearer → 401').toBe(401);
   });
 
@@ -257,7 +260,7 @@ test.describe('Admin · impagos de inscripción (member_payment_flag)', () => {
     const email = `e2e-impago-${Date.now()}@example.test`;
 
     // 1) Alta por email.
-    const createRes = await fetch(`${API_URL}/api/v1/inscripcion/payment-flags`, {
+    const createRes = await fetch(`${API_URL}/api/v1/modules/member-registration/payment-flags`, {
       method: 'POST',
       headers: { ...auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, name: 'Moroso email E2E', isDelinquent: true }),
@@ -266,7 +269,7 @@ test.describe('Admin · impagos de inscripción (member_payment_flag)', () => {
     const created = (await createRes.json()) as { id: string };
 
     // 2) Re-upsert con el mismo email actualiza la MISMA fila (idempotente).
-    const updateRes = await fetch(`${API_URL}/api/v1/inscripcion/payment-flags`, {
+    const updateRes = await fetch(`${API_URL}/api/v1/modules/member-registration/payment-flags`, {
       method: 'POST',
       headers: { ...auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, isDelinquent: false }),
@@ -277,7 +280,7 @@ test.describe('Admin · impagos de inscripción (member_payment_flag)', () => {
 
     // 3) La lista lo encuentra por email y refleja el update.
     const listRes = await fetch(
-      `${API_URL}/api/v1/inscripcion/payment-flags?q=${encodeURIComponent(email)}`,
+      `${API_URL}/api/v1/modules/member-registration/payment-flags?q=${encodeURIComponent(email)}`,
       { headers: auth },
     );
     expect(listRes.status).toBe(200);
@@ -291,10 +294,13 @@ test.describe('Admin · impagos de inscripción (member_payment_flag)', () => {
     expect(found!.isDelinquent).toBe(false);
 
     // 4) DELETE lo borra.
-    const delRes = await fetch(`${API_URL}/api/v1/inscripcion/payment-flags/${created.id}`, {
-      method: 'DELETE',
-      headers: auth,
-    });
+    const delRes = await fetch(
+      `${API_URL}/api/v1/modules/member-registration/payment-flags/${created.id}`,
+      {
+        method: 'DELETE',
+        headers: auth,
+      },
+    );
     expect(delRes.status, 'delete → 2xx').toBeLessThan(300);
   });
 
@@ -307,14 +313,14 @@ test.describe('Admin · impagos de inscripción (member_payment_flag)', () => {
     const auth = { Authorization: `Bearer ${adminToken}` };
 
     // 1) Con bearer admin la lista responde 200 (array).
-    const initialRes = await fetch(`${API_URL}/api/v1/inscripcion/payment-flags`, {
+    const initialRes = await fetch(`${API_URL}/api/v1/modules/member-registration/payment-flags`, {
       headers: auth,
     });
     expect(initialRes.status, 'admin lista → 200').toBe(200);
     expect(Array.isArray(await initialRes.json())).toBe(true);
 
     // 2) Upsert: crea el flag de impago.
-    const upsertRes = await fetch(`${API_URL}/api/v1/inscripcion/payment-flags`, {
+    const upsertRes = await fetch(`${API_URL}/api/v1/modules/member-registration/payment-flags`, {
       method: 'POST',
       headers: { ...auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -330,7 +336,7 @@ test.describe('Admin · impagos de inscripción (member_payment_flag)', () => {
 
     // 3) GET (filtrando por el telegramId) refleja el alta.
     const listRes = await fetch(
-      `${API_URL}/api/v1/inscripcion/payment-flags?q=${encodeURIComponent(telegramId)}`,
+      `${API_URL}/api/v1/modules/member-registration/payment-flags?q=${encodeURIComponent(telegramId)}`,
       { headers: auth },
     );
     expect(listRes.status).toBe(200);
@@ -345,15 +351,18 @@ test.describe('Admin · impagos de inscripción (member_payment_flag)', () => {
     expect(found!.isDelinquent).toBe(true);
 
     // 4) DELETE lo borra.
-    const delRes = await fetch(`${API_URL}/api/v1/inscripcion/payment-flags/${upserted.id}`, {
-      method: 'DELETE',
-      headers: auth,
-    });
+    const delRes = await fetch(
+      `${API_URL}/api/v1/modules/member-registration/payment-flags/${upserted.id}`,
+      {
+        method: 'DELETE',
+        headers: auth,
+      },
+    );
     expect(delRes.status, 'delete → 2xx').toBeLessThan(300);
 
     // 5) GET ya no lo encuentra.
     const afterRes = await fetch(
-      `${API_URL}/api/v1/inscripcion/payment-flags?q=${encodeURIComponent(telegramId)}`,
+      `${API_URL}/api/v1/modules/member-registration/payment-flags?q=${encodeURIComponent(telegramId)}`,
       { headers: auth },
     );
     expect(afterRes.status).toBe(200);

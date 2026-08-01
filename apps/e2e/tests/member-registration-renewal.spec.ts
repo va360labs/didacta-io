@@ -4,19 +4,21 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
 /**
  * Spec e2e del recordatorio de pago desde el panel de solicitudes de inscripción
  * (`/admin/solicitudes-miembros`): endpoints `GET .../renewal-context` y
- * `POST .../renewal-email` de `inscripcion-admin`.
+ * `POST .../renewal-email` del admin del módulo (`/modules/member-registration/admin`).
  *
- * API-driven (igual que inscripcion-miembros.spec.ts). Cubrimos los caminos
+ * API-driven (igual que member-registration.spec.ts). Cubrimos los caminos
  * OBSERVABLES sin infraestructura externa: autorización (401), validación (400) y
  * "no encontrado" (404). El happy-path completo (resolver el enlace de Stripe y
  * enviar por SMTP) NO se puede ejercitar en e2e — requiere una cuenta Stripe
  * conectada con permiso de Facturas + SMTP del tenant — y queda cubierto en los
- * unit tests (apps/api/tests/inscripcion-admin-renewal.controller.test.ts +
+ * unit tests (apps/api/tests/member-registration-admin-renewal.controller.test.ts +
  * modules/payment-connections/tests con resolveRenewalUrlByRef).
  */
 
-const BASE = `${API_URL}/api/v1/inscripcion-admin`;
-const ABSENT_USER = 'usuario-inexistente-e2e';
+const BASE = `${API_URL}/api/v1/modules/member-registration/admin`;
+// UUID válido que no existe en la BD (un id no-UUID haría tirar el cast de
+// Prisma con 500 en vez de ejercitar el camino "no encontrado").
+const ABSENT_USER = '00000000-0000-4000-8000-0000000000e2';
 
 test.describe('Admin · recordatorio de pago desde solicitudes de inscripción', () => {
   test('GET renewal-context sin auth → 401', async () => {
@@ -39,9 +41,14 @@ test.describe('Admin · recordatorio de pago desde solicitudes de inscripción',
     const auth = { Authorization: `Bearer ${adminToken}` };
     const json = { ...auth, 'Content-Type': 'application/json' };
 
-    // renewal-context sin subscriptionId → 400.
+    // renewal-context sin subscriptionId → 200 con la plantilla del tenant y
+    // sin enlace de renovación (sirve para escribir a quien NO tiene
+    // suscripción detectada; subscriptionId es opcional desde 3b7325e).
     const noSub = await fetch(`${BASE}/requests/${ABSENT_USER}/renewal-context`, { headers: auth });
-    expect(noSub.status, 'falta subscriptionId → 400').toBe(400);
+    expect(noSub.status, 'sin subscriptionId → 200 (plantilla sin enlace)').toBe(200);
+    const noSubBody = (await noSub.json()) as { template: unknown; renewalUrl: unknown };
+    expect(noSubBody.template, 'la plantilla del tenant viene igualmente').toBeTruthy();
+    expect(noSubBody.renewalUrl, 'sin suscripción no hay enlace de renovación').toBeNull();
 
     // renewal-context de una suscripción que no está en el lookup → 404.
     const notFound = await fetch(

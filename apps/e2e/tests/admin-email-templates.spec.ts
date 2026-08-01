@@ -55,7 +55,11 @@ test.describe('Admin · Emails de la plataforma — /admin/emails', () => {
     expect(resetEntry!.source).toBe('transactional');
     expect(resetEntry!.defaultSubject).toContain('{{tenantName}}');
     expect(resetEntry!.variables.map((v) => v.name)).toContain('resetUrl');
-    for (const key of ['membership.welcome', 'inscripcion.otp_code', 'community.broadcast']) {
+    for (const key of [
+      'membership.welcome',
+      'member_registration.otp_code',
+      'community.broadcast',
+    ]) {
       expect(
         catalog.some((e) => e.key === key),
         `el catálogo incluye ${key}`,

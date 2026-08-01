@@ -158,7 +158,7 @@ test.describe('Panel de administración reordenado', () => {
     );
     expect(token, 'sesión inyectada').toBeTruthy();
 
-    const res = await fetch(`${API_URL}/api/v1/inscripcion-admin/requests`, {
+    const res = await fetch(`${API_URL}/api/v1/modules/member-registration/admin/requests`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(res.ok, `requests (${res.status})`).toBe(true);
