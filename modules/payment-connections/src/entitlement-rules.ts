@@ -64,19 +64,31 @@ export interface EntitlementRuleset {
 }
 
 /**
- * Reglas por defecto, deliberadamente conservadoras: solo clasifican lo que se
- * puede deducir sin conocer el negocio. Todo lo demás cae en `ONE_OFF`, que es
- * el default seguro (no caduca → nadie pierde acceso por una mala inferencia).
+ * Reglas por defecto: NINGUNA regla por nombre. De fábrica solo se confía en
+ * lo que declara la tienda (tipo de producto recurrente) y todo lo demás cae
+ * en `ONE_OFF`, el default seguro (no caduca → nadie pierde acceso por una
+ * mala inferencia).
+ *
+ * Deducir el tipo de acceso del NOMBRE del producto es conocimiento del
+ * negocio, no del producto whitelabel: un «Curso Lifetime Fitness» no promete
+ * acceso permanente a nada. Ese tipo de heurística se configura por tenant —
+ * ver `EXAMPLE_LIFETIME_RULE`.
  */
 export const DEFAULT_RULESET: EntitlementRuleset = {
-  rules: [
-    {
-      match: /lifetime|de por vida|para siempre/i,
-      kind: 'LIFETIME',
-      note: 'Acceso permanente por nombre de producto.',
-    },
-  ],
+  rules: [],
   fallback: 'ONE_OFF',
+};
+
+/**
+ * EJEMPLO de regla por nombre para copiar en las reglas del tenant (no está
+ * activa por defecto): clasifica como acceso permanente los productos cuyo
+ * nombre lo promete. Útil como punto de partida en catálogos en español/inglés
+ * con productos tipo «Acceso lifetime» o «Curso X de por vida».
+ */
+export const EXAMPLE_LIFETIME_RULE: EntitlementRule = {
+  match: /lifetime|de por vida|para siempre/i,
+  kind: 'LIFETIME',
+  note: 'Acceso permanente por nombre de producto.',
 };
 
 /** Tipos de producto de WooCommerce que SIEMPRE son recurrentes. */

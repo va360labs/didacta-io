@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyPurchase,
   DEFAULT_RULESET,
+  EXAMPLE_LIFETIME_RULE,
   expires,
   grantsLearningAccess,
   strongestKind,
@@ -103,10 +104,20 @@ describe('classifyPurchase · inferencia sin reglas del tenant', () => {
     ).toBe('SUBSCRIPTION');
   });
 
-  it('detecta lifetime por nombre aun sin reglas del tenant', () => {
-    expect(classifyPurchase({ productName: 'Acceso Lifetime' }, DEFAULT_RULESET).kind).toBe(
-      'LIFETIME',
-    );
+  it('el default NO clasifica por nombre: "lifetime" sin reglas del tenant es compra suelta', () => {
+    // Deducir acceso permanente del nombre es conocimiento del negocio, no del
+    // producto whitelabel. Sin reglas del tenant, ONE_OFF: tampoco caduca, así
+    // que nadie pierde acceso — pero nadie recibe LIFETIME por heurística.
+    expect(DEFAULT_RULESET.rules).toHaveLength(0);
+    const c = classifyPurchase({ productName: 'Acceso Lifetime' }, DEFAULT_RULESET);
+    expect(c.kind).toBe('ONE_OFF');
+    expect(expires(c.kind)).toBe(false);
+  });
+
+  it('la regla de ejemplo, adoptada por el tenant, sí detecta lifetime por nombre', () => {
+    const rs: EntitlementRuleset = { rules: [EXAMPLE_LIFETIME_RULE], fallback: 'ONE_OFF' };
+    expect(classifyPurchase({ productName: 'Acceso Lifetime' }, rs).kind).toBe('LIFETIME');
+    expect(classifyPurchase({ productName: 'Curso X de por vida' }, rs).kind).toBe('LIFETIME');
   });
 
   it('ante la duda NO caduca: el fallback nunca puede quitar acceso', () => {

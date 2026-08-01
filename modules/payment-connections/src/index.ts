@@ -98,6 +98,7 @@ export {
   expires,
   grantsLearningAccess,
   DEFAULT_RULESET,
+  EXAMPLE_LIFETIME_RULE,
   KIND_LABELS,
 } from './entitlement-rules.js';
 export type {

@@ -974,8 +974,8 @@ export class PaymentConnectionsService {
    * sin desplegar.
    *
    * Devuelve null si el tenant no ha configurado ninguna: entonces se aplica
-   * `DEFAULT_RULESET`, que solo detecta lifetime y recurrentes declarados por
-   * la tienda, y trata todo lo demás como compra que no caduca.
+   * `DEFAULT_RULESET`, que no clasifica por nombre — solo detecta recurrentes
+   * declarados por la tienda y trata todo lo demás como compra que no caduca.
    */
   async loadEntitlementRuleset(tenantId: string): Promise<EntitlementRuleset | null> {
     const stored = await this.config.get<StoredRuleset>(
