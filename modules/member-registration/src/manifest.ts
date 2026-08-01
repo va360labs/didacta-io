@@ -16,10 +16,9 @@ import { parseModuleManifest, type ModuleManifest } from '@didacta/core-kernel';
  * de referencia y el lookup de suscripciones/compras del solicitante en las
  * cuentas de pago conectadas (vía mod.payment-connections).
  *
- * La aprobación asigna el grupo de acceso por defecto del tenant. Ese wiring
- * corre por el host contra el vertical de grupos (mod.access-groups), que aún
- * no está formalizado como módulo (F6): por eso figura como dependencia
- * OPCIONAL — al formalizarse pasará a dependencia dura.
+ * La aprobación asigna el grupo de acceso por defecto del tenant vía
+ * mod.access-groups (dependencia dura desde su formalización en F6); el
+ * wiring corre por el host.
  */
 export const manifest: ModuleManifest = parseModuleManifest({
   name: 'mod.member-registration',
@@ -38,8 +37,11 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'member_registration.payment_flag.manage',
   ],
   dependencies: {
-    modules: [{ name: 'mod.payment-connections', version: '^1.0.0' }],
-    optionalModules: [{ name: 'mod.access-groups', version: '^1.0.0' }],
+    modules: [
+      { name: 'mod.payment-connections', version: '^1.0.0' },
+      { name: 'mod.access-groups', version: '^1.0.0' },
+    ],
+    optionalModules: [],
   },
   eventsEmitted: [
     'member_registration.request.created',

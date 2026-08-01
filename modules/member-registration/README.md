@@ -56,7 +56,7 @@ El módulo registra además sus 4 plantillas de email (`member_registration.otp_
 ## Dependencias
 
 - `mod.payment-connections` ^1.0.0 — lookup de suscripciones y compras del solicitante; enlaces de renovación.
-- `mod.access-groups` ^1.0.0 (**opcional** hasta su formalización en F6) — asignación del grupo por defecto al aprobar. El wiring corre por el host.
+- `mod.access-groups` ^1.0.0 — asignación del grupo por defecto al aprobar (dependencia dura desde su formalización en F6). El wiring corre por el host.
 
 ## Eventos
 
