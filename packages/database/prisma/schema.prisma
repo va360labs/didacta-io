@@ -2065,7 +2065,7 @@ model EmailVerificationCode {
   @@map("email_verification_code")
 }
 
-enum MemberDecisionAction {
+enum MemberRegistrationDecisionAction {
   APPROVE
   REJECT
 }
@@ -2076,16 +2076,16 @@ enum MemberDecisionAction {
 /// transacción que el cambio de status del User. TTL ~7 días. El raw del token
 /// viaja solo por email; en BD solo el SHA-256.
 model MemberRegistrationDecisionToken {
-  id        String               @id @default(uuid()) @db.Uuid
-  tenantId  String               @map("tenant_id") @db.Uuid
-  userId    String               @map("user_id") @db.Uuid
-  action    MemberDecisionAction
-  tokenHash String               @unique @map("token_hash") @db.VarChar(64)
-  expiresAt DateTime             @map("expires_at")
-  decidedAt DateTime?            @map("decided_at")
-  requestIp String?              @map("request_ip")
-  requestUa String?              @map("request_ua")
-  createdAt DateTime             @default(now()) @map("created_at")
+  id        String                           @id @default(uuid()) @db.Uuid
+  tenantId  String                           @map("tenant_id") @db.Uuid
+  userId    String                           @map("user_id") @db.Uuid
+  action    MemberRegistrationDecisionAction
+  tokenHash String                           @unique @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime                         @map("expires_at")
+  decidedAt DateTime?                        @map("decided_at")
+  requestIp String?                          @map("request_ip")
+  requestUa String?                          @map("request_ua")
+  createdAt DateTime                         @default(now()) @map("created_at")
 
   @@index([tenantId, userId], map: "mod_member_registration_decision_token_tenant_user_idx")
   @@index([expiresAt], map: "mod_member_registration_decision_token_expires_at_idx")
