@@ -36,6 +36,7 @@
     "@didacta/mod-fundae": "workspace:*",
     "@didacta/mod-hello-world": "workspace:*",
     "@didacta/mod-learning": "workspace:*",
+    "@didacta/mod-member-registration": "workspace:*",
     "@didacta/mod-messaging": "workspace:*",
     "@didacta/mod-payment-connections": "workspace:*",
     "@didacta/mod-referrals": "workspace:*",

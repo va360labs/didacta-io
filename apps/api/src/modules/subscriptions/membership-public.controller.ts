@@ -17,7 +17,7 @@ import { membershipCheckoutSchema, type MembershipCheckoutDto } from './membersh
  * Endpoints PÚBLICOS de la página de membresía (/unete).
  *
  * Sin JWT: el visitante aún no tiene cuenta — el tenant se resuelve por el
- * Host del request (igual que /inscripcion y /signin). El checkout es de
+ * Host del request (igual que /modules/member-registration y /signin). El checkout es de
  * Stripe hosted: aquí solo se genera la URL de la session.
  */
 @ApiTags('Membresía (público)')

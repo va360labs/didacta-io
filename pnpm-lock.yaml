@@ -101,6 +101,9 @@ importers:
       '@didacta/mod-learning':
         specifier: workspace:*
         version: link:../../modules/learning
+      '@didacta/mod-member-registration':
+        specifier: workspace:*
+        version: link:../../modules/member-registration
       '@didacta/mod-messaging':
         specifier: workspace:*
         version: link:../../modules/messaging
@@ -652,6 +655,25 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
+
+  modules/member-registration:
+    dependencies:
+      '@didacta/core-kernel':
+        specifier: workspace:*
+        version: link:../../packages/core-kernel
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.17
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
         version: 2.1.9(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.2)
 
   modules/messaging:

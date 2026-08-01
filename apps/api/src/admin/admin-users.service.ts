@@ -188,7 +188,7 @@ export class AdminUsersService {
    * invitado definía su contraseña y AUN ASÍ recibía "Credenciales inválidas"
    * hasta que un admin le daba a "Reactivar acceso" a mano. PENDING queda
    * reservado para el único caso donde significa algo: la inscripción de
-   * miembros pendiente de aprobación (`inscripcion/member-registration`).
+   * miembros pendiente de aprobación (`modules/member-registration`).
    *
    * `options.sendInvite` (default `true`): cuando es `false`, el user se crea
    * IGUAL en estado PENDING + se le asigna el rol + queda registrado en audit,

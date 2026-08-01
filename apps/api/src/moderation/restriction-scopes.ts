@@ -148,8 +148,11 @@ export const NEVER_BLOCKED: readonly RouteMatcher[] = [
   { methods: MUTATING, pattern: /^\/auth\// },
   { methods: MUTATING, pattern: /^\/me\/(security|notification-preferences|onboarding)/ },
   // Dinero. Bajo ningún concepto.
-  { methods: MUTATING, pattern: /^\/modules\/(billing|subscriptions|payment-connections)\// },
-  { methods: MUTATING, pattern: /^\/(inscripcion|inscribe|enrollment)/ },
+  {
+    methods: MUTATING,
+    pattern: /^\/modules\/(billing|subscriptions|payment-connections|member-registration)\//,
+  },
+  { methods: MUTATING, pattern: /^\/(inscribe|enrollment)/ },
   // Consumir lo que ya tiene: progreso, matrículas, intentos de quiz y SCORM.
   { methods: MUTATING, pattern: /^\/modules\/learning\/(progress|enrollments)/ },
   { methods: MUTATING, pattern: /^\/modules\/learning\/lessons\/[^/]+\/scorm/ },

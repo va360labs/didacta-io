@@ -17,8 +17,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
-import { MemberRegistrationService } from '../src/inscripcion/member-registration.service';
-import type { MemberRegistrationInput } from '../src/inscripcion/member-registration.service';
+import { MemberRegistrationService } from '../src/modules/member-registration/member-registration.service';
+import type { MemberRegistrationInput } from '../src/modules/member-registration/member-registration.service';
 import type { ClientContext } from '../src/auth/client-context';
 
 const TENANT_ID = 'tenant-1';
@@ -112,6 +112,7 @@ function makeHarness(
     resolve: vi.fn().mockResolvedValue({ config: {}, source: 'global', verified: true }),
   } as never;
   const auditLog = { record: vi.fn().mockResolvedValue(undefined) };
+  const events = { publish: vi.fn().mockResolvedValue(undefined) };
   const logger = { warn: vi.fn(), log: vi.fn(), error: vi.fn(), debug: vi.fn() } as never;
 
   const service = new MemberRegistrationService(
@@ -124,6 +125,7 @@ function makeHarness(
     smtp as never,
     smtpResolver,
     auditLog as never,
+    events as never,
     logger,
   );
 

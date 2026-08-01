@@ -14,7 +14,7 @@ import {
   buildOtpEmail,
   buildRejectionEmail,
   buildWelcomeEmail,
-} from '../src/inscripcion/email-templates';
+} from '../src/modules/member-registration/email-templates';
 import type { EmailBranding } from '../src/common/branded-email';
 
 // ============================================================================

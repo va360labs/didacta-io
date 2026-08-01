@@ -22,7 +22,7 @@
 
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { MemberDecisionService } from '../src/inscripcion/member-decision.service';
+import { MemberDecisionService } from '../src/modules/member-registration/member-decision.service';
 import type { ClientContext } from '../src/auth/client-context';
 
 const TENANT_ID = 'tenant-1';
@@ -151,6 +151,7 @@ function makeHarness() {
     resolve: vi.fn().mockResolvedValue({ config: {}, source: 'global', verified: true }),
   } as never;
   const auditLog = { record: vi.fn().mockResolvedValue(undefined) };
+  const events = { publish: vi.fn().mockResolvedValue(undefined) };
   const logger = { warn: vi.fn(), log: vi.fn(), error: vi.fn(), debug: vi.fn() } as never;
 
   const service = new MemberDecisionService(
@@ -159,10 +160,11 @@ function makeHarness() {
     smtp as never,
     smtpResolver,
     auditLog as never,
+    events as never,
     logger,
   );
 
-  return { service, prisma, tokens, users, assignDefaultGroupOnApproval, smtp, auditLog };
+  return { service, prisma, tokens, users, assignDefaultGroupOnApproval, smtp, auditLog, events };
 }
 
 describe('MemberDecisionService.issueDecisionTokens', () => {

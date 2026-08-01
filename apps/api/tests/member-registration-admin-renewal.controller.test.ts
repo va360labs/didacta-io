@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { InscripcionAdminController } from '../src/inscripcion/inscripcion-admin.controller';
+import { MemberRegistrationAdminController } from '../src/modules/member-registration/member-registration-admin.controller';
 
 /**
  * Tests del recordatorio de pago desde el panel de solicitudes de inscripción:
@@ -65,7 +65,7 @@ function build(overrides?: {
       findUnique: vi.fn(async () => ({ logoUrl: null, brandHue: 213, brandSaturation: 70 })),
     },
   };
-  const controller = new InscripcionAdminController(
+  const controller = new MemberRegistrationAdminController(
     registration as never,
     lookup as never,
     {} as never,
@@ -77,7 +77,7 @@ function build(overrides?: {
   return { controller, registration, lookup, paymentSvc, smtpResolver, smtp, prisma };
 }
 
-describe('InscripcionAdminController · renewal-context', () => {
+describe('MemberRegistrationAdminController · renewal-context', () => {
   let h: ReturnType<typeof build>;
   beforeEach(() => {
     h = build();
@@ -132,7 +132,7 @@ describe('InscripcionAdminController · renewal-context', () => {
   });
 });
 
-describe('InscripcionAdminController · renewal-email', () => {
+describe('MemberRegistrationAdminController · renewal-email', () => {
   const DTO = { subject: 'Renueva tu plan', body: 'Paga aquí: https://invoice.stripe.com/i/sub_1' };
 
   it('rol no admin → 403', async () => {
@@ -184,7 +184,7 @@ describe('InscripcionAdminController · renewal-email', () => {
   });
 });
 
-describe('InscripcionAdminController · rerun (mapear suscripción por email)', () => {
+describe('MemberRegistrationAdminController · rerun (mapear suscripción por email)', () => {
   it('usa el email del body cuando se pasa (mapeo por otro email)', async () => {
     const h = build({ getForUser: async () => ({ email: 'registro@x.com', results: [] }) });
     const res = await h.controller.rerun(ADMIN as never, USER_ID, { email: 'pago@x.com' });

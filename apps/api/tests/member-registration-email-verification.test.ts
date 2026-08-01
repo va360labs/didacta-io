@@ -15,7 +15,7 @@
 
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { EmailVerificationService } from '../src/inscripcion/email-verification.service';
+import { EmailVerificationService } from '../src/modules/member-registration/email-verification.service';
 
 const TENANT_ID = 'tenant-1';
 const EMAIL = 'aspirante@example.com';

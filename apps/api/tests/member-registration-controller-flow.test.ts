@@ -1,5 +1,5 @@
 /**
- * Tests del flujo COMPONIBLE de `InscripcionController` (F2 — registro
+ * Tests del flujo COMPONIBLE de `MemberRegistrationPublicController` (F2 — registro
  * componible). Verifican el gating por política del tenant y el desacople
  * OTP↔Telegram:
  *
@@ -21,9 +21,9 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { InscripcionController } from '../src/inscripcion/inscripcion.controller';
-import type { EffectiveRegistrationPolicy } from '../src/inscripcion/member-registration-settings.service';
-import { signTicket } from '../src/inscripcion/signed-ticket';
+import { MemberRegistrationPublicController } from '../src/modules/member-registration/member-registration-public.controller';
+import type { EffectiveRegistrationPolicy } from '@didacta/mod-member-registration';
+import { signTicket } from '@didacta/mod-member-registration';
 
 const AUTH_SECRET = 'secret-de-test-suficientemente-largo';
 const TENANT_ID = 'tenant-1';
@@ -66,7 +66,7 @@ function makeController(effectivePolicy: EffectiveRegistrationPolicy) {
   };
   const tenantResolver = { resolveByHost: vi.fn().mockResolvedValue({ id: TENANT_ID }) };
 
-  const controller = new InscripcionController(
+  const controller = new MemberRegistrationPublicController(
     telegram as never,
     emailVerification as never,
     registration as never,
@@ -89,7 +89,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('InscripcionController · config', () => {
+describe('MemberRegistrationPublicController · config', () => {
   it('expone disponibilidad, verificadores y botUsername de la política efectiva', async () => {
     const { controller } = makeController(
       policy({ verifiers: ['telegram', 'otp'], botUsername: 'mi_bot' }),
@@ -116,7 +116,7 @@ describe('InscripcionController · config', () => {
   });
 });
 
-describe('InscripcionController · telegram/verify', () => {
+describe('MemberRegistrationPublicController · telegram/verify', () => {
   it('503 cuando la política no incluye telegram', async () => {
     const { controller } = makeController(policy({ verifiers: ['otp'] }));
     await expect(
@@ -132,7 +132,7 @@ describe('InscripcionController · telegram/verify', () => {
   });
 });
 
-describe('InscripcionController · otp/request', () => {
+describe('MemberRegistrationPublicController · otp/request', () => {
   it("sin 'otp' en la política → 503", async () => {
     const { controller } = makeController(policy({ verifiers: ['telegram'] }));
     await expect(controller.otpRequest(REQ, { email: 'a@x.com' } as never)).rejects.toBeInstanceOf(
@@ -176,7 +176,7 @@ describe('InscripcionController · otp/request', () => {
   });
 });
 
-describe('InscripcionController · otp/verify', () => {
+describe('MemberRegistrationPublicController · otp/verify', () => {
   it('política solo-otp: emite verificationToken con telegramId null', async () => {
     const { controller, registration } = makeController(policy({ verifiers: ['otp'] }));
     const { verificationToken } = await controller.otpVerify(REQ, {
@@ -205,7 +205,7 @@ describe('InscripcionController · otp/verify', () => {
   });
 });
 
-describe('InscripcionController · register', () => {
+describe('MemberRegistrationPublicController · register', () => {
   it('registro cerrado → 503', async () => {
     const { controller } = makeController(policy({ enabled: false, operational: false }));
     await expect(

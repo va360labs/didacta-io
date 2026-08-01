@@ -113,7 +113,7 @@ describe('blockedBy — lo que NUNCA se bloquea', () => {
   });
 
   it('deja inscribirse y matricularse', () => {
-    expect(blockedBy(ALL, 'POST', '/api/v1/inscripcion/solicitud')).toBeNull();
+    expect(blockedBy(ALL, 'POST', '/api/v1/modules/member-registration/register')).toBeNull();
     expect(blockedBy(ALL, 'POST', '/api/v1/modules/learning/enrollments/me')).toBeNull();
   });
 

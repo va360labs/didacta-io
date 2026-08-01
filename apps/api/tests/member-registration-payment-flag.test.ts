@@ -16,8 +16,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { MemberPaymentFlagService } from '../src/inscripcion/member-payment-flag.service';
-import type { PaymentFlagUpsertDto } from '../src/inscripcion/inscripcion.dto';
+import { MemberPaymentFlagService } from '../src/modules/member-registration/member-payment-flag.service';
+import type { PaymentFlagUpsertDto } from '@didacta/mod-member-registration';
 
 const TENANT_ID = 'tenant-1';
 const OTHER_TENANT = 'tenant-2';
