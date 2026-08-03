@@ -10,6 +10,44 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.95] — 2026-08-03
+
+#### Notes
+
+- **Release intermedia del despliegue de Row-Level Security.** Un cambio de
+  comportamiento para el operador: la telemetría de aislamiento pasa a `on`
+  por defecto y las queries sin contexto de tenant se registran como **error**
+  en el log (antes warning, y había que activarlo). No cambia ninguna
+  respuesta de la API ni el aislamiento efectivo — la aplicación sigue
+  conectando con el usuario de arranque. Se puede volver al comportamiento
+  anterior con `RLS_ENFORCEMENT=warn` (u `off`). El aislamiento real a nivel
+  de base de datos (rol `didacta_app`) llega en una próxima versión.
+
+#### Changed
+
+- **Aislamiento por tenant (RLS), fase 3 — telemetría en `on` por defecto**:
+  `RLS_ENFORCEMENT` pasa de `warn` a `on`. Cualquier operación sin contexto de
+  tenant que una instalación destape con una configuración distinta a las
+  cubiertas por tests sale a log-error sin romper nada.
+- **Webhooks y workers escopados por tenant**: los webhooks de Stripe
+  (billing y suscripciones, incluida la materialización de la membresía) y de
+  Zoom resuelven primero el tenant dueño del evento (lookup global auditado) y
+  procesan bajo su contexto; los workers de aprobación de comisiones de
+  referidos y de expiración del periodo de gracia separan el barrido global
+  del procesado por tenant. Última pieza del worklist previo a la activación
+  del enforcement real.
+
+#### Fixed
+
+- **Validador de contratos vs módulos marketplace-style**: `module-doctor` ya
+  no exige el campo legado `edition` a los `module.json` con el shape del
+  marketplace (bloques `vendor`/`isolation`/`http`/`didacta`) y pasa a marcar
+  como error las keys legadas (`edition`, `category`, `requiredLicenseFeature`)
+  que el schema estricto del host rechazaría al instalar el módulo
+  (`MANIFEST_SCHEMA_INVALID`). Se elimina `edition` del `module.json` del
+  migrador de LearnDash, resolviendo la contradicción con sus tests de
+  consistencia.
+
 ### [0.0.1-alpha.94] — 2026-08-03
 
 #### Notes
