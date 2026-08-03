@@ -5,6 +5,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@didacta/database';
+import { Parser } from 'node-sql-parser/build/postgresql';
 import { PrismaService } from '../prisma/prisma.service';
 import { DB_CAPS } from './module-manifest.schema';
 import {
@@ -36,14 +37,37 @@ import {
  *     normaliza a uno de los `DbErrorCode` tipados. Esto desacopla al
  *     módulo de la versión exacta de Postgres/Prisma.
  *
- * Limitación conocida del SQL guard: el extractor de tabla refs es regex
- * + balanced-paren tracking; soporta los casos comunes (FROM/JOIN/INTO/
- * UPDATE/USING + ONLY + qualified idents + CTE aliases + funciones que
- * usan FROM como separador: extract/substring/trim/overlay/position).
- * NO usa un parser PG completo (nadie quiere meterse `pg-query-emscripten`
- * de 4 MB en el bundle del API). Los módulos que necesiten SQL exótico
- * (DSL, generated columns con functions raras) van a chocar con
- * DB_PREFIX_VIOLATION false-positive y deben simplificar la query.
+ * SQL guard (F4, alpha.97): el extractor de table refs usa el AST real de
+ * `node-sql-parser` (dialecto `postgresql`, subpath `build/postgresql` para
+ * no cargar el resto de dialectos — ~300 KB vs. los ~4 MB de
+ * `pg-query-emscripten`, que se descartó en su momento por eso). Reemplaza
+ * al validador anterior basado en regex + balanced-paren tracking, que
+ * tenía falsos negativos reales y explotables: listas FROM separadas por
+ * coma (`FROM mod_x_a, "user"`) y subqueries anidadas dentro de
+ * extract/substring/trim/overlay/position (`substring(x FROM (SELECT ...
+ * FROM "user") FOR 1)`) pasaban sin disparar `DB_PREFIX_VIOLATION` porque
+ * el regex solo miraba el identifier pegado a FROM/JOIN/INTO/UPDATE/USING,
+ * no la estructura real del árbol. El parser real resuelve todo eso de
+ * forma nativa (joins implícitos, subqueries a cualquier profundidad,
+ * UNION, alias con y sin AS, ON CONFLICT DO UPDATE SET, RETURNING).
+ *
+ * La gramática `postgresql` de la librería no cubre 100% del dialecto real
+ * — antes de invocar `astify`/`tableList` se normaliza una COPIA del SQL
+ * (`normalizeSqlForParsing`, nunca la que se ejecuta contra Postgres) para
+ * sortear 4 huecos verificados: `ONLY` mal interpretado como nombre de
+ * tabla, `$N::tipo` (cast de un parámetro posicional) fuera de una lista
+ * SELECT top-level, la sintaxis SQL-standard de `SUBSTRING(x FROM a FOR b)`
+ * / `OVERLAY(x PLACING y FROM a FOR b)`, y `VALUES (...)` como statement
+ * top-level (sin INSERT). Cada normalización es sintáctica y con scope
+ * acotado (nunca toca contenido dentro de parens anidados más profundos,
+ * así que una subquery escondida ahí adentro sigue siendo detectada).
+ * Statement kinds no soportados (DDL, COPY, DO, SET ROLE) se rechazan por
+ * la keyword inicial ANTES de invocar el parser — ni falta que arranque.
+ *
+ * Limitación conocida que sigue vigente (no es objetivo de F4, es un guard
+ * de tablas, no de funciones): llamadas a funciones peligrosas sin FROM
+ * (`SELECT set_config(...)`, `SELECT pg_sleep(...)`) no tienen table ref
+ * que chequear, así que pasan el guard igual que en el validador anterior.
  */
 
 /// Defaults expuestos para tests + telemetría. Caps DUROS viven en
@@ -63,12 +87,19 @@ export const DB_DEFAULTS = {
 /// código del módulo en runtime.
 const ALLOWED_KINDS = new Set(['select', 'insert', 'update', 'delete', 'with', 'values']);
 
-/// Funciones PG que usan `FROM` como separador entre argumentos. Si una
-/// query las usa, hay que enmascarar el contenido de sus parens antes de
-/// extraer table refs — de lo contrario `extract(year from created_at)`
-/// dispara DB_PREFIX_VIOLATION en `created_at` (que es una columna, no
-/// una tabla).
-const FROM_FN_NAMES = ['extract', 'substring', 'trim', 'overlay', 'position'] as const;
+/// Funciones PG con sintaxis SQL-standard (`FROM`/`FOR`/`PLACING` como
+/// separador de argumentos, no coma) que la gramática `postgresql` de
+/// `node-sql-parser` 5.4 NO reconoce — verificado empíricamente. `extract`,
+/// `trim(... FROM ...)` y `position(... IN ...)` SÍ parsean nativos (no
+/// necesitan normalización); solo `substring`/`overlay` necesitan reescribir
+/// su `FROM`/`FOR`/`PLACING` de nivel superior a comas antes de parsear
+/// (ver `rewriteSqlStandardFnSyntax`).
+const FROM_FOR_PLACING_FN_NAMES = ['substring', 'overlay'] as const;
+
+/// Instancia única del parser — sin estado mutable entre llamadas, seguro
+/// de reusar (Node.js es single-threaded por request).
+const sqlParser = new Parser();
+const PARSE_OPT = { database: 'postgresql' } as const;
 
 @Injectable()
 export class SandboxedDbService {
@@ -270,11 +301,12 @@ class ScopedSandboxedDb implements SandboxedDb {
 ///
 /// Invariantes:
 ///   1. SQL es string no-vacío con length ≤ MAX_STATEMENT_LENGTH.
-///   2. UN solo statement (al menos un trailing `;` opcional).
+///   2. UN solo statement (según el AST real — no un conteo de `;`).
 ///   3. Statement kind ∈ {select, insert, update, delete, with, values}.
-///   4. Todas las refs a tablas (FROM/JOIN/INTO/UPDATE/USING + ONLY)
-///      empiezan con `tablePrefix`. CTE aliases (de `WITH alias AS (...)`)
-///      se excluyen del check.
+///   4. Todas las refs a tablas del AST real (FROM/JOIN/INTO/UPDATE/USING,
+///      joins implícitos por coma, subqueries a cualquier profundidad)
+///      empiezan con `tablePrefix`. CTE aliases (de `WITH alias AS (...)`,
+///      leídos del AST, no de un parser de CTEs a mano) se excluyen.
 export function validateSql(sql: string, tablePrefix: string): void {
   if (typeof sql !== 'string') {
     throw new DbError('DB_INVALID_SQL', `SQL debe ser string (recibido: ${typeof sql}).`);
@@ -289,15 +321,10 @@ export function validateSql(sql: string, tablePrefix: string): void {
     );
   }
 
+  // El statement kind se detecta por keyword inicial ANTES de invocar el
+  // parser — barato, y filtra DDL/COPY/DO/SET que la gramática de
+  // node-sql-parser ni siquiera intenta parsear (fail-fast real).
   const stripped = stripCommentsAndStrings(sql);
-
-  if (countNonTrailingSemicolons(stripped) > 0) {
-    throw new DbError(
-      'DB_INVALID_SQL',
-      'Multi-statement SQL no permitido. ctx.db ejecuta UN solo statement por llamada — para varios, usá ctx.db.transaction(tx => …).',
-    );
-  }
-
   const kind = detectStatementKind(stripped);
   if (!ALLOWED_KINDS.has(kind)) {
     throw new DbError(
@@ -306,13 +333,30 @@ export function validateSql(sql: string, tablePrefix: string): void {
     );
   }
 
-  // Pre-procesamiento: enmascaramos el contenido de funciones que usan
-  // FROM como separador (extract/substring/trim/overlay/position) para
-  // que el extractor de table refs no las confunda con FROM <tabla>.
-  const masked = maskFromFunctions(stripped);
+  const parseSql = normalizeSqlForParsing(sql, kind);
 
-  const cteAliases = extractCteAliases(masked);
-  const tableRefs = extractTableRefs(masked);
+  let ast: unknown;
+  let tableRefs: Set<string>;
+  try {
+    ast = sqlParser.astify(parseSql, PARSE_OPT);
+    tableRefs = extractTableRefsFromNormalized(parseSql);
+  } catch (err) {
+    throw new DbError(
+      'DB_INVALID_SQL',
+      `SQL no pudo ser interpretado por el parser (sintaxis no reconocida): ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`,
+    );
+  }
+
+  const stmts = Array.isArray(ast) ? ast : [ast];
+  if (stmts.length !== 1) {
+    throw new DbError(
+      'DB_INVALID_SQL',
+      'Multi-statement SQL no permitido. ctx.db ejecuta UN solo statement por llamada — para varios, usá ctx.db.transaction(tx => …).',
+    );
+  }
+
+  const cteAliases = new Set<string>();
+  collectCteAliasNames(stmts[0], cteAliases);
 
   for (const ref of tableRefs) {
     if (cteAliases.has(ref)) continue;
@@ -327,16 +371,13 @@ export function validateSql(sql: string, tablePrefix: string): void {
 
 /// Quita comentarios `--` (línea), `/* ... */` (bloque) y reemplaza el
 /// contenido de strings literales `'foo'` por espacios (preservando
-/// length para que offsets de error sean útiles). NO toca quoted
-/// identifiers `"foo"` — esos SON nombres de tabla/columna y deben
-/// participar en la extracción de refs.
+/// length). Usado solo para detectar el statement kind por keyword
+/// inicial — el parseo real de tablas lo hace el AST, que ya resuelve
+/// comentarios/strings con su propio tokenizer.
 export function stripCommentsAndStrings(sql: string): string {
-  // Comentarios primero. Bloque /* ... */ y línea --.
   let out = sql.replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length));
   out = out.replace(/--[^\n]*/g, (m) => ' '.repeat(m.length));
 
-  // Strings literales 'foo' con escape Postgres '' (doble apóstrofo).
-  // Walk char-by-char para manejar `''` correctamente.
   const chars: string[] = [...out];
   let inStr = false;
   for (let i = 0; i < chars.length; i++) {
@@ -346,14 +387,12 @@ export function stripCommentsAndStrings(sql: string): string {
       continue;
     }
     if (ch === "'") {
-      // ¿Doble apóstrofo (escape)?
       if (chars[i + 1] === "'") {
         chars[i] = ' ';
         chars[i + 1] = ' ';
         i += 1;
         continue;
       }
-      // Cierre.
       inStr = false;
       continue;
     }
@@ -362,189 +401,153 @@ export function stripCommentsAndStrings(sql: string): string {
   return chars.join('');
 }
 
-/// Cuenta `;` que NO sean trailing. `SELECT 1` y `SELECT 1;` y `SELECT 1; `
-/// devuelven 0; `SELECT 1; SELECT 2` devuelve 1.
-export function countNonTrailingSemicolons(sql: string): number {
-  let count = 0;
-  const trimmed = sql.replace(/\s+$/g, '');
-  for (let i = 0; i < trimmed.length; i++) {
-    if (trimmed[i] !== ';') continue;
-    // Si NO es el último char no-blanco, cuenta.
-    const rest = trimmed.slice(i + 1).trim();
-    if (rest.length > 0) count++;
-  }
-  return count;
-}
-
 /// Detecta el statement kind por la primera keyword no-blanca. Devuelve
 /// la keyword en lowercase, o `'unknown'` si no matchea ninguna conocida.
+/// No es el componente de seguridad del guard (eso es la extracción de
+/// table refs vía AST) — solo clasifica para el allowlist/fail-fast.
 export function detectStatementKind(sql: string): string {
   const m = sql.trimStart().match(/^([a-z]+)/i);
   return m ? m[1]!.toLowerCase() : 'unknown';
 }
 
-/// Enmascara el contenido (entre parens) de las funciones que usan FROM
-/// como separador. Reemplaza chars dentro de los parens por espacios,
-/// preservando la estructura de balanceo. Maneja parens anidados.
-export function maskFromFunctions(sql: string): string {
-  const FN_REGEX = new RegExp(`\\b(?:${FROM_FN_NAMES.join('|')})\\s*\\(`, 'gi');
-  const chars = [...sql];
-  for (const match of sql.matchAll(FN_REGEX)) {
-    const start = match.index;
-    if (typeof start !== 'number') continue;
-    // Posicionarse en el `(` de apertura.
-    const openIdx = sql.indexOf('(', start);
-    if (openIdx === -1) continue;
-    // Walk parens balanceados.
-    let depth = 1;
-    let i = openIdx + 1;
-    while (i < sql.length && depth > 0) {
-      const ch = sql[i];
-      if (ch === '(') depth++;
-      else if (ch === ')') depth--;
-      if (depth === 0) break;
-      // Reemplazo por espacio para mantener offsets.
-      chars[i] = ' ';
-      i++;
-    }
-  }
-  return chars.join('');
-}
-
-/// Extrae los aliases de las CTEs (`WITH alias AS (...), alias2 AS (...)`).
-/// Solo procesa si el SQL empieza con WITH. Walk balanceado de parens
-/// para saltar cuerpos de CTE. Devuelve set lowercase, sin prefix.
-export function extractCteAliases(sql: string): Set<string> {
-  const out = new Set<string>();
-  const trimmed = sql.trimStart();
-  if (!/^with\b/i.test(trimmed)) return out;
-
-  // Avanzar tras WITH y (opcional) RECURSIVE.
-  let i = sql.indexOf(trimmed[0]!);
-  i += 4; // 'with'.length
-  // saltar RECURSIVE
-  const recRe = /\s+recursive\b/iy;
-  recRe.lastIndex = i;
-  const recMatch = recRe.exec(sql);
-  if (recMatch) i = recRe.lastIndex;
-
-  while (i < sql.length) {
-    // skip whitespace + comma
-    while (i < sql.length && /[\s,]/.test(sql[i]!)) i++;
-    // capturar alias
-    const aliasMatch = sql.slice(i).match(/^"?([a-z_][\w]*)"?/i);
-    if (!aliasMatch) break;
-    out.add(aliasMatch[1]!.toLowerCase());
-    i += aliasMatch[0].length;
-    // saltar opcional (col1, col2, ...) — paren balanceado
-    while (i < sql.length && /\s/.test(sql[i]!)) i++;
-    if (sql[i] === '(') {
-      i = skipBalancedParens(sql, i);
-    }
-    // saltar AS [MATERIALIZED|NOT MATERIALIZED]
-    while (i < sql.length && /\s/.test(sql[i]!)) i++;
-    if (!/^as\b/i.test(sql.slice(i))) break;
-    i += 2; // 'as'
-    while (i < sql.length && /\s/.test(sql[i]!)) i++;
-    if (/^materialized\b/i.test(sql.slice(i))) i += 'materialized'.length;
-    else if (/^not\s+materialized\b/i.test(sql.slice(i))) {
-      i += sql.slice(i).match(/^not\s+materialized/i)![0].length;
-    }
-    while (i < sql.length && /\s/.test(sql[i]!)) i++;
-    if (sql[i] !== '(') break;
-    i = skipBalancedParens(sql, i);
-    // posible coma → siguiente CTE; o terminamos.
-    while (i < sql.length && /\s/.test(sql[i]!)) i++;
-    if (sql[i] === ',') {
-      i++;
-      continue;
-    }
-    break;
+/// Normaliza una COPIA del SQL para que la gramática `postgresql` de
+/// node-sql-parser pueda parsearla, sin alterar lo que efectivamente se
+/// ejecuta contra Postgres (`validateSql` solo usa el resultado para
+/// analizar estructura, nunca lo pasa a `$queryRawUnsafe`). Cada
+/// normalización es sintáctica y de scope acotado — ver comentario de
+/// cabecera del archivo para el detalle de cada hueco cubierto.
+export function normalizeSqlForParsing(sql: string, kind: string): string {
+  let out = stripOnlyKeyword(sql);
+  out = wrapPlaceholderCasts(out);
+  out = rewriteSqlStandardFnSyntax(out);
+  if (kind === 'values') {
+    // `VALUES (...)` como statement top-level no es soportado por la
+    // gramática. Envolver en `SELECT * FROM (...)` preserva 100% del
+    // contenido original (incluida cualquier subquery anidada dentro de
+    // una fila) para que el AST la siga viendo — solo cambia si un SELECT
+    // "envoltorio" es válido, no qué tablas son alcanzables.
+    out = `SELECT * FROM (${out}) AS __sandboxed_values_shim(__c)`;
   }
   return out;
 }
 
-function skipBalancedParens(sql: string, openIdx: number): number {
-  let depth = 1;
-  let i = openIdx + 1;
-  while (i < sql.length && depth > 0) {
-    const ch = sql[i];
-    if (ch === '(') depth++;
-    else if (ch === ')') depth--;
-    i++;
-  }
-  return i;
+/// `FROM ONLY tabla` / `UPDATE ONLY tabla` es sintaxis real de Postgres
+/// (excluye tablas hijas de partición) que la gramática de
+/// node-sql-parser NO reconoce — interpreta "ONLY" como el nombre de la
+/// tabla y lo que sigue como su alias, escondiendo la tabla real del
+/// extractor. Quitar la keyword `ONLY` dejando el identifier real intacto
+/// no cambia qué tabla se referencia para efectos del guard.
+export function stripOnlyKeyword(sql: string): string {
+  return sql.replace(/\b(FROM|UPDATE)\s+ONLY\s+/gi, '$1 ');
 }
 
-/// Extrae todas las referencias a tablas (FROM/JOIN/INTO/UPDATE/USING +
-/// ONLY opcional + qualified `schema.table`). Devuelve identifiers
-/// lowercase, sin schema prefix, sin quotes. Set para deduplicar.
-export function extractTableRefs(sql: string): Set<string> {
-  const out = new Set<string>();
-  // Patrón: keyword-de-tabla seguido de ONLY opcional y luego identifier
-  // (posiblemente qualified). Capturamos el último segmento.
-  // - `FROM <ident>` / `FROM ONLY <ident>` / `FROM "schema"."tbl"` / `FROM schema.tbl`
-  // - `JOIN <ident>` (cualquier tipo de join — left/right/inner/cross/lateral)
-  // - `INTO <ident>` (INSERT INTO <tbl>)
-  // - `UPDATE <ident>` / `UPDATE ONLY <ident>` (top-level del statement)
-  // - `USING <ident>` (USING en DELETE; USING también aparece en CREATE
-  //    INDEX y JOIN ON USING (col), pero esos casos están filtrados:
-  //    DDL ya rechazada arriba; JOIN USING se desambigua porque viene
-  //    seguido de `(` (paren), no de un ident plain).
-  const KW = '(?:from|join|into|update|using)';
-  const QUALIFIED_IDENT = `(?:"?[a-z_][\\w]*"?\\s*\\.\\s*)?"?([a-z_][\\w]*)"?`;
-  const re = new RegExp(`\\b${KW}\\b\\s+(?:only\\s+)?${QUALIFIED_IDENT}`, 'gi');
+/// `$N::tipo` (cast de un parámetro posicional) rompe la gramática de
+/// node-sql-parser en casi cualquier posición salvo el tope de una lista
+/// SELECT (`SELECT $1::uuid` parsea; `WHERE x = $1::uuid` no) — verificado
+/// empíricamente contra los ~36 queries reales de mod.migrator-learndash,
+/// que usan este patrón en casi todas sus queries. Envolver el parámetro
+/// en parens (`($1)::uuid`) es sintácticamente equivalente y sí parsea en
+/// todas las posiciones probadas.
+export function wrapPlaceholderCasts(sql: string): string {
+  return sql.replace(/\$(\d+)(?=\s*::)/g, '($&)');
+}
 
-  for (const match of sql.matchAll(re)) {
-    const ident = match[1];
-    if (!ident) continue;
-    const kw = match[0].slice(0, match[0].search(/\s/)).toLowerCase();
+/// `SUBSTRING(x FROM a [FOR b])` y `OVERLAY(x PLACING y FROM a [FOR b])`
+/// son sintaxis SQL-standard que la gramática NO soporta (a diferencia de
+/// `extract(... FROM ...)`, `trim(... FROM ...)` y `position(... IN ...)`,
+/// que sí parsean nativos). Se reescribe a la forma equivalente por comas
+/// (`substring(x, a, b)`) SOLO en el nivel superior de los argumentos de
+/// la función — cualquier paren anidado (una subquery escondida como
+/// argumento, p. ej. `substring(x FROM (SELECT secret FROM "user") FOR 1)`)
+/// se preserva byte a byte, así que sigue siendo visible para el AST real.
+export function rewriteSqlStandardFnSyntax(sql: string): string {
+  const FN_REGEX = new RegExp(`\\b(?:${FROM_FOR_PLACING_FN_NAMES.join('|')})\\s*\\(`, 'gi');
+  const matches = [...sql.matchAll(FN_REGEX)];
+  if (matches.length === 0) return sql;
 
-    // alpha.56: filtrar el caso `... ON CONFLICT (cols) DO UPDATE SET ...`.
-    // El extractor matchea `UPDATE SET` y captura `set` como ident — false
-    // positive porque `SET` es la cláusula de assignment, no una tabla.
-    // PostgreSQL UPSERT estándar: `INSERT ... ON CONFLICT (...) DO UPDATE SET col=...`.
-    // Detección: si la keyword es `update` y el token anterior es `do`,
-    // skipear este match (es parte del DO UPDATE, no un UPDATE top-level).
-    if (kw === 'update') {
-      const startIdx = match.index ?? 0;
-      // Mirar atrás hasta encontrar el token previo (saltando whitespace).
-      let k = startIdx - 1;
-      while (k >= 0 && /\s/.test(sql[k]!)) k--;
-      // Capturar palabra anterior.
-      let prevEnd = k + 1;
-      while (k >= 0 && /[a-z_]/i.test(sql[k]!)) k--;
-      const prev = sql.slice(k + 1, prevEnd).toLowerCase();
-      if (prev === 'do') {
-        // DO UPDATE SET — no es table ref. El INSERT INTO de la misma
-        // statement ya añadió la table real al set.
+  let result = '';
+  let idx = 0;
+  for (const match of matches) {
+    const start = match.index;
+    if (typeof start !== 'number' || start < idx) continue;
+    const openIdx = sql.indexOf('(', start);
+    if (openIdx === -1) continue;
+
+    result += sql.slice(idx, openIdx + 1);
+    let depth = 1;
+    let i = openIdx + 1;
+    let rebuilt = '';
+    while (i < sql.length && depth > 0) {
+      const ch = sql[i];
+      if (ch === '(') {
+        depth++;
+        rebuilt += ch;
+        i++;
         continue;
       }
+      if (ch === ')') {
+        depth--;
+        if (depth === 0) break;
+        rebuilt += ch;
+        i++;
+        continue;
+      }
+      if (depth === 1) {
+        const kwMatch = sql.slice(i).match(/^(FROM|FOR|PLACING)\b/i);
+        if (kwMatch) {
+          rebuilt += ',';
+          i += kwMatch[0].length;
+          continue;
+        }
+      }
+      rebuilt += ch;
+      i++;
     }
+    result += rebuilt + ')';
+    idx = i + 1;
+  }
+  result += sql.slice(idx);
+  return result;
+}
 
-    // Filtrar el caso `JOIN USING (col)` — cuando la kw es USING y
-    // viene seguido de `(`, no es una table ref. También filtra
-    // `LATERAL <subquery>` que matchea pero no es tabla.
-    const matchEnd = (match.index ?? 0) + match[0].length;
-    // Saltar whitespace después del match.
-    let j = matchEnd;
-    while (j < sql.length && /\s/.test(sql[j]!)) j++;
-    if (sql[j] === '(') {
-      // El "ident" capturado es en realidad parte de algo como
-      // `JOIN USING (col)` o función — descartar.
-      // PERO ojo: `INSERT INTO mod_x_t (col1, col2) VALUES ...` también
-      // matchea con `(` después. Ese SÍ es una table ref válida. Para
-      // distinguir: si la keyword es `into` o `update`, el `(` de
-      // después es la lista de columnas — es VÁLIDO. Si es `using`, el
-      // `(` indica USING(col) que NO es una table ref.
-      if (kw === 'using') continue;
-      // for from/join, table-with-paren no es una sintaxis válida de PG
-      // — las funciones table-valued usan `from func(args)` pero esas
-      // ya las enmascaramos en `maskFromFunctions`. Si llegó hasta acá,
-      // probablemente es algo no estándar — descartamos por seguridad.
-      if (kw === 'from' || kw === 'join') continue;
+/// Recolecta recursivamente los nombres de alias de CTEs (`WITH alias AS
+/// (...)`) leyendo la estructura real del AST (`node.with[].name.value`)
+/// en cualquier nivel de anidamiento — reemplaza al parser de CTEs a mano
+/// del validador anterior (regex + balanced-paren tracking).
+export function collectCteAliasNames(node: unknown, out: Set<string>): void {
+  if (Array.isArray(node)) {
+    for (const item of node) collectCteAliasNames(item, out);
+    return;
+  }
+  if (node === null || typeof node !== 'object') return;
+
+  const obj = node as Record<string, unknown>;
+  if (Array.isArray(obj.with)) {
+    for (const cte of obj.with) {
+      const name = (cte as { name?: { value?: unknown } } | null)?.name?.value;
+      if (typeof name === 'string') out.add(name.toLowerCase());
     }
-    out.add(ident.toLowerCase());
+  }
+  for (const value of Object.values(obj)) {
+    collectCteAliasNames(value, out);
+  }
+}
+
+/// Extrae todas las referencias a tablas del SQL ya normalizado
+/// (`normalizeSqlForParsing`) usando `Parser.tableList()` — el AST real
+/// resuelve FROM/JOIN/INTO/UPDATE/USING, listas separadas por coma
+/// (joins implícitos), UNION y subqueries a cualquier profundidad.
+/// Devuelve identifiers lowercase, sin schema/db prefix. Los aliases de
+/// CTE NO se excluyen acá — eso lo hace `validateSql` con
+/// `collectCteAliasNames`, porque `tableList()` no distingue un alias de
+/// CTE de una tabla real (ambos aparecen con el mismo formato).
+export function extractTableRefsFromNormalized(normalizedSql: string): Set<string> {
+  const raw = sqlParser.tableList(normalizedSql, PARSE_OPT);
+  const out = new Set<string>();
+  for (const entry of raw) {
+    const segments = entry.split('::');
+    const table = segments[segments.length - 1];
+    if (table) out.add(table.toLowerCase());
   }
   return out;
 }

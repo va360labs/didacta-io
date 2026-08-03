@@ -1,20 +1,24 @@
+import { Parser } from 'node-sql-parser/build/postgresql';
 import { describe, expect, it, vi } from 'vitest';
 import {
   DB_DEFAULTS,
   SandboxedDbService,
-  countNonTrailingSemicolons,
+  collectCteAliasNames,
   detectStatementKind,
-  extractCteAliases,
-  extractTableRefs,
+  extractTableRefsFromNormalized,
   mapPostgresError,
-  maskFromFunctions,
+  normalizeSqlForParsing,
+  rewriteSqlStandardFnSyntax,
   stripCommentsAndStrings,
+  stripOnlyKeyword,
   validateSql,
+  wrapPlaceholderCasts,
 } from '../../src/marketplace/sandboxed-db.service';
 import { DbError } from '../../src/marketplace/sandboxed-db.types';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 
-/// Tests del SandboxedDbService (alpha.51 task DB-003).
+/// Tests del SandboxedDbService (alpha.51 task DB-003; F4 alpha.97
+/// reemplaza el validador regex por el AST real de node-sql-parser).
 ///
 /// Capas defensivas (en orden, fail-fast):
 ///   1. validateSql → DB_INVALID_SQL / DB_STATEMENT_TOO_LONG / DB_PREFIX_VIOLATION
@@ -26,7 +30,7 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
 const PREFIX = 'mod_example_';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helpers puros del SQL guard
+// Helpers puros
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('stripCommentsAndStrings', () => {
@@ -43,36 +47,12 @@ describe('stripCommentsAndStrings', () => {
   });
   it('blanquea contenido de strings literales', () => {
     const out = stripCommentsAndStrings(`SELECT 'mod_other_users' FROM mod_x_t`);
-    // El string literal queda como espacios — no debe verse como tabla.
     expect(out).not.toContain('mod_other_users');
     expect(out).toContain('mod_x_t');
   });
   it('respeta escape de apóstrofo doble en strings', () => {
     const out = stripCommentsAndStrings(`SELECT 'a''b' FROM mod_x_t`);
     expect(out).toContain('mod_x_t');
-    // No debe fallar dejando un string abierto.
-  });
-  it('preserva quoted identifiers ("foo")', () => {
-    // Quoted idents son nombres de tabla — DEBEN quedar visibles para el extractor.
-    const out = stripCommentsAndStrings(`SELECT * FROM "mod_x_t"`);
-    expect(out).toContain('mod_x_t');
-  });
-});
-
-describe('countNonTrailingSemicolons', () => {
-  it('0 si no hay punto y coma', () => {
-    expect(countNonTrailingSemicolons('SELECT 1')).toBe(0);
-  });
-  it('0 si solo hay trailing ;', () => {
-    expect(countNonTrailingSemicolons('SELECT 1;')).toBe(0);
-    expect(countNonTrailingSemicolons('SELECT 1;   ')).toBe(0);
-  });
-  it('1 si hay statement extra', () => {
-    expect(countNonTrailingSemicolons('SELECT 1; SELECT 2')).toBe(1);
-    expect(countNonTrailingSemicolons('SELECT 1; SELECT 2;')).toBe(1);
-  });
-  it('cuenta múltiples', () => {
-    expect(countNonTrailingSemicolons('A; B; C;')).toBe(2);
   });
 });
 
@@ -95,68 +75,84 @@ describe('detectStatementKind', () => {
   });
 });
 
-describe('maskFromFunctions', () => {
-  it('enmascara contenido de extract(... FROM ...)', () => {
-    const out = maskFromFunctions(`SELECT extract(year FROM created_at) FROM mod_x_t`);
-    // El "FROM created_at" interno queda blanqueado — solo el FROM exterior queda visible.
-    const inside = out.slice(out.indexOf('('), out.indexOf(')') + 1);
-    expect(inside).not.toContain('FROM');
-    expect(inside).not.toContain('created_at');
-    // El FROM externo (de mod_x_t) sí debe seguir.
-    expect(out).toContain('FROM mod_x_t');
+describe('stripOnlyKeyword', () => {
+  it('quita ONLY tras FROM sin tocar la tabla', () => {
+    expect(stripOnlyKeyword('SELECT * FROM ONLY mod_x_t')).toBe('SELECT * FROM mod_x_t');
   });
-  it('soporta substring(s FROM 1 FOR 10)', () => {
-    const out = maskFromFunctions(`SELECT substring(name FROM 1 FOR 10) FROM mod_x_t`);
-    expect(out).not.toContain('FROM 1');
-    expect(out).toContain('FROM mod_x_t');
+  it('quita ONLY tras UPDATE sin tocar la tabla', () => {
+    expect(stripOnlyKeyword('UPDATE ONLY mod_x_t SET a=1')).toBe('UPDATE mod_x_t SET a=1');
   });
-  it('no enmascara funciones que no usan FROM', () => {
-    const out = maskFromFunctions(`SELECT lower(name), upper(email) FROM mod_x_t`);
-    expect(out).toContain('lower(name)');
-    expect(out).toContain('upper(email)');
+  it('quita ONLY en DELETE FROM ONLY', () => {
+    expect(stripOnlyKeyword('DELETE FROM ONLY mod_x_t WHERE id=1')).toBe(
+      'DELETE FROM mod_x_t WHERE id=1',
+    );
   });
-  it('soporta parens anidados dentro del enmascarado', () => {
-    const out = maskFromFunctions(`SELECT trim(BOTH ' ' FROM coalesce(name, 'x')) FROM mod_x_t`);
-    expect(out).toContain('FROM mod_x_t');
-    // El inner coalesce queda blanqueado junto con todo el contenido del trim().
-    expect(out).not.toMatch(/coalesce\([^)]+\)\s+FROM\s+mod_x/);
+  it('no toca SQL sin ONLY', () => {
+    expect(stripOnlyKeyword('SELECT * FROM mod_x_t')).toBe('SELECT * FROM mod_x_t');
   });
 });
 
-describe('extractCteAliases', () => {
-  it('vacío si no hay WITH', () => {
-    expect([...extractCteAliases('SELECT * FROM mod_x_t')]).toEqual([]);
+describe('wrapPlaceholderCasts', () => {
+  it('envuelve $N::tipo en parens', () => {
+    expect(wrapPlaceholderCasts('WHERE id = $1::uuid')).toBe('WHERE id = ($1)::uuid');
   });
-  it('captura un alias', () => {
-    const aliases = extractCteAliases('WITH cte AS (SELECT 1) SELECT * FROM cte');
-    expect(aliases.has('cte')).toBe(true);
+  it('envuelve múltiples placeholders casteados', () => {
+    expect(wrapPlaceholderCasts('$1::uuid AND $2::text')).toBe('($1)::uuid AND ($2)::text');
   });
-  it('captura múltiples CTEs encadenadas', () => {
-    const aliases = extractCteAliases(
-      'WITH a AS (SELECT 1), b AS (SELECT 2), c AS (SELECT 3) SELECT * FROM a JOIN b ON true JOIN c ON true',
-    );
-    expect(aliases.has('a')).toBe(true);
-    expect(aliases.has('b')).toBe(true);
-    expect(aliases.has('c')).toBe(true);
+  it('no toca placeholders sin cast', () => {
+    expect(wrapPlaceholderCasts('WHERE id = $1')).toBe('WHERE id = $1');
   });
-  it('soporta WITH RECURSIVE', () => {
-    const aliases = extractCteAliases('WITH RECURSIVE tree AS (SELECT 1) SELECT * FROM tree');
-    expect(aliases.has('tree')).toBe(true);
-  });
-  it('soporta column list en CTE', () => {
-    const aliases = extractCteAliases(
-      'WITH agg(total, n) AS (SELECT sum(x), count(*) FROM mod_x_t) SELECT * FROM agg',
-    );
-    expect(aliases.has('agg')).toBe(true);
+  it('no toca columnas o literales casteados (no son placeholders)', () => {
+    expect(wrapPlaceholderCasts(`x::int, 'a'::text`)).toBe(`x::int, 'a'::text`);
   });
 });
 
-describe('extractTableRefs', () => {
+describe('rewriteSqlStandardFnSyntax', () => {
+  it('reescribe substring(x FROM a FOR b) a comas', () => {
+    expect(rewriteSqlStandardFnSyntax('substring(name FROM 1 FOR 10)')).toBe(
+      'substring(name , 1 , 10)',
+    );
+  });
+  it('reescribe overlay(x PLACING y FROM a FOR b) a comas', () => {
+    expect(rewriteSqlStandardFnSyntax(`overlay(name PLACING 'x' FROM 1 FOR 3)`)).toBe(
+      `overlay(name , 'x' , 1 , 3)`,
+    );
+  });
+  it('no toca funciones que ya parsean nativas (extract/trim/position)', () => {
+    const sql = `extract(year FROM created_at)`;
+    expect(rewriteSqlStandardFnSyntax(sql)).toBe(sql);
+  });
+  it('preserva byte a byte una subquery anidada en el argumento FROM/FOR', () => {
+    const sql = `substring(x FROM (SELECT secret FROM "user" LIMIT 1) FOR 1)`;
+    const out = rewriteSqlStandardFnSyntax(sql);
+    expect(out).toContain('(SELECT secret FROM "user" LIMIT 1)');
+  });
+  it('no toca SQL sin substring/overlay', () => {
+    const sql = 'SELECT * FROM mod_x_t';
+    expect(rewriteSqlStandardFnSyntax(sql)).toBe(sql);
+  });
+});
+
+describe('normalizeSqlForParsing', () => {
+  it('envuelve un VALUES top-level en SELECT FROM (...) preservando el contenido', () => {
+    const out = normalizeSqlForParsing('VALUES (1, 2)', 'values');
+    expect(out).toContain('VALUES (1, 2)');
+    expect(out.trimStart().toUpperCase().startsWith('SELECT')).toBe(true);
+  });
+  it('no envuelve statements que no son values', () => {
+    const out = normalizeSqlForParsing('SELECT * FROM mod_x_t', 'select');
+    expect(out).toBe('SELECT * FROM mod_x_t');
+  });
+});
+
+describe('extractTableRefsFromNormalized', () => {
   it('captura FROM <tabla>', () => {
-    expect([...extractTableRefs('SELECT * FROM mod_x_users')]).toEqual(['mod_x_users']);
+    expect([...extractTableRefsFromNormalized('SELECT * FROM mod_x_users')]).toEqual([
+      'mod_x_users',
+    ]);
   });
   it('captura JOIN', () => {
-    const refs = extractTableRefs(
+    const refs = extractTableRefsFromNormalized(
       'SELECT * FROM mod_x_a a INNER JOIN mod_x_b b ON a.id=b.id LEFT JOIN mod_x_c c ON b.id=c.id',
     );
     expect(refs.has('mod_x_a')).toBe(true);
@@ -164,47 +160,106 @@ describe('extractTableRefs', () => {
     expect(refs.has('mod_x_c')).toBe(true);
   });
   it('captura UPDATE / DELETE FROM / INSERT INTO', () => {
-    expect([...extractTableRefs('UPDATE mod_x_t SET name=$1')]).toEqual(['mod_x_t']);
-    expect([...extractTableRefs('DELETE FROM mod_x_t WHERE id=$1')]).toEqual(['mod_x_t']);
-    expect([...extractTableRefs('INSERT INTO mod_x_t (a, b) VALUES ($1, $2)')]).toEqual([
+    expect([...extractTableRefsFromNormalized('UPDATE mod_x_t SET name=$1')]).toEqual(['mod_x_t']);
+    expect([...extractTableRefsFromNormalized('DELETE FROM mod_x_t WHERE id=$1')]).toEqual([
+      'mod_x_t',
+    ]);
+    expect([
+      ...extractTableRefsFromNormalized('INSERT INTO mod_x_t (a, b) VALUES ($1, $2)'),
+    ]).toEqual(['mod_x_t']);
+  });
+  it('soporta qualified schema.table — devuelve solo el último segmento', () => {
+    expect([...extractTableRefsFromNormalized('SELECT * FROM public.mod_x_t')]).toEqual([
       'mod_x_t',
     ]);
   });
-  it('soporta ONLY en FROM/UPDATE/DELETE', () => {
-    expect([...extractTableRefs('SELECT * FROM ONLY mod_x_t')]).toEqual(['mod_x_t']);
-    expect([...extractTableRefs('UPDATE ONLY mod_x_t SET a=1')]).toEqual(['mod_x_t']);
-  });
-  it('soporta qualified schema.table — devuelve solo el último segmento', () => {
-    expect([...extractTableRefs('SELECT * FROM public.mod_x_t')]).toEqual(['mod_x_t']);
-  });
   it('soporta quoted idents', () => {
-    expect([...extractTableRefs('SELECT * FROM "mod_x_t"')]).toEqual(['mod_x_t']);
+    expect([...extractTableRefsFromNormalized('SELECT * FROM "mod_x_t"')]).toEqual(['mod_x_t']);
   });
   it('NO confunde JOIN USING (col) con table ref', () => {
-    const refs = extractTableRefs('SELECT * FROM mod_x_a a JOIN mod_x_b b USING (id)');
+    const refs = extractTableRefsFromNormalized(
+      'SELECT * FROM mod_x_a a JOIN mod_x_b b USING (id)',
+    );
     expect(refs.has('mod_x_a')).toBe(true);
     expect(refs.has('mod_x_b')).toBe(true);
     expect(refs.has('id')).toBe(false);
   });
+  it('captura joins implícitos separados por coma (el regex viejo los perdía)', () => {
+    const refs = extractTableRefsFromNormalized('SELECT * FROM mod_x_a, mod_x_b');
+    expect(refs.has('mod_x_a')).toBe(true);
+    expect(refs.has('mod_x_b')).toBe(true);
+  });
+});
+
+describe('collectCteAliasNames', () => {
+  it('recolecta un alias simple del AST', () => {
+    const ast = new Parser().astify('WITH cte AS (SELECT 1) SELECT * FROM cte', {
+      database: 'postgresql',
+    });
+    const out = new Set<string>();
+    collectCteAliasNames(ast, out);
+    expect(out.has('cte')).toBe(true);
+  });
+  it('recolecta múltiples CTEs encadenadas, incluida RECURSIVE', () => {
+    const ast = new Parser().astify(
+      'WITH RECURSIVE a AS (SELECT 1), b AS (SELECT 2 FROM a) SELECT * FROM a JOIN b ON true',
+      { database: 'postgresql' },
+    );
+    const out = new Set<string>();
+    collectCteAliasNames(ast, out);
+    expect(out.has('a')).toBe(true);
+    expect(out.has('b')).toBe(true);
+  });
+  it('vacío si no hay WITH', () => {
+    const ast = new Parser().astify('SELECT * FROM mod_x_t', { database: 'postgresql' });
+    const out = new Set<string>();
+    collectCteAliasNames(ast, out);
+    expect(out.size).toBe(0);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// validateSql — invariantes del contrato
+// validateSql — invariantes del contrato (paridad con el validador anterior)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('validateSql — happy path', () => {
   it.each([
     'SELECT * FROM mod_example_jobs',
     'SELECT id FROM mod_example_jobs WHERE id = $1',
+    'SELECT id FROM mod_example_jobs WHERE id = $1::uuid',
     'INSERT INTO mod_example_jobs (id, status) VALUES ($1, $2)',
+    'INSERT INTO mod_example_jobs (id) VALUES ($1::uuid)',
     'UPDATE mod_example_jobs SET status = $1 WHERE id = $2',
+    'UPDATE mod_example_jobs SET status = $1 WHERE id = $2::uuid',
     'DELETE FROM mod_example_jobs WHERE id = $1',
     'WITH agg AS (SELECT count(*) FROM mod_example_jobs) SELECT * FROM agg',
     'SELECT extract(year FROM created_at) FROM mod_example_jobs',
+    `SELECT substring(name FROM 1 FOR 10) FROM mod_example_jobs`,
+    `SELECT overlay(name PLACING 'x' FROM 1 FOR 3) FROM mod_example_jobs`,
     'SELECT * FROM mod_example_a JOIN mod_example_b ON mod_example_a.id = mod_example_b.aid',
     'SELECT * FROM ONLY mod_example_jobs',
+    'UPDATE ONLY mod_example_jobs SET status = $1',
     'SELECT * FROM "mod_example_jobs"',
+    'VALUES (1, 2)',
+    `INSERT INTO mod_example_jobs (tenant_id, status) VALUES ($1::uuid, 'pending')
+     ON CONFLICT (tenant_id) DO UPDATE SET status = EXCLUDED.status`,
   ])('OK: %s', (sql) => {
+    expect(() => validateSql(sql, PREFIX)).not.toThrow();
+  });
+
+  it('query real de mod.migrator-learndash (corpus de producción)', () => {
+    const sql = `SELECT id, tenant_id, status, phase, source_profile, options, started_at,
+            completed_at, progress, error, created_by
+       FROM mod_example_jobs
+      WHERE tenant_id = $1::uuid
+      ORDER BY started_at DESC
+      LIMIT 200`;
+    expect(() => validateSql(sql, PREFIX)).not.toThrow();
+  });
+
+  it('UPDATE...FROM correlacionado, todas las tablas dentro del prefix', () => {
+    const sql = `UPDATE mod_example_a SET x = mod_example_b.y
+                 FROM mod_example_b WHERE mod_example_a.id = mod_example_b.id`;
     expect(() => validateSql(sql, PREFIX)).not.toThrow();
   });
 });
@@ -221,8 +276,13 @@ describe('validateSql — DB_INVALID_SQL', () => {
     ['REVOKE SELECT ON mod_example_x FROM public', 'REVOKE'],
     ['COPY mod_example_x FROM stdin', 'COPY'],
     ['DO $$ BEGIN END $$', 'DO block'],
+    ['SET ROLE didacta_super', 'SET ROLE'],
     ['SELECT 1; SELECT 2', 'multi-statement'],
     ['SELECT 1; INSERT INTO mod_example_x VALUES (1)', 'multi-statement con DML'],
+    [
+      'SELECT * FROM mod_example_jobs; DROP TABLE mod_example_jobs;--',
+      'multi-statement con DDL final',
+    ],
   ])('rechaza "%s" (%s)', (sql) => {
     expect(() => validateSql(sql, PREFIX)).toThrowError(DbError);
     try {
@@ -270,14 +330,11 @@ describe('validateSql — DB_PREFIX_VIOLATION', () => {
     );
   });
   it('NO rechaza CTE alias que no empieza con prefix', () => {
-    // El CTE alias se excluye del check — eso es correcto, es un alias
-    // local del query, no toca tabla real.
     expect(() =>
       validateSql('WITH agg AS (SELECT count(*) FROM mod_example_jobs) SELECT * FROM agg', PREFIX),
     ).not.toThrow();
   });
   it('NO se confunde con string literal "mod_other"', () => {
-    // El string literal NO debe disparar prefix violation.
     expect(() =>
       validateSql(`SELECT 'mod_other_secret' FROM mod_example_jobs`, PREFIX),
     ).not.toThrow();
@@ -287,6 +344,57 @@ describe('validateSql — DB_PREFIX_VIOLATION', () => {
       validateSql('SELECT extract(year FROM created_at) FROM mod_example_jobs', PREFIX),
     ).not.toThrow();
   });
+
+  // ── Adversariales: falsos negativos REALES del validador regex anterior,
+  // verificados contra el código antes de este cambio (ver commit F4).
+  // El nuevo validador, basado en AST real, los rechaza correctamente.
+  it('[mejora F4] rechaza FROM con lista separada por coma (join implícito) — el regex viejo la aceptaba', () => {
+    expect(() => validateSql('SELECT * FROM mod_example_a, "user"', PREFIX)).toThrowError(
+      expect.objectContaining({ code: 'DB_PREFIX_VIOLATION' }),
+    );
+  });
+  it('[mejora F4] rechaza UPDATE...FROM con lista separada por coma — el regex viejo la aceptaba', () => {
+    expect(() =>
+      validateSql(
+        'UPDATE mod_example_a SET x = 1 FROM mod_example_b, "user" WHERE mod_example_a.id = mod_example_b.id',
+        PREFIX,
+      ),
+    ).toThrowError(expect.objectContaining({ code: 'DB_PREFIX_VIOLATION' }));
+  });
+  it('[mejora F4] rechaza subquery escondida en substring(... FROM ...) — el regex viejo la enmascaraba entera y la perdía', () => {
+    expect(() =>
+      validateSql(
+        'SELECT substring(x FROM (SELECT secret FROM "user" LIMIT 1) FOR 1) FROM mod_example_jobs',
+        PREFIX,
+      ),
+    ).toThrowError(expect.objectContaining({ code: 'DB_PREFIX_VIOLATION' }));
+  });
+  it('[mejora F4] rechaza subquery escondida en extract(... FROM ...) — el regex viejo la enmascaraba entera y la perdía', () => {
+    expect(() =>
+      validateSql(
+        'SELECT extract(year FROM (SELECT ts FROM "user" LIMIT 1)) FROM mod_example_jobs',
+        PREFIX,
+      ),
+    ).toThrowError(expect.objectContaining({ code: 'DB_PREFIX_VIOLATION' }));
+  });
+  it('[mejora F4] rechaza subquery escondida dentro de un VALUES top-level', () => {
+    expect(() => validateSql('VALUES ((SELECT secret FROM "user" LIMIT 1))', PREFIX)).toThrowError(
+      expect.objectContaining({ code: 'DB_PREFIX_VIOLATION' }),
+    );
+  });
+  it('[mejora F4] rechaza UNION que agrega una tabla prohibida', () => {
+    expect(() =>
+      validateSql('SELECT * FROM mod_example_jobs UNION SELECT * FROM pg_user', PREFIX),
+    ).toThrowError(expect.objectContaining({ code: 'DB_PREFIX_VIOLATION' }));
+  });
+  it('[mejora F4] rechaza tabla prohibida detrás de un JOIN LATERAL', () => {
+    expect(() =>
+      validateSql(
+        'SELECT * FROM mod_example_a JOIN LATERAL (SELECT * FROM "user") u ON true',
+        PREFIX,
+      ),
+    ).toThrowError(expect.objectContaining({ code: 'DB_PREFIX_VIOLATION' }));
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -295,14 +403,10 @@ describe('validateSql — DB_PREFIX_VIOLATION', () => {
 
 interface PrismaMockState {
   txCount: number;
-  /// SQL ejecutado dentro de cada $transaction (en orden).
   executed: Array<{ kind: 'queryRawUnsafe' | 'executeRawUnsafe'; sql: string; params: unknown[] }>;
-  /// Si está set, la próxima query del kind indicado lanza el error provisto.
   failNextQueryWith?: Error;
   failNextExecuteWith?: Error;
-  /// Stub de respuesta para $queryRawUnsafe.
   queryReturn?: unknown[];
-  /// Stub de respuesta para $executeRawUnsafe (rowCount).
   executeReturn?: number;
 }
 
@@ -329,7 +433,6 @@ function makePrismaMock(opts: PrismaMockState = { txCount: 0, executed: [] }): {
         state.failNextExecuteWith = undefined;
         throw err;
       }
-      // SET LOCAL devuelve siempre 0; lo simulamos.
       if (/^SET LOCAL/i.test(sql)) return 0;
       return state.executeReturn ?? 1;
     }),
@@ -377,13 +480,23 @@ describe('SandboxedDbService — query happy path', () => {
     expect(state.txCount).toBe(1);
 
     const sqlExecuted = state.executed.map((e) => e.sql);
-    // Debe incluir SET LOCAL app.current_tenant_id y SET LOCAL statement_timeout.
     expect(sqlExecuted.some((s) => /SET LOCAL app\.current_tenant_id/.test(s))).toBe(true);
     expect(sqlExecuted.some((s) => /SET LOCAL statement_timeout/.test(s))).toBe(true);
-    // Y la query del usuario, con params.
     const userQuery = state.executed.find((e) => /SELECT \* FROM mod_example_jobs/.test(e.sql));
     expect(userQuery).toBeDefined();
     expect(userQuery!.params).toEqual([42]);
+  });
+
+  it('ejecuta con placeholder casteado ($1::uuid) sin alterar el SQL real enviado a Postgres', async () => {
+    const { prisma, state } = makePrismaMock({ txCount: 0, executed: [], queryReturn: [] });
+    const svc = new SandboxedDbService(prisma);
+    const db = svc.build('mod.example', PREFIX, 'tnt');
+
+    await db.query('SELECT * FROM mod_example_jobs WHERE id = $1::uuid', ['abc']);
+
+    const userQuery = state.executed.find((e) => /SELECT \* FROM mod_example_jobs/.test(e.sql));
+    // El SQL ejecutado debe ser EL ORIGINAL, sin los parens del shim de parseo.
+    expect(userQuery!.sql).toBe('SELECT * FROM mod_example_jobs WHERE id = $1::uuid');
   });
 
   it('NO setea tenant si tenantId es null', async () => {
@@ -449,7 +562,6 @@ describe('SandboxedDbService — caps', () => {
 
     const setTimeout = state.executed.find((e) => /SET LOCAL statement_timeout/.test(e.sql));
     expect(setTimeout).toBeDefined();
-    // Debe haber clampeado al cap del core (10_000).
     expect(setTimeout!.sql).toContain(`= ${DB_DEFAULTS.MAX_TIMEOUT_MS}`);
   });
 
@@ -481,7 +593,6 @@ describe('SandboxedDbService — transaction', () => {
     });
 
     expect(result).toEqual({ ok: true });
-    // Solo un $transaction abierto (no nesting porque la query interna reusa).
     expect(state.txCount).toBe(1);
   });
 
@@ -506,7 +617,6 @@ describe('SandboxedDbService — transaction', () => {
     await expect(
       db.transaction(async (tx) => {
         await tx.transaction(async () => {
-          // never reached
           return null;
         });
       }),
@@ -524,9 +634,7 @@ describe('SandboxedDbService — transaction', () => {
       await tx.execute('UPDATE mod_example_jobs SET x=1');
     });
 
-    // Solo 1 $transaction (la outer); las 3 queries internas usan tx directamente.
     expect(state.txCount).toBe(1);
-    // El tenant scope se setea UNA vez al inicio de la tx.
     const tenantSets = state.executed.filter((e) => /SET LOCAL app\.current_tenant_id/.test(e.sql));
     expect(tenantSets.length).toBe(1);
   });
