@@ -10,6 +10,28 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.92] — 2026-08-03
+
+#### Notes
+
+- Corte menor de mantenimiento: presentación pública de los tres viajes de
+  captación en el README y actualización de dependencias.
+
+#### Added
+
+- **README: sección «Tres formas de llenar tu academia de alumnos»** — cómo
+  conviven los tres caminos de captación (alta manual por invitación con
+  grupo de acceso, venta de cursos sueltos desde el catálogo público con
+  compra sin registro previo, y membresías con planes flexibles), más el
+  registro con solicitud y verificadores componibles.
+
+#### Changed
+
+- Dependencias (revisión de Dependabot): `next` 15.5.15 → 15.5.22 (parches
+  del runtime web) y `@auth/core` 0.37.4 → 0.41.3. El salto a
+  `@fastify/static` 10 queda pospuesto hasta la migración a Fastify 5: el
+  API corre Fastify 4 y Swagger UI usa esa librería en runtime.
+
 ### [0.0.1-alpha.91] — 2026-08-01
 
 #### Notes
