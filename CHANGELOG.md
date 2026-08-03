@@ -10,6 +10,19 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.97] — 2026-08-03
+
+#### Changed
+
+- **Marketplace: el guard SQL de `ctx.db` (aislamiento de módulos third-party
+  a sus propias tablas `mod_<slug>_*`) pasa de un validador regex a parsear
+  el AST real con `node-sql-parser`.** Corrige dos huecos explotables del
+  validador anterior: listas `FROM` separadas por coma
+  (`FROM mod_x_a, "user"`) y subqueries anidadas dentro de
+  `extract`/`substring`/`trim`/`overlay`/`position` que el regex enmascaraba
+  a ciegas. Sin cambios de contrato público — el SQL que efectivamente se
+  ejecuta contra Postgres no cambió, solo la validación previa.
+
 ### [0.0.1-alpha.96] — 2026-08-03
 
 #### Notes
