@@ -68,7 +68,7 @@ export class SurveysZoomBridge implements OnModuleInit {
 
   private async onSessionEnded(tenantId: string, sessionId: string): Promise<void> {
     const prisma = this.factory.getPrisma();
-    // Lectura acotada de mod_zoom_session (ADR-016, declarada en el manifest).
+    // Lectura acotada de mod_zoom_live_session (ADR-016, declarada en el manifest).
     const session = await prisma.modZoomSession.findFirst({
       where: { id: sessionId, tenantId },
       select: { topic: true },

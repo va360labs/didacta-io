@@ -879,7 +879,7 @@ export class ZoomLiveService {
    *    Zoom reintente.
    *
    * Es idempotente por `event_id`: registramos cada evento recibido en
-   * `mod_zoom_webhook_event` con UNIQUE en esa columna; un segundo intento
+   * `mod_zoom_live_webhook_event` con UNIQUE en esa columna; un segundo intento
    * con el mismo id devuelve DUPLICATE sin re-aplicar el efecto.
    */
   async handleWebhookEvent(

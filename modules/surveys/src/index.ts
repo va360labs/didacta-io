@@ -26,7 +26,7 @@ export {
  * Módulo mod.surveys. La suscripción a `zoom.session.ended` NO vive aquí sino
  * en el host (`apps/api/src/modules/surveys/surveys-zoom.bridge.ts`): crear la
  * encuesta y avisar a los inscritos necesita el NotificationHub y una lectura
- * acotada de mod_zoom_session_registration — composición entre módulos que
+ * acotada de mod_zoom_live_session_registration — composición entre módulos que
  * pertenece al host (ADR-016), no al dominio de la encuesta.
  */
 export function buildSurveysModule(): DidactaModule {

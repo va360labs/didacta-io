@@ -120,7 +120,7 @@ export class SurveysReminderWorker implements OnApplicationBootstrap, OnModuleDe
       const claimed = await service.claimReminder(survey.tenantId, survey.id);
       if (!claimed) continue;
 
-      // Lectura acotada de mod_zoom_session_registration (ADR-016, manifest).
+      // Lectura acotada de mod_zoom_live_session_registration (ADR-016, manifest).
       const registrations = await prisma.modZoomSessionRegistration.findMany({
         where: { tenantId: survey.tenantId, sessionId: survey.zoomSessionId },
         select: { userId: true },

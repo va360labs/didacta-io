@@ -9,7 +9,7 @@ import { z } from 'zod';
  * DTOs y tipos del módulo Zoom Live.
  *
  * Filosofía v0.1:
- *  - El backend es la fuente de la verdad de las sesiones (`mod_zoom_session`).
+ *  - El backend es la fuente de la verdad de las sesiones (`mod_zoom_live_session`).
  *  - La integración real con Zoom API se hace en `ZoomApiClient` (stub por
  *    ahora). El service no acopla a la API: trabaja contra la fila de DB.
  *  - El startUrl/joinUrl los devuelve la API al crear la sesión y se guardan

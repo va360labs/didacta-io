@@ -5,7 +5,7 @@
   "coreVersionRequired": "^0.0.1",
   "displayName": "Aula virtual síncrona Zoom",
   "category": "live",
-  "tablePrefix": "mod_zoom_",
+  "tablePrefix": "mod_zoom_live_",
   "permissions": ["zoom-live:read", "zoom-live:write"],
   "events": [
     { "name": "zoom.session.created" },

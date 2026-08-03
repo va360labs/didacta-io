@@ -21,7 +21,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
   permissions: ['surveys.response.write', 'surveys.results.read', 'surveys.manage'],
   dependencies: {
     modules: [],
-    // Lectura acotada de mod_zoom_session_registration (ADR-016) para avisar a
+    // Lectura acotada de mod_zoom_live_session_registration (ADR-016) para avisar a
     // los inscritos al crear la encuesta post-clase. Solo lectura, nunca escritura.
     optionalModules: [{ name: 'mod.zoom-live', version: '^0.3.0' }],
   },

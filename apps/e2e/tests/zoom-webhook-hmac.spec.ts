@@ -4,7 +4,7 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
 
 /**
  * Spec G5.3: el webhook público de Zoom acepta solicitudes con firma HMAC
- * válida y aplica el cambio de status sobre `mod_zoom_session`.
+ * válida y aplica el cambio de status sobre `mod_zoom_live_session`.
  *
  * Flow:
  *   1. Admin crea una sesión (status SCHEDULED).

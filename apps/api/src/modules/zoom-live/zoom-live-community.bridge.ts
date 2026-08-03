@@ -129,7 +129,7 @@ export class ZoomLiveCommunityBridge implements OnModuleInit {
     if (!(await this.registry.isModuleEnabledForTenant(tenantId, COMMUNITY_MODULE))) return;
 
     const prisma = this.factory.getPrisma();
-    // Lectura acotada de mod_zoom_session (ADR-016: core first-party, filtrada
+    // Lectura acotada de mod_zoom_live_session (ADR-016: core first-party, filtrada
     // por tenant, sin escribir en tablas ajenas).
     const session = await prisma.modZoomSession.findFirst({
       where: { id: sessionId, tenantId },

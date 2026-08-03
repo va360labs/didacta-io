@@ -1608,10 +1608,10 @@ model ModZoomSession {
   registrations ModZoomSessionRegistration[]
   attendances   ModZoomSessionAttendance[]
 
-  @@index([tenantId, startTime(sort: Desc)], map: "mod_zoom_session_tenant_idx")
-  @@index([courseId], map: "mod_zoom_session_course_idx")
-  @@index([lessonId], map: "mod_zoom_session_lesson_idx")
-  @@map("mod_zoom_session")
+  @@index([tenantId, startTime(sort: Desc)], map: "mod_zoom_live_session_tenant_idx")
+  @@index([courseId], map: "mod_zoom_live_session_course_idx")
+  @@index([lessonId], map: "mod_zoom_live_session_lesson_idx")
+  @@map("mod_zoom_live_session")
 }
 
 /// Inscripción de un miembro a una sesión en directo. El `joinUrl` (y la
@@ -1627,13 +1627,13 @@ model ModZoomSessionRegistration {
 
   session ModZoomSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
-  @@unique([sessionId, userId], name: "mod_zoom_session_registration_unique", map: "mod_zoom_session_registration_unique")
-  @@index([tenantId, userId], map: "mod_zoom_session_registration_tenant_user_idx")
-  @@map("mod_zoom_session_registration")
+  @@unique([sessionId, userId], name: "mod_zoom_session_registration_unique", map: "mod_zoom_live_session_registration_unique")
+  @@index([tenantId, userId], map: "mod_zoom_live_session_registration_tenant_user_idx")
+  @@map("mod_zoom_live_session_registration")
 }
 
 /// Asistencia REAL a una clase en directo (ADR-018), frente a la inscripción
-/// (`mod_zoom_session_registration`) que solo registra intención.
+/// (`mod_zoom_live_session_registration`) que solo registra intención.
 ///
 /// Dos fuentes conviven en la misma fila:
 ///  - `clickedJoinAt`: el alumno pulsó "Unirme" en Didacta (`POST .../join`).
@@ -1679,10 +1679,10 @@ model ModZoomSessionAttendance {
 
   /// NULLs son distintos entre sí en PostgreSQL: la unique acota a un registro
   /// por usuario identificado y deja convivir N participantes sin casar.
-  @@unique([sessionId, userId], name: "mod_zoom_session_attendance_unique", map: "mod_zoom_session_attendance_unique")
-  @@index([tenantId, sessionId], map: "mod_zoom_session_attendance_tenant_session_idx")
-  @@index([tenantId, userId], map: "mod_zoom_session_attendance_tenant_user_idx")
-  @@map("mod_zoom_session_attendance")
+  @@unique([sessionId, userId], name: "mod_zoom_session_attendance_unique", map: "mod_zoom_live_session_attendance_unique")
+  @@index([tenantId, sessionId], map: "mod_zoom_live_session_attendance_tenant_session_idx")
+  @@index([tenantId, userId], map: "mod_zoom_live_session_attendance_tenant_user_idx")
+  @@map("mod_zoom_live_session_attendance")
 }
 
 /// Registro de eventos webhook recibidos de Zoom para idempotencia.
@@ -1701,9 +1701,9 @@ model ModZoomWebhookEvent {
   result       String   @default("OK") /// OK | IGNORED | ERROR
   errorMessage String?  @map("error_message")
 
-  @@index([meetingId], map: "mod_zoom_webhook_event_meeting_idx")
-  @@index([sessionId], map: "mod_zoom_webhook_event_session_idx")
-  @@map("mod_zoom_webhook_event")
+  @@index([meetingId], map: "mod_zoom_live_webhook_event_meeting_idx")
+  @@index([sessionId], map: "mod_zoom_live_webhook_event_session_idx")
+  @@map("mod_zoom_live_webhook_event")
 }
 
 // ============================================================================

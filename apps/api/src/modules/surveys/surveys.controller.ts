@@ -119,7 +119,7 @@ export class SurveysController {
     @Param('sessionId') sessionId: string,
   ) {
     const u = this.requireAdmin(user);
-    // Lectura acotada de mod_zoom_session (título) — composición en el host.
+    // Lectura acotada de mod_zoom_live_session (título) — composición en el host.
     const session = await this.factory.getPrisma().modZoomSession.findFirst({
       where: { id: sessionId, tenantId: u.tenantId },
       select: { topic: true },

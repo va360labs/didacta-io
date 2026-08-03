@@ -15,7 +15,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
   license: 'Proprietary',
   category: 'live',
   coreVersionRequired: '^1.0.0',
-  tablePrefix: 'mod_zoom_',
+  tablePrefix: 'mod_zoom_live_',
   permissions: ['zoom.session.read', 'zoom.session.write'],
   dependencies: {
     modules: [],
