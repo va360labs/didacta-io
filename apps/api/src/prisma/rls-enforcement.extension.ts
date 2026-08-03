@@ -51,30 +51,65 @@ export function runCallerTransaction(opts: {
   makeSetConfig: (tenantId: string) => unknown;
   /** Corre fn bajo el ALS de tenant con gucApplied=true. */
   runWithGucApplied: <T>(fn: () => Promise<T>) => Promise<T>;
+  /**
+   * F3: ¿la operación corre bajo runSanctionedGlobalAccess()? Sin tenantId
+   * activo, un `$transaction` propio del caller (p.ej. /setup/init) necesita
+   * el mismo bypass real que las queries sueltas sancionadas — ver más abajo
+   * en createRlsEnforcementExtension.
+   */
+  isSanctioned?: () => boolean;
+  /** Crea la PrismaPromise `SET LOCAL ROLE didacta_super` sobre el cliente extendido. */
+  makeSetRole?: () => unknown;
 }): Promise<unknown> {
-  const { original, args, ctx, makeSetConfig, runWithGucApplied } = opts;
-  if (!ctx?.tenantId || ctx.gucApplied) {
+  const { original, args, ctx, makeSetConfig, runWithGucApplied, isSanctioned, makeSetRole } = opts;
+
+  if (ctx?.tenantId && !ctx.gucApplied) {
+    const tenantId = ctx.tenantId;
+    const scoped = <T>(fn: () => Promise<T>): Promise<T> =>
+      runWithGucApplied(() => markPrismaTransactionScope(fn));
+    const [first, ...rest] = args;
+    if (Array.isArray(first)) {
+      return scoped(() => original([makeSetConfig(tenantId), ...first], ...rest)).then(
+        // El caller no sabe del miembro inyectado: se descarta su resultado.
+        (results) => (results as unknown[]).slice(1),
+      );
+    }
+    if (typeof first === 'function') {
+      const callback = first as (tx: unknown) => Promise<unknown>;
+      const withGuc = async (tx: unknown) => {
+        await (tx as { $queryRaw: (s: TemplateStringsArray, ...v: unknown[]) => Promise<unknown> })
+          .$queryRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`;
+        return callback(tx);
+      };
+      return scoped(() => original(withGuc, ...rest));
+    }
     return markPrismaTransactionScope(() => original(...args));
   }
-  const tenantId = ctx.tenantId;
-  const scoped = <T>(fn: () => Promise<T>): Promise<T> =>
-    runWithGucApplied(() => markPrismaTransactionScope(fn));
-  const [first, ...rest] = args;
-  if (Array.isArray(first)) {
-    return scoped(() => original([makeSetConfig(tenantId), ...first], ...rest)).then(
-      // El caller no sabe del miembro inyectado: se descarta su resultado.
-      (results) => (results as unknown[]).slice(1),
-    );
+
+  // Sin tenantId activo (o ya gucApplied — nada que inyectar dos veces): si el
+  // `$transaction` del caller corre bajo acceso global sancionado, inyectamos
+  // el switch de rol como primera op/statement, igual que el set_config del
+  // tenant arriba — envolver desde fuera (como el batch de $allOperations)
+  // sacaría al resto de ops de la transacción del caller.
+  if (!ctx?.gucApplied && isSanctioned?.() && makeSetRole) {
+    const [first, ...rest] = args;
+    if (Array.isArray(first)) {
+      return markPrismaTransactionScope(() => original([makeSetRole(), ...first], ...rest)).then(
+        (results) => (results as unknown[]).slice(1),
+      );
+    }
+    if (typeof first === 'function') {
+      const callback = first as (tx: unknown) => Promise<unknown>;
+      const withRole = async (tx: unknown) => {
+        await (
+          tx as { $executeRaw: (s: TemplateStringsArray, ...v: unknown[]) => Promise<unknown> }
+        ).$executeRaw`SET LOCAL ROLE didacta_super`;
+        return callback(tx);
+      };
+      return markPrismaTransactionScope(() => original(withRole, ...rest));
+    }
   }
-  if (typeof first === 'function') {
-    const callback = first as (tx: unknown) => Promise<unknown>;
-    const withGuc = async (tx: unknown) => {
-      await (tx as { $queryRaw: (s: TemplateStringsArray, ...v: unknown[]) => Promise<unknown> })
-        .$queryRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`;
-      return callback(tx);
-    };
-    return scoped(() => original(withGuc, ...rest));
-  }
+
   return markPrismaTransactionScope(() => original(...args));
 }
 
@@ -89,12 +124,23 @@ export function runCallerTransaction(opts: {
  *   el usuario bootstrap, así que RLS no filtra: el modo existe para pagar el
  *   coste real, medirlo y llevar los huecos a cero ANTES del flip.
  * - `on`   → (default desde la release intermedia F3) igual que `warn` pero
- *   los huecos se loguean a nivel error: cualquier hueco que una instalación
- *   real destape con config distinta a la nuestra sale a log-error SIN romper
- *   nada (la app sigue conectando como bootstrap y RLS aún no filtra). El
- *   enforcement REAL llega al conectar como `didacta_app` (release siguiente):
- *   entonces una query sin contexto devuelve 0 filas (fail-closed) en las
- *   tablas con tenant_id.
+ *   los huecos se loguean a nivel error. Con la app conectando como
+ *   bootstrap/superuser (release intermedia) esto es solo telemetría — RLS no
+ *   filtra nada. Con la app conectando como `didacta_app` (flip real, F3) el
+ *   enforcement es REAL: una query sin contexto y sin sanción devuelve 0 filas
+ *   (fail-closed) en las tablas con tenant_id.
+ *
+ * Acceso global sancionado (runSanctionedGlobalAccess) bajo el flip real: el
+ * rol `didacta_app` no tiene BYPASSRLS, así que sin esto los ~27 call sites
+ * sancionados (auth por API key, refresh token, resolución host→tenant,
+ * dispatcher del outbox, /setup/init, sweeps de workers) devolverían 0 filas y
+ * romperían en silencio. El hook (y `runCallerTransaction` para los que abren
+ * su propio `$transaction`) inyecta `SET LOCAL ROLE didacta_super` como primer
+ * statement de una transacción — igual patrón que el `set_config` del tenant,
+ * transaccional y sin fugas entre requests. Requiere que `didacta_app` sea
+ * miembro de `didacta_super` (grants.sql) y que este último tenga sus propios
+ * GRANT de tabla (SET ROLE cambia el `current_user` para chequeo de
+ * privilegios: no hereda los grants de didacta_app).
  *
  * Limitación conocida (caracterizada empíricamente contra Prisma 5.22):
  * una PrismaPromise devuelta DIRECTAMENTE fuera del scope del ALS (sin await
@@ -187,8 +233,24 @@ export function createRlsEnforcementExtension(opts: RlsEnforcementOptions) {
             const ctx = opts.getContext();
 
             if (!ctx?.tenantId) {
-              if (scoped && !opts.isSanctioned?.()) opts.onGap({ model, operation });
-              return query(args);
+              const sanctioned = opts.isSanctioned?.() ?? false;
+              if (!scoped || !sanctioned) {
+                if (scoped && !sanctioned) opts.onGap({ model, operation });
+                return query(args);
+              }
+              // Acceso global sancionado sobre tabla con RLS: didacta_app NO
+              // ve filas sin contexto (NOBYPASSRLS) — el bypass real exige
+              // correr como didacta_super. Si ya estamos dentro del
+              // $transaction propio del caller, el switch de rol lo inyecta
+              // runCallerTransaction (envolver aquí lo sacaría de esa tx).
+              if (opts.isInTransaction?.()) {
+                return query(args);
+              }
+              const [, sanctionedResult] = await client.$transaction([
+                client.$executeRaw`SET LOCAL ROLE didacta_super`,
+                query(args) as unknown as Prisma.PrismaPromise<unknown>,
+              ]);
+              return sanctionedResult;
             }
             if (ctx.gucApplied || !scoped) {
               return query(args);

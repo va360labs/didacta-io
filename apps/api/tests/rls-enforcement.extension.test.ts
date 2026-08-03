@@ -62,6 +62,10 @@ function setupHook(opts: Partial<RlsEnforcementOptions> = {}) {
       sql: strings.join('$'),
       values,
     })),
+    $executeRaw: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
+      sql: strings.join('$'),
+      values,
+    })),
   };
   const ext = createRlsEnforcementExtension({
     mode: 'warn',
@@ -131,12 +135,40 @@ describe('createRlsEnforcementExtension', () => {
     expect(onGap).toHaveBeenCalled();
   });
 
-  it('acceso global sancionado sin contexto: pasa sin registrar hueco', async () => {
+  it('acceso global sancionado sobre modelo multi-tenant: bypass real vía SET LOCAL ROLE didacta_super', async () => {
     const { hook, onGap, fakeClient } = setupHook({
       getContext: () => undefined,
       isSanctioned: () => true,
     });
     const result = await hook({ model: 'User', operation: 'findMany', args: {}, query });
+    expect(result).toEqual(queryResult);
+    expect(onGap).not.toHaveBeenCalled();
+    // didacta_app no tiene BYPASSRLS: sin el switch de rol, la query sancionada
+    // devolvería 0 filas en real. El wrap es necesario, no opcional.
+    expect(fakeClient.$transaction).toHaveBeenCalledTimes(1);
+    const setRole = fakeClient.$executeRaw.mock.results[0]!.value as { sql: string };
+    expect(setRole.sql).toContain('SET LOCAL ROLE didacta_super');
+  });
+
+  it('acceso global sancionado sobre modelo global: ni hueco ni wrap (no hay RLS que saltar)', async () => {
+    const { hook, onGap, fakeClient } = setupHook({
+      getContext: () => undefined,
+      isSanctioned: () => true,
+    });
+    await hook({ model: 'Tenant', operation: 'findMany', args: {}, query });
+    expect(onGap).not.toHaveBeenCalled();
+    expect(fakeClient.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('sancionado dentro de un $transaction del caller: NO envuelve aquí (el switch de rol lo inyecta runCallerTransaction)', async () => {
+    const { hook, onGap, fakeClient } = setupHook({
+      getContext: () => undefined,
+      isSanctioned: () => true,
+      isInTransaction: () => isInsidePrismaTransaction(),
+    });
+    const result = await markPrismaTransactionScope(() =>
+      hook({ model: 'User', operation: 'findUnique', args: {}, query }),
+    );
     expect(result).toEqual(queryResult);
     expect(onGap).not.toHaveBeenCalled();
     expect(fakeClient.$transaction).not.toHaveBeenCalled();
@@ -250,6 +282,68 @@ describe('runCallerTransaction (inyección del GUC en $transaction del caller �
     expect(out).toBe('no-ctx');
     expect(wasOpened()).toBe(false);
     // No se inyectó el set_config: el caller recibe sus args tal cual.
+    expect(original.mock.calls[0]![0]).toEqual(['op']);
+  });
+
+  it('sancionado sin tenantId, forma batch: antepone SET LOCAL ROLE y descarta su resultado', async () => {
+    const SET_ROLE = { __setRole: true };
+    const makeSetRole = () => SET_ROLE;
+    const original = vi.fn(async (members: unknown[]) =>
+      members.map((_, i) => (i === 0 ? 'setrole' : `row-${i}`)),
+    );
+    const out = await runCallerTransaction({
+      original,
+      args: [['op-a', 'op-b']],
+      ctx: undefined,
+      makeSetConfig,
+      runWithGucApplied: async (fn) => fn(),
+      isSanctioned: () => true,
+      makeSetRole,
+    });
+    expect(out).toEqual(['row-1', 'row-2']);
+    const passed = original.mock.calls[0]![0] as unknown[];
+    expect(passed[0]).toBe(SET_ROLE);
+    expect(passed.slice(1)).toEqual(['op-a', 'op-b']);
+  });
+
+  it('sancionado sin tenantId, forma interactiva: setea el rol como primera op del callback', async () => {
+    const executeRawCalls: unknown[][] = [];
+    const tx = {
+      $executeRaw: (...a: unknown[]) => {
+        executeRawCalls.push(a);
+        return Promise.resolve();
+      },
+    };
+    const original = vi.fn(async (cb: (t: typeof tx) => Promise<unknown>) => cb(tx));
+    const userCallback = vi.fn(async () => 'result');
+    const out = await runCallerTransaction({
+      original,
+      args: [userCallback],
+      ctx: undefined,
+      makeSetConfig,
+      runWithGucApplied: async (fn) => fn(),
+      isSanctioned: () => true,
+      makeSetRole: () => ({}),
+    });
+    expect(out).toBe('result');
+    expect(executeRawCalls).toHaveLength(1);
+    expect(userCallback).toHaveBeenCalledWith(tx);
+  });
+
+  it('sancionado pero ya gucApplied: no inyecta el rol (ya hay GUC de tenant en la tx)', async () => {
+    const makeSetRole = vi.fn(() => ({}));
+    const original = vi.fn(async () => 'passthrough');
+    const out = await runCallerTransaction({
+      original,
+      args: [['op']],
+      ctx: { tenantId: 't-1', gucApplied: true },
+      makeSetConfig,
+      runWithGucApplied: async (fn) => fn(),
+      isSanctioned: () => true,
+      makeSetRole,
+    });
+    expect(out).toBe('passthrough');
+    expect(makeSetRole).not.toHaveBeenCalled();
     expect(original.mock.calls[0]![0]).toEqual(['op']);
   });
 });

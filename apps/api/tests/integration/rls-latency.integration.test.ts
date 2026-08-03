@@ -3,16 +3,18 @@
  *
  * El modo `warn` existe «para pagar el coste real, medirlo y llevar los huecos
  * a cero ANTES del flip» (header de rls-enforcement.extension.ts). Este test
- * MIDE ese coste contra Postgres real y lo imprime; NO impone presupuesto —
- * el presupuesto p95 es una decisión de producto pendiente (RLS decisión 6) y
- * este benchmark produce los números para tomarla.
+ * MIDE ese coste contra Postgres real y lo imprime; NO impone presupuesto duro
+ * (sigue sin fallar por umbral) — la decisión de producto (RLS decisión 6) ya
+ * está cerrada: +5ms p95 como techo de alerta, con +1.2ms p50/+1.3ms p95
+ * medidos en sesión 10 como dato real. Este benchmark existe para volver a
+ * medir si el coste se desvía de ese rango en el futuro.
  *
  * Qué compara, con la misma query (`user.findFirst` filtrado por tenant):
  *  - baseline: cliente Prisma pelado (comportamiento RLS_ENFORCEMENT=off).
  *  - extension: cliente con la extensión y contexto ALS → cada query viaja en
  *    un `$transaction([set_config, query])` (dos round-trips en un batch).
  *
- * SKIP sin DATABASE_URL (mismo criterio que rls-isolation.integration.test.ts).
+ * SKIP sin DATABASE_URL (mismo criterio que rls-isolation-didacta-app.integration.test.ts).
  */
 
 import { randomUUID } from 'node:crypto';

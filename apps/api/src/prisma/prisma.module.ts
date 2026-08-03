@@ -71,6 +71,8 @@ import { PrismaService } from './prisma.service';
                     const ctx = tenantContextStorage.getStore();
                     return ctx ? tenantContextStorage.run({ ...ctx, gucApplied: true }, fn) : fn();
                   },
+                  isSanctioned: () => isSanctionedGlobalAccess(),
+                  makeSetRole: () => extended.$executeRaw`SET LOCAL ROLE didacta_super`,
                 });
             }
             const value: unknown = Reflect.get(target, prop, target);
