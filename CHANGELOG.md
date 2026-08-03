@@ -10,6 +10,41 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.96] — 2026-08-03
+
+#### Notes
+
+- **Flip real de aislamiento RLS: la app deja de conectar con el usuario de
+  arranque.** Cambio de comportamiento para el operador: `ADMIN_DATABASE_URL`
+  (nueva, opcional con fallback a `DATABASE_URL`) es la conexión de
+  administración — solo migraciones, políticas RLS y grants. `DATABASE_URL`
+  pasa a ser la conexión de **runtime**: si se deja vacía (recomendado), el
+  entrypoint la deriva sola hacia el rol `didacta_app` (sin `BYPASSRLS`), con
+  contraseña autogenerada y persistida en el volumen de datos si no se define
+  `POSTGRES_APP_PASSWORD`. Una instalación existente con solo `DATABASE_URL`
+  apuntando al usuario de arranque **sigue arrancando sin tocar nada** — el
+  log advierte la degradación (sin aislamiento RLS real) sin romper el
+  arranque. Guía de migración en `docs/UPGRADE.md`.
+
+#### Added
+
+- **Bypass real de acceso global sancionado**: `didacta_app` es miembro del
+  rol `didacta_super` (`BYPASSRLS`); las operaciones legítimamente
+  cross-tenant sin contexto conocido (autenticación por API key, refresh
+  token, resolución de tenant por dominio, despachador del outbox, el setup
+  wizard) hacen `SET LOCAL ROLE didacta_super` dentro de su propia
+  transacción — transaccional, auditado por el código, sin conexión separada.
+- Test de aislamiento honesto contra Postgres real: conecta de verdad como
+  `didacta_app` con dos tenants, valida `SELECT`/`INSERT` cross-tenant y que
+  el bypass sancionado sigue funcionando.
+
+#### Fixed
+
+- **Contraseña del rol `didacta_app` nunca se aplicaba de verdad**: el
+  entrypoint la asignaba con `psql -c "... :'pw'"`, y `psql -c` no interpola
+  variables (`:'var'` solo funciona en modo script `-f`/stdin) — bug latente
+  desde la fase 0 del despliegue de RLS. Corregido a script por stdin.
+
 ### [0.0.1-alpha.95] — 2026-08-03
 
 #### Notes
