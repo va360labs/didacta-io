@@ -82,16 +82,19 @@ export function runCallerTransaction(opts: {
  * Modo de enforcement de RLS en runtime (env RLS_ENFORCEMENT):
  *
  * - `off`  → la extensión no se instala; comportamiento previo a F1.
- * - `warn` → (default) toda operación de modelo con contexto de tenant se
- *   envuelve en una transacción batch con `set_config('app.current_tenant_id')`
- *   y toda operación SIN contexto sobre un modelo multi-tenant se loguea como
- *   hueco (la lista de huecos es el worklist de la fase 2). La app aún conecta
- *   con el usuario bootstrap, así que RLS no filtra: el modo existe para pagar
- *   el coste real, medirlo y llevar los huecos a cero ANTES del flip.
- * - `on`   → igual que `warn` pero los huecos se loguean a nivel error. El
- *   enforcement REAL llega al conectar como `didacta_app` (fase 3): entonces
- *   una query sin contexto devuelve 0 filas (fail-closed) en las tablas con
- *   tenant_id.
+ * - `warn` → toda operación de modelo con contexto de tenant se envuelve en
+ *   una transacción batch con `set_config('app.current_tenant_id')` y toda
+ *   operación SIN contexto sobre un modelo multi-tenant se loguea como hueco
+ *   (la lista de huecos es el worklist de la fase 2). La app aún conecta con
+ *   el usuario bootstrap, así que RLS no filtra: el modo existe para pagar el
+ *   coste real, medirlo y llevar los huecos a cero ANTES del flip.
+ * - `on`   → (default desde la release intermedia F3) igual que `warn` pero
+ *   los huecos se loguean a nivel error: cualquier hueco que una instalación
+ *   real destape con config distinta a la nuestra sale a log-error SIN romper
+ *   nada (la app sigue conectando como bootstrap y RLS aún no filtra). El
+ *   enforcement REAL llega al conectar como `didacta_app` (release siguiente):
+ *   entonces una query sin contexto devuelve 0 filas (fail-closed) en las
+ *   tablas con tenant_id.
  *
  * Limitación conocida (caracterizada empíricamente contra Prisma 5.22):
  * una PrismaPromise devuelta DIRECTAMENTE fuera del scope del ALS (sin await
@@ -108,7 +111,10 @@ export function resolveRlsEnforcementMode(
 ): RlsEnforcementMode {
   const v = raw?.trim().toLowerCase();
   if (v === 'off' || v === 'warn' || v === 'on') return v;
-  return 'warn';
+  // Default `on` (decisión F3, release intermedia): telemetría de huecos a
+  // error mientras la app sigue conectando como bootstrap. El flip real a
+  // didacta_app es la release siguiente (cambio de DATABASE_URL).
+  return 'on';
 }
 
 /**

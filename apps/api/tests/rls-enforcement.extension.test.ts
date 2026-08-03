@@ -11,17 +11,18 @@ import {
 import { RlsGapTelemetry } from '../src/prisma/rls-gap-telemetry';
 
 describe('resolveRlsEnforcementMode', () => {
-  it('default warn cuando no hay env', () => {
-    expect(resolveRlsEnforcementMode(undefined)).toBe('warn');
+  it('default on cuando no hay env (release intermedia F3: huecos a error)', () => {
+    expect(resolveRlsEnforcementMode(undefined)).toBe('on');
   });
 
   it('normaliza mayúsculas y espacios', () => {
     expect(resolveRlsEnforcementMode(' ON ')).toBe('on');
     expect(resolveRlsEnforcementMode('Off')).toBe('off');
+    expect(resolveRlsEnforcementMode(' Warn ')).toBe('warn');
   });
 
-  it('valores desconocidos caen a warn', () => {
-    expect(resolveRlsEnforcementMode('bogus')).toBe('warn');
+  it('valores desconocidos caen al default on', () => {
+    expect(resolveRlsEnforcementMode('bogus')).toBe('on');
   });
 });
 
