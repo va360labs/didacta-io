@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { AiProvidersController } from '../src/modules/ai-providers.controller';
 import type { ApiKeyCipher } from '../src/ai/api-key-cipher';
@@ -103,11 +103,11 @@ describe('AiProvidersController · guards', () => {
     await expect(c.catalog(undefined)).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('catalog rechaza alumno', async () => {
+  it('catalog rechaza alumno con 403', async () => {
     const { prisma, cipher, registry } = makeDeps();
     const c = new AiProvidersController(prisma, cipher, registry);
     await expect(c.catalog(makeUser({ roles: ['alumno'] }))).rejects.toBeInstanceOf(
-      UnauthorizedException,
+      ForbiddenException,
     );
   });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { AdminSystemController } from '../src/modules/admin-system.controller';
 
 interface SmtpRow {
@@ -80,9 +80,9 @@ describe('AdminSystemController.healthDetail', () => {
     await expect(c.healthDetail(undefined)).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('rechaza si el rol no es admin', async () => {
+  it('rechaza si el rol no es admin con 403', async () => {
     const c = makeController({});
-    await expect(c.healthDetail(ALUMNO as never)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(c.healthDetail(ALUMNO as never)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('healthy cuando todo está OK', async () => {

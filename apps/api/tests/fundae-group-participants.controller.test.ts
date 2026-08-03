@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { FundaeGroupParticipantsController } from '../src/modules/fundae/fundae-group-participants.controller';
 import type { ModuleRegistryService } from '../src/modules/module-registry.service';
@@ -44,11 +44,11 @@ describe('FundaeGroupParticipantsController · guard admin', () => {
     );
   });
 
-  it('rechaza alumno con UnauthorizedException', async () => {
+  it('rechaza alumno con ForbiddenException', async () => {
     const { registry } = makeRegistry();
     const c = new FundaeGroupParticipantsController(registry);
     await expect(c.list(makeUser({ roles: ['alumno'] }), 'g1', {} as never)).rejects.toBeInstanceOf(
-      UnauthorizedException,
+      ForbiddenException,
     );
   });
 

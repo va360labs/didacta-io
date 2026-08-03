@@ -7,6 +7,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   Param,
@@ -53,7 +54,7 @@ export class FundaeGroupParticipantsController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new UnauthorizedException(
+      throw new ForbiddenException(
         'Solo super_admin y tenant_admin pueden gestionar participantes de grupos.',
       );
     }

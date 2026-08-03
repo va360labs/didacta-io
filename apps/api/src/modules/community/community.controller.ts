@@ -7,6 +7,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   Param,
@@ -266,7 +267,7 @@ export class CommunityController {
   async runDigestNow(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.includes('super_admin')) {
-      throw new UnauthorizedException('Solo super_admin puede disparar el digest manualmente.');
+      throw new ForbiddenException('Solo super_admin puede disparar el digest manualmente.');
     }
     await this.digest.triggerNow();
     return { enqueued: true };

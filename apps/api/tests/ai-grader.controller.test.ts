@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { AiGraderController } from '../src/modules/ai-grader/ai-grader.controller';
 import type { ModuleRegistryService } from '../src/modules/module-registry.service';
@@ -57,11 +57,11 @@ describe('AiGraderController · guards', () => {
     await expect(c.getRubric(undefined, 'q1')).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('rechaza alumno', async () => {
+  it('rechaza alumno con 403', async () => {
     const { registry } = makeRegistry();
     const c = new AiGraderController(registry);
     await expect(c.getRubric(makeUser({ roles: ['alumno'] }), 'q1')).rejects.toBeInstanceOf(
-      UnauthorizedException,
+      ForbiddenException,
     );
   });
 

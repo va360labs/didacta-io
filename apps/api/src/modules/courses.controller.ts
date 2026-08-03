@@ -7,6 +7,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpException,
@@ -47,6 +48,19 @@ const listQuerySchema = z.object({
 
 /** Roles que gestionan cursos y ven SIEMPRE el contenido completo (sin gating de drip). */
 const COURSE_EDITOR_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
+
+/**
+ * Toda escritura del catálogo (crear/editar/publicar/borrar cursos, módulos y
+ * lecciones) exige rol editor. Sin este check, cualquier usuario autenticado
+ * del tenant (un alumno) podía editar y publicar cursos.
+ */
+function requireCourseEditor(user: SessionClaims | undefined): SessionClaims {
+  if (!user) throw new UnauthorizedException();
+  if (!user.roles.some((r) => COURSE_EDITOR_ROLES.has(r))) {
+    throw new ForbiddenException('Esta acción requiere rol formador, tenant_admin o super_admin.');
+  }
+  return user;
+}
 
 /**
  * Devuelve el detalle del curso con el `content` de las lecciones puesto a null
@@ -93,9 +107,9 @@ export class CoursesController {
     @CurrentUser() user: SessionClaims | undefined,
     @Body(new ZodValidationPipe(createCourseSchema)) dto: CreateCourseDto,
   ) {
-    if (!user) throw new UnauthorizedException();
+    const u = requireCourseEditor(user);
     try {
-      return await this.registry.getCoursesService().createCourse(user.tenantId, user.sub, dto);
+      return await this.registry.getCoursesService().createCourse(u.tenantId, u.sub, dto);
     } catch (error) {
       throw this.translate(error);
     }
@@ -254,9 +268,9 @@ export class CoursesController {
     @Param('id') id: string,
     @Body(new ZodValidationPipe(updateCourseSchema)) dto: UpdateCourseDto,
   ) {
-    if (!user) throw new UnauthorizedException();
+    const u = requireCourseEditor(user);
     try {
-      return await this.registry.getCoursesService().updateCourse(user.tenantId, user.sub, id, dto);
+      return await this.registry.getCoursesService().updateCourse(u.tenantId, u.sub, id, dto);
     } catch (error) {
       throw this.translate(error);
     }
@@ -269,9 +283,9 @@ export class CoursesController {
     @Param('id') id: string,
     @Body(new ZodValidationPipe(createModuleSchema)) dto: CreateModuleDto,
   ) {
-    if (!user) throw new UnauthorizedException();
+    const u = requireCourseEditor(user);
     try {
-      return await this.registry.getCoursesService().createModule(user.tenantId, user.sub, id, dto);
+      return await this.registry.getCoursesService().createModule(u.tenantId, u.sub, id, dto);
     } catch (error) {
       throw this.translate(error);
     }
@@ -284,11 +298,9 @@ export class CoursesController {
     @Param('moduleId') moduleId: string,
     @Body(new ZodValidationPipe(createLessonSchema)) dto: CreateLessonDto,
   ) {
-    if (!user) throw new UnauthorizedException();
+    const u = requireCourseEditor(user);
     try {
-      return await this.registry
-        .getCoursesService()
-        .createLesson(user.tenantId, user.sub, moduleId, dto);
+      return await this.registry.getCoursesService().createLesson(u.tenantId, u.sub, moduleId, dto);
     } catch (error) {
       throw this.translate(error);
     }
@@ -301,11 +313,9 @@ export class CoursesController {
     @Param('lessonId') lessonId: string,
     @Body(new ZodValidationPipe(updateLessonSchema)) dto: UpdateLessonDto,
   ) {
-    if (!user) throw new UnauthorizedException();
+    const u = requireCourseEditor(user);
     try {
-      return await this.registry
-        .getCoursesService()
-        .updateLesson(user.tenantId, user.sub, lessonId, dto);
+      return await this.registry.getCoursesService().updateLesson(u.tenantId, u.sub, lessonId, dto);
     } catch (error) {
       throw this.translate(error);
     }
@@ -315,9 +325,9 @@ export class CoursesController {
   @HttpCode(200)
   @ApiOperation({ summary: 'Publicar curso (corre hook courses.publish.validate)' })
   async publish(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
-    if (!user) throw new UnauthorizedException();
+    const u = requireCourseEditor(user);
     try {
-      return await this.registry.getCoursesService().publishCourse(user.tenantId, user.sub, id);
+      return await this.registry.getCoursesService().publishCourse(u.tenantId, u.sub, id);
     } catch (error) {
       throw this.translate(error);
     }
@@ -327,9 +337,9 @@ export class CoursesController {
   @HttpCode(200)
   @ApiOperation({ summary: 'Archivar curso' })
   async archive(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
-    if (!user) throw new UnauthorizedException();
+    const u = requireCourseEditor(user);
     try {
-      return await this.registry.getCoursesService().archiveCourse(user.tenantId, user.sub, id);
+      return await this.registry.getCoursesService().archiveCourse(u.tenantId, u.sub, id);
     } catch (error) {
       throw this.translate(error);
     }
@@ -339,9 +349,9 @@ export class CoursesController {
   @HttpCode(200)
   @ApiOperation({ summary: 'Desarchivar curso (ARCHIVED → DRAFT)' })
   async unarchive(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
-    if (!user) throw new UnauthorizedException();
+    const u = requireCourseEditor(user);
     try {
-      return await this.registry.getCoursesService().unarchiveCourse(user.tenantId, user.sub, id);
+      return await this.registry.getCoursesService().unarchiveCourse(u.tenantId, u.sub, id);
     } catch (error) {
       throw this.translate(error);
     }
@@ -356,11 +366,11 @@ export class CoursesController {
     @Body(new ZodValidationPipe(z.object({ direction: z.enum(['up', 'down']) })))
     body: { direction: 'up' | 'down' },
   ) {
-    if (!user) throw new UnauthorizedException();
+    const u = requireCourseEditor(user);
     try {
       return await this.registry
         .getCoursesService()
-        .moveLesson(user.tenantId, user.sub, lessonId, body.direction);
+        .moveLesson(u.tenantId, u.sub, lessonId, body.direction);
     } catch (error) {
       throw this.translate(error);
     }
@@ -373,9 +383,9 @@ export class CoursesController {
     @CurrentUser() user: SessionClaims | undefined,
     @Param('moduleId') moduleId: string,
   ) {
-    if (!user) throw new UnauthorizedException();
+    const u = requireCourseEditor(user);
     try {
-      await this.registry.getCoursesService().deleteModule(user.tenantId, user.sub, moduleId);
+      await this.registry.getCoursesService().deleteModule(u.tenantId, u.sub, moduleId);
       return { deleted: true };
     } catch (error) {
       throw this.translate(error);
@@ -389,9 +399,9 @@ export class CoursesController {
     @CurrentUser() user: SessionClaims | undefined,
     @Param('lessonId') lessonId: string,
   ) {
-    if (!user) throw new UnauthorizedException();
+    const u = requireCourseEditor(user);
     try {
-      await this.registry.getCoursesService().deleteLesson(user.tenantId, user.sub, lessonId);
+      await this.registry.getCoursesService().deleteLesson(u.tenantId, u.sub, lessonId);
       return { deleted: true };
     } catch (error) {
       throw this.translate(error);
@@ -414,11 +424,11 @@ export class CoursesController {
     )
     body: { targetModuleId: string; position?: number },
   ) {
-    if (!user) throw new UnauthorizedException();
+    const u = requireCourseEditor(user);
     try {
       await this.registry
         .getCoursesService()
-        .moveLessonToModule(user.tenantId, user.sub, lessonId, body.targetModuleId, body.position);
+        .moveLessonToModule(u.tenantId, u.sub, lessonId, body.targetModuleId, body.position);
       return { moved: true };
     } catch (error) {
       throw this.translate(error);
@@ -434,11 +444,11 @@ export class CoursesController {
     @Body(new ZodValidationPipe(z.object({ lessonIds: z.array(z.string().uuid()).min(1) })))
     body: { lessonIds: string[] },
   ) {
-    if (!user) throw new UnauthorizedException();
+    const u = requireCourseEditor(user);
     try {
       await this.registry
         .getCoursesService()
-        .reorderLessons(user.tenantId, user.sub, moduleId, body.lessonIds);
+        .reorderLessons(u.tenantId, u.sub, moduleId, body.lessonIds);
       return { reordered: true };
     } catch (error) {
       throw this.translate(error);
@@ -454,11 +464,9 @@ export class CoursesController {
     @Body(new ZodValidationPipe(z.object({ moduleIds: z.array(z.string().uuid()).min(1) })))
     body: { moduleIds: string[] },
   ) {
-    if (!user) throw new UnauthorizedException();
+    const u = requireCourseEditor(user);
     try {
-      await this.registry
-        .getCoursesService()
-        .reorderModules(user.tenantId, user.sub, id, body.moduleIds);
+      await this.registry.getCoursesService().reorderModules(u.tenantId, u.sub, id, body.moduleIds);
       return { reordered: true };
     } catch (error) {
       throw this.translate(error);

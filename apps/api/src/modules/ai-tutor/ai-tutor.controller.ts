@@ -3,7 +3,15 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Body, Controller, Param, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Param,
+  Post,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   askSchema,
@@ -45,7 +53,7 @@ export class AiTutorController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     const u = this.requireAuth(user);
     if (!u.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new UnauthorizedException('Solo admins pueden re-indexar cursos.');
+      throw new ForbiddenException('Solo admins pueden re-indexar cursos.');
     }
     return u;
   }
@@ -81,7 +89,7 @@ export class AiTutorController {
     const u = this.requireAdmin(user);
     const indexer = this.registry.getAiTutorIndexerServiceOrNull();
     if (!indexer) {
-      throw new UnauthorizedException('mod.ai-tutor no está activo en este tenant.');
+      throw new ForbiddenException('mod.ai-tutor no está activo en este tenant.');
     }
     return indexer.indexCourse(u.tenantId, courseId, { force: dto.force });
   }
@@ -95,7 +103,7 @@ export class AiTutorController {
     const u = this.requireAdmin(user);
     const indexer = this.registry.getAiTutorIndexerServiceOrNull();
     if (!indexer) {
-      throw new UnauthorizedException('mod.ai-tutor no está activo en este tenant.');
+      throw new ForbiddenException('mod.ai-tutor no está activo en este tenant.');
     }
     const courses = await this.registry
       .getCoursesService()

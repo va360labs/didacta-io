@@ -35,11 +35,11 @@ describe('FundaeRlptController · guard admin', () => {
     await expect(c.list(undefined, 'c-1')).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('rechaza alumno', async () => {
+  it('rechaza alumno con 403', async () => {
     const { registry } = makeRegistry();
     const c = new FundaeRlptController(registry);
     await expect(c.list(makeUser({ roles: ['alumno'] }), 'c-1')).rejects.toBeInstanceOf(
-      UnauthorizedException,
+      ForbiddenException,
     );
   });
 });

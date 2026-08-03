@@ -7,6 +7,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   Param,
@@ -157,7 +158,7 @@ export class AccessGroupsController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     const u = this.requireUser(user);
     if (!u.roles.some((r) => ADMIN_ROLES.includes(r))) {
-      throw new UnauthorizedException('Requiere rol super_admin o tenant_admin');
+      throw new ForbiddenException('Requiere rol super_admin o tenant_admin');
     }
     return u;
   }

@@ -6,6 +6,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   NotFoundException,
@@ -134,7 +135,7 @@ export class EventsController {
   ) {
     if (!user) throw new UnauthorizedException();
     const isAdmin = user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r));
-    if (!isAdmin) throw new UnauthorizedException('Solo admins o formadores pueden crear eventos');
+    if (!isAdmin) throw new ForbiddenException('Solo admins o formadores pueden crear eventos');
 
     return this.prisma.modEvent.create({
       data: {

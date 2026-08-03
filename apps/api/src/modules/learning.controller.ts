@@ -476,7 +476,7 @@ export class LearningController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r))) {
-      throw new UnauthorizedException(
+      throw new ForbiddenException(
         'Solo formadores y administradores pueden ver el listado de alumnos.',
       );
     }
@@ -588,34 +588,37 @@ export class LearningController {
     return result;
   }
 
+  // Las invitaciones (código + token) son la llave de entrada a un curso:
+  // gestionarlas es acción de staff. Sin el check de rol, cualquier alumno
+  // podía listar los códigos vigentes (y auto-matricularse gratis), crear
+  // invitaciones nuevas o revocar las legítimas.
+
   @Get('invitations')
-  @ApiOperation({ summary: 'Listar invitaciones activas de un curso' })
+  @ApiOperation({ summary: 'Listar invitaciones activas de un curso (formador/admin)' })
   async listInvitations(
     @CurrentUser() user: SessionClaims | undefined,
     @Query(new ZodValidationPipe(listInvitationsQuerySchema)) query: ListInvitationsQueryDto,
   ) {
-    if (!user) throw new UnauthorizedException();
-    return this.registry
-      .getLearningService()
-      .listInvitationsForCourse(user.tenantId, query.courseId);
+    const u = requireScormEditor(user);
+    return this.registry.getLearningService().listInvitationsForCourse(u.tenantId, query.courseId);
   }
 
   @Post('invitations')
-  @ApiOperation({ summary: 'Crear invitación (código + token)' })
+  @ApiOperation({ summary: 'Crear invitación (código + token) (formador/admin)' })
   async createInvitation(
     @CurrentUser() user: SessionClaims | undefined,
     @Body(new ZodValidationPipe(createInvitationSchema)) dto: CreateInvitationDto,
   ) {
-    if (!user) throw new UnauthorizedException();
-    return this.registry.getLearningService().createInvitation(user.tenantId, user.sub, dto);
+    const u = requireScormEditor(user);
+    return this.registry.getLearningService().createInvitation(u.tenantId, u.sub, dto);
   }
 
   @Delete('invitations/:id')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Revocar invitación' })
+  @ApiOperation({ summary: 'Revocar invitación (formador/admin)' })
   async revokeInvitation(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
-    if (!user) throw new UnauthorizedException();
-    await this.registry.getLearningService().revokeInvitation(user.tenantId, id);
+    const u = requireScormEditor(user);
+    await this.registry.getLearningService().revokeInvitation(u.tenantId, id);
     return { revoked: true };
   }
 

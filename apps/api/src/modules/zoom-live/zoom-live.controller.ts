@@ -7,6 +7,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   NotFoundException,
@@ -78,7 +79,7 @@ export class ZoomLiveController {
   /** Gating de staff (formador/admin) con el motivo en el mensaje. */
   private ensureStaff(user: SessionClaims, action: string): void {
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new UnauthorizedException(`Solo formadores y admins pueden ${action}.`);
+      throw new ForbiddenException(`Solo formadores y admins pueden ${action}.`);
     }
   }
 
@@ -152,7 +153,7 @@ export class ZoomLiveController {
   async listRegistrations(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new UnauthorizedException('Solo formadores y admins pueden ver los inscritos.');
+      throw new ForbiddenException('Solo formadores y admins pueden ver los inscritos.');
     }
     ensureSessionId(id);
     return this.registry.getZoomLiveService().listRegistrations(user.tenantId, id);
@@ -231,7 +232,7 @@ export class ZoomLiveController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new UnauthorizedException('Solo formadores y admins pueden crear sesiones.');
+      throw new ForbiddenException('Solo formadores y admins pueden crear sesiones.');
     }
     return this.registry.getZoomLiveService().create(user.tenantId, user.sub, dto);
   }
@@ -245,7 +246,7 @@ export class ZoomLiveController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new UnauthorizedException('Solo formadores y admins pueden modificar sesiones.');
+      throw new ForbiddenException('Solo formadores y admins pueden modificar sesiones.');
     }
     ensureSessionId(id);
     return this.registry.getZoomLiveService().update(user.tenantId, user.sub, id, dto);
@@ -257,7 +258,7 @@ export class ZoomLiveController {
   async cancel(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new UnauthorizedException('Solo formadores y admins pueden cancelar sesiones.');
+      throw new ForbiddenException('Solo formadores y admins pueden cancelar sesiones.');
     }
     ensureSessionId(id);
     await this.registry.getZoomLiveService().cancel(user.tenantId, user.sub, id);
@@ -274,9 +275,7 @@ export class ZoomLiveController {
     if (!user) throw new UnauthorizedException();
     const allowed = new Set(['super_admin', 'tenant_admin']);
     if (!user.roles.some((r) => allowed.has(r))) {
-      throw new UnauthorizedException(
-        'Solo administradores pueden probar las credenciales de Zoom.',
-      );
+      throw new ForbiddenException('Solo administradores pueden probar las credenciales de Zoom.');
     }
     return this.registry.getZoomLiveService().testCredentials(user.tenantId);
   }
@@ -308,7 +307,7 @@ export class ZoomLiveController {
     // que no queremos exponer a formadores genéricos.
     const allowed = new Set(['super_admin', 'tenant_admin']);
     if (!user.roles.some((r) => allowed.has(r))) {
-      throw new UnauthorizedException('Solo administradores pueden consultar eventos de webhook.');
+      throw new ForbiddenException('Solo administradores pueden consultar eventos de webhook.');
     }
     return this.registry.getZoomLiveService().listWebhookEvents(user.tenantId, q);
   }

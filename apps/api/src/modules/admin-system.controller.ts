@@ -3,7 +3,13 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Controller, Get, UnauthorizedException, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -88,9 +94,7 @@ export class AdminSystemController {
   ): Promise<HealthDetailResponse> {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new UnauthorizedException(
-        'Solo super_admin / tenant_admin pueden ver el health-detail.',
-      );
+      throw new ForbiddenException('Solo super_admin / tenant_admin pueden ver el health-detail.');
     }
 
     const [db, redis, storage, smtp, outbox] = await Promise.all([

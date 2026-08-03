@@ -7,6 +7,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   Param,
@@ -30,6 +31,7 @@ import { CurrentUser, Public } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
+import { runAsTenant } from '../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from './module-registry.service';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
@@ -75,7 +77,7 @@ export class ThemingController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new UnauthorizedException('Solo administradores pueden modificar el theme.');
+      throw new ForbiddenException('Solo administradores pueden modificar el theme.');
     }
     // El gate white-label solo debe saltar cuando se INTENTA ESTABLECER
     // contenido white-label (string no vacío), no cuando el campo llega como
@@ -99,7 +101,7 @@ export class ThemingController {
   async resetMine(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new UnauthorizedException('Solo administradores pueden resetear el theme.');
+      throw new ForbiddenException('Solo administradores pueden resetear el theme.');
     }
     return this.registry.getThemingService().reset(user.tenantId);
   }
@@ -116,7 +118,7 @@ export class ThemingController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new UnauthorizedException('Solo administradores pueden subir el logo.');
+      throw new ForbiddenException('Solo administradores pueden subir el logo.');
     }
     return this.registry.getThemingService().uploadLogo(user.tenantId, dto);
   }
@@ -129,7 +131,7 @@ export class ThemingController {
   async removeLogo(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new UnauthorizedException('Solo administradores pueden eliminar el logo.');
+      throw new ForbiddenException('Solo administradores pueden eliminar el logo.');
     }
     return this.registry.getThemingService().removeLogo(user.tenantId);
   }
@@ -145,7 +147,11 @@ export class ThemingController {
     @Res({ passthrough: false }) reply: FastifyReply,
   ) {
     try {
-      const { buffer, mimeType } = await this.registry.getThemingService().getLogoBlob(tenantId);
+      // RLS F2: ruta @Public sin ALS del middleware — el tenant viene en el
+      // path y el blob se lee bajo su contexto.
+      const { buffer, mimeType } = await runAsTenant(tenantId, () =>
+        this.registry.getThemingService().getLogoBlob(tenantId),
+      );
       void reply
         .header('Content-Type', mimeType)
         .header('Cache-Control', 'public, max-age=300, must-revalidate')

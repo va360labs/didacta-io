@@ -7,6 +7,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   NotFoundException,
@@ -116,7 +117,7 @@ export class GroupsController {
   ) {
     if (!user) throw new UnauthorizedException();
     const isAdmin = user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r));
-    if (!isAdmin) throw new UnauthorizedException('Solo admins o formadores pueden crear grupos');
+    if (!isAdmin) throw new ForbiddenException('Solo admins o formadores pueden crear grupos');
 
     const group = await this.prisma.modGroup.create({
       data: {
@@ -150,11 +151,23 @@ export class GroupsController {
     });
     if (!group) throw new NotFoundException('Grupo no encontrado');
 
-    await this.prisma.modGroupMember.upsert({
+    // El join es idempotente: solo se incrementa memberCount cuando la
+    // membresía se CREA. El upsert anterior no distinguía y cada re-join
+    // volvía a incrementar, inflando el contador sin límite.
+    const existing = await this.prisma.modGroupMember.findUnique({
       where: { mod_group_member_unique: { groupId: id, userId: user.sub } },
-      create: { groupId: id, tenantId: user.tenantId, userId: user.sub, role: 'member' },
-      update: {},
     });
+    if (existing) return { joined: true };
+
+    try {
+      await this.prisma.modGroupMember.create({
+        data: { groupId: id, tenantId: user.tenantId, userId: user.sub, role: 'member' },
+      });
+    } catch (e) {
+      // P2002: otro request concurrente creó la membresía — ya está unido.
+      if ((e as { code?: string }).code === 'P2002') return { joined: true };
+      throw e;
+    }
 
     await this.prisma.modGroup.update({
       where: { id },

@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { AiTutorController } from '../src/modules/ai-tutor/ai-tutor.controller';
 import type { ModuleRegistryService } from '../src/modules/module-registry.service';
@@ -12,7 +12,7 @@ import type { SessionClaims } from '../src/auth/token.service';
  *   - guard de admin para `reindex`.
  *   - delegación correcta al chat service / indexer pasando tenantId
  *     y userId del JWT (nunca confiar en parámetros del cliente).
- *   - 401 si el módulo ai-tutor no está activo en el tenant.
+ *   - 403 si el módulo ai-tutor no está activo en el tenant.
  */
 
 function makeUser(overrides: Partial<SessionClaims> = {}): SessionClaims {
@@ -120,20 +120,20 @@ describe('AiTutorController · reindex', () => {
     );
   });
 
-  it('rechaza alumno', async () => {
+  it('rechaza alumno con 403', async () => {
     const { registry } = makeRegistry();
     const c = new AiTutorController(registry);
     await expect(
       c.reindex(makeUser({ roles: ['alumno'] }), 'c1', {} as never),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('rechaza formador', async () => {
+  it('rechaza formador con 403', async () => {
     const { registry } = makeRegistry();
     const c = new AiTutorController(registry);
     await expect(
       c.reindex(makeUser({ roles: ['formador'] }), 'c1', {} as never),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it.each(['tenant_admin', 'super_admin'] as const)('rol %s pasa el guard', async (role) => {
@@ -143,11 +143,11 @@ describe('AiTutorController · reindex', () => {
     expect(spies.indexCourse).toHaveBeenCalledWith('tenant-A', 'c1', { force: true });
   });
 
-  it('si el módulo ai-tutor no está activo, lanza UnauthorizedException', async () => {
+  it('si el módulo ai-tutor no está activo, lanza ForbiddenException', async () => {
     const { registry } = makeRegistry({ indexerEnabled: false });
     const c = new AiTutorController(registry);
     await expect(
       c.reindex(makeUser({ roles: ['tenant_admin'] }), 'c1', {} as never),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

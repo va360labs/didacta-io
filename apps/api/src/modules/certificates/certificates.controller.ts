@@ -9,6 +9,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -150,15 +151,31 @@ export class CertificatesController {
   // Certificados emitidos.
   // ----------------------------------------------------------------------
 
+  /**
+   * Un certificado solo lo ve su titular o el staff (formador/admin). El
+   * service solo filtra por tenant, así que sin este check cualquier usuario
+   * autenticado del tenant leía y descargaba certificados ajenos (PII:
+   * nombre del alumno, curso, número). Devolvemos 404 —no 403— para no
+   * confirmar la existencia de un certificado ajeno. La verificación
+   * compartible sigue siendo el endpoint público /verify/:id.
+   */
+  private assertOwnerOrStaff(user: SessionClaims, cert: { userId: string }): void {
+    if (cert.userId === user.sub) return;
+    const staff = user.roles.some((r) => (TEMPLATE_EDITOR_ROLES as readonly string[]).includes(r));
+    if (!staff) throw new NotFoundException('Certificado no encontrado.');
+  }
+
   @Get(':id')
-  @ApiOperation({ summary: 'Detalle de un certificado emitido' })
+  @ApiOperation({ summary: 'Detalle de un certificado emitido (titular o formador/admin)' })
   async getById(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
     if (!user) throw new UnauthorizedException();
-    return this.registry.getCertificatesService().getById(user.tenantId, id);
+    const cert = await this.registry.getCertificatesService().getById(user.tenantId, id);
+    this.assertOwnerOrStaff(user, cert);
+    return cert;
   }
 
   @Get(':id/download')
-  @ApiOperation({ summary: 'Descargar PDF del certificado' })
+  @ApiOperation({ summary: 'Descargar PDF del certificado (titular o formador/admin)' })
   async download(
     @CurrentUser() user: SessionClaims | undefined,
     @Param('id') id: string,
@@ -166,6 +183,7 @@ export class CertificatesController {
   ) {
     if (!user) throw new UnauthorizedException();
     const cert = await this.registry.getCertificatesService().getById(user.tenantId, id);
+    this.assertOwnerOrStaff(user, cert);
     const pdf = await this.registry
       .getCertificatesService()
       .renderCertificatePdf(user.tenantId, id);

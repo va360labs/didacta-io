@@ -8,19 +8,41 @@
  * - GET    /admin/registry/status     → consultar estado
  * - DELETE /admin/registry/opt-in     → opt-out (RGPD)
  *
- * Auth: TODO añadir guard de super_admin cuando esté disponible globalmente.
- * Por ahora el path admin/* asume protección de capa superior (proxy/Auth).
+ * Auth: JwtAuthGuard + super_admin. El opt-in/opt-out del registro es una
+ * decisión de INSTANCIA (no de tenant): solo el operador de la instalación
+ * puede activarlo, consultarlo o revocarlo.
  */
 
-import { Body, Controller, Delete, Get, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  Post,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import type { SessionClaims } from '../auth/token.service';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { optInDtoSchema, type OptInDto } from './dto/opt-in.dto';
 import { RegistryService, type RegistryStatus } from './registry.service';
 
+function requireSuperAdmin(user: SessionClaims | undefined): SessionClaims {
+  if (!user) throw new UnauthorizedException();
+  if (!user.roles.includes('super_admin')) {
+    throw new ForbiddenException('El registro de la instalación requiere rol super_admin.');
+  }
+  return user;
+}
+
 @ApiTags('admin-registry')
 @ApiBearerAuth()
 @Controller('admin/registry')
+@UseGuards(JwtAuthGuard)
 export class RegistryController {
   constructor(private readonly registry: RegistryService) {}
 
@@ -31,7 +53,8 @@ export class RegistryController {
       'Devuelve si esta instalación está registrada en Cloud god, fecha de opt-in, último envío de telemetría y si la conexión está establecida.',
   })
   @ApiResponse({ status: 200, description: 'Estado del registro.' })
-  status(): Promise<RegistryStatus> {
+  status(@CurrentUser() user: SessionClaims | undefined): Promise<RegistryStatus> {
+    requireSuperAdmin(user);
     return this.registry.getStatus();
   }
 
@@ -42,7 +65,11 @@ export class RegistryController {
       'Activa el envío de telemetría agregada (sin PII) a cambio de comunicación directa con el equipo Didacta. Requiere aceptación explícita de términos.',
   })
   @ApiResponse({ status: 201, description: 'Opt-in confirmado.' })
-  optIn(@Body(new ZodValidationPipe(optInDtoSchema)) body: OptInDto): Promise<RegistryStatus> {
+  optIn(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(optInDtoSchema)) body: OptInDto,
+  ): Promise<RegistryStatus> {
+    requireSuperAdmin(user);
     return this.registry.optIn(body);
   }
 
@@ -53,7 +80,8 @@ export class RegistryController {
       'Marca el registro como opted-out localmente y solicita borrado remoto a Cloud god. Best-effort en caso de Cloud god inalcanzable.',
   })
   @ApiResponse({ status: 200, description: 'Opt-out aplicado.' })
-  optOut(): Promise<RegistryStatus> {
+  optOut(@CurrentUser() user: SessionClaims | undefined): Promise<RegistryStatus> {
+    requireSuperAdmin(user);
     return this.registry.optOut();
   }
 }

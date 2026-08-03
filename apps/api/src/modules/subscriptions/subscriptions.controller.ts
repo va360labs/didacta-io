@@ -7,8 +7,10 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
+  NotFoundException,
   Param,
   Post,
   UnauthorizedException,
@@ -156,7 +158,9 @@ export class SubscriptionsController {
     // Re-leemos la sub para verificar ownership antes de listar invoices.
     const subs = await this.registry.getSubscriptionsService().listMine(user.tenantId, user.sub);
     const owned = subs.find((s) => s.id === id);
-    if (!owned) throw new UnauthorizedException('Esa suscripción no es tuya o no existe.');
+    // 404 (no 401): hay sesión válida; la sub no existe o es de otro usuario,
+    // y no confirmamos cuál de las dos para no permitir enumerar ids ajenos.
+    if (!owned) throw new NotFoundException('Esa suscripción no es tuya o no existe.');
     const invoices = await this.registry
       .getSubscriptionsService()
       .listInvoicesForSubscription(user.tenantId, id);
@@ -193,9 +197,7 @@ export class SubscriptionsController {
   async runGraceExpirationNow(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.includes('super_admin')) {
-      throw new UnauthorizedException(
-        'Solo super_admin puede disparar grace-expiration manualmente.',
-      );
+      throw new ForbiddenException('Solo super_admin puede disparar grace-expiration manualmente.');
     }
     await this.graceExpiration.triggerNow();
     return { enqueued: true };
