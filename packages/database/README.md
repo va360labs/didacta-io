@@ -5,8 +5,8 @@ Cliente Prisma compartido, schema v1 del core y políticas RLS.
 ## Contenido
 
 - `prisma/schema.prisma` — schema v1 con modelos del core (ver PRD §9.1)
-- `prisma/rls.sql` — políticas Row-Level Security + triggers append-only
-- `prisma/grants.sql` — rol de runtime `didacta_app` (NOBYPASSRLS) + grants idempotentes; lo aplica el entrypoint junto a `rls.sql`
+- `prisma/rls.sql` — políticas Row-Level Security + triggers append-only + rol `didacta_super` (BYPASSRLS, sin LOGIN)
+- `prisma/grants.sql` — rol de runtime `didacta_app` (NOBYPASSRLS) + grants idempotentes + membership de `didacta_app` en `didacta_super`; lo aplica el entrypoint junto a `rls.sql`, con la conexión ADMIN (nunca con `didacta_app`)
 - `src/client.ts` — factoría de `PrismaClient`
 - `src/tenant-context.ts` — wrapper `withTenantContext(prisma, tenantId, cb)`: la ÚNICA implementación del tenant-scope (transacción + `set_config('app.current_tenant_id', $1, true)` con bind, nunca interpolado). `TenantPrismaService` y `SuperAdminPrismaService` del API delegan aquí.
 
@@ -52,7 +52,17 @@ A partir de ese momento, los próximos `db:migrate:deploy` aplicarán solo las m
 
 **Todos los módulos deben leer/escribir a través del Prisma que reciben en `ModuleContext`**. El backend (apps/api) envuelve cada request con `withTenantContext` para que RLS se aplique automáticamente.
 
-Si necesitás saltar RLS (workers globales, seeders), usá el rol `didacta_super` que se crea en `rls.sql`. **Nunca** en request path de usuario final.
+Si necesitás saltar RLS (workers globales, seeders), usá el rol `didacta_super` que se crea en `rls.sql`. **Nunca** en request path de usuario final. En runtime (conectado como `didacta_app`), el bypass real es `SET LOCAL ROLE didacta_super` dentro de una transacción — es lo que hace `runSanctionedGlobalAccess()` (ver `apps/api/src/tenancy/tenant-context.storage.ts` y `apps/api/src/prisma/rls-enforcement.extension.ts`), no una conexión separada.
+
+## Conexión de runtime: `ADMIN_DATABASE_URL` vs `DATABASE_URL`
+
+Desde el flip de RLS F3, la app **nunca** conecta en runtime con el usuario
+bootstrap. `infra/docker/entrypoint.sh` aplica migraciones + `rls.sql` +
+`grants.sql` con `ADMIN_DATABASE_URL` (o `DATABASE_URL` como fallback, para
+instalaciones existentes), y deriva la `DATABASE_URL` de runtime del rol
+`didacta_app` (contraseña en `POSTGRES_APP_PASSWORD`, autogenerada y
+persistida en `/app/data` si no se define). Detalle completo en
+`docs/UPGRADE.md` § flip a didacta_app.
 
 ## Modelos incluidos (v1)
 

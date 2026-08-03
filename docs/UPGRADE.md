@@ -36,6 +36,38 @@ revisa el log del contenedor, corrige la causa y vuelve a arrancar.
 Nunca hagas rollback de la imagen sin restaurar la base de datos: una BD con
 migraciones de una versión más nueva no es compatible con la imagen antigua.
 
+## Flip a `didacta_app` (aislamiento RLS real)
+
+Desde esta versión, la app deja de conectar con el usuario bootstrap/superuser
+en runtime. Dos variables en vez de una:
+
+- `ADMIN_DATABASE_URL`: el usuario bootstrap (el que ya usabas como
+  `DATABASE_URL`). El entrypoint la usa SOLO para migraciones + políticas RLS
+  + grants — nunca para servir tráfico.
+- `DATABASE_URL`: la conexión de RUNTIME de la app. **Dejala vacía** — el
+  entrypoint la deriva automáticamente del host/puerto/base de
+  `ADMIN_DATABASE_URL`, conectando como el rol `didacta_app` (sin bypass de
+  RLS). La contraseña de ese rol es `POSTGRES_APP_PASSWORD` si la fijás, o se
+  autogenera y persiste en el volumen de datos la primera vez.
+
+**Migración de una instalación existente:**
+
+```bash
+# En tu .env:
+# 1. Renombra la línea DATABASE_URL=<valor> a ADMIN_DATABASE_URL=<el mismo valor>
+# 2. Borra (o deja vacía) la línea DATABASE_URL
+
+# 3. Recrea el contenedor
+docker compose -f docker-compose.alpha.yml up -d didacta
+```
+
+Al arrancar, el log confirma el modo: `runtime conecta como didacta_app
+(aislamiento RLS real)`. Si por algún motivo necesitás mantener temporalmente
+la app conectando con el usuario bootstrap (no recomendado — sin aislamiento
+real entre tenants), dejá `DATABASE_URL` definida explícitamente: el
+entrypoint la respeta tal cual y lo advierte en el log como degradación
+explícita, sin romper el arranque.
+
 ## Caso especial: instalaciones anteriores al baseline (era `db push`)
 
 Hasta la retomada fair-code (2026-07-31) el
