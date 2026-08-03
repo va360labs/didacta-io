@@ -6,6 +6,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 
 export interface CreatedApiKey {
   id: string;
@@ -160,7 +161,12 @@ export class ApiKeyService {
   } | null> {
     if (!token.startsWith(TOKEN_PREFIX)) return null;
     const hash = this.hashToken(token);
-    const row = await this.prisma.apiKey.findUnique({ where: { tokenHash: hash } });
+    // Lookup token→tenant PRE-contexto (aún no hay ALS): acceso global
+    // sancionado, mismo caso que resolveByHost. Sin esto, el flip de RLS F3
+    // dejaría toda autenticación por API key en 401.
+    const row = await runSanctionedGlobalAccess(() =>
+      this.prisma.apiKey.findUnique({ where: { tokenHash: hash } }),
+    );
     if (!row) return null;
     if (row.revokedAt) return null;
     if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null;
@@ -180,7 +186,12 @@ export class ApiKeyService {
   } | null> {
     if (!token.startsWith(TOKEN_PREFIX)) return null;
     const hash = this.hashToken(token);
-    const row = await this.prisma.apiKey.findUnique({ where: { tokenHash: hash } });
+    // Mismo lookup pre-contexto que resolveContext (el guard puede correr sin
+    // ALS en rutas donde el middleware no lo abrió). El update de lastUsedAt
+    // de abajo sí corre bajo el contexto del request cuando existe.
+    const row = await runSanctionedGlobalAccess(() =>
+      this.prisma.apiKey.findUnique({ where: { tokenHash: hash } }),
+    );
     if (!row) return null;
     if (row.revokedAt) return null;
     if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null;

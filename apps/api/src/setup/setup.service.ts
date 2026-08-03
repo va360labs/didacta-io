@@ -9,6 +9,7 @@ import { PasswordService } from '../auth/password.service';
 import { TokenService, type SignedTokens } from '../auth/token.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import type { SetupInitDto } from './dto';
 import { SessionRegistryService } from '../auth/session-registry.service';
 
@@ -119,6 +120,19 @@ export class SetupService {
 
     const passwordHash = await this.passwords.hash(dto.admin.password);
 
+    // Todo el bootstrap corre como acceso global SANCIONADO (RLS): el tenant
+    // no existe hasta dentro de la transacción, así que no hay GUC posible.
+    // Sin esto, el flip a didacta_app (F3) dejaría la instalación imposible.
+    return runSanctionedGlobalAccess(() => this.initSanctioned(dto, hostname, passwordHash, ctx));
+  }
+
+  private async initSanctioned(
+    dto: SetupInitDto,
+    hostname: string,
+    passwordHash: string,
+    ctx: ClientContext,
+  ): Promise<SetupInitResult> {
+    const slug = (dto.organization.slug ?? this.slugify(dto.organization.name)).toLowerCase();
     // Transacción única: re-chequea el "first run" DENTRO para cerrar la
     // ventana de carrera entre dos POST /setup/init concurrentes.
     const created = await this.prisma.$transaction(async (tx) => {

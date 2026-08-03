@@ -10,6 +10,10 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import { SuperAdminPrismaService } from '../../tenancy/super-admin-prisma.service';
+import {
+  runSanctionedGlobalAccess,
+  tenantContextStorage,
+} from '../../tenancy/tenant-context.storage';
 
 const QUEUE_NAME = 'didacta.members.gdpr-purge';
 const REPEAT_PATTERN = process.env['MEMBER_PURGE_CRON']?.trim() || '0 3 * * *'; // Diario 03:00 UTC
@@ -128,7 +132,11 @@ export class MemberPurgeWorker implements OnApplicationBootstrap, OnModuleDestro
 
     const startedAt = Date.now();
     try {
-      const tenants = await this.prisma.tenant.findMany({ select: { id: true } });
+      // Inventario cross-tenant explícito (RLS F3): el barrido de tenants es
+      // legítimamente global.
+      const tenants = await runSanctionedGlobalAccess(() =>
+        this.prisma.tenant.findMany({ select: { id: true } }),
+      );
 
       let totalPurged = 0;
       for (const { id: tenantId } of tenants) {
@@ -164,14 +172,22 @@ export class MemberPurgeWorker implements OnApplicationBootstrap, OnModuleDestro
           totalPurged += count;
           // Auditoría por tenant. NO se borra el audit_log: la purga solo
           // anonimiza los datos de Telegram, la trazabilidad se conserva.
-          await this.auditLog.record({
-            tenantId,
-            actorId: null,
-            action: 'member.gdpr.purged',
-            resourceType: 'user',
-            resourceId: tenantId,
-            metadata: { count },
-          });
+          // Bajo contexto ALS del tenant (SIN gucApplied: el audit usa su
+          // propio cliente Prisma y la extensión debe envolver sus queries) —
+          // fuera del asAdmin de arriba, cuya marca gucApplied sería falsa
+          // para estas queries.
+          await tenantContextStorage.run(
+            { tenantId, traceId: `member-purge-${tenantId}` },
+            async () =>
+              this.auditLog.record({
+                tenantId,
+                actorId: null,
+                action: 'member.gdpr.purged',
+                resourceType: 'user',
+                resourceId: tenantId,
+                metadata: { count },
+              }),
+          );
         }
       }
 

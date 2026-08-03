@@ -22,6 +22,7 @@ import {
   type SessionClaims,
   type StreamTicketClaims,
 } from '../../../auth/token.service';
+import { tenantContextStorage } from '../../../tenancy/tenant-context.storage';
 import { NotificationStreamService } from './notification-stream.service';
 
 /**
@@ -73,7 +74,14 @@ export class NotificationStreamController {
       throw new UnauthorizedException('Ticket de stream inválido o expirado');
     }
 
-    return this.streamService.register(claims.tenantId, claims.sub);
+    // El request llega SIN Authorization, así que TenantMiddleware no abrió el
+    // ALS. Hoy el registro del stream no toca Prisma, pero abrimos el contexto
+    // con el tenant del ticket para que cualquier query futura en este camino
+    // quede escopada (RLS) en vez de convertirse en un hueco invisible.
+    return tenantContextStorage.run(
+      { tenantId: claims.tenantId, userId: claims.sub, traceId: `sse-notifications-${claims.sub}` },
+      () => this.streamService.register(claims.tenantId, claims.sub),
+    );
   }
 
   /**

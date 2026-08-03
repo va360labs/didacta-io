@@ -22,6 +22,7 @@ import {
   type SessionClaims,
   type StreamTicketClaims,
 } from '../../auth/token.service';
+import { tenantContextStorage } from '../../tenancy/tenant-context.storage';
 import { MessagingStreamService } from './messaging-stream.service';
 
 /**
@@ -57,7 +58,13 @@ export class MessagingStreamController {
       throw new UnauthorizedException('Ticket de stream inválido o expirado');
     }
 
-    return this.streamService.register(claims.tenantId, claims.sub);
+    // Sin Authorization no hay ALS del middleware: abrimos el contexto con el
+    // tenant del ticket para que cualquier query futura del camino SSE quede
+    // escopada (RLS) en vez de ser un hueco invisible. Hoy no toca Prisma.
+    return tenantContextStorage.run(
+      { tenantId: claims.tenantId, userId: claims.sub, traceId: `sse-messaging-${claims.sub}` },
+      () => this.streamService.register(claims.tenantId, claims.sub),
+    );
   }
 
   @Post('stream-ticket')

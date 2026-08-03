@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PersistentEventBus, type OutboxDispatcher } from '../src/modules/persistent-event-bus';
+import { tenantContextStorage, type TenantContext } from '../src/tenancy/tenant-context.storage';
 
 interface OutboxRow {
   id: bigint;
@@ -139,6 +140,22 @@ describe('PersistentEventBus', () => {
     const row = [...prisma._rows.values()][0];
     expect(row.processedAt).toBeInstanceOf(Date);
     expect(row.processingAttempts).toBe(0);
+  });
+
+  it('abre el contexto ALS del tenant del evento alrededor de los handlers (RLS F1)', async () => {
+    const bus = new PersistentEventBus(prisma as never, silentLogger);
+    let seen: TenantContext | undefined;
+    bus.subscribe('rls.contexto', async () => {
+      seen = tenantContextStorage.getStore();
+    });
+
+    await bus.publish(makeEvent('rls.contexto'));
+
+    // El despacho corre bajo el tenant del EVENTO, sin gucApplied: la
+    // extensión RLS envuelve las queries de los bridges query a query.
+    expect(seen?.tenantId).toBe('t1');
+    expect(seen?.gucApplied).toBeUndefined();
+    expect(seen?.traceId).toMatch(/^outbox-/);
   });
 
   it('marca processedAt aunque no haya subscribers (no se pierde el evento)', async () => {
