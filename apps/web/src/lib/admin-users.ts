@@ -134,4 +134,88 @@ export const adminUsersApi = {
       bearer,
     );
   },
+  async startBulkInvite(
+    bearer: string,
+    dto: {
+      rows: BulkInviteRow[];
+      role: AssignableRole;
+      accessGroupId?: string;
+    },
+  ): Promise<BulkInviteStartResult> {
+    return apiFetch<BulkInviteStartResult>(
+      '/api/v1/admin/users/bulk-invite',
+      { method: 'POST', body: JSON.stringify(dto) },
+      bearer,
+    );
+  },
+  async bulkInviteStatus(bearer: string): Promise<BulkInviteState | null> {
+    return apiFetch<BulkInviteState | null>(
+      '/api/v1/admin/users/bulk-invite/status',
+      { method: 'GET' },
+      bearer,
+    );
+  },
 };
+
+export interface BulkInviteRow {
+  email: string;
+  name?: string;
+}
+
+export interface BulkInviteStartResult {
+  aceptado: boolean;
+  yaEnCurso: boolean;
+  total: number;
+}
+
+/** Progreso del alta masiva (CSV). Null si nunca se lanzó ninguna. */
+export interface BulkInviteState {
+  enCurso: boolean;
+  total: number;
+  creados: number;
+  fallidos: Array<{ email: string; error: string }>;
+  iniciadoEn: string;
+  terminadoEn: string | null;
+}
+
+/** ¿Parece un email? Validación laxa (el backend valida en serio con Zod). */
+const BULK_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Parsea el contenido de un CSV a filas de alta masiva. Mismo criterio que
+ * `parsePaymentFlagsCsv`: detecta el separador (`;` o `,`) mirando la
+ * cabecera, mapea columnas por nombre (`email`/`correo`, `name`/`nombre`) y,
+ * sin cabecera reconocible, trata la primera columna como email y la segunda
+ * como nombre. Filas sin un email con forma de email se descartan en
+ * silencio — rol y grupo NO van en el CSV: se eligen una vez para todo el
+ * lote en el formulario.
+ */
+export function parseBulkInviteCsv(text: string): BulkInviteRow[] {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length === 0) return [];
+
+  const headerLine = lines[0]!;
+  const sep =
+    (headerLine.match(/;/g)?.length ?? 0) >= (headerLine.match(/,/g)?.length ?? 0) ? ';' : ',';
+  const splitRow = (line: string): string[] =>
+    line.split(sep).map((c) => c.trim().replace(/^"(.*)"$/, '$1'));
+
+  const header = splitRow(headerLine).map((h) => h.toLowerCase());
+  const emailIdx = header.findIndex((h) => h === 'email' || h === 'e-mail' || h === 'correo');
+  const nameIdx = header.findIndex((h) => h === 'name' || h === 'nombre');
+  const hasHeader = emailIdx !== -1;
+
+  const dataLines = hasHeader ? lines.slice(1) : lines;
+  const rows: BulkInviteRow[] = [];
+  for (const line of dataLines) {
+    const cols = splitRow(line);
+    const email = (hasHeader ? cols[emailIdx] : cols[0])?.trim() ?? '';
+    if (!BULK_EMAIL_RE.test(email)) continue;
+    const rawName = hasHeader && nameIdx !== -1 ? cols[nameIdx] : cols[1];
+    rows.push({ email, name: rawName?.trim() || undefined });
+  }
+  return rows;
+}

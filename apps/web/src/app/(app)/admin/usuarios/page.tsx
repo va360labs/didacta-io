@@ -133,9 +133,14 @@ export default function UsuariosPage() {
             Gestiona las personas que tienen acceso a tu organización.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/admin/usuarios/invitar">Invitar persona</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="secondary">
+            <Link href="/admin/usuarios/importar">Importar CSV</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/usuarios/invitar">Invitar persona</Link>
+          </Button>
+        </div>
       </header>
 
       <Card>
@@ -231,9 +236,14 @@ export default function UsuariosPage() {
             <p className="max-w-md text-text-muted">
               Invita a tu primer usuario o ajusta los filtros si esperabas ver a alguien acá.
             </p>
-            <Button asChild>
-              <Link href="/admin/usuarios/invitar">Invitar persona</Link>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button asChild variant="secondary">
+                <Link href="/admin/usuarios/importar">Importar CSV</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/admin/usuarios/invitar">Invitar persona</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (

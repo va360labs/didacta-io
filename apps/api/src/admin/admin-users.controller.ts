@@ -41,6 +41,22 @@ const inviteSchema = z.object({
 });
 type InviteDto = z.infer<typeof inviteSchema>;
 
+/// Alta masiva desde CSV. El rol y el grupo son ÚNICOS para todo el lote (se
+/// eligen una vez en el formulario, no por fila) para no exigirle al operador
+/// que prepare un CSV con columnas de rol/grupo por persona. `rows` cap a 300:
+/// el lote corre en segundo plano igual que `send-batch` de invitaciones, pero
+/// un límite mantiene la memoria del progreso acotada.
+const bulkInviteRowSchema = z.object({
+  email: z.string().email().max(200),
+  name: z.string().max(120).optional(),
+});
+const bulkInviteSchema = z.object({
+  rows: z.array(bulkInviteRowSchema).min(1).max(300),
+  role: z.enum(TENANT_ASSIGNABLE_ROLES),
+  accessGroupId: z.string().uuid().optional(),
+});
+type BulkInviteDto = z.infer<typeof bulkInviteSchema>;
+
 /// Paginación del listado de users (alpha.74).
 /// `limit` cap a 500 — más que eso es DoS-friendly por la query de count.
 /// `page` cap a 10000 — paranoia anti-overflow del offset.
@@ -132,6 +148,36 @@ export class AdminUsersController {
       webBaseUrl,
       extractClientContext(req),
     );
+  }
+
+  @Post('bulk-invite')
+  @ApiOperation({
+    summary:
+      'Alta masiva (CSV): crea varios usuarios con el mismo rol/grupo. Responde antes de terminar; el progreso se consulta en GET bulk-invite/status.',
+  })
+  async bulkInvite(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(bulkInviteSchema)) dto: BulkInviteDto,
+  ) {
+    const u = requireAdmin(user);
+    const webBaseUrl = resolveWebBaseUrl(req);
+    return this.service.startBulkInvite(
+      u.tenantId,
+      u.sub,
+      dto.rows,
+      dto.role as AssignableRole,
+      dto.accessGroupId,
+      webBaseUrl,
+      extractClientContext(req),
+    );
+  }
+
+  @Get('bulk-invite/status')
+  @ApiOperation({ summary: 'Progreso del alta masiva en curso (o la última terminada).' })
+  async bulkInviteStatus(@CurrentUser() user: SessionClaims | undefined) {
+    const u = requireAdmin(user);
+    return this.service.estadoBulkInvite(u.tenantId);
   }
 
   @Patch(':id/status')

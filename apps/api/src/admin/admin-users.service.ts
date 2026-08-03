@@ -77,8 +77,27 @@ export interface PaginatedUsers {
   hasMore: boolean;
 }
 
+/** Progreso del alta masiva (CSV). En memoria: sobrevive a la petición, no al
+ *  reinicio del contenedor (ver doc de `AdminUsersService.bulkImports`). */
+export interface BulkInviteState {
+  enCurso: boolean;
+  total: number;
+  creados: number;
+  fallidos: Array<{ email: string; error: string }>;
+  iniciadoEn: string;
+  terminadoEn: string | null;
+}
+
 @Injectable()
 export class AdminUsersService {
+  /**
+   * Progreso del alta masiva (CSV) por tenant. En memoria a propósito, mismo
+   * criterio que `InvitationsService.envios`: es estado de una operación en
+   * vuelo, no un dato del producto. Con más de una instancia de API habría
+   * que moverlo a Redis — hoy sirve una sola.
+   */
+  private readonly bulkImports = new Map<string, BulkInviteState>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: PrismaAuditLogService,
@@ -309,6 +328,131 @@ export class AdminUsersService {
 
     const detail = await this.getDetail(tenantId, user.id);
     return detail;
+  }
+
+  /**
+   * Arranca el alta masiva del CSV y **vuelve enseguida**, sin esperar a que
+   * termine. Mismo motivo que `InvitationsService.startBatch`: cada fila hace
+   * como mínimo una escritura + un email de bienvenida, así que un CSV de un
+   * tamaño moderado ya supera los ~30 s que aguanta el proxy antes de cortar
+   * la petición. El progreso se consulta en `estadoBulkInvite()`.
+   *
+   * Rol y grupo son los mismos para TODO el lote (se eligen una vez en el
+   * formulario) — así el CSV solo necesita `email`/`name` por fila, sin pedirle
+   * al operador que resuelva ids de grupo por persona.
+   */
+  async startBulkInvite(
+    tenantId: string,
+    actorId: string,
+    rows: Array<{ email: string; name?: string }>,
+    role: AssignableRole,
+    accessGroupId: string | undefined,
+    webBaseUrl: string,
+    ctx: ClientContext = NO_CTX,
+  ): Promise<{ aceptado: boolean; yaEnCurso: boolean; total: number }> {
+    const enCurso = this.bulkImports.get(tenantId);
+    if (enCurso?.enCurso) {
+      // Mismo freno que el envío por lotes: dos a la vez podrían pisarse (dos
+      // altas del mismo email en la ventana entre el check y el create).
+      return { aceptado: false, yaEnCurso: true, total: enCurso.total };
+    }
+
+    // Dedup dentro del propio CSV (mismo email dos veces en el archivo): el
+    // segundo intento fallaría igual por conflicto, mejor no ni intentarlo.
+    const vistos = new Set<string>();
+    const filas: Array<{ email: string; name?: string }> = [];
+    for (const r of rows) {
+      const email = r.email.trim().toLowerCase();
+      if (vistos.has(email)) continue;
+      vistos.add(email);
+      filas.push({ email, name: r.name?.trim() || undefined });
+    }
+
+    const ahora = new Date().toISOString();
+    this.bulkImports.set(tenantId, {
+      enCurso: filas.length > 0,
+      total: filas.length,
+      creados: 0,
+      fallidos: [],
+      iniciadoEn: ahora,
+      terminadoEn: filas.length > 0 ? null : ahora,
+    });
+
+    if (filas.length > 0) {
+      void this.procesarBulkInviteEnSegundoPlano(
+        tenantId,
+        actorId,
+        filas,
+        role,
+        accessGroupId,
+        webBaseUrl,
+        ctx,
+      );
+    }
+    return { aceptado: true, yaEnCurso: false, total: filas.length };
+  }
+
+  /** Estado del alta masiva en curso (o la última terminada), para que el panel lo pinte. */
+  estadoBulkInvite(tenantId: string): BulkInviteState | null {
+    return this.bulkImports.get(tenantId) ?? null;
+  }
+
+  /**
+   * El bucle real. Corre desligado de la petición HTTP: NO puede lanzar
+   * (sería un unhandled rejection) y siempre termina con `enCurso: false`, o
+   * el panel se quedaría diciendo "importando…" para siempre. Cada fila usa
+   * `invite()` tal cual (misma validación de rol/grupo, mismo alta ACTIVE,
+   * mismo email de bienvenida) — un fallo en una fila (email duplicado, etc.)
+   * no corta el resto del lote.
+   */
+  private async procesarBulkInviteEnSegundoPlano(
+    tenantId: string,
+    actorId: string,
+    filas: Array<{ email: string; name?: string }>,
+    role: AssignableRole,
+    accessGroupId: string | undefined,
+    webBaseUrl: string,
+    ctx: ClientContext,
+  ): Promise<void> {
+    const estado = this.bulkImports.get(tenantId);
+
+    try {
+      for (const fila of filas) {
+        try {
+          await this.invite(
+            tenantId,
+            actorId,
+            { email: fila.email, name: fila.name, role, accessGroupId },
+            webBaseUrl,
+            ctx,
+          );
+          if (estado) estado.creados += 1;
+        } catch (err) {
+          if (estado) {
+            estado.fallidos.push({ email: fila.email, error: (err as Error).message ?? 'error' });
+          }
+        }
+      }
+    } catch (err) {
+      this.logger.error(
+        { tenantId, err: err instanceof Error ? err.message : String(err) },
+        'admin.bulk-invite: el lote se cortó por un error inesperado',
+      );
+    } finally {
+      if (estado) {
+        estado.enCurso = false;
+        estado.terminadoEn = new Date().toISOString();
+      }
+      this.logger.log(
+        {
+          tenantId,
+          actorId,
+          creados: estado?.creados ?? 0,
+          fallidos: estado?.fallidos.length ?? 0,
+        },
+        'admin.bulk-invite: lote procesado',
+      );
+    }
   }
 
   async setStatus(
