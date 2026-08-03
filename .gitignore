@@ -60,6 +60,9 @@ didacta-keys-*/
 .env.local.license
 kms-sign-input-*.b64
 apps/api/data/
+# Storage/clave autogenerada cuando se arranca el API con STORAGE_ROOT por
+# defecto desde la raíz del repo (contiene .didacta-secret-key — nunca al repo).
+/data/
 
 # Test artifacts
 apps/e2e/test-results/
