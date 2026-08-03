@@ -10,6 +10,16 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.99] — 2026-08-03
+
+#### Added
+
+- **Grupo de acceso opcional en el envío por lotes de invitaciones**
+  (`/admin/invitaciones`): además de reenviar la invitación al siguiente lote
+  de pendientes, se puede elegir un grupo de acceso para añadirlos a todos
+  (aditivo, sin quitarles los que ya tuvieran). Mismo criterio que la
+  invitación individual y el CSV de alta masiva, que ya lo tenían.
+
 ### [0.0.1-alpha.98] — 2026-08-03
 
 #### Added
