@@ -10,6 +10,43 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.93] — 2026-08-03
+
+#### Notes
+
+- **Actualización mayor del runtime del backend**: NestJS 11 y Fastify 5.
+  Sin cambios de API pública ni de configuración para el operador. Esta
+  versión incluye una **migración de base de datos** (renombrado de las
+  tablas del módulo de aula virtual) que se aplica automáticamente al
+  arrancar, como siempre.
+
+#### Changed
+
+- Backend migrado a **NestJS 11 + Fastify 5** (`@fastify/static` 10, Swagger
+  11). Se retiran dependencias sin uso (`@auth/core`, `@auth/prisma-adapter`).
+- Las tablas de `mod.zoom-live` pasan del prefijo histórico `mod_zoom_` al
+  canónico `mod_zoom_live_` (migración versionada no destructiva: RENAME de
+  tablas, índices y claves foráneas). El validador de contratos de módulos
+  (`module-doctor`) queda a **0 errores**; los módulos `mod.messaging`,
+  `mod.resources` y `mod.surveys` estrenan README técnico.
+- Endurecimiento del enforcement de RLS (fase 1): la autenticación por API
+  key, el asistente de instalación y los streams SSE establecen ahora su
+  contexto de tenant correctamente de cara al aislamiento por Row-Level
+  Security; benchmark de latencia incluido en la suite de integración.
+
+#### Fixed
+
+- La extensión de RLS ya no extrae de su transacción las operaciones que
+  forman parte de un `$transaction` propio de un servicio. En instalaciones
+  con `RLS_ENFORCEMENT=warn` (el valor por defecto) esto podía provocar
+  errores intermitentes de clave foránea al crear conversaciones de
+  mensajería.
+- La cola de despacho del outbox (BullMQ) encola de verdad: el identificador
+  de job anterior era rechazado por BullMQ y todos los eventos caían en
+  silencio al despacho síncrono. Los eventos siempre se entregaron; ahora
+  además lo hacen por la cola con reintentos y backoff, como estaba
+  diseñado.
+
 ### [0.0.1-alpha.92] — 2026-08-03
 
 #### Notes
