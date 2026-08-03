@@ -11,6 +11,7 @@ import { PrismaTenantConfigService } from '../modules/prisma-tenant-config.servi
 import { SmtpAdapterService } from '../modules/smtp-adapter.service';
 import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { runAsTenant, runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import { invitationEmailHtml } from '../common/invitation-email';
 import {
   renderBrandedEmail,
@@ -89,6 +90,25 @@ export class PasswordResetService {
     const tenant = await this.resolveTenant(args);
     if (!tenant) return null;
 
+    // RLS F2: generación del token bajo el ALS del tenant resuelto (endpoint
+    // público sin middleware con Authorization).
+    return runAsTenant(tenant.id, () => this.requestInTenant(tenant, args, ctx, opts), {
+      traceLabel: 'pwd-forgot',
+    });
+  }
+
+  private async requestInTenant(
+    tenant: { id: string; name?: string | null },
+    args: { email: string; tenantSlug?: string; resolvedTenantId?: string },
+    ctx: ClientContext,
+    opts: { allowPending?: boolean; ttlMinutes?: number },
+  ): Promise<{
+    rawToken: string;
+    userId: string;
+    userName: string | null;
+    tenantId: string;
+    tenantName: string;
+  } | null> {
     const user = await this.prisma.user.findUnique({
       where: { tenantId_email: { tenantId: tenant.id, email: args.email } },
     });
@@ -165,9 +185,14 @@ export class PasswordResetService {
     ctx: ClientContext = NO_CLIENT_CONTEXT,
   ): Promise<void> {
     const tokenHash = this.hashToken(rawToken);
-    const record = await this.prisma.passwordResetToken.findUnique({
-      where: { tokenHash },
-    });
+    // RLS F2: lookup por hash del token ANTES de conocer el tenant —
+    // sancionado (inventario del flip F3). El consumo corre bajo el tenant
+    // de la fila.
+    const record = await runSanctionedGlobalAccess(() =>
+      this.prisma.passwordResetToken.findUnique({
+        where: { tokenHash },
+      }),
+    );
 
     if (!record) {
       throw new UnauthorizedException('Token inválido o ya utilizado.');
@@ -179,6 +204,17 @@ export class PasswordResetService {
       throw new UnauthorizedException('Este enlace expiró. Pide uno nuevo.');
     }
 
+    return runAsTenant(record.tenantId, () => this.consumeToken(record, newPassword, ctx), {
+      traceLabel: 'pwd-reset',
+      userId: record.userId,
+    });
+  }
+
+  private async consumeToken(
+    record: { id: string; userId: string; tenantId: string },
+    newPassword: string,
+    ctx: ClientContext,
+  ): Promise<void> {
     const passwordHash = await this.passwords.hash(newPassword);
 
     const owner = await this.prisma.user.findUnique({
@@ -231,6 +267,26 @@ export class PasswordResetService {
     const result = await this.request(args, ctx, opts);
     if (!result) return;
 
+    // RLS F2: branding/override/SMTP del tenant bajo su ALS.
+    return runAsTenant(
+      result.tenantId,
+      () => this.sendResetEmail(result, args.email, webBaseUrl, opts),
+      { traceLabel: 'pwd-email' },
+    );
+  }
+
+  private async sendResetEmail(
+    result: {
+      rawToken: string;
+      userId: string;
+      userName: string | null;
+      tenantId: string;
+      tenantName: string;
+    },
+    toEmail: string,
+    webBaseUrl: string,
+    opts: { allowPending?: boolean; ttlMinutes?: number; asInvitation?: boolean },
+  ): Promise<void> {
     // alpha.75 — pasamos por el TenantSmtpResolverService cuando está
     // disponible. Eso permite que el reset funcione aunque el tenant aún
     // no configuró SMTP propio: si el despliegue tiene SMTP_HOST/PORT/FROM
@@ -302,7 +358,7 @@ export class PasswordResetService {
       : this.buildResetEmail(result.rawToken, result.userName, webBaseUrl, branding, override);
     const sendResult = await this.smtp.send(
       config,
-      { to: args.email, subject, text, html },
+      { to: toEmail, subject, text, html },
       branding.tenantName,
     );
 
@@ -378,16 +434,19 @@ export class PasswordResetService {
       if (t && t.status === 'ACTIVE') return t;
       return null;
     }
-    const matches = await this.prisma.user.findMany({
-      where: {
-        email: args.email,
-        deletedAt: null,
-        status: 'ACTIVE',
-        tenant: { status: 'ACTIVE' },
-      },
-      include: { tenant: true },
-      take: 2,
-    });
+    // Lookup cross-tenant DELIBERADO (aún no sabemos el tenant): sancionado.
+    const matches = await runSanctionedGlobalAccess(() =>
+      this.prisma.user.findMany({
+        where: {
+          email: args.email,
+          deletedAt: null,
+          status: 'ACTIVE',
+          tenant: { status: 'ACTIVE' },
+        },
+        include: { tenant: true },
+        take: 2,
+      }),
+    );
     if (matches.length === 1) return matches[0]!.tenant;
     return null;
   }

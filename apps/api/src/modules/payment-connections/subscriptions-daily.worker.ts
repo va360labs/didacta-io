@@ -14,6 +14,7 @@ import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import type { SubscriberToWarn, UpcomingRenewal } from '@didacta/mod-payment-connections';
+import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from '../module-registry.service';
 import { SmtpAdapterService, type SmtpConfig } from '../smtp-adapter.service';
 import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
@@ -123,24 +124,31 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
 
   private async processJob(): Promise<void> {
     const service = this.registry.getPaymentConnectionsService();
-    const tenants = await service.listTenantsWithVerifiedConnections();
+    // Barrido cross-tenant de conexiones VERIFIED (inventario RLS F3).
+    const tenants = await runSanctionedGlobalAccess(() =>
+      service.listTenantsWithVerifiedConnections(),
+    );
     for (const tenantId of tenants) {
       try {
-        const resolved = await this.smtpResolver.resolve(tenantId);
-        if (!resolved) {
-          this.logger.log({ tenantId }, 'subscriptions daily: tenant sin SMTP, salto');
-          continue;
-        }
-        const branding = await resolveEmailBranding(
-          this.prisma as unknown as BrandingPrisma,
-          tenantId,
-          process.env['WEB_PUBLIC_URL']?.trim() ?? '',
-        );
-        await this.sendAdminDigest(service, resolved.config, tenantId, branding);
-        await this.sendMemberWarnings(service, resolved.config, tenantId, branding);
-        // Los accesos con vigencia no los cubre el aviso de renovación: viven
-        // en otra tabla y nadie más va a avisar de ellos.
-        await this.sendTimedAccessWarnings(resolved.config, tenantId, branding);
+        // Todo el procesado del tenant (SMTP, branding, overrides, digest,
+        // avisos y marks) corre bajo su contexto (scope RLS).
+        await runAsTenant(tenantId, async () => {
+          const resolved = await this.smtpResolver.resolve(tenantId);
+          if (!resolved) {
+            this.logger.log({ tenantId }, 'subscriptions daily: tenant sin SMTP, salto');
+            return;
+          }
+          const branding = await resolveEmailBranding(
+            this.prisma as unknown as BrandingPrisma,
+            tenantId,
+            process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+          );
+          await this.sendAdminDigest(service, resolved.config, tenantId, branding);
+          await this.sendMemberWarnings(service, resolved.config, tenantId, branding);
+          // Los accesos con vigencia no los cubre el aviso de renovación: viven
+          // en otra tabla y nadie más va a avisar de ellos.
+          await this.sendTimedAccessWarnings(resolved.config, tenantId, branding);
+        });
       } catch (err) {
         this.logger.error(
           { tenantId, err: err instanceof Error ? err.message : String(err) },

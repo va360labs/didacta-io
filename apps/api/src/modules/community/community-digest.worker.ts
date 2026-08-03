@@ -14,6 +14,7 @@ import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { CommunityDigestMetrics } from './community-digest.metrics';
+import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleContextFactory } from '../module-context.factory';
 import { ModuleRegistryService } from '../module-registry.service';
 
@@ -138,48 +139,52 @@ export class CommunityDigestWorker implements OnApplicationBootstrap, OnModuleDe
     const ctx = this.factory.build();
 
     const stopTimer = this.metrics.startRunTimer();
-    const users = await community.listActiveUsersForDigest();
+    // Barrido cross-tenant de usuarios activos (inventario RLS F3).
+    const users = await runSanctionedGlobalAccess(() => community.listActiveUsersForDigest());
     let sent = 0;
     let skipped = 0;
     let failed = 0;
 
     for (const u of users) {
       this.metrics.recordUserProcessed();
-      const digest = await community.buildDigest(u.tenantId, u.userId, since);
-      if (digest.mentions.length === 0 && digest.replies.length === 0) {
-        skipped++;
-        this.metrics.recordSkipped();
-        continue;
-      }
-      try {
-        await ctx.notificationHub.send({
-          tenantId: u.tenantId,
-          channel: 'email',
-          templateKey: 'community.digest.weekly',
-          locale: 'es-ES',
-          to: u.userId,
-          variables: {
-            mentionsCount: digest.mentions.length,
-            repliesCount: digest.replies.length,
-            mentions: digest.mentions,
-            replies: digest.replies,
-            sinceIso: since.toISOString(),
-          },
-        });
-        sent++;
-        this.metrics.recordSent();
-      } catch (err) {
-        failed++;
-        this.metrics.recordFailed();
-        this.logger.warn(
-          {
+      // Digest y envío por usuario bajo su tenant (scope RLS).
+      await runAsTenant(u.tenantId, async () => {
+        const digest = await community.buildDigest(u.tenantId, u.userId, since);
+        if (digest.mentions.length === 0 && digest.replies.length === 0) {
+          skipped++;
+          this.metrics.recordSkipped();
+          return;
+        }
+        try {
+          await ctx.notificationHub.send({
             tenantId: u.tenantId,
-            userId: u.userId,
-            err: err instanceof Error ? err.message : String(err),
-          },
-          'community digest: notify failed',
-        );
-      }
+            channel: 'email',
+            templateKey: 'community.digest.weekly',
+            locale: 'es-ES',
+            to: u.userId,
+            variables: {
+              mentionsCount: digest.mentions.length,
+              repliesCount: digest.replies.length,
+              mentions: digest.mentions,
+              replies: digest.replies,
+              sinceIso: since.toISOString(),
+            },
+          });
+          sent++;
+          this.metrics.recordSent();
+        } catch (err) {
+          failed++;
+          this.metrics.recordFailed();
+          this.logger.warn(
+            {
+              tenantId: u.tenantId,
+              userId: u.userId,
+              err: err instanceof Error ? err.message : String(err),
+            },
+            'community digest: notify failed',
+          );
+        }
+      });
     }
 
     const elapsedSec = stopTimer();

@@ -9,8 +9,8 @@ import {
   buildTenantScopedModelSet,
   createRlsEnforcementExtension,
   isInsidePrismaTransaction,
-  markPrismaTransactionScope,
   resolveRlsEnforcementMode,
+  runCallerTransaction,
 } from './rls-enforcement.extension';
 import { RlsGapTelemetry } from './rls-gap-telemetry';
 import { PrismaService } from './prisma.service';
@@ -51,6 +51,9 @@ import { PrismaService } from './prisma.service';
         // $transaction del caller marcado con el scope: los hooks de sus
         // operaciones (lazy, ejecutan DENTRO de la llamada) ven la marca y no
         // envuelven — envolver las sacaría de la transacción (ver extensión).
+        // F2 (@tx): runCallerTransaction además inyecta el set_config del
+        // tenant DENTRO de la transacción del caller cuando hay contexto sin
+        // gucApplied (las ~17 firmas @tx del request path).
         return new Proxy(extended, {
           get(target, prop) {
             if (prop === '$transaction') {
@@ -58,7 +61,17 @@ import { PrismaService } from './prisma.service';
                 ...args: unknown[]
               ) => Promise<unknown>;
               return (...args: unknown[]) =>
-                markPrismaTransactionScope(() => original.apply(target, args));
+                runCallerTransaction({
+                  original: (...a: unknown[]) => original.apply(target, a),
+                  args,
+                  ctx: tenantContextStorage.getStore(),
+                  makeSetConfig: (tenantId) =>
+                    extended.$queryRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`,
+                  runWithGucApplied: (fn) => {
+                    const ctx = tenantContextStorage.getStore();
+                    return ctx ? tenantContextStorage.run({ ...ctx, gucApplied: true }, fn) : fn();
+                  },
+                });
             }
             const value: unknown = Reflect.get(target, prop, target);
             return typeof value === 'function'

@@ -13,6 +13,7 @@ import {
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleContextFactory } from '../module-context.factory';
 import { ModuleRegistryService } from '../module-registry.service';
 import { signUnsubscribeToken } from './broadcast-unsubscribe';
@@ -120,9 +121,9 @@ export class CommunityBroadcastWorker implements OnApplicationBootstrap, OnModul
   private async processBatch(broadcastId: string): Promise<boolean> {
     const community = this.registry.getCommunityService();
     const ctx = this.factory.build();
-    const { broadcast, recipients, done } = await community.claimBroadcastBatch(
-      broadcastId,
-      BATCH_SIZE,
+    // Lookup por broadcastId sin tenant aún: acceso global sancionado (RLS F3).
+    const { broadcast, recipients, done } = await runSanctionedGlobalAccess(() =>
+      community.claimBroadcastBatch(broadcastId, BATCH_SIZE),
     );
     if (done || !broadcast) return true;
 
@@ -133,49 +134,56 @@ export class CommunityBroadcastWorker implements OnApplicationBootstrap, OnModul
     let skipped = 0;
     let lastUserId = broadcast.cursorUserId ?? '';
 
-    for (const r of recipients) {
-      lastUserId = r.userId;
-      if (r.optedOut && !broadcast.important) {
-        skipped++;
-        continue;
+    // Envíos y commit del cursor bajo el tenant del aviso (scope RLS).
+    await runAsTenant(broadcast.tenantId, async () => {
+      for (const r of recipients) {
+        lastUserId = r.userId;
+        if (r.optedOut && !broadcast.important) {
+          skipped++;
+          continue;
+        }
+        const unsubUrl = `${webBase}/api/v1/modules/community/unsubscribe?token=${signUnsubscribeToken(
+          broadcast.tenantId,
+          r.userId,
+        )}`;
+        const emailBody =
+          broadcast.bodyText +
+          postLine +
+          `\n\n———\nRecibes este aviso como miembro de la comunidad. ` +
+          `Para dejar de recibir avisos, entra aquí: ${unsubUrl}`;
+        try {
+          await ctx.notificationHub.send({
+            tenantId: broadcast.tenantId,
+            channel: 'email',
+            templateKey: 'community.broadcast',
+            locale: 'es-ES',
+            to: r.userId,
+            variables: { subject: broadcast.subject, body: emailBody },
+          });
+          await ctx.notificationHub.send({
+            tenantId: broadcast.tenantId,
+            channel: 'in-app',
+            templateKey: 'community.broadcast',
+            locale: 'es-ES',
+            to: r.userId,
+            variables: { subject: broadcast.subject, body: broadcast.bodyText + postLine },
+          });
+          sent++;
+        } catch (err) {
+          failed++;
+          this.logger.warn(
+            {
+              broadcastId,
+              userId: r.userId,
+              err: err instanceof Error ? err.message : String(err),
+            },
+            'broadcast: envío falló',
+          );
+        }
       }
-      const unsubUrl = `${webBase}/api/v1/modules/community/unsubscribe?token=${signUnsubscribeToken(
-        broadcast.tenantId,
-        r.userId,
-      )}`;
-      const emailBody =
-        broadcast.bodyText +
-        postLine +
-        `\n\n———\nRecibes este aviso como miembro de la comunidad. ` +
-        `Para dejar de recibir avisos, entra aquí: ${unsubUrl}`;
-      try {
-        await ctx.notificationHub.send({
-          tenantId: broadcast.tenantId,
-          channel: 'email',
-          templateKey: 'community.broadcast',
-          locale: 'es-ES',
-          to: r.userId,
-          variables: { subject: broadcast.subject, body: emailBody },
-        });
-        await ctx.notificationHub.send({
-          tenantId: broadcast.tenantId,
-          channel: 'in-app',
-          templateKey: 'community.broadcast',
-          locale: 'es-ES',
-          to: r.userId,
-          variables: { subject: broadcast.subject, body: broadcast.bodyText + postLine },
-        });
-        sent++;
-      } catch (err) {
-        failed++;
-        this.logger.warn(
-          { broadcastId, userId: r.userId, err: err instanceof Error ? err.message : String(err) },
-          'broadcast: envío falló',
-        );
-      }
-    }
 
-    await community.commitBroadcastBatch(broadcastId, { sent, failed, skipped, lastUserId });
+      await community.commitBroadcastBatch(broadcastId, { sent, failed, skipped, lastUserId });
+    });
 
     if (this.queue) {
       // Siguiente lote con delay = rate-limit.

@@ -7,6 +7,7 @@ import { Controller, Get, NotFoundException, Param } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../auth/decorators';
 import { PrismaService } from '../../prisma/prisma.service';
+import { runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
@@ -34,10 +35,16 @@ export class PublicCertificatesController {
   @ApiResponse({ status: 404, description: 'Certificado no encontrado.' })
   async verify(@Param('id') id: string) {
     if (!UUID_RE.test(id)) throw new NotFoundException('Certificado no encontrado.');
-    const cert = await this.prisma.modCertificatesIssued.findUnique({
-      where: { id },
-      select: { number: true, snapshot: true, issuedAt: true, revokedAt: true },
-    });
+    // Lookup cross-tenant DELIBERADO (decisión de diseño): la URL de
+    // verificación es compartible sin contexto de tenant (LinkedIn la referencia
+    // como certUrl) y la credencial es el propio UUID. Inventario F3: post-flip
+    // debe seguir funcionando vía `didacta_super` (o una policy explícita).
+    const cert = await runSanctionedGlobalAccess(() =>
+      this.prisma.modCertificatesIssued.findUnique({
+        where: { id },
+        select: { number: true, snapshot: true, issuedAt: true, revokedAt: true },
+      }),
+    );
     if (!cert) throw new NotFoundException('Certificado no encontrado.');
 
     const snap = (cert.snapshot ?? {}) as {

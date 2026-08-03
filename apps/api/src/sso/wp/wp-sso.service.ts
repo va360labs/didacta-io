@@ -7,6 +7,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { verifyWpSsoToken, WpSsoTokenError } from '@didacta/mod-wp-sso';
 import IORedis, { type Redis } from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service';
+import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { PrismaAuditLogService } from '../../modules/prisma-audit-log.service';
 import { TokenService } from '../../auth/token.service';
 import { WpSsoConfigService } from './wp-sso-config.service';
@@ -64,6 +65,28 @@ export class WpSsoService {
     // configurado/habilitado para este tenant.
     const { tenant, config } = await this.config.resolveTenantConfig(tenantSlug);
 
+    // RLS F2: el intercambio entero (identidades, provisión, sesión, audit)
+    // corre bajo el ALS del tenant resuelto por slug — endpoint público.
+    return runAsTenant(tenant.id, () => this.exchangeInTenant(tenant, config, token), {
+      traceLabel: 'wp-sso',
+    });
+  }
+
+  private async exchangeInTenant(
+    tenant: { id: string; slug: string },
+    config: Awaited<ReturnType<WpSsoConfigService['resolveTenantConfig']>>['config'],
+    token: string,
+  ): Promise<{
+    tokens: { accessToken: string; refreshToken: string };
+    user: {
+      id: string;
+      email: string;
+      name: string | null;
+      tenantId: string;
+      tenantSlug: string;
+      roles: string[];
+    };
+  }> {
     const claims = await verifyWpSsoToken(token, {
       sharedSecret: config.sharedSecret,
       expectedIssuer: config.issuer || undefined,
@@ -238,7 +261,7 @@ export class WpSsoService {
         email: user.email,
         name: user.name,
         tenantId: tenant.id,
-        tenantSlug,
+        tenantSlug: tenant.slug,
         roles,
       },
     };

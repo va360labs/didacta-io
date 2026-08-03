@@ -7,6 +7,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req } from '@nestjs/
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { resolveWebBaseUrl } from '../common/resolve-web-base-url';
+import { runAsTenant } from '../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 import { AuthService } from './auth.service';
 import { extractClientContext } from './client-context';
@@ -61,10 +62,16 @@ export class AuthController {
     if (!tenant) return { tenant: null, host: hostStr ?? null };
     // Logo del tenant (mod.theming) para que las páginas anónimas (signin,
     // registro) muestren la marca del tenant en vez de "Didacta".
-    const [logoUrl, branding] = await Promise.all([
-      this.passwordReset.resolveTenantLogoUrl(tenant.id, resolveWebBaseUrl(req)),
-      this.signinContext.get(tenant.id),
-    ]);
+    // RLS F2: endpoint público — las lecturas van bajo el ALS del tenant.
+    const [logoUrl, branding] = await runAsTenant(
+      tenant.id,
+      () =>
+        Promise.all([
+          this.passwordReset.resolveTenantLogoUrl(tenant.id, resolveWebBaseUrl(req)),
+          this.signinContext.get(tenant.id),
+        ]),
+      { traceLabel: 'tenant-context' },
+    );
     return {
       tenant: {
         id: tenant.id,

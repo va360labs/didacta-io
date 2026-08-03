@@ -14,6 +14,7 @@ import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
+import { runAsTenant, runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import { ModuleContextFactory } from './module-context.factory';
 
 const QUEUE_NAME = 'didacta.learning.lesson-unlock';
@@ -104,71 +105,82 @@ export class LessonUnlockNotifierWorker implements OnApplicationBootstrap, OnMod
 
   private async processDueUnlocks(): Promise<{ sent: number; failed: number }> {
     const now = new Date();
-    const pending = await this.prisma.modLearningLessonUnlockSub.findMany({
-      where: { notifiedAt: null },
-      select: { id: true, tenantId: true, lessonId: true, userId: true },
-      take: 500,
-    });
-    if (pending.length === 0) return { sent: 0, failed: 0 };
+    // Barrido cross-tenant (inventario RLS F3): suscripciones pendientes de
+    // todos los tenants + sus lecciones/módulos/cursos, de una pasada.
+    const sweep = await runSanctionedGlobalAccess(async () => {
+      const pending = await this.prisma.modLearningLessonUnlockSub.findMany({
+        where: { notifiedAt: null },
+        select: { id: true, tenantId: true, lessonId: true, userId: true },
+        take: 500,
+      });
+      if (pending.length === 0) return null;
 
-    // Lecciones ya publicadas (publishAt <= now) de entre las suscritas.
-    const lessonIds = [...new Set(pending.map((s) => s.lessonId))];
-    const lessons = await this.prisma.modCoursesLesson.findMany({
-      where: { id: { in: lessonIds }, deletedAt: null, publishAt: { not: null, lte: now } },
-      select: { id: true, title: true, moduleId: true },
-    });
-    if (lessons.length === 0) return { sent: 0, failed: 0 };
-    const lessonById = new Map(lessons.map((l) => [l.id, l]));
+      // Lecciones ya publicadas (publishAt <= now) de entre las suscritas.
+      const lessonIds = [...new Set(pending.map((s) => s.lessonId))];
+      const lessons = await this.prisma.modCoursesLesson.findMany({
+        where: { id: { in: lessonIds }, deletedAt: null, publishAt: { not: null, lte: now } },
+        select: { id: true, title: true, moduleId: true },
+      });
+      if (lessons.length === 0) return null;
 
-    // Título del curso de cada lección (módulo → curso).
-    const moduleIds = [...new Set(lessons.map((l) => l.moduleId))];
-    const mods = await this.prisma.modCoursesModule.findMany({
-      where: { id: { in: moduleIds } },
-      select: { id: true, courseId: true },
+      // Título del curso de cada lección (módulo → curso).
+      const moduleIds = [...new Set(lessons.map((l) => l.moduleId))];
+      const mods = await this.prisma.modCoursesModule.findMany({
+        where: { id: { in: moduleIds } },
+        select: { id: true, courseId: true },
+      });
+      const courses = await this.prisma.modCoursesCourse.findMany({
+        where: { id: { in: [...new Set(mods.map((m) => m.courseId))] } },
+        select: { id: true, title: true },
+      });
+      return { pending, lessons, mods, courses };
     });
-    const courseIdByModule = new Map(mods.map((m) => [m.id, m.courseId]));
-    const courses = await this.prisma.modCoursesCourse.findMany({
-      where: { id: { in: [...new Set(mods.map((m) => m.courseId))] } },
-      select: { id: true, title: true },
-    });
-    const courseTitleById = new Map(courses.map((c) => [c.id, c.title]));
+    if (!sweep) return { sent: 0, failed: 0 };
+
+    const lessonById = new Map(sweep.lessons.map((l) => [l.id, l]));
+    const courseIdByModule = new Map(sweep.mods.map((m) => [m.id, m.courseId]));
+    const courseTitleById = new Map(sweep.courses.map((c) => [c.id, c.title]));
 
     const hub = this.factory.build().notificationHub;
     let sent = 0;
     let failed = 0;
 
-    for (const sub of pending) {
+    for (const sub of sweep.pending) {
       const lesson = lessonById.get(sub.lessonId);
       if (!lesson) continue; // su lección aún no está publicada
       const courseId = courseIdByModule.get(lesson.moduleId);
       const courseTitle = (courseId && courseTitleById.get(courseId)) || 'tu curso';
       const variables = { lessonTitle: lesson.title, courseTitle };
       try {
-        // In-app garantizado.
-        await hub.send({
-          tenantId: sub.tenantId,
-          channel: 'in-app',
-          templateKey: 'lesson.unlocked',
-          locale: 'es-ES',
-          to: sub.userId,
-          variables,
-        });
-        // Email best-effort (si el tenant tiene SMTP). No bloquea el marcado.
-        try {
+        // Procesado por fila bajo el tenant de la suscripción: la extensión
+        // RLS escopa los envíos y el marcado de notifiedAt.
+        await runAsTenant(sub.tenantId, async () => {
+          // In-app garantizado.
           await hub.send({
             tenantId: sub.tenantId,
-            channel: 'email',
+            channel: 'in-app',
             templateKey: 'lesson.unlocked',
             locale: 'es-ES',
             to: sub.userId,
             variables,
           });
-        } catch {
-          /* sin SMTP o fallo de email: el in-app ya avisó */
-        }
-        await this.prisma.modLearningLessonUnlockSub.update({
-          where: { id: sub.id },
-          data: { notifiedAt: new Date() },
+          // Email best-effort (si el tenant tiene SMTP). No bloquea el marcado.
+          try {
+            await hub.send({
+              tenantId: sub.tenantId,
+              channel: 'email',
+              templateKey: 'lesson.unlocked',
+              locale: 'es-ES',
+              to: sub.userId,
+              variables,
+            });
+          } catch {
+            /* sin SMTP o fallo de email: el in-app ya avisó */
+          }
+          await this.prisma.modLearningLessonUnlockSub.update({
+            where: { id: sub.id },
+            data: { notifiedAt: new Date() },
+          });
         });
         sent++;
       } catch (err) {

@@ -13,6 +13,7 @@ import {
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from '../module-registry.service';
 
 const QUEUE_NAME = 'didacta.zoom-live.attendance-sync';
@@ -102,14 +103,20 @@ export class ZoomAttendanceSyncWorker implements OnApplicationBootstrap, OnModul
 
   private async syncDueSessions(): Promise<{ synced: number; failed: number }> {
     const service = this.registry.getZoomLiveService();
-    const pending = await service.listSessionsPendingAttendanceSync(new Date());
+    // Barrido cross-tenant de sesiones pendientes (inventario RLS F3).
+    const pending = await runSanctionedGlobalAccess(() =>
+      service.listSessionsPendingAttendanceSync(new Date()),
+    );
     if (pending.length === 0) return { synced: 0, failed: 0 };
 
     let synced = 0;
     let failed = 0;
     for (const session of pending) {
       try {
-        const report = await service.syncAttendance(session.tenantId, session.id);
+        // Reconciliación por sesión bajo su tenant (scope RLS).
+        const report = await runAsTenant(session.tenantId, () =>
+          service.syncAttendance(session.tenantId, session.id),
+        );
         // `syncAttendance` no lanza cuando Zoom falla: deja el motivo en
         // `syncError` y no marca `syncedAt`. Distinguimos por ahí.
         if (report.syncedAt) synced++;

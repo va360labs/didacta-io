@@ -5,6 +5,7 @@ import {
   isInsidePrismaTransaction,
   markPrismaTransactionScope,
   resolveRlsEnforcementMode,
+  runCallerTransaction,
   type RlsEnforcementOptions,
 } from '../src/prisma/rls-enforcement.extension';
 import { RlsGapTelemetry } from '../src/prisma/rls-gap-telemetry';
@@ -155,6 +156,100 @@ describe('createRlsEnforcementExtension', () => {
     // Fuera del scope, la misma operación SÍ se envuelve.
     await hook({ model: 'User', operation: 'create', args: {}, query });
     expect(fakeClient.$transaction).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('runCallerTransaction (inyección del GUC en $transaction del caller — F2 @tx)', () => {
+  const SET_CFG = { __setConfig: true };
+  const makeSetConfig = () => SET_CFG;
+  // runWithGucApplied real-ish: marca que el scope se abrió.
+  function makeRunner() {
+    let opened = false;
+    const runWithGucApplied = async <T>(fn: () => Promise<T>): Promise<T> => {
+      opened = true;
+      return fn();
+    };
+    return { runWithGucApplied, wasOpened: () => opened };
+  }
+
+  it('forma batch con contexto sin gucApplied: antepone el set_config y descarta su resultado', async () => {
+    const { runWithGucApplied, wasOpened } = makeRunner();
+    const original = vi.fn(async (members: unknown[]) =>
+      members.map((_, i) => (i === 0 ? 'setcfg' : `row-${i}`)),
+    );
+    const out = await runCallerTransaction({
+      original,
+      args: [['op-a', 'op-b']],
+      ctx: { tenantId: 't-1' },
+      makeSetConfig,
+      runWithGucApplied,
+    });
+    // El caller recibe solo SUS resultados (el miembro inyectado se recorta).
+    expect(out).toEqual(['row-1', 'row-2']);
+    const passed = original.mock.calls[0]![0] as unknown[];
+    expect(passed[0]).toBe(SET_CFG);
+    expect(passed.slice(1)).toEqual(['op-a', 'op-b']);
+    expect(wasOpened()).toBe(true);
+  });
+
+  it('forma interactiva con contexto sin gucApplied: setea el GUC como primera op del callback', async () => {
+    const { runWithGucApplied } = makeRunner();
+    const queryRawCalls: unknown[][] = [];
+    const tx = {
+      $queryRaw: (...a: unknown[]) => {
+        queryRawCalls.push(a);
+        return Promise.resolve();
+      },
+    };
+    const original = vi.fn(async (cb: (t: typeof tx) => Promise<unknown>) => cb(tx));
+    const userCallback = vi.fn(async () => 'result');
+    const out = await runCallerTransaction({
+      original,
+      args: [userCallback],
+      ctx: { tenantId: 't-9' },
+      makeSetConfig,
+      runWithGucApplied,
+    });
+    expect(out).toBe('result');
+    // El set_config corrió ANTES del callback del usuario.
+    expect(queryRawCalls).toHaveLength(1);
+    expect(userCallback).toHaveBeenCalledWith(tx);
+  });
+
+  it('con gucApplied: no inyecta nada, solo marca el scope de transacción', async () => {
+    const { runWithGucApplied, wasOpened } = makeRunner();
+    const original = vi.fn(async () => 'passthrough');
+    const inTxDuringCall = { seen: false };
+    const out = await runCallerTransaction({
+      original: async (...a: unknown[]) => {
+        inTxDuringCall.seen = isInsidePrismaTransaction();
+        return original(...a);
+      },
+      args: [() => Promise.resolve()],
+      ctx: { tenantId: 't-1', gucApplied: true },
+      makeSetConfig,
+      runWithGucApplied,
+    });
+    expect(out).toBe('passthrough');
+    // gucApplied ⇒ no se abre el scope de tenant, pero SÍ el marker de tx.
+    expect(wasOpened()).toBe(false);
+    expect(inTxDuringCall.seen).toBe(true);
+  });
+
+  it('sin contexto de tenant: passthrough con solo el marker de transacción', async () => {
+    const { runWithGucApplied, wasOpened } = makeRunner();
+    const original = vi.fn(async () => 'no-ctx');
+    const out = await runCallerTransaction({
+      original,
+      args: [['op']],
+      ctx: undefined,
+      makeSetConfig,
+      runWithGucApplied,
+    });
+    expect(out).toBe('no-ctx');
+    expect(wasOpened()).toBe(false);
+    // No se inyectó el set_config: el caller recibe sus args tal cual.
+    expect(original.mock.calls[0]![0]).toEqual(['op']);
   });
 });
 

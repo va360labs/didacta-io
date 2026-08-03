@@ -6,6 +6,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { WpSsoTokenError } from '@didacta/mod-wp-sso';
 import { PrismaService } from '../../prisma/prisma.service';
+import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { PrismaAuditLogService } from '../../modules/prisma-audit-log.service';
 import { PrismaTenantConfigService } from '../../modules/prisma-tenant-config.service';
 import { resolveWebBaseUrlForAuthRedirect } from '../../common/resolve-web-base-url';
@@ -169,7 +170,10 @@ export class WpSsoConfigService {
     if (!tenantSlug) return off;
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant || tenant.status !== 'ACTIVE') return off;
-    const config = await this.getConfig(tenant.id);
+    // RLS F2: endpoint público — la config del tenant se lee bajo su ALS.
+    const config = await runAsTenant(tenant.id, () => this.getConfig(tenant.id), {
+      traceLabel: 'wp-sso-status',
+    });
     if (!config || !config.enabled || !config.sharedSecret) return off;
     return {
       configured: true,
@@ -189,7 +193,10 @@ export class WpSsoConfigService {
     if (!tenant) {
       throw new WpSsoTokenError('not_configured', `El tenant "${tenantSlug}" no existe.`);
     }
-    const config = await this.getConfig(tenant.id);
+    // RLS F2: idem getPublicStatus — lectura de config bajo el ALS del tenant.
+    const config = await runAsTenant(tenant.id, () => this.getConfig(tenant.id), {
+      traceLabel: 'wp-sso-config',
+    });
     if (!config || !config.enabled || !config.sharedSecret) {
       throw new WpSsoTokenError(
         'not_configured',

@@ -25,6 +25,7 @@ import {
 import { Public } from '../../auth/decorators';
 import { createHmac } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from '../module-registry.service';
 
 /**
@@ -95,8 +96,28 @@ export class WooWebhookController {
     });
     if (!tenant) throw new BadRequestException('Tenant desconocido.');
 
+    // RLS F2: con el tenant resuelto por slug, todo lo demás (secreto,
+    // ruleset, conexión, espejo del pedido) corre bajo su ALS.
+    return runAsTenant(
+      tenant.id,
+      () => this.handleForTenant(tenant.id, { tenantSlug, signature, topic, rawBuffer, rawBody }),
+      { traceLabel: 'woo-webhook' },
+    );
+  }
+
+  private async handleForTenant(
+    tenantId: string,
+    args: {
+      tenantSlug: string;
+      signature: string | undefined;
+      topic: string | undefined;
+      rawBuffer: Buffer;
+      rawBody: string;
+    },
+  ) {
+    const { tenantSlug, signature, topic, rawBuffer, rawBody } = args;
     const pc = this.registry.getPaymentConnectionsService();
-    const secret = await pc.getWooWebhookSecret(tenant.id);
+    const secret = await pc.getWooWebhookSecret(tenantId);
     if (!secret) {
       // Sin secreto configurado no se puede verificar nada. Rechazar es la
       // única opción segura: aceptar dejaría el endpoint abierto.
@@ -146,12 +167,12 @@ export class WooWebhookController {
       return { ok: true, skipped: 'sin-email' };
     }
 
-    const ruleset = await pc.loadEntitlementRuleset(tenant.id);
-    const connectionId = await pc.findVerifiedWooConnectionId(tenant.id);
+    const ruleset = await pc.loadEntitlementRuleset(tenantId);
+    const connectionId = await pc.findVerifiedWooConnectionId(tenantId);
 
     const res = await this.registry
       .getOrderMirrorService()
-      .mirrorSingleOrder(tenant.id, connectionId, order, { ...(ruleset ? { ruleset } : {}) });
+      .mirrorSingleOrder(tenantId, connectionId, order, { ...(ruleset ? { ruleset } : {}) });
 
     this.logger.log(
       {

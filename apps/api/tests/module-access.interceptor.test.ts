@@ -32,22 +32,29 @@ function setup(
     }),
   } as never;
 
+  // Desde el fix RLS F2 el interceptor hace DOS queries top-level (Module +
+  // TenantModule) en vez del include anidado que la extensión RLS no veía.
   const findUnique = vi.fn(async ({ where }: any) => {
     const r = rows.find((row) => row.name === where.name);
     if (!r) return null;
-    return {
-      name: r.name,
-      enabledByDefault: r.enabledByDefault,
-      tenantModules:
-        r.tenantEnabled !== undefined ? [{ tenantId: 't1', enabled: r.tenantEnabled }] : [],
-    };
+    return { id: `id-${r.name}`, enabledByDefault: r.enabledByDefault };
   });
 
-  const prisma = { module: { findUnique } } as never;
+  const tenantModuleFindUnique = vi.fn(async ({ where }: any) => {
+    const key = where.tenantId_moduleId as { tenantId: string; moduleId: string };
+    const r = rows.find((row) => `id-${row.name}` === key.moduleId);
+    if (!r || r.tenantEnabled === undefined) return null;
+    return { tenantId: key.tenantId, moduleId: key.moduleId, enabled: r.tenantEnabled };
+  });
+
+  const prisma = {
+    module: { findUnique },
+    tenantModule: { findUnique: tenantModuleFindUnique },
+  } as never;
   const interceptor = new ModuleAccessInterceptor(registry, prisma);
   const next = { handle: () => of('ok') };
 
-  return { interceptor, next, findUnique };
+  return { interceptor, next, findUnique, tenantModuleFindUnique };
 }
 
 describe('ModuleAccessInterceptor', () => {

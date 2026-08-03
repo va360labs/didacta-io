@@ -13,6 +13,7 @@ import {
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from '../module-registry.service';
 
 const QUEUE_NAME = 'didacta.subscriptions.grace-expiration';
@@ -149,7 +150,10 @@ export class SubscriptionsGraceExpirationWorker implements OnApplicationBootstra
 
     const startedAt = Date.now();
     try {
-      const expired = await service.expireGracePeriods();
+      // expireGracePeriods() vive en modules/subscriptions/src (no puede
+      // importar helpers del API): sancionamos la llamada en bloque. El flip
+      // F3 exigirá partir el service en sweep global + procesado por tenant.
+      const expired = await runSanctionedGlobalAccess(() => service.expireGracePeriods());
       const elapsedMs = Date.now() - startedAt;
       this.logger.log(
         { count: expired.length, elapsedMs },

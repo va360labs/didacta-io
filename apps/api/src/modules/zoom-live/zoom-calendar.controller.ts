@@ -13,6 +13,7 @@ import {
 } from '@didacta/mod-zoom-live';
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from '../module-registry.service';
 import { classUrl } from './class-links';
 
@@ -75,7 +76,13 @@ export class ZoomCalendarController {
   /** Carga la sesión y la traduce al evento, o 404 si no procede. */
   private async resolve(id: string): Promise<CalendarEventInput> {
     if (!uuidSchema.safeParse(id).success) throw new NotFoundException('Clase no encontrada.');
-    const info = await this.registry.getZoomLiveService().getCalendarInfo(id);
+    // Lookup cross-tenant DELIBERADO por UUID compartible (ADR-017): el id es la
+    // credencial y el service resuelve internamente sesión + nombre del tenant,
+    // sin más queries después (los builders de ICS/URL son puros). Inventario
+    // F3: post-flip esta resolución irá vía `didacta_super`.
+    const info = await runSanctionedGlobalAccess(() =>
+      this.registry.getZoomLiveService().getCalendarInfo(id),
+    );
     if (!info || info.status === 'CANCELLED') {
       throw new NotFoundException('Clase no encontrada.');
     }

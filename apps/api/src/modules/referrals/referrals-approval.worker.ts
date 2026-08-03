@@ -13,6 +13,7 @@ import {
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from '../module-registry.service';
 
 const QUEUE_NAME = 'didacta.referrals.approval';
@@ -97,7 +98,12 @@ export class ReferralsApprovalWorker implements OnApplicationBootstrap, OnModule
   private async processJob(): Promise<void> {
     const startedAt = Date.now();
     try {
-      const approved = await this.registry.getReferralsService().approveDueCommissions();
+      // approveDueCommissions() vive en modules/referrals/src (no puede
+      // importar helpers del API): sancionamos la llamada en bloque. El flip
+      // F3 exigirá partir el service en sweep global + procesado por tenant.
+      const approved = await runSanctionedGlobalAccess(() =>
+        this.registry.getReferralsService().approveDueCommissions(),
+      );
       this.logger.log(
         { approved, elapsedMs: Date.now() - startedAt },
         'referrals approval job completado',

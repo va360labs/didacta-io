@@ -4,6 +4,7 @@
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomUUID } from 'node:crypto';
 
 export interface TenantContext {
   tenantId: string;
@@ -50,4 +51,31 @@ export async function runSanctionedGlobalAccess<T>(fn: () => Promise<T> | T): Pr
 /** ¿La operación actual corre bajo runSanctionedGlobalAccess()? */
 export function isSanctionedGlobalAccess(): boolean {
   return sanctionedGlobalAccessStorage.getStore() === true;
+}
+
+/**
+ * Abre el contexto ALS de un tenant SIN gucApplied: la extensión RLS envuelve
+ * cada query con su set_config. Es el patrón para caminos fuera del
+ * middleware que YA conocen su tenant — endpoints públicos resueltos por
+ * Host/slug/ticket y el procesado por-fila de los workers — cuyos services
+ * usan su propio PrismaService inyectado (no el tx de withTenantId, que
+ * marcaría gucApplied sobre queries que NO corren en esa transacción).
+ *
+ * El await ocurre DENTRO del scope (PrismaPromise lazy — misma razón que en
+ * runSanctionedGlobalAccess).
+ */
+export async function runAsTenant<T>(
+  tenantId: string,
+  fn: () => Promise<T> | T,
+  opts: { userId?: string; traceLabel?: string } = {},
+): Promise<T> {
+  const parent = tenantContextStorage.getStore();
+  return tenantContextStorage.run(
+    {
+      tenantId,
+      userId: opts.userId ?? parent?.userId,
+      traceId: parent?.traceId ?? `${opts.traceLabel ?? 'ctx'}-${randomUUID()}`,
+    },
+    async () => await fn(),
+  );
 }

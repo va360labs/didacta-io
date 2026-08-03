@@ -17,6 +17,7 @@ import { WebhookSignatureInvalidError } from '@didacta/mod-billing';
 import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
 import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
+import { runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from '../module-registry.service';
 import { BillingProvisioningService } from './billing-provisioning.service';
 
@@ -75,10 +76,15 @@ export class BillingWebhookController {
     // confirmado en Stripe y envía la bienvenida con el enlace de contraseña.
     const ctx = extractClientContext(req);
     const webBaseUrl = resolveWebBaseUrl(req);
-    await billing.handleWebhookEvent(event, parsedBody, {
-      provisionUser: ({ tenantId, email, name }) =>
-        this.provisioning.provision({ tenantId, email, name, webBaseUrl, ctx }),
-    });
+    // RLS F2: el tenant sale de la metadata del evento DENTRO del service del
+    // módulo (lookup de la order por id global) — acceso sancionado. F3: partir
+    // el service en lookup sancionado + procesado por tenant antes del flip.
+    await runSanctionedGlobalAccess(() =>
+      billing.handleWebhookEvent(event, parsedBody, {
+        provisionUser: ({ tenantId, email, name }) =>
+          this.provisioning.provision({ tenantId, email, name, webBaseUrl, ctx }),
+      }),
+    );
     return { received: true, type: event.type, id: event.id };
   }
 }

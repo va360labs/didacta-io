@@ -45,6 +45,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { PrismaAuditLogService } from '../../modules/prisma-audit-log.service';
 import { PrismaTenantConfigService } from '../../modules/prisma-tenant-config.service';
 import { TokenService, type SignedTokens } from '../../auth/token.service';
@@ -290,7 +291,10 @@ export class SamlService {
     if (!tenantSlug || typeof tenantSlug !== 'string') return false;
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant || tenant.status !== 'ACTIVE') return false;
-    const config = await this.getConfig(tenant.id);
+    // RLS F2: endpoint público — la config se lee bajo el ALS del tenant.
+    const config = await runAsTenant(tenant.id, () => this.getConfig(tenant.id), {
+      traceLabel: 'saml-status',
+    });
     return Boolean(config && config.enabled);
   }
 
@@ -334,6 +338,16 @@ export class SamlService {
       throw new NotFoundException('Tenant no encontrado o inactivo.');
     }
 
+    // RLS F2: endpoint público — config + audit bajo el ALS del tenant.
+    return runAsTenant(tenant.id, () => this.startFlowInTenant(tenant), {
+      traceLabel: 'saml-start',
+    });
+  }
+
+  private async startFlowInTenant(tenant: {
+    id: string;
+    slug: string;
+  }): Promise<SamlAuthorizationParams> {
     const config = await this.getConfig(tenant.id);
     if (!config || !config.enabled) {
       throw new NotFoundException('Este tenant no tiene SSO SAML habilitado.');
@@ -410,6 +424,23 @@ export class SamlService {
       throw new UnauthorizedException('RelayState expirado.');
     }
 
+    // RLS F2: endpoint público — el cierre del flow (config, upsert de user,
+    // sesión, audit) corre bajo el ALS del tenant del flow.
+    return runAsTenant(
+      flow.tenantId,
+      () =>
+        this.completeAcs(flow, {
+          samlResponse: params.samlResponse!,
+          relayState: params.relayState!,
+        }),
+      { traceLabel: 'saml-acs' },
+    );
+  }
+
+  private async completeAcs(
+    flow: SamlFlowState,
+    params: { samlResponse: string; relayState: string },
+  ): Promise<SamlCallbackResult> {
     const config = await this.getConfig(flow.tenantId);
     if (!config || !config.enabled) {
       throw new UnauthorizedException(
@@ -554,7 +585,10 @@ export class SamlService {
     if (!tenant || tenant.status !== 'ACTIVE') {
       throw new NotFoundException('Tenant no encontrado o inactivo.');
     }
-    const config = await this.getConfig(tenant.id);
+    // RLS F2: endpoint público — la config se lee bajo el ALS del tenant.
+    const config = await runAsTenant(tenant.id, () => this.getConfig(tenant.id), {
+      traceLabel: 'saml-metadata',
+    });
     if (!config) {
       throw new NotFoundException('Este tenant no tiene config SAML.');
     }

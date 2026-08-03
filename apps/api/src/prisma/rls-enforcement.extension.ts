@@ -32,6 +32,53 @@ export function isInsidePrismaTransaction(): boolean {
 }
 
 /**
+ * F2 (@tx): ejecuta un `$transaction` del caller inyectando el GUC del tenant
+ * DENTRO de su propia transacción — primer statement en la forma batch,
+ * primera operación del callback en la interactiva. Así las ~17 firmas `@tx`
+ * (servicios que abren su $transaction en el request path) quedan escopadas
+ * sin romper su atomicidad y sin tocar los call sites.
+ *
+ * El cuerpo corre bajo `runWithGucApplied` (ALS con gucApplied=true) además
+ * del scope de transacción: los hooks de las ops internas ni re-envuelven ni
+ * cuentan hueco. Sin contexto de tenant (o ya gucApplied, p.ej. dentro de
+ * withTenantContext) el comportamiento es el previo: solo el marker.
+ */
+export function runCallerTransaction(opts: {
+  original: (...args: unknown[]) => Promise<unknown>;
+  args: unknown[];
+  ctx: { tenantId?: string; gucApplied?: boolean } | undefined;
+  /** Crea la PrismaPromise `SELECT set_config(...)` sobre el cliente extendido. */
+  makeSetConfig: (tenantId: string) => unknown;
+  /** Corre fn bajo el ALS de tenant con gucApplied=true. */
+  runWithGucApplied: <T>(fn: () => Promise<T>) => Promise<T>;
+}): Promise<unknown> {
+  const { original, args, ctx, makeSetConfig, runWithGucApplied } = opts;
+  if (!ctx?.tenantId || ctx.gucApplied) {
+    return markPrismaTransactionScope(() => original(...args));
+  }
+  const tenantId = ctx.tenantId;
+  const scoped = <T>(fn: () => Promise<T>): Promise<T> =>
+    runWithGucApplied(() => markPrismaTransactionScope(fn));
+  const [first, ...rest] = args;
+  if (Array.isArray(first)) {
+    return scoped(() => original([makeSetConfig(tenantId), ...first], ...rest)).then(
+      // El caller no sabe del miembro inyectado: se descarta su resultado.
+      (results) => (results as unknown[]).slice(1),
+    );
+  }
+  if (typeof first === 'function') {
+    const callback = first as (tx: unknown) => Promise<unknown>;
+    const withGuc = async (tx: unknown) => {
+      await (tx as { $queryRaw: (s: TemplateStringsArray, ...v: unknown[]) => Promise<unknown> })
+        .$queryRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`;
+      return callback(tx);
+    };
+    return scoped(() => original(withGuc, ...rest));
+  }
+  return markPrismaTransactionScope(() => original(...args));
+}
+
+/**
  * Modo de enforcement de RLS en runtime (env RLS_ENFORCEMENT):
  *
  * - `off`  → la extensión no se instala; comportamiento previo a F1.

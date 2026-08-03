@@ -37,6 +37,7 @@ import {
 import { extractClientContext } from '../../auth/client-context';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
+import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { EmailVerificationService } from './email-verification.service';
 import { MemberDecisionService } from './member-decision.service';
@@ -105,12 +106,16 @@ export class MemberRegistrationPublicController {
   })
   async config(@Req() req: FastifyRequest) {
     const tenantId = await this.resolveTenantId(req);
-    const policy = await this.settings.resolveEffectivePolicy(tenantId);
-    return {
-      configured: policy.enabled && policy.operational,
-      verifiers: policy.verifiers,
-      botUsername: policy.botUsername,
-    };
+    // RLS F2: rutas anónimas sin middleware de tenant — tras resolver por Host,
+    // el cuerpo corre bajo el ALS del tenant (la extensión escopa cada query).
+    return runAsTenant(tenantId, async () => {
+      const policy = await this.settings.resolveEffectivePolicy(tenantId);
+      return {
+        configured: policy.enabled && policy.operational,
+        verifiers: policy.verifiers,
+        botUsername: policy.botUsername,
+      };
+    });
   }
 
   @Post('telegram/verify')
@@ -125,25 +130,27 @@ export class MemberRegistrationPublicController {
   ) {
     const secret = this.requireAuthSecret();
     const tenantId = await this.resolveTenantId(req);
-    const policy = await this.requirePolicy(tenantId);
-    if (!policy.verifiers.includes('telegram')) {
-      throw new ServiceUnavailableException(
-        'Esta comunidad no verifica por Telegram su inscripción.',
-      );
-    }
-    // Operativo garantizado por requirePolicy → la config del bot existe.
-    const telegramConfig = await this.settings.resolveTelegram(tenantId);
-    if (!telegramConfig) {
-      throw new ServiceUnavailableException('El acceso por Telegram no está configurado.');
-    }
+    return runAsTenant(tenantId, async () => {
+      const policy = await this.requirePolicy(tenantId);
+      if (!policy.verifiers.includes('telegram')) {
+        throw new ServiceUnavailableException(
+          'Esta comunidad no verifica por Telegram su inscripción.',
+        );
+      }
+      // Operativo garantizado por requirePolicy → la config del bot existe.
+      const telegramConfig = await this.settings.resolveTelegram(tenantId);
+      if (!telegramConfig) {
+        throw new ServiceUnavailableException('El acceso por Telegram no está configurado.');
+      }
 
-    if (!this.telegram.verifyLoginHash(telegramConfig, dto)) {
-      throw new UnauthorizedException('Firma de Telegram inválida.');
-    }
+      if (!this.telegram.verifyLoginHash(telegramConfig, dto)) {
+        throw new UnauthorizedException('Firma de Telegram inválida.');
+      }
 
-    const inGroup = await this.telegram.getChatMember(telegramConfig, dto.id);
-    const ticket = signTicket({ telegramId: dto.id, inGroup, purpose: 'telegram' }, secret, 900);
-    return { ok: true, inGroup, ticket };
+      const inGroup = await this.telegram.getChatMember(telegramConfig, dto.id);
+      const ticket = signTicket({ telegramId: dto.id, inGroup, purpose: 'telegram' }, secret, 900);
+      return { ok: true, inGroup, ticket };
+    });
   }
 
   @Post('otp/request')
@@ -158,18 +165,22 @@ export class MemberRegistrationPublicController {
   ) {
     const secret = this.requireAuthSecret();
     const tenantId = await this.resolveTenantId(req);
-    const policy = await this.requirePolicy(tenantId);
-    if (!policy.verifiers.includes('otp')) {
-      throw new ServiceUnavailableException('Esta comunidad no verifica por email su inscripción.');
-    }
-    this.requireTelegramClaims(policy, secret, dto.ticket);
+    return runAsTenant(tenantId, async () => {
+      const policy = await this.requirePolicy(tenantId);
+      if (!policy.verifiers.includes('otp')) {
+        throw new ServiceUnavailableException(
+          'Esta comunidad no verifica por email su inscripción.',
+        );
+      }
+      this.requireTelegramClaims(policy, secret, dto.ticket);
 
-    const expiresInSeconds = await this.emailVerification.requestCode(
-      tenantId,
-      dto.email,
-      extractClientContext(req),
-    );
-    return { ok: true, expiresInSeconds };
+      const expiresInSeconds = await this.emailVerification.requestCode(
+        tenantId,
+        dto.email,
+        extractClientContext(req),
+      );
+      return { ok: true, expiresInSeconds };
+    });
   }
 
   @Post('otp/verify')
@@ -184,33 +195,37 @@ export class MemberRegistrationPublicController {
   ) {
     const secret = this.requireAuthSecret();
     const tenantId = await this.resolveTenantId(req);
-    const policy = await this.requirePolicy(tenantId);
-    if (!policy.verifiers.includes('otp')) {
-      throw new ServiceUnavailableException('Esta comunidad no verifica por email su inscripción.');
-    }
-    const telegramClaims = this.requireTelegramClaims(policy, secret, dto.ticket);
+    return runAsTenant(tenantId, async () => {
+      const policy = await this.requirePolicy(tenantId);
+      if (!policy.verifiers.includes('otp')) {
+        throw new ServiceUnavailableException(
+          'Esta comunidad no verifica por email su inscripción.',
+        );
+      }
+      const telegramClaims = this.requireTelegramClaims(policy, secret, dto.ticket);
 
-    const ok = await this.emailVerification.verifyCode(
-      tenantId,
-      dto.email,
-      dto.code,
-      extractClientContext(req),
-    );
-    if (!ok) {
-      throw new UnauthorizedException('Código inválido o expirado.');
-    }
+      const ok = await this.emailVerification.verifyCode(
+        tenantId,
+        dto.email,
+        dto.code,
+        extractClientContext(req),
+      );
+      if (!ok) {
+        throw new UnauthorizedException('Código inválido o expirado.');
+      }
 
-    const verificationToken = signTicket(
-      {
-        telegramId: telegramClaims?.telegramId ?? null,
-        inGroup: telegramClaims?.inGroup ?? 'unknown',
-        email: dto.email,
-        purpose: 'member-register',
-      },
-      secret,
-      1800,
-    );
-    return { ok: true, verificationToken };
+      const verificationToken = signTicket(
+        {
+          telegramId: telegramClaims?.telegramId ?? null,
+          inGroup: telegramClaims?.inGroup ?? 'unknown',
+          email: dto.email,
+          purpose: 'member-register',
+        },
+        secret,
+        1800,
+      );
+      return { ok: true, verificationToken };
+    });
   }
 
   @Post('register')
@@ -225,61 +240,63 @@ export class MemberRegistrationPublicController {
   ) {
     const secret = this.requireAuthSecret();
     const tenantId = await this.resolveTenantId(req);
-    const policy = await this.requirePolicy(tenantId);
+    return runAsTenant(tenantId, async () => {
+      const policy = await this.requirePolicy(tenantId);
 
-    // Evidencia según la política: cada verificador exigido debe venir probado.
-    let email: string;
-    let telegramId: string | null = null;
-    let inGroup: TelegramMembership = 'unknown';
+      // Evidencia según la política: cada verificador exigido debe venir probado.
+      let email: string;
+      let telegramId: string | null = null;
+      let inGroup: TelegramMembership = 'unknown';
 
-    if (policy.verifiers.includes('otp')) {
-      // El verificationToken del OTP es la evidencia final (arrastra la de
-      // Telegram si ese verificador también estaba exigido).
-      if (!dto.verificationToken) {
-        throw new UnauthorizedException('Token de verificación inválido o expirado.');
+      if (policy.verifiers.includes('otp')) {
+        // El verificationToken del OTP es la evidencia final (arrastra la de
+        // Telegram si ese verificador también estaba exigido).
+        if (!dto.verificationToken) {
+          throw new UnauthorizedException('Token de verificación inválido o expirado.');
+        }
+        const claims = verifyTicket<VerificationTokenClaims>(dto.verificationToken, secret);
+        if (!claims || claims.purpose !== 'member-register') {
+          throw new UnauthorizedException('Token de verificación inválido o expirado.');
+        }
+        if (policy.verifiers.includes('telegram') && !claims.telegramId) {
+          throw new UnauthorizedException('Falta la verificación de Telegram.');
+        }
+        email = claims.email;
+        telegramId = claims.telegramId ?? null;
+        inGroup = claims.inGroup ?? 'unknown';
+      } else if (policy.verifiers.includes('telegram')) {
+        // Solo Telegram: el ticket del widget es la evidencia; el email viene
+        // del formulario (sin verificar — la aprobación manual sigue delante).
+        const claims = dto.ticket ? verifyTicket<TelegramTicketClaims>(dto.ticket, secret) : null;
+        if (!claims || claims.purpose !== 'telegram') {
+          throw new UnauthorizedException('Ticket de Telegram inválido o expirado.');
+        }
+        email = this.requireEmail(dto);
+        telegramId = claims.telegramId;
+        inGroup = claims.inGroup;
+      } else {
+        // Registro libre: sin verificadores; el gate es la aprobación manual.
+        email = this.requireEmail(dto);
       }
-      const claims = verifyTicket<VerificationTokenClaims>(dto.verificationToken, secret);
-      if (!claims || claims.purpose !== 'member-register') {
-        throw new UnauthorizedException('Token de verificación inválido o expirado.');
-      }
-      if (policy.verifiers.includes('telegram') && !claims.telegramId) {
-        throw new UnauthorizedException('Falta la verificación de Telegram.');
-      }
-      email = claims.email;
-      telegramId = claims.telegramId ?? null;
-      inGroup = claims.inGroup ?? 'unknown';
-    } else if (policy.verifiers.includes('telegram')) {
-      // Solo Telegram: el ticket del widget es la evidencia; el email viene
-      // del formulario (sin verificar — la aprobación manual sigue delante).
-      const claims = dto.ticket ? verifyTicket<TelegramTicketClaims>(dto.ticket, secret) : null;
-      if (!claims || claims.purpose !== 'telegram') {
-        throw new UnauthorizedException('Ticket de Telegram inválido o expirado.');
-      }
-      email = this.requireEmail(dto);
-      telegramId = claims.telegramId;
-      inGroup = claims.inGroup;
-    } else {
-      // Registro libre: sin verificadores; el gate es la aprobación manual.
-      email = this.requireEmail(dto);
-    }
 
-    // Base del API para los enlaces de decisión (aprobar/rechazar) del email,
-    // que apuntan de vuelta a este controller (`GET .../decision`).
-    const apiBase = this.resolveApiBaseUrl(req);
-    await this.registration.createPending(
-      tenantId,
-      {
-        name: dto.name,
-        email,
-        password: dto.password,
-        bio: dto.bio,
-        telegramId,
-        inGroup,
-      },
-      apiBase,
-      extractClientContext(req),
-    );
-    return { ok: true, status: 'PENDING' };
+      // Base del API para los enlaces de decisión (aprobar/rechazar) del email,
+      // que apuntan de vuelta a este controller (`GET .../decision`).
+      const apiBase = this.resolveApiBaseUrl(req);
+      await this.registration.createPending(
+        tenantId,
+        {
+          name: dto.name,
+          email,
+          password: dto.password,
+          bio: dto.bio,
+          telegramId,
+          inGroup,
+        },
+        apiBase,
+        extractClientContext(req),
+      );
+      return { ok: true, status: 'PENDING' };
+    });
   }
 
   @Get('decision')
@@ -293,7 +310,14 @@ export class MemberRegistrationPublicController {
     @Res({ passthrough: false }) res: FastifyReply,
   ): Promise<void> {
     const token = String((req.query as Record<string, unknown> | undefined)?.['token'] ?? '');
-    const result = await this.decision.decide(token, extractClientContext(req));
+    // El token de decisión es OPACO (aleatorio, solo su hash vive en BD — no es
+    // un ticket HMAC con claims): el tenant se conoce recién tras el lookup
+    // interno del service, así que la llamada va sancionada completa.
+    // Inventario F3: `decide()` deberá adoptar el patrón de password-reset
+    // (lookup sancionado del token + resto bajo runAsTenant del tenant de la fila).
+    const result = await runSanctionedGlobalAccess(() =>
+      this.decision.decide(token, extractClientContext(req)),
+    );
     const web = (process.env['WEB_PUBLIC_URL']?.trim() || resolveWebBaseUrl(req)).replace(
       /\/$/,
       '',

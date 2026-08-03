@@ -13,6 +13,7 @@ import {
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from '../module-registry.service';
 
 const QUEUE_NAME = 'didacta.payment-connections.subscribers-sync';
@@ -31,8 +32,9 @@ type JobData = Record<string, never>;
  *  2. Por tenant: `PaymentConnectionsService.syncSubscribers(tenantId)` (reconcile
  *     en vivo de cada cuenta → upsert + churn + SyncHistory).
  *
- * Cross-tenant sin contexto de request: depende de que el rol de la app bypase
- * RLS (mismo modelo que el resto de workers del host, p.ej. grace-expiration).
+ * Cross-tenant sin contexto de request: el barrido de tenants va como acceso
+ * global sancionado (inventario RLS F3) y cada sync corre bajo el contexto del
+ * tenant (runAsTenant), con la extensión RLS escopando sus queries.
  *
  * Si REDIS_URL no está set, el worker no arranca (warn). En tests (NODE_ENV=test)
  * tampoco. Best-effort por tenant: un fallo no tumba el barrido del resto.
@@ -101,12 +103,15 @@ export class SubscribersSyncWorker implements OnApplicationBootstrap, OnModuleDe
 
   private async processJob(): Promise<void> {
     const service = this.registry.getPaymentConnectionsService();
-    const tenants = await service.listTenantsWithVerifiedConnections();
+    // Barrido cross-tenant de conexiones VERIFIED (inventario RLS F3).
+    const tenants = await runSanctionedGlobalAccess(() =>
+      service.listTenantsWithVerifiedConnections(),
+    );
     let ok = 0;
     let failed = 0;
     for (const tenantId of tenants) {
       try {
-        const r = await service.syncSubscribers(tenantId);
+        const r = await runAsTenant(tenantId, () => service.syncSubscribers(tenantId));
         ok += 1;
         this.logger.log(
           { tenantId, connections: r.connections, upserted: r.upserted, markedGone: r.markedGone },

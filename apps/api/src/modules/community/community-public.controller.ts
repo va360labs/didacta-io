@@ -6,6 +6,7 @@
 import { Controller, Get, Query, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
+import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from '../module-registry.service';
 import { verifyUnsubscribeToken } from './broadcast-unsubscribe';
 
@@ -31,9 +32,16 @@ export class CommunityPublicController {
       return;
     }
     try {
-      await this.registry
-        .getCommunityService()
-        .setBroadcastOptOut(parsed.tenantId, parsed.userId, true);
+      // RLS F2: el tenant viene en el propio token firmado del enlace — la baja
+      // corre bajo su contexto ALS.
+      await runAsTenant(
+        parsed.tenantId,
+        () =>
+          this.registry
+            .getCommunityService()
+            .setBroadcastOptOut(parsed.tenantId, parsed.userId, true),
+        { userId: parsed.userId, traceLabel: 'unsubscribe' },
+      );
     } catch {
       reply
         .status(500)

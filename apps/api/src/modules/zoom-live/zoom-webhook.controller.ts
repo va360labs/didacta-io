@@ -15,6 +15,7 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { verifyZoomSignature, webhookEventSchema } from '@didacta/mod-zoom-live';
 import type { FastifyRequest } from 'fastify';
+import { runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from '../module-registry.service';
 
 /**
@@ -92,7 +93,12 @@ export class ZoomWebhookController {
       return { result: 'IGNORED', reason: 'unknown_payload_shape' };
     }
 
-    const outcome = await this.registry.getZoomLiveService().handleWebhookEvent(result.data);
+    // RLS F2: el tenant se resuelve DENTRO del service (lookup de la sesión
+    // por zoomMeetingId, cross-tenant) — acceso sancionado. F3: partir en
+    // lookup sancionado + procesado por tenant antes del flip.
+    const outcome = await runSanctionedGlobalAccess(() =>
+      this.registry.getZoomLiveService().handleWebhookEvent(result.data),
+    );
     return outcome;
   }
 }

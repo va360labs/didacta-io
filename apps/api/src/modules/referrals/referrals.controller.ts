@@ -28,6 +28,7 @@ import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import type { SessionClaims } from '../../auth/token.service';
 import { extractClientContext } from '../../auth/client-context';
 import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
+import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 
@@ -134,11 +135,15 @@ export class ReferralsController {
       .update(ctx.ip ?? 'unknown', 'utf8')
       .digest('hex')
       .slice(0, 32);
-    const service = this.registry.getReferralsService();
-    const registered = await service.registerClick(tenantId, dto.code.toLowerCase(), ipHash);
-    // La ventana vuelve para que el cliente ajuste el TTL del código guardado.
-    const { attributionWindowDays } = await service.getConfig(tenantId);
-    return { registered, attributionWindowDays };
+    // RLS F2: única ruta pública del fichero (sin ALS del middleware) — el
+    // registro del clic corre bajo el contexto del tenant resuelto por Host.
+    return runAsTenant(tenantId, async () => {
+      const service = this.registry.getReferralsService();
+      const registered = await service.registerClick(tenantId, dto.code.toLowerCase(), ipHash);
+      // La ventana vuelve para que el cliente ajuste el TTL del código guardado.
+      const { attributionWindowDays } = await service.getConfig(tenantId);
+      return { registered, attributionWindowDays };
+    });
   }
 
   // ---------------- Admin ----------------

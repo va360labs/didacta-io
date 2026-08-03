@@ -22,6 +22,7 @@ import { extractClientContext } from '../../auth/client-context';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
 import { PrismaService } from '../../prisma/prisma.service';
+import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 
@@ -95,49 +96,53 @@ export class BillingPublicController {
   })
   async catalog(@Req() req: FastifyRequest): Promise<{ courses: PublicCatalogCourse[] }> {
     const tenantId = await this.resolveTenantId(req);
-    let billing: BillingService;
-    try {
-      billing = this.registry.getBillingService();
-    } catch {
-      return { courses: [] };
-    }
-    const ofertas = await billing.getCatalog(tenantId);
-    if (ofertas.length === 0) return { courses: [] };
+    // RLS F2: ruta pública sin middleware de tenant — el cuerpo corre bajo el
+    // ALS del tenant resuelto por Host para que cada query quede escopada.
+    return runAsTenant(tenantId, async () => {
+      let billing: BillingService;
+      try {
+        billing = this.registry.getBillingService();
+      } catch {
+        return { courses: [] };
+      }
+      const ofertas = await billing.getCatalog(tenantId);
+      if (ofertas.length === 0) return { courses: [] };
 
-    // Cruce con mod.courses en el HOST (lectura first-party con tenant_id;
-    // el paquete de billing no toca tablas de otros módulos). Solo cursos
-    // publicados y no borrados llegan al catálogo público.
-    const optionsByCourse = new Map(ofertas.map((o) => [o.courseId, o.options]));
-    const cursos = await this.prisma.modCoursesCourse.findMany({
-      where: {
-        id: { in: [...optionsByCourse.keys()] },
-        tenantId,
-        status: 'PUBLISHED',
-        deletedAt: null,
-      },
-      orderBy: { publishedAt: 'desc' },
-      select: {
-        id: true,
-        slug: true,
-        title: true,
-        description: true,
-        thumbnailUrl: true,
-        category: true,
-        estimatedMinutes: true,
-      },
+      // Cruce con mod.courses en el HOST (lectura first-party con tenant_id;
+      // el paquete de billing no toca tablas de otros módulos). Solo cursos
+      // publicados y no borrados llegan al catálogo público.
+      const optionsByCourse = new Map(ofertas.map((o) => [o.courseId, o.options]));
+      const cursos = await this.prisma.modCoursesCourse.findMany({
+        where: {
+          id: { in: [...optionsByCourse.keys()] },
+          tenantId,
+          status: 'PUBLISHED',
+          deletedAt: null,
+        },
+        orderBy: { publishedAt: 'desc' },
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          description: true,
+          thumbnailUrl: true,
+          category: true,
+          estimatedMinutes: true,
+        },
+      });
+      return {
+        courses: cursos.map((c) => ({
+          id: c.id,
+          slug: c.slug,
+          title: c.title,
+          description: c.description,
+          thumbnailUrl: c.thumbnailUrl,
+          category: c.category,
+          estimatedMinutes: c.estimatedMinutes,
+          options: optionsByCourse.get(c.id) ?? [],
+        })),
+      };
     });
-    return {
-      courses: cursos.map((c) => ({
-        id: c.id,
-        slug: c.slug,
-        title: c.title,
-        description: c.description,
-        thumbnailUrl: c.thumbnailUrl,
-        category: c.category,
-        estimatedMinutes: c.estimatedMinutes,
-        options: optionsByCourse.get(c.id) ?? [],
-      })),
-    };
   }
 
   @Get('offer/:courseId')
@@ -148,18 +153,20 @@ export class BillingPublicController {
   async offer(@Req() req: FastifyRequest, @Param('courseId') courseId: string) {
     const tenantId = await this.resolveTenantId(req);
     ensureUuid(courseId);
-    // Un curso no publicado no expone su oferta a visitantes: misma respuesta
-    // neutra que un curso sin precio (no filtra si el curso existe o no).
-    const curso = await this.prisma.modCoursesCourse.findFirst({
-      where: { id: courseId, tenantId, status: 'PUBLISHED', deletedAt: null },
-      select: { id: true },
+    return runAsTenant(tenantId, async () => {
+      // Un curso no publicado no expone su oferta a visitantes: misma respuesta
+      // neutra que un curso sin precio (no filtra si el curso existe o no).
+      const curso = await this.prisma.modCoursesCourse.findFirst({
+        where: { id: courseId, tenantId, status: 'PUBLISHED', deletedAt: null },
+        select: { id: true },
+      });
+      if (!curso) return { forSale: false, options: [] };
+      try {
+        return await this.registry.getBillingService().getCourseOffer(tenantId, courseId);
+      } catch {
+        return { forSale: false, options: [] };
+      }
     });
-    if (!curso) return { forSale: false, options: [] };
-    try {
-      return await this.registry.getBillingService().getCourseOffer(tenantId, courseId);
-    } catch {
-      return { forSale: false, options: [] };
-    }
   }
 
   @Post('checkout/:courseId')
@@ -174,43 +181,44 @@ export class BillingPublicController {
   ) {
     const tenantId = await this.resolveTenantId(req);
     ensureUuid(courseId);
+    return runAsTenant(tenantId, async () => {
+      // Guardas ANTES de mandar a nadie a pagar (mismo criterio que el checkout
+      // logueado): sin esto se puede cobrar por un curso despublicado cuya
+      // matriculación posterior fallaría siempre.
+      const curso = await this.prisma.modCoursesCourse.findFirst({
+        where: { id: courseId, tenantId, deletedAt: null },
+        select: { status: true },
+      });
+      if (!curso) throw new NotFoundException('Curso no encontrado.');
+      if (curso.status !== 'PUBLISHED') {
+        throw new ConflictException('Este curso no está disponible para la compra.');
+      }
 
-    // Guardas ANTES de mandar a nadie a pagar (mismo criterio que el checkout
-    // logueado): sin esto se puede cobrar por un curso despublicado cuya
-    // matriculación posterior fallaría siempre.
-    const curso = await this.prisma.modCoursesCourse.findFirst({
-      where: { id: courseId, tenantId, deletedAt: null },
-      select: { status: true },
+      let billing: BillingService;
+      try {
+        billing = this.registry.getBillingService();
+      } catch {
+        throw new ServiceUnavailableException(
+          'La pasarela de pago no está configurada en esta plataforma.',
+        );
+      }
+
+      const base = resolveWebBaseUrl(req).replace(/\/$/, '');
+      const result = await billing.startCheckout({
+        tenantId,
+        userId: null,
+        userEmail: dto.email,
+        courseId,
+        optionId: dto.optionId,
+        // Retorno a las páginas PÚBLICAS del catálogo: el comprador aún no tiene
+        // sesión y las de /cursos/checkout viven tras el gate de login.
+        successUrl: `${base}/catalogo/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${base}/catalogo/checkout/cancel`,
+      });
+      // Client context solo para trazabilidad en logs de acceso (no se persiste aquí).
+      void extractClientContext(req);
+      return { url: result.url, sessionId: result.sessionId };
     });
-    if (!curso) throw new NotFoundException('Curso no encontrado.');
-    if (curso.status !== 'PUBLISHED') {
-      throw new ConflictException('Este curso no está disponible para la compra.');
-    }
-
-    let billing: BillingService;
-    try {
-      billing = this.registry.getBillingService();
-    } catch {
-      throw new ServiceUnavailableException(
-        'La pasarela de pago no está configurada en esta plataforma.',
-      );
-    }
-
-    const base = resolveWebBaseUrl(req).replace(/\/$/, '');
-    const result = await billing.startCheckout({
-      tenantId,
-      userId: null,
-      userEmail: dto.email,
-      courseId,
-      optionId: dto.optionId,
-      // Retorno a las páginas PÚBLICAS del catálogo: el comprador aún no tiene
-      // sesión y las de /cursos/checkout viven tras el gate de login.
-      successUrl: `${base}/catalogo/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancelUrl: `${base}/catalogo/checkout/cancel`,
-    });
-    // Client context solo para trazabilidad en logs de acceso (no se persiste aquí).
-    void extractClientContext(req);
-    return { url: result.url, sessionId: result.sessionId };
   }
 
   /** Tenant por dominio (Host / X-Forwarded-Host), como MembershipPublicController. */

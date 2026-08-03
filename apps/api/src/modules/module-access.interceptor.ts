@@ -121,15 +121,24 @@ export class ModuleAccessInterceptor implements NestInterceptor {
     const now = Date.now();
     if (cached && cached.expiresAt > now) return cached.enabled;
 
+    // Dos queries top-level en vez de include anidado (RLS F2): el include
+    // `tenantModules: { where: { tenantId } }` viajaba DENTRO de la query del
+    // modelo global Module, invisible para la extensión RLS — bajo didacta_app
+    // habría vuelto vacío en silencio y el fallback a enabledByDefault dejaba
+    // el gating fail-open. Como op top-level, la lectura de tenant_module sí
+    // pasa por el hook (se escopa con el contexto del request o aflora en
+    // telemetría si falta).
     const row = await this.prisma.module.findUnique({
       where: { name: moduleName },
-      include: { tenantModules: { where: { tenantId } } },
+      select: { id: true, enabledByDefault: true },
     });
     if (!row) {
       this.cache.set(cacheKey, { enabled: true, expiresAt: now + CACHE_TTL_MS });
       return true;
     }
-    const link = row.tenantModules[0];
+    const link = await this.prisma.tenantModule.findUnique({
+      where: { tenantId_moduleId: { tenantId, moduleId: row.id } },
+    });
     const enabled = link ? link.enabled : row.enabledByDefault;
     this.cache.set(cacheKey, { enabled, expiresAt: now + CACHE_TTL_MS });
     return enabled;

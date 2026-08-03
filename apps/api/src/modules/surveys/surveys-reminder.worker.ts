@@ -13,6 +13,7 @@ import {
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleContextFactory } from '../module-context.factory';
 import { ModuleRegistryService } from '../module-registry.service';
 
@@ -111,42 +112,51 @@ export class SurveysReminderWorker implements OnApplicationBootstrap, OnModuleDe
   async runSweep(): Promise<{ surveys: number; reminders: number }> {
     const service = this.registry.getSurveysService();
     const prisma = this.factory.getPrisma();
-    const due = await service.findDueReminders(new Date(), reminderDelayHours());
+    // Barrido cross-tenant de encuestas vencidas (inventario RLS F3).
+    const due = await runSanctionedGlobalAccess(() =>
+      service.findDueReminders(new Date(), reminderDelayHours()),
+    );
     let reminders = 0;
 
     for (const survey of due) {
-      // Reclama ANTES de enviar: con dos instancias barriendo a la vez, solo
-      // una gana el updateMany condicionado y envía.
-      const claimed = await service.claimReminder(survey.tenantId, survey.id);
-      if (!claimed) continue;
+      // Todo el procesado de la encuesta corre bajo su tenant: claim, lectura
+      // acotada y envíos comparten el mismo scope RLS.
+      reminders += await runAsTenant(survey.tenantId, async () => {
+        // Reclama ANTES de enviar: con dos instancias barriendo a la vez, solo
+        // una gana el updateMany condicionado y envía.
+        const claimed = await service.claimReminder(survey.tenantId, survey.id);
+        if (!claimed) return 0;
 
-      // Lectura acotada de mod_zoom_live_session_registration (ADR-016, manifest).
-      const registrations = await prisma.modZoomSessionRegistration.findMany({
-        where: { tenantId: survey.tenantId, sessionId: survey.zoomSessionId },
-        select: { userId: true },
+        // Lectura acotada de mod_zoom_live_session_registration (ADR-016, manifest).
+        const registrations = await prisma.modZoomSessionRegistration.findMany({
+          where: { tenantId: survey.tenantId, sessionId: survey.zoomSessionId },
+          select: { userId: true },
+        });
+        const pending = await service.filterPendingRespondents(
+          survey.tenantId,
+          survey.id,
+          registrations.map((r) => r.userId),
+        );
+
+        const variables = { topic: survey.title, surveyUrl: classUrl(survey.zoomSessionId) };
+        // Secuencial a propósito: nada de ráfagas SMTP paralelas.
+        let sent = 0;
+        for (const userId of pending) {
+          await this.notify(survey.tenantId, userId, variables);
+          sent += 1;
+        }
+
+        this.logger.log(
+          {
+            tenantId: survey.tenantId,
+            surveyId: survey.id,
+            registered: registrations.length,
+            pending: pending.length,
+          },
+          'mod.surveys: recordatorio de encuesta enviado',
+        );
+        return sent;
       });
-      const pending = await service.filterPendingRespondents(
-        survey.tenantId,
-        survey.id,
-        registrations.map((r) => r.userId),
-      );
-
-      const variables = { topic: survey.title, surveyUrl: classUrl(survey.zoomSessionId) };
-      // Secuencial a propósito: nada de ráfagas SMTP paralelas.
-      for (const userId of pending) {
-        await this.notify(survey.tenantId, userId, variables);
-        reminders += 1;
-      }
-
-      this.logger.log(
-        {
-          tenantId: survey.tenantId,
-          surveyId: survey.id,
-          registered: registrations.length,
-          pending: pending.length,
-        },
-        'mod.surveys: recordatorio de encuesta enviado',
-      );
     }
 
     return { surveys: due.length, reminders };

@@ -13,6 +13,7 @@ import {
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleContextFactory } from '../module-context.factory';
 import { ModuleRegistryService } from '../module-registry.service';
 import { calendarVariables } from './class-links';
@@ -142,39 +143,47 @@ export class ZoomReminderWorker implements OnApplicationBootstrap, OnModuleDestr
   ): Promise<{ sessions: number; reminders: number }> {
     const service = this.registry.getZoomLiveService();
     const hoursBefore = reminderHoursBefore();
-    const due = await service.listSessionsPendingReminder(now, hoursBefore, 100, tenantId);
+    // Barrido cross-tenant de clases pendientes (inventario RLS F3).
+    const due = await runSanctionedGlobalAccess(() =>
+      service.listSessionsPendingReminder(now, hoursBefore, 100, tenantId),
+    );
     let reminders = 0;
     let sessions = 0;
 
     for (const pending of due) {
-      // Reclama ANTES de enviar: con dos instancias barriendo a la vez, solo
-      // una gana el updateMany condicionado y avisa.
-      const claimed = await service.claimReminder(pending.tenantId, pending.id, now);
-      if (!claimed) continue;
+      // Todo el procesado de la sesión corre bajo su tenant (scope RLS).
+      const sent = await runAsTenant(pending.tenantId, async () => {
+        // Reclama ANTES de enviar: con dos instancias barriendo a la vez, solo
+        // una gana el updateMany condicionado y avisa.
+        const claimed = await service.claimReminder(pending.tenantId, pending.id, now);
+        if (!claimed) return null;
+
+        const info = await service.getCalendarInfo(pending.id);
+        if (!info) return 0;
+
+        const userIds = await service.listRegisteredUserIds(pending.tenantId, pending.id);
+        const variables = {
+          topic: info.topic,
+          startsAt: formatStartsAt(info.startTime, info.timezone),
+          hoursBefore,
+          ...calendarVariables(pending.id),
+        };
+
+        // Secuencial a propósito: el hub hace SMTP por destinatario y no
+        // queremos ráfagas paralelas contra el servidor de correo.
+        for (const userId of userIds) {
+          await this.notify(pending.tenantId, userId, variables);
+        }
+
+        this.logger.log(
+          { tenantId: pending.tenantId, sessionId: pending.id, registered: userIds.length },
+          'mod.zoom-live: recordatorio de clase enviado',
+        );
+        return userIds.length;
+      });
+      if (sent === null) continue;
       sessions += 1;
-
-      const info = await service.getCalendarInfo(pending.id);
-      if (!info) continue;
-
-      const userIds = await service.listRegisteredUserIds(pending.tenantId, pending.id);
-      const variables = {
-        topic: info.topic,
-        startsAt: formatStartsAt(info.startTime, info.timezone),
-        hoursBefore,
-        ...calendarVariables(pending.id),
-      };
-
-      // Secuencial a propósito: el hub hace SMTP por destinatario y no
-      // queremos ráfagas paralelas contra el servidor de correo.
-      for (const userId of userIds) {
-        await this.notify(pending.tenantId, userId, variables);
-        reminders += 1;
-      }
-
-      this.logger.log(
-        { tenantId: pending.tenantId, sessionId: pending.id, registered: userIds.length },
-        'mod.zoom-live: recordatorio de clase enviado',
-      );
+      reminders += sent;
     }
 
     return { sessions, reminders };

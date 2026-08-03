@@ -9,6 +9,7 @@ import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
+import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { membershipCheckoutSchema, type MembershipCheckoutDto } from './membership.dto';
@@ -35,7 +36,11 @@ export class MembershipPublicController {
   })
   async page(@Req() req: FastifyRequest) {
     const tenantId = await this.resolveTenantId(req);
-    return this.registry.getMembershipService().getPublicPage(tenantId);
+    // RLS F2: ruta pública sin middleware de tenant — las queries corren bajo
+    // el ALS del tenant resuelto por Host.
+    return runAsTenant(tenantId, () =>
+      this.registry.getMembershipService().getPublicPage(tenantId),
+    );
   }
 
   @Post('checkout')
@@ -49,17 +54,21 @@ export class MembershipPublicController {
   ) {
     const tenantId = await this.resolveTenantId(req);
     const base = resolveWebBaseUrl(req);
-    const { url, sessionId } = await this.registry.getMembershipService().startMembershipCheckout({
-      tenantId,
-      planId: dto.planId,
-      email: dto.email,
-      referralCode: dto.referralCode,
-      successUrl: `${base}/unete?status=success`,
-      cancelUrl: `${base}/unete?status=cancel`,
+    return runAsTenant(tenantId, async () => {
+      const { url, sessionId } = await this.registry
+        .getMembershipService()
+        .startMembershipCheckout({
+          tenantId,
+          planId: dto.planId,
+          email: dto.email,
+          referralCode: dto.referralCode,
+          successUrl: `${base}/unete?status=success`,
+          cancelUrl: `${base}/unete?status=cancel`,
+        });
+      // Client context solo para trazabilidad en logs de acceso (no se persiste aquí).
+      void extractClientContext(req);
+      return { url, sessionId };
     });
-    // Client context solo para trazabilidad en logs de acceso (no se persiste aquí).
-    void extractClientContext(req);
-    return { url, sessionId };
   }
 
   /** Tenant por dominio (Host / X-Forwarded-Host), como InscripcionController. */

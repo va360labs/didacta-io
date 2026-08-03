@@ -39,6 +39,7 @@ import { createHmac } from 'node:crypto';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
+import { runAsTenant } from '../tenancy/tenant-context.storage';
 import { WebhooksMetricsEE } from './webhooks.metrics.ee';
 import type { WebhooksEEDispatcher } from './webhooks.types';
 
@@ -262,16 +263,20 @@ export class WebhooksDispatcherEE
     attempts: number,
   ): Promise<void> {
     try {
-      await this.prisma.webhookDeadLetter.create({
-        data: {
-          tenantId: data.tenantId,
-          endpointId: data.endpointId,
-          eventType: data.eventType,
-          payload: data.payload as never,
-          lastError: lastError.slice(0, 4000),
-          attempts,
-        },
-      });
+      // La entrega trae su tenant: la escritura corre bajo su contexto para
+      // que la extensión RLS la escope (F2).
+      await runAsTenant(data.tenantId, () =>
+        this.prisma.webhookDeadLetter.create({
+          data: {
+            tenantId: data.tenantId,
+            endpointId: data.endpointId,
+            eventType: data.eventType,
+            payload: data.payload as never,
+            lastError: lastError.slice(0, 4000),
+            attempts,
+          },
+        }),
+      );
     } catch (err) {
       this.logger.error(
         { err: (err as Error).message, endpointId: data.endpointId },

@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { runAsTenant, runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import type { ClientContext } from './client-context';
 import { isAdminMfaEnforced } from './mfa-config';
 import { MfaPolicyService } from './mfa-policy/mfa-policy.service';
@@ -125,6 +126,19 @@ export class AuthService {
       );
     }
 
+    // RLS F2: el alta entera corre bajo el ALS del tenant resuelto — sin esto
+    // (endpoint público, sin middleware con Authorization) cada query era un
+    // hueco de contexto.
+    return runAsTenant(tenant.id, () => this.signupInTenant(tenant, dto, ctx), {
+      traceLabel: 'auth-signup',
+    });
+  }
+
+  private async signupInTenant(
+    tenant: { id: string; slug: string },
+    dto: SignupDto,
+    ctx: ClientContext,
+  ): Promise<AuthResult> {
     const existing = await this.prisma.user.findUnique({
       where: { tenantId_email: { tenantId: tenant.id, email: dto.email } },
     });
@@ -235,6 +249,17 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
+    // RLS F2: mismo racional que en signup.
+    return runAsTenant(tenant.id, () => this.signinInTenant(tenant, dto, ctx), {
+      traceLabel: 'auth-signin',
+    });
+  }
+
+  private async signinInTenant(
+    tenant: { id: string; slug: string },
+    dto: SigninDto,
+    ctx: ClientContext,
+  ): Promise<AuthResult> {
     const user = await this.prisma.user.findUnique({
       where: { tenantId_email: { tenantId: tenant.id, email: dto.email } },
       include: { roles: { include: { role: true } }, tenant: true },
@@ -365,25 +390,34 @@ export class AuthService {
     if (!claims) {
       throw new UnauthorizedException('Refresh token inválido o expirado');
     }
-    const user = await this.prisma.user.findUnique({
-      where: { id: claims.sub },
-      include: { roles: { include: { role: true } } },
-    });
+    // RLS F2: lookup por id de usuario ANTES de conocer el tenant — acceso
+    // global sancionado (inventario del flip F3).
+    const user = await runSanctionedGlobalAccess(() =>
+      this.prisma.user.findUnique({
+        where: { id: claims.sub },
+        include: { roles: { include: { role: true } } },
+      }),
+    );
     if (!user || user.status !== 'ACTIVE') {
       throw new UnauthorizedException('Usuario no válido');
     }
     const roles = user.roles.map((r: { role: { name: string } }) => r.role.name);
     // Rotar y no re-emitir: si cada refresh abriera una sesión nueva, la lista
     // de «sesiones activas» del usuario acumularía una fila por hora.
-    return this.sessions.rotate(
-      claims.sid,
-      {
-        sub: user.id,
-        tenantId: user.tenantId,
-        roles,
-        mfaVerified: !this.shouldRequireMfa(roles, user.mfaEnabled),
-      },
-      ctx,
+    return runAsTenant(
+      user.tenantId,
+      () =>
+        this.sessions.rotate(
+          claims.sid,
+          {
+            sub: user.id,
+            tenantId: user.tenantId,
+            roles,
+            mfaVerified: !this.shouldRequireMfa(roles, user.mfaEnabled),
+          },
+          ctx,
+        ),
+      { traceLabel: 'auth-refresh', userId: user.id },
     );
   }
 
@@ -442,16 +476,19 @@ export class AuthService {
     }
 
     // Fallback email-first: ¿este email existe en uno o varios tenants?
-    const matches = await this.prisma.user.findMany({
-      where: {
-        email: args.email,
-        deletedAt: null,
-        status: 'ACTIVE',
-        tenant: { status: 'ACTIVE' },
-      },
-      include: { tenant: true },
-      take: 5,
-    });
+    // Lookup cross-tenant DELIBERADO (aún no sabemos el tenant): sancionado.
+    const matches = await runSanctionedGlobalAccess(() =>
+      this.prisma.user.findMany({
+        where: {
+          email: args.email,
+          deletedAt: null,
+          status: 'ACTIVE',
+          tenant: { status: 'ACTIVE' },
+        },
+        include: { tenant: true },
+        take: 5,
+      }),
+    );
 
     if (matches.length === 0) return null;
     if (matches.length === 1) return matches[0]!.tenant;

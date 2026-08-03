@@ -20,6 +20,7 @@ import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
 import type { ClientContext } from '../../auth/client-context';
 import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
+import { runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { BillingProvisioningService } from '../billing/billing-provisioning.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { MembershipProvisioningService } from './membership-provisioning.service';
@@ -72,7 +73,10 @@ export class SubscriptionsWebhookController {
       parsedBody = { raw: rawBody };
     }
 
-    await subs.handleWebhookEvent(event, parsedBody);
+    // RLS F2: el tenant sale de la metadata/lookup por id global DENTRO del
+    // service del módulo — acceso sancionado. F3: partir en lookup sancionado
+    // + procesado por tenant antes del flip.
+    await runSanctionedGlobalAccess(() => subs.handleWebhookEvent(event, parsedBody));
 
     // Fulfillment de MEMBRESÍA: el checkout completado materializa al
     // comprador (find-or-create user + bienvenida con enlace mágico) y crea la
@@ -83,11 +87,13 @@ export class SubscriptionsWebhookController {
     const webBaseUrl = resolveWebBaseUrl(req);
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
-      await this.registry
-        .getMembershipService()
-        .fulfillMembershipCheckout(session, ({ tenantId, email, name }) =>
-          this.provisioning.provision({ tenantId, email, name, webBaseUrl, ctx }),
-        );
+      await runSanctionedGlobalAccess(() =>
+        this.registry
+          .getMembershipService()
+          .fulfillMembershipCheckout(session, ({ tenantId, email, name }) =>
+            this.provisioning.provision({ tenantId, email, name, webBaseUrl, ctx }),
+          ),
+      );
     }
 
     // FAN-OUT a mod.billing (compra de curso suelto). Una sola cuenta de Stripe
@@ -118,10 +124,13 @@ export class SubscriptionsWebhookController {
     try {
       // Mismo provisioner que el endpoint propio de billing: una compra
       // ANÓNIMA de curso puede entrar por este webhook compartido.
-      await billing.handleWebhookEvent(event, parsedBody, {
-        provisionUser: ({ tenantId, email, name }) =>
-          this.billingProvisioning.provision({ tenantId, email, name, webBaseUrl, ctx }),
-      });
+      // RLS F2: mismo racional que el webhook propio de billing — sancionado.
+      await runSanctionedGlobalAccess(() =>
+        billing.handleWebhookEvent(event, parsedBody, {
+          provisionUser: ({ tenantId, email, name }) =>
+            this.billingProvisioning.provision({ tenantId, email, name, webBaseUrl, ctx }),
+        }),
+      );
     } catch (err) {
       // Si el evento ERA de una compra de curso, propagamos: Stripe verá un
       // 5xx y reintentará, que es la única red de seguridad que evita cobrar

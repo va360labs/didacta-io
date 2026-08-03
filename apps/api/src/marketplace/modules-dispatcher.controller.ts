@@ -18,6 +18,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { TokenService, type SessionClaims } from '../auth/token.service';
 import { TenantContextService } from '../tenancy/tenant-context.service';
+import { runAsTenant } from '../tenancy/tenant-context.storage';
 import { ModuleContextFactory } from '../modules/module-context.factory';
 import { ModuleRegistryService } from '../modules/module-registry.service';
 import {
@@ -197,7 +198,14 @@ export class ModulesDispatcherController {
 
     let result: ModuleRouteResponse;
     try {
-      const ret = await matched.handler(ctx);
+      // RLS F2 (defensa): el middleware ya deja el ALS cuando el request trae
+      // Bearer, pero este dispatcher decodifica el token por su cuenta — si
+      // hay user y el ALS quedó vacío (ruta excluida del middleware), el
+      // handler corre bajo el tenant del JWT. Camino anónimo: no hay tenant
+      // que escopar y SandboxedDb ya es fail-closed con tenantId=null.
+      const ret = await (user && !this.tenantContext.get()
+        ? runAsTenant(user.tenantId, () => matched.handler(ctx), { userId: user.sub })
+        : matched.handler(ctx));
       result = ret ?? { status: 204, body: null };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
