@@ -10,6 +10,18 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.98] — 2026-08-03
+
+#### Added
+
+- **Alta masiva de alumnos desde CSV** (`/admin/usuarios/importar`): un
+  operador sube un CSV con columnas `email`/`correo` y `name`/`nombre`,
+  elige rol y grupo de acceso una única vez para todo el lote, y cada fila
+  se invita en segundo plano reutilizando la misma validación que la
+  invitación individual. El parseo ocurre en el navegador (sin subida
+  multipart) y el progreso se sigue con una barra + lista de fallidos,
+  mismo patrón ya usado para el envío por lotes de invitaciones.
+
 ### [0.0.1-alpha.97] — 2026-08-03
 
 #### Changed
