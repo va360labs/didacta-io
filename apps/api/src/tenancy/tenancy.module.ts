@@ -31,6 +31,6 @@ import { TenantResolverService } from './tenant-resolver.service';
 })
 export class TenancyModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TenantMiddleware).forRoutes('*');
+    consumer.apply(TenantMiddleware).forRoutes('{*path}');
   }
 }

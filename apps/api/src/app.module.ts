@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Module } from '@nestjs/common';
+import { Module, RequestMethod } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { LicenseModule } from '@didacta/license-sdk';
@@ -35,6 +35,9 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 @Module({
   imports: [
     LoggerModule.forRoot({
+      // El default de nestjs-pino es `path: '*'` (sintaxis legacy); con
+      // path-to-regexp v8 (Nest 11) el wildcard va nombrado.
+      forRoutes: [{ path: '{*path}', method: RequestMethod.ALL }],
       pinoHttp: {
         level: process.env['NODE_ENV'] === 'production' ? 'info' : 'debug',
         transport:

@@ -115,7 +115,8 @@ async function bootstrap(): Promise<void> {
       // SCIM 2.0 vive en /scim/v2/* sin prefijo /api/v1 — los IdPs (Okta,
       // Azure AD, Auth0, Google Workspace) esperan exactamente esa forma
       // canónica del path RFC 7644. Séptimo piloto License SDK (feat:scim).
-      'scim/v2/(.*)',
+      // Sintaxis de wildcard nombrado de path-to-regexp v8 (Nest 11).
+      'scim/v2/{*path}',
     ],
   });
 

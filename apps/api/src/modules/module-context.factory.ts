@@ -123,7 +123,11 @@ export class ModuleContextFactory implements OnApplicationShutdown {
 
   build(): ModuleContext {
     const adaptedLogger = this.adaptLogger(this.pino);
-    this.eventBus = new PersistentEventBus(this.prisma, adaptedLogger, this.outboxQueue);
+    // El bus es un singleton lazy: los workers llaman a build() por job y los
+    // bridges se suscriben en onModuleInit (que en Nest 11 puede correr ANTES
+    // de que el registry construya el contexto) — todos deben compartir la
+    // misma instancia o las suscripciones se pierden.
+    this.eventBus ??= new PersistentEventBus(this.prisma, adaptedLogger, this.outboxQueue);
     const auditLog = new PrismaAuditLogService(this.prisma);
     const evidenceVault = new PrismaEvidenceVaultService(this.prisma, this.storage);
     this.tenantConfig = new PrismaTenantConfigService(this.prisma, this.cipher, auditLog);
@@ -301,7 +305,14 @@ export class ModuleContextFactory implements OnApplicationShutdown {
   }
 
   getEventBus(): PersistentEventBus {
-    if (!this.eventBus) throw new Error('EventBus aún no construido (build() no fue llamado)');
+    // Construido lazy si build() todavía no corrió: en Nest 11 el orden de
+    // inicialización de módulos es topológico y los bridges pueden pedir el
+    // bus antes de que el registry llame a build().
+    this.eventBus ??= new PersistentEventBus(
+      this.prisma,
+      this.adaptLogger(this.pino),
+      this.outboxQueue,
+    );
     return this.eventBus;
   }
 
