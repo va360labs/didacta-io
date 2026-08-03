@@ -1,21 +1,40 @@
 {
   "name": "zoom-live",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "edition": "community",
   "coreVersionRequired": "^0.0.1",
   "displayName": "Aula virtual síncrona Zoom",
   "category": "live",
   "tablePrefix": "mod_zoom_live_",
-  "permissions": ["zoom-live:read", "zoom-live:write"],
+  "permissions": ["zoom.session.read", "zoom.session.write"],
   "events": [
-    { "name": "zoom.session.created" },
-    { "name": "zoom.session.updated" },
-    { "name": "zoom.session.cancelled" },
-    { "name": "zoom.session.started" },
-    { "name": "zoom.session.ended" },
-    { "name": "zoom.session.recording_ready" },
-    { "name": "zoom.session.registration.created" },
-    { "name": "zoom.session.registration.cancelled" }
+    {
+      "name": "zoom.session.created"
+    },
+    {
+      "name": "zoom.session.updated"
+    },
+    {
+      "name": "zoom.session.cancelled"
+    },
+    {
+      "name": "zoom.session.started"
+    },
+    {
+      "name": "zoom.session.ended"
+    },
+    {
+      "name": "zoom.session.recording_ready"
+    },
+    {
+      "name": "zoom.session.registration.created"
+    },
+    {
+      "name": "zoom.session.registration.cancelled"
+    },
+    {
+      "name": "zoom.session.attendance_synced"
+    }
   ],
   "apiNamespace": "/modules/zoom-live",
   "surfaces": ["admin", "formador"]

@@ -35,12 +35,12 @@ describe('hello-world: contrato de módulo', () => {
   it('el manifest es válido según el schema del core', () => {
     expect(manifest.name).toBe('mod.hello-world');
     expect(manifest.version).toBe('1.0.0');
-    expect(manifest.tablePrefix).toBe('mod_helloworld_');
+    expect(manifest.tablePrefix).toBe('mod_hello_world_');
     expect(manifest.apiNamespace).toBe('/modules/hello-world');
   });
 
   it('se registra correctamente en un ModuleRegistry', async () => {
-    const registry = new ModuleRegistry({ coreVersion: '1.0.0', context: ctx });
+    const registry = new ModuleRegistry({ coreVersion: '0.0.1', context: ctx });
     await registry.register([helloWorldModule]);
 
     expect(registry.getModule('mod.hello-world')).toBe(helloWorldModule);
@@ -50,7 +50,7 @@ describe('hello-world: contrato de módulo', () => {
   });
 
   it('activa y desactiva en un tenant respetando idempotencia', async () => {
-    const registry = new ModuleRegistry({ coreVersion: '1.0.0', context: ctx });
+    const registry = new ModuleRegistry({ coreVersion: '0.0.1', context: ctx });
     await registry.register([helloWorldModule]);
 
     await registry.enableForTenant('tenant-1', 'mod.hello-world');

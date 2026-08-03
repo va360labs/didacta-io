@@ -10,11 +10,11 @@ export const manifest: ModuleManifest = parseModuleManifest({
   displayName: 'Fundae · Acciones formativas',
   description:
     'Gestión de acciones formativas Fundae (España): código de acción, modalidad, horas, fechas. Export XML para presentar a la fundación. v0.1: CRUD + XML básico.',
-  version: '0.1.0',
+  version: '0.3.0',
   author: 'VA360 LABS',
   license: 'Proprietary',
   category: 'compliance',
-  coreVersionRequired: '^1.0.0',
+  coreVersionRequired: '^0.0.1',
   tablePrefix: 'mod_fundae_',
   permissions: [
     'fundae.action.read',

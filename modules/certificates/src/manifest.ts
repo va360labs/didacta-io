@@ -13,7 +13,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
   author: 'VA360 LABS',
   license: 'Proprietary',
   category: 'core',
-  coreVersionRequired: '^1.0.0',
+  coreVersionRequired: '^0.0.1',
   tablePrefix: 'mod_certificates_',
   permissions: [
     'certificates.template.read',

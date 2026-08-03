@@ -6,8 +6,36 @@
   "displayName": "Quizzes y exámenes",
   "category": "core",
   "tablePrefix": "mod_assessments_",
-  "permissions": ["assessments:read", "assessments:write", "assessments:grade"],
-  "events": [{ "name": "assessments.attempt.submitted" }, { "name": "assessments.attempt.graded" }],
+  "permissions": [
+    "assessments.quiz.read",
+    "assessments.quiz.write",
+    "assessments.quiz.publish",
+    "assessments.attempt.create",
+    "assessments.attempt.read"
+  ],
+  "events": [
+    {
+      "name": "assessments.quiz.published"
+    },
+    {
+      "name": "assessments.attempt.started"
+    },
+    {
+      "name": "assessments.attempt.submitted"
+    },
+    {
+      "name": "assessments.attempt.pending_review"
+    },
+    {
+      "name": "assessments.attempt.graded"
+    },
+    {
+      "name": "assessments.attempt.passed"
+    },
+    {
+      "name": "assessments.attempt.failed"
+    }
+  ],
   "apiNamespace": "/modules/assessments",
   "surfaces": ["alumno", "formador"]
 }

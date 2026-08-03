@@ -6,9 +6,20 @@
   "displayName": "Encuestas y NPS",
   "category": "engagement",
   "tablePrefix": "mod_surveys_",
-  "permissions": ["surveys:response:write", "surveys:results:read", "surveys:manage"],
-  "events": [{ "name": "surveys.survey.created" }, { "name": "surveys.response.submitted" }],
-  "hooks": [{ "event": "zoom.session.ended" }],
+  "permissions": ["surveys.response.write", "surveys.results.read", "surveys.manage"],
+  "events": [
+    {
+      "name": "surveys.survey.created"
+    },
+    {
+      "name": "surveys.response.submitted"
+    }
+  ],
+  "hooks": [
+    {
+      "event": "zoom.session.ended"
+    }
+  ],
   "apiNamespace": "/modules/surveys",
   "surfaces": ["alumno", "admin"]
 }

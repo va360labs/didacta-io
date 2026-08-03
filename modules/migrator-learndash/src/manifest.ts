@@ -124,7 +124,7 @@ export const manifest: ModuleManifest = {
   author: 'Didacta',
   license: 'Proprietary',
   category: 'migration',
-  coreVersionRequired: '^0.0.0',
+  coreVersionRequired: '^0.0.1-alpha.81',
   tablePrefix: 'mod_migrator_learndash_',
   apiNamespace: '/modules/migrator-learndash',
   permissions: [

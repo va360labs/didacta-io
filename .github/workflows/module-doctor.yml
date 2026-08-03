@@ -1,14 +1,22 @@
 name: module-doctor
 
-# Pasado a workflow_dispatch only (2026-05-01): el script detecta 22 errores
-# reales en módulos preexistentes (theming, zoom-live, etc.) — apiNamespace
-# sin "/" inicial, tablePrefix incorrecto, coreVersionRequired faltante. Estos
-# fallos no se veían antes porque el workflow tenía pnpm v9 (mismatch con
-# packageManager 10.21.0) y nunca pasaba la fase de setup. Cambiar tablePrefix
-# requiere migración DB. Tracking en issue separada — bloquear ART-025 por
-# deuda preexistente que el bug de pnpm enmascaraba sería injusto.
+# Reactivado en push/PR (2026-08-03): la deuda que lo mantenía en
+# workflow_dispatch-only quedó saldada — module-doctor a 0 errores desde
+# alpha.93 (rename mod_zoom_live_ incluido) y contratos module.json ↔
+# src/manifest.ts alineados. El doctor ahora también compara ambos ficheros.
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'modules/**'
+      - 'scripts/module-doctor.ts'
+      - '.github/workflows/module-doctor.yml'
+  pull_request:
+    paths:
+      - 'modules/**'
+      - 'scripts/module-doctor.ts'
+      - '.github/workflows/module-doctor.yml'
   workflow_dispatch:
 
 jobs:

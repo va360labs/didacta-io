@@ -8,7 +8,7 @@
   "category": "core",
   "coreVersionRequired": "^0.0.1",
   "tablePrefix": "mod_theming_",
-  "permissions": ["theming:read", "theming:write"],
+  "permissions": ["theming.read", "theming.write"],
   "events": [
     {
       "name": "theming.logo.uploaded",

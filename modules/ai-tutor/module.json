@@ -6,13 +6,39 @@
   "displayName": "Tutor conversacional con RAG",
   "category": "ai",
   "tablePrefix": "mod_ai_tutor_",
-  "permissions": ["ai-tutor:read", "ai-tutor:chat", "ai-tutor:admin"],
-  "events": [
-    { "name": "ai-tutor.conversation.created" },
-    { "name": "ai-tutor.message.sent" },
-    { "name": "ai-tutor.indexing.completed" }
+  "permissions": [
+    "ai-tutor.chat.read",
+    "ai-tutor.chat.write",
+    "ai-tutor.index.write",
+    "ai-tutor.config.write",
+    "ai-tutor.review.read",
+    "ai-tutor.review.write"
   ],
-  "hooks": [{ "event": "courses.course.published" }],
+  "events": [
+    {
+      "name": "ai-tutor.course.indexed"
+    },
+    {
+      "name": "ai-tutor.course.index-failed"
+    },
+    {
+      "name": "ai-tutor.chat.message-sent"
+    },
+    {
+      "name": "ai-tutor.chat.message-received"
+    },
+    {
+      "name": "ai-tutor.answer.reviewed"
+    },
+    {
+      "name": "ai-tutor.answer.corrected"
+    }
+  ],
+  "hooks": [
+    {
+      "event": "courses.course.published"
+    }
+  ],
   "apiNamespace": "/modules/ai-tutor",
   "surfaces": ["alumno", "formador", "admin"]
 }

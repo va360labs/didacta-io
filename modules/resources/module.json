@@ -6,11 +6,17 @@
   "displayName": "Biblioteca de recursos",
   "category": "engagement",
   "tablePrefix": "mod_resources_",
-  "permissions": ["resources:read", "resources:manage"],
+  "permissions": ["resources.read", "resources.manage"],
   "events": [
-    { "name": "resources.resource.created" },
-    { "name": "resources.resource.deleted" },
-    { "name": "resources.collection.created" }
+    {
+      "name": "resources.resource.created"
+    },
+    {
+      "name": "resources.resource.deleted"
+    },
+    {
+      "name": "resources.collection.created"
+    }
   ],
   "hooks": [],
   "apiNamespace": "/modules/resources",

@@ -6,12 +6,28 @@
   "displayName": "Player + matrícula + progreso",
   "category": "core",
   "tablePrefix": "mod_learning_",
-  "permissions": ["learning:read", "learning:write"],
+  "permissions": [
+    "learning.enrollment.read",
+    "learning.enrollment.write",
+    "learning.progress.read",
+    "learning.progress.write"
+  ],
   "events": [
-    { "name": "learning.enrollment.created" },
-    { "name": "learning.enrollment.cancelled" },
-    { "name": "learning.lesson.completed" },
-    { "name": "learning.course.completed" }
+    {
+      "name": "learning.enrollment.created"
+    },
+    {
+      "name": "learning.enrollment.cancelled"
+    },
+    {
+      "name": "learning.progress.updated"
+    },
+    {
+      "name": "learning.course.completed"
+    },
+    {
+      "name": "learning.invitation.created"
+    }
   ],
   "apiNamespace": "/modules/learning",
   "surfaces": ["alumno", "formador"]

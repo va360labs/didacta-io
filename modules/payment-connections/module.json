@@ -7,12 +7,16 @@
   "category": "core",
   "tablePrefix": "mod_payment_connections_",
   "permissions": [
-    "payment_connections:connection:read",
-    "payment_connections:connection:create",
-    "payment_connections:connection:update",
-    "payment_connections:connection:delete"
+    "payment_connections.connection.read",
+    "payment_connections.connection.create",
+    "payment_connections.connection.update",
+    "payment_connections.connection.delete"
   ],
-  "events": [],
+  "events": [
+    {
+      "name": "payment_connections.user_tier.changed"
+    }
+  ],
   "hooks": [],
   "apiNamespace": "/modules/payment-connections",
   "surfaces": ["admin"]

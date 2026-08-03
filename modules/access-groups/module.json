@@ -7,9 +7,9 @@
   "category": "core",
   "tablePrefix": "mod_access_groups_",
   "permissions": [
-    "access_groups:group:read",
-    "access_groups:group:manage",
-    "access_groups:member:manage"
+    "access_groups.group.read",
+    "access_groups.group.manage",
+    "access_groups.member.manage"
   ],
   "events": [],
   "hooks": [],

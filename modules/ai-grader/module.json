@@ -6,10 +6,19 @@
   "displayName": "Corrección IA con rúbrica",
   "category": "ai",
   "tablePrefix": "mod_ai_grader_",
-  "permissions": ["ai-grader:read", "ai-grader:suggest", "ai-grader:admin"],
+  "permissions": [
+    "ai-grader.rubric.read",
+    "ai-grader.rubric.write",
+    "ai-grader.suggestion.read",
+    "ai-grader.suggestion.write"
+  ],
   "events": [
-    { "name": "ai-grader.suggestion.generated" },
-    { "name": "ai-grader.suggestion.failed" }
+    {
+      "name": "ai-grader.suggestion.generated"
+    },
+    {
+      "name": "ai-grader.suggestion.failed"
+    }
   ],
   "apiNamespace": "/modules/ai-grader",
   "surfaces": ["formador", "admin"]

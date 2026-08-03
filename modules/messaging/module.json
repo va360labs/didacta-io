@@ -7,11 +7,18 @@
   "category": "community",
   "tablePrefix": "mod_messaging_",
   "permissions": [
-    "messaging:conversation:read",
-    "messaging:message:write",
-    "messaging:moderation:write"
+    "messaging.conversation.read",
+    "messaging.message.write",
+    "messaging.moderation.write"
   ],
-  "events": [{ "name": "messaging.conversation.created" }, { "name": "messaging.message.sent" }],
+  "events": [
+    {
+      "name": "messaging.conversation.created"
+    },
+    {
+      "name": "messaging.message.sent"
+    }
+  ],
   "hooks": [],
   "apiNamespace": "/modules/messaging",
   "surfaces": ["alumno"]

@@ -6,16 +6,43 @@
   "displayName": "Cursos y catálogo",
   "category": "core",
   "tablePrefix": "mod_courses_",
-  "permissions": ["courses:read", "courses:write", "courses:publish"],
+  "permissions": [
+    "courses.course.read",
+    "courses.course.write",
+    "courses.course.publish",
+    "courses.course.archive"
+  ],
   "events": [
-    { "name": "courses.course.created" },
-    { "name": "courses.course.updated" },
-    { "name": "courses.course.published" },
-    { "name": "courses.course.unpublished" },
-    { "name": "courses.course.deleted" },
-    { "name": "courses.lesson.created" },
-    { "name": "courses.lesson.updated" },
-    { "name": "courses.lesson.deleted" }
+    {
+      "name": "courses.course.created"
+    },
+    {
+      "name": "courses.course.updated"
+    },
+    {
+      "name": "courses.course.published"
+    },
+    {
+      "name": "courses.course.archived"
+    },
+    {
+      "name": "courses.course.unarchived"
+    },
+    {
+      "name": "courses.module.created"
+    },
+    {
+      "name": "courses.module.deleted"
+    },
+    {
+      "name": "courses.lesson.created"
+    },
+    {
+      "name": "courses.lesson.updated"
+    },
+    {
+      "name": "courses.lesson.moved"
+    }
   ],
   "apiNamespace": "/modules/courses",
   "surfaces": ["admin", "formador", "alumno"]

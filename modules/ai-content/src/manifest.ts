@@ -14,7 +14,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
   author: 'VA360 LABS',
   license: 'Proprietary',
   category: 'ai',
-  coreVersionRequired: '^1.0.0',
+  coreVersionRequired: '^0.0.1',
   tablePrefix: 'mod_ai_content_',
   permissions: ['ai-content.generate', 'ai-content.review', 'ai-content.read'],
   dependencies: {

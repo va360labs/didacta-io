@@ -111,7 +111,12 @@ import { AiGatewayService } from '../ai/ai-gateway.service';
 import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import { ModuleContextFactory } from './module-context.factory';
 
-const CORE_VERSION = '1.0.0';
+/**
+ * Versión de contrato del core contra la que se valida el `coreVersionRequired`
+ * (`^0.0.1`) de los módulos first-party. El producto versiona 0.0.1-alpha.N;
+ * se usa la base estable porque semver excluye prereleases de los rangos caret.
+ */
+const CORE_VERSION = '0.0.1';
 /** Mismo TTL que el cache del ModuleAccessInterceptor, por coherencia. */
 const MODULE_ENABLED_CACHE_TTL_MS = 30_000;
 

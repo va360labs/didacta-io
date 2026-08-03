@@ -6,17 +6,97 @@
   "displayName": "Fundae — cumplimiento regulatorio España",
   "category": "compliance",
   "tablePrefix": "mod_fundae_",
-  "permissions": ["fundae:read", "fundae:write", "fundae:export"],
+  "permissions": [
+    "fundae.action.read",
+    "fundae.action.write",
+    "fundae.export.read",
+    "fundae.company.read",
+    "fundae.company.write",
+    "fundae.rlpt.read",
+    "fundae.rlpt.write",
+    "fundae.group.read",
+    "fundae.group.write",
+    "fundae.cost.read",
+    "fundae.cost.write",
+    "fundae.group.participant.read",
+    "fundae.group.participant.write"
+  ],
   "events": [
-    { "name": "fundae.company.created" },
-    { "name": "fundae.company.updated" },
-    { "name": "fundae.rlpt.notification.created" },
-    { "name": "fundae.group.created" },
-    { "name": "fundae.group.before-start" },
-    { "name": "fundae.group.started" },
-    { "name": "fundae.group.finalized" },
-    { "name": "fundae.xml.exported" },
-    { "name": "fundae.audit.zip-exported" }
+    {
+      "name": "fundae.action.created"
+    },
+    {
+      "name": "fundae.action.updated"
+    },
+    {
+      "name": "fundae.action.archived"
+    },
+    {
+      "name": "fundae.export.generated"
+    },
+    {
+      "name": "fundae.company.created"
+    },
+    {
+      "name": "fundae.company.updated"
+    },
+    {
+      "name": "fundae.company.deleted"
+    },
+    {
+      "name": "fundae.rlpt.notice.created"
+    },
+    {
+      "name": "fundae.rlpt.notice.deleted"
+    },
+    {
+      "name": "fundae.group.created"
+    },
+    {
+      "name": "fundae.group.updated"
+    },
+    {
+      "name": "fundae.group.started"
+    },
+    {
+      "name": "fundae.group.closed"
+    },
+    {
+      "name": "fundae.group.cancelled"
+    },
+    {
+      "name": "fundae.cost.added"
+    },
+    {
+      "name": "fundae.cost.updated"
+    },
+    {
+      "name": "fundae.cost.removed"
+    },
+    {
+      "name": "fundae.group.participant.enrolled"
+    },
+    {
+      "name": "fundae.group.participant.bulk-enrolled"
+    },
+    {
+      "name": "fundae.group.participant.updated"
+    },
+    {
+      "name": "fundae.group.participant.removed"
+    },
+    {
+      "name": "fundae.group.start-xml.generated"
+    },
+    {
+      "name": "fundae.group.completion-computed"
+    },
+    {
+      "name": "fundae.group.end-xml.generated"
+    },
+    {
+      "name": "fundae.group.audit-zip.generated"
+    }
   ],
   "apiNamespace": "/modules/fundae",
   "surfaces": ["admin", "auditor", "empresa_manager"]

@@ -7,19 +7,41 @@
   "category": "core",
   "tablePrefix": "mod_subscriptions_",
   "permissions": [
-    "subscriptions:subscription:read",
-    "subscriptions:subscription:create",
-    "subscriptions:subscription:cancel"
+    "subscriptions.subscription.read",
+    "subscriptions.subscription.create",
+    "subscriptions.subscription.cancel"
   ],
   "events": [
-    { "name": "subscriptions.subscription.created" },
-    { "name": "subscriptions.subscription.activated" },
-    { "name": "subscriptions.subscription.past_due" },
-    { "name": "subscriptions.subscription.unpaid" },
-    { "name": "subscriptions.subscription.canceled" },
-    { "name": "subscriptions.invoice.paid" },
-    { "name": "subscriptions.invoice.payment_failed" },
-    { "name": "subscriptions.invoice.refunded" }
+    {
+      "name": "subscriptions.subscription.created"
+    },
+    {
+      "name": "subscriptions.subscription.activated"
+    },
+    {
+      "name": "subscriptions.subscription.past_due"
+    },
+    {
+      "name": "subscriptions.subscription.unpaid"
+    },
+    {
+      "name": "subscriptions.subscription.canceled"
+    },
+    {
+      "name": "subscriptions.invoice.paid"
+    },
+    {
+      "name": "subscriptions.invoice.payment_failed"
+    },
+    {
+      "name": "subscriptions.invoice.refunded"
+    },
+    {
+      "name": "subscriptions.membership.activated"
+    },
+    {
+      "name": "subscriptions.membership.revoked"
+    }
   ],
   "hooks": [],
   "apiNamespace": "/modules/subscriptions",

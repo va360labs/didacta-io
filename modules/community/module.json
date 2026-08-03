@@ -6,12 +6,23 @@
   "displayName": "Comunidad — posts, hilos, reacciones, menciones",
   "category": "engagement",
   "tablePrefix": "mod_community_",
-  "permissions": ["community:read", "community:write", "community:moderate"],
+  "permissions": [
+    "community.post.read",
+    "community.post.write",
+    "community.comment.read",
+    "community.comment.write",
+    "community.reaction.write"
+  ],
   "events": [
-    { "name": "community.post.created" },
-    { "name": "community.comment.created" },
-    { "name": "community.reaction.added" },
-    { "name": "community.mention.created" }
+    {
+      "name": "community.post.created"
+    },
+    {
+      "name": "community.comment.created"
+    },
+    {
+      "name": "community.reaction.added"
+    }
   ],
   "apiNamespace": "/modules/community",
   "surfaces": ["alumno", "formador", "admin"]
