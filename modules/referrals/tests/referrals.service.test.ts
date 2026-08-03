@@ -700,6 +700,60 @@ describe('ciclo de vida de comisiones', () => {
       ReferralsCommissionStateError,
     );
   });
+
+  // ---- Split F3: sweep global (sancionado) + procesado por tenant ----
+
+  it('findTenantsWithDueCommissions devuelve tenants únicos con comisiones vencidas', async () => {
+    const { prisma, service } = build();
+    await seedCommission(prisma, service); // tenant-1, PENDING
+    // Comisión de OTRO tenant, también vencida (seed directo en el mock).
+    prisma.commissions.push({
+      id: 'com-otro',
+      tenantId: 'tenant-2',
+      referralId: 'ref-otro',
+      referrerUserId: 'referrer-2',
+      stripeInvoiceId: 'in_otro',
+      amountCents: 500,
+      currency: 'eur',
+      status: 'PENDING',
+      approveAfter: new Date(Date.now() - 1000),
+    });
+    const future = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+    expect((await service.findTenantsWithDueCommissions(future)).sort()).toEqual([
+      TENANT,
+      'tenant-2',
+    ]);
+    // Sin garantía vencida no hay tenants.
+    expect(await service.findTenantsWithDueCommissions(new Date(0))).toEqual([]);
+  });
+
+  it('approveDueCommissionsForTenant solo aprueba las de ESE tenant', async () => {
+    const { prisma, service, events } = build();
+    const commissionId = await seedCommission(prisma, service); // tenant-1
+    prisma.commissions.push({
+      id: 'com-otro',
+      tenantId: 'tenant-2',
+      referralId: 'ref-otro',
+      referrerUserId: 'referrer-2',
+      stripeInvoiceId: 'in_otro',
+      amountCents: 500,
+      currency: 'eur',
+      status: 'PENDING',
+      approveAfter: new Date(Date.now() - 1000),
+    });
+    const future = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+
+    expect(await service.approveDueCommissionsForTenant(TENANT, future)).toBe(1);
+
+    expect(prisma.commissions.find((c) => c['id'] === commissionId)!['status']).toBe('APPROVED');
+    // La comisión del otro tenant queda intacta.
+    expect(prisma.commissions.find((c) => c['id'] === 'com-otro')!['status']).toBe('PENDING');
+    expect(
+      events.filter((e) => e.name === 'referrals.commission.approved').map((e) => e.tenantId),
+    ).toEqual([TENANT]);
+    // Re-ejecutar no re-aprueba (idempotente).
+    expect(await service.approveDueCommissionsForTenant(TENANT, future)).toBe(0);
+  });
 });
 
 describe('recordPayout', () => {

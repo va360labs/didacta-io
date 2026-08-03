@@ -882,6 +882,24 @@ export class ZoomLiveService {
    * `mod_zoom_live_webhook_event` con UNIQUE en esa columna; un segundo intento
    * con el mismo id devuelve DUPLICATE sin re-aplicar el efecto.
    */
+  /**
+   * Resuelve el tenant dueño de un evento webhook SIN procesarlo (lookup de
+   * la sesión por zoomMeetingId, cross-tenant). Mitad «lookup» del patrón F3:
+   * el host la invoca bajo acceso global sancionado y ejecuta
+   * `handleWebhookEvent` bajo el contexto del tenant resuelto. Devuelve null
+   * si el meeting no matchea ninguna sesión local (el host procesa sancionado:
+   * el evento solo se archiva como IGNORED).
+   */
+  async resolveWebhookTenantId(event: ZoomWebhookEvent): Promise<string | null> {
+    const meetingId = event.payload?.object?.id ? String(event.payload.object.id) : null;
+    if (!meetingId) return null;
+    const session = await this.prisma.modZoomSession.findFirst({
+      where: { zoomMeetingId: meetingId },
+      select: { tenantId: true },
+    });
+    return session?.tenantId ?? null;
+  }
+
   async handleWebhookEvent(
     event: ZoomWebhookEvent,
   ): Promise<{ result: 'OK' | 'IGNORED' | 'DUPLICATE' | 'ERROR'; sessionId?: string }> {

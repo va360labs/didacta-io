@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { SubscriptionsGraceExpirationWorker } from '../src/modules/subscriptions/subscriptions-grace-expiration.worker';
+import { tenantContextStorage } from '../src/tenancy/tenant-context.storage';
 
 const noopLogger = {
   log: vi.fn(),
@@ -7,9 +8,15 @@ const noopLogger = {
   error: vi.fn(),
 } as never;
 
-function buildRegistryStub(opts: { initialized?: boolean; expired?: unknown[] } = {}) {
-  const expireGracePeriods = vi.fn(async () => opts.expired ?? []);
-  const service = { expireGracePeriods };
+function buildRegistryStub(
+  opts: { initialized?: boolean; expiredByTenant?: Record<string, unknown[]> } = {},
+) {
+  const expiredByTenant = opts.expiredByTenant ?? {};
+  const findTenantsWithExpiredGrace = vi.fn(async () => Object.keys(expiredByTenant));
+  const expireGracePeriodsForTenant = vi.fn(
+    async (tenantId: string) => expiredByTenant[tenantId] ?? [],
+  );
+  const service = { findTenantsWithExpiredGrace, expireGracePeriodsForTenant };
   const registry = {
     getSubscriptionsService: vi.fn(() => {
       if (opts.initialized === false) {
@@ -18,7 +25,7 @@ function buildRegistryStub(opts: { initialized?: boolean; expired?: unknown[] } 
       return service;
     }),
   } as never;
-  return { registry, service, expireGracePeriods };
+  return { registry, service, findTenantsWithExpiredGrace, expireGracePeriodsForTenant };
 }
 
 describe('SubscriptionsGraceExpirationWorker.triggerNow (degraded mode, sin Redis)', () => {
@@ -36,18 +43,17 @@ describe('SubscriptionsGraceExpirationWorker.triggerNow (degraded mode, sin Redi
     }
   });
 
-  it('invoca expireGracePeriods() del SubscriptionsService cuando se llama triggerNow()', async () => {
-    const { registry, expireGracePeriods } = buildRegistryStub({
-      expired: [
-        {
-          id: 's1',
-          tenantId: 't1',
-          userId: 'u1',
-          courseId: 'c1',
-          status: 'UNPAID',
+  it('barre tenants y expira por tenant cuando se llama triggerNow()', async () => {
+    const { registry, findTenantsWithExpiredGrace, expireGracePeriodsForTenant } =
+      buildRegistryStub({
+        expiredByTenant: {
+          t1: [{ id: 's1', tenantId: 't1', userId: 'u1', courseId: 'c1', status: 'UNPAID' }],
+          t2: [
+            { id: 's2', tenantId: 't2', userId: 'u2', courseId: 'c2', status: 'UNPAID' },
+            { id: 's3', tenantId: 't2', userId: 'u3', courseId: 'c3', status: 'UNPAID' },
+          ],
         },
-      ],
-    });
+      });
 
     const worker = new SubscriptionsGraceExpirationWorker(registry, noopLogger);
 
@@ -55,7 +61,32 @@ describe('SubscriptionsGraceExpirationWorker.triggerNow (degraded mode, sin Redi
     await worker.triggerNow();
 
     expect(registry.getSubscriptionsService).toHaveBeenCalledTimes(1);
-    expect(expireGracePeriods).toHaveBeenCalledTimes(1);
+    expect(findTenantsWithExpiredGrace).toHaveBeenCalledTimes(1);
+    expect(expireGracePeriodsForTenant).toHaveBeenCalledTimes(2);
+    // El mismo `now` del sweep viaja al procesado por tenant (consistencia).
+    const now = findTenantsWithExpiredGrace.mock.calls[0]![0];
+    expect(expireGracePeriodsForTenant).toHaveBeenCalledWith('t1', now);
+    expect(expireGracePeriodsForTenant).toHaveBeenCalledWith('t2', now);
+  });
+
+  it('el procesado por tenant corre bajo el contexto ALS de ESE tenant (patrón F3)', async () => {
+    const seenContexts: Array<string | undefined> = [];
+    const findTenantsWithExpiredGrace = vi.fn(async () => ['t1', 't2']);
+    const expireGracePeriodsForTenant = vi.fn(async () => {
+      seenContexts.push(tenantContextStorage.getStore()?.tenantId);
+      return [];
+    });
+    const registry = {
+      getSubscriptionsService: vi.fn(() => ({
+        findTenantsWithExpiredGrace,
+        expireGracePeriodsForTenant,
+      })),
+    } as never;
+
+    const worker = new SubscriptionsGraceExpirationWorker(registry, noopLogger);
+    await worker.triggerNow();
+
+    expect(seenContexts).toEqual(['t1', 't2']);
   });
 
   it('si mod.subscriptions no está inicializado, loguea warn y NO lanza', async () => {
@@ -75,18 +106,21 @@ describe('SubscriptionsGraceExpirationWorker.triggerNow (degraded mode, sin Redi
     expect(JSON.stringify(warnArgs)).toContain('no inicializado');
   });
 
-  it('si expireGracePeriods() lanza, el worker re-lanza (para retry de BullMQ)', async () => {
-    const expireGracePeriods = vi.fn(async () => {
+  it('si el barrido lanza, el worker re-lanza (para retry de BullMQ)', async () => {
+    const findTenantsWithExpiredGrace = vi.fn(async () => {
       throw new Error('boom');
     });
     const registry = {
-      getSubscriptionsService: vi.fn(() => ({ expireGracePeriods })),
+      getSubscriptionsService: vi.fn(() => ({
+        findTenantsWithExpiredGrace,
+        expireGracePeriodsForTenant: vi.fn(),
+      })),
     } as never;
 
     const worker = new SubscriptionsGraceExpirationWorker(registry, noopLogger);
 
     await expect(worker.triggerNow()).rejects.toThrow('boom');
-    expect(expireGracePeriods).toHaveBeenCalledTimes(1);
+    expect(findTenantsWithExpiredGrace).toHaveBeenCalledTimes(1);
   });
 });
 

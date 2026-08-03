@@ -506,18 +506,32 @@ export class ReferralsService {
   // ---------------- Ciclo de vida de comisiones ----------------
 
   /**
-   * PENDING → APPROVED para todas las comisiones cuya garantía venció.
-   * Lo invoca el worker (cron horario). Devuelve cuántas aprobó.
+   * Mitad «sweep» de la aprobación de comisiones (patrón F3): tenants con al
+   * menos una comisión PENDING cuya garantía venció. El worker la invoca bajo
+   * acceso global sancionado y procesa cada tenant con su contexto RLS.
    */
-  async approveDueCommissions(now: Date = new Date()): Promise<number> {
-    const due = await this.prisma.modReferralsCommission.findMany({
+  async findTenantsWithDueCommissions(now: Date = new Date()): Promise<string[]> {
+    const rows = await this.prisma.modReferralsCommission.findMany({
       where: { status: 'PENDING', approveAfter: { lte: now } },
+      select: { tenantId: true },
+      distinct: ['tenantId'],
+    });
+    return [...new Set(rows.map((r) => r.tenantId))];
+  }
+
+  /**
+   * Mitad «procesado» (por tenant): PENDING → APPROVED para las comisiones
+   * del tenant cuya garantía venció. Devuelve cuántas aprobó.
+   */
+  async approveDueCommissionsForTenant(tenantId: string, now: Date = new Date()): Promise<number> {
+    const due = await this.prisma.modReferralsCommission.findMany({
+      where: { tenantId, status: 'PENDING', approveAfter: { lte: now } },
       take: 500,
     });
     let approved = 0;
     for (const commission of due) {
       const result = await this.prisma.modReferralsCommission.updateMany({
-        where: { id: commission.id, status: 'PENDING' },
+        where: { id: commission.id, tenantId, status: 'PENDING' },
         data: { status: 'APPROVED', approvedAt: now },
       });
       if (result.count === 0) continue; // otro proceso la tocó — no-op
@@ -528,6 +542,20 @@ export class ReferralsService {
         REFERRALS_EVENT.COMMISSION_APPROVED,
         { commissionId: commission.id, referrerUserId: commission.referrerUserId },
       );
+    }
+    return approved;
+  }
+
+  /**
+   * Barrido global: composición sweep + por-tenant. La conserva la API del
+   * módulo (tests, llamadas in-process); el worker BullMQ usa las dos mitades
+   * por separado para escopar el procesado por tenant.
+   */
+  async approveDueCommissions(now: Date = new Date()): Promise<number> {
+    const tenants = await this.findTenantsWithDueCommissions(now);
+    let approved = 0;
+    for (const tenantId of tenants) {
+      approved += await this.approveDueCommissionsForTenant(tenantId, now);
     }
     return approved;
   }

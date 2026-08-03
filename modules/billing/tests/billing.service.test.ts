@@ -1182,3 +1182,87 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
     expect(publisher.events).toHaveLength(0);
   });
 });
+
+describe('BillingService — resolveWebhookTenantId (mitad lookup del patrón F3)', () => {
+  let prisma: MockPrisma;
+  let stripe: MockStripe;
+  let publisher: MockPublisher;
+  let svc: BillingService;
+
+  beforeEach(() => {
+    prisma = new MockPrisma();
+    stripe = new MockStripe();
+    publisher = new MockPublisher();
+    svc = new BillingService(prisma as unknown as never, stripe, publisher, urls);
+  });
+
+  it('checkout con NUESTRA marca (orderId+productId) → tenant de la metadata', async () => {
+    const tenantId = await svc.resolveWebhookTenantId({
+      id: 'evt_res_1',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_1',
+          metadata: { orderId: 'order-1', productId: 'prod-1', tenantId: 't-meta' },
+        } as unknown as Stripe.Checkout.Session,
+      },
+    } as Stripe.Event);
+    expect(tenantId).toBe('t-meta');
+  });
+
+  it('checkout SIN nuestra marca (p.ej. membresía de mod.subscriptions) → null', async () => {
+    const tenantId = await svc.resolveWebhookTenantId({
+      id: 'evt_res_2',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_2',
+          metadata: { tenantId: 't-ajeno', membership: '1' },
+        } as unknown as Stripe.Checkout.Session,
+      },
+    } as Stripe.Event);
+    expect(tenantId).toBeNull();
+  });
+
+  it('charge.refunded → tenant de la order por stripePaymentIntentId', async () => {
+    stripe.setPrice('price_a');
+    await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
+    const checkout = await svc.startCheckout({
+      tenantId: 't1',
+      userId: 'u1',
+      userEmail: 'u@test',
+      courseId: 'course-1',
+    });
+    prisma.orders.get(checkout.orderId)!.stripePaymentIntentId = 'pi_res_1';
+
+    const tenantId = await svc.resolveWebhookTenantId({
+      id: 'evt_res_3',
+      type: 'charge.refunded',
+      data: {
+        object: { id: 'ch_1', payment_intent: 'pi_res_1' } as unknown as Stripe.Charge,
+      },
+    } as Stripe.Event);
+    expect(tenantId).toBe('t1');
+
+    // PaymentIntent desconocido (cobro ajeno) → null.
+    expect(
+      await svc.resolveWebhookTenantId({
+        id: 'evt_res_4',
+        type: 'charge.refunded',
+        data: {
+          object: { id: 'ch_2', payment_intent: 'pi_desconocido' } as unknown as Stripe.Charge,
+        },
+      } as Stripe.Event),
+    ).toBeNull();
+  });
+
+  it('evento sin lógica de dominio → null (el host lo procesa sancionado)', async () => {
+    expect(
+      await svc.resolveWebhookTenantId({
+        id: 'evt_res_5',
+        type: 'payment_method.attached',
+        data: { object: {} },
+      } as unknown as Stripe.Event),
+    ).toBeNull();
+  });
+});

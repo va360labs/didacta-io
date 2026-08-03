@@ -1098,3 +1098,187 @@ describe('SubscriptionsService.listMine', () => {
     expect(mine[0]!.id).toBe('a');
   });
 });
+
+// ---------- Split F3: lookup sancionado + procesado por tenant ----------
+
+function makeSubRow(overrides: Partial<SubRow> & { id: string; tenantId: string }): SubRow {
+  return {
+    userId: 'u',
+    courseId: 'c1',
+    stripeSubscriptionId: null,
+    stripeCustomerId: 'cus_x',
+    stripePriceId: 'price_recurring',
+    status: 'ACTIVE',
+    unitAmount: 1999,
+    currency: 'eur',
+    interval: 'month',
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: false,
+    gracePeriodEndsAt: null,
+    canceledAt: null,
+    canceledReason: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+}
+
+describe('SubscriptionsService.resolveWebhookTenantId (mitad lookup del patrón F3)', () => {
+  it('customer.subscription.updated → tenant de la sub por stripeSubscriptionId', async () => {
+    const { service, prisma } = buildSystem();
+    prisma.subs.set(
+      's1',
+      makeSubRow({ id: 's1', tenantId: 't-sub', stripeSubscriptionId: 'sub_stripe_1' }),
+    );
+    const tenantId = await service.resolveWebhookTenantId({
+      id: 'evt_r1',
+      type: 'customer.subscription.updated',
+      data: { object: { id: 'sub_stripe_1' } },
+    } as unknown as Stripe.Event);
+    expect(tenantId).toBe('t-sub');
+  });
+
+  it('customer.subscription.created → tenant por metadata.subscriptionLocalId', async () => {
+    const { service, prisma } = buildSystem();
+    prisma.subs.set('sub-local-9', makeSubRow({ id: 'sub-local-9', tenantId: 't-created' }));
+    const tenantId = await service.resolveWebhookTenantId({
+      id: 'evt_r2',
+      type: 'customer.subscription.created',
+      data: { object: { id: 'sub_stripe_9', metadata: { subscriptionLocalId: 'sub-local-9' } } },
+    } as unknown as Stripe.Event);
+    expect(tenantId).toBe('t-created');
+  });
+
+  it('invoice.paid → tenant de la sub referenciada por el invoice', async () => {
+    const { service, prisma } = buildSystem();
+    prisma.subs.set(
+      's2',
+      makeSubRow({ id: 's2', tenantId: 't-inv', stripeSubscriptionId: 'sub_stripe_2' }),
+    );
+    const tenantId = await service.resolveWebhookTenantId({
+      id: 'evt_r3',
+      type: 'invoice.paid',
+      data: { object: { subscription: 'sub_stripe_2' } },
+    } as unknown as Stripe.Event);
+    expect(tenantId).toBe('t-inv');
+  });
+
+  it('charge.refunded → tenant de la invoice local por stripeInvoiceId', async () => {
+    const { service, prisma } = buildSystem();
+    prisma.invoices.set('inv-1', {
+      id: 'inv-1',
+      tenantId: 't-refund',
+      subscriptionId: 's3',
+      stripeInvoiceId: 'in_ref_1',
+      status: 'PAID',
+      amount: 1999,
+      currency: 'eur',
+      hostedInvoiceUrl: null,
+      paidAt: new Date(),
+      periodStart: new Date(),
+      periodEnd: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const tenantId = await service.resolveWebhookTenantId({
+      id: 'evt_r4',
+      type: 'charge.refunded',
+      data: { object: { invoice: 'in_ref_1' } },
+    } as unknown as Stripe.Event);
+    expect(tenantId).toBe('t-refund');
+  });
+
+  it('entidad desconocida o evento sin lógica de dominio → null (procesado sancionado)', async () => {
+    const { service } = buildSystem();
+    expect(
+      await service.resolveWebhookTenantId({
+        id: 'evt_r5',
+        type: 'customer.subscription.updated',
+        data: { object: { id: 'sub_stripe_desconocida' } },
+      } as unknown as Stripe.Event),
+    ).toBeNull();
+    expect(
+      await service.resolveWebhookTenantId({
+        id: 'evt_r6',
+        type: 'payment_method.attached',
+        data: { object: {} },
+      } as unknown as Stripe.Event),
+    ).toBeNull();
+  });
+});
+
+describe('SubscriptionsService — split F3 del barrido de grace periods', () => {
+  function installGraceFindMany(prisma: MockPrisma) {
+    // El findMany del mock base no implementa status/gracePeriodEndsAt.lte/
+    // distinct; este override cubre las dos formas que usa el split.
+    prisma.modSubscriptionsSubscription.findMany = (async (args: {
+      where: { tenantId?: string; status?: SubStatus; gracePeriodEndsAt?: { lte?: Date } };
+      distinct?: string[];
+    }) => {
+      const lte = args.where.gracePeriodEndsAt?.lte;
+      let rows = [...prisma.subs.values()].filter(
+        (s) =>
+          (!args.where.tenantId || s.tenantId === args.where.tenantId) &&
+          (!args.where.status || s.status === args.where.status) &&
+          (!lte || (s.gracePeriodEndsAt && s.gracePeriodEndsAt <= lte)),
+      );
+      if (args.distinct?.includes('tenantId')) {
+        const seen = new Set<string>();
+        rows = rows.filter((r) => (seen.has(r.tenantId) ? false : (seen.add(r.tenantId), true)));
+      }
+      return rows.map((r) => ({ ...r }));
+    }) as never;
+  }
+
+  it('findTenantsWithExpiredGrace devuelve tenants únicos con grace vencido', async () => {
+    const { service, prisma } = buildSystem();
+    installGraceFindMany(prisma);
+    const past = new Date(Date.now() - 1000);
+    prisma.subs.set(
+      's1',
+      makeSubRow({ id: 's1', tenantId: 't1', status: 'PAST_DUE', gracePeriodEndsAt: past }),
+    );
+    prisma.subs.set(
+      's2',
+      makeSubRow({ id: 's2', tenantId: 't1', status: 'PAST_DUE', gracePeriodEndsAt: past }),
+    );
+    prisma.subs.set(
+      's3',
+      makeSubRow({ id: 's3', tenantId: 't2', status: 'PAST_DUE', gracePeriodEndsAt: past }),
+    );
+    prisma.subs.set(
+      's4',
+      makeSubRow({
+        id: 's4',
+        tenantId: 't3',
+        status: 'PAST_DUE',
+        gracePeriodEndsAt: new Date(Date.now() + 86400_000),
+      }),
+    );
+    const tenants = await service.findTenantsWithExpiredGrace(new Date());
+    expect(tenants.sort()).toEqual(['t1', 't2']);
+  });
+
+  it('expireGracePeriodsForTenant solo toca las subs de ESE tenant y emite unpaid', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    installGraceFindMany(prisma);
+    const past = new Date(Date.now() - 1000);
+    prisma.subs.set(
+      's1',
+      makeSubRow({ id: 's1', tenantId: 't1', status: 'PAST_DUE', gracePeriodEndsAt: past }),
+    );
+    prisma.subs.set(
+      's2',
+      makeSubRow({ id: 's2', tenantId: 't2', status: 'PAST_DUE', gracePeriodEndsAt: past }),
+    );
+
+    const expired = await service.expireGracePeriodsForTenant('t1', new Date());
+
+    expect(expired.map((s) => s.id)).toEqual(['s1']);
+    expect(prisma.subs.get('s1')!.status).toBe('UNPAID');
+    expect(prisma.subs.get('s2')!.status).toBe('PAST_DUE'); // otro tenant: intacto
+    const unpaid = publisher.events.filter((e) => e.name === 'subscriptions.subscription.unpaid');
+    expect(unpaid).toHaveLength(1);
+    expect(unpaid[0]!.tenantId).toBe('t1');
+  });
+});

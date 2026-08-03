@@ -1566,3 +1566,48 @@ describe('ZoomLiveService · recordatorio 2h antes', () => {
     ]);
   });
 });
+
+describe('ZoomLiveService.resolveWebhookTenantId (mitad lookup del patrón F3)', () => {
+  it('resuelve el tenant de la sesión local por zoomMeetingId', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await service.create(TENANT, ACTOR, {
+      topic: 'Test',
+      startTime: '2026-05-15T10:00:00-03:00',
+      durationMinutes: 60,
+      hostEmail: 'h@x.com',
+      timezone: 'UTC',
+    });
+
+    const tenantId = await service.resolveWebhookTenantId({
+      event_id: 'evt-res-1',
+      event: 'meeting.started',
+      payload: { object: { id: created.zoomMeetingId! } },
+    });
+
+    expect(tenantId).toBe(TENANT);
+  });
+
+  it('meeting desconocido o payload sin id → null (el host procesa sancionado)', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+
+    expect(
+      await service.resolveWebhookTenantId({
+        event_id: 'evt-res-2',
+        event: 'meeting.started',
+        payload: { object: { id: 999999999 } },
+      }),
+    ).toBeNull();
+
+    expect(
+      await service.resolveWebhookTenantId({
+        event_id: 'evt-res-3',
+        event: 'meeting.started',
+        payload: { object: {} },
+      }),
+    ).toBeNull();
+  });
+});

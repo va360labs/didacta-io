@@ -541,6 +541,48 @@ export class BillingService {
   // ---------------- Webhook handler (idempotente) ----------------
 
   /**
+   * Resuelve el tenant dueño de un evento webhook SIN procesarlo. Es la mitad
+   * «lookup» del patrón F3: el host la invoca bajo acceso global sancionado y
+   * después ejecuta `handleWebhookEvent` bajo el contexto del tenant resuelto.
+   *
+   * Devuelve null cuando el evento no trae marca nuestra o la entidad no
+   * existe localmente (evento ajeno al módulo): el host procesa esos casos en
+   * modo sancionado — solo persisten para auditoría.
+   *
+   * La metadata es de confianza: el evento llega verificado por la firma HMAC
+   * de Stripe y la metadata la escribió nuestro propio checkout.
+   */
+  async resolveWebhookTenantId(event: Stripe.Event): Promise<string | null> {
+    switch (event.type) {
+      case 'checkout.session.completed':
+      case 'checkout.session.expired':
+      case 'checkout.session.async_payment_failed': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const metadata = session.metadata ?? {};
+        // Misma pertenencia POSITIVA que onCheckoutCompleted: sin nuestra
+        // marca (orderId + productId) el checkout es de otro módulo.
+        if (!metadata['orderId'] || !metadata['productId']) return null;
+        return metadata['tenantId'] ?? null;
+      }
+      case 'charge.refunded': {
+        const charge = event.data.object as Stripe.Charge;
+        const paymentIntentId =
+          typeof charge.payment_intent === 'string'
+            ? charge.payment_intent
+            : (charge.payment_intent?.id ?? null);
+        if (!paymentIntentId) return null;
+        const order = await this.prisma.modBillingOrder.findFirst({
+          where: { stripePaymentIntentId: paymentIntentId },
+          select: { tenantId: true },
+        });
+        return order?.tenantId ?? null;
+      }
+      default:
+        return null; // evento sin lógica de dominio: solo se archiva.
+    }
+  }
+
+  /**
    * Procesa un evento de Stripe ya validado por firma. Garantiza idempotencia:
    * si el evento ya se procesó, devuelve sin tocar nada.
    *

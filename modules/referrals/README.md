@@ -38,9 +38,10 @@ cross-module):
 ## API pública
 
 Service: `ReferralsService` (`getOrCreateCode`, `registerClick`, `attribute`,
-`accrueCommission`, `approveDueCommissions`, `approveCommissionNow`,
-`revokeCommission`, `recordPayout`, `memberStats`, `listCommissions`,
-`listReferrers`, `getConfig`, `updateConfig`).
+`accrueCommission`, `findTenantsWithDueCommissions`,
+`approveDueCommissionsForTenant`, `approveDueCommissions`,
+`approveCommissionNow`, `revokeCommission`, `recordPayout`, `memberStats`,
+`listCommissions`, `listReferrers`, `getConfig`, `updateConfig`).
 
 HTTP (host, `apps/api/src/modules/referrals/`): namespace `/modules/referrals`
 (`GET me`, `GET me/stats`, `POST track` público, `GET|PUT admin/config`,

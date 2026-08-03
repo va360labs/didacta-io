@@ -79,3 +79,19 @@ export async function runAsTenant<T>(
     async () => await fn(),
   );
 }
+
+/**
+ * Patrón webhook (F3): el tenant se RESUELVE primero con un lookup sancionado
+ * (id global del payload → fila → tenantId) y el PROCESADO corre escopado con
+ * `runAsTenant`. Cuando el lookup no encuentra tenant (evento ajeno, entidad
+ * desconocida), el procesado degrada a acceso sancionado: solo persiste el
+ * evento para auditoría/idempotencia — trabajo legítimamente sin tenant.
+ */
+export async function runAsTenantOrSanctioned<T>(
+  tenantId: string | null | undefined,
+  fn: () => Promise<T> | T,
+  opts: { userId?: string; traceLabel?: string } = {},
+): Promise<T> {
+  if (tenantId) return runAsTenant(tenantId, fn, opts);
+  return runSanctionedGlobalAccess(fn);
+}

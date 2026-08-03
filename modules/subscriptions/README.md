@@ -20,7 +20,7 @@ Alpha. MVP cubre suscripción recurrente por curso, grace period configurable tr
   - `subscriptions.subscription.unpaid` → pausa enrollment (grace expirado).
   - `subscriptions.subscription.canceled` (immediate=true) → desenrolla.
 - Grace period (default 3 días) tras `invoice.payment_failed`. Si Stripe cobra antes de que expire → vuelve a ACTIVE. Si expira sin pago → UNPAID + bridge pausa.
-- Cron horario `expireGracePeriods()` recorre subs PAST_DUE con `gracePeriodEndsAt < now`.
+- Cron horario recorre subs PAST_DUE con `gracePeriodEndsAt < now`: barrido `findTenantsWithExpiredGrace()` + `expireGracePeriodsForTenant()` por tenant (el worker del host escopa cada tenant en su contexto RLS); `expireGracePeriods()` conserva la composición global.
 
 ## API pública
 

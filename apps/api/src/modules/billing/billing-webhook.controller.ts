@@ -17,7 +17,10 @@ import { WebhookSignatureInvalidError } from '@didacta/mod-billing';
 import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
 import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
-import { runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
+import {
+  runAsTenantOrSanctioned,
+  runSanctionedGlobalAccess,
+} from '../../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from '../module-registry.service';
 import { BillingProvisioningService } from './billing-provisioning.service';
 
@@ -76,14 +79,24 @@ export class BillingWebhookController {
     // confirmado en Stripe y envía la bienvenida con el enlace de contraseña.
     const ctx = extractClientContext(req);
     const webBaseUrl = resolveWebBaseUrl(req);
-    // RLS F2: el tenant sale de la metadata del evento DENTRO del service del
-    // módulo (lookup de la order por id global) — acceso sancionado. F3: partir
-    // el service en lookup sancionado + procesado por tenant antes del flip.
-    await runSanctionedGlobalAccess(() =>
-      billing.handleWebhookEvent(event, parsedBody, {
-        provisionUser: ({ tenantId, email, name }) =>
-          this.provisioning.provision({ tenantId, email, name, webBaseUrl, ctx }),
-      }),
+    // RLS F3: lookup sancionado (metadata / order por id global) + procesado
+    // bajo el contexto del tenant resuelto. Sin tenant (evento ajeno) el
+    // procesado degrada a sancionado: solo archiva para auditoría.
+    const tenantId = await runSanctionedGlobalAccess(() => billing.resolveWebhookTenantId(event));
+    await runAsTenantOrSanctioned(
+      tenantId,
+      () =>
+        billing.handleWebhookEvent(event, parsedBody, {
+          provisionUser: ({ tenantId: provisionTenantId, email, name }) =>
+            this.provisioning.provision({
+              tenantId: provisionTenantId,
+              email,
+              name,
+              webBaseUrl,
+              ctx,
+            }),
+        }),
+      { traceLabel: 'billing-webhook' },
     );
     return { received: true, type: event.type, id: event.id };
   }

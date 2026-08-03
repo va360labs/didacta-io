@@ -13,7 +13,7 @@ import {
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
-import { runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
+import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from '../module-registry.service';
 
 const QUEUE_NAME = 'didacta.referrals.approval';
@@ -98,20 +98,30 @@ export class ReferralsApprovalWorker implements OnApplicationBootstrap, OnModule
   private async processJob(): Promise<void> {
     const startedAt = Date.now();
     try {
-      // approveDueCommissions() vive en modules/referrals/src (no puede
-      // importar helpers del API): sancionamos la llamada en bloque. El flip
-      // F3 exigirá partir el service en sweep global + procesado por tenant.
-      const approved = await runSanctionedGlobalAccess(() =>
-        this.registry.getReferralsService().approveDueCommissions(),
+      const service = this.registry.getReferralsService();
+      const now = new Date();
+      // Patrón F3 (como member-purge.worker): el barrido de tenants con
+      // comisiones vencidas es legítimamente cross-tenant (sancionado); el
+      // procesado de cada tenant corre bajo su contexto RLS.
+      const tenants = await runSanctionedGlobalAccess(() =>
+        service.findTenantsWithDueCommissions(now),
       );
+      let approved = 0;
+      for (const tenantId of tenants) {
+        approved += await runAsTenant(
+          tenantId,
+          () => service.approveDueCommissionsForTenant(tenantId, now),
+          { traceLabel: 'referrals-approval' },
+        );
+      }
       this.logger.log(
-        { approved, elapsedMs: Date.now() - startedAt },
+        { tenants: tenants.length, approved, elapsedMs: Date.now() - startedAt },
         'referrals approval job completado',
       );
     } catch (err) {
       this.logger.error(
         { err: err instanceof Error ? err.message : String(err) },
-        'referrals approval: approveDueCommissions() lanzó error',
+        'referrals approval: la aprobación de comisiones lanzó error',
       );
       throw err; // BullMQ aplica retry exponencial
     }

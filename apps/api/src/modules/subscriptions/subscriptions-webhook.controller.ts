@@ -20,7 +20,10 @@ import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
 import type { ClientContext } from '../../auth/client-context';
 import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
-import { runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
+import {
+  runAsTenantOrSanctioned,
+  runSanctionedGlobalAccess,
+} from '../../tenancy/tenant-context.storage';
 import { BillingProvisioningService } from '../billing/billing-provisioning.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { MembershipProvisioningService } from './membership-provisioning.service';
@@ -73,10 +76,13 @@ export class SubscriptionsWebhookController {
       parsedBody = { raw: rawBody };
     }
 
-    // RLS F2: el tenant sale de la metadata/lookup por id global DENTRO del
-    // service del módulo — acceso sancionado. F3: partir en lookup sancionado
-    // + procesado por tenant antes del flip.
-    await runSanctionedGlobalAccess(() => subs.handleWebhookEvent(event, parsedBody));
+    // RLS F3: lookup sancionado (sub/invoice por id global de Stripe) +
+    // procesado bajo el contexto del tenant resuelto. Sin tenant (entidad
+    // desconocida, evento sin dominio) degrada a sancionado: solo archiva.
+    const tenantId = await runSanctionedGlobalAccess(() => subs.resolveWebhookTenantId(event));
+    await runAsTenantOrSanctioned(tenantId, () => subs.handleWebhookEvent(event, parsedBody), {
+      traceLabel: 'subscriptions-webhook',
+    });
 
     // Fulfillment de MEMBRESÍA: el checkout completado materializa al
     // comprador (find-or-create user + bienvenida con enlace mágico) y crea la
@@ -87,12 +93,26 @@ export class SubscriptionsWebhookController {
     const webBaseUrl = resolveWebBaseUrl(req);
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
-      await runSanctionedGlobalAccess(() =>
-        this.registry
-          .getMembershipService()
-          .fulfillMembershipCheckout(session, ({ tenantId, email, name }) =>
-            this.provisioning.provision({ tenantId, email, name, webBaseUrl, ctx }),
-          ),
+      // RLS F3: el tenant de la membresía viaja en la metadata de la session
+      // (la escribió nuestro startMembershipCheckout; el evento llega firmado).
+      // Sin tenantId degrada a sancionado y el service conserva su semántica
+      // (no-op si no es membresía; error si es membresía con metadata coja).
+      const membershipTenantId = session.metadata?.['tenantId'] ?? null;
+      await runAsTenantOrSanctioned(
+        membershipTenantId,
+        () =>
+          this.registry
+            .getMembershipService()
+            .fulfillMembershipCheckout(session, ({ tenantId: provisionTenantId, email, name }) =>
+              this.provisioning.provision({
+                tenantId: provisionTenantId,
+                email,
+                name,
+                webBaseUrl,
+                ctx,
+              }),
+            ),
+        { traceLabel: 'membership-fulfillment' },
       );
     }
 
@@ -124,12 +144,25 @@ export class SubscriptionsWebhookController {
     try {
       // Mismo provisioner que el endpoint propio de billing: una compra
       // ANÓNIMA de curso puede entrar por este webhook compartido.
-      // RLS F2: mismo racional que el webhook propio de billing — sancionado.
-      await runSanctionedGlobalAccess(() =>
-        billing.handleWebhookEvent(event, parsedBody, {
-          provisionUser: ({ tenantId, email, name }) =>
-            this.billingProvisioning.provision({ tenantId, email, name, webBaseUrl, ctx }),
-        }),
+      // RLS F3: mismo patrón que el webhook propio de billing — lookup
+      // sancionado + procesado bajo el tenant resuelto.
+      const billingTenantId = await runSanctionedGlobalAccess(() =>
+        billing.resolveWebhookTenantId(event),
+      );
+      await runAsTenantOrSanctioned(
+        billingTenantId,
+        () =>
+          billing.handleWebhookEvent(event, parsedBody, {
+            provisionUser: ({ tenantId: provisionTenantId, email, name }) =>
+              this.billingProvisioning.provision({
+                tenantId: provisionTenantId,
+                email,
+                name,
+                webBaseUrl,
+                ctx,
+              }),
+          }),
+        { traceLabel: 'billing-webhook' },
       );
     } catch (err) {
       // Si el evento ERA de una compra de curso, propagamos: Stripe verá un

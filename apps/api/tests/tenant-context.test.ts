@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { TenantContextService } from '../src/tenancy/tenant-context.service';
+import {
+  isSanctionedGlobalAccess,
+  runAsTenantOrSanctioned,
+  tenantContextStorage,
+} from '../src/tenancy/tenant-context.storage';
 
 describe('TenantContextService', () => {
   it('expone el contexto dentro del scope de run()', async () => {
@@ -34,5 +39,25 @@ describe('TenantContextService', () => {
   it('get() devuelve undefined fuera de scope', () => {
     const service = new TenantContextService();
     expect(service.get()).toBeUndefined();
+  });
+});
+
+describe('runAsTenantOrSanctioned (patrón webhook F3)', () => {
+  it('con tenant abre el contexto ALS de ese tenant (sin marca sancionada)', async () => {
+    const seen = await runAsTenantOrSanctioned('t-webhook', async () => ({
+      tenantId: tenantContextStorage.getStore()?.tenantId,
+      sanctioned: isSanctionedGlobalAccess(),
+    }));
+    expect(seen).toEqual({ tenantId: 't-webhook', sanctioned: false });
+  });
+
+  it('sin tenant (null/undefined) degrada a acceso global sancionado', async () => {
+    for (const empty of [null, undefined]) {
+      const seen = await runAsTenantOrSanctioned(empty, async () => ({
+        tenantId: tenantContextStorage.getStore()?.tenantId,
+        sanctioned: isSanctionedGlobalAccess(),
+      }));
+      expect(seen).toEqual({ tenantId: undefined, sanctioned: true });
+    }
   });
 });

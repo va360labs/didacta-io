@@ -13,7 +13,7 @@ import {
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
-import { runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
+import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from '../module-registry.service';
 
 const QUEUE_NAME = 'didacta.subscriptions.grace-expiration';
@@ -28,9 +28,10 @@ type GraceExpirationJobData = Record<string, never>;
  * Worker BullMQ que ejecuta el barrido de grace periods de mod.subscriptions.
  * Cada hora en punto UTC (configurable vía `SUBSCRIPTIONS_GRACE_EXPIRATION_CRON`):
  *
- *  1. Llama `SubscriptionsService.expireGracePeriods()` que:
- *     - lee subs en PAST_DUE con `gracePeriodEndsAt < now`,
- *     - las marca UNPAID,
+ *  1. Barrido sancionado `findTenantsWithExpiredGrace()` (tenants con subs
+ *     PAST_DUE y `gracePeriodEndsAt < now`) y, por cada tenant bajo su
+ *     contexto RLS, `expireGracePeriodsForTenant()`:
+ *     - marca UNPAID las subs vencidas,
  *     - emite `subscriptions.subscription.unpaid` por cada una.
  *  2. El bridge `SubscriptionsLearningBridge` escucha el evento y pausa el
  *     enrollment correspondiente (sin borrar progreso).
@@ -133,8 +134,8 @@ export class SubscriptionsGraceExpirationWorker implements OnApplicationBootstra
   }
 
   /**
-   * Lógica del job: invoca `SubscriptionsService.expireGracePeriods()` y
-   * loguea el resultado. Si el módulo no está inicializado, warn y exit.
+   * Lógica del job: barrido sancionado de tenants + expiración por tenant
+   * bajo su contexto RLS. Si el módulo no está inicializado, warn y exit.
    */
   private async processJob(): Promise<void> {
     let service;
@@ -150,19 +151,31 @@ export class SubscriptionsGraceExpirationWorker implements OnApplicationBootstra
 
     const startedAt = Date.now();
     try {
-      // expireGracePeriods() vive en modules/subscriptions/src (no puede
-      // importar helpers del API): sancionamos la llamada en bloque. El flip
-      // F3 exigirá partir el service en sweep global + procesado por tenant.
-      const expired = await runSanctionedGlobalAccess(() => service.expireGracePeriods());
+      const now = new Date();
+      // Patrón F3 (como member-purge.worker): el barrido de tenants con
+      // grace vencido es legítimamente cross-tenant (sancionado); el
+      // procesado de cada tenant corre bajo su contexto RLS.
+      const tenants = await runSanctionedGlobalAccess(() =>
+        service.findTenantsWithExpiredGrace(now),
+      );
+      let count = 0;
+      for (const tenantId of tenants) {
+        const expired = await runAsTenant(
+          tenantId,
+          () => service.expireGracePeriodsForTenant(tenantId, now),
+          { traceLabel: 'grace-expiration' },
+        );
+        count += expired.length;
+      }
       const elapsedMs = Date.now() - startedAt;
       this.logger.log(
-        { count: expired.length, elapsedMs },
+        { tenants: tenants.length, count, elapsedMs },
         'subscriptions grace-expiration job completado',
       );
     } catch (err) {
       this.logger.error(
         { err: err instanceof Error ? err.message : String(err) },
-        'subscriptions grace-expiration: expireGracePeriods() lanzó error',
+        'subscriptions grace-expiration: el barrido de grace periods lanzó error',
       );
       throw err; // re-lanzamos para que BullMQ aplique retry exponencial
     }

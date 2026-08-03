@@ -290,6 +290,61 @@ export class SubscriptionsService {
   // ---------------- Webhook handler (idempotente) ----------------
 
   /**
+   * Resuelve el tenant dueño de un evento webhook SIN procesarlo. Mitad
+   * «lookup» del patrón F3: el host la invoca bajo acceso global sancionado y
+   * después ejecuta `handleWebhookEvent` bajo el contexto del tenant resuelto.
+   * Devuelve null si la entidad no existe localmente o el evento no tiene
+   * lógica de dominio (el host lo procesa sancionado: solo se archiva).
+   */
+  async resolveWebhookTenantId(event: Stripe.Event): Promise<string | null> {
+    switch (event.type) {
+      case 'customer.subscription.created': {
+        const localId = this.extractLocalId(event.data.object as Stripe.Subscription);
+        if (!localId) return null;
+        const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
+          where: { id: localId },
+          select: { tenantId: true },
+        });
+        return sub?.tenantId ?? null;
+      }
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted': {
+        const stripeSub = event.data.object as Stripe.Subscription;
+        const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
+          where: { stripeSubscriptionId: stripeSub.id },
+          select: { tenantId: true },
+        });
+        return sub?.tenantId ?? null;
+      }
+      case 'invoice.paid':
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object as Stripe.Invoice;
+        if (!invoice.subscription) return null;
+        const stripeSubId =
+          typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription.id;
+        const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
+          where: { stripeSubscriptionId: stripeSubId },
+          select: { tenantId: true },
+        });
+        return sub?.tenantId ?? null;
+      }
+      case 'charge.refunded': {
+        const charge = event.data.object as Stripe.Charge;
+        const stripeInvoiceId =
+          typeof charge.invoice === 'string' ? charge.invoice : (charge.invoice?.id ?? null);
+        if (!stripeInvoiceId) return null;
+        const invoice = await this.prisma.modSubscriptionsInvoice.findUnique({
+          where: { stripeInvoiceId },
+          select: { tenantId: true },
+        });
+        return invoice?.tenantId ?? null;
+      }
+      default:
+        return null;
+    }
+  }
+
+  /**
    * Procesa un evento Stripe ya validado por firma. Idempotente.
    */
   async handleWebhookEvent(event: Stripe.Event, rawPayload: unknown): Promise<void> {
@@ -353,17 +408,32 @@ export class SubscriptionsService {
   // ---------------- Cron: expirar grace periods ----------------
 
   /**
-   * Lee subs en PAST_DUE con gracePeriodEndsAt < now → marca UNPAID y emite
-   * evento. El bridge mod.learning escucha y pausa el enrollment.
-   *
-   * Devuelve la lista de subs procesadas (para logging).
-   *
-   * Llamar desde un cron job cada hora (apps/api con BullMQ schedule).
+   * Mitad «sweep» del barrido de grace periods (patrón F3): tenants con al
+   * menos una sub PAST_DUE cuyo grace venció. El worker la invoca bajo acceso
+   * global sancionado y después procesa cada tenant con su contexto RLS.
    */
-  async expireGracePeriods(): Promise<SubscriptionRow[]> {
-    const now = new Date();
+  async findTenantsWithExpiredGrace(now: Date = new Date()): Promise<string[]> {
+    const rows = await this.prisma.modSubscriptionsSubscription.findMany({
+      where: { status: 'PAST_DUE', gracePeriodEndsAt: { lte: now } },
+      select: { tenantId: true },
+      distinct: ['tenantId'],
+    });
+    return [...new Set(rows.map((r) => r.tenantId))];
+  }
+
+  /**
+   * Mitad «procesado» (por tenant): marca UNPAID las subs del tenant en
+   * PAST_DUE con grace vencido y emite `subscriptions.subscription.unpaid`
+   * por cada una. El bridge mod.learning escucha y pausa el enrollment.
+   * Devuelve las subs procesadas (para logging).
+   */
+  async expireGracePeriodsForTenant(
+    tenantId: string,
+    now: Date = new Date(),
+  ): Promise<SubscriptionRow[]> {
     const expired = await this.prisma.modSubscriptionsSubscription.findMany({
       where: {
+        tenantId,
         status: 'PAST_DUE',
         gracePeriodEndsAt: { lte: now },
       },
@@ -381,6 +451,21 @@ export class SubscriptionsService {
       });
     }
     return expired;
+  }
+
+  /**
+   * Barrido global: composición sweep + por-tenant. La conserva la API del
+   * módulo (tests, llamadas in-process sin contexto); el worker BullMQ usa
+   * las dos mitades por separado para escopar el procesado por tenant.
+   */
+  async expireGracePeriods(): Promise<SubscriptionRow[]> {
+    const now = new Date();
+    const tenants = await this.findTenantsWithExpiredGrace(now);
+    const processed: SubscriptionRow[] = [];
+    for (const tenantId of tenants) {
+      processed.push(...(await this.expireGracePeriodsForTenant(tenantId, now)));
+    }
+    return processed;
   }
 
   // ---------------- Webhook event handlers (privados) ----------------
