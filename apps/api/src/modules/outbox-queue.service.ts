@@ -134,8 +134,11 @@ export class OutboxQueueService implements OnApplicationBootstrap, OnModuleDestr
   /**
    * Encola el despacho de un evento ya persistido en outbox_event.
    *
-   * Usa el `outboxId` como `jobId` para que BullMQ deduplique automáticamente
-   * si el mismo evento se reencola (ej. reintento + recovery worker).
+   * El `jobId` deriva del `outboxId` para que BullMQ deduplique si el mismo
+   * evento se reencola (ej. reintento + recovery worker). Con prefijo: BullMQ
+   * rechaza custom ids enteros («Custom Id cannot be integers») — con el id
+   * numérico pelado TODOS los enqueue fallaban en silencio y el bus caía
+   * siempre al fallback in-process, dejando la cola sin uso real.
    */
   async enqueue(outboxId: bigint): Promise<void> {
     if (!this.queue) {
@@ -144,7 +147,7 @@ export class OutboxQueueService implements OnApplicationBootstrap, OnModuleDestr
     await this.queue.add(
       'dispatch',
       { outboxId: outboxId.toString() },
-      { jobId: outboxId.toString() },
+      { jobId: `outbox-${outboxId.toString()}` },
     );
   }
 

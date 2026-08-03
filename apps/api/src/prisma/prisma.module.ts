@@ -8,6 +8,8 @@ import { isSanctionedGlobalAccess, tenantContextStorage } from '../tenancy/tenan
 import {
   buildTenantScopedModelSet,
   createRlsEnforcementExtension,
+  isInsidePrismaTransaction,
+  markPrismaTransactionScope,
   resolveRlsEnforcementMode,
 } from './rls-enforcement.extension';
 import { RlsGapTelemetry } from './rls-gap-telemetry';
@@ -36,15 +38,34 @@ import { PrismaService } from './prisma.service';
         const base = new PrismaService();
         const mode = resolveRlsEnforcementMode();
         if (mode === 'off') return base;
-        return base.$extends(
+        const extended = base.$extends(
           createRlsEnforcementExtension({
             mode,
             getContext: () => tenantContextStorage.getStore(),
             tenantModels: buildTenantScopedModelSet(),
             onGap: (gap) => telemetry.record(gap),
             isSanctioned: () => isSanctionedGlobalAccess(),
+            isInTransaction: () => isInsidePrismaTransaction(),
           }),
         ) as unknown as PrismaService;
+        // $transaction del caller marcado con el scope: los hooks de sus
+        // operaciones (lazy, ejecutan DENTRO de la llamada) ven la marca y no
+        // envuelven — envolver las sacaría de la transacción (ver extensión).
+        return new Proxy(extended, {
+          get(target, prop) {
+            if (prop === '$transaction') {
+              const original = Reflect.get(target, prop, target) as (
+                ...args: unknown[]
+              ) => Promise<unknown>;
+              return (...args: unknown[]) =>
+                markPrismaTransactionScope(() => original.apply(target, args));
+            }
+            const value: unknown = Reflect.get(target, prop, target);
+            return typeof value === 'function'
+              ? (value as (...a: unknown[]) => unknown).bind(target)
+              : value;
+          },
+        });
       },
     },
   ],

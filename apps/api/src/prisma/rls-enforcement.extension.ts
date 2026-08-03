@@ -3,7 +3,33 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { Prisma } from '@didacta/database';
+
+/**
+ * Marca "estamos dentro de un $transaction del caller" (batch o interactiva).
+ *
+ * El wrap `$transaction([set_config, query])` de la extensión ejecuta la query
+ * en una transacción NUEVA del cliente base — si la operación ya venía dentro
+ * de una transacción del servicio, el wrap la SACA de ella (caracterizado
+ * contra Prisma 5.22) y rompe su atomicidad: p.ej. el batch de messaging
+ * (conversation.create + participant.create) acababa en dos transacciones
+ * independientes y la FK del participant fallaba de forma intermitente.
+ *
+ * La factory de PrismaModule envuelve `$transaction` del cliente extendido con
+ * este scope; el hook lo consulta y NO envuelve esas operaciones (quedan en su
+ * transacción, sin GUC — telemetría aparte con firma `@tx`: son el worklist de
+ * los ~17 `$transaction` propios de la fase 2).
+ */
+const prismaTransactionScope = new AsyncLocalStorage<true>();
+
+export function markPrismaTransactionScope<T>(fn: () => Promise<T>): Promise<T> {
+  return prismaTransactionScope.run(true, fn);
+}
+
+export function isInsidePrismaTransaction(): boolean {
+  return prismaTransactionScope.getStore() === true;
+}
 
 /**
  * Modo de enforcement de RLS en runtime (env RLS_ENFORCEMENT):
@@ -77,6 +103,12 @@ export interface RlsEnforcementOptions {
    * como hueco.
    */
   isSanctioned?: () => boolean;
+  /**
+   * true si la operación corre dentro de un `$transaction` del caller
+   * (markPrismaTransactionScope): no se envuelve — el wrap la sacaría de su
+   * transacción — y se telemetría con firma `@tx` (worklist F2).
+   */
+  isInTransaction?: () => boolean;
 }
 
 /**
@@ -106,6 +138,13 @@ export function createRlsEnforcementExtension(opts: RlsEnforcementOptions) {
               return query(args);
             }
             if (ctx.gucApplied || !scoped) {
+              return query(args);
+            }
+            if (opts.isInTransaction?.()) {
+              // Dentro de un $transaction del caller: envolver la sacaría de
+              // su transacción (rompe atomicidad — FK intermitentes). Corre
+              // sin GUC y se registra con firma propia para el worklist F2.
+              opts.onGap({ model, operation: `${operation}@tx` });
               return query(args);
             }
 

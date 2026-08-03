@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildTenantScopedModelSet,
   createRlsEnforcementExtension,
+  isInsidePrismaTransaction,
+  markPrismaTransactionScope,
   resolveRlsEnforcementMode,
   type RlsEnforcementOptions,
 } from '../src/prisma/rls-enforcement.extension';
@@ -136,6 +138,23 @@ describe('createRlsEnforcementExtension', () => {
     expect(result).toEqual(queryResult);
     expect(onGap).not.toHaveBeenCalled();
     expect(fakeClient.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('dentro de un $transaction del caller: NO envuelve (lo sacaría de su tx) y telemetría @tx', async () => {
+    const { hook, onGap, fakeClient } = setupHook({
+      getContext: () => ({ tenantId: 't-1' }),
+      isInTransaction: () => isInsidePrismaTransaction(),
+    });
+    const result = await markPrismaTransactionScope(() =>
+      hook({ model: 'User', operation: 'create', args: {}, query }),
+    );
+    expect(result).toEqual(queryResult);
+    // Sin wrap: la operación se queda en la transacción del caller.
+    expect(fakeClient.$transaction).not.toHaveBeenCalled();
+    expect(onGap).toHaveBeenCalledWith({ model: 'User', operation: 'create@tx' });
+    // Fuera del scope, la misma operación SÍ se envuelve.
+    await hook({ model: 'User', operation: 'create', args: {}, query });
+    expect(fakeClient.$transaction).toHaveBeenCalledTimes(1);
   });
 });
 
