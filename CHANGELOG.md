@@ -10,6 +10,53 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.94] — 2026-08-03
+
+#### Notes
+
+- **Endurecimiento de seguridad y aislamiento por tenant.** Sin cambios de
+  configuración para el operador. Un cambio de comportamiento a tener en
+  cuenta si integras la API por tu cuenta: varios endpoints que antes
+  aceptaban cualquier sesión autenticada ahora exigen el rol adecuado
+  (respuesta **403** en vez de dejar pasar) — ver «Security» abajo.
+
+#### Security
+
+- **Control de acceso por rol en las escrituras del catálogo**: crear, editar,
+  publicar, archivar y borrar cursos, módulos y lecciones
+  (`/modules/courses/*`) exige rol formador o administrador. Antes cualquier
+  usuario autenticado del tenant podía modificar el catálogo.
+- **Invitaciones de matrícula protegidas**: listar, crear y revocar
+  invitaciones (`/modules/learning/invitations`) exige rol formador o
+  administrador.
+- **Certificados por propiedad**: el detalle y la descarga de un certificado
+  (`/modules/certificates/:id`, `/:id/download`) solo los sirve a su titular o
+  al personal (formador/admin); una petición a un certificado ajeno responde
+  **404**. La verificación pública compartible (`/verify/:id`) no cambia.
+- **Registro de la instalación restringido**: los endpoints `/admin/registry/*`
+  (opt-in/opt-out con Cloud) exigen sesión de super-admin.
+- **White-label con sesión de administrador**: los endpoints Enterprise de
+  white-label exigen sesión de administrador además de la capability
+  `feat:white_label`.
+- **Códigos de estado coherentes**: los rechazos por falta de rol devuelven
+  **403** (había sesión, faltaba autorización) en lugar de 401 en más de 20
+  endpoints de administración y módulos.
+- **Contador de miembros de grupo**: unirse a un grupo es idempotente; repetir
+  la acción ya no infla el contador de miembros.
+
+#### Changed
+
+- **Aislamiento por tenant (Row-Level Security), fase 2**: los endpoints
+  públicos (resueltos por dominio, slug o ticket), los webhooks entrantes, los
+  workers en segundo plano y el SSO establecen ahora su contexto de tenant de
+  forma explícita, de cara al aislamiento por RLS. Sin cambios de
+  comportamiento observable en esta versión (el enforcement real llega en una
+  fase posterior); reduce el ruido de la telemetría interna.
+- **Contratos de módulos**: el validador de contratos (`module-doctor`) coteja
+  ahora `module.json` con el manifiesto del módulo y con la versión del núcleo,
+  y vuelve a ejecutarse en cada push y pull request. Todos los módulos quedan
+  alineados.
+
 ### [0.0.1-alpha.93] — 2026-08-03
 
 #### Notes

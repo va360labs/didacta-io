@@ -168,8 +168,8 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 # Stage 6: runner — imagen final desde alpine LIMPIO (no hereda del builder)
 # ----------------------------------------------------------------------------
 # DIDACTA_VERSION: version de la app, inyectada en build time.
-# Sobreescribible con: docker build --build-arg DIDACTA_VERSION=0.0.1-alpha.93
-ARG DIDACTA_VERSION=0.0.1-alpha.93
+# Sobreescribible con: docker build --build-arg DIDACTA_VERSION=0.0.1-alpha.94
+ARG DIDACTA_VERSION=0.0.1-alpha.94
 
 FROM node:22-alpine AS runner
 # Re-declarar ARG para que este disponible en este stage (Docker multi-stage)
