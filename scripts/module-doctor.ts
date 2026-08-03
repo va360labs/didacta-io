@@ -57,6 +57,23 @@ const REQUIRED_TOP_FIELDS = [
   'apiNamespace',
 ];
 
+/**
+ * Un módulo "marketplace-style" trae el module.json en el shape EXPANDIDO que
+ * valida el schema strict del host (module-manifest.schema.ts): vendor,
+ * isolation, http, didacta, etc. Ese schema es `.strict()` y NO admite las
+ * keys legacy del contrato first-party (`edition`, `category`,
+ * `requiredLicenseFeature`) — un ZIP firmado con ellas fallaría el install con
+ * MANIFEST_SCHEMA_INVALID. Para estos módulos el doctor invierte la regla:
+ * `edition` deja de ser obligatorio y las keys legacy pasan a ser error.
+ * (Coherente con la regla de producto: los módulos son SIEMPRE Community.)
+ */
+const MARKETPLACE_STYLE_MARKERS = ['vendor', 'isolation', 'http', 'didacta'] as const;
+const LEGACY_KEYS_REJECTED_BY_HOST = ['edition', 'category', 'requiredLicenseFeature'] as const;
+
+function isMarketplaceStyle(manifest: any): boolean {
+  return MARKETPLACE_STYLE_MARKERS.some((k) => manifest[k] !== undefined);
+}
+
 const REQUIRED_README_SECTIONS = [
   /^#\s+`?mod\./m, // título con `mod.`
   /^##\s+(Edici[oó]n|Edition)/m,
@@ -99,8 +116,13 @@ function validateModule(moduleDir: string): Issue[] {
     return issues;
   }
 
-  // Campos requeridos
-  for (const f of REQUIRED_TOP_FIELDS) {
+  const marketplaceStyle = isMarketplaceStyle(manifest);
+
+  // Campos requeridos (marketplace-style: `edition` no existe en el schema del host)
+  const requiredFields = marketplaceStyle
+    ? REQUIRED_TOP_FIELDS.filter((f) => f !== 'edition')
+    : REQUIRED_TOP_FIELDS;
+  for (const f of requiredFields) {
     if (manifest[f] === undefined || manifest[f] === null) {
       issues.push({
         module: name,
@@ -108,6 +130,21 @@ function validateModule(moduleDir: string): Issue[] {
         field: f,
         message: `Missing required field "${f}"`,
       });
+    }
+  }
+
+  // Marketplace-style: keys legacy que el schema strict del host rechaza en
+  // install (MANIFEST_SCHEMA_INVALID) → error aquí, no en producción.
+  if (marketplaceStyle) {
+    for (const k of LEGACY_KEYS_REJECTED_BY_HOST) {
+      if (manifest[k] !== undefined) {
+        issues.push({
+          module: name,
+          severity: 'error',
+          field: k,
+          message: `Key legacy "${k}" presente en un module.json marketplace-style: el schema strict del host (module-manifest.schema.ts) la rechaza al instalar.`,
+        });
+      }
     }
   }
 

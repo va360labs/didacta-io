@@ -1,7 +1,6 @@
 {
   "name": "mod.migrator-learndash",
   "version": "1.1.1",
-  "edition": "community",
   "displayName": "Migrador desde WordPress + LearnDash",
   "description": "Importa cursos, lecciones, temas, quizzes, preguntas, usuarios, grupos, matrículas, media y progreso desde una instalación WordPress + LearnDash hacia Didacta. Wizard didáctico paso a paso, ETL con staging, idempotencia por checksum, reportes auditables.",
   "coreVersionRequired": "^0.0.1-alpha.81",
