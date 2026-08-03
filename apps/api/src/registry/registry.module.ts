@@ -10,11 +10,16 @@
  */
 
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { RegistryController } from './registry.controller';
 import { RegistryService } from './registry.service';
 import { TelemetryHeartbeatService } from './telemetry-heartbeat.service';
 
+// AuthModule aporta TokenService, dependencia del JwtAuthGuard que ahora
+// protege RegistryController (super_admin). Sin él, el DI del guard rompe el
+// boot.
 @Module({
+  imports: [AuthModule],
   controllers: [RegistryController],
   providers: [RegistryService, TelemetryHeartbeatService],
   exports: [RegistryService],

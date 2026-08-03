@@ -24,9 +24,26 @@
 
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
+import semver from 'semver';
 
 const ROOT = resolve(process.cwd());
 const MODULES_DIR = resolve(ROOT, 'modules');
+
+/**
+ * CORE_VERSION real del runtime (module-registry.service.ts). Es lo que el
+ * registry pasa a `new ModuleRegistry({ coreVersion })` y contra lo que valida
+ * `coreVersionRequired` de cada módulo al boot. El doctor lo lee para cazar el
+ * mismatch en CI en vez de que reviente el arranque del API (F2 dejó
+ * CORE_VERSION en 0.0.1 y 5 módulos requerían ^1.0.0 → boot muerto).
+ */
+function readCoreVersion(): string | null {
+  const p = resolve(ROOT, 'apps', 'api', 'src', 'modules', 'module-registry.service.ts');
+  if (!existsSync(p)) return null;
+  const m = readFileSync(p, 'utf8').match(/const\s+CORE_VERSION\s*=\s*'([^']+)'/);
+  return m ? m[1] : null;
+}
+
+const CORE_VERSION = readCoreVersion();
 
 type Severity = 'error' | 'warning';
 type Issue = { module: string; severity: Severity; field?: string; message: string };
@@ -182,6 +199,20 @@ function validateModule(moduleDir: string): Issue[] {
 
   // Coherencia module.json ↔ src/manifest.ts (contrato runtime)
   issues.push(...compareWithRuntimeManifest(name, dirPath, manifest));
+
+  // coreVersionRequired satisfecho por el CORE_VERSION real del registry: si no,
+  // el módulo tira CoreVersionMismatchError al registrarse y el API no arranca.
+  if (CORE_VERSION && manifest.coreVersionRequired) {
+    const range = String(manifest.coreVersionRequired);
+    if (!semver.satisfies(CORE_VERSION, range, { includePrerelease: false })) {
+      issues.push({
+        module: name,
+        severity: 'error',
+        field: 'coreVersionRequired',
+        message: `coreVersionRequired "${range}" NO lo satisface el CORE_VERSION real del registry ("${CORE_VERSION}"). El módulo rompería el boot con CoreVersionMismatchError.`,
+      });
+    }
+  }
 
   // Schema Prisma — verifica que las tablas usen el prefijo
   if (existsSync(schemaPath)) {

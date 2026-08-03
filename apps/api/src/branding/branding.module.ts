@@ -18,12 +18,16 @@
  */
 
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { BrandingController } from './branding.controller';
 import { BrandingService } from './branding.service';
 import { WhiteLabelController } from './white-label.controller.ee';
 import { WhiteLabelService } from './white-label.service.ee';
 
+// AuthModule aporta TokenService, dependencia del JwtAuthGuard que protege
+// WhiteLabelController (sin este import el DI del guard revienta el boot).
 @Module({
+  imports: [AuthModule],
   controllers: [BrandingController, WhiteLabelController],
   providers: [BrandingService, WhiteLabelService],
   exports: [BrandingService],
