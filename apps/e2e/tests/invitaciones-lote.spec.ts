@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { adminTokenForBootstrap, API_URL, signup } from '../helpers/api';
+import { adminTokenForBootstrap, API_URL, createPublishedCourse, signup } from '../helpers/api';
 
 /**
  * El envío por lotes de invitaciones responde SIN esperar a mandar los correos.
@@ -79,5 +79,94 @@ test.describe('invitaciones · envío por lotes', () => {
     const final = await summary();
     expect(final.envio?.enviados).toBeGreaterThanOrEqual(3);
     expect(final.envio?.fallidos ?? []).toHaveLength(0);
+  });
+
+  test('con accessGroupId, el lote añade a cada destinatario al grupo (y matricula su curso)', async () => {
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
+    const stamp = Date.now();
+    const adminToken = await adminTokenForBootstrap(tenantSlug);
+    const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
+
+    const course = await createPublishedCourse({
+      bearer: adminToken,
+      title: `Curso lote ${stamp}`,
+      slug: `curso-lote-${stamp}`,
+    });
+
+    const groupRes = await fetch(`${API_URL}/api/v1/modules/access-groups`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: `Aula lote ${stamp}`, kind: 'COURSE', courseIds: [course.id] }),
+    });
+    expect(groupRes.ok, 'crear grupo → ok').toBe(true);
+    const group = (await groupRes.json()) as { id: string };
+
+    const emails = [0, 1].map((i) => `e2e-lote-grupo-${stamp}-${i}@example.test`);
+    for (const email of emails) {
+      const r = await fetch(`${API_URL}/api/v1/admin/users`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ email, name: `Pendiente grupo ${stamp}`, role: 'alumno' }),
+      });
+      expect(r.ok, `alta OK (got ${r.status})`).toBe(true);
+    }
+
+    const res = await fetch(`${API_URL}/api/v1/admin/invitations/send-batch`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ emails, pauseMs: 200, accessGroupId: group.id }),
+    });
+    expect(res.ok, `send-batch OK (got ${res.status})`).toBe(true);
+
+    const summary = async (): Promise<Summary> => {
+      const r = await fetch(`${API_URL}/api/v1/admin/invitations/summary`, { headers });
+      expect(r.ok).toBe(true);
+      return (await r.json()) as Summary;
+    };
+    await expect
+      .poll(async () => (await summary()).envio?.enCurso, { timeout: 30_000, intervals: [500] })
+      .toBe(false);
+    const final = await summary();
+    expect(final.envio?.enviados).toBe(2);
+    expect(final.envio?.fallidos ?? []).toHaveLength(0);
+
+    // Los dos quedaron en el grupo (y por tanto matriculados en su curso) sin
+    // haber tocado contraseña ni entrado nunca — la invitación por lotes es lo
+    // que los puso ahí.
+    const groupDetail = await fetch(`${API_URL}/api/v1/modules/access-groups/${group.id}`, {
+      headers,
+    });
+    expect(groupDetail.ok).toBe(true);
+    const detail = (await groupDetail.json()) as { members: Array<{ email: string | null }> };
+    const miembros = detail.members.map((m) => m.email);
+    for (const email of emails) {
+      expect(miembros).toContain(email);
+    }
+  });
+
+  test('un accessGroupId inválido no arranca el lote (nadie recibe invitación)', async () => {
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
+    const stamp = Date.now();
+    const adminToken = await adminTokenForBootstrap(tenantSlug);
+    const headers = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
+
+    const email = `e2e-lote-grupoinvalido-${stamp}@example.test`;
+    const alta = await fetch(`${API_URL}/api/v1/admin/users`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ email, name: `Pendiente ${stamp}`, role: 'alumno' }),
+    });
+    expect(alta.ok, `alta OK (got ${alta.status})`).toBe(true);
+
+    const res = await fetch(`${API_URL}/api/v1/admin/invitations/send-batch`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        emails: [email],
+        accessGroupId: '00000000-0000-0000-0000-000000000000',
+      }),
+    });
+    // El grupo no existe en este tenant → 404, y el lote ni arranca.
+    expect(res.status).toBe(404);
   });
 });

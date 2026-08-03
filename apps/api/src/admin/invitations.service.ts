@@ -7,6 +7,7 @@ import { Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminUsersService } from './admin-users.service';
+import { AccessGroupsService } from '../modules/access-groups/access-groups.service';
 import type { ClientContext } from '../auth/client-context';
 
 /**
@@ -48,6 +49,9 @@ export class InvitationsService {
     private readonly prisma: PrismaService,
     private readonly adminUsers: AdminUsersService,
     private readonly logger: PinoLogger,
+    // Mismo patrón que AdminUsersService.invite()/startBulkInvite(): el core
+    // llama al service del módulo first-party, nunca a sus tablas.
+    private readonly accessGroups: AccessGroupsService,
   ) {}
 
   async summary(tenantId: string): Promise<InvitationsSummary> {
@@ -288,13 +292,20 @@ export class InvitationsService {
    * El progreso se consulta en `summary().envio`. Si el contenedor se reinicia
    * a mitad, los que queden sin token los recoge el lote siguiente: el envío
    * es reanudable por construcción.
+   *
+   * `opts.accessGroupId` (opcional): además de invitar, añade a cada
+   * destinatario del lote a ese grupo de acceso (mismo `assignMembers` que usa
+   * `AdminUsersService.invite()`/`startBulkInvite()` — aditivo, no toca los
+   * grupos que ya tuviera). Pensado para el cohort "sin ningún curso
+   * asignado": sin esto, un lote entraría a un aula vacía y habría que
+   * arreglarlo persona por persona desde `/admin/grupos-acceso`.
    */
   async startBatch(
     tenantId: string,
     actorId: string,
     webBaseUrl: string,
     ctx: ClientContext,
-    opts: { size?: number; emails?: string[]; pauseMs?: number },
+    opts: { size?: number; emails?: string[]; pauseMs?: number; accessGroupId?: string },
   ): Promise<{ aceptado: boolean; yaEnCurso: boolean; total: number }> {
     const enCurso = this.envios.get(tenantId);
     if (enCurso?.enCurso) {
@@ -302,6 +313,13 @@ export class InvitationsService {
       // bucle. Dos a la vez seleccionarían los mismos pendientes en la ventana
       // entre el SELECT y la creación del token, y alguien recibiría dos correos.
       return { aceptado: false, yaEnCurso: true, total: enCurso.total };
+    }
+
+    // Un grupo inválido (o de otro tenant) aborta ANTES de seleccionar
+    // destinatarios, no a mitad del lote. Mismo criterio fail-closed que
+    // `AdminUsersService.invite()`.
+    if (opts.accessGroupId) {
+      await this.accessGroups.getGroup(tenantId, opts.accessGroupId);
     }
 
     const destinatarios = await this.seleccionarPendientes(tenantId, opts);
@@ -372,7 +390,7 @@ export class InvitationsService {
     webBaseUrl: string,
     ctx: ClientContext,
     destinatarios: Array<{ id: string; email: string }>,
-    opts: { pauseMs?: number },
+    opts: { pauseMs?: number; accessGroupId?: string },
   ): Promise<void> {
     const pausa = Math.min(5000, Math.max(0, opts.pauseMs ?? 400));
     const estado = this.envios.get(tenantId);
@@ -380,6 +398,20 @@ export class InvitationsService {
     try {
       for (const u of destinatarios) {
         try {
+          // Añadir al grupo es fail-soft (como en `invite()`): si falla, el
+          // envío del correo sigue igual — mejor una invitación sin grupo
+          // asignado que ninguna, y el operador lo corrige desde el panel de
+          // grupos.
+          if (opts.accessGroupId) {
+            try {
+              await this.accessGroups.assignMembers(tenantId, opts.accessGroupId, [u.id]);
+            } catch (err) {
+              this.logger.warn(
+                { err, userId: u.id, accessGroupId: opts.accessGroupId },
+                'invitaciones: no se pudo añadir al grupo de acceso; se envía la invitación igual',
+              );
+            }
+          }
           await this.adminUsers.resendInvite(tenantId, actorId, u.id, webBaseUrl, ctx);
           if (estado) estado.enviados += 1;
         } catch (err) {

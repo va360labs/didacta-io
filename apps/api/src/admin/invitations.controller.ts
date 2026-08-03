@@ -41,6 +41,8 @@ const batchSchema = z
     emails: z.array(z.string().email().max(200)).max(200).optional(),
     /** Pausa entre correos, en milisegundos. */
     pauseMs: z.number().int().min(0).max(5000).optional(),
+    /** Añade a cada destinatario a este grupo de acceso (aditivo). */
+    accessGroupId: z.string().uuid().optional(),
   })
   .strict();
 type BatchDto = z.infer<typeof batchSchema>;
@@ -97,7 +99,8 @@ export class InvitationsController {
       'Arranca el envío de la invitación al siguiente lote de pendientes que aún no la han ' +
       'recibido y responde al instante: el envío sigue en segundo plano (~1 s por correo) y su ' +
       'progreso se consulta en `GET /summary` → `envio`. Idempotente entre lotes: nadie la ' +
-      'recibe dos veces. Si ya hay un lote en curso responde `yaEnCurso: true` sin arrancar otro.',
+      'recibe dos veces. Si ya hay un lote en curso responde `yaEnCurso: true` sin arrancar otro. ' +
+      'Con `accessGroupId`, además añade a cada destinatario a ese grupo de acceso (aditivo).',
   })
   async sendBatch(
     @CurrentUser() user: SessionClaims | undefined,

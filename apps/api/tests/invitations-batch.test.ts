@@ -15,7 +15,12 @@ import { InvitationsService } from '../src/admin/invitations.service';
 const TENANT = 'tenant-1';
 const ACTOR = 'admin-1';
 
-function hacerServicio(opts: { destinatarios: number; fallaEn?: Set<number> }) {
+function hacerServicio(opts: {
+  destinatarios: number;
+  fallaEn?: Set<number>;
+  grupoInvalido?: boolean;
+  assignMembersFallaPara?: Set<string>;
+}) {
   const usuarios = Array.from({ length: opts.destinatarios }, (_, i) => ({
     id: `u${i}`,
     email: `alumno${i}@example.test`,
@@ -34,10 +39,25 @@ function hacerServicio(opts: { destinatarios: number; fallaEn?: Set<number> }) {
     }),
   };
 
+  const accessGroups = {
+    getGroup: vi.fn(async () => {
+      if (opts.grupoInvalido) throw new Error('Grupo de acceso no encontrado');
+      return { id: 'group-1' };
+    }),
+    assignMembers: vi.fn(async (_tenantId: string, _groupId: string, userIds: string[]) => {
+      if (opts.assignMembersFallaPara?.has(userIds[0])) throw new Error('fallo de BD');
+    }),
+  };
+
   const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
-  const service = new InvitationsService(prisma as never, adminUsers as never, logger as never);
-  return { service, adminUsers, logger };
+  const service = new InvitationsService(
+    prisma as never,
+    adminUsers as never,
+    logger as never,
+    accessGroups as never,
+  );
+  return { service, adminUsers, accessGroups, logger };
 }
 
 /** Espera a que el envío en segundo plano termine (sin pausa entre correos). */
@@ -138,5 +158,81 @@ describe('invitaciones · envío por lotes en segundo plano', () => {
     expect(r).toEqual({ aceptado: true, yaEnCurso: false, total: 0 });
     expect(adminUsers.resendInvite).not.toHaveBeenCalled();
     expect(service.estadoEnvio(TENANT)).toMatchObject({ enCurso: false, total: 0 });
+  });
+});
+
+describe('invitaciones · envío por lotes con grupo de acceso', () => {
+  it('un grupo inválido aborta el lote entero antes de invitar a nadie', async () => {
+    const { service, adminUsers, accessGroups } = hacerServicio({
+      destinatarios: 3,
+      grupoInvalido: true,
+    });
+
+    await expect(
+      service.startBatch(TENANT, ACTOR, 'https://aula.test', {} as never, {
+        size: 3,
+        accessGroupId: 'grupo-inexistente',
+      }),
+    ).rejects.toThrow('Grupo de acceso no encontrado');
+
+    expect(accessGroups.getGroup).toHaveBeenCalledWith(TENANT, 'grupo-inexistente');
+    expect(adminUsers.resendInvite).not.toHaveBeenCalled();
+    // Sin esto el panel se quedaría "enviando" para siempre: el fallo pasó
+    // ANTES de fijar el estado del envío, así que no hay nada que limpiar.
+    expect(service.estadoEnvio(TENANT)).toBeNull();
+  });
+
+  it('añade a cada destinatario al grupo antes de mandarle la invitación', async () => {
+    const { service, adminUsers, accessGroups } = hacerServicio({ destinatarios: 3 });
+
+    await service.startBatch(TENANT, ACTOR, 'https://aula.test', {} as never, {
+      size: 3,
+      pauseMs: 5,
+      accessGroupId: 'group-1',
+    });
+    await esperarFin(service);
+
+    expect(accessGroups.assignMembers).toHaveBeenCalledTimes(3);
+    for (const u of ['u0', 'u1', 'u2']) {
+      expect(accessGroups.assignMembers).toHaveBeenCalledWith(TENANT, 'group-1', [u]);
+    }
+    expect(adminUsers.resendInvite).toHaveBeenCalledTimes(3);
+  });
+
+  it('si falla añadir al grupo, igual se envía la invitación (fail-soft)', async () => {
+    const { service, adminUsers, logger } = hacerServicio({
+      destinatarios: 3,
+      assignMembersFallaPara: new Set(['u1']),
+    });
+
+    await service.startBatch(TENANT, ACTOR, 'https://aula.test', {} as never, {
+      size: 3,
+      pauseMs: 5,
+      accessGroupId: 'group-1',
+    });
+    await esperarFin(service);
+
+    // Los 3 reciben su correo pese a que u1 no se pudo añadir al grupo.
+    expect(adminUsers.resendInvite).toHaveBeenCalledTimes(3);
+    const estado = service.estadoEnvio(TENANT)!;
+    expect(estado.enviados).toBe(3);
+    expect(estado.fallidos).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u1', accessGroupId: 'group-1' }),
+      expect.stringContaining('no se pudo añadir al grupo'),
+    );
+  });
+
+  it('sin accessGroupId no toca el servicio de grupos', async () => {
+    const { service, accessGroups } = hacerServicio({ destinatarios: 2 });
+
+    await service.startBatch(TENANT, ACTOR, 'https://aula.test', {} as never, {
+      size: 2,
+      pauseMs: 5,
+    });
+    await esperarFin(service);
+
+    expect(accessGroups.getGroup).not.toHaveBeenCalled();
+    expect(accessGroups.assignMembers).not.toHaveBeenCalled();
   });
 });

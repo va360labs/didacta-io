@@ -100,10 +100,14 @@ export const invitationsApi = {
     return apiFetch<InvitationsPage>(`${BASE}${suffix}`, { method: 'GET' }, bearer);
   },
 
-  /** Arranca el lote. Vuelve enseguida: el avance se sigue en `summary().envio`. */
+  /**
+   * Arranca el lote. Vuelve enseguida: el avance se sigue en `summary().envio`.
+   * `accessGroupId` (opcional): añade a cada destinatario del lote a ese
+   * grupo de acceso, además de invitarlo.
+   */
   async sendBatch(
     bearer: string,
-    opts: { size?: number; emails?: string[]; pauseMs?: number } = {},
+    opts: { size?: number; emails?: string[]; pauseMs?: number; accessGroupId?: string } = {},
   ): Promise<BatchStarted> {
     return apiFetch<BatchStarted>(
       `${BASE}/send-batch`,

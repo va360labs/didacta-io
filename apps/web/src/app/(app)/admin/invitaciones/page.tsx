@@ -9,6 +9,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { accessGroupsApi, type AccessGroupListItem } from '@/lib/access-groups';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import {
@@ -41,11 +44,29 @@ export default function AdminInvitacionesPage() {
   const [arrancando, setArrancando] = useState(false);
   const [hayMas, setHayMas] = useState(false);
   const [cargandoMas, setCargandoMas] = useState(false);
+  const [groupId, setGroupId] = useState('');
+  // null = catálogo no disponible (módulo desactivado) → el selector no se pinta.
+  const [groups, setGroups] = useState<AccessGroupListItem[] | null>(null);
 
   useEffect(() => {
     const t = window.setTimeout(() => setBusqueda(search.trim()), 350);
     return () => window.clearTimeout(t);
   }, [search]);
+
+  useEffect(() => {
+    let aborted = false;
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    accessGroupsApi
+      .list(token)
+      .then((r) => {
+        if (!aborted && r.groups.length > 0) setGroups(r.groups);
+      })
+      .catch(() => undefined);
+    return () => {
+      aborted = true;
+    };
+  }, []);
 
   const cargar = useCallback(async () => {
     const token = authStorage.getAccessToken();
@@ -114,7 +135,10 @@ export default function AdminInvitacionesPage() {
     setArrancando(true);
     setError(null);
     try {
-      const r = await invitationsApi.sendBatch(token, { size: tamanoLote });
+      const r = await invitationsApi.sendBatch(token, {
+        size: tamanoLote,
+        accessGroupId: groupId || undefined,
+      });
       if (r.yaEnCurso) {
         setError('Ya hay un lote en marcha. Espera a que termine antes de lanzar otro.');
       }
@@ -199,6 +223,30 @@ export default function AdminInvitacionesPage() {
               {envio?.enCurso ? 'Enviando…' : arrancando ? 'Arrancando…' : `Enviar a ${tamanoLote}`}
             </Button>
           </div>
+
+          {groups ? (
+            <div className="space-y-2">
+              <Label htmlFor="batchAccessGroup">Grupo de acceso para el lote (opcional)</Label>
+              <Select
+                id="batchAccessGroup"
+                value={groupId}
+                onChange={(e) => setGroupId(e.target.value)}
+                disabled={arrancando || envio?.enCurso}
+                data-testid="batch-invite-group-select"
+              >
+                <option value="">Sin grupo</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-text-subtle">
+                Se añade a cada persona del lote a este grupo (sin quitarles los que ya tuvieran),
+                así entran con su aula lista en vez de a un campus vacío.
+              </p>
+            </div>
+          ) : null}
 
           {(summary?.sinInvitar ?? 0) === 0 && summary ? (
             <p className="text-sm text-text-muted">
