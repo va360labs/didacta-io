@@ -165,7 +165,7 @@ jobs:
             docker compose -f docker-compose.alpha.yml up -d
             ```
 
-            Ver `docs/alpha/INSTALL.md` para guía paso a paso.
+            Ver `docs/INSTALL.md` para guía paso a paso.
 
             ### Política de versiones
 

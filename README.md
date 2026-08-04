@@ -14,7 +14,8 @@
 producción real a su primer despliegue (congelado en el tag
 `v0.0.1-alpha.88-va360`); desde el 31 de julio de 2026 el repo vuelve a ser el
 producto whitelabel y prepara su primera versión pública. Guías:
-[instalación](docs/INSTALL.md) · [actualización](docs/UPGRADE.md).
+[instalación](docs/INSTALL.md) · [actualización](docs/UPGRADE.md) ·
+[versionado](docs/versioning.md).
 
 Imagen oficial publicada en Docker Hub: [`didactaio/community`](https://hub.docker.com/r/didactaio/community). **Pública** — no requiere `docker login`.
 
