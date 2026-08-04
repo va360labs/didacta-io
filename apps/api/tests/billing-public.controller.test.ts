@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConflictException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { BillingPublicController } from '../src/modules/billing/billing-public.controller';
+import { resolveWebBaseUrl, type RequestLike } from '../src/common/resolve-web-base-url';
 
 /**
  * Tests unit del controller PÚBLICO de mod.billing (viaje 2): tenant por Host,
@@ -38,6 +39,11 @@ function makeController(opts?: {
     resolveByHost: vi
       .fn()
       .mockResolvedValue(opts?.tenant === undefined ? { id: TENANT } : opts.tenant),
+    // Sin BD real en este harness: delega en la misma cascada pura que usaba
+    // el controller antes de F5 (env → Host del request → localhost).
+    resolveTenantWebBaseUrl: vi.fn(async (_tenantId: string | null, req?: RequestLike) =>
+      resolveWebBaseUrl(req),
+    ),
   } as never;
   const prisma = {
     modCoursesCourse: {

@@ -27,13 +27,13 @@ import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import type { SessionClaims } from '../../auth/token.service';
-import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
 import { renewalEmailHtml } from '../../common/renewal-email-html';
 import { resolveEmailBranding, type BrandingPrisma } from '../../common/branded-email';
 import { ModuleRegistryService } from '../module-registry.service';
 import { SmtpAdapterService } from '../smtp-adapter.service';
 import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { MemberDecisionService } from './member-decision.service';
 import { MemberRegistrationService } from './member-registration.service';
 import { MemberSubscriptionLookupService } from './member-subscription-lookup.service';
@@ -104,6 +104,7 @@ export class MemberRegistrationAdminController {
     private readonly smtp: SmtpAdapterService,
     private readonly smtpResolver: TenantSmtpResolverService,
     private readonly prisma: PrismaService,
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
@@ -140,7 +141,7 @@ export class MemberRegistrationAdminController {
   ) {
     const user = this.requireAdmin(rawUser);
     const ctx = extractClientContext(req);
-    const webBaseUrl = resolveWebBaseUrl(req);
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(user.tenantId, req);
     const input = {
       name: dto.name,
       email: dto.email,

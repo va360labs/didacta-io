@@ -180,7 +180,7 @@ describe('OidcController.callback', () => {
       undefined,
       undefined,
       reply as unknown as Parameters<OidcController['callback']>[4],
-      {},
+      { headers: {} } as Parameters<OidcController['callback']>[5],
     );
 
     expect(svc.handleCallback).toHaveBeenCalledWith({
@@ -218,7 +218,7 @@ describe('OidcController.callback', () => {
       undefined,
       undefined,
       reply as unknown as Parameters<OidcController['callback']>[4],
-      {},
+      { headers: {} } as Parameters<OidcController['callback']>[5],
     );
     expect(reply._redirectUrl).toContain('/auth/error');
     expect(reply._redirectUrl).toContain('reason=nonce_mismatch');
@@ -240,7 +240,7 @@ describe('OidcController.callback', () => {
       undefined,
       undefined,
       reply as unknown as Parameters<OidcController['callback']>[4],
-      {},
+      { headers: {} } as Parameters<OidcController['callback']>[5],
     );
     expect(reply._redirectUrl).toContain('reason=state_invalid');
   });
@@ -261,7 +261,7 @@ describe('OidcController.callback', () => {
       undefined,
       undefined,
       reply as unknown as Parameters<OidcController['callback']>[4],
-      {},
+      { headers: {} } as Parameters<OidcController['callback']>[5],
     );
     expect(reply._redirectUrl).toContain('reason=user_not_provisioned');
   });
@@ -281,7 +281,7 @@ describe('OidcController.callback', () => {
       undefined,
       undefined,
       reply as unknown as Parameters<OidcController['callback']>[4],
-      {},
+      { headers: {} } as Parameters<OidcController['callback']>[5],
     );
     expect(reply._redirectUrl).toContain('reason=email_not_allowed');
   });
@@ -299,7 +299,7 @@ describe('OidcController.callback', () => {
       undefined,
       undefined,
       reply as unknown as Parameters<OidcController['callback']>[4],
-      {},
+      { headers: {} } as Parameters<OidcController['callback']>[5],
     );
     expect(reply._redirectUrl).toContain('reason=tenant_not_configured');
   });
@@ -317,7 +317,7 @@ describe('OidcController.callback', () => {
       undefined,
       undefined,
       reply as unknown as Parameters<OidcController['callback']>[4],
-      {},
+      { headers: {} } as Parameters<OidcController['callback']>[5],
     );
     expect(reply._redirectUrl).toContain('reason=idp_unreachable');
   });
@@ -335,7 +335,7 @@ describe('OidcController.callback', () => {
       undefined,
       undefined,
       reply as unknown as Parameters<OidcController['callback']>[4],
-      {},
+      { headers: {} } as Parameters<OidcController['callback']>[5],
     );
     expect(reply._redirectUrl).toContain('reason=bad_request');
   });
@@ -353,7 +353,7 @@ describe('OidcController.callback', () => {
       undefined,
       undefined,
       reply as unknown as Parameters<OidcController['callback']>[4],
-      {},
+      { headers: {} } as Parameters<OidcController['callback']>[5],
     );
     expect(reply._redirectUrl).toContain('reason=internal');
   });

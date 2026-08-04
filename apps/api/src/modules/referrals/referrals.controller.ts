@@ -27,7 +27,6 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import type { SessionClaims } from '../../auth/token.service';
 import { extractClientContext } from '../../auth/client-context';
-import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
@@ -100,7 +99,7 @@ export class ReferralsController {
   async me(@CurrentUser() user: SessionClaims | undefined, @Req() req: FastifyRequest) {
     const u = this.requireUser(user);
     const { code } = await this.registry.getReferralsService().getOrCreateCode(u.tenantId, u.sub);
-    const base = resolveWebBaseUrl(req);
+    const base = await this.tenantResolver.resolveTenantWebBaseUrl(u.tenantId, req);
     return { code, url: `${base}/unete?ref=${encodeURIComponent(code)}` };
   }
 

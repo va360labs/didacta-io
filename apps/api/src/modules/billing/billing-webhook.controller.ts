@@ -16,11 +16,11 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { WebhookSignatureInvalidError } from '@didacta/mod-billing';
 import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
-import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
 import {
   runAsTenantOrSanctioned,
   runSanctionedGlobalAccess,
 } from '../../tenancy/tenant-context.storage';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { BillingProvisioningService } from './billing-provisioning.service';
 
@@ -40,6 +40,7 @@ export class BillingWebhookController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly provisioning: BillingProvisioningService,
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   @Post('webhook')
@@ -78,11 +79,13 @@ export class BillingWebhookController {
     // (comprador anónimo), el fulfillment materializa la cuenta con el email
     // confirmado en Stripe y envía la bienvenida con el enlace de contraseña.
     const ctx = extractClientContext(req);
-    const webBaseUrl = resolveWebBaseUrl(req);
     // RLS F3: lookup sancionado (metadata / order por id global) + procesado
     // bajo el contexto del tenant resuelto. Sin tenant (evento ajeno) el
     // procesado degrada a sancionado: solo archiva para auditoría.
     const tenantId = await runSanctionedGlobalAccess(() => billing.resolveWebhookTenantId(event));
+    // El Host de este request es el de la API (Stripe), no el del frontend
+    // del tenant — con el tenant ya resuelto, preferimos su dominio primario.
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(tenantId, req);
     await runAsTenantOrSanctioned(
       tenantId,
       () =>

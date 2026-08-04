@@ -36,7 +36,6 @@ import {
 } from '@didacta/mod-member-registration';
 import { extractClientContext } from '../../auth/client-context';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
-import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
 import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { EmailVerificationService } from './email-verification.service';
@@ -281,7 +280,7 @@ export class MemberRegistrationPublicController {
 
       // Base del API para los enlaces de decisión (aprobar/rechazar) del email,
       // que apuntan de vuelta a este controller (`GET .../decision`).
-      const apiBase = this.resolveApiBaseUrl(req);
+      const apiBase = await this.resolveApiBaseUrl(tenantId, req);
       await this.registration.createPending(
         tenantId,
         {
@@ -313,12 +312,13 @@ export class MemberRegistrationPublicController {
     // El token de decisión es OPACO (aleatorio, solo su hash vive en BD — no es
     // un ticket HMAC con claims): el tenant se conoce recién tras el lookup
     // interno del service, así que la llamada va sancionada completa.
-    // Inventario F3: `decide()` deberá adoptar el patrón de password-reset
-    // (lookup sancionado del token + resto bajo runAsTenant del tenant de la fila).
     const result = await runSanctionedGlobalAccess(() =>
       this.decision.decide(token, extractClientContext(req)),
     );
-    const web = (process.env['WEB_PUBLIC_URL']?.trim() || resolveWebBaseUrl(req)).replace(
+    // `decide()` devuelve el tenantId de la fila (null solo si el token no
+    // existe) — con eso, la base prefiere el dominio primario del tenant
+    // sobre el Host de este request.
+    const web = (await this.tenantResolver.resolveTenantWebBaseUrl(result.tenantId, req)).replace(
       /\/$/,
       '',
     );
@@ -371,11 +371,12 @@ export class MemberRegistrationPublicController {
 
   /**
    * Base pública del API para construir los enlaces de decisión del email.
-   * Reusa la misma cascada que `resolveWebBaseUrl` (env → X-Forwarded-* →
-   * host del request): en el setup de Didacta (Traefik, un host por tenant) la
-   * API y el web comparten dominio bajo el prefijo `/api/v1`.
+   * Reusa la misma cascada que `resolveTenantWebBaseUrl` (env → dominio
+   * primario del tenant → X-Forwarded-* → host del request): en el setup de
+   * Didacta (Traefik, un host por tenant) la API y el web comparten dominio
+   * bajo el prefijo `/api/v1`.
    */
-  private resolveApiBaseUrl(req: FastifyRequest): string {
-    return resolveWebBaseUrl(req);
+  private async resolveApiBaseUrl(tenantId: string, req: FastifyRequest): Promise<string> {
+    return this.tenantResolver.resolveTenantWebBaseUrl(tenantId, req);
   }
 }

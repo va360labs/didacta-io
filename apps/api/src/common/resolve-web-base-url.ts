@@ -13,12 +13,16 @@
  * resuelve la base con una cascada robusta:
  *
  *   1. `process.env.WEB_PUBLIC_URL` si está set y es una URL http/https válida.
- *   2. Derivar del request entrante: `${proto}://${host}` usando los headers
+ *   2. `tenantPrimaryHostname` si se pasa: el dominio primario **verificado**
+ *      del tenant (`TenantDomain.isPrimary`), resuelto por el caller (ver
+ *      `TenantResolverService.resolveTenantWebBaseUrl`). Fuente más confiable
+ *      que el Host del request — el admin ya lo declaró en `/admin/dominios`.
+ *   3. Derivar del request entrante: `${proto}://${host}` usando los headers
  *      `X-Forwarded-Proto` / `X-Forwarded-Host` que Traefik (el reverse proxy
  *      delante de la API) inyecta — p.ej. `x-forwarded-host=dev.didacta.io`,
  *      `x-forwarded-proto=https`. Si no están, cae a los headers normales
  *      (`host` + el protocolo del propio request).
- *   3. Fallback final `http://localhost:3000` (solo dev / tests sin proxy).
+ *   4. Fallback final `http://localhost:3000` (solo dev / tests sin proxy).
  *
  * Importante: el host derivado del request apunta al dominio del **frontend**
  * solo si la API y el web comparten dominio (caso de Traefik con un único host
@@ -47,18 +51,34 @@ function isValidHttpUrl(value: string): boolean {
   }
 }
 
+/** `localhost` (con o sin puerto) usa http; cualquier otro dominio real usa https. */
+function isLocalHostname(hostname: string): boolean {
+  return hostname === 'localhost' || hostname.startsWith('localhost:');
+}
+
 /**
  * Devuelve la base URL del web SIN trailing slash. Pura: no lee globals salvo
- * `process.env.WEB_PUBLIC_URL`, no muta nada.
+ * `process.env.WEB_PUBLIC_URL`, no muta nada. `tenantPrimaryHostname` (si se
+ * pasa) es el dominio primario verificado del tenant, ya resuelto por el
+ * caller — esta función no hace I/O.
  */
-export function resolveWebBaseUrl(req?: RequestLike): string {
+export function resolveWebBaseUrl(
+  req?: RequestLike,
+  tenantPrimaryHostname?: string | null,
+): string {
   // 1) Env var explícita gana si es válida.
   const fromEnv = process.env.WEB_PUBLIC_URL?.trim();
   if (fromEnv && isValidHttpUrl(fromEnv)) {
     return stripTrailingSlash(fromEnv);
   }
 
-  // 2) Derivar del request (Traefik inyecta X-Forwarded-*).
+  // 2) Dominio primario verificado del tenant (TenantDomain.isPrimary).
+  if (tenantPrimaryHostname) {
+    const proto = isLocalHostname(tenantPrimaryHostname) ? 'http' : 'https';
+    return `${proto}://${tenantPrimaryHostname}`;
+  }
+
+  // 3) Derivar del request (Traefik inyecta X-Forwarded-*).
   if (req) {
     const host = firstHeader(req.headers['x-forwarded-host']) ?? firstHeader(req.headers['host']);
     if (host && host.length > 0) {
@@ -72,7 +92,7 @@ export function resolveWebBaseUrl(req?: RequestLike): string {
     }
   }
 
-  // 3) Fallback dev.
+  // 4) Fallback dev.
   return 'http://localhost:3000';
 }
 
@@ -86,13 +106,25 @@ export function resolveWebBaseUrl(req?: RequestLike): string {
  * a un host arbitrario (open-redirect con exfiltración de tokens). Cascada:
  *
  *   1. `WEB_PUBLIC_URL` si es una URL http/https válida (caso normal en prod).
- *   2. Derivar del request SOLO si el host está en `WEB_PUBLIC_ALLOWED_HOSTS`.
- *   3. Fallback dev `http://localhost:3000` (constante, no controlable por el atacante).
+ *   2. `tenantPrimaryHostname`: el dominio primario verificado del tenant —
+ *      fuente MÁS confiable que el Host del request (viene de una fila de BD
+ *      verificada por DNS, no de un header que el cliente controla), así que
+ *      se acepta sin pasar por la allowlist.
+ *   3. Derivar del request SOLO si el host está en `WEB_PUBLIC_ALLOWED_HOSTS`.
+ *   4. Fallback dev `http://localhost:3000` (constante, no controlable por el atacante).
  */
-export function resolveWebBaseUrlForAuthRedirect(req?: RequestLike): string {
+export function resolveWebBaseUrlForAuthRedirect(
+  req?: RequestLike,
+  tenantPrimaryHostname?: string | null,
+): string {
   const fromEnv = process.env.WEB_PUBLIC_URL?.trim();
   if (fromEnv && isValidHttpUrl(fromEnv)) {
     return stripTrailingSlash(fromEnv);
+  }
+
+  if (tenantPrimaryHostname) {
+    const proto = isLocalHostname(tenantPrimaryHostname) ? 'http' : 'https';
+    return `${proto}://${tenantPrimaryHostname}`;
   }
 
   if (req) {

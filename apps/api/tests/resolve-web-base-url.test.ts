@@ -99,6 +99,27 @@ describe('resolveWebBaseUrl', () => {
     const req = makeReq({ 'x-forwarded-host': 'dev.didacta.io', 'x-forwarded-proto': 'https' });
     expect(resolveWebBaseUrl(req)).toBe('https://dev.didacta.io');
   });
+
+  it('sin env, con tenantPrimaryHostname → usa el dominio primario del tenant (https)', () => {
+    const req = makeReq({ 'x-forwarded-host': 'otro-host-del-request.io' });
+    expect(resolveWebBaseUrl(req, 'aula.academia.com')).toBe('https://aula.academia.com');
+  });
+
+  it('tenantPrimaryHostname="localhost" → usa http', () => {
+    expect(resolveWebBaseUrl(undefined, 'localhost')).toBe('http://localhost');
+    expect(resolveWebBaseUrl(undefined, 'localhost:3000')).toBe('http://localhost:3000');
+  });
+
+  it('env válida gana sobre tenantPrimaryHostname', () => {
+    process.env.WEB_PUBLIC_URL = 'https://app.didacta.io';
+    expect(resolveWebBaseUrl(undefined, 'aula.academia.com')).toBe('https://app.didacta.io');
+  });
+
+  it('tenantPrimaryHostname null/undefined → cae al comportamiento de siempre (Host del request)', () => {
+    const req = makeReq({ host: 'mi-tenant.didacta.io' }, 'http');
+    expect(resolveWebBaseUrl(req, null)).toBe('http://mi-tenant.didacta.io');
+    expect(resolveWebBaseUrl(req, undefined)).toBe('http://mi-tenant.didacta.io');
+  });
 });
 
 describe('resolveWebBaseUrlForAuthRedirect (redirects que portan tokens)', () => {
@@ -148,5 +169,25 @@ describe('resolveWebBaseUrlForAuthRedirect (redirects que portan tokens)', () =>
 
   it('sin env ni request → localhost', () => {
     expect(resolveWebBaseUrlForAuthRedirect()).toBe('http://localhost:3000');
+  });
+
+  it('tenantPrimaryHostname se acepta SIN pasar por la allowlist (fuente verificada por BD)', () => {
+    const req = makeReq({ 'x-forwarded-host': 'atacante.evil', 'x-forwarded-proto': 'https' });
+    expect(resolveWebBaseUrlForAuthRedirect(req, 'aula.academia.com')).toBe(
+      'https://aula.academia.com',
+    );
+  });
+
+  it('tenantPrimaryHostname gana sobre el host del request aunque esté en la allowlist', () => {
+    process.env.WEB_PUBLIC_ALLOWED_HOSTS = 'dev.didacta.io';
+    const req = makeReq({ 'x-forwarded-host': 'dev.didacta.io' });
+    expect(resolveWebBaseUrlForAuthRedirect(req, 'aula.academia.com')).toBe(
+      'https://aula.academia.com',
+    );
+  });
+
+  it('tenantPrimaryHostname null → cae al comportamiento de siempre (allowlist)', () => {
+    const req = makeReq({ 'x-forwarded-host': 'atacante.evil' });
+    expect(resolveWebBaseUrlForAuthRedirect(req, null)).toBe('http://localhost:3000');
   });
 });

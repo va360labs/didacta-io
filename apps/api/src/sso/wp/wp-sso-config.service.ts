@@ -9,7 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { PrismaAuditLogService } from '../../modules/prisma-audit-log.service';
 import { PrismaTenantConfigService } from '../../modules/prisma-tenant-config.service';
-import { resolveWebBaseUrlForAuthRedirect } from '../../common/resolve-web-base-url';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import {
   WP_SSO_AUDIENCE_DEFAULT,
   WP_SSO_CONFIG_KEY,
@@ -36,6 +36,7 @@ export class WpSsoConfigService {
     private readonly prisma: PrismaService,
     private readonly tenantConfig: PrismaTenantConfigService,
     private readonly auditLog: PrismaAuditLogService,
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   /** Lee la config completa (con secreto en claro) de un tenant. Null si no hay. */
@@ -80,8 +81,9 @@ export class WpSsoConfigService {
       select: { slug: true },
     });
     const slug = tenant?.slug ?? '';
-    // Base sólo desde WEB_PUBLIC_URL (infra), nunca de un header (no hay request aquí).
-    const base = resolveWebBaseUrlForAuthRedirect();
+    // Base: env WEB_PUBLIC_URL, o el dominio primario verificado del tenant.
+    // Nunca de un header (no hay request aquí).
+    const base = await this.tenantResolver.resolveTenantWebBaseUrlForAuthRedirect(tenantId);
     return `${base}/api/v1/modules/wp-sso/${encodeURIComponent(slug)}/callback`;
   }
 

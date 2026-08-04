@@ -75,6 +75,7 @@ function build(overrides?: {
     smtp as never,
     smtpResolver as never,
     prisma as never,
+    {} as never,
   );
   return { controller, registration, lookup, paymentSvc, smtpResolver, smtp, prisma };
 }

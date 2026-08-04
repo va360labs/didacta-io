@@ -20,7 +20,6 @@ import type { FastifyRequest } from 'fastify';
 import type { BillingService, CourseOfferOption } from '@didacta/mod-billing';
 import { extractClientContext } from '../../auth/client-context';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
-import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
 import { PrismaService } from '../../prisma/prisma.service';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
@@ -203,7 +202,10 @@ export class BillingPublicController {
         );
       }
 
-      const base = resolveWebBaseUrl(req).replace(/\/$/, '');
+      const base = (await this.tenantResolver.resolveTenantWebBaseUrl(tenantId, req)).replace(
+        /\/$/,
+        '',
+      );
       const result = await billing.startCheckout({
         tenantId,
         userId: null,

@@ -12,6 +12,7 @@ import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import { SmtpAdapterService } from '../smtp-adapter.service';
 import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { buildRejectionEmail, buildWelcomeEmail } from './email-templates';
 import { resolveEmailBranding, type BrandingPrisma } from '../../common/branded-email';
 import {
@@ -63,6 +64,7 @@ export class MemberDecisionService {
     private readonly auditLog: PrismaAuditLogService,
     private readonly events: MemberRegistrationEventsService,
     private readonly logger: PinoLogger,
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   /**
@@ -113,15 +115,20 @@ export class MemberDecisionService {
    *   usuario en todos los cursos publicados y le envía la bienvenida; si fue
    *   rechazado envía el aviso de rechazo. El email es best-effort.
    */
-  async decide(rawToken: string, ctx: ClientContext): Promise<{ outcome: DecisionOutcome }> {
+  async decide(
+    rawToken: string,
+    ctx: ClientContext,
+  ): Promise<{ outcome: DecisionOutcome; tenantId: string | null }> {
     const tokenHash = this.hashToken(rawToken);
     const record = await this.prisma.memberRegistrationDecisionToken.findUnique({
       where: { tokenHash },
     });
 
-    if (!record) return { outcome: 'invalid' };
-    if (record.decidedAt) return { outcome: 'already' };
-    if (record.expiresAt.getTime() < Date.now()) return { outcome: 'expired' };
+    if (!record) return { outcome: 'invalid', tenantId: null };
+    if (record.decidedAt) return { outcome: 'already', tenantId: record.tenantId };
+    if (record.expiresAt.getTime() < Date.now()) {
+      return { outcome: 'expired', tenantId: record.tenantId };
+    }
 
     const newStatus = record.action === 'APPROVE' ? 'ACTIVE' : 'DEACTIVATED';
     const decidedAt = new Date();
@@ -148,17 +155,21 @@ export class MemberDecisionService {
       where: { id: record.userId },
       select: { email: true, name: true },
     });
+    // Sin `req` (este service no ve el HTTP request): cascada env → dominio
+    // primario verificado del tenant → localhost. Antes leía WEB_PUBLIC_URL
+    // directo — con la env sin set, el link salía roto (`""` + `/signin`).
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(record.tenantId);
     // Branding del tenant (la tabla `tenant` es global, sin RLS) para que los
     // emails al usuario lleven el nombre/logo de su academia y no "Didacta".
     const branding = await resolveEmailBranding(
       this.prisma as unknown as BrandingPrisma,
       record.tenantId,
-      process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+      webBaseUrl,
     );
 
     if (record.action === 'APPROVE') {
       await this.accessGroups.assignDefaultGroupOnApproval(record.tenantId, record.userId);
-      const signinUrl = `${process.env['WEB_PUBLIC_URL']?.trim() ?? ''}/signin`;
+      const signinUrl = `${webBaseUrl}/signin`;
       const welcomeOverride = await fetchEmailOverride(
         this.prisma as unknown as TemplateOverridePrisma,
         record.tenantId,
@@ -196,7 +207,7 @@ export class MemberDecisionService {
           via: 'email',
         },
       );
-      return { outcome: 'approved' };
+      return { outcome: 'approved', tenantId: record.tenantId };
     }
 
     const rejectionOverride = await fetchEmailOverride(
@@ -235,7 +246,7 @@ export class MemberDecisionService {
         via: 'email',
       },
     );
-    return { outcome: 'rejected' };
+    return { outcome: 'rejected', tenantId: record.tenantId };
   }
 
   /**
@@ -274,15 +285,18 @@ export class MemberDecisionService {
       });
     });
 
+    // Sin `req` (llamada desde el panel admin, no un handler HTTP con Host):
+    // cascada env → dominio primario verificado del tenant → localhost.
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(tenantId);
     const branding = await resolveEmailBranding(
       this.prisma as unknown as BrandingPrisma,
       tenantId,
-      process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+      webBaseUrl,
     );
 
     if (action === 'APPROVE') {
       await this.accessGroups.assignDefaultGroupOnApproval(tenantId, userId);
-      const signinUrl = `${process.env['WEB_PUBLIC_URL']?.trim() ?? ''}/signin`;
+      const signinUrl = `${webBaseUrl}/signin`;
       const welcomeOverride = await fetchEmailOverride(
         this.prisma as unknown as TemplateOverridePrisma,
         tenantId,

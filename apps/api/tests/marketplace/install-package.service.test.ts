@@ -117,6 +117,7 @@ function makeExtraDeps() {
     {} as any, // moduleRegistry
     { get: () => undefined } as any, // tenantContext
     { register: vi.fn(), unregister: vi.fn() } as any, // jobLifecycle
+    {} as any, // tenantResolver — didacta=null en todos los fixtures, no se invoca
   ] as const;
 }
 

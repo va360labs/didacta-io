@@ -3,6 +3,7 @@ import { WpSsoTokenError } from '@didacta/mod-wp-sso';
 import { WpSsoController } from '../src/sso/wp/wp-sso.controller';
 import type { WpSsoService } from '../src/sso/wp/wp-sso.service';
 import type { WpSsoConfigService } from '../src/sso/wp/wp-sso-config.service';
+import { TenantResolverService } from '../src/tenancy/tenant-resolver.service';
 
 /** FastifyReply mínimo que captura status + URL del redirect. */
 function fakeRes() {
@@ -49,9 +50,17 @@ function build(
     }),
     ...configOverrides,
   };
+  // Servicio REAL (no mock manual): 'demo' no es un tenant real en este
+  // harness, así que resolveBySlug cae a null y el comportamiento de la
+  // cascada queda idéntico al de antes de F5 (env → allowlist → localhost).
+  const tenantResolver = new TenantResolverService({
+    tenant: { findUnique: vi.fn().mockResolvedValue(null) },
+    tenantDomain: { findFirst: vi.fn().mockResolvedValue(null) },
+  } as never);
   const ctrl = new WpSsoController(
     wpSso as unknown as WpSsoService,
     config as unknown as WpSsoConfigService,
+    tenantResolver,
   );
   return { ctrl, wpSso, config };
 }

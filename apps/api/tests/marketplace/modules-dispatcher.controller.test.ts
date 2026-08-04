@@ -119,6 +119,9 @@ const secretsFactory = {
 } as any;
 const moduleRegistry = {} as any;
 const contextFactory = {} as any;
+const tenantResolver = {
+  resolveTenantWebBaseUrl: vi.fn(async () => 'http://test.local'),
+} as any;
 
 afterEach(() => {
   rateLimiter.reset();
@@ -147,6 +150,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({
       url: '/api/v1/modules/example/items/42',
@@ -176,6 +180,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({ url: '/api/v1/modules/ghost/foo' });
     const { reply } = makeReply();
@@ -201,6 +206,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({
       url: '/api/v1/modules/example/echo?a=1',
@@ -236,6 +242,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({ url: '/api/v1/modules/example/public' });
     const { reply } = makeReply();
@@ -261,6 +268,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({
       url: '/api/v1/modules/example/public',
@@ -289,6 +297,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({
       url: '/api/v1/modules/example/public',
@@ -318,6 +327,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({
       url: '/api/v1/modules/example/public',
@@ -354,6 +364,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({
       url: '/api/v1/modules/example/boom',
@@ -389,6 +400,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({
       url: '/api/v1/modules/example/with-headers',
@@ -418,6 +430,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({
       url: '/api/v1/modules/example/x',
@@ -453,6 +466,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({
       url: '/api/v1/modules/example/probe',
@@ -503,6 +517,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({
       url: '/api/v1/modules/zoom/probe',
@@ -542,6 +557,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({
       url: '/api/v1/modules/example/probe',
@@ -587,6 +603,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({
       url: '/api/v1/modules/example/probe',
@@ -630,6 +647,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({
       url: '/api/v1/modules/example/probe',
@@ -688,6 +706,7 @@ describe('ModulesDispatcherController.dispatch', () => {
       moduleRegistry,
       contextFactory,
       tenantContext,
+      tenantResolver,
     );
     const req = makeReq({
       url: '/api/v1/modules/example/probe',

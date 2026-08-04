@@ -10,6 +10,7 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleContextFactory } from '../../modules/module-context.factory';
 import { ModuleRegistryService } from '../../modules/module-registry.service';
 import { TenantContextService } from '../../tenancy/tenant-context.service';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { RateLimitedHttp, RateLimiterService } from '../rate-limiter.service';
 import { SandboxedDbService } from '../sandboxed-db.service';
 import { BlockedSandboxedDb, type SandboxedDb } from '../sandboxed-db.types';
@@ -97,6 +98,7 @@ export class ModJobsWorkerService implements OnApplicationBootstrap, OnModuleDes
     private readonly tenantContext: TenantContextService,
     private readonly metrics: ModJobsMetrics,
     private readonly logger: PinoLogger,
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -175,7 +177,7 @@ export class ModJobsWorkerService implements OnApplicationBootstrap, OnModuleDes
       return;
     }
 
-    const ctx = this.buildTickContext(payload, entry.manifest);
+    const ctx = await this.buildTickContext(payload, entry.manifest);
 
     // Propagación tenant context al ALS. CRÍTICO: sin esto el handler
     // corre fuera del scope del TenantContextService y ctx.didacta
@@ -291,7 +293,7 @@ export class ModJobsWorkerService implements OnApplicationBootstrap, OnModuleDes
 
   /// Construye el ctx que el handler recibe. Mismo wiring que el
   /// dispatcher pero sin AbortSignal y sin user/method/path/etc.
-  private buildTickContext(
+  private async buildTickContext(
     payload: ModJobPayload,
     manifest: {
       httpConfig: import('../module-manifest.schema').ModuleHttpConfig | null;
@@ -304,7 +306,7 @@ export class ModJobsWorkerService implements OnApplicationBootstrap, OnModuleDes
         | null;
       moduleVersion: string;
     },
-  ): ModuleJobTickContext {
+  ): Promise<ModuleJobTickContext> {
     const db: SandboxedDb = manifest.dbEnabled
       ? this.dbService.build(payload.moduleName, manifest.tablePrefix, payload.tenantId)
       : new BlockedSandboxedDb(payload.moduleName);
@@ -324,11 +326,14 @@ export class ModJobsWorkerService implements OnApplicationBootstrap, OnModuleDes
 
     let didacta: DidactaApi;
     if (manifest.didactaConfig) {
+      // En el worker SIEMPRE tenemos tenantId del payload del job (mismo
+      // comentario que ctx.secrets más abajo).
+      const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(payload.tenantId);
       const resolver: CoreServicesResolver = {
         getCoursesService: () => this.moduleRegistry.getCoursesService(),
         getLearningService: () => this.moduleRegistry.getLearningService(),
         getAssessmentsService: () => this.moduleRegistry.getAssessmentsService(),
-        getWebBaseUrl: () => process.env['WEB_BASE_URL'] ?? 'http://localhost:3000',
+        getWebBaseUrl: () => webBaseUrl,
         getStorage: () => this.contextFactory.getStorage(),
       };
       didacta = this.didactaFactory.build(payload.moduleName, manifest.didactaConfig, resolver);

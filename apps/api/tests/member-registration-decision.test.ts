@@ -153,6 +153,9 @@ function makeHarness() {
   const auditLog = { record: vi.fn().mockResolvedValue(undefined) };
   const events = { publish: vi.fn().mockResolvedValue(undefined) };
   const logger = { warn: vi.fn(), log: vi.fn(), error: vi.fn(), debug: vi.fn() } as never;
+  const tenantResolver = {
+    resolveTenantWebBaseUrl: vi.fn().mockResolvedValue('https://academia-demo.com'),
+  } as never;
 
   const service = new MemberDecisionService(
     prisma,
@@ -162,6 +165,7 @@ function makeHarness() {
     auditLog as never,
     events as never,
     logger,
+    tenantResolver,
   );
 
   return { service, prisma, tokens, users, assignDefaultGroupOnApproval, smtp, auditLog, events };
@@ -198,7 +202,7 @@ describe('MemberDecisionService.decide', () => {
   it('token inexistente → invalid', async () => {
     const h = makeHarness();
     const result = await h.service.decide('a'.repeat(64), CTX);
-    expect(result).toEqual({ outcome: 'invalid' });
+    expect(result).toEqual({ outcome: 'invalid', tenantId: null });
   });
 
   it('token ya decidido (decidedAt set) → already', async () => {
@@ -207,7 +211,7 @@ describe('MemberDecisionService.decide', () => {
     h.tokens.forEach((t) => (t.decidedAt = new Date()));
 
     const result = await h.service.decide(approveToken, CTX);
-    expect(result).toEqual({ outcome: 'already' });
+    expect(result).toEqual({ outcome: 'already', tenantId: TENANT_ID });
   });
 
   it('token expirado → expired', async () => {
@@ -216,7 +220,7 @@ describe('MemberDecisionService.decide', () => {
     h.tokens.forEach((t) => (t.expiresAt = new Date(Date.now() - 1000)));
 
     const result = await h.service.decide(approveToken, CTX);
-    expect(result).toEqual({ outcome: 'expired' });
+    expect(result).toEqual({ outcome: 'expired', tenantId: TENANT_ID });
   });
 
   it('APPROVE válido → User ACTIVE, sella ambos tokens, asigna grupo por defecto y devuelve approved', async () => {
@@ -225,7 +229,7 @@ describe('MemberDecisionService.decide', () => {
 
     const result = await h.service.decide(approveToken, CTX);
 
-    expect(result).toEqual({ outcome: 'approved' });
+    expect(result).toEqual({ outcome: 'approved', tenantId: TENANT_ID });
     expect(h.users[0].status).toBe('ACTIVE');
     expect(h.users[0].approvalDecidedAt).not.toBeNull();
     expect(h.tokens.every((t) => t.decidedAt !== null)).toBe(true);
@@ -241,7 +245,7 @@ describe('MemberDecisionService.decide', () => {
 
     const result = await h.service.decide(rejectToken, CTX);
 
-    expect(result).toEqual({ outcome: 'rejected' });
+    expect(result).toEqual({ outcome: 'rejected', tenantId: TENANT_ID });
     expect(h.users[0].status).toBe('DEACTIVATED');
     expect(h.tokens.every((t) => t.decidedAt !== null)).toBe(true);
     expect(h.assignDefaultGroupOnApproval).not.toHaveBeenCalled();

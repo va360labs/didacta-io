@@ -101,6 +101,9 @@ export class AdminTenantsController {
     @Body(new ZodValidationPipe(createTenantSchema)) dto: CreateTenantDto,
   ) {
     const u = requireSuperAdmin(user);
+    // Sin escalón TenantDomain: el tenant que se está creando aún no tiene
+    // fila en esa tabla (se crea DENTRO de service.create). Cascada normal:
+    // env → Host del request → localhost.
     const webBaseUrl = resolveWebBaseUrl(req);
     return this.service.create(u.sub, dto, webBaseUrl, extractClientContext(req));
   }

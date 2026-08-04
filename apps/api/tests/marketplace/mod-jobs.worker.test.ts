@@ -94,6 +94,10 @@ function makeWorkerHarness(
     debug: vi.fn(),
   } as unknown as import('nestjs-pino').Logger;
 
+  const tenantResolver = {
+    resolveTenantWebBaseUrl: vi.fn(async () => 'http://test.local'),
+  } as unknown as import('../../src/tenancy/tenant-resolver.service').TenantResolverService;
+
   const worker = new ModJobsWorkerService(
     queueService,
     registry,
@@ -116,6 +120,7 @@ function makeWorkerHarness(
     tenantContext,
     metrics,
     logger,
+    tenantResolver,
   );
 
   return {
@@ -354,6 +359,7 @@ describe('ModJobsWorkerService.processTick — TenantContext', () => {
       tenantContext,
       metrics,
       { log: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as never,
+      {} as never,
     );
 
     await worker.processTick(makeJob({ tenantId: 'tenant-xyz', jobId: 'job-42', tickIndex: 2 }));

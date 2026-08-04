@@ -19,12 +19,12 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { resolveWebBaseUrl } from '../common/resolve-web-base-url';
 import { CurrentUser } from '../auth/decorators';
 import { extractClientContext } from '../auth/client-context';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
+import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 import {
   AdminUsersService,
   TENANT_ASSIGNABLE_ROLES,
@@ -95,7 +95,10 @@ function requireAdmin(user: SessionClaims | undefined): SessionClaims {
 @Controller('admin/users')
 @UseGuards(JwtAuthGuard)
 export class AdminUsersController {
-  constructor(private readonly service: AdminUsersService) {}
+  constructor(
+    private readonly service: AdminUsersService,
+    private readonly tenantResolver: TenantResolverService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -135,7 +138,7 @@ export class AdminUsersController {
     @Body(new ZodValidationPipe(inviteSchema)) dto: InviteDto,
   ) {
     const u = requireAdmin(user);
-    const webBaseUrl = resolveWebBaseUrl(req);
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(u.tenantId, req);
     return this.service.invite(
       u.tenantId,
       u.sub,
@@ -161,7 +164,7 @@ export class AdminUsersController {
     @Body(new ZodValidationPipe(bulkInviteSchema)) dto: BulkInviteDto,
   ) {
     const u = requireAdmin(user);
-    const webBaseUrl = resolveWebBaseUrl(req);
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(u.tenantId, req);
     return this.service.startBulkInvite(
       u.tenantId,
       u.sub,
@@ -242,7 +245,7 @@ export class AdminUsersController {
     @Param('id') id: string,
   ) {
     const u = requireAdmin(user);
-    const webBaseUrl = resolveWebBaseUrl(req);
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(u.tenantId, req);
     return this.service.resendInvite(u.tenantId, u.sub, id, webBaseUrl, extractClientContext(req));
   }
 }

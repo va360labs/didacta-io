@@ -6,7 +6,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
-import { resolveWebBaseUrl } from '../common/resolve-web-base-url';
 import { runAsTenant } from '../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 import { AuthService } from './auth.service';
@@ -60,6 +59,7 @@ export class AuthController {
     const hostStr = Array.isArray(host) ? host[0] : host;
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
     if (!tenant) return { tenant: null, host: hostStr ?? null };
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(tenant.id, req);
     // Logo del tenant (mod.theming) para que las páginas anónimas (signin,
     // registro) muestren la marca del tenant en vez de "Didacta".
     // RLS F2: endpoint público — las lecturas van bajo el ALS del tenant.
@@ -67,7 +67,7 @@ export class AuthController {
       tenant.id,
       () =>
         Promise.all([
-          this.passwordReset.resolveTenantLogoUrl(tenant.id, resolveWebBaseUrl(req)),
+          this.passwordReset.resolveTenantLogoUrl(tenant.id, webBaseUrl),
           this.signinContext.get(tenant.id),
         ]),
       { traceLabel: 'tenant-context' },
@@ -132,8 +132,11 @@ export class AuthController {
     @Req() req: FastifyRequest,
     @Body(new ZodValidationPipe(forgotPasswordSchema)) dto: ForgotPasswordDto,
   ) {
-    const webBaseUrl = resolveWebBaseUrl(req);
     const resolvedTenantId = await this.resolveTenantIdFromHost(req);
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(
+      resolvedTenantId ?? null,
+      req,
+    );
     await this.passwordReset.requestAndSendEmail(
       { email: dto.email, tenantSlug: dto.tenantSlug, resolvedTenantId },
       webBaseUrl,

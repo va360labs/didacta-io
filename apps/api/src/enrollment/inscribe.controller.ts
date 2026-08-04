@@ -11,9 +11,9 @@ import { JwtOrApiKeyGuard } from '../auth/api-key.guard';
 import { RequireApiScopes } from '../auth/api-scope.decorator';
 import { CurrentUser } from '../auth/decorators';
 import { extractClientContext } from '../auth/client-context';
-import { resolveWebBaseUrl } from '../common/resolve-web-base-url';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
+import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 import { inscribeSchema, revokeSchema, type InscribeDto, type RevokeDto } from './inscribe.dto';
 import { InscribeService } from './inscribe.service';
 
@@ -29,7 +29,10 @@ import { InscribeService } from './inscribe.service';
 @UseGuards(JwtOrApiKeyGuard, ApiScopeGuard)
 @RequireApiScopes('enrollments:write')
 export class InscribeController {
-  constructor(private readonly service: InscribeService) {}
+  constructor(
+    private readonly service: InscribeService,
+    private readonly tenantResolver: TenantResolverService,
+  ) {}
 
   @Post()
   @ApiOperation({
@@ -99,7 +102,7 @@ export class InscribeController {
     @Body(new ZodValidationPipe(inscribeSchema)) dto: InscribeDto,
   ) {
     if (!user) throw new UnauthorizedException();
-    const webBaseUrl = resolveWebBaseUrl(req);
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(user.tenantId, req);
     return this.service.inscribe(
       user.tenantId,
       user.sub,

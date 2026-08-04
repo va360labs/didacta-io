@@ -26,7 +26,6 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { normalizeEmail } from '@didacta/mod-payment-connections';
-import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
 import { renewalEmailHtml } from '../../common/renewal-email-html';
 import { resolveEmailBranding, type BrandingPrisma } from '../../common/branded-email';
 import { extractClientContext } from '../../auth/client-context';
@@ -41,6 +40,7 @@ import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { ModuleContextFactory } from '../module-context.factory';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { SubscriptionsDailyWorker } from './subscriptions-daily.worker';
 
 /**
@@ -220,6 +220,7 @@ export class PaymentConnectionsController {
     private readonly smtpResolver: TenantSmtpResolverService,
     private readonly dailyWorker: SubscriptionsDailyWorker,
     private readonly prisma: PrismaService,
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   private assertSuperAdmin(user: SessionClaims | undefined): SessionClaims {
@@ -356,7 +357,7 @@ export class PaymentConnectionsController {
     // Verifica que la conexión exista y sea del tenant antes de invitar.
     await svc.getConnection(user.tenantId, id);
 
-    const webBaseUrl = resolveWebBaseUrl(req);
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(user.tenantId, req);
     const ctx = extractClientContext(req);
     const emails = Array.from(
       new Set(body.emails.map((e) => normalizeEmail(e)).filter((e): e is string => e !== null)),
@@ -893,7 +894,8 @@ export class PaymentConnectionsController {
     body: { subscriberId: string },
   ) {
     if (!rawUser) throw new UnauthorizedException();
-    const returnUrl = `${resolveWebBaseUrl(req).replace(/\/$/, '')}/cuenta?tab=suscripcion`;
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(rawUser.tenantId, req);
+    const returnUrl = `${webBaseUrl.replace(/\/$/, '')}/cuenta?tab=suscripcion`;
     const url = await this.registry
       .getPaymentConnectionsService()
       .createMyBillingPortalSession(rawUser.tenantId, rawUser.sub, body.subscriberId, returnUrl);

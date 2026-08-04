@@ -8,7 +8,6 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
-import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
@@ -53,7 +52,7 @@ export class MembershipPublicController {
     @Body(new ZodValidationPipe(membershipCheckoutSchema)) dto: MembershipCheckoutDto,
   ) {
     const tenantId = await this.resolveTenantId(req);
-    const base = resolveWebBaseUrl(req);
+    const base = await this.tenantResolver.resolveTenantWebBaseUrl(tenantId, req);
     return runAsTenant(tenantId, async () => {
       const { url, sessionId } = await this.registry
         .getMembershipService()

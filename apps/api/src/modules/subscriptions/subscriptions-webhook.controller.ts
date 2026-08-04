@@ -19,11 +19,11 @@ import type Stripe from 'stripe';
 import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
 import type { ClientContext } from '../../auth/client-context';
-import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
 import {
   runAsTenantOrSanctioned,
   runSanctionedGlobalAccess,
 } from '../../tenancy/tenant-context.storage';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { BillingProvisioningService } from '../billing/billing-provisioning.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { MembershipProvisioningService } from './membership-provisioning.service';
@@ -44,6 +44,7 @@ export class SubscriptionsWebhookController {
     private readonly provisioning: MembershipProvisioningService,
     private readonly billingProvisioning: BillingProvisioningService,
     private readonly logger: PinoLogger,
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   @Post('webhook')
@@ -90,7 +91,10 @@ export class SubscriptionsWebhookController {
     // Stripe no duplica user ni sub. Va DESPUÉS de handleWebhookEvent (que
     // persiste el evento para auditoría) y es independiente de su dedupe.
     const ctx = extractClientContext(req);
-    const webBaseUrl = resolveWebBaseUrl(req);
+    // El Host de este request es el de la API (Stripe), no el del frontend
+    // del tenant — con el tenant ya resuelto arriba, preferimos su dominio
+    // primario (puede ser null si el evento no tiene tenant reconocible).
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(tenantId, req);
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
       // RLS F3: el tenant de la membresía viaja en la metadata de la session

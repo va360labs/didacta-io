@@ -8,7 +8,7 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { WpSsoTokenError } from '@didacta/mod-wp-sso';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { Public } from '../../auth/decorators';
-import { resolveWebBaseUrlForAuthRedirect } from '../../common/resolve-web-base-url';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { WpSsoService } from './wp-sso.service';
 import { WpSsoConfigService } from './wp-sso-config.service';
 
@@ -29,6 +29,7 @@ export class WpSsoController {
   constructor(
     private readonly wpSso: WpSsoService,
     private readonly config: WpSsoConfigService,
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   @Get(':tenantSlug/status')
@@ -59,9 +60,15 @@ export class WpSsoController {
     @Res({ passthrough: false }) res: FastifyReply,
   ): Promise<void> {
     // Base endurecida: para un redirect que porta tokens NO confiamos en el
-    // header Host (open-redirect con exfiltración); solo WEB_PUBLIC_URL o un host
-    // de la allowlist. Ver resolveWebBaseUrlForAuthRedirect.
-    const base = resolveWebBaseUrlForAuthRedirect(req);
+    // header Host (open-redirect con exfiltración); solo WEB_PUBLIC_URL, el
+    // dominio primario verificado del tenant, o un host de la allowlist. Se
+    // resuelve el tenant por slug ANTES (lookup barato, de solo lectura) para
+    // poder usar su dominio incluso si el intercambio del token falla.
+    const resolvedTenant = await this.tenantResolver.resolveBySlug(tenantSlug);
+    const base = await this.tenantResolver.resolveTenantWebBaseUrlForAuthRedirect(
+      resolvedTenant?.id ?? null,
+      req,
+    );
     try {
       const result = await this.wpSso.exchange(tenantSlug, token ?? '');
       // El handler del frontend (oidc-callback-handler) EXIGE el set completo:

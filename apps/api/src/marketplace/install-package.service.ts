@@ -25,6 +25,7 @@ import { BlockedSandboxedDb, type SandboxedDb } from './sandboxed-db.types';
 import { SandboxedHttpService } from './sandboxed-http.service';
 import { BlockedSandboxedHttp, type SandboxedHttp } from './sandboxed-http.types';
 import { TenantContextService } from '../tenancy/tenant-context.service';
+import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 
 /// Versión del core a la que apunta esta instancia. Inyectada en runtime,
 /// no en build time, para permitir overrides en tests sin recompilar. Si
@@ -98,6 +99,7 @@ export class InstallPackageService implements OnApplicationBootstrap {
     private readonly moduleRegistry: ModuleRegistryService,
     private readonly tenantContext: TenantContextService,
     private readonly jobLifecycle: ModuleJobLifecycleRegistry,
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   /// Re-bootea los módulos previamente instalados al arrancar el server.
@@ -273,7 +275,7 @@ export class InstallPackageService implements OnApplicationBootstrap {
       // ctx.didacta scoped para `onInstall` (alpha.52). Si el módulo
       // declara `manifest.didacta.permissions`, recibe ScopedDidactaApi
       // con permission matrix; si no, BlockedDidactaApi (rechazo claro).
-      const installDidacta = this.buildScopedDidacta(
+      const installDidacta = await this.buildScopedDidacta(
         validated.manifest.name,
         validated.manifest.didacta ?? null,
       );
@@ -398,16 +400,18 @@ export class InstallPackageService implements OnApplicationBootstrap {
   /// Storage). El resolver es lazy porque ModuleRegistryService.onModuleInit
   /// instancia los services, y ese hook puede aún no haber corrido cuando se
   /// construye este service.
-  private buildScopedDidacta(
+  private async buildScopedDidacta(
     moduleName: string,
     didactaConfig: ModuleDidactaConfig | null,
-  ): DidactaApi {
+  ): Promise<DidactaApi> {
     if (!didactaConfig) return new BlockedDidactaApi(moduleName);
+    const tenantId = this.tenantContext.get()?.tenantId ?? null;
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(tenantId);
     const resolver: CoreServicesResolver = {
       getCoursesService: () => this.moduleRegistry.getCoursesService(),
       getLearningService: () => this.moduleRegistry.getLearningService(),
       getAssessmentsService: () => this.moduleRegistry.getAssessmentsService(),
-      getWebBaseUrl: () => process.env['WEB_BASE_URL'] ?? 'http://localhost:3000',
+      getWebBaseUrl: () => webBaseUrl,
       getStorage: () => this.contextFactory.getStorage(),
     };
     return this.didactaFactory.build(moduleName, didactaConfig, resolver);

@@ -5,7 +5,12 @@
 
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { runSanctionedGlobalAccess } from './tenant-context.storage';
+import { runAsTenant, runSanctionedGlobalAccess } from './tenant-context.storage';
+import {
+  resolveWebBaseUrl,
+  resolveWebBaseUrlForAuthRedirect,
+  type RequestLike,
+} from '../common/resolve-web-base-url';
 
 export interface ResolvedTenant {
   id: string;
@@ -75,6 +80,42 @@ export class TenantResolverService {
       matchedBy: 'hostname',
       hostname: '',
     };
+  }
+
+  /**
+   * Sentido inverso de `resolveByHost`: dado un tenant, su dominio primario
+   * verificado (`TenantDomain.isPrimary && isVerified`), si tiene uno. El
+   * tenant ya es conocido por el caller, así que la query corre escopada con
+   * `runAsTenant` (RLS estándar), no sancionada.
+   */
+  async resolvePrimaryDomain(tenantId: string): Promise<string | null> {
+    const domain = await runAsTenant(tenantId, () =>
+      this.prisma.tenantDomain.findFirst({
+        where: { tenantId, isPrimary: true, isVerified: true },
+      }),
+    );
+    return domain?.hostname ?? null;
+  }
+
+  /**
+   * `resolveWebBaseUrl` consciente del tenant: si `tenantId` es conocido,
+   * intenta primero su dominio primario verificado antes de derivar del Host
+   * del request. `tenantId: null` es un no-op explícito (p.ej. el tenant
+   * todavía no existe, o el token que trajo la request es opaco) — cae
+   * directo al comportamiento de siempre.
+   */
+  async resolveTenantWebBaseUrl(tenantId: string | null, req?: RequestLike): Promise<string> {
+    const hostname = tenantId ? await this.resolvePrimaryDomain(tenantId) : null;
+    return resolveWebBaseUrl(req, hostname);
+  }
+
+  /** Variante endurecida (ver `resolveWebBaseUrlForAuthRedirect`) consciente del tenant. */
+  async resolveTenantWebBaseUrlForAuthRedirect(
+    tenantId: string | null,
+    req?: RequestLike,
+  ): Promise<string> {
+    const hostname = tenantId ? await this.resolvePrimaryDomain(tenantId) : null;
+    return resolveWebBaseUrlForAuthRedirect(req, hostname);
   }
 
   /** Normaliza host: lowercase, sin puerto, sin trailing dot. */

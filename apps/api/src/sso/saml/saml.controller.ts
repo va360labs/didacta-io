@@ -40,20 +40,15 @@ import {
   NotFoundException,
   Param,
   Post,
+  Req,
   Res,
   UnauthorizedException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import type { FastifyReply } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { resolveWebBaseUrlForAuthRedirect } from '../../common/resolve-web-base-url';
 import { SamlService } from './saml.service';
-
-const DEFAULT_WEB_BASE = 'http://localhost:3000';
-
-function webBaseUrl(): string {
-  const v = process.env['WEB_PUBLIC_URL'] ?? process.env['NEXTAUTH_URL'] ?? DEFAULT_WEB_BASE;
-  return v.replace(/\/+$/, '');
-}
 
 @ApiTags('Auth · SAML')
 @Controller('auth/saml')
@@ -108,8 +103,12 @@ export class SamlController {
     @Param('tenantSlug') _tenantSlug: string,
     @Body() body: { SAMLResponse?: string; RelayState?: string },
     @Res({ passthrough: false }) res: FastifyReply,
+    @Req() req: FastifyRequest,
   ): Promise<void> {
-    const base = webBaseUrl();
+    // El tenant solo se conoce tras procesar la respuesta del IdP (más abajo),
+    // así que esta base no lo deriva por TenantDomain — pasa por la variante
+    // endurecida (allowlist) para no exponerse a un Host manipulado.
+    const base = resolveWebBaseUrlForAuthRedirect(req);
     try {
       const result = await this.saml.handleAcs({
         samlResponse: body?.SAMLResponse,

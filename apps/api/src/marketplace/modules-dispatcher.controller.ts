@@ -19,6 +19,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { TokenService, type SessionClaims } from '../auth/token.service';
 import { TenantContextService } from '../tenancy/tenant-context.service';
 import { runAsTenant } from '../tenancy/tenant-context.storage';
+import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 import { ModuleContextFactory } from '../modules/module-context.factory';
 import { ModuleRegistryService } from '../modules/module-registry.service';
 import {
@@ -85,6 +86,7 @@ export class ModulesDispatcherController {
     private readonly moduleRegistry: ModuleRegistryService,
     private readonly contextFactory: ModuleContextFactory,
     private readonly tenantContext: TenantContextService,
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   /// Atrapa todos los métodos bajo `/modules/*`. NestJS no soporta
@@ -153,7 +155,10 @@ export class ModulesDispatcherController {
     // - Con manifest.didacta → ScopedDidactaApi con permission matrix +
     //   idempotencia por (externalSource, externalId) + delegación a
     //   services del core (Courses/Learning/Assessments/AdminUsers).
-    const didacta: DidactaApi = this.buildScopedDidacta(matched.moduleName, matched.didactaConfig);
+    const didacta: DidactaApi = await this.buildScopedDidacta(
+      matched.moduleName,
+      matched.didactaConfig,
+    );
     // ctx.jobs: cliente para encolar primer tick (alpha.55).
     // - Sin manifest.jobLifecycle → BlockedSandboxedJobs (rechaza con
     //   JOBS_NOT_DECLARED + mensaje accionable sobre cómo declarar el bloque).
@@ -260,16 +265,18 @@ export class ModulesDispatcherController {
   /// request. El resolver es lazy porque ModuleRegistryService.onModuleInit
   /// instancia los services del core, y ese hook ya corrió antes de que
   /// llegue cualquier request HTTP. `protected` para override en tests.
-  protected buildScopedDidacta(
+  protected async buildScopedDidacta(
     moduleName: string,
     didactaConfig: ModuleDidactaConfig | null,
-  ): DidactaApi {
+  ): Promise<DidactaApi> {
     if (!didactaConfig) return new BlockedDidactaApi(moduleName);
+    const tenantId = this.tenantContext.get()?.tenantId ?? null;
+    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(tenantId);
     const resolver: CoreServicesResolver = {
       getCoursesService: () => this.moduleRegistry.getCoursesService(),
       getLearningService: () => this.moduleRegistry.getLearningService(),
       getAssessmentsService: () => this.moduleRegistry.getAssessmentsService(),
-      getWebBaseUrl: () => process.env['WEB_BASE_URL'] ?? 'http://localhost:3000',
+      getWebBaseUrl: () => webBaseUrl,
       getStorage: () => this.contextFactory.getStorage(),
     };
     return this.didactaFactory.build(moduleName, didactaConfig, resolver);

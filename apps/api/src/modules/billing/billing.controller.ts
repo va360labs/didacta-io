@@ -20,10 +20,10 @@ import { z } from 'zod';
 import type { FastifyRequest } from 'fastify';
 import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-import { resolveWebBaseUrl } from '../../common/resolve-web-base-url';
 import type { SessionClaims } from '../../auth/token.service';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 
 /**
@@ -48,6 +48,7 @@ export class BillingController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly prisma: PrismaService,
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   @Get('offer/:courseId')
@@ -126,7 +127,9 @@ export class BillingController {
     // arrancar, a partir de AUTH_URL — que en producción no está definida, así
     // que el comprador acababa en `localhost:3000/cursos/<uuid>?paid=1`.
     // La página de éxito espera `session_id` para confirmar el pago.
-    const webBaseUrl = resolveWebBaseUrl(req).replace(/\/$/, '');
+    const webBaseUrl = (
+      await this.tenantResolver.resolveTenantWebBaseUrl(user.tenantId, req)
+    ).replace(/\/$/, '');
     const result = await this.registry.getBillingService().startCheckout({
       tenantId: user.tenantId,
       userId: user.sub,
