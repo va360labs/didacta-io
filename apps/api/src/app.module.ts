@@ -15,11 +15,14 @@ import { BrandingModule } from './branding/branding.module';
 import { HealthModule } from './health/health.module';
 import { InscribeModule } from './enrollment/inscribe.module';
 import { ApiLicenseModule } from './license/license.module';
+import { LicenseAdminModule } from './license/license-admin.module';
 import { MarketplaceModule } from './marketplace/marketplace.module';
 import { AuditExportModule } from './modules/audit-export/audit-export.module';
+import { InstanceSettingsModule } from './modules/instance-settings.module';
 import { MemberRegistrationModule } from './modules/member-registration/member-registration.module';
 import { MetricsAuthController } from './modules/metrics-auth.controller';
 import { ModulesModule } from './modules/modules.module';
+import { PrismaInstanceConfigService } from './modules/prisma-instance-config.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { RegistryModule } from './registry/registry.module';
@@ -68,14 +71,24 @@ import { WebhooksModule } from './webhooks/webhooks.module';
       controller: MetricsAuthController,
     }),
     PrismaModule,
-    // License SDK: cargamos la licencia al boot desde DIDACTA_LICENSE_KEY
-    // y exponemos LicenseService como provider global. Permite gateado de
-    // capabilities Enterprise transversales del core con @RequiresCapability.
-    LicenseModule.forRoot({
-      keyEnv: 'DIDACTA_LICENSE_KEY',
-      allowDevBypass: process.env['DIDACTA_DEV_BYPASS'] === 'true',
+    // License SDK: cargamos la licencia al boot. Precedencia env > BD
+    // (work/migracion-env-a-panel.md §1): si DIDACTA_LICENSE_KEY está seteada
+    // se usa esa; si no, `keyProvider` cae a `instance_setting` (lo que
+    // guarda /admin/licencia). Exponemos LicenseService como provider global
+    // para el gateado de capabilities Enterprise con @RequiresCapability.
+    LicenseModule.forRootAsync({
+      imports: [InstanceSettingsModule],
+      inject: [PrismaInstanceConfigService],
+      useFactory: (instanceSettings: PrismaInstanceConfigService) => ({
+        keyEnv: 'DIDACTA_LICENSE_KEY',
+        allowDevBypass: process.env['DIDACTA_DEV_BYPASS'] === 'true',
+        keyProvider: () => instanceSettings.get<string>('license', 'key').then((v) => v ?? null),
+      }),
     }),
     ApiLicenseModule,
+    // `/admin/licencia`: gestionar la key desde el panel con recarga en
+    // caliente (sin esto, guardar no surtía efecto hasta reiniciar).
+    LicenseAdminModule,
     // Sexto piloto License SDK — gate feat:api.rate_limit.elevated end-to-end.
     // Registra RateLimitInterceptor como APP_INTERCEPTOR global, así que
     // todas las rutas (con las exenciones definidas en el interceptor)

@@ -324,6 +324,7 @@ export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): S
       items: [
         { href: '/admin/tenants', label: 'Tenants', icon: 'building' },
         { href: '/admin/marketplace', label: 'Marketplace módulos', icon: 'package' },
+        { href: '/admin/licencia', label: 'Licencia', icon: 'shield' },
       ],
     });
   }
