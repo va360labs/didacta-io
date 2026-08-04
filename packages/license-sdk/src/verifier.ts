@@ -21,6 +21,12 @@ const EXPECTED_AUDIENCE = 'didacta-runtime';
 // `__dirname` está disponible directamente en CommonJS (que es lo que el SDK
 // compila — alineado con apps/api). Si en el futuro se compila a ESM, sustituir
 // por `dirname(fileURLToPath(import.meta.url))`.
+//
+// En runtime `__dirname` es `dist/` (no `src/`): el script `build` de este
+// paquete copia `src/public-keys/` a `dist/public-keys/` después de `tsc`
+// justo por esto — sin ese paso, cualquier instalación que consuma el
+// paquete compilado (todas, salvo los propios tests del SDK) no encuentra
+// ninguna clave pública y toda licencia real es rechazada con "Unknown key id".
 const PUBLIC_KEYS_DIR = resolve(__dirname, 'public-keys');
 
 /**
