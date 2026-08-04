@@ -113,7 +113,7 @@ services:
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
 
   didacta:
-    image: didactaio/community:${DIDACTA_IMAGE_TAG:-0.0.1-alpha.99}
+    image: didactaio/community:${DIDACTA_IMAGE_TAG:-0.0.1-alpha.100}
     container_name: didacta-app
     restart: unless-stopped
     depends_on:
@@ -124,7 +124,7 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       # DIDACTA_CORE_VERSION: Fuente de verdad para compatibilidad de modulos.
-      DIDACTA_CORE_VERSION: ${DIDACTA_IMAGE_TAG:-0.0.1-alpha.99}
+      DIDACTA_CORE_VERSION: ${DIDACTA_IMAGE_TAG:-0.0.1-alpha.100}
       # ADMIN_DATABASE_URL: conexión de bootstrap (superuser/owner del cluster
       # Postgres de arriba). El entrypoint la usa SOLO para migraciones +
       # políticas RLS + grants — nunca para servir tráfico de la app.

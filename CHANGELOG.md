@@ -10,6 +10,35 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.100] — 2026-08-04
+
+#### Added
+
+- **Configuración de instalación desde el panel** (`instance_setting`,
+  10ª tabla global): base para mover ajustes a nivel de instalación desde el
+  `.env` al panel de administración, con el mismo cifrado at-rest que los
+  ajustes de tenant.
+- **Panel `/admin/licencia`**: activar, cambiar o quitar la licencia
+  Enterprise desde el panel, con recarga en caliente (sin reiniciar el
+  contenedor) y precedencia clara sobre `DIDACTA_LICENSE_KEY` (env siempre
+  gana, badge de solo lectura si está fijada). Aviso no bloqueante si la
+  instalación tiene dominios verificados que la licencia activa no declara.
+- **Secreto de webhook de Zoom por tenant** (`/admin/aula-virtual`): sustituye
+  la variable global `ZOOM_WEBHOOK_SECRET`, en línea con que las credenciales
+  S2S de Zoom ya eran por tenant.
+- **Registro público configurable por tenant** (`/admin/configuracion` →
+  Registro): un tenant puede abrir su propio registro sin depender del flag
+  global `AUTH_SIGNUP_ENABLED`, que sigue disponible como apertura de toda la
+  instalación (conveniencia de desarrollo/E2E).
+
+#### Fixed
+
+- **Las claves públicas de licencia nunca llegaban a la imagen de
+  producción**: el build de `license-sdk` no copiaba
+  `src/public-keys/` a `dist/public-keys/`, donde el verificador las busca en
+  runtime. Ninguna licencia Enterprise real verificaba en producción; solo
+  los tests del SDK (que corren contra `src/`) pasaban.
+
 ### [0.0.1-alpha.99] — 2026-08-03
 
 #### Added
