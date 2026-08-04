@@ -23,7 +23,10 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        # pgvector, no postgres:16 a secas: la migración baseline hace
+        # CREATE EXTENSION vector y falla con P3018 sin ella. Misma imagen
+        # que docker-compose.alpha.yml (instalación de referencia).
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: didacta
           POSTGRES_PASSWORD: didacta
@@ -160,7 +163,8 @@ jobs:
     # instancia inicializada antes de que la API levante.
     services:
       postgres:
-        image: postgres:16
+        # pgvector: ver comentario equivalente en el job "e2e" de arriba.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: didacta
           POSTGRES_PASSWORD: didacta
