@@ -10,6 +10,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
+import { PrismaTenantConfigService } from '../modules/prisma-tenant-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { runAsTenant, runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import type { ClientContext } from './client-context';
@@ -43,10 +44,16 @@ const DEFAULT_SIGNUP_ROLE = 'alumno';
  * entran por flujos que asignan rol — invitación de admin, SSO o los módulos y
  * APIs de registro instalados. El signup abierto creaba usuarios ACTIVE sin rol
  * (JWT roles:[] → 403 en storage y compañía).
- * `AUTH_SIGNUP_ENABLED=true` lo reabre en stacks de dev/E2E que lo usan para
- * fabricar usuarios de prueba.
+ *
+ * Dos formas de reabrirlo (A3 de `work/migracion-env-a-panel.md`):
+ *   - `AUTH_SIGNUP_ENABLED=true` (env): lo abre para TODOS los tenants de la
+ *     instalación. Pensado para stacks de dev/E2E que fabrican usuarios de
+ *     prueba — precedencia máxima, igual que el resto de env vars del operador.
+ *   - `tenant_setting` scope `auth` key `signup` (`{ enabled: true }`): lo abre
+ *     SOLO para ese tenant. Decisión de negocio del tenant (¿acepto altas
+ *     públicas?), no del despliegue — encaja en `/admin/configuracion`.
  */
-function isSignupEnabled(): boolean {
+function isSignupEnabledByEnv(): boolean {
   return process.env['AUTH_SIGNUP_ENABLED'] === 'true';
 }
 
@@ -103,6 +110,7 @@ export class AuthService {
     private readonly auditLog: PrismaAuditLogService,
     private readonly mfaPolicy: MfaPolicyService,
     private readonly sessions: SessionRegistryService,
+    private readonly tenantConfig: PrismaTenantConfigService,
   ) {}
 
   async signup(
@@ -110,11 +118,10 @@ export class AuthService {
     ctx: ClientContext = NO_CLIENT_CONTEXT,
     resolvedTenantId?: string,
   ): Promise<AuthResult> {
-    if (!isSignupEnabled()) {
-      throw new ForbiddenException(
-        'El registro público está deshabilitado. Pide acceso a tu organización.',
-      );
-    }
+    // El check por-tenant necesita el tenant resuelto, así que la
+    // resolución pasa a ir SIEMPRE primero (antes solo se resolvía si el
+    // gate global ya había dejado pasar). Igual que signin, un tenant no
+    // identificable da 401 antes que nada.
     const tenant = await this.resolveTenantForRequest({
       explicitSlug: dto.tenantSlug,
       resolvedTenantId,
@@ -128,10 +135,28 @@ export class AuthService {
 
     // RLS F2: el alta entera corre bajo el ALS del tenant resuelto — sin esto
     // (endpoint público, sin middleware con Authorization) cada query era un
-    // hueco de contexto.
-    return runAsTenant(tenant.id, () => this.signupInTenant(tenant, dto, ctx), {
-      traceLabel: 'auth-signup',
-    });
+    // hueco de contexto. El check de signup habilitado también corre acá
+    // adentro: lee tenant_setting, que es tenant-scoped.
+    return runAsTenant(
+      tenant.id,
+      async () => {
+        if (!(await this.isSignupEnabledForTenant(tenant.id))) {
+          throw new ForbiddenException(
+            'El registro público está deshabilitado. Pide acceso a tu organización.',
+          );
+        }
+        return this.signupInTenant(tenant, dto, ctx);
+      },
+      { traceLabel: 'auth-signup' },
+    );
+  }
+
+  private async isSignupEnabledForTenant(tenantId: string): Promise<boolean> {
+    if (isSignupEnabledByEnv()) return true;
+    const setting = await this.tenantConfig
+      .get<{ enabled?: boolean }>(tenantId, 'auth', 'signup')
+      .catch(() => undefined);
+    return setting?.enabled === true;
   }
 
   private async signupInTenant(

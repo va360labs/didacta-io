@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { MemberRegistrationSettingsCard } from '@/components/admin/member-registration-settings-card';
+import { SignupPolicyCard } from '@/components/admin/signup-policy-card';
 import { SmtpSettingsCard } from '@/components/admin/smtp-settings-card';
 import { TenantIdentityCard } from '@/components/admin/tenant-identity-card';
 import { adminModulesApi, type TenantModuleListItem } from '@/lib/admin-modules';
@@ -268,7 +269,12 @@ export default function ConfiguracionPage() {
 
       {tab === 'notifications' ? <SmtpSettingsCard /> : null}
 
-      {tab === 'registro' ? <MemberRegistrationSettingsCard /> : null}
+      {tab === 'registro' ? (
+        <div className="flex flex-col gap-6">
+          <SignupPolicyCard />
+          <MemberRegistrationSettingsCard />
+        </div>
+      ) : null}
 
       {tab === 'modules' ? <ModulesTab /> : null}
 

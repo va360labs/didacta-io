@@ -3,7 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../src/auth/auth.service';
 
 const dummy = (..._args: unknown[]): AuthService =>
-  new AuthService(null as never, null as never, null as never, null as never, null as never);
+  new AuthService(
+    null as never,
+    null as never,
+    null as never,
+    null as never,
+    null as never,
+    null as never,
+    null as never,
+  );
 
 const ENV = 'DIDACTA_REQUIRE_MFA_ADMIN';
 
@@ -65,8 +73,12 @@ describe('AuthService.shouldRequireMfa', () => {
 
 /**
  * Registro público CERRADO por defecto. El signup abierto creaba usuarios
- * ACTIVE sin rol (JWT roles:[] → 403 en storage etc.); ahora está tras
- * AUTH_SIGNUP_ENABLED (solo dev/E2E) y, cuando está abierto, asigna `alumno`.
+ * ACTIVE sin rol (JWT roles:[] → 403 en storage etc.).
+ *
+ * Dos formas de reabrirlo (A3 de `work/migracion-env-a-panel.md`):
+ *   - env `AUTH_SIGNUP_ENABLED=true` → abre para TODOS los tenants (dev/E2E).
+ *   - `tenant_setting` scope `auth` key `signup` → abre SOLO ese tenant.
+ * El env gana: si está en 'true', ni se consulta la BD.
  */
 describe('AuthService.signup · gate AUTH_SIGNUP_ENABLED', () => {
   const FLAG = 'AUTH_SIGNUP_ENABLED';
@@ -81,22 +93,16 @@ describe('AuthService.signup · gate AUTH_SIGNUP_ENABLED', () => {
   });
 
   const dto = { email: 'x@y.com', password: 'Password123!', tenantSlug: 'demo' };
+  const TENANT = { id: 't1', slug: 'demo', name: 'Demo', status: 'ACTIVE' };
+  const ALUMNO = { id: 'r1', name: 'alumno' };
 
-  it('sin la env (default) → 403 sin tocar la BD', async () => {
-    // prisma null: si el gate no cortara ANTES de resolver tenant, esto
-    // explotaría con TypeError en vez de ForbiddenException.
-    await expect(dummy().signup(dto)).rejects.toMatchObject({ status: 403 });
-  });
+  /** tenantConfig que SIEMPRE dice "no configurado" — el default sin BD real. */
+  const tenantConfigDisabled = { get: async () => undefined } as never;
 
-  it.each(['false', '1', 'yes', 'TRUE'])('AUTH_SIGNUP_ENABLED=%s (≠ "true") → 403', async (v) => {
-    process.env[FLAG] = v;
-    await expect(dummy().signup(dto)).rejects.toMatchObject({ status: 403 });
-  });
-
-  it('AUTH_SIGNUP_ENABLED=true deja pasar el gate (y crea el usuario CON rol alumno)', async () => {
-    process.env[FLAG] = 'true';
-    const TENANT = { id: 't1', slug: 'demo', name: 'Demo', status: 'ACTIVE' };
-    const ALUMNO = { id: 'r1', name: 'alumno' };
+  function buildService(opts: {
+    tenantConfig?: unknown;
+    userRoleCreate?: ReturnType<typeof vi.fn>;
+  }) {
     const created = {
       id: 'u1',
       email: dto.email,
@@ -108,7 +114,7 @@ describe('AuthService.signup · gate AUTH_SIGNUP_ENABLED', () => {
       roles: [],
       tenant: TENANT,
     };
-    const userRoleCreate = vi.fn(async (args: unknown) => args);
+    const userRoleCreate = opts.userRoleCreate ?? vi.fn(async (args: unknown) => args);
     const prisma = {
       tenant: { findUnique: async () => TENANT, findMany: async () => [TENANT] },
       user: { findUnique: async () => null },
@@ -122,14 +128,60 @@ describe('AuthService.signup · gate AUTH_SIGNUP_ENABLED', () => {
           userRole: { create: userRoleCreate },
         }),
     };
-    const service = new AuthService(
-      prisma as never,
-      { hash: async () => 'hashed' } as never,
-      { sign: async () => ({ accessToken: 'a', refreshToken: 'r' }) } as never,
-      { record: async () => {} } as never,
-      { evaluateLoginPolicy: async () => ({ outcome: 'allow' }) } as never,
-      sessionRegistryStub({ sign: async () => ({ accessToken: 'a', refreshToken: 'r' }) } as never),
-    );
+    return {
+      userRoleCreate,
+      service: new AuthService(
+        prisma as never,
+        { hash: async () => 'hashed' } as never,
+        { sign: async () => ({ accessToken: 'a', refreshToken: 'r' }) } as never,
+        { record: async () => {} } as never,
+        { evaluateLoginPolicy: async () => ({ outcome: 'allow' }) } as never,
+        sessionRegistryStub({
+          sign: async () => ({ accessToken: 'a', refreshToken: 'r' }),
+        } as never),
+        (opts.tenantConfig ?? tenantConfigDisabled) as never,
+      ),
+    };
+  }
+
+  it('sin env y sin tenant_setting (default) → 403', async () => {
+    const { service } = buildService({});
+    await expect(service.signup(dto)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it.each(['false', '1', 'yes', 'TRUE'])(
+    'AUTH_SIGNUP_ENABLED=%s (≠ "true") y sin tenant_setting → 403',
+    async (v) => {
+      process.env[FLAG] = v;
+      const { service } = buildService({});
+      await expect(service.signup(dto)).rejects.toMatchObject({ status: 403 });
+    },
+  );
+
+  it('sin env pero con tenant_setting auth.signup.enabled=true → deja pasar (por tenant)', async () => {
+    const tenantConfig = {
+      get: async (tenantId: string, scope: string, key: string) =>
+        tenantId === TENANT.id && scope === 'auth' && key === 'signup'
+          ? { enabled: true }
+          : undefined,
+    };
+    const { service, userRoleCreate } = buildService({ tenantConfig });
+
+    const result = await service.signup(dto);
+
+    expect(userRoleCreate).toHaveBeenCalledWith({ data: { userId: 'u1', roleId: 'r1' } });
+    expect(result.user.roles).toEqual(['alumno']);
+  });
+
+  it('tenant_setting auth.signup.enabled=false → sigue en 403', async () => {
+    const tenantConfig = { get: async () => ({ enabled: false }) };
+    const { service } = buildService({ tenantConfig });
+    await expect(service.signup(dto)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('AUTH_SIGNUP_ENABLED=true deja pasar el gate para CUALQUIER tenant (y crea el usuario CON rol alumno)', async () => {
+    process.env[FLAG] = 'true';
+    const { service, userRoleCreate } = buildService({});
 
     const result = await service.signup(dto);
 
