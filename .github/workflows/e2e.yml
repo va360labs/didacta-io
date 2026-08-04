@@ -133,3 +133,144 @@ jobs:
           name: playwright-report
           path: apps/e2e/playwright-report/
           retention-days: 14
+
+  setup-wizard:
+    name: Playwright wizard de setup (token de un solo uso)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Job separado del golden path: el wizard de /setup solo se puede
+    # completar UNA vez por instancia (el primer tenant la cierra para
+    # siempre), así que necesita su propia base de datos SIN seed — el
+    # golden path arranca con `db:seed`, que ya crea un tenant y deja la
+    # instancia inicializada antes de que la API levante.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: didacta
+          POSTGRES_PASSWORD: didacta
+          POSTGRES_DB: didacta
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://didacta:didacta@localhost:5432/didacta?schema=public
+      JWT_SECRET: e2e-test-secret-must-be-at-least-32-chars-long-aaaa
+      JWT_REFRESH_SECRET: e2e-refresh-secret-must-be-32-chars-long-bbbb
+      AUTH_SECRET: e2e-auth-secret-must-be-at-least-32-chars-long-cccc
+      AUTH_URL: http://localhost:4000
+      TENANT_SETTINGS_ENC_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
+      NODE_ENV: production
+      # El puerto real de `next start` está fijo en el script (`-p 3010`,
+      # ver apps/web/package.json) — PORT no lo cambia. E2E_BASE_URL tiene
+      # que apuntar ahí, no al valor legacy de otros jobs de este workflow.
+      API_PORT: 4000
+      API_INTERNAL_URL: http://localhost:4000
+      E2E_BASE_URL: http://localhost:3010
+      E2E_API_DIRECT_URL: http://localhost:4000
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 10.21.0
+          run_install: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @didacta/database db:generate
+
+      - name: Apply migrations
+        run: pnpm --filter @didacta/database db:migrate:deploy
+
+      - name: Aplicar políticas RLS y roles de runtime (didacta_app/didacta_super)
+        run: |
+          # La app conecta como el rol bootstrap (igual que el job "e2e" de
+          # arriba), pero desde RLS F3 el boot hace `SET LOCAL ROLE
+          # didacta_super` para el acceso global sancionado (ver
+          # tenant-context.storage.ts) — ese rol solo existe tras correr
+          # grants.sql. Mismo paso que infra/docker/entrypoint.sh#run_migrations,
+          # sin el cual la API no llega a levantar (rol inexistente).
+          # psql no acepta `?schema=public` (param propio de Prisma).
+          ADMIN_PSQL_URL="${DATABASE_URL%%\?*}"
+          psql "$ADMIN_PSQL_URL" -v ON_ERROR_STOP=1 -f packages/database/prisma/rls.sql
+          psql "$ADMIN_PSQL_URL" -v ON_ERROR_STOP=1 -f packages/database/prisma/grants.sql
+
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Start API (log a fichero para extraer el token de setup)
+        run: pnpm --filter @didacta/api start > /tmp/api.log 2>&1 &
+
+      - name: Start Web
+        run: pnpm --filter @didacta/web start &
+
+      - name: Wait for services
+        run: |
+          for i in {1..60}; do
+            if curl -sf http://localhost:4000/healthz > /dev/null \
+              && curl -sf http://localhost:3010 > /dev/null; then
+              echo "API + Web up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Services no respondieron tras 120s"
+          cat /tmp/api.log
+          exit 1
+
+      - name: Extraer el token de setup de los logs
+        run: |
+          # SetupTokenService.onApplicationBootstrap corre antes de app.listen(),
+          # así que el token ya está en el log para cuando /healthz responde.
+          # En NODE_ENV=production nestjs-pino no usa pino-pretty: cada línea es
+          # un objeto JSON con el mensaje en `.msg` (posible \n interno escapado).
+          TOKEN=$(node -e "
+            const fs = require('fs');
+            const lines = fs.readFileSync('/tmp/api.log', 'utf8').split('\n').filter(Boolean);
+            for (const line of lines) {
+              let obj;
+              try { obj = JSON.parse(line); } catch { continue; }
+              if (typeof obj.msg === 'string' && obj.msg.startsWith('Setup token')) {
+                const m = obj.msg.match(/setup\/init\): (\S+)/);
+                if (m) { process.stdout.write(m[1]); process.exit(0); }
+              }
+            }
+            process.exit(1);
+          ")
+          if [ -z "$TOKEN" ]; then
+            echo "No se encontró el token de setup en /tmp/api.log"
+            cat /tmp/api.log
+            exit 1
+          fi
+          echo "E2E_SETUP_TOKEN=${TOKEN}" >> "$GITHUB_ENV"
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @didacta/e2e exec playwright install --with-deps chromium
+
+      - name: Run E2E — wizard de setup
+        run: pnpm --filter @didacta/e2e exec playwright test tests/setup-wizard.spec.ts
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-report-setup-wizard
+          path: apps/e2e/playwright-report/
+          retention-days: 14
