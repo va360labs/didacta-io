@@ -408,7 +408,17 @@ jobs:
         run: pnpm --filter @didacta/e2e exec playwright install --with-deps chromium
 
       - name: Run E2E — MFA enforcement
-        run: pnpm --filter @didacta/e2e exec playwright test tests/mfa-setup.spec.ts tests/mfa-enforcement.spec.ts
+        # Orden importa: ambos comparten la cuenta admin seedeada (mfaEnabled
+        # es estado real en DB, no por-test). mfa-enforcement completa el
+        # ciclo setup→enable como efecto secundario y lo deja con MFA ya
+        # activado; si corriera primero, mfa-setup.spec.ts navegaría a
+        # /mfa/setup y el FE lo redirige a /mfa/verify (ya configurado) en
+        # vez de mostrar el form de alta. Playwright NO respeta el orden de
+        # argumentos del CLI (ordena los ficheros alfabéticamente pese al
+        # orden dado aquí), así que van en pasos separados para forzarlo.
+        run: |
+          pnpm --filter @didacta/e2e exec playwright test tests/mfa-setup.spec.ts
+          pnpm --filter @didacta/e2e exec playwright test tests/mfa-enforcement.spec.ts
 
       - name: Upload Playwright report
         if: always()
