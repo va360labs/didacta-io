@@ -17,6 +17,9 @@ concurrency:
   group: module-contract-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+permissions:
+  contents: read
+
 jobs:
   audit:
     name: Lint contrato de módulo
@@ -25,23 +28,25 @@ jobs:
 
     steps:
       - name: Checkout didacta-community
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: didacta-community
+          persist-credentials: false
 
       # didacta-skills se checkoutea como sibling para que el wrapper script
       # de didacta-community/scripts/audit-modules.mjs lo encuentre.
       - name: Checkout didacta-skills
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: va360labs/didacta-skills
           path: didacta-skills
           # Si el repo es privado, requiere PAT con scope `repo` configurado
           # como secret. Si es público, basta GITHUB_TOKEN.
           token: ${{ secrets.DIDACTA_SKILLS_PAT || github.token }}
+          persist-credentials: false
 
       - name: Setup Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: didacta-community/.nvmrc
 

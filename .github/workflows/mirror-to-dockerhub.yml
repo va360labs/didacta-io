@@ -34,10 +34,17 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Install crane
+        env:
+          # sha256 publicado en el checksums.txt del release v0.21.5:
+          # https://github.com/google/go-containerregistry/releases/tag/v0.21.5
+          CRANE_TARBALL_SHA256: 9f823ae5ee25803161110f957b5fd4538f714d40cdf25dacb4914fefafd246bf
         run: |
-          curl -sSL \
-            https://github.com/google/go-containerregistry/releases/download/v0.21.5/go-containerregistry_Linux_x86_64.tar.gz \
-            | sudo tar -xzf - -C /usr/local/bin crane
+          set -euo pipefail
+          curl -sSL -o crane.tar.gz \
+            https://github.com/google/go-containerregistry/releases/download/v0.21.5/go-containerregistry_Linux_x86_64.tar.gz
+          echo "${CRANE_TARBALL_SHA256}  crane.tar.gz" | sha256sum -c -
+          sudo tar -xzf crane.tar.gz -C /usr/local/bin crane
+          rm -f crane.tar.gz
           crane version
 
       - name: Login GHCR
