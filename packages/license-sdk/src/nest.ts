@@ -26,6 +26,7 @@ import {
   type DynamicModule,
   type ExceptionFilter,
   type FactoryProvider,
+  type ModuleMetadata,
   type OnApplicationBootstrap,
   Global,
   HttpStatus,
@@ -35,7 +36,7 @@ import {
   Module,
 } from '@nestjs/common';
 import { LicenseService } from './runtime.js';
-import { CapabilityRequiredError, LicenseSignatureError } from './types.js';
+import { CapabilityRequiredError, LicenseSignatureError, type LicenseState } from './types.js';
 import { LicenseGuard } from './guards.js';
 
 export const LICENSE_OPTIONS_TOKEN = 'DIDACTA_LICENSE_OPTIONS';
@@ -45,8 +46,21 @@ export interface LicenseModuleOptions {
   keyEnv?: string;
   /** Pasa la key directamente (en vez de leerla de env). */
   key?: string | null;
+  /**
+   * Fallback async cuando no hay key ni en `key` ni en `keyEnv`. Pensado para
+   * leer de `instance_setting` (panel `/admin/licencia`) sin que el SDK
+   * dependa de Prisma — el caller (apps/api) inyecta el resuelto vía
+   * `forRootAsync`. El resultado se carga con `source: 'admin-panel'`.
+   */
+  keyProvider?: () => Promise<string | null>;
   /** Activa el bypass de desarrollo. Solo efecto si NODE_ENV !== 'production'. */
   allowDevBypass?: boolean;
+}
+
+export interface LicenseModuleAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- misma firma que FactoryProvider de Nest.
+  useFactory: (...args: any[]) => LicenseModuleOptions | Promise<LicenseModuleOptions>;
+  inject?: FactoryProvider['inject'];
 }
 
 @Injectable()
@@ -61,10 +75,16 @@ class LicenseBootstrap implements OnApplicationBootstrap {
 
   async onApplicationBootstrap(): Promise<void> {
     const env = this.options.keyEnv ?? 'DIDACTA_LICENSE_KEY';
-    const key = this.options.key ?? process.env[env] ?? null;
+    let key = this.options.key ?? process.env[env] ?? null;
+    let source: LicenseState['source'] | undefined;
+    if (!key && this.options.keyProvider) {
+      key = await this.options.keyProvider();
+      if (key) source = 'admin-panel';
+    }
 
     const state = await this.license.load({
       key,
+      source,
       allowDevBypass: this.options.allowDevBypass ?? false,
     });
 
@@ -138,6 +158,27 @@ export class LicenseModule {
 
     return {
       module: LicenseModule,
+      providers: [optionsProvider, LicenseService, LicenseGuard, LicenseBootstrap],
+      exports: [LicenseService, LicenseGuard],
+    };
+  }
+
+  /**
+   * Variante async: permite construir `LicenseModuleOptions` con DI (p.ej.
+   * inyectar un service que lee `instance_setting` para `keyProvider`), algo
+   * que `forRoot()` no puede hacer porque su objeto se evalúa antes de que
+   * exista el container de Nest.
+   */
+  static forRootAsync(options: LicenseModuleAsyncOptions): DynamicModule {
+    const optionsProvider: FactoryProvider = {
+      provide: LICENSE_OPTIONS_TOKEN,
+      useFactory: options.useFactory,
+      inject: options.inject ?? [],
+    };
+
+    return {
+      module: LicenseModule,
+      imports: options.imports ?? [],
       providers: [optionsProvider, LicenseService, LicenseGuard, LicenseBootstrap],
       exports: [LicenseService, LicenseGuard],
     };

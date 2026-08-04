@@ -42,6 +42,7 @@ export {
   LicenseExceptionFilter,
   LICENSE_OPTIONS_TOKEN,
   type LicenseModuleOptions,
+  type LicenseModuleAsyncOptions,
 } from './nest.js';
 
 export {
