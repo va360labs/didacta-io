@@ -2,8 +2,9 @@
 
 Los tests de Didacta se ejecutan **en local** con `scripts/test-local.sh`, que
 es el runner autorizado antes de mergear. La CI de GitHub Actions valida
-typecheck, lint, ee-fence, gitleaks y license-check; las suites unit e
-integración corren aquí.
+typecheck, lint, ee-fence, gitleaks, license-check y la suite **unit** (job
+`unit-tests` de `ci.yml`); la suite de **integración** (Postgres/Redis
+reales) y los **E2E** de Playwright solo corren aquí, en local.
 
 ## Requisitos
 
