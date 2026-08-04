@@ -6,19 +6,27 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
  * Spec G5.3: el webhook público de Zoom acepta solicitudes con firma HMAC
  * válida y aplica el cambio de status sobre `mod_zoom_live_session`.
  *
- * Flow:
- *   1. Admin crea una sesión (status SCHEDULED).
- *   2. Construimos un payload `meeting.started` y lo firmamos con
- *      `ZOOM_WEBHOOK_SECRET` siguiendo el algoritmo de Zoom
- *      (HMAC-SHA256 sobre `v0:{timestamp}:{rawBody}`).
- *   3. POST al endpoint público `/api/v1/webhooks/zoom` (sin auth bearer).
- *   4. Verificamos `result=OK`.
- *   5. GET de la sesión confirma `status=STARTED`.
- *   6. Re-POST del mismo `event_id` → `result=DUPLICATE` (idempotencia).
- *   7. POST con firma falsa → 401.
+ * El webhook secret es per-tenant ahora (A2 de `work/migracion-env-a-panel.md`
+ * — antes vivía en el env global `ZOOM_WEBHOOK_SECRET`). El test lo configura
+ * él mismo vía el endpoint genérico de tenant-settings ANTES de firmar nada,
+ * y lo borra al terminar. El webhook resuelve el tenant por `Host` header
+ * (igual que `billing-public.controller.ts`); contra el stack de e2e eso
+ * cae en `localhost`, que el seed/`setup/init` siembran siempre verificado.
  *
- * Requiere `E2E_ZOOM_WEBHOOK_SECRET` para que coincida con el del backend.
- * Si no está set, el test queda skip-en-el-acto.
+ * Flow:
+ *   1. Admin configura `zoom-live/credentials.webhookSecret` (solo ese
+ *      campo — sin accountId/clientId/clientSecret, así `buildZoomApiClient`
+ *      sigue cayendo al stub y la creación de sesión no intenta pegarle a la
+ *      API real de Zoom).
+ *   2. Admin crea una sesión (status SCHEDULED).
+ *   3. Construimos un payload `meeting.started` y lo firmamos con ese secret
+ *      siguiendo el algoritmo de Zoom (HMAC-SHA256 sobre `v0:{timestamp}:{rawBody}`).
+ *   4. POST al endpoint público `/api/v1/webhooks/zoom` (sin auth bearer).
+ *   5. Verificamos `result=OK`.
+ *   6. GET de la sesión confirma `status=STARTED`.
+ *   7. Re-POST del mismo `event_id` → `result=DUPLICATE` (idempotencia).
+ *   8. POST con firma falsa → 401.
+ *   9. Cleanup: borra `zoom-live/credentials`.
  */
 
 /**
@@ -35,18 +43,24 @@ function signZoomWebhook(secret: string, body: string): { signature: string; tim
 
 test.describe('mod.zoom-live · webhook HMAC (G5.3)', () => {
   test('SCHEDULED → STARTED via webhook firmado, idempotente, rechaza firma falsa', async () => {
-    const secret = process.env.E2E_ZOOM_WEBHOOK_SECRET;
-    if (!secret) {
-      test.skip(
-        true,
-        'E2E_ZOOM_WEBHOOK_SECRET no está set (debe coincidir con ZOOM_WEBHOOK_SECRET del backend).',
-      );
-      return;
-    }
-
     const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const adminToken = await adminTokenForBootstrap(tenantSlug);
     const stamp = Date.now();
+    const secret = `e2e-webhook-secret-${stamp}`;
+    const adminHeaders = {
+      Authorization: `Bearer ${adminToken}`,
+      'Content-Type': 'application/json',
+    };
+
+    // 0. Configura el webhook secret de este tenant (solo ese campo — sin
+    // accountId/clientId/clientSecret, para que la creación de sesión de
+    // abajo siga usando el stub en vez de intentar Zoom real).
+    const credsRes = await fetch(`${API_URL}/api/v1/tenant-settings/zoom-live/credentials`, {
+      method: 'PUT',
+      headers: adminHeaders,
+      body: JSON.stringify({ value: { webhookSecret: secret }, isSecret: true }),
+    });
+    expect(credsRes.ok, `set webhookSecret OK (got ${credsRes.status})`).toBe(true);
 
     // 1. Crear sesión Zoom (SCHEDULED).
     const createRes = await fetch(`${API_URL}/api/v1/modules/zoom-live/sessions`, {
@@ -139,5 +153,11 @@ test.describe('mod.zoom-live · webhook HMAC (G5.3)', () => {
       body: fakeBody,
     });
     expect(fakeRes.status).toBe(401);
+
+    // 9. Cleanup: no dejar el webhook secret de prueba guardado.
+    await fetch(`${API_URL}/api/v1/tenant-settings/zoom-live/credentials`, {
+      method: 'DELETE',
+      headers: adminHeaders,
+    }).catch(() => {});
   });
 });

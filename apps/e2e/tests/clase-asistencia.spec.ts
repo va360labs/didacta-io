@@ -159,14 +159,17 @@ test.describe('mod.zoom-live · asistencia real (ADR-018)', () => {
     expect(tooEarly.status).toBe(409);
 
     // 8. Con el webhook de Zoom disponible, cerramos la clase y reconciliamos.
-    const secret = process.env.E2E_ZOOM_WEBHOOK_SECRET;
-    if (!secret) {
-      test.info().annotations.push({
-        type: 'skip-parcial',
-        description: 'Sin E2E_ZOOM_WEBHOOK_SECRET no se valida la reconciliación con Zoom.',
-      });
-      return;
-    }
+    // El secret es per-tenant (A2 de work/migracion-env-a-panel.md — antes
+    // vivía en el env global ZOOM_WEBHOOK_SECRET): lo configuramos nosotros
+    // mismos, sin accountId/clientId/clientSecret para que la sesión creada
+    // arriba siga viniendo del stub en vez de intentar Zoom real.
+    const secret = `e2e-asistencia-webhook-${stamp}`;
+    const credsRes = await fetch(`${API_URL}/api/v1/tenant-settings/zoom-live/credentials`, {
+      method: 'PUT',
+      headers: adminHeaders,
+      body: JSON.stringify({ value: { webhookSecret: secret }, isSecret: true }),
+    });
+    expect(credsRes.ok, `set webhookSecret OK (got ${credsRes.status})`).toBe(true);
 
     const endedBody = JSON.stringify({
       event_id: `evt-asistencia-${stamp}-ended`,
@@ -205,6 +208,12 @@ test.describe('mod.zoom-live · asistencia real (ADR-018)', () => {
     expect(rowAfter.confidence).toBe('ZOOM');
     expect(rowAfter.clickedJoinAt).not.toBeNull();
     expect(synced.attendedCount).toBe(0);
+
+    // Cleanup: no dejar el webhook secret de prueba guardado.
+    await fetch(`${API_URL}/api/v1/tenant-settings/zoom-live/credentials`, {
+      method: 'DELETE',
+      headers: adminHeaders,
+    }).catch(() => {});
   });
 
   test('el panel de asistencia se renderiza en /clase/[id] para staff', async ({ page }) => {

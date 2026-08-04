@@ -268,6 +268,8 @@ export const zoomLiveApi = {
     accountId: string;
     clientId: string;
     clientSecret: string;
+    /** Vacío conserva el guardado previo (merge del backend, igual que clientSecret). */
+    webhookSecret?: string;
   }): Promise<void> {
     await apiFetch(
       '/api/v1/tenant-settings/zoom-live/credentials',

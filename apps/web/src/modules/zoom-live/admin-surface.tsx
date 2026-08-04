@@ -29,7 +29,12 @@ type TestStatus =
   | { error: string };
 
 export function ZoomAdminSurface() {
-  const [draft, setDraft] = useState({ accountId: '', clientId: '', clientSecret: '' });
+  const [draft, setDraft] = useState({
+    accountId: '',
+    clientId: '',
+    clientSecret: '',
+    webhookSecret: '',
+  });
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const [testStatus, setTestStatus] = useState<TestStatus>('idle');
@@ -43,9 +48,14 @@ export function ZoomAdminSurface() {
         accountId: draft.accountId.trim(),
         clientId: draft.clientId.trim(),
         clientSecret: draft.clientSecret,
+        // Siempre se manda (aunque vacío): el merge del backend conserva el
+        // guardado previo cuando llega vacío, igual que clientSecret. Si se
+        // omitiera la clave por completo del body, el merge no tendría nada
+        // que preservar.
+        webhookSecret: draft.webhookSecret,
       });
       setStatus('saved');
-      setDraft((s) => ({ ...s, clientSecret: '' }));
+      setDraft((s) => ({ ...s, clientSecret: '', webhookSecret: '' }));
     } catch (e) {
       setStatus('error');
       setErrMsg(e instanceof ApiHttpError ? e.message : 'No pudimos guardar las credenciales.');
@@ -59,7 +69,7 @@ export function ZoomAdminSurface() {
     try {
       await zoomLiveApi.removeCredentials();
       setStatus('saved');
-      setDraft({ accountId: '', clientId: '', clientSecret: '' });
+      setDraft({ accountId: '', clientId: '', clientSecret: '', webhookSecret: '' });
     } catch (e) {
       setStatus('error');
       setErrMsg(e instanceof ApiHttpError ? e.message : 'No pudimos borrar las credenciales.');
@@ -122,6 +132,22 @@ export function ZoomAdminSurface() {
               onChange={(e) => setDraft({ ...draft, clientSecret: e.target.value })}
               autoComplete="new-password"
             />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="zoom-webhook-secret">Webhook Secret Token</Label>
+            <Input
+              id="zoom-webhook-secret"
+              type="password"
+              value={draft.webhookSecret}
+              onChange={(e) => setDraft({ ...draft, webhookSecret: e.target.value })}
+              autoComplete="new-password"
+              placeholder="(dejar vacío para conservar el actual)"
+            />
+            <p className="text-xs text-text-subtle">
+              El &quot;Secret Token&quot; que Zoom te da al configurar el webhook de tu app,
+              apuntando a <code className="font-mono">https://tu-dominio/api/v1/webhooks/zoom</code>
+              . Sin esto, el aula virtual no recibe eventos de inicio/fin de reunión.
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
             <Button type="submit" disabled={status === 'saving'}>

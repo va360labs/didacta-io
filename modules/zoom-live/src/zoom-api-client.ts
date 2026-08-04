@@ -102,6 +102,8 @@ export interface ZoomS2SCredentials {
   accountId: string;
   clientId: string;
   clientSecret: string;
+  /** Secret Token del webhook de esta app Zoom. Ver `ZoomLiveService.getWebhookSecret()`. */
+  webhookSecret?: string;
 }
 
 /**

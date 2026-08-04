@@ -883,6 +883,22 @@ export class ZoomLiveService {
    * con el mismo id devuelve DUPLICATE sin re-aplicar el efecto.
    */
   /**
+   * Lee el `webhookSecret` guardado junto a las credenciales S2S del tenant
+   * (`zoom-live/credentials`) — antes vivía en el env global
+   * `ZOOM_WEBHOOK_SECRET`, compartido por todos los tenants sin motivo (las
+   * credenciales S2S ya eran per-tenant). Lo usa el host para verificar la
+   * firma HMAC del webhook y para responder el handshake
+   * `endpoint.url_validation` de Zoom.
+   */
+  async getWebhookSecret(tenantId: string): Promise<string | null> {
+    if (!this.ctx.config) return null;
+    const creds = await this.ctx.config
+      .get<{ webhookSecret?: string }>(tenantId, 'zoom-live', 'credentials')
+      .catch(() => undefined);
+    return creds?.webhookSecret?.trim() || null;
+  }
+
+  /**
    * Resuelve el tenant dueño de un evento webhook SIN procesarlo (lookup de
    * la sesión por zoomMeetingId, cross-tenant). Mitad «lookup» del patrón F3:
    * el host la invoca bajo acceso global sancionado y ejecuta

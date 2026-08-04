@@ -1611,3 +1611,67 @@ describe('ZoomLiveService.resolveWebhookTenantId (mitad lookup del patrón F3)',
     ).toBeNull();
   });
 });
+
+describe('ZoomLiveService.getWebhookSecret (A2 — antes vivía en env ZOOM_WEBHOOK_SECRET)', () => {
+  function makeCtxWithConfig(store: Map<string, unknown>) {
+    const base = makeCtx();
+    return {
+      ...base,
+      config: {
+        async get<T>(tenantId: string, moduleName: string, key: string): Promise<T | undefined> {
+          return store.get(`${tenantId}.${moduleName}.${key}`) as T | undefined;
+        },
+      },
+    };
+  }
+
+  it('devuelve el webhookSecret guardado junto a las credenciales del tenant', async () => {
+    const prisma = makeFakePrisma();
+    const store = new Map<string, unknown>();
+    store.set(`${TENANT}.zoom-live.credentials`, { webhookSecret: 'sekret-123' });
+    const ctx = makeCtxWithConfig(store);
+    const service = new ZoomLiveService(prisma as never, ctx as never);
+
+    expect(await service.getWebhookSecret(TENANT)).toBe('sekret-123');
+  });
+
+  it('null si el tenant no configuró credenciales', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtxWithConfig(new Map());
+    const service = new ZoomLiveService(prisma as never, ctx as never);
+
+    expect(await service.getWebhookSecret(TENANT)).toBeNull();
+  });
+
+  it('null si hay credenciales S2S pero sin webhookSecret', async () => {
+    const prisma = makeFakePrisma();
+    const store = new Map<string, unknown>();
+    store.set(`${TENANT}.zoom-live.credentials`, {
+      accountId: 'a',
+      clientId: 'c',
+      clientSecret: 's',
+    });
+    const ctx = makeCtxWithConfig(store);
+    const service = new ZoomLiveService(prisma as never, ctx as never);
+
+    expect(await service.getWebhookSecret(TENANT)).toBeNull();
+  });
+
+  it('null si ctx.config no está disponible (host sin TenantConfigService)', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never);
+
+    expect(await service.getWebhookSecret(TENANT)).toBeNull();
+  });
+
+  it('aísla por tenant: el secret de un tenant no se filtra a otro', async () => {
+    const prisma = makeFakePrisma();
+    const store = new Map<string, unknown>();
+    store.set(`${TENANT}.zoom-live.credentials`, { webhookSecret: 'sekret-del-tenant-1' });
+    const ctx = makeCtxWithConfig(store);
+    const service = new ZoomLiveService(prisma as never, ctx as never);
+
+    expect(await service.getWebhookSecret('otro-tenant')).toBeNull();
+  });
+});
