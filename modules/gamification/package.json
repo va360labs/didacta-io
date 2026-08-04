@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Puntos, niveles y retos con prueba: convierte la actividad de la comunidad en un ledger auditable — mod.gamification",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

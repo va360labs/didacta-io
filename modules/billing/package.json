@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Módulo de monetización vía Stripe Checkout (pago único por curso) — mod.billing",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

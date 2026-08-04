@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Grupos de acceso configurables: entitlement por set de cursos materializado como matrículas del core — mod.access-groups",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

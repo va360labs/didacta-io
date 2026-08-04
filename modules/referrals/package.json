@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Programa de referidos de la membresía: enlaces por miembro, atribución vía Stripe Checkout, comisiones sobre cobros reales y liquidación manual — mod.referrals",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

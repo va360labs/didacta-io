@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Módulo de comunidad: posts, comentarios y reacciones (mod.community)",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

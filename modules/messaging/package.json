@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Mensajería de la comunidad: salas por espacio, mensajes directos y canal alumno↔profesores — mod.messaging",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

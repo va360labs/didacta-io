@@ -3,6 +3,7 @@
   "version": "0.0.1-alpha.88",
   "private": true,
   "description": "Frontend Next.js 15 de Didacta (alumno + admin de tenant)",
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "build": "next build",
     "dev": "next dev -p 3010",

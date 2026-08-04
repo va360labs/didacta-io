@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Módulo AI Grader: corrección IA de respuestas abiertas con rúbrica + revisión humana (LMS-91, Fase 1.C)",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

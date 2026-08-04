@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Contrato de módulo y primitivas del core de Didacta",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

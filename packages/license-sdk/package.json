@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Didacta License SDK — verifies signed JWTs (ES256) for Enterprise capabilities and integrates with the opt-in registry",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

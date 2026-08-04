@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Encuestas y NPS de la comunidad: encuesta post-clase anónima con resultados agregados — mod.surveys",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

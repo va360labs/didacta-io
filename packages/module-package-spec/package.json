@@ -2,6 +2,7 @@
   "name": "@didacta/module-package-spec",
   "version": "1.0.0",
   "description": "Didacta module package spec — versioned contract for the module ZIP layout. Single source of truth shared by the backend validator and any packager (official skill or third-party tooling). Zero runtime deps.",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

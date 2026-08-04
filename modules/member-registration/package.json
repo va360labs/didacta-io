@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Módulo de inscripción de miembros: solicitud → evidencia (verificadores componibles) → decisión humana — mod.member-registration",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

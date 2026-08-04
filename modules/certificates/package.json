@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Módulo de emisión de certificados PDF tras finalización de cursos (mod.certificates)",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

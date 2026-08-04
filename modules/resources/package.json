@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Biblioteca de recursos de la comunidad: workflows de las clases, skills, directorio de herramientas y plantillas — mod.resources",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

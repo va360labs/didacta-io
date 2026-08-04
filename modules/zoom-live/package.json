@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Módulo de aula virtual: sesiones síncronas Zoom asociadas a curso (mod.zoom-live)",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

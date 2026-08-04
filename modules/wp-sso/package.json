@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "SSO desde WordPress hacia Didacta. WordPress firma un token corto (HMAC) con el email del usuario; Didacta lo verifica y emite sesión. Incluye plugin WP companion.",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

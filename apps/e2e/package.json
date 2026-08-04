@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Tests E2E con Playwright (golden path completo del alumno)",
+  "license": "SEE LICENSE IN LICENSE",
   "type": "commonjs",
   "scripts": {
     "test": "node -e \"console.log('e2e: skipped en CI principal — usar workflow e2e.yml o pnpm test:e2e')\"",

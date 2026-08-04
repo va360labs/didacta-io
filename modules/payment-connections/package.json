@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Conecta varias cuentas Stripe (solo lectura) y reconcilia suscripciones contra usuarios Didacta por email — mod.payment-connections",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

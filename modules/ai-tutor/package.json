@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Módulo AI Tutor: tutor IA por curso con RAG sobre contenido (LMS-90, Fase 1.C)",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
