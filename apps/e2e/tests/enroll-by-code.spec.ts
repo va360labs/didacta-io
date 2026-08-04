@@ -43,7 +43,10 @@ test.describe('Matriculación por código de invitación', () => {
     await page.goto('/signin');
     await injectSession(page, {
       accessToken: alumno.tokens.accessToken,
-      user: alumno.user,
+      // Sin esto el alumno recién creado cae en el gate de onboarding
+      // obligatorio al navegar a /cursos/[slug] en vez de ver la card de
+      // matrícula (mismo fallo que redesign-smoke.spec.ts ya documenta).
+      user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
 
     // 1) Entrar al detalle del curso (sin estar matriculado): la card pre-enrolment

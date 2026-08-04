@@ -31,7 +31,10 @@ test.describe('Golden path del alumno', () => {
     await page.goto('/signin');
     await injectSession(page, {
       accessToken: scenario.alumno.accessToken,
-      user: scenario.alumno.user,
+      // Sin onboardingCompletedAt el alumno recién creado cae en el gate de
+      // onboarding obligatorio ("Completa tu perfil para empezar") — este
+      // spec no lo testea (eso lo cubre tests/onboarding.spec.ts).
+      user: { ...scenario.alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
 
     // 1) Catálogo

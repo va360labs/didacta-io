@@ -50,6 +50,8 @@ test.describe('Branding · guardar logo + colores (regresión "no se guarda")', 
         tenantSlug,
         roles: ['super_admin', 'tenant_admin'],
         mfaEnabled: true,
+        // Sin esto el gate de onboarding secuestra la navegación a /admin/branding.
+        onboardingCompletedAt: new Date().toISOString(),
       },
     });
 
