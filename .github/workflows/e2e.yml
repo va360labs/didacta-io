@@ -53,13 +53,15 @@ jobs:
       # specs E2E lo usan para fabricar usuarios de prueba → se reabre solo aquí.
       AUTH_SIGNUP_ENABLED: 'true'
       PORT: 4000
-      WEB_PORT: 3000
       API_INTERNAL_URL: http://localhost:4000
       BOOTSTRAP_PASSWORD: E2eAdminPassword123!
       BOOTSTRAP_EMAIL: e2e-admin@example.test
       BOOTSTRAP_TENANT_SLUG: demo
-      E2E_BASE_URL: http://localhost:3000
-      E2E_API_URL: http://localhost:3000
+      # El puerto real de `next start` está fijo en el script (`-p 3010`, ver
+      # apps/web/package.json) — PORT no lo cambia. E2E_BASE_URL/E2E_API_URL
+      # tienen que apuntar ahí (mismo criterio que el job "setup-wizard").
+      E2E_BASE_URL: http://localhost:3010
+      E2E_API_URL: http://localhost:3010
       E2E_TENANT_SLUG: demo
       E2E_ADMIN_EMAIL: e2e-admin@example.test
       E2E_ADMIN_PASSWORD: E2eAdminPassword123!
@@ -88,6 +90,19 @@ jobs:
       - name: Apply migrations
         run: pnpm --filter @didacta/database db:migrate:deploy
 
+      - name: Aplicar políticas RLS y roles de runtime (didacta_app/didacta_super)
+        run: |
+          # Desde RLS F3 el boot de la API hace `SET LOCAL ROLE didacta_super`
+          # para el acceso global sancionado (ver tenant-context.storage.ts) —
+          # ese rol solo existe tras correr grants.sql. Mismo paso que
+          # infra/docker/entrypoint.sh#run_migrations y que el job
+          # "setup-wizard" de este mismo archivo, sin el cual la API no llega
+          # a levantar (rol inexistente).
+          # psql no acepta `?schema=public` (param propio de Prisma).
+          ADMIN_PSQL_URL="${DATABASE_URL%%\?*}"
+          psql "$ADMIN_PSQL_URL" -v ON_ERROR_STOP=1 -f packages/database/prisma/rls.sql
+          psql "$ADMIN_PSQL_URL" -v ON_ERROR_STOP=1 -f packages/database/prisma/grants.sql
+
       - name: Seed admin user
         run: pnpm --filter @didacta/database db:seed
 
@@ -101,17 +116,16 @@ jobs:
 
       - name: Start Web
         run: pnpm --filter @didacta/web start &
-        env:
-          PORT: 3000
 
       - name: Wait for services
         run: |
           # API liveness: el endpoint canónico es /healthz (no /api/v1/health).
-          # Probamos contra el api directamente (4000) y el web (3000) en
-          # paralelo para no avanzar si alguno no respondió.
+          # Probamos contra el api directamente (4000) y el web (3010, ver
+          # apps/web/package.json#start) en paralelo para no avanzar si
+          # alguno no respondió.
           for i in {1..60}; do
             if curl -sf http://localhost:4000/healthz > /dev/null \
-              && curl -sf http://localhost:3000 > /dev/null; then
+              && curl -sf http://localhost:3010 > /dev/null; then
               echo "API + Web up"
               exit 0
             fi
