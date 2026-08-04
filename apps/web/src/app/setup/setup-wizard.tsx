@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -79,6 +79,12 @@ function evaluatePassword(pw: string): PasswordStrength {
 
 export function SetupWizard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Token de un solo uso impreso en los logs del contenedor al primer
+  // arranque (ver SetupTokenService en el backend). Sin `?token=` en la URL
+  // el POST final se rechaza con 403 — evita que un tercero gane la carrera
+  // hasta /setup/init antes que el operador legítimo.
+  const setupToken = searchParams?.get('token') ?? null;
   const [step, setStep] = useState<Step>('welcome');
   const [error, setError] = useState<string | null>(null);
 
@@ -164,6 +170,7 @@ export function SetupWizard() {
     try {
       const response = await apiFetch<InitResponse>('/api/v1/setup/init', {
         method: 'POST',
+        headers: setupToken ? { 'X-Setup-Token': setupToken } : undefined,
         body: JSON.stringify({
           organization: {
             name: orgName.trim(),
@@ -193,6 +200,10 @@ export function SetupWizard() {
         if (e.status === 409) {
           msg =
             'Esta plataforma ya fue inicializada. Vuelve a la pantalla de inicio de sesión y entra con tu cuenta admin.';
+        } else if (e.status === 403) {
+          msg = setupToken
+            ? 'El token de setup no es válido o ya se usó. Revisa los logs del contenedor del primer arranque (docker logs) y abre el enlace más reciente.'
+            : 'Falta el token de setup en la URL. Ábrela con el enlace que aparece en los logs del contenedor tras el primer arranque (docker logs), con el formato /setup?token=...';
         } else if (e.message) {
           msg = e.message;
         }

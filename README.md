@@ -69,7 +69,12 @@ docker compose -f docker-compose.alpha.yml up -d
 # 6. Esperar healthchecks (~60-90s la primera vez)
 docker compose -f docker-compose.alpha.yml ps
 
-# 7. Abrir
+# 7. Copiar el token de setup de un solo uso (obligatorio para crear la
+#    cuenta admin — sin él /setup/init responde 403). Deja de valer en
+#    cuanto termine el asistente o el contenedor se reinicie sin terminarlo.
+docker compose -f docker-compose.alpha.yml logs didacta | grep "Setup token"
+
+# 8. Abrir (usa la URL /setup?token=... que imprimió el paso anterior)
 # http://localhost:3000             — Web
 # http://localhost:4000/api/docs    — Swagger
 # http://localhost:4000/healthz     — health probe
@@ -147,6 +152,7 @@ docker run -d \
 ```bash
 docker logs -f didacta-app                  # ver bootstrap + migraciones Prisma
 curl -fsS http://localhost:4000/healthz     # debe responder 200
+docker logs didacta-app | grep "Setup token"  # token de un solo uso para /setup?token=...
 ```
 
 **Variables opcionales útiles** — conjunto completo en [`.env.example`](.env.example):

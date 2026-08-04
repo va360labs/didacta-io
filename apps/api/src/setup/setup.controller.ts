@@ -38,7 +38,7 @@ export class SetupController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Bootstrap de primer arranque: crea tenant + dominio + usuario super_admin con password inline. Devuelve tokens firmados (auto-login). 409 si ya hay tenants.',
+      'Bootstrap de primer arranque: crea tenant + dominio + usuario super_admin con password inline. Devuelve tokens firmados (auto-login). 409 si ya hay tenants, 403 si falta o no coincide el header X-Setup-Token (ver docker logs del primer arranque).',
   })
   async init(
     @Req() req: FastifyRequest,
@@ -49,6 +49,10 @@ export class SetupController {
     // Quitamos el puerto: el TenantDomain.hostname no incluye `:port`. El
     // request a `localhost:4000` debe persistir como `localhost`.
     const hostNoPort = hostStr ? (hostStr.split(':')[0] ?? null) : null;
-    return this.service.init(dto, hostNoPort, extractClientContext(req));
+    const tokenHeader = req.headers['x-setup-token'];
+    const setupToken = Array.isArray(tokenHeader)
+      ? (tokenHeader[0] ?? null)
+      : (tokenHeader ?? null);
+    return this.service.init(dto, hostNoPort, extractClientContext(req), setupToken);
   }
 }

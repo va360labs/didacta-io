@@ -9,7 +9,7 @@ import { sessionRegistryStub } from './helpers/session-registry-stub';
  */
 
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { SetupService } from '../src/setup/setup.service';
 import { PasswordService } from '../src/auth/password.service';
 
@@ -197,6 +197,16 @@ const tokensFake = {
   })),
 } as unknown as ConstructorParameters<typeof SetupService>[2];
 
+// Stub que siempre deja pasar — el comportamiento real de SetupTokenService
+// (403 si falta/no coincide) se cubre en setup-token.service.test.ts y en el
+// describe dedicado más abajo, que sí inyecta un stub que rechaza.
+function permissiveSetupTokensStub() {
+  return {
+    assertValid: vi.fn(async () => undefined),
+    invalidate: vi.fn(async () => undefined),
+  } as unknown as ConstructorParameters<typeof SetupService>[5];
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -210,6 +220,7 @@ describe('SetupService.getStatus', () => {
       tokensFake,
       dummyAuditLog,
       sessionRegistryStub(tokensFake as never),
+      permissiveSetupTokensStub(),
     );
     expect(await svc.getStatus()).toEqual({ initialized: false });
   });
@@ -229,6 +240,7 @@ describe('SetupService.getStatus', () => {
       tokensFake,
       dummyAuditLog,
       sessionRegistryStub(tokensFake as never),
+      permissiveSetupTokensStub(),
     );
     expect(await svc.getStatus()).toEqual({ initialized: true });
   });
@@ -248,6 +260,7 @@ describe('SetupService.getStatus', () => {
       tokensFake,
       dummyAuditLog,
       sessionRegistryStub(tokensFake as never),
+      permissiveSetupTokensStub(),
     );
     expect(await svc.getStatus()).toEqual({ initialized: false });
   });
@@ -267,6 +280,7 @@ describe('SetupService.init', () => {
       tokensFake,
       dummyAuditLog,
       sessionRegistryStub(tokensFake as never),
+      permissiveSetupTokensStub(),
     );
 
     const result = await svc.init(validDto, 'lms.acme.test', { ip: null, userAgent: null });
@@ -328,6 +342,7 @@ describe('SetupService.init', () => {
       tokensFake,
       dummyAuditLog,
       sessionRegistryStub(tokensFake as never),
+      permissiveSetupTokensStub(),
     );
 
     await expect(svc.init(validDto, 'host.test', { ip: null, userAgent: null })).rejects.toThrow(
@@ -347,6 +362,7 @@ describe('SetupService.init', () => {
       tokensFake,
       dummyAuditLog,
       sessionRegistryStub(tokensFake as never),
+      permissiveSetupTokensStub(),
     );
 
     const [a, b] = await Promise.allSettled([
@@ -372,6 +388,7 @@ describe('SetupService.init', () => {
       tokensFake,
       dummyAuditLog,
       sessionRegistryStub(tokensFake as never),
+      permissiveSetupTokensStub(),
     );
 
     await svc.init(
@@ -393,6 +410,7 @@ describe('SetupService.init', () => {
       tokensFake,
       dummyAuditLog,
       sessionRegistryStub(tokensFake as never),
+      permissiveSetupTokensStub(),
     );
 
     await svc.init(
@@ -414,6 +432,7 @@ describe('SetupService.init', () => {
       tokensFake,
       dummyAuditLog,
       sessionRegistryStub(tokensFake as never),
+      permissiveSetupTokensStub(),
     );
 
     await svc.init(
@@ -435,6 +454,7 @@ describe('SetupService.init', () => {
       tokensFake,
       dummyAuditLog,
       sessionRegistryStub(tokensFake as never),
+      permissiveSetupTokensStub(),
     );
 
     await svc.init(
@@ -448,5 +468,88 @@ describe('SetupService.init', () => {
     const localhostDomains = state.tenantDomains.filter((d) => d.hostname === 'localhost');
     expect(localhostDomains).toHaveLength(1);
     expect(localhostDomains[0]?.isPrimary).toBe(true);
+  });
+});
+
+describe('SetupService.init — gate del token de setup', () => {
+  const validDto = {
+    organization: { name: 'ACME Corp', primaryHostname: 'lms.acme.test' },
+    admin: { name: 'Pat Admin', email: 'pat@acme.test', password: 'super-secure-1234' },
+  };
+
+  function rejectingSetupTokensStub() {
+    return {
+      assertValid: vi.fn(async () => {
+        throw new ForbiddenException({ code: 'SETUP_TOKEN_INVALID', message: 'nope' });
+      }),
+      invalidate: vi.fn(async () => undefined),
+    } as unknown as ConstructorParameters<typeof SetupService>[5];
+  }
+
+  it('rechaza con 403 en DB virgen si el token no es válido, sin crear nada', async () => {
+    const { client, state } = makeFakePrisma();
+    const setupTokens = rejectingSetupTokensStub();
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+      setupTokens,
+    );
+
+    await expect(
+      svc.init(validDto, 'host.test', { ip: null, userAgent: null }, 'token-que-sea'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(setupTokens.assertValid).toHaveBeenCalledWith('token-que-sea');
+    expect(state.tenants).toHaveLength(0);
+  });
+
+  it('con token válido, invalida el token tras crear el tenant (uso único)', async () => {
+    const { client } = makeFakePrisma();
+    const setupTokens = permissiveSetupTokensStub() as unknown as {
+      assertValid: ReturnType<typeof vi.fn>;
+      invalidate: ReturnType<typeof vi.fn>;
+    };
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+      setupTokens as unknown as ConstructorParameters<typeof SetupService>[5],
+    );
+
+    await svc.init(validDto, 'host.test', { ip: null, userAgent: null }, 'token-valido');
+    expect(setupTokens.assertValid).toHaveBeenCalledWith('token-valido');
+    expect(setupTokens.invalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it('si ya hay un tenant, NO consulta el token (prioriza el 409 de siempre)', async () => {
+    const { client, state } = makeFakePrisma();
+    state.tenants.push({
+      id: 't0',
+      slug: 'existing',
+      name: 'Existing',
+      status: 'ACTIVE',
+      deletedAt: null,
+    });
+    const setupTokens = rejectingSetupTokensStub() as unknown as {
+      assertValid: ReturnType<typeof vi.fn>;
+      invalidate: ReturnType<typeof vi.fn>;
+    };
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+      setupTokens as unknown as ConstructorParameters<typeof SetupService>[5],
+    );
+
+    await expect(
+      svc.init(validDto, 'host.test', { ip: null, userAgent: null }, null),
+    ).rejects.toThrow(ConflictException);
+    expect(setupTokens.assertValid).not.toHaveBeenCalled();
   });
 });

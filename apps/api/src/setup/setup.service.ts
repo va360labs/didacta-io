@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import type { SetupInitDto } from './dto';
 import { SessionRegistryService } from '../auth/session-registry.service';
+import { SetupTokenService } from './setup-token.service';
 
 const NO_CTX: ClientContext = { ip: null, userAgent: null };
 
@@ -76,6 +77,7 @@ export class SetupService {
     private readonly tokens: TokenService,
     private readonly auditLog: PrismaAuditLogService,
     private readonly sessions: SessionRegistryService,
+    private readonly setupTokens: SetupTokenService,
   ) {}
 
   async getStatus(): Promise<SetupStatus> {
@@ -104,7 +106,16 @@ export class SetupService {
     dto: SetupInitDto,
     requestHostname: string | null,
     ctx: ClientContext = NO_CTX,
+    setupToken: string | null = null,
   ): Promise<SetupInitResult> {
+    // Gate del token ANTES de cualquier validación/hash costoso: una
+    // instancia ya inicializada no lo exige (mantiene el 409 de siempre sin
+    // ruido de "token inválido" en reintentos post-setup); mientras esté
+    // virgen, sin token válido no se llega ni a tocar argon2.
+    if (!(await this.getStatus()).initialized) {
+      await this.setupTokens.assertValid(setupToken);
+    }
+
     const slug = (dto.organization.slug ?? this.slugify(dto.organization.name)).toLowerCase();
     if (!SLUG_RE.test(slug)) {
       throw new ConflictException(
@@ -123,7 +134,13 @@ export class SetupService {
     // Todo el bootstrap corre como acceso global SANCIONADO (RLS): el tenant
     // no existe hasta dentro de la transacción, así que no hay GUC posible.
     // Sin esto, el flip a didacta_app (F3) dejaría la instalación imposible.
-    return runSanctionedGlobalAccess(() => this.initSanctioned(dto, hostname, passwordHash, ctx));
+    const result = await runSanctionedGlobalAccess(() =>
+      this.initSanctioned(dto, hostname, passwordHash, ctx),
+    );
+    // De un solo uso: si llegamos aquí, initSanctioned no lanzó → cierra el
+    // token para que nadie más pueda reintentar con el mismo valor.
+    await this.setupTokens.invalidate();
+    return result;
   }
 
   private async initSanctioned(

@@ -4,6 +4,7 @@
  */
 
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { SetupWizard } from './setup-wizard';
 
 export const metadata: Metadata = {
@@ -13,5 +14,12 @@ export const metadata: Metadata = {
 };
 
 export default function SetupPage() {
-  return <SetupWizard />;
+  // SetupWizard lee `?token=` con useSearchParams (el token de un solo uso
+  // impreso en los logs del contenedor al primer arranque) — exige Suspense
+  // en el árbol, mismo patrón que reset-password/page.tsx.
+  return (
+    <Suspense>
+      <SetupWizard />
+    </Suspense>
+  );
 }

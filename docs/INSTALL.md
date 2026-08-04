@@ -40,12 +40,26 @@ idempotente de sistema. No hay que ejecutar nada a mano.
 
 ### Primer acceso
 
-1. Abre `http://localhost:3000`. La primera vez te llevará al **asistente de
-   configuración** (`/setup`): ahí creas la organización (tenant) y la cuenta
-   del primer administrador.
-2. Entra con esa cuenta y configura tu marca en **Administración → Marca**
+1. Mientras la instancia no tenga ningún tenant, el arranque imprime en los
+   logs un **token de setup de un solo uso** (obligatorio para completar el
+   asistente — sin él, cualquiera que llegase antes que tú a `/setup/init`
+   podría quedarse con la cuenta super_admin si tu instancia está expuesta a
+   internet):
+
+   ```bash
+   docker compose -f docker-compose.alpha.yml logs didacta | grep "Setup token"
+   ```
+
+   Copia la URL `/setup?token=...` que aparece justo debajo del token. Si el
+   contenedor se reinicia antes de terminar el asistente, el token anterior
+   deja de valer — vuelve a mirar los logs y usa el más reciente.
+2. Abre esa URL tal cual (`http://localhost:3000/setup?token=...`) — el
+   asistente solo lee el token de ahí, no hay campo para pegarlo a mano. Ahí
+   creas la organización (tenant) y la cuenta del primer administrador. El
+   token se invalida automáticamente en cuanto el asistente termina con éxito.
+3. Entra con esa cuenta y configura tu marca en **Administración → Marca**
    (logo, colores, textos de la pantalla de acceso).
-3. El correo saliente apunta por defecto al buzón de pruebas Mailpit
+4. El correo saliente apunta por defecto al buzón de pruebas Mailpit
    (`http://localhost:8025`). Para producción configura tu SMTP real en
    **Administración → SMTP**.
 
