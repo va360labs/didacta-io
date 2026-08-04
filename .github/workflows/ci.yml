@@ -19,11 +19,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    # Política activa desde 2026-05-01: las pruebas (unit, integración, E2E)
-    # NO se ejecutan en CI. Se corren en local sobre Docker Desktop a través
-    # de `scripts/test-local.sh` (ver docs/TESTING-LOCAL.md). Este job mantiene
-    # las verificaciones estáticas obligatorias antes de merge: format, lint,
-    # typecheck y build del workspace.
+    # Política activa desde 2026-05-01: las pruebas de integración y E2E
+    # (las que requieren Postgres/Redis reales) NO se ejecutan en CI. Se
+    # corren en local sobre Docker Desktop a través de `scripts/test-local.sh`
+    # (ver docs/TESTING-LOCAL.md). Este job mantiene las verificaciones
+    # estáticas obligatorias antes de merge: format, lint, typecheck y build
+    # del workspace. Los tests unit corren en el job `unit-tests` de abajo.
 
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -64,3 +65,44 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Suite unit (`pnpm test` → `turbo run test`, ~2000 tests). No requiere
+    # Postgres/Redis reales — los tests que sí los necesitan viven bajo
+    # `tests/integration/**` o `*.integration.test.ts` y quedan excluidos por
+    # `vitest.config.ts` (ver integration.yml, workflow_dispatch-only).
+
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 10.21.0
+          run_install: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @didacta/database db:generate
+
+      - name: Unit tests
+        run: pnpm test
