@@ -16,6 +16,7 @@ import { assessmentsModule, AssessmentsService } from '@didacta/mod-assessments'
 import {
   BillingService,
   buildBillingModule,
+  StripeConfigMissingError as BillingStripeConfigMissingError,
   StripeSdkAdapter,
   type BillingEventPublisher,
   type CheckoutUrlBuilder,
@@ -23,6 +24,7 @@ import {
 } from '@didacta/mod-billing';
 import {
   MembershipService,
+  StripeConfigMissingError as SubscriptionsStripeConfigMissingError,
   SubscriptionsService,
   SubscriptionsStripeSdkAdapter,
   buildSubscriptionsModule,
@@ -960,29 +962,30 @@ export class ModuleRegistryService implements OnModuleInit {
     return this.aiContent;
   }
 
+  // Las 4 getters de abajo lanzan el `StripeConfigMissingError` propio de
+  // cada módulo (no un `Error` plano): son BillingError/SubscriptionsError,
+  // así que BillingErrorFilter/SubscriptionsErrorFilter (@Catch(...Error))
+  // las mapean a un 503 con mensaje útil. Con `Error` plano el filtro nunca
+  // se activaba y el cliente veía un 500 "Internal server error" genérico
+  // en vez de "falta STRIPE_SECRET_KEY" — hallazgo real al documentar
+  // /admin/billing/products sin Stripe configurado.
   getBillingService(): BillingService {
     if (!this.billing) {
-      throw new Error(
-        'mod.billing no está inicializado. Configura STRIPE_SECRET_KEY y STRIPE_WEBHOOK_SECRET.',
-      );
+      throw new BillingStripeConfigMissingError('secretKey');
     }
     return this.billing;
   }
 
   getStripeAdapter(): StripeAdapter {
     if (!this.stripeAdapter) {
-      throw new Error(
-        'StripeAdapter no está inicializado. Configura STRIPE_SECRET_KEY y STRIPE_WEBHOOK_SECRET.',
-      );
+      throw new BillingStripeConfigMissingError('secretKey');
     }
     return this.stripeAdapter;
   }
 
   getSubscriptionsService(): SubscriptionsService {
     if (!this.subscriptions) {
-      throw new Error(
-        'mod.subscriptions no está inicializado. Configura STRIPE_SECRET_KEY y STRIPE_WEBHOOK_SECRET (o SUBSCRIPTIONS_WEBHOOK_SECRET).',
-      );
+      throw new SubscriptionsStripeConfigMissingError('secretKey');
     }
     return this.subscriptions;
   }
@@ -1011,9 +1014,7 @@ export class ModuleRegistryService implements OnModuleInit {
 
   getSubscriptionsStripeAdapter(): SubscriptionsStripeAdapter {
     if (!this.subscriptionsStripeAdapter) {
-      throw new Error(
-        'SubscriptionsStripeAdapter no está inicializado. Configura STRIPE_SECRET_KEY y STRIPE_WEBHOOK_SECRET.',
-      );
+      throw new SubscriptionsStripeConfigMissingError('secretKey');
     }
     return this.subscriptionsStripeAdapter;
   }
