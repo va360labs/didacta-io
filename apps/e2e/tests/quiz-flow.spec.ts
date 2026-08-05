@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { adminTokenForBootstrap, createPublishedCourseWithQuiz, signup } from '../helpers/api';
+import {
+  adminTokenForBootstrap,
+  createInvitation,
+  createPublishedCourseWithQuiz,
+  signup,
+} from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
 /**
@@ -34,15 +39,23 @@ test.describe('mod.assessments — flujo del alumno', () => {
       name: 'Alumno Quiz',
     });
 
+    const invitation = await createInvitation({ bearer: adminToken, courseId: course.id });
+
     await page.goto('/signin');
     await injectSession(page, {
       accessToken: alumno.tokens.accessToken,
-      user: alumno.user,
+      // Sin esto el alumno recién creado cae en el gate de onboarding
+      // obligatorio ("Completa tu perfil para empezar") en vez de ver la
+      // ficha del curso (mismo idiom que golden-path.spec.ts).
+      user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
 
-    // 1) Catálogo y entrada al curso
+    // 1) Catálogo y entrada al curso, matrícula por código de invitación (el
+    // botón "Matricularme" de matrícula libre fue eliminado globalmente, ver
+    // inscribe-by-api.spec.ts).
     await page.goto(`/cursos/${course.slug}`);
-    await page.getByRole('button', { name: 'Matricularme' }).click();
+    await page.getByLabel(/código de invitación/i).fill(invitation.code);
+    await page.getByRole('button', { name: 'Canjear código' }).click();
     await expect(page.getByText('Tu progreso')).toBeVisible({ timeout: 15_000 });
 
     // 2) Click en la lección QUIZ desde el sidebar

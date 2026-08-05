@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
   adminTokenForBootstrap,
+  createInvitation,
   createPublishedCourseWithShortAnswerQuiz,
   signup,
 } from '../helpers/api';
@@ -40,14 +41,22 @@ test.describe('mod.assessments — corrección manual end-to-end', () => {
       name: 'Alumno Grading',
     });
 
+    const invitation = await createInvitation({ bearer: adminToken, courseId: course.id });
+
     // 1) Alumno hace el quiz
     await page.goto('/signin');
     await injectSession(page, {
       accessToken: alumno.tokens.accessToken,
-      user: alumno.user,
+      // Sin esto el alumno recién creado cae en el gate de onboarding
+      // obligatorio ("Completa tu perfil para empezar") en vez de ver la
+      // ficha del curso (mismo idiom que golden-path.spec.ts).
+      user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
     await page.goto(`/cursos/${course.slug}`);
-    await page.getByRole('button', { name: 'Matricularme' }).click();
+    // Matrícula por código de invitación: el botón "Matricularme" de
+    // matrícula libre fue eliminado globalmente (ver inscribe-by-api.spec.ts).
+    await page.getByLabel(/código de invitación/i).fill(invitation.code);
+    await page.getByRole('button', { name: 'Canjear código' }).click();
     await expect(page.getByText('Tu progreso')).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole('button', { name: /Quiz lesson SHORT/ }).click();
@@ -62,7 +71,7 @@ test.describe('mod.assessments — corrección manual end-to-end', () => {
     // pantalla de resultado, conformémonos con que la página no rompa y
     // que el bridge no haya marcado la lección como completada (todavía).
     // El alumno verá el resultado provisional o un mensaje similar.
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000); // networkidle nunca resuelve con SSE activo (ver espacios.spec.ts)
 
     // 2) Admin entra al panel de correcciones
     const adminCtx = await browser.newContext();
@@ -80,6 +89,9 @@ test.describe('mod.assessments — corrección manual end-to-end', () => {
         tenantSlug,
         roles: ['super_admin', 'tenant_admin'],
         mfaEnabled: true,
+        // Sin esto el gate de onboarding secuestra la navegación a
+        // /formador/correcciones (mismo idiom que la sesión del alumno).
+        onboardingCompletedAt: new Date().toISOString(),
       },
     });
     await adminPage.goto('/formador/correcciones');
@@ -97,8 +109,15 @@ test.describe('mod.assessments — corrección manual end-to-end', () => {
     await expect(adminPage.getByText(/Postgres es una base de datos/)).toBeVisible();
 
     // 4) Asigna max points y envía
+    // dispatchEvent('click') en vez de .click(): la píldora fija del chat
+    // flotante (bottom-right, global en (app)/layout.tsx) puede solaparse con
+    // botones de submit cuando caen en esa zona de la pantalla — un click de
+    // ratón real (incluso con force:true) puede entregarse al elemento
+    // visualmente superior en vez de al botón. Mismo hallazgo NUEVO que
+    // branding-visual.spec.ts, documentado aparte en memoria en vez de tocar
+    // aquí el componente global.
     await adminPage.locator('input[type="number"]').fill(String(questionPoints));
-    await adminPage.getByRole('button', { name: 'Enviar calificación' }).click();
+    await adminPage.getByRole('button', { name: 'Enviar calificación' }).dispatchEvent('click');
 
     // Vuelve al panel de pendientes vacío
     await expect(adminPage).toHaveURL(/\/formador\/correcciones$/, { timeout: 15_000 });

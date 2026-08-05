@@ -339,8 +339,18 @@ export default function BrandingPage() {
               <LogoUploader
                 currentLogoUrl={form.logoUrl}
                 isUploaded={theme?.logoUploaded ?? false}
-                onUploaded={(url) => setForm((f) => f && { ...f, logoUrl: url })}
-                onRemoved={() => setForm((f) => f && { ...f, logoUrl: '' })}
+                onUploaded={(url) => {
+                  setForm((f) => f && { ...f, logoUrl: url });
+                  // Sin esto, `theme.logoUploaded` queda desactualizado tras
+                  // subir (solo se refresca en save/reset) y el bloque "Logo
+                  // subido" (con el botón Eliminar) no aparece hasta recargar
+                  // la página, aunque la vista previa de arriba sí lo muestre.
+                  setTheme((t) => t && { ...t, logoUploaded: true, logoUrl: url });
+                }}
+                onRemoved={() => {
+                  setForm((f) => f && { ...f, logoUrl: '' });
+                  setTheme((t) => t && { ...t, logoUploaded: false, logoUrl: null });
+                }}
               />
 
               <div>

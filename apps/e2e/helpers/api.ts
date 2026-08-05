@@ -644,6 +644,13 @@ export async function adminTokenForBootstrap(tenantSlug: string): Promise<string
 export interface BootstrapResult {
   tenantSlug: string;
   course: CourseDetail;
+  /**
+   * Código de invitación del curso, válido para 1 uso. Desde que se quitó
+   * "Matricularme" (matrícula libre) de la ficha de curso (commit f778ad1e,
+   * ver inscribe-by-api.spec.ts), esta es la vía de matrícula por UI que
+   * queda para un curso sin producto de venta ni plan de membresía.
+   */
+  invitationCode: string;
   alumno: {
     email: string;
     password: string;
@@ -693,6 +700,14 @@ export async function bootstrapScenario(): Promise<BootstrapResult> {
     slug: `curso-e2e-${stamp}`,
   });
 
+  // 2b. Código de invitación (1 uso): vía de matrícula libre por UI, ya que
+  // el curso no tiene producto de venta ni plan de membresía configurado.
+  const invitation = await createInvitation({
+    bearer: adminToken,
+    courseId: course.id,
+    maxUses: 1,
+  });
+
   // 3. Alumno: signup. Sin rol admin -> sin MFA.
   const alumno = await signup({
     tenantSlug,
@@ -715,6 +730,7 @@ export async function bootstrapScenario(): Promise<BootstrapResult> {
   return {
     tenantSlug,
     course,
+    invitationCode: invitation.code,
     alumno: {
       email: alumnoEmail,
       password,

@@ -42,17 +42,30 @@ test.describe('Golden path del alumno', () => {
     await expect(page.getByRole('heading', { name: 'Catálogo' })).toBeVisible();
     await expect(page.getByText(scenario.course.title)).toBeVisible();
 
-    // 2) Detalle del curso + matrícula
+    // 2) Detalle del curso + matrícula por código de invitación (el botón
+    // "Matricularme" de matrícula libre fue eliminado globalmente, ver
+    // inscribe-by-api.spec.ts).
     await page.getByText(scenario.course.title).click();
     await expect(page).toHaveURL(new RegExp(`/cursos/${scenario.course.slug}$`));
-    await page.getByRole('button', { name: 'Matricularme' }).click();
+    await page.getByLabel(/código de invitación/i).fill(scenario.invitationCode);
+    await page.getByRole('button', { name: 'Canjear código' }).click();
 
     // Esperar a que aparezca el panel de progreso (post-matrícula).
     await expect(page.getByText('Tu progreso')).toBeVisible({ timeout: 15_000 });
 
     // 3) Completar la lección vía API (replica lo que haría LessonPlayer al final del video).
-    const enrollments = await listEnrollments(scenario.alumno.accessToken);
-    const ours = enrollments.find((e) => e.courseId === scenario.course.id);
+    // GET /me/enrollments para un cliente fuera del navegador (esta misma
+    // llamada, hecha por fetch directo en vez de por el reload() de la
+    // página) tiene una ventana de consistencia eventual de ~1s tras crear
+    // la matrícula — no es específico de la matrícula por código, aplicaría
+    // igual con cualquier otro mecanismo de alta. Reintentamos con margen,
+    // mismo criterio que el "margen para el outbox dispatch" del paso 4.
+    let ours: Awaited<ReturnType<typeof listEnrollments>>[number] | undefined;
+    for (let i = 0; i < 10 && !ours; i++) {
+      const enrollments = await listEnrollments(scenario.alumno.accessToken);
+      ours = enrollments.find((e) => e.courseId === scenario.course.id);
+      if (!ours) await new Promise((r) => setTimeout(r, 500));
+    }
     expect(ours, 'enrollment recién creada').toBeDefined();
     const firstModule = scenario.course.modules[0];
     const firstLesson = firstModule?.lessons[0];
