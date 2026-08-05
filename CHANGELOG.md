@@ -10,6 +10,35 @@
 
 - (Acumulando cambios para el siguiente tag.)
 
+### [0.0.1-alpha.101] — 2026-08-05
+
+#### Added
+
+- **URL pública del tenant derivada de `TenantDomain`** (F5): la cascada de
+  resolución de URL (invitaciones, checkout, member-registration, SSO,
+  jobs de marketplace, redirects con token) ahora prioriza el dominio
+  primario verificado del tenant sobre variables de entorno globales.
+  `WEB_PUBLIC_URL` pasa a override opcional; `WEB_BASE_URL` y
+  `NEXTAUTH_URL` quedan sin referencias en el código.
+- **Token de un solo uso obligatorio para `/setup/init`**: antes el
+  endpoint de inicialización era público sin protección — en una
+  instalación expuesta a internet, un tercero podía ganar la carrera y
+  quedarse con la cuenta `super_admin`. Ahora exige un token impreso en
+  los logs del contenedor mientras la instancia sigue virgen.
+
+#### Fixed
+
+- **Logo del tenant: el bloque de confirmación no aparecía tras subir**
+  (`/admin/branding`): `theme.logoUploaded` no se refrescaba al subir o
+  quitar el logo (solo en guardar/restaurar), así que la ficha de
+  confirmación con el botón "Eliminar" se quedaba invisible hasta
+  recargar la página, aunque la vista previa sí mostraba el logo nuevo.
+- Hardening de CI (12 workflows pinneados a SHA + `permissions:` +
+  `persist-credentials:false`), gate de unit tests en cada PR, y el job
+  `e2e` (golden path) del pipeline de Playwright arreglado de punta a
+  punta (puerto del web, roles RLS, imagen Postgres con pgvector,
+  enforcement de MFA en job dedicado, gate de onboarding en los specs).
+
 ### [0.0.1-alpha.100] — 2026-08-04
 
 #### Added

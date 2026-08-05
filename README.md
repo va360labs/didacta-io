@@ -123,7 +123,7 @@ Para operadores que ya tienen Postgres 16 + Redis 7 administrados y solo quieren
 - Las 3 variables de entorno obligatorias listadas arriba.
 
 ```bash
-docker pull didactaio/community:0.0.1-alpha.100
+docker pull didactaio/community:0.0.1-alpha.101
 
 # Crear volumen para uploads + clave de cifrado autogenerada.
 # El volumen sobrevive a reinicios.
@@ -141,7 +141,7 @@ docker run -d \
   -e STORAGE_ROOT=/app/data/storage \
   -e NODE_ENV=production \
   --restart unless-stopped \
-  didactaio/community:0.0.1-alpha.100
+  didactaio/community:0.0.1-alpha.101
 ```
 
 > El volumen `didacta_data` guarda los archivos subidos —cursos, certificados y evidencias— **y** una clave de cifrado autogenerada en el primer arranque para los secretos at-rest. Sin ese volumen montado, todo se borra al recrear el contenedor.
