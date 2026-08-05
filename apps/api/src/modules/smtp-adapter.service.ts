@@ -118,6 +118,16 @@ export class SmtpAdapterService {
         user: config.user,
         pass: config.password,
       },
+      // Sin esto, nodemailer usa sus defaults (hasta 2 min de connectionTimeout
+      // + 2 min de socketTimeout): un host SMTP mal configurado o inalcanzable
+      // colgaba `send()`/`verify()` minutos enteros. Como quien invita a un
+      // alumno (`AdminUsersService.invite`) espera este envío en el mismo
+      // request-response (try/catch fail-soft, pero SÍNCRONO), el alta entera
+      // parecía congelada/rota en vez de simplemente "sin email". Acotado a
+      // unos segundos: sigue siendo tiempo de sobra para un SMTP sano.
+      connectionTimeout: 8_000,
+      greetingTimeout: 5_000,
+      socketTimeout: 10_000,
     });
   }
 }
