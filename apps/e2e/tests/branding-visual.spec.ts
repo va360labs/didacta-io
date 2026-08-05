@@ -77,18 +77,10 @@ test.describe('Branding · guardar logo + colores (regresión "no se guarda")', 
     await page.screenshot({ path: `${SHOTS}/05-before-save.png`, fullPage: true });
 
     // 3. GUARDAR — aquí estaba el bloqueo original. Click en submit.
-    // dispatchEvent('click') en vez de .click(): la píldora fija del chat
-    // flotante (bottom-right, global en (app)/layout.tsx) puede solaparse con
-    // este botón cuando cae al final de una página larga — un click de ratón
-    // real (incluso con force:true) puede entregarse al elemento visualmente
-    // superior en vez de al botón. Hallazgo NUEVO, independiente del alt-text
-    // que corrige este spec, documentado aparte en memoria en vez de tocar
-    // aquí el componente global. La verificación real de que el guardado
-    // funcionó es la comprobación por API de abajo, no este click.
     await page
       .getByRole('button', { name: /Guardar/i })
       .first()
-      .dispatchEvent('click');
+      .click();
 
     // 4. NO debe quedar bloqueado por validación del input (mensaje nativo
     //    "Introduce una url"). El input ya no es type=url, así que el submit pasa.

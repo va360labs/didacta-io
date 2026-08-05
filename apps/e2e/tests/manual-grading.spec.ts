@@ -109,15 +109,8 @@ test.describe('mod.assessments — corrección manual end-to-end', () => {
     await expect(adminPage.getByText(/Postgres es una base de datos/)).toBeVisible();
 
     // 4) Asigna max points y envía
-    // dispatchEvent('click') en vez de .click(): la píldora fija del chat
-    // flotante (bottom-right, global en (app)/layout.tsx) puede solaparse con
-    // botones de submit cuando caen en esa zona de la pantalla — un click de
-    // ratón real (incluso con force:true) puede entregarse al elemento
-    // visualmente superior en vez de al botón. Mismo hallazgo NUEVO que
-    // branding-visual.spec.ts, documentado aparte en memoria en vez de tocar
-    // aquí el componente global.
     await adminPage.locator('input[type="number"]').fill(String(questionPoints));
-    await adminPage.getByRole('button', { name: 'Enviar calificación' }).dispatchEvent('click');
+    await adminPage.getByRole('button', { name: 'Enviar calificación' }).click();
 
     // Vuelve al panel de pendientes vacío
     await expect(adminPage).toHaveURL(/\/formador\/correcciones$/, { timeout: 15_000 });
