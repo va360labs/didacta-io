@@ -357,7 +357,17 @@ function Shell({
               <NotificationsBell />
             </header>
 
-            <main className="flex-1 px-4 py-5 pb-24 sm:px-6 lg:px-8 lg:py-6 lg:pb-6">
+            {/* pb-24 en todos los breakpoints (no solo móvil): dejamos hueco bajo
+                el contenido igual de alto que la píldora fija del chat flotante
+                (abajo a la derecha, ver FloatingChat) para que, al hacer scroll
+                hasta el final de una página larga, ningún botón (p.ej. "Guardar")
+                termine geométricamente debajo de la píldora — solapamiento real
+                detectado en /admin/branding y el constructor de cursos.
+                OJO: `lg:py-6` (shorthand) también fija padding-bottom y pisaba a
+                `pb-24` en ese breakpoint porque los prefijos responsive cascadean
+                después de las utilidades sin prefijo — por eso aquí es `lg:pt-6`
+                (solo top), nunca `lg:py-*` ni `lg:pb-*`. */}
+            <main className="flex-1 px-4 py-5 pb-24 sm:px-6 lg:px-8 lg:pt-6">
               <div className="mx-auto max-w-[1280px]">{children}</div>
             </main>
           </div>
