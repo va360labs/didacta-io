@@ -225,6 +225,19 @@ body {
   color: var(--color-text);
 }
 
+/* Cualquier scroll-into-view (foco por teclado, .click() en un elemento fuera
+ * de pantalla, enlaces #ancla) desplaza al MÍNIMO necesario — para un elemento
+ * bajo el pliegue, eso deja su borde inferior pegado al borde inferior del
+ * viewport, justo donde vive la píldora fija del chat (FloatingChat). Esto
+ * pasa en CUALQUIER página con contenido más alto que el viewport, no solo al
+ * llegar al final del documento (eso ya lo cubre el pb-24 del <main> del
+ * shell) — por eso hace falta scroll-padding aquí, a nivel global.
+ * `--didacta-chat-corner` la mantiene FloatingChat con la altura real de su
+ * esquina (píldora + avisos apilados); +1rem de margen de seguridad. */
+html {
+  scroll-padding-bottom: calc(var(--didacta-chat-corner, 5rem) + 1rem);
+}
+
 body {
   font-family: var(--font-sans);
   font-feature-settings:
