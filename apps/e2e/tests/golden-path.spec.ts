@@ -48,25 +48,33 @@ test.describe('Golden path del alumno', () => {
     await page.getByText(scenario.course.title).click();
     await expect(page).toHaveURL(new RegExp(`/cursos/${scenario.course.slug}$`));
     await page.getByLabel(/código de invitación/i).fill(scenario.invitationCode);
-    await page.getByRole('button', { name: 'Canjear código' }).click();
 
-    // Esperar a que aparezca el panel de progreso (post-matrícula).
-    await expect(page.getByText('Tu progreso')).toBeVisible({ timeout: 15_000 });
+    // Sincronizamos contra la respuesta REAL del POST de canje, no contra un
+    // texto en pantalla ("Tu progreso"): investigado a fondo (sesión de
+    // retoma 2026-08-06, ver memoria "didacta-consistencia-eventual-me-enrollments")
+    // — `getByText('Tu progreso').toBeVisible()` podía resolver en falso
+    // positivo (~1/20 runs) ANTES de que el propio estado `enrollment` del
+    // componente se actualizara, dejando una ventana de milisegundos donde
+    // una llamada externa a GET /me/enrollments (fuera del navegador,
+    // network-only) corría en paralelo con el POST y lo veía vacío. No era
+    // consistencia eventual de Postgres/Prisma — confirmado con 2100+
+    // lecturas directas contra la API sin ni una sola anomalía.
+    const [byCodeResponse] = await Promise.all([
+      page.waitForResponse(
+        (res) => res.url().includes('/enrollments/by-code') && res.request().method() === 'POST',
+      ),
+      page.getByRole('button', { name: 'Canjear código' }).click(),
+    ]);
+    expect(byCodeResponse.ok(), 'POST /enrollments/by-code debe responder 2xx').toBe(true);
 
     // 3) Completar la lección vía API (replica lo que haría LessonPlayer al final del video).
-    // GET /me/enrollments para un cliente fuera del navegador (esta misma
-    // llamada, hecha por fetch directo en vez de por el reload() de la
-    // página) tiene una ventana de consistencia eventual de ~1s tras crear
-    // la matrícula — no es específico de la matrícula por código, aplicaría
-    // igual con cualquier otro mecanismo de alta. Reintentamos con margen,
-    // mismo criterio que el "margen para el outbox dispatch" del paso 4.
-    let ours: Awaited<ReturnType<typeof listEnrollments>>[number] | undefined;
-    for (let i = 0; i < 10 && !ours; i++) {
-      const enrollments = await listEnrollments(scenario.alumno.accessToken);
-      ours = enrollments.find((e) => e.courseId === scenario.course.id);
-      if (!ours) await new Promise((r) => setTimeout(r, 500));
-    }
+    // Ahora sí garantizado secuencial: el POST ya resolvió del lado servidor.
+    const enrollments = await listEnrollments(scenario.alumno.accessToken);
+    const ours = enrollments.find((e) => e.courseId === scenario.course.id);
     expect(ours, 'enrollment recién creada').toBeDefined();
+
+    // La UI también debería reflejarlo (panel de progreso post-matrícula).
+    await expect(page.getByText('Tu progreso')).toBeVisible({ timeout: 15_000 });
     const firstModule = scenario.course.modules[0];
     const firstLesson = firstModule?.lessons[0];
     expect(firstLesson, 'curso con al menos una lección').toBeDefined();
