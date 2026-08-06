@@ -19,8 +19,8 @@ de pruebas) corriendo en tu máquina o servidor.
 
 ```bash
 # 1. Descarga el compose y la plantilla de entorno
-git clone https://github.com/va360labs/didacta-community.git
-cd didacta-community
+git clone https://github.com/va360labs/didacta-io.git
+cd didacta-io
 
 # 2. Configura el entorno. Con compose solo AUTH_SECRET es obligatoria.
 cp .env.example .env
@@ -119,7 +119,11 @@ Lo que hay que salvar son dos cosas: la base de datos y el volumen de ficheros.
 docker exec didacta-postgres pg_dump -U didacta -d didacta -Fc > didacta-$(date +%F).dump
 
 # Ficheros (storage local + clave de cifrado autogenerada)
-docker run --rm -v didacta-community_didacta_data:/data -v "$PWD":/backup alpine \
+# El nombre del volumen lleva de prefijo el del directorio desde el que
+# levantaste el compose. Si no clonaste en `didacta-io`, sácalo de
+# `docker volume ls | grep didacta_data` en vez de copiarlo tal cual:
+# un prefijo que no existe crea un volumen vacío y el tar sale sin contenido.
+docker run --rm -v didacta-io_didacta_data:/data -v "$PWD":/backup alpine \
   tar czf /backup/didacta-data-$(date +%F).tar.gz -C /data .
 ```
 

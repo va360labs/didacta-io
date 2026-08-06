@@ -2,7 +2,7 @@
 
 > 📚 **El LMS de nueva generación. Fair-code, modular y listo para Fundae.**
 
-[![Docker](https://img.shields.io/badge/docker-hub-blue)](https://hub.docker.com/r/didactaio/community)
+[![Docker](https://img.shields.io/badge/ghcr-didacta--community-blue)](https://github.com/va360labs/didacta-io/pkgs/container/didacta-community)
 [![License](https://img.shields.io/badge/license-Sustainable%20Use%201.0-orange)](LICENSE)
 [![Versioning](https://img.shields.io/badge/versioning-SemVer-green)](https://semver.org)
 ![Stage](https://img.shields.io/badge/stage-alpha-red)
@@ -17,13 +17,13 @@ producto whitelabel y prepara su primera versión pública. Guías:
 [instalación](docs/INSTALL.md) · [actualización](docs/UPGRADE.md) ·
 [versionado](docs/versioning.md).
 
-Imagen oficial publicada en Docker Hub: [`didactaio/community`](https://hub.docker.com/r/didactaio/community). **Pública** — no requiere `docker login`.
+Imagen oficial publicada en GitHub Container Registry: `ghcr.io/va360labs/didacta-community`. **Pública** — no requiere `docker login`. El espejo en [Docker Hub](https://hub.docker.com/r/didactaio/community) (`didactaio/community`) todavía no está activo.
 
 ## Verificar acceso a la imagen
 
 ```bash
-# Fija SIEMPRE una versión concreta (tags en Docker Hub); no hay tag `latest`.
-docker pull didactaio/community:<versión>
+# Fija SIEMPRE una versión concreta; no hay tag `latest`.
+docker pull ghcr.io/va360labs/didacta-community:<versión>
 ```
 
 Si se descarga sin pedir credenciales, ya puedes seguir cualquiera de los dos caminos de despliegue descritos abajo.
@@ -123,7 +123,7 @@ Para operadores que ya tienen Postgres 16 + Redis 7 administrados y solo quieren
 - Las 3 variables de entorno obligatorias listadas arriba.
 
 ```bash
-docker pull didactaio/community:0.0.1-alpha.101
+docker pull ghcr.io/va360labs/didacta-community:0.0.1-alpha.101
 
 # Crear volumen para uploads + clave de cifrado autogenerada.
 # El volumen sobrevive a reinicios.
@@ -141,7 +141,7 @@ docker run -d \
   -e STORAGE_ROOT=/app/data/storage \
   -e NODE_ENV=production \
   --restart unless-stopped \
-  didactaio/community:0.0.1-alpha.101
+  ghcr.io/va360labs/didacta-community:0.0.1-alpha.101
 ```
 
 > El volumen `didacta_data` guarda los archivos subidos —cursos, certificados y evidencias— **y** una clave de cifrado autogenerada en el primer arranque para los secretos at-rest. Sin ese volumen montado, todo se borra al recrear el contenedor.

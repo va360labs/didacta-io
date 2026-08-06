@@ -1,8 +1,9 @@
 # Actualizar Didacta Community
 
 Didacta versiona con SemVer y publica cada versión como un tag de imagen
-Docker (`didactaio/community:<versión>`). No existe tag `latest`: cada
-instalación fija su versión con `DIDACTA_IMAGE_TAG` y decide cuándo subir.
+Docker (`ghcr.io/va360labs/didacta-community:<versión>`). No existe tag
+`latest`: cada instalación fija su versión con `DIDACTA_IMAGE_TAG` y decide
+cuándo subir.
 
 ## Actualización normal
 

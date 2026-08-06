@@ -2,15 +2,19 @@
 # Didacta Community — docker-compose para Alpha testers
 # ----------------------------------------------------------------------------
 # Arranca el stack COMPLETO (API + web + dependencias) usando la imagen
-# oficial de Docker Hub. Diseñado para alpha testers que quieren probar
-# Didacta en su máquina sin desarrollarlo.
+# oficial publicada por `release.yml`. Diseñado para alpha testers que quieren
+# probar Didacta en su máquina sin desarrollarlo.
 #
 # Uso:
 #   1. Copia .env.example → .env y rellena los valores REQUIRED.
 #   2. docker compose -f docker-compose.alpha.yml up -d
 #   3. Abre http://localhost:3000 (web) o http://localhost:4000/api/docs (API).
 #
-# La imagen `didactaio/community` es pública en Docker Hub: no requiere login.
+# La imagen por defecto es `ghcr.io/va360labs/didacta-community`, que es la que
+# publica `release.yml` en cada corte. Es pública: no requiere `docker login`.
+# El espejo en Docker Hub (`didactaio/community`) todavía no está activo — hasta
+# que lo esté, apuntar ahí da «manifest unknown». Para usarlo cuando exista:
+#   DIDACTA_IMAGE=didactaio/community docker compose -f docker-compose.alpha.yml up -d
 #
 # Para desarrollo local (con `pnpm dev`), usa el `docker-compose.yml` clásico
 # que solo levanta dependencias.
@@ -113,7 +117,7 @@ services:
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
 
   didacta:
-    image: didactaio/community:${DIDACTA_IMAGE_TAG:-0.0.1-alpha.101}
+    image: ${DIDACTA_IMAGE:-ghcr.io/va360labs/didacta-community}:${DIDACTA_IMAGE_TAG:-0.0.1-alpha.101}
     container_name: didacta-app
     restart: unless-stopped
     depends_on:
@@ -145,6 +149,11 @@ services:
       # abajo). Setealo explícitamente solo si querés controlarlo desde tu
       # secrets manager.
       TENANT_SETTINGS_ENC_KEY: ${TENANT_SETTINGS_ENC_KEY:-}
+      # Clave maestra HMAC del export firmado de audit log (capability EE
+      # `reports.advanced_signed`). Como este compose arranca con
+      # NODE_ENV=production, ese endpoint responde 503 hasta que la setees.
+      # Solo hace falta si usás esa feature. Generar: openssl rand -hex 32
+      AUDIT_REPORT_HMAC_KEY: ${AUDIT_REPORT_HMAC_KEY:-}
       # Puertos INTERNOS fijos: el mapeo de abajo publica 4000/3000 en los
       # puertos del host que digan API_PORT/WEB_PORT del .env. Si estas vars
       # entraran al contenedor, la app escucharía en un puerto distinto del

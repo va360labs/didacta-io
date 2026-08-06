@@ -167,13 +167,18 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 # ----------------------------------------------------------------------------
 # Stage 6: runner — imagen final desde alpine LIMPIO (no hereda del builder)
 # ----------------------------------------------------------------------------
-# DIDACTA_VERSION: version de la app, inyectada en build time.
-# Sobreescribible con: docker build --build-arg DIDACTA_VERSION=0.0.1-alpha.96
-ARG DIDACTA_VERSION=0.0.1-alpha.96
-
 FROM node:22-alpine AS runner
-# Re-declarar ARG para que este disponible en este stage (Docker multi-stage)
-ARG DIDACTA_VERSION
+# DIDACTA_VERSION: version de la app, inyectada en build time por release.yml
+# (`build-args: DIDACTA_VERSION=<version del tag>`). El default tiene que vivir
+# en ESTE stage: un ARG declarado en otro stage no cruza, y sin default aqui el
+# valor llegaba vacio y se horneaba una version falsa.
+# Sobreescribible con: docker build --build-arg DIDACTA_VERSION=0.0.1-alpha.96
+# El default 0.0.0 es el mismo valor conservador que asume el runtime cuando
+# DIDACTA_CORE_VERSION no esta set (resolveCoreVersion en install-package.service.ts):
+# una imagen construida a mano se identifica como "sin version" en /healthz y en
+# telemetria, y el gate del marketplace queda fail-closed, en vez de mentir con
+# el numero de una release que no es.
+ARG DIDACTA_VERSION=0.0.0
 # Deps de RUNTIME (no build):
 #   - bash: entrypoint.sh usa bashismos ([[, arrays, `wait -n`).
 #   - ca-certificates + openssl: TLS para S3, Anthropic, SMTP.
@@ -202,7 +207,7 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     API_PORT=4000 \
     WEB_PORT=3000 \
-    DIDACTA_CORE_VERSION=${DIDACTA_VERSION:-0.0.1-alpha.55}
+    DIDACTA_CORE_VERSION=${DIDACTA_VERSION:-0.0.0}
 
 # Usuario no-root.
 RUN addgroup -S -g 1001 didacta \

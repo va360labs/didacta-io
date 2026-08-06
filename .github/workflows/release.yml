@@ -108,6 +108,11 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.version.outputs.tags }}
+          # Sin esto el stage `runner` recibe DIDACTA_VERSION vacío y hornea el
+          # default fósil de DIDACTA_CORE_VERSION — la versión que reportan
+          # /healthz, la telemetría y el gate de compatibilidad del marketplace.
+          build-args: |
+            DIDACTA_VERSION=${{ steps.version.outputs.version }}
           labels: |
             org.opencontainers.image.title=Didacta Community
             org.opencontainers.image.description=Source-available LMS by VA360 LABS
@@ -165,10 +170,10 @@ jobs:
             docker compose -f docker-compose.alpha.yml up -d
             ```
 
-            Ver `docs/INSTALL.md` para guía paso a paso.
+            Ver [`docs/INSTALL.md`](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/INSTALL.md) para guía paso a paso.
 
             ### Política de versiones
 
-            Ver [`docs/versioning.md`](https://github.com/${{ github.repository }}/blob/main/docs/versioning.md).
+            Ver [`docs/versioning.md`](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/versioning.md).
 
             ${{ steps.version.outputs.is_prerelease == 'true' && '⚠️ **Esta es una pre-release**. No usar en producción con datos reales.' || '' }}
