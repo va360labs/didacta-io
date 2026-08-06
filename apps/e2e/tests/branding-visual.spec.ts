@@ -77,15 +77,20 @@ test.describe('Branding · guardar logo + colores (regresión "no se guarda")', 
     await page.screenshot({ path: `${SHOTS}/05-before-save.png`, fullPage: true });
 
     // 3. GUARDAR — aquí estaba el bloqueo original. Click en submit.
-    await page
-      .getByRole('button', { name: /Guardar/i })
-      .first()
-      .click();
-
-    // 4. NO debe quedar bloqueado por validación del input (mensaje nativo
-    //    "Introduce una url"). El input ya no es type=url, así que el submit pasa.
-    //    Esperamos señal de guardado OK (estado "saved" / toast). Damos margen.
-    await page.waitForTimeout(2500);
+    // Sincronizamos contra la respuesta REAL del PUT, no contra un sleep fijo:
+    // un margen arbitrario es la misma carrera que se encontró y arregló en
+    // golden-path.spec.ts (ver memoria didacta-consistencia-eventual-me-enrollments)
+    // frente a la verificación externa por API que sigue justo debajo.
+    const [saveResponse] = await Promise.all([
+      page.waitForResponse(
+        (res) => res.url().includes('/modules/theming/me') && res.request().method() === 'PUT',
+      ),
+      page
+        .getByRole('button', { name: /Guardar/i })
+        .first()
+        .click(),
+    ]);
+    expect(saveResponse.ok(), 'PUT /modules/theming/me debe responder 2xx').toBe(true);
     await page.screenshot({ path: `${SHOTS}/06-after-save.png`, fullPage: true });
 
     // 5. VERIFICACIÓN DURA por API: el theme persistió color + logo.

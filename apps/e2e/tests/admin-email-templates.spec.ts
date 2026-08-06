@@ -118,7 +118,20 @@ test.describe('Admin · Emails de la plataforma — /admin/emails', () => {
         .fill(
           '{{greeting}}\n\nPide una contraseña nueva con el botón (caduca en {{ttlMinutes}} minutos).',
         );
-      await editor.getByRole('button', { name: 'Guardar' }).click();
+      // Sincronizamos contra la respuesta REAL del PUT, no contra la
+      // aserción de UI: el mismo patrón de carrera que se encontró y
+      // arregló en golden-path.spec.ts (ver memoria
+      // didacta-consistencia-eventual-me-enrollments) frente a la
+      // verificación externa por API que sigue debajo.
+      const [saveResponse] = await Promise.all([
+        page.waitForResponse(
+          (res) =>
+            res.url().includes(`/admin/notifications/templates/${KEY}`) &&
+            res.request().method() === 'PUT',
+        ),
+        editor.getByRole('button', { name: 'Guardar' }).click(),
+      ]);
+      expect(saveResponse.ok(), 'PUT del override debe responder 2xx').toBe(true);
 
       // Badge "Personalizado" visible y override persistido en el backend.
       await expect(row.getByText('Personalizado')).toBeVisible({ timeout: 10_000 });
@@ -136,11 +149,21 @@ test.describe('Admin · Emails de la plataforma — /admin/emails', () => {
       ).toBeVisible({ timeout: 15_000 });
 
       // Restaurar por defecto desde el listado (confirm nativo → aceptar).
+      // Mismo criterio de sincronización que el Guardar de arriba: contra
+      // el DELETE real, no contra la aserción de UI.
       page.once('dialog', (dialog) => void dialog.accept());
-      await page
-        .getByTestId(`email-template-${KEY}`)
-        .getByRole('button', { name: 'Restaurar' })
-        .click();
+      const [restoreResponse] = await Promise.all([
+        page.waitForResponse(
+          (res) =>
+            res.url().includes(`/admin/notifications/templates/${KEY}`) &&
+            res.request().method() === 'DELETE',
+        ),
+        page
+          .getByTestId(`email-template-${KEY}`)
+          .getByRole('button', { name: 'Restaurar' })
+          .click(),
+      ]);
+      expect(restoreResponse.ok(), 'DELETE del override debe responder 2xx').toBe(true);
       await expect(page.getByTestId(`email-template-${KEY}`).getByText('Personalizado')).toBeHidden(
         { timeout: 10_000 },
       );

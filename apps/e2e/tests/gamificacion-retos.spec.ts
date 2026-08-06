@@ -139,8 +139,23 @@ test.describe('Puntos, niveles y retos (mod.gamification)', () => {
 
     await page.getByRole('tab', { name: 'Entregas' }).click();
     await expect(page.getByText(title).first()).toBeVisible();
-    await page.getByRole('button', { name: 'Aprobar y dar puntos' }).first().click();
-    await expect(page.getByText('No hay entregas pendientes')).toBeVisible();
+    // Sincronizamos contra la respuesta REAL del POST de revisión, no contra
+    // la aserción de UI: el mismo patrón de carrera que se encontró y
+    // arregló en golden-path.spec.ts (ver memoria
+    // didacta-consistencia-eventual-me-enrollments) frente a la lectura
+    // externa de standing.lifetimePoints que sigue más abajo.
+    const [reviewResponse] = await Promise.all([
+      page.waitForResponse(
+        (res) => res.url().includes('/admin/submissions/') && res.url().includes('/review'),
+      ),
+      page.getByRole('button', { name: 'Aprobar y dar puntos' }).first().click(),
+    ]);
+    expect(reviewResponse.ok(), 'POST de revisión debe responder 2xx').toBe(true);
+    // Copy real desde el commit 474471c7 ("las solicitudes aprobadas ya no
+    // desaparecen del panel"): con el toggle "Por revisar" (soloPendientes,
+    // default true) el vacío dice "No hay entregas por revisar", no
+    // "No hay entregas pendientes".
+    await expect(page.getByText('No hay entregas por revisar')).toBeVisible();
 
     // 7. Los puntos del reto ya están en el saldo del alumno.
     const standingRes = await fetch(`${API_URL}${BASE}/me?range=all`, { headers: studentHeaders });
@@ -268,7 +283,9 @@ test.describe('Puntos, niveles y retos (mod.gamification)', () => {
 
     await fullSession(page, student as never);
     await page.goto('/retos');
-    await expect(page.getByText(`Píldora a medida ${stamp}`)).toBeVisible();
+    // .first(): el mismo perk se pinta dos veces en /retos — resumido dentro
+    // de la tarjeta de su nivel (LevelCard) y como PerkCard independiente.
+    await expect(page.getByText(`Píldora a medida ${stamp}`).first()).toBeVisible();
     // Acotado al stamp: ejecuciones anteriores dejan sus propios niveles.
     await expect(
       page.getByText(new RegExp(`Se desbloquea en Inalcanzable ${stamp}`)),
