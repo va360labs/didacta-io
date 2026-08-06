@@ -105,6 +105,15 @@ function main() {
   }
 
   const masterKey = args.masterKey ?? process.env.AUDIT_REPORT_HMAC_KEY ?? FALLBACK_KEY;
+  if (masterKey === FALLBACK_KEY) {
+    // El servidor en producción NUNCA firma con el fallback (lanza sin
+    // AUDIT_REPORT_HMAC_KEY): si un export real no verifica, lo más probable
+    // es que falte pasar la clave, no que haya tampering.
+    process.stderr.write(
+      '[WARN] Usando la clave de fallback de desarrollo (ni --key ni AUDIT_REPORT_HMAC_KEY). ' +
+        'Un export generado en producción NO verificará con esta clave.\n',
+    );
+  }
 
   let zip;
   try {

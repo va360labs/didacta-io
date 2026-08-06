@@ -27,7 +27,7 @@
  */
 
 import { createHash, createHmac } from 'node:crypto';
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, ServiceUnavailableException } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import {
@@ -35,6 +35,7 @@ import {
   AUDIT_REPORT_MANIFEST_FILENAME,
   AUDIT_REPORT_MANIFEST_VERSION,
   AUDIT_REPORT_SIGNATURE_ALGORITHM,
+  AUDIT_REPORT_HMAC_FALLBACK_KEY,
   AUDIT_REPORT_SIGNATURE_FILENAME,
   deriveTenantHmacKey,
   resolveAuditReportMasterKey,
@@ -66,6 +67,8 @@ export interface BuildSignedZipOptions {
 
 @Injectable()
 export class AuditExportService {
+  private readonly logger = new Logger(AuditExportService.name);
+
   constructor(
     private readonly auditLog: PrismaAuditLogService,
     @Optional() @Inject(AUDIT_EXPORT_MASTER_KEY_TOKEN) private readonly injectedMasterKey?: string,
@@ -138,8 +141,10 @@ export class AuditExportService {
     const manifestBuf = Buffer.from(JSON.stringify(manifest, null, 2) + '\n', 'utf8');
 
     // 4. Firma HMAC-SHA256 sobre los bytes del manifest, con clave derivada
-    //    del tenantId. La masterKey viene de DI o del entorno.
-    const masterKey = this.injectedMasterKey ?? resolveAuditReportMasterKey();
+    //    del tenantId. La masterKey viene de DI o del entorno. Con
+    //    NODE_ENV=production sin AUDIT_REPORT_HMAC_KEY el resolver lanza:
+    //    lo traducimos a 503 para que el operador vea qué falta configurar.
+    const masterKey = this.injectedMasterKey ?? this.requireMasterKey();
     const tenantKey = deriveTenantHmacKey(masterKey, tenantId);
     const signature: AuditExportSignature = {
       algorithm: AUDIT_REPORT_SIGNATURE_ALGORITHM,
@@ -156,6 +161,34 @@ export class AuditExportService {
 
     const filename = buildFilename(tenantId, range);
     return { zip: zip.toBuffer(), manifest, signature, filename };
+  }
+
+  /**
+   * Igual que `resolveAuditReportMasterKey` pero mapeando el error de
+   * configuración a 503 (el endpoint está gateado a admins: el mensaje con la
+   * instrucción de generar la clave es para ese operador, no se filtra a
+   * usuarios finales).
+   *
+   * El throw solo cubre `NODE_ENV=production` exacto. Un despliegue con otro
+   * valor (`staging`, o bare-metal sin la var) sigue firmando con la clave de
+   * desarrollo, así que dejamos rastro en logs: sin esto la única señal vivía
+   * en el validador offline, que solo la ve quien verifica, no quien firma.
+   */
+  private requireMasterKey(): string {
+    let key: string;
+    try {
+      key = resolveAuditReportMasterKey();
+    } catch (err) {
+      throw new ServiceUnavailableException(err instanceof Error ? err.message : String(err));
+    }
+    if (key === AUDIT_REPORT_HMAC_FALLBACK_KEY) {
+      this.logger.warn(
+        'Firmando el export de audit log con la clave HMAC de desarrollo: ' +
+          'AUDIT_REPORT_HMAC_KEY no está definida. La firma no es tamper-evidence ' +
+          'fuera de este entorno — cualquiera con el código fuente puede forjarla.',
+      );
+    }
+    return key;
   }
 }
 

@@ -33,7 +33,12 @@ export const AUDIT_REPORT_MANIFEST_VERSION = 'v1-audit-signed';
 /** Algoritmo de firma del piloto. En producción: 'RSA-SHA256' o 'ECDSA-P256'. */
 export const AUDIT_REPORT_SIGNATURE_ALGORITHM = 'HMAC-SHA256';
 
-/** Clave HMAC por defecto para tests/dev cuando la env no está set. */
+/**
+ * Clave HMAC por defecto para tests/dev cuando la env no está set. Con
+ * NODE_ENV=production está PROHIBIDA: `resolveAuditReportMasterKey` lanza en
+ * vez de caer aquí — una clave hardcodeada en el código fuente permitiría a
+ * cualquiera forjar firmas y anularía la tamper-evidence del export.
+ */
 export const AUDIT_REPORT_HMAC_FALLBACK_KEY =
   'didacta-audit-report-hmac-fallback-do-not-use-in-prod';
 
@@ -135,11 +140,24 @@ export function deriveTenantHmacKey(masterKey: string, tenantId: string): Buffer
  * Centralizado para que tanto el service como el validador offline (si vive en
  * el mismo runtime) usen la misma fuente.
  *
+ * Con NODE_ENV=production el fallback NO aplica: lanza `Error` si
+ * `AUDIT_REPORT_HMAC_KEY` no está seteada. Lanzamos aquí (en uso, no en boot)
+ * porque el export firmado es una capability EE opcional — exigir la env al
+ * arrancar rompería instalaciones que nunca la ejercitan. El service traduce
+ * este error a 503 para el operador.
+ *
  * El validador offline (`tools/audit-report-verify.mjs`) recibe la masterKey
  * por flag `--key` o env y NO depende de esta función.
  */
 export function resolveAuditReportMasterKey(env: NodeJS.ProcessEnv = process.env): string {
   const v = env['AUDIT_REPORT_HMAC_KEY'];
   if (typeof v === 'string' && v.trim().length > 0) return v.trim();
+  if (env['NODE_ENV'] === 'production') {
+    throw new Error(
+      'AUDIT_REPORT_HMAC_KEY no definida con NODE_ENV=production. El export firmado ' +
+        'de audit log no puede usar la clave de fallback de desarrollo. ' +
+        'Genera una con `openssl rand -hex 32` y setéala en el entorno de la API.',
+    );
+  }
   return AUDIT_REPORT_HMAC_FALLBACK_KEY;
 }

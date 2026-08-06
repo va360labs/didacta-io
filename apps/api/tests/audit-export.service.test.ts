@@ -16,10 +16,14 @@
  *   6. El range del manifest refleja from/to en ISO strings (null si ausente).
  *   7. version + signatureAlgorithm fijos en v1-audit-signed / HMAC-SHA256.
  *   8. Filename derivado de tenantId + range.
+ *   9. resolveAuditReportMasterKey: fallback solo fuera de producción — con
+ *      NODE_ENV=production sin AUDIT_REPORT_HMAC_KEY lanza, y el service lo
+ *      traduce a 503 (ServiceUnavailableException).
  */
 
 import { createHash, createHmac } from 'node:crypto';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import AdmZip from 'adm-zip';
 import {
   AuditExportService,
@@ -33,6 +37,7 @@ import {
   AUDIT_REPORT_SIGNATURE_ALGORITHM,
   AUDIT_REPORT_SIGNATURE_FILENAME,
   deriveTenantHmacKey,
+  resolveAuditReportMasterKey,
 } from '../src/modules/audit-export/audit-export.types';
 
 type FakeAuditLog = ConstructorParameters<typeof AuditExportService>[0];
@@ -257,5 +262,116 @@ describe('AuditExportService · buildSignedZip', () => {
       timestamp: '2026-04-29T10:00:00.000Z',
     });
     expect(typeof first.timestamp).toBe('string');
+  });
+});
+
+describe('resolveAuditReportMasterKey', () => {
+  it('devuelve AUDIT_REPORT_HMAC_KEY trimmed cuando está seteada, en cualquier entorno', () => {
+    expect(resolveAuditReportMasterKey({ AUDIT_REPORT_HMAC_KEY: '  clave-real  ' })).toBe(
+      'clave-real',
+    );
+    expect(
+      resolveAuditReportMasterKey({
+        NODE_ENV: 'production',
+        AUDIT_REPORT_HMAC_KEY: 'clave-prod',
+      }),
+    ).toBe('clave-prod');
+  });
+
+  it('cae al fallback sin la env cuando NODE_ENV no es production', () => {
+    expect(resolveAuditReportMasterKey({})).toBe(AUDIT_REPORT_HMAC_FALLBACK_KEY);
+    expect(resolveAuditReportMasterKey({ NODE_ENV: 'test' })).toBe(AUDIT_REPORT_HMAC_FALLBACK_KEY);
+    expect(resolveAuditReportMasterKey({ NODE_ENV: 'development' })).toBe(
+      AUDIT_REPORT_HMAC_FALLBACK_KEY,
+    );
+  });
+
+  it('lanza con NODE_ENV=production sin AUDIT_REPORT_HMAC_KEY', () => {
+    expect(() => resolveAuditReportMasterKey({ NODE_ENV: 'production' })).toThrow(
+      /AUDIT_REPORT_HMAC_KEY/,
+    );
+  });
+
+  it('lanza con NODE_ENV=production si la env es vacía o whitespace', () => {
+    expect(() =>
+      resolveAuditReportMasterKey({ NODE_ENV: 'production', AUDIT_REPORT_HMAC_KEY: '' }),
+    ).toThrow(/AUDIT_REPORT_HMAC_KEY/);
+    expect(() =>
+      resolveAuditReportMasterKey({ NODE_ENV: 'production', AUDIT_REPORT_HMAC_KEY: '   ' }),
+    ).toThrow(/AUDIT_REPORT_HMAC_KEY/);
+  });
+});
+
+describe('AuditExportService · masterKey en producción', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('sin AUDIT_REPORT_HMAC_KEY con NODE_ENV=production → 503 ServiceUnavailableException', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('AUDIT_REPORT_HMAC_KEY', '');
+    const made = makeAuditLog([row()]);
+    const svc = new AuditExportService(made.audit);
+
+    await expect(svc.buildSignedZip(TENANT_A)).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(svc.buildSignedZip(TENANT_A)).rejects.toThrow(/AUDIT_REPORT_HMAC_KEY/);
+  });
+
+  it('con AUDIT_REPORT_HMAC_KEY seteada en producción firma con esa clave (no lanza)', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('AUDIT_REPORT_HMAC_KEY', 'clave-prod-desde-env');
+    const made = makeAuditLog([row()]);
+    const svc = new AuditExportService(made.audit);
+
+    const result = await svc.buildSignedZip(TENANT_A);
+    const z = readZip(result.zip);
+    const signature = JSON.parse(z.signatureBuf.toString('utf8'));
+    const expected = createHmac('sha256', deriveTenantHmacKey('clave-prod-desde-env', TENANT_A))
+      .update(z.manifestBuf)
+      .digest('hex');
+    expect(signature.signatureHmacSha256).toBe(expected);
+  });
+
+  it('deja rastro en logs cuando firma con la clave de fallback (NODE_ENV no production)', async () => {
+    vi.stubEnv('NODE_ENV', 'staging');
+    vi.stubEnv('AUDIT_REPORT_HMAC_KEY', '');
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const made = makeAuditLog([row()]);
+    const svc = new AuditExportService(made.audit);
+
+    await svc.buildSignedZip(TENANT_A);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]![0])).toMatch(/AUDIT_REPORT_HMAC_KEY/);
+    warn.mockRestore();
+  });
+
+  it('no avisa cuando la clave viene del entorno', async () => {
+    vi.stubEnv('NODE_ENV', 'staging');
+    vi.stubEnv('AUDIT_REPORT_HMAC_KEY', 'clave-de-verdad');
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const made = makeAuditLog([row()]);
+    const svc = new AuditExportService(made.audit);
+
+    await svc.buildSignedZip(TENANT_A);
+
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('la masterKey inyectada por DI tiene prioridad y no consulta el entorno', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('AUDIT_REPORT_HMAC_KEY', '');
+    const made = makeAuditLog([row()]);
+    const svc = new AuditExportService(made.audit, 'test-master-key');
+
+    // Con DI no lanza aunque el entorno sea producción sin clave.
+    const result = await svc.buildSignedZip(TENANT_A);
+    const z = readZip(result.zip);
+    const signature = JSON.parse(z.signatureBuf.toString('utf8'));
+    const expected = createHmac('sha256', deriveTenantHmacKey('test-master-key', TENANT_A))
+      .update(z.manifestBuf)
+      .digest('hex');
+    expect(signature.signatureHmacSha256).toBe(expected);
   });
 });
