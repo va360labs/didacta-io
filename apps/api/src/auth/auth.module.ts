@@ -12,6 +12,7 @@ import { PrismaTenantConfigService } from '../modules/prisma-tenant-config.servi
 import { SecretCipherService } from '../modules/secret-cipher.service';
 import { SmtpAdapterService } from '../modules/smtp-adapter.service';
 import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
+import { TenantStripeResolverService } from '../modules/tenant-stripe-resolver.service';
 import { ApiKeyController } from './api-key.controller';
 import { MeController } from './me.controller';
 import { JwtOrApiKeyGuard } from './api-key.guard';
@@ -105,6 +106,15 @@ function loadCipherKeyForAuth(): string {
       useFactory: (config: PrismaTenantConfigService, smtp: SmtpAdapterService) =>
         new TenantSmtpResolverService(config, smtp),
     },
+    // TenantStripeResolverService — cascada tenant→global→none para Stripe
+    // (mod.billing/mod.subscriptions/webhooks/admin-stripe). Mismo criterio
+    // que TenantSmtpResolverService: depende de la interface del kernel
+    // (TenantConfigService), NestJS no la resuelve sola.
+    {
+      provide: TenantStripeResolverService,
+      inject: [PrismaTenantConfigService],
+      useFactory: (config: PrismaTenantConfigService) => new TenantStripeResolverService(config),
+    },
     // MfaPolicyService — orquesta CRUD de la política tenant-wide y la
     // evaluación del enforcement en el flujo de login. Inyectamos manual
     // para mantener la fuente de verdad de PrismaTenantConfigService dentro
@@ -137,6 +147,10 @@ function loadCipherKeyForAuth(): string {
     // otro caller que mande mail use el mismo resolver.
     SmtpAdapterService,
     TenantSmtpResolverService,
+    // Exportado para AdminModule (AdminStripeController) y los webhook
+    // controllers de mod.billing/mod.subscriptions (resuelven su propio
+    // adapter desechable tras identificar el tenant por Host).
+    TenantStripeResolverService,
   ],
 })
 export class AuthModule {}

@@ -21,6 +21,7 @@
  *     antes de persistir el vínculo (cachea unitAmount y currency).
  */
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +35,39 @@ import { billingApi, formatPrice, type BillingProduct } from '@/modules/billing'
 import { coursesApi, type Course } from '@/lib/courses';
 
 const PRICE_ID_PATTERN = /^price_[A-Za-z0-9]+$/;
+
+/** Error de acción, con marca aparte para el caso "Stripe sin configurar" (CTA a Administración → Pagos). */
+interface ActionError {
+  message: string;
+  stripeMissing: boolean;
+}
+
+function toActionError(e: unknown, fallback: string): ActionError {
+  if (e instanceof ApiHttpError) {
+    return {
+      message: e.message,
+      stripeMissing: e.code === 'BILLING_STRIPE_CONFIG_MISSING',
+    };
+  }
+  return { message: fallback, stripeMissing: false };
+}
+
+function ActionErrorMessage({ error }: { error: ActionError }) {
+  return (
+    <p className="mt-3 text-sm text-danger-700">
+      {error.message}
+      {error.stripeMissing ? (
+        <>
+          {' '}
+          <Link href="/admin/configuracion" className="font-semibold underline">
+            Configura Stripe en Administración → Pagos
+          </Link>
+          .
+        </>
+      ) : null}
+    </p>
+  );
+}
 
 export default function AdminBillingProductsPage() {
   return (
@@ -56,7 +90,7 @@ function BillingProductsPanel() {
   const [products, setProducts] = useState<BillingProduct[] | null>(null);
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<ActionError | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
   // Form alta
   const [courseId, setCourseId] = useState('');
@@ -101,9 +135,10 @@ function BillingProductsPanel() {
     if (!token) return;
     if (!courseId || !stripePriceId) return;
     if (!PRICE_ID_PATTERN.test(stripePriceId.trim())) {
-      setActionError(
-        'El Stripe Price ID debe empezar por "price_" y solo contener letras y números.',
-      );
+      setActionError({
+        message: 'El Stripe Price ID debe empezar por "price_" y solo contener letras y números.',
+        stripeMissing: false,
+      });
       return;
     }
     setCreating(true);
@@ -117,9 +152,10 @@ function BillingProductsPanel() {
       setActionInfo(`Producto creado para el curso ${courseTitle(courses, product.courseId)}.`);
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError
-          ? e.message
-          : 'No se pudo crear el producto. Revisa que el price_id exista y esté activo en Stripe.',
+        toActionError(
+          e,
+          'No se pudo crear el producto. Revisa que el price_id exista y esté activo en Stripe.',
+        ),
       );
     } finally {
       setCreating(false);
@@ -137,7 +173,7 @@ function BillingProductsPanel() {
         prev ? prev.map((it) => (it.id === product.id ? product : it)) : prev,
       );
     } catch (e) {
-      setActionError(e instanceof ApiHttpError ? e.message : 'No se pudo cambiar el estado.');
+      setActionError(toActionError(e, 'No se pudo cambiar el estado.'));
     }
   }
 
@@ -150,7 +186,10 @@ function BillingProductsPanel() {
     );
     if (!next || next.trim() === p.stripePriceId) return;
     if (!PRICE_ID_PATTERN.test(next.trim())) {
-      setActionError('El Stripe Price ID debe empezar por "price_".');
+      setActionError({
+        message: 'El Stripe Price ID debe empezar por "price_".',
+        stripeMissing: false,
+      });
       return;
     }
     setActionError(null);
@@ -164,9 +203,7 @@ function BillingProductsPanel() {
       );
       setActionInfo(`Price actualizado: ${formatPrice(product.unitAmount, product.currency)}.`);
     } catch (e) {
-      setActionError(
-        e instanceof ApiHttpError ? e.message : 'No se pudo cambiar el price. Verifica Stripe.',
-      );
+      setActionError(toActionError(e, 'No se pudo cambiar el price. Verifica Stripe.'));
     }
   }
 
@@ -186,7 +223,7 @@ function BillingProductsPanel() {
       setProducts((prev) => (prev ? prev.filter((it) => it.id !== p.id) : prev));
       setActionInfo('Producto desvinculado.');
     } catch (e) {
-      setActionError(e instanceof ApiHttpError ? e.message : 'No se pudo desvincular el producto.');
+      setActionError(toActionError(e, 'No se pudo desvincular el producto.'));
     }
   }
 
@@ -279,7 +316,7 @@ function BillingProductsPanel() {
               {creating ? 'Creando…' : 'Vincular'}
             </Button>
           </form>
-          {actionError ? <p className="mt-3 text-sm text-danger-700">{actionError}</p> : null}
+          {actionError ? <ActionErrorMessage error={actionError} /> : null}
           {actionInfo ? <p className="mt-3 text-sm text-success-700">{actionInfo}</p> : null}
         </CardContent>
       </Card>

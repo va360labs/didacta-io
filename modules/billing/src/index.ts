@@ -31,6 +31,7 @@ export type {
   UpdateProductInput,
   StartCheckoutInput,
   StartCheckoutResult,
+  StripeAdapterResolver,
 } from './billing.service.js';
 export { StripeSdkAdapter } from './stripe.client.js';
 export type {

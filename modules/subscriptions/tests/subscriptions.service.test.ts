@@ -380,7 +380,7 @@ function buildSystem(opts?: { gracePeriodDays?: number }) {
   stripe.setPrice('price_inactive', 'month', false);
   const service = new SubscriptionsService(
     prisma as never,
-    stripe,
+    async () => stripe,
     publisher,
     URLS,
     opts?.gracePeriodDays ?? 3,

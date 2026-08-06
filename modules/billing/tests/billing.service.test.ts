@@ -352,7 +352,7 @@ describe('BillingService — productos (admin)', () => {
     prisma = new MockPrisma();
     stripe = new MockStripe();
     publisher = new MockPublisher();
-    svc = new BillingService(prisma as unknown as never, stripe, publisher, urls);
+    svc = new BillingService(prisma as unknown as never, async () => stripe, publisher, urls);
   });
 
   it('createProduct: cachea unit_amount y currency desde Stripe', async () => {
@@ -425,7 +425,7 @@ describe('BillingService — startCheckout (alumno)', () => {
     prisma = new MockPrisma();
     stripe = new MockStripe();
     publisher = new MockPublisher();
-    svc = new BillingService(prisma as unknown as never, stripe, publisher, urls);
+    svc = new BillingService(prisma as unknown as never, async () => stripe, publisher, urls);
     stripe.setPrice('price_a');
   });
 
@@ -490,7 +490,7 @@ describe('BillingService — alta de producto por importe y URLs por petición',
     prisma = new MockPrisma();
     stripe = new MockStripe();
     publisher = new MockPublisher();
-    svc = new BillingService(prisma as unknown as never, stripe, publisher, urls);
+    svc = new BillingService(prisma as unknown as never, async () => stripe, publisher, urls);
   });
 
   it('crea Product+Price en Stripe cuando se da un importe en vez de un price_', async () => {
@@ -672,7 +672,7 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     prisma = new MockPrisma();
     stripe = new MockStripe();
     publisher = new MockPublisher();
-    svc = new BillingService(prisma as unknown as never, stripe, publisher, urls);
+    svc = new BillingService(prisma as unknown as never, async () => stripe, publisher, urls);
   });
 
   function buildSessionCompletedEvent(
@@ -975,7 +975,7 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
     prisma = new MockPrisma();
     stripe = new MockStripe();
     publisher = new MockPublisher();
-    svc = new BillingService(prisma as unknown as never, stripe, publisher, urls);
+    svc = new BillingService(prisma as unknown as never, async () => stripe, publisher, urls);
     stripe.setPrice('price_a');
     await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
   });
@@ -1193,7 +1193,7 @@ describe('BillingService — resolveWebhookTenantId (mitad lookup del patrón F3
     prisma = new MockPrisma();
     stripe = new MockStripe();
     publisher = new MockPublisher();
-    svc = new BillingService(prisma as unknown as never, stripe, publisher, urls);
+    svc = new BillingService(prisma as unknown as never, async () => stripe, publisher, urls);
   });
 
   it('checkout con NUESTRA marca (orderId+productId) → tenant de la metadata', async () => {

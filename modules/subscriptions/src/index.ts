@@ -26,6 +26,7 @@ export type {
   CheckoutUrlBuilder,
   StartSubscriptionInput,
   StartSubscriptionResult,
+  SubscriptionsStripeAdapterResolver,
 } from './subscriptions.service.js';
 export {
   MembershipService,

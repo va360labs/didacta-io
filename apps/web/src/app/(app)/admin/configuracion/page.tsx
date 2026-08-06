@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { MemberRegistrationSettingsCard } from '@/components/admin/member-registration-settings-card';
 import { SignupPolicyCard } from '@/components/admin/signup-policy-card';
 import { SmtpSettingsCard } from '@/components/admin/smtp-settings-card';
+import { StripeSettingsCard } from '@/components/admin/stripe-settings-card';
 import { TenantIdentityCard } from '@/components/admin/tenant-identity-card';
 import { adminModulesApi, type TenantModuleListItem } from '@/lib/admin-modules';
 import { meApi } from '@/lib/me';
@@ -63,6 +64,11 @@ const CORE_TABS: ConfigTabSpec[] = [
     label: 'Registro',
     description:
       'Cómo entran los miembros: verificadores exigidos (Telegram/OTP), bot y aprobador.',
+  },
+  {
+    key: 'pagos',
+    label: 'Pagos',
+    description: 'Cuenta de Stripe para vender cursos sueltos y suscripciones/membresía.',
   },
   {
     key: 'modules',
@@ -275,6 +281,8 @@ export default function ConfiguracionPage() {
           <MemberRegistrationSettingsCard />
         </div>
       ) : null}
+
+      {tab === 'pagos' ? <StripeSettingsCard /> : null}
 
       {tab === 'modules' ? <ModulesTab /> : null}
 

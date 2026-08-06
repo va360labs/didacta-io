@@ -12,6 +12,7 @@ import { SsoWpModule } from '../sso/wp/wp-sso.module';
 import { AdminApiKeysController } from './admin-api-keys.controller';
 import { AdminModulesController } from './admin-modules.controller';
 import { AdminSmtpController } from './admin-smtp.controller';
+import { AdminStripeController } from './admin-stripe.controller';
 import { AdminStatsController } from './admin-stats.controller';
 import { AdminStatsService } from './admin-stats.service';
 import { AdminBusinessMetricsController } from './admin-business-metrics.controller';
@@ -63,6 +64,10 @@ import { SuperUsersService } from './super/super-users.service';
     // SMTP per-tenant — GET/PUT/POST test. Wrappea el almacenamiento
     // genérico de tenant_setting con un contrato dedicado (alpha.75).
     AdminSmtpController,
+    // Stripe per-tenant (Administración → Pagos) — GET/PUT/POST test, mismo
+    // patrón que AdminSmtpController. Comparte credenciales entre mod.billing
+    // y mod.subscriptions (TenantStripeResolverService).
+    AdminStripeController,
     // Cuarto piloto License SDK — gate feat:custom_domains end-to-end.
     CustomDomainsController,
     // Séptimo piloto License SDK — gestión del token SCIM por tenant.

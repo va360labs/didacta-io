@@ -7,13 +7,14 @@ import {
   BadRequestException,
   Controller,
   HttpCode,
+  NotFoundException,
   Post,
   RawBodyRequest,
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { WebhookSignatureInvalidError } from '@didacta/mod-billing';
+import { StripeSdkAdapter, WebhookSignatureInvalidError } from '@didacta/mod-billing';
 import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
 import {
@@ -22,13 +23,21 @@ import {
 } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { TenantStripeResolverService } from '../tenant-stripe-resolver.service';
 import { BillingProvisioningService } from './billing-provisioning.service';
 
 /**
  * Endpoint público de webhooks de Stripe. NO usa JwtAuthGuard porque Stripe
  * no envía bearer; la autenticación es por firma HMAC del raw body con el
- * secret `STRIPE_WEBHOOK_SECRET`. La idempotencia la garantiza la PK natural
+ * secret de webhook — propio del tenant (Administración → Pagos) o el
+ * fallback de instancia. La idempotencia la garantiza la PK natural
  * `stripe_event_id` en `mod_billing_webhook_event`.
+ *
+ * Cada tenant apunta su endpoint de Stripe a SU dominio verificado
+ * (`https://mi-academia.com/api/v1/modules/billing/webhook`), igual que
+ * `zoom-webhook.controller.ts`: el Host del request nos dice a qué tenant
+ * pertenece la llamada ANTES de leer ningún secret, que es lo que hace falta
+ * para saber qué secret probar al verificar la firma.
  *
  * Stripe espera 2xx en menos de 30s o reintenta hasta 3 días. El handler
  * persiste el evento ANTES de procesar, así que un timeout intermedio no
@@ -41,6 +50,7 @@ export class BillingWebhookController {
     private readonly registry: ModuleRegistryService,
     private readonly provisioning: BillingProvisioningService,
     private readonly tenantResolver: TenantResolverService,
+    private readonly stripeResolver: TenantStripeResolverService,
   ) {}
 
   @Post('webhook')
@@ -51,7 +61,29 @@ export class BillingWebhookController {
   })
   async handle(@Req() req: RawBodyRequest<FastifyRequest>) {
     const billing = this.registry.getBillingService();
-    const stripe = this.registry.getStripeAdapter();
+
+    const hostHeader = req.headers.host ?? req.headers['x-forwarded-host'];
+    const hostStr = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
+    const tenant = await runSanctionedGlobalAccess(() =>
+      this.tenantResolver.resolveByHost(hostStr),
+    );
+    if (!tenant) {
+      throw new NotFoundException('No se reconoce el dominio de este webhook.');
+    }
+
+    const resolved = await runAsTenantOrSanctioned(tenant.id, () =>
+      this.stripeResolver.resolve(tenant.id),
+    );
+    if (!resolved) {
+      throw new UnauthorizedException('Stripe no está configurado para este tenant.');
+    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const StripeCtor = require('stripe').default ?? require('stripe');
+    const stripe = new StripeSdkAdapter(
+      resolved.credentials.secretKey,
+      resolved.credentials.webhookSecret,
+      StripeCtor,
+    );
 
     const signature = readHeader(req.headers, 'stripe-signature');
     if (!signature) throw new UnauthorizedException('stripe-signature ausente.');

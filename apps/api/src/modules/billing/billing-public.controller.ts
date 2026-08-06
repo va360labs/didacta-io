@@ -12,12 +12,11 @@ import {
   Param,
   Post,
   Req,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import type { FastifyRequest } from 'fastify';
-import type { BillingService, CourseOfferOption } from '@didacta/mod-billing';
+import type { CourseOfferOption } from '@didacta/mod-billing';
 import { extractClientContext } from '../../auth/client-context';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -75,9 +74,10 @@ interface PublicCatalogCourse {
  * El checkout es de Stripe hosted: aquí solo se genera la URL de la session;
  * la cuenta se materializa en el webhook tras el pago (provisioning).
  *
- * Si mod.billing no está configurado (sin claves Stripe), el catálogo y la
- * oferta responden VACÍOS (la página pública sigue renderizando) y el checkout
- * responde 503.
+ * El catálogo y la oferta son datos propios (no dependen de Stripe): se
+ * sirven aunque el tenant no haya configurado sus credenciales todavía. Solo
+ * el checkout necesita Stripe — sin credenciales (ni propias del tenant en
+ * Administración → Pagos ni fallback de instancia) responde 503.
  */
 @ApiTags('Billing · Público')
 @Controller('modules/billing/public')
@@ -91,19 +91,14 @@ export class BillingPublicController {
   @Get('catalog')
   @ApiOperation({
     summary:
-      'Catálogo público de cursos a la venta: cursos PUBLISHED con opciones de compra activas y precios. Tenant por Host. Sin Stripe configurado devuelve lista vacía.',
+      'Catálogo público de cursos a la venta: cursos PUBLISHED con opciones de compra activas y precios. Tenant por Host.',
   })
   async catalog(@Req() req: FastifyRequest): Promise<{ courses: PublicCatalogCourse[] }> {
     const tenantId = await this.resolveTenantId(req);
     // RLS F2: ruta pública sin middleware de tenant — el cuerpo corre bajo el
     // ALS del tenant resuelto por Host para que cada query quede escopada.
     return runAsTenant(tenantId, async () => {
-      let billing: BillingService;
-      try {
-        billing = this.registry.getBillingService();
-      } catch {
-        return { courses: [] };
-      }
+      const billing = this.registry.getBillingService();
       const ofertas = await billing.getCatalog(tenantId);
       if (ofertas.length === 0) return { courses: [] };
 
@@ -160,11 +155,7 @@ export class BillingPublicController {
         select: { id: true },
       });
       if (!curso) return { forSale: false, options: [] };
-      try {
-        return await this.registry.getBillingService().getCourseOffer(tenantId, courseId);
-      } catch {
-        return { forSale: false, options: [] };
-      }
+      return this.registry.getBillingService().getCourseOffer(tenantId, courseId);
     });
   }
 
@@ -193,14 +184,7 @@ export class BillingPublicController {
         throw new ConflictException('Este curso no está disponible para la compra.');
       }
 
-      let billing: BillingService;
-      try {
-        billing = this.registry.getBillingService();
-      } catch {
-        throw new ServiceUnavailableException(
-          'La pasarela de pago no está configurada en esta plataforma.',
-        );
-      }
+      const billing = this.registry.getBillingService();
 
       const base = (await this.tenantResolver.resolveTenantWebBaseUrl(tenantId, req)).replace(
         /\/$/,

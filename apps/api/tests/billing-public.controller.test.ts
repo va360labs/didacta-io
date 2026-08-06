@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ConflictException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { StripeConfigMissingError } from '@didacta/mod-billing';
 import { BillingPublicController } from '../src/modules/billing/billing-public.controller';
 import { resolveWebBaseUrl, type RequestLike } from '../src/common/resolve-web-base-url';
 
 /**
  * Tests unit del controller PÚBLICO de mod.billing (viaje 2): tenant por Host,
- * catálogo/oferta neutros sin Stripe, y guardas del checkout anónimo.
+ * catálogo/oferta (no dependen de Stripe, siempre disponibles) y guardas del
+ * checkout anónimo (sí depende de Stripe — falla per-tenant, no per-boot).
  */
 
 const TENANT = 'tenant-1';
@@ -14,26 +16,20 @@ const COURSE = '11111111-1111-4111-8111-111111111111';
 const req = (host = 'academia.example.com') => ({ headers: { host } }) as never;
 
 function makeController(opts?: {
-  billing?: Record<string, unknown> | null;
+  billing?: Record<string, unknown>;
   courses?: Array<Record<string, unknown>>;
   courseFirst?: Record<string, unknown> | null;
   tenant?: { id: string } | null;
 }) {
-  const billing =
-    opts?.billing === undefined
-      ? {
-          getCatalog: vi.fn().mockResolvedValue([]),
-          getCourseOffer: vi.fn().mockResolvedValue({ forSale: true, options: [] }),
-          startCheckout: vi
-            .fn()
-            .mockResolvedValue({ orderId: 'ord-1', sessionId: 'cs_1', url: 'https://stripe/cs_1' }),
-        }
-      : opts.billing;
+  const billing = opts?.billing ?? {
+    getCatalog: vi.fn().mockResolvedValue([]),
+    getCourseOffer: vi.fn().mockResolvedValue({ forSale: true, options: [] }),
+    startCheckout: vi
+      .fn()
+      .mockResolvedValue({ orderId: 'ord-1', sessionId: 'cs_1', url: 'https://stripe/cs_1' }),
+  };
   const registry = {
-    getBillingService: () => {
-      if (!billing) throw new Error('mod.billing no está inicializado.');
-      return billing;
-    },
+    getBillingService: () => billing,
   } as never;
   const tenantResolver = {
     resolveByHost: vi
@@ -107,11 +103,6 @@ describe('BillingPublicController — catálogo público', () => {
       .modCoursesCourse.findMany.mock.calls[0][0].where;
     expect(where).toMatchObject({ tenantId: TENANT, status: 'PUBLISHED', deletedAt: null });
   });
-
-  it('sin Stripe configurado responde catálogo VACÍO (200), nunca 500', async () => {
-    const { controller } = makeController({ billing: null });
-    await expect(controller.catalog(req())).resolves.toEqual({ courses: [] });
-  });
 });
 
 describe('BillingPublicController — oferta pública', () => {
@@ -135,14 +126,6 @@ describe('BillingPublicController — oferta pública', () => {
     const { controller } = makeController({ courseFirst: { id: COURSE } });
     await expect(controller.offer(req(), COURSE)).resolves.toEqual({ forSale: true, options: [] });
   });
-
-  it('curso publicado pero Stripe sin configurar: forSale=false (la ficha sigue renderizando)', async () => {
-    const { controller } = makeController({ billing: null, courseFirst: { id: COURSE } });
-    await expect(controller.offer(req(), COURSE)).resolves.toEqual({
-      forSale: false,
-      options: [],
-    });
-  });
 });
 
 describe('BillingPublicController — checkout anónimo', () => {
@@ -156,10 +139,15 @@ describe('BillingPublicController — checkout anónimo', () => {
     await expect(controller.checkout(req(), COURSE, {})).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('503 si la pasarela no está configurada', async () => {
-    const { controller } = makeController({ billing: null, courseFirst: { status: 'PUBLISHED' } });
+  it('sin Stripe configurado para este tenant, el fallo sale de startCheckout (BillingErrorFilter lo mapea a 503)', async () => {
+    const { controller } = makeController({
+      billing: {
+        startCheckout: vi.fn().mockRejectedValue(new StripeConfigMissingError('secretKey')),
+      },
+      courseFirst: { status: 'PUBLISHED' },
+    });
     await expect(controller.checkout(req(), COURSE, {})).rejects.toBeInstanceOf(
-      ServiceUnavailableException,
+      StripeConfigMissingError,
     );
   });
 

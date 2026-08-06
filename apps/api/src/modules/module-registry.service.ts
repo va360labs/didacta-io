@@ -21,6 +21,7 @@ import {
   type BillingEventPublisher,
   type CheckoutUrlBuilder,
   type StripeAdapter,
+  type StripeAdapterResolver,
 } from '@didacta/mod-billing';
 import {
   MembershipService,
@@ -32,6 +33,7 @@ import {
   type CheckoutUrlBuilder as SubsCheckoutUrlBuilder,
   type SubscriptionsEventPublisher,
   type SubscriptionsStripeAdapter,
+  type SubscriptionsStripeAdapterResolver,
 } from '@didacta/mod-subscriptions';
 import {
   buildReferralsModule,
@@ -112,6 +114,10 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import { AiGatewayService } from '../ai/ai-gateway.service';
 import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import { ModuleContextFactory } from './module-context.factory';
+import {
+  TenantStripeResolverService,
+  type StripeCredentials as BillingStripeCredentials,
+} from './tenant-stripe-resolver.service';
 
 /**
  * Versión de contrato del core contra la que se valida el `coreVersionRequired`
@@ -146,10 +152,17 @@ export class ModuleRegistryService implements OnModuleInit {
   private aiGraderSuggestion?: AiGraderSuggestionService;
   private aiContent?: AiContentService;
   private billing?: BillingService;
-  private stripeAdapter?: StripeAdapter;
   private subscriptions?: SubscriptionsService;
   private membership?: MembershipService;
-  private subscriptionsStripeAdapter?: SubscriptionsStripeAdapter;
+  private stripeResolver?: TenantStripeResolverService;
+  /**
+   * Adapters de instancia (env globales), memoizados al boot — evitan
+   * reconstruir el cliente Stripe SDK en el caso común sin override de
+   * tenant. Un tenant con credenciales propias en Administración → Pagos
+   * siempre construye su propio adapter fresco (ver resolveStripeAdapter).
+   */
+  private globalStripeAdapter?: StripeAdapter;
+  private globalSubscriptionsStripeAdapter?: SubscriptionsStripeAdapter;
   private paymentConnections?: PaymentConnectionsService;
   private paymentTiers?: PaymentTiersService;
   private orderMirror?: OrderMirrorService;
@@ -314,81 +327,64 @@ export class ModuleRegistryService implements OnModuleInit {
     const certificatesModule = buildCertificatesModule(this.certificates);
     const aiContentModule = buildAiContentModule(this.aiContent);
 
-    // mod.billing: el adapter Stripe se construye solo si las ENVs están
-    // presentes. Sin Stripe configurado, el módulo no expone su service —
-    // los endpoints `/modules/billing/*` devuelven 503 vía ConfigMissing.
-    const stripeKey = process.env['STRIPE_SECRET_KEY'];
-    // Fallback simétrico al de mod.subscriptions (más abajo): una sola cuenta
-    // de Stripe puede servir a los dos módulos desde un ÚNICO endpoint de
-    // webhook, y en ese caso hay un solo secreto de firma. Si el operador no
-    // define uno propio para billing, reutilizamos el de subscriptions en vez
-    // de dejar el módulo sin construir (que es lo que hacía que /modules/billing
-    // devolviera 500 y el botón "Comprar curso" no funcionara).
+    // mod.billing / mod.subscriptions / membresía: Stripe es configurable POR
+    // TENANT desde Administración → Pagos (tenant_setting, cifrado), con
+    // fallback a las envs de instancia si el tenant no configuró las suyas
+    // (mismo patrón que SMTP). Los 3 services son SIEMPRE singletons — la
+    // disponibilidad real de Stripe se decide per-tenant, per-llamada dentro
+    // de `stripeFor`/`subscriptionsStripeFor` (StripeConfigMissingError se
+    // propaga desde ahí cuando ni el tenant ni la instancia tienen key).
+    this.stripeResolver = new TenantStripeResolverService(this.factory.getTenantConfig());
     // OJO con `??`: la plantilla del .env declara `STRIPE_WEBHOOK_SECRET=` y un
     // env_file convierte eso en CADENA VACÍA, no en undefined — con `??` el
-    // respaldo no entraría y el módulo seguiría apagado. Por eso `||` sobre el
-    // valor ya recortado.
-    const stripeWebhookSecret =
-      process.env['STRIPE_WEBHOOK_SECRET']?.trim() ||
-      process.env['SUBSCRIPTIONS_WEBHOOK_SECRET']?.trim() ||
-      undefined;
-    if (stripeKey && stripeWebhookSecret) {
-      // Carga perezosa de Stripe SDK — evita romper en NODE_ENV=test si no
-      // está instalado (vitest unit no lo necesita).
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const StripeCtor = require('stripe').default ?? require('stripe');
-      this.stripeAdapter = new StripeSdkAdapter(stripeKey, stripeWebhookSecret, StripeCtor);
-
-      const successUrlBase =
-        process.env['BILLING_SUCCESS_URL_BASE'] ??
-        `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cursos`;
-      const cancelUrlBase =
-        process.env['BILLING_CANCEL_URL_BASE'] ??
-        `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cursos`;
-      const urls: CheckoutUrlBuilder = {
-        successUrl: (courseId) => `${successUrlBase}/${courseId}?paid=1`,
-        cancelUrl: (courseId) => `${cancelUrlBase}/${courseId}?cancelled=1`,
-      };
-
-      const eventBus = this.factory.getEventBus();
-      const publisher: BillingEventPublisher = {
-        publish: async (tenantId, actorId, name, payload) => {
-          // idempotencyKey derivado del orderId cuando aplique: si el outbox
-          // dispatcher reintrega, downstream subscribers no duplican efecto.
-          const orderId = (payload as { orderId?: string }).orderId;
-          await eventBus.publish({
-            name,
-            version: 1,
-            data: payload as never,
-            metadata: {
-              tenantId,
-              userId: actorId ?? undefined,
-              timestamp: new Date().toISOString(),
-              traceId: cryptoRandom(),
-              idempotencyKey: orderId ? `${name}:${orderId}` : `${name}:${cryptoRandom()}`,
-            },
-          });
-        },
-      };
-
-      this.billing = new BillingService(prisma, this.stripeAdapter, publisher, urls);
-    } else {
+    // respaldo no entraría. Por eso `||` sobre el valor ya recortado.
+    this.globalStripeAdapter = this.tryBuildGlobalStripeAdapter();
+    this.globalSubscriptionsStripeAdapter = this.tryBuildGlobalSubscriptionsStripeAdapter();
+    if (!this.globalStripeAdapter && !this.globalSubscriptionsStripeAdapter) {
       this.pino.warn(
         {},
-        'STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET ausentes — mod.billing sin service. Endpoints /modules/billing devolverán 503.',
+        'Sin credenciales Stripe de instancia (STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET) — ' +
+          'mod.billing/mod.subscriptions siguen operativos: cada tenant puede configurar las ' +
+          'suyas en Administración → Pagos.',
       );
     }
 
-    const billingModuleOrNull = this.billing ? buildBillingModule(this.billing) : null;
+    const successUrlBase =
+      process.env['BILLING_SUCCESS_URL_BASE'] ??
+      `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cursos`;
+    const cancelUrlBase =
+      process.env['BILLING_CANCEL_URL_BASE'] ??
+      `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cursos`;
+    const urls: CheckoutUrlBuilder = {
+      successUrl: (courseId) => `${successUrlBase}/${courseId}?paid=1`,
+      cancelUrl: (courseId) => `${cancelUrlBase}/${courseId}?cancelled=1`,
+    };
 
-    // mod.subscriptions: comparte STRIPE_SECRET_KEY con mod.billing (un solo
-    // Stripe account por instancia). Webhook secret es independiente — Stripe
-    // permite múltiples endpoints firmados con secrets distintos.
-    const subscriptionsWebhookSecret =
-      process.env['SUBSCRIPTIONS_WEBHOOK_SECRET'] ?? stripeWebhookSecret;
+    const eventBus = this.factory.getEventBus();
+    const publisher: BillingEventPublisher = {
+      publish: async (tenantId, actorId, name, payload) => {
+        // idempotencyKey derivado del orderId cuando aplique: si el outbox
+        // dispatcher reintrega, downstream subscribers no duplican efecto.
+        const orderId = (payload as { orderId?: string }).orderId;
+        await eventBus.publish({
+          name,
+          version: 1,
+          data: payload as never,
+          metadata: {
+            tenantId,
+            userId: actorId ?? undefined,
+            timestamp: new Date().toISOString(),
+            traceId: cryptoRandom(),
+            idempotencyKey: orderId ? `${name}:${orderId}` : `${name}:${cryptoRandom()}`,
+          },
+        });
+      },
+    };
+    const stripeFor: StripeAdapterResolver = (tenantId) => this.resolveStripeAdapter(tenantId);
+    this.billing = new BillingService(prisma, stripeFor, publisher, urls);
+    const billingModule = buildBillingModule(this.billing);
+
     // Publisher compartido por SubscriptionsService y MembershipService.
-    // Se construye SIEMPRE (no depende de Stripe): la membresía necesita
-    // publicar aunque el checkout esté deshabilitado por falta de key.
     const subsEventBus = this.factory.getEventBus();
     const subsPublisher: SubscriptionsEventPublisher = {
       publish: async (tenantId, actorId, name, payload) => {
@@ -415,57 +411,38 @@ export class ModuleRegistryService implements OnModuleInit {
         });
       },
     };
-    if (stripeKey && subscriptionsWebhookSecret) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const StripeCtor = require('stripe').default ?? require('stripe');
-      this.subscriptionsStripeAdapter = new SubscriptionsStripeSdkAdapter(
-        stripeKey,
-        subscriptionsWebhookSecret,
-        StripeCtor,
-      );
 
-      const subsSuccessBase =
-        process.env['SUBSCRIPTIONS_SUCCESS_URL_BASE'] ??
-        `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cuenta/suscripciones`;
-      const subsCancelBase =
-        process.env['SUBSCRIPTIONS_CANCEL_URL_BASE'] ??
-        `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cuenta/suscripciones`;
-      const subsUrls: SubsCheckoutUrlBuilder = {
-        successUrl: (courseId) => `${subsSuccessBase}?course=${courseId}&status=success`,
-        cancelUrl: (courseId) => `${subsCancelBase}?course=${courseId}&status=cancel`,
-      };
+    const subsSuccessBase =
+      process.env['SUBSCRIPTIONS_SUCCESS_URL_BASE'] ??
+      `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cuenta/suscripciones`;
+    const subsCancelBase =
+      process.env['SUBSCRIPTIONS_CANCEL_URL_BASE'] ??
+      `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cuenta/suscripciones`;
+    const subsUrls: SubsCheckoutUrlBuilder = {
+      successUrl: (courseId) => `${subsSuccessBase}?course=${courseId}&status=success`,
+      cancelUrl: (courseId) => `${subsCancelBase}?course=${courseId}&status=cancel`,
+    };
 
-      const gracePeriodDays = Number(
-        process.env['SUBSCRIPTIONS_GRACE_PERIOD_DAYS'] ?? DEFAULT_GRACE_PERIOD_DAYS,
-      );
-      this.subscriptions = new SubscriptionsService(
-        prisma,
-        this.subscriptionsStripeAdapter,
-        subsPublisher,
-        subsUrls,
-        Number.isFinite(gracePeriodDays) && gracePeriodDays > 0
-          ? gracePeriodDays
-          : DEFAULT_GRACE_PERIOD_DAYS,
-      );
-    } else {
-      this.pino.warn(
-        {},
-        'STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET ausentes — mod.subscriptions sin service. Endpoints /modules/subscriptions devolverán 503.',
-      );
-    }
+    const gracePeriodDays = Number(
+      process.env['SUBSCRIPTIONS_GRACE_PERIOD_DAYS'] ?? DEFAULT_GRACE_PERIOD_DAYS,
+    );
+    const subscriptionsStripeFor: SubscriptionsStripeAdapterResolver = (tenantId) =>
+      this.resolveSubscriptionsStripeAdapter(tenantId);
+    this.subscriptions = new SubscriptionsService(
+      prisma,
+      subscriptionsStripeFor,
+      subsPublisher,
+      subsUrls,
+      Number.isFinite(gracePeriodDays) && gracePeriodDays > 0
+        ? gracePeriodDays
+        : DEFAULT_GRACE_PERIOD_DAYS,
+    );
+    const subscriptionsModule = buildSubscriptionsModule(this.subscriptions);
 
     // Membresía (página pública /unete): config y planes funcionan SIN Stripe
     // (el admin puede dejarlo todo listo antes de configurar la key); el
-    // checkout lanza StripeConfigMissingError → 503 si falta el adapter.
-    this.membership = new MembershipService(
-      prisma,
-      this.subscriptionsStripeAdapter ?? null,
-      subsPublisher,
-    );
-
-    const subscriptionsModuleOrNull = this.subscriptions
-      ? buildSubscriptionsModule(this.subscriptions)
-      : null;
+    // checkout lanza StripeConfigMissingError → 503 si falta.
+    this.membership = new MembershipService(prisma, subscriptionsStripeFor, subsPublisher);
 
     // mod.referrals: programa de referidos de la membresía. No depende de
     // Stripe (consume eventos de mod.subscriptions vía bridge); siempre se
@@ -728,8 +705,8 @@ export class ModuleRegistryService implements OnModuleInit {
       aiGraderModule,
       aiContentModule,
       wpSsoModule,
-      ...(billingModuleOrNull ? [billingModuleOrNull] : []),
-      ...(subscriptionsModuleOrNull ? [subscriptionsModuleOrNull] : []),
+      billingModule,
+      subscriptionsModule,
       paymentConnectionsModule,
       // Grupos de acceso: depende (hard) de mod.courses y mod.learning. El host
       // NestJS del módulo vive en ./access-groups/ (ADR-011/015). El orden del
@@ -820,6 +797,74 @@ export class ModuleRegistryService implements OnModuleInit {
         },
       });
     }
+  }
+
+  /**
+   * Adapter Stripe de mod.billing para UN tenant: sus credenciales propias
+   * (Administración → Pagos) si las tiene, si no el fallback global de
+   * instancia ya memoizado al boot. Lanza StripeConfigMissingError si ni el
+   * tenant ni la instancia tienen nada configurado — la captura
+   * BillingErrorFilter (@Catch(BillingError)) y responde 503.
+   */
+  private async resolveStripeAdapter(tenantId: string): Promise<StripeAdapter> {
+    if (!this.stripeResolver) throw new Error('ModuleRegistry no está inicializado');
+    const resolved = await this.stripeResolver.resolve(tenantId);
+    if (!resolved) throw new BillingStripeConfigMissingError('secretKey');
+    if (resolved.source === 'global' && this.globalStripeAdapter) return this.globalStripeAdapter;
+    return this.buildStripeAdapter(resolved.credentials);
+  }
+
+  /** Igual que resolveStripeAdapter pero para mod.subscriptions/membresía. */
+  private async resolveSubscriptionsStripeAdapter(
+    tenantId: string,
+  ): Promise<SubscriptionsStripeAdapter> {
+    if (!this.stripeResolver) throw new Error('ModuleRegistry no está inicializado');
+    const resolved = await this.stripeResolver.resolve(tenantId);
+    if (!resolved) throw new SubscriptionsStripeConfigMissingError('secretKey');
+    if (resolved.source === 'global' && this.globalSubscriptionsStripeAdapter) {
+      return this.globalSubscriptionsStripeAdapter;
+    }
+    return this.buildSubscriptionsStripeAdapter(resolved.credentials);
+  }
+
+  private buildStripeAdapter(credentials: BillingStripeCredentials): StripeAdapter {
+    // Carga perezosa de Stripe SDK — evita romper en NODE_ENV=test si no
+    // está instalado (vitest unit no lo necesita).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const StripeCtor = require('stripe').default ?? require('stripe');
+    return new StripeSdkAdapter(credentials.secretKey, credentials.webhookSecret, StripeCtor);
+  }
+
+  private buildSubscriptionsStripeAdapter(
+    credentials: BillingStripeCredentials,
+  ): SubscriptionsStripeAdapter {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const StripeCtor = require('stripe').default ?? require('stripe');
+    return new SubscriptionsStripeSdkAdapter(
+      credentials.secretKey,
+      credentials.subscriptionsWebhookSecret || credentials.webhookSecret,
+      StripeCtor,
+    );
+  }
+
+  private tryBuildGlobalStripeAdapter(): StripeAdapter | undefined {
+    const secretKey = process.env['STRIPE_SECRET_KEY']?.trim();
+    const webhookSecret =
+      process.env['STRIPE_WEBHOOK_SECRET']?.trim() ||
+      process.env['SUBSCRIPTIONS_WEBHOOK_SECRET']?.trim() ||
+      undefined;
+    if (!secretKey || !webhookSecret) return undefined;
+    return this.buildStripeAdapter({ secretKey, webhookSecret });
+  }
+
+  private tryBuildGlobalSubscriptionsStripeAdapter(): SubscriptionsStripeAdapter | undefined {
+    const secretKey = process.env['STRIPE_SECRET_KEY']?.trim();
+    const webhookSecret =
+      process.env['SUBSCRIPTIONS_WEBHOOK_SECRET']?.trim() ||
+      process.env['STRIPE_WEBHOOK_SECRET']?.trim() ||
+      undefined;
+    if (!secretKey || !webhookSecret) return undefined;
+    return this.buildSubscriptionsStripeAdapter({ secretKey, webhookSecret });
   }
 
   /** Expone el registry para uso de servicios admin (TenantModulesService). */
@@ -962,61 +1007,37 @@ export class ModuleRegistryService implements OnModuleInit {
     return this.aiContent;
   }
 
-  // Las 4 getters de abajo lanzan el `StripeConfigMissingError` propio de
-  // cada módulo (no un `Error` plano): son BillingError/SubscriptionsError,
-  // así que BillingErrorFilter/SubscriptionsErrorFilter (@Catch(...Error))
-  // las mapean a un 503 con mensaje útil. Con `Error` plano el filtro nunca
-  // se activaba y el cliente veía un 500 "Internal server error" genérico
-  // en vez de "falta STRIPE_SECRET_KEY" — hallazgo real al documentar
-  // /admin/billing/products sin Stripe configurado.
+  // Los 3 getters de abajo SIEMPRE devuelven el service — Stripe se resuelve
+  // per-tenant, per-llamada dentro de cada método (stripeFor), no al obtener
+  // el service. El `StripeConfigMissingError` propio de cada módulo (no un
+  // `Error` plano) sale de ahí — son BillingError/SubscriptionsError, así que
+  // BillingErrorFilter/SubscriptionsErrorFilter (@Catch(...Error)) las mapean
+  // a un 503 con mensaje útil.
   getBillingService(): BillingService {
-    if (!this.billing) {
-      throw new BillingStripeConfigMissingError('secretKey');
-    }
+    if (!this.billing) throw new Error('ModuleRegistry no está inicializado');
     return this.billing;
   }
 
-  getStripeAdapter(): StripeAdapter {
-    if (!this.stripeAdapter) {
-      throw new BillingStripeConfigMissingError('secretKey');
-    }
-    return this.stripeAdapter;
-  }
-
   getSubscriptionsService(): SubscriptionsService {
-    if (!this.subscriptions) {
-      throw new SubscriptionsStripeConfigMissingError('secretKey');
-    }
+    if (!this.subscriptions) throw new Error('ModuleRegistry no está inicializado');
     return this.subscriptions;
   }
 
   /**
-   * Como `getSubscriptionsService` pero devuelve null en vez de lanzar cuando el
-   * módulo no está inicializado (p. ej. un despliegue que usa pagos EXTERNOS vía
-   * mod.payment-connections y no tiene el Stripe propio de Didacta configurado).
-   * Lo usan los endpoints read-only del alumno para degradar a "sin suscripciones"
-   * en lugar de responder 500.
+   * Como `getSubscriptionsService` pero devuelve null en vez de lanzar si el
+   * registry aún no completó el boot (mismo criterio defensivo que el resto
+   * de getters de esta clase). Lo usan los endpoints read-only del alumno.
    */
   getSubscriptionsServiceOrNull(): SubscriptionsService | null {
     return this.subscriptions ?? null;
   }
 
-  /**
-   * Membresía (página pública /unete). SIEMPRE inicializado tras el boot:
-   * config y planes no requieren Stripe; el checkout falla con 503 si falta.
-   */
+  /** Membresía (página pública /unete). SIEMPRE inicializado tras el boot. */
   getMembershipService(): MembershipService {
     if (!this.membership) {
       throw new Error('MembershipService no está inicializado (boot incompleto).');
     }
     return this.membership;
-  }
-
-  getSubscriptionsStripeAdapter(): SubscriptionsStripeAdapter {
-    if (!this.subscriptionsStripeAdapter) {
-      throw new SubscriptionsStripeConfigMissingError('secretKey');
-    }
-    return this.subscriptionsStripeAdapter;
   }
 
   getPaymentConnectionsService(): PaymentConnectionsService {

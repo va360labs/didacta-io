@@ -312,7 +312,11 @@ function build(withStripe = true) {
   const pub = stubPublisher();
   const service = new MembershipService(
     prisma as never,
-    withStripe ? stripe.adapter : null,
+    withStripe
+      ? async () => stripe.adapter
+      : async () => {
+          throw new StripeConfigMissingError('secretKey');
+        },
     pub.publisher,
   );
   return { prisma, stripe, pub, service };

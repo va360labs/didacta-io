@@ -52,6 +52,11 @@ import {
 } from './errors.js';
 import type { SubscriptionsStripeAdapter } from './stripe-subscriptions.client.js';
 
+/** Resuelve el SubscriptionsStripeAdapter a usar para un tenant concreto, por llamada. */
+export type SubscriptionsStripeAdapterResolver = (
+  tenantId: string,
+) => Promise<SubscriptionsStripeAdapter>;
+
 type SubscriptionRow = Awaited<ReturnType<PrismaClient['modSubscriptionsSubscription']['create']>>;
 type InvoiceRow = Awaited<ReturnType<PrismaClient['modSubscriptionsInvoice']['create']>>;
 
@@ -106,7 +111,7 @@ export const DEFAULT_GRACE_PERIOD_DAYS = 3;
 export class SubscriptionsService {
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly stripe: SubscriptionsStripeAdapter,
+    private readonly stripeFor: SubscriptionsStripeAdapterResolver,
     private readonly publisher: SubscriptionsEventPublisher,
     private readonly urls: CheckoutUrlBuilder,
     private readonly gracePeriodDays: number = DEFAULT_GRACE_PERIOD_DAYS,
@@ -120,8 +125,9 @@ export class SubscriptionsService {
    * (customer.subscription.created → status=trialing/active).
    */
   async startSubscription(input: StartSubscriptionInput): Promise<StartSubscriptionResult> {
+    const stripe = await this.stripeFor(input.tenantId);
     // Validación: el price debe ser recurring antes de crear nada local.
-    const price = await this.stripe.retrievePrice(input.stripePriceId);
+    const price = await stripe.retrievePrice(input.stripePriceId);
     if (!price.active) {
       throw new StripeApiError(`El price ${input.stripePriceId} está inactivo en Stripe.`);
     }
@@ -160,7 +166,7 @@ export class SubscriptionsService {
 
     let session;
     try {
-      session = await this.stripe.createCheckoutSession({
+      session = await stripe.createCheckoutSession({
         priceId: price.id,
         successUrl: this.urls.successUrl(input.courseId),
         cancelUrl: this.urls.cancelUrl(input.courseId),
@@ -236,7 +242,8 @@ export class SubscriptionsService {
     }
 
     const atPeriodEnd = !options.immediate;
-    const stripeView = await this.stripe.cancelSubscription(sub.stripeSubscriptionId, atPeriodEnd);
+    const stripe = await this.stripeFor(tenantId);
+    const stripeView = await stripe.cancelSubscription(sub.stripeSubscriptionId, atPeriodEnd);
 
     const updated = await this.prisma.modSubscriptionsSubscription.update({
       where: { id: sub.id },
@@ -480,7 +487,8 @@ export class SubscriptionsService {
     if (sub.status === 'CANCELED') {
       // El alumno canceló entre que abrió el checkout y se confirmó Stripe.
       // Cancelamos en Stripe sin esperar al evento `deleted`.
-      await this.stripe.cancelSubscription(stripeSub.id, false).catch(() => {
+      const stripe = await this.stripeFor(sub.tenantId);
+      await stripe.cancelSubscription(stripeSub.id, false).catch(() => {
         // ignore — Stripe ya devolverá el deleted event
       });
       return;

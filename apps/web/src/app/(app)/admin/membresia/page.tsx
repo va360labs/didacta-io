@@ -13,6 +13,7 @@
  * Todos los selectores usan datos reales (grupos y cursos del tenant).
  */
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { accessGroupsApi, type AccessGroupListItem } from '@/lib/access-groups';
+import { adminStripeApi } from '@/lib/admin-stripe';
 import { authStorage } from '@/lib/auth-storage';
 import { coursesApi, type Course } from '@/lib/courses';
 import {
@@ -94,6 +96,10 @@ export default function MembresiaAdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // null mientras carga; false si ni el tenant ni el fallback global tienen
+  // Stripe configurado — la config de planes/página se guarda igual, pero el
+  // checkout real de /unete fallará hasta que se configure.
+  const [stripeReady, setStripeReady] = useState<boolean | null>(null);
 
   // Alta/edición de plan
   const [draft, setDraft] = useState<PlanDraft>(EMPTY_DRAFT);
@@ -137,6 +143,15 @@ export default function MembresiaAdminPage() {
             ? e.message
             : 'No pudimos cargar la configuración de membresía.',
         );
+      }
+      // Aviso proactivo, no bloqueante: guardar planes/página no depende de
+      // Stripe, pero el checkout real de /unete sí — mejor avisar aquí que
+      // dejar que el admin lo descubra cuando un alumno intente pagar.
+      try {
+        const stripe = await adminStripeApi.get();
+        setStripeReady(stripe.hasTenantConfig || stripe.hasGlobalFallback);
+      } catch {
+        setStripeReady(null);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -303,6 +318,17 @@ export default function MembresiaAdminPage() {
           {config?.active ? 'Página activa' : 'Página desactivada'}
         </Badge>
       </div>
+
+      {stripeReady === false ? (
+        <p className="rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700">
+          Stripe no está configurado para esta academia — puedes preparar planes y página, pero el
+          checkout real fallará hasta que{' '}
+          <Link href="/admin/configuracion" className="font-semibold underline">
+            configures Stripe en Administración → Pagos
+          </Link>
+          .
+        </p>
+      ) : null}
 
       {error && (
         <p className="rounded-lg border border-danger-500/40 bg-danger-50 px-3 py-2 text-sm text-danger-700">
