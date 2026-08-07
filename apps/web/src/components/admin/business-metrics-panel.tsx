@@ -17,9 +17,11 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatCard } from '@/components/stat-card';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatCurrency, formatDate } from '@/lib/i18n/format';
 import {
   adminBusinessMetricsApi,
   type BusinessMetrics,
@@ -27,15 +29,15 @@ import {
 } from '@/lib/admin-business-metrics';
 
 function euros(cents: number): string {
-  return new Intl.NumberFormat('es-ES', {
-    style: 'currency',
-    currency: 'EUR',
+  return formatCurrency(cents / 100, 'EUR', {
     maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
-  }).format(cents / 100);
+  });
 }
 
 function formatWeek(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('es-ES', {
+  // timeZone UTC deliberada: `weekStart` es una fecha-calendario (lunes) sin
+  // hora; formatearla en la TZ del navegador podría desplazarla un día.
+  return formatDate(`${iso}T00:00:00Z`, {
     day: 'numeric',
     month: 'short',
     timeZone: 'UTC',
@@ -43,6 +45,8 @@ function formatWeek(iso: string): string {
 }
 
 export function BusinessMetricsPanel() {
+  const t = useTranslations('adminMonetizacion.metrics');
+  const tErrors = useTranslations('errors');
   const [metrics, setMetrics] = useState<BusinessMetrics | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,12 +59,13 @@ export function BusinessMetricsPanel() {
       })
       .catch((e) => {
         if (!cancelled) {
-          setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las métricas.');
+          setError(apiErrorMessage(e, tErrors));
         }
       });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (error) {
@@ -87,19 +92,20 @@ export function BusinessMetricsPanel() {
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-text-muted">
-        Los KPIs del lunes: comunidad, ventas y salud de la membresía. Ventana de 30 días salvo que
-        se indique otra cosa.
-      </p>
+      <p className="text-sm text-text-muted">{t('intro')}</p>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
-          label="NPS (30 días)"
+          label={t('npsLabel')}
           value={nps.score ?? '—'}
           hint={
             nps.responses > 0
-              ? `${nps.responses} respuestas · ${nps.promoters} promotores · ${nps.detractors} detractores`
-              : 'sin respuestas aún — se llena con las encuestas post-clase'
+              ? t('npsHint', {
+                  responses: String(nps.responses),
+                  promoters: String(nps.promoters),
+                  detractors: String(nps.detractors),
+                })
+              : t('npsEmpty')
           }
           icon="chart"
           tone={
@@ -113,38 +119,47 @@ export function BusinessMetricsPanel() {
           }
         />
         <StatCard
-          label="Ventas (30 días)"
+          label={t('revenueLabel')}
           value={euros(revenue.totalCents30d)}
-          hint="cursos + membresía, cobrado"
+          hint={t('revenueHint')}
           icon="chart"
           tone="info"
         />
         <StatCard
-          label="Impagos ahora"
+          label={t('arrearsLabel')}
           value={arrears.total}
-          hint={`${arrears.subscriptions} membresía · ${arrears.external} externos`}
+          hint={t('arrearsHint', {
+            subscriptions: String(arrears.subscriptions),
+            external: String(arrears.external),
+          })}
           icon="bell"
           tone={arrears.total > 0 ? 'warn' : 'success'}
           href="/admin/impagos"
         />
         <StatCard
-          label="Altas (30 días)"
+          label={t('signupsLabel')}
           value={members.newMembers30d}
-          hint={`${members.cancellations30d} bajas de membresía`}
+          hint={t('signupsHint', { cancellations: String(members.cancellations30d) })}
           icon="users"
           tone="info"
         />
         <StatCard
-          label="Activos 7 días"
+          label={t('activeLabel')}
           value={connections.active7d}
-          hint={`${connections.active30d} en 30 días · ${connections.totalActive} miembros`}
+          hint={t('activeHint', {
+            active30d: String(connections.active30d),
+            total: String(connections.totalActive),
+          })}
           icon="users"
           tone="info"
         />
         <StatCard
-          label="Tutor IA (30 días)"
+          label={t('aiTutorLabel')}
           value={aiTutor.questions30d}
-          hint={`preguntas · ${aiTutor.activeUsers30d} alumnos distintos · ${community.posts30d} posts en comunidad`}
+          hint={t('aiTutorHint', {
+            students: String(aiTutor.activeUsers30d),
+            posts: String(community.posts30d),
+          })}
           icon="sparkles"
           tone="neutral"
         />
@@ -152,16 +167,16 @@ export function BusinessMetricsPanel() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <WeeklyBars
-          title="Ventas por semana"
-          description="Cobros de cursos y membresía, últimas 12 semanas."
+          title={t('weeklyRevenueTitle')}
+          description={t('weeklyRevenueDescription')}
           points={revenue.weekly}
           format={euros}
         />
         <WeeklyBars
-          title="Altas por semana"
-          description="Miembros nuevos, últimas 12 semanas."
+          title={t('weeklySignupsTitle')}
+          description={t('weeklySignupsDescription')}
           points={members.weeklySignups}
-          format={(v) => `${v} alta${v !== 1 ? 's' : ''}`}
+          format={(v) => t('signupsCount', { count: v })}
         />
       </div>
     </div>
@@ -184,6 +199,7 @@ function WeeklyBars({
   points: WeeklyPoint[];
   format: (v: number) => string;
 }) {
+  const t = useTranslations('adminMonetizacion.metrics');
   const max = Math.max(...points.map((p) => p.value), 1);
   const empty = points.every((p) => p.value === 0);
 
@@ -205,7 +221,7 @@ function WeeklyBars({
                 }}
               />
               <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-[#0D1B2A] px-2 py-1 text-[11px] font-medium text-white shadow-lg group-hover:block">
-                Semana del {formatWeek(p.weekStart)} · {format(p.value)}
+                {t('weekTooltip', { week: formatWeek(p.weekStart), value: format(p.value) })}
               </div>
               {/* Zona de hover más grande que la marca. */}
               <div className="absolute inset-0" />
@@ -216,17 +232,15 @@ function WeeklyBars({
           <span>{formatWeek(points[0]!.weekStart)}</span>
           <span>{formatWeek(points.at(-1)!.weekStart)}</span>
         </div>
-        {empty ? (
-          <p className="mt-2 text-xs text-text-subtle">Sin datos todavía en esta ventana.</p>
-        ) : null}
+        {empty ? <p className="mt-2 text-xs text-text-subtle">{t('emptyWindow')}</p> : null}
 
         {/* Los mismos datos, accesibles como tabla. */}
         <table className="sr-only">
           <caption>{title}</caption>
           <thead>
             <tr>
-              <th>Semana</th>
-              <th>Valor</th>
+              <th>{t('weekHeader')}</th>
+              <th>{t('valueHeader')}</th>
             </tr>
           </thead>
           <tbody>

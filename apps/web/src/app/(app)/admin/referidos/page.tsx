@@ -14,6 +14,7 @@
 /// - Comisiones: listado con filtros y acciones aprobar / revocar (motivo).
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,22 +22,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatCurrency, formatDate } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import {
-  formatReferralCents,
   referralsAdminApi,
   type AdminCommissionRow,
   type AdminReferrerRow,
   type ReferralCommissionStatus,
   type ReferralsConfig,
 } from '@/lib/referrals';
-
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: 'Pendiente',
-  APPROVED: 'Aprobada',
-  PAID: 'Pagada',
-  REVOKED: 'Revocada',
-};
 
 const STATUS_VARIANT: Record<string, 'warning' | 'info' | 'success' | 'danger'> = {
   PENDING: 'warning',
@@ -72,14 +67,22 @@ function toForm(config: ReferralsConfig): ConfigForm {
 }
 
 function dateLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-ES', {
+  return formatDate(iso, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
   });
 }
 
+/** Céntimos → "12,34 €" en el locale activo (antes `formatReferralCents`). */
+function amountLabel(cents: number, currency = 'eur'): string {
+  return formatCurrency(cents / 100, currency.toUpperCase());
+}
+
 export default function AdminReferidosPage() {
+  const t = useTranslations('adminMonetizacion.referrals');
+  const tStatus = useTranslations('adminMonetizacion.commissionStatus');
+  const tErrors = useTranslations('errors');
   const [form, setForm] = useState<ConfigForm | null>(null);
   const [referrers, setReferrers] = useState<AdminReferrerRow[]>([]);
   const [commissions, setCommissions] = useState<AdminCommissionRow[]>([]);
@@ -107,9 +110,9 @@ export default function AdminReferidosPage() {
 
   useEffect(() => {
     reload().catch((e) => {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los referidos.');
+      setError(apiErrorMessage(e, tErrors));
     });
-  }, [reload]);
+  }, [reload, tErrors]);
 
   async function run(label: string, fn: () => Promise<void>) {
     setBusy(true);
@@ -120,7 +123,7 @@ export default function AdminReferidosPage() {
       await reload(statusFilter);
       setNotice(label);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'La operación falló. Reintenta.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -130,7 +133,7 @@ export default function AdminReferidosPage() {
     if (!form) return;
     const percent = Number(form.commissionPercent.replace(',', '.'));
     const minPayout = Number(form.minPayoutEur.replace(',', '.'));
-    await run('Configuración guardada. Solo afecta a devengos futuros.', async () => {
+    await run(t('configSaved'), async () => {
       await referralsAdminApi.updateConfig({
         active: form.active,
         commissionBps: Math.round(percent * 100),
@@ -147,10 +150,13 @@ export default function AdminReferidosPage() {
 
   async function liquidate(referrer: AdminReferrerRow) {
     const reference = window.prompt(
-      `Liquidar ${formatReferralCents(referrer.approvedCents)} a ${referrer.code}.\n\nReferencia externa del pago (transferencia, PayPal…):`,
+      t('liquidatePrompt', {
+        amount: amountLabel(referrer.approvedCents),
+        code: referrer.code,
+      }),
     );
     if (!reference || reference.trim().length < 3) return;
-    await run('Liquidación registrada.', async () => {
+    await run(t('payoutRecorded'), async () => {
       const approved = await referralsAdminApi.listCommissions({
         status: 'APPROVED',
         referrerUserId: referrer.referrerUserId,
@@ -165,10 +171,12 @@ export default function AdminReferidosPage() {
 
   async function revoke(commission: AdminCommissionRow) {
     const reason = window.prompt(
-      `Revocar la comisión de ${formatReferralCents(commission.amountCents, commission.currency)}.\n\nMotivo (obligatorio, lo verá el miembro):`,
+      t('revokePrompt', {
+        amount: amountLabel(commission.amountCents, commission.currency),
+      }),
     );
     if (!reason || reason.trim().length < 3) return;
-    await run('Comisión revocada.', () =>
+    await run(t('commissionRevoked'), () =>
       referralsAdminApi.revokeCommission(commission.id, reason.trim()),
     );
   }
@@ -185,11 +193,8 @@ export default function AdminReferidosPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-text">Programa de referidos</h1>
-        <p className="mt-1 text-sm text-text-muted">
-          Los miembros comparten su enlace de /unete y ganan un % de los cobros reales de quien
-          entra. La liquidación es manual con referencia externa (v1 sin pagos automáticos).
-        </p>
+        <h1 className="text-xl font-bold text-text">{t('title')}</h1>
+        <p className="mt-1 text-sm text-text-muted">{t('intro')}</p>
       </div>
 
       {error ? (
@@ -211,11 +216,8 @@ export default function AdminReferidosPage() {
 
       <Card data-testid="referrals-config-card">
         <CardHeader>
-          <CardTitle>Configuración</CardTitle>
-          <CardDescription>
-            Los cambios no recalculan comisiones ya devengadas: cada comisión sella el % vigente en
-            el momento del cobro.
-          </CardDescription>
+          <CardTitle>{t('configTitle')}</CardTitle>
+          <CardDescription>{t('configDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -225,7 +227,7 @@ export default function AdminReferidosPage() {
                 checked={form.active}
                 onCheckedChange={(v) => setForm({ ...form, active: v })}
               />
-              <Label htmlFor="ref-active">Programa activo</Label>
+              <Label htmlFor="ref-active">{t('activeLabel')}</Label>
             </div>
             <div className="flex items-center gap-3">
               <Switch
@@ -233,10 +235,10 @@ export default function AdminReferidosPage() {
                 checked={form.requireActiveMembership}
                 onCheckedChange={(v) => setForm({ ...form, requireActiveMembership: v })}
               />
-              <Label htmlFor="ref-require">Exigir membresía activa al referidor</Label>
+              <Label htmlFor="ref-require">{t('requireMembershipLabel')}</Label>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ref-percent">Comisión (%)</Label>
+              <Label htmlFor="ref-percent">{t('commissionLabel')}</Label>
               <Input
                 id="ref-percent"
                 inputMode="decimal"
@@ -245,18 +247,18 @@ export default function AdminReferidosPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ref-scope">Ámbito del devengo</Label>
+              <Label htmlFor="ref-scope">{t('scopeLabel')}</Label>
               <Select
                 id="ref-scope"
                 value={form.scope}
                 onChange={(e) => setForm({ ...form, scope: e.target.value as ConfigForm['scope'] })}
               >
-                <option value="RECURRING">Recurrente (cada cobro)</option>
-                <option value="FIRST_PAYMENT">Solo el primer cobro</option>
+                <option value="RECURRING">{t('scopeRecurring')}</option>
+                <option value="FIRST_PAYMENT">{t('scopeFirstPayment')}</option>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ref-months">Meses de recurrencia (vacío = ilimitado)</Label>
+              <Label htmlFor="ref-months">{t('recurringMonthsLabel')}</Label>
               <Input
                 id="ref-months"
                 inputMode="numeric"
@@ -266,7 +268,7 @@ export default function AdminReferidosPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ref-window">Ventana de atribución (días)</Label>
+              <Label htmlFor="ref-window">{t('attributionWindowLabel')}</Label>
               <Input
                 id="ref-window"
                 inputMode="numeric"
@@ -275,7 +277,7 @@ export default function AdminReferidosPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ref-guarantee">Días de garantía antes de aprobar</Label>
+              <Label htmlFor="ref-guarantee">{t('guaranteeDaysLabel')}</Label>
               <Input
                 id="ref-guarantee"
                 inputMode="numeric"
@@ -284,7 +286,7 @@ export default function AdminReferidosPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ref-min">Mínimo de liquidación (€, 0 = sin mínimo)</Label>
+              <Label htmlFor="ref-min">{t('minPayoutLabel')}</Label>
               <Input
                 id="ref-min"
                 inputMode="decimal"
@@ -293,20 +295,20 @@ export default function AdminReferidosPage() {
               />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="ref-copy">Mensaje para el área del miembro (opcional)</Label>
+              <Label htmlFor="ref-copy">{t('memberCopyLabel')}</Label>
               <textarea
                 id="ref-copy"
                 rows={3}
                 value={form.memberCopy}
                 onChange={(e) => setForm({ ...form, memberCopy: e.target.value })}
                 className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="Ej.: Comparte tu enlace y gana el 30% de cada cuota."
+                placeholder={t('memberCopyPlaceholder')}
               />
             </div>
           </div>
           <div className="mt-4 flex justify-end border-t border-border-soft pt-3">
             <Button type="button" onClick={() => void saveConfig()} disabled={busy}>
-              {busy ? 'Guardando…' : 'Guardar configuración'}
+              {busy ? t('saving') : t('saveConfig')}
             </Button>
           </div>
         </CardContent>
@@ -314,28 +316,23 @@ export default function AdminReferidosPage() {
 
       <Card data-testid="referrals-referrers-card">
         <CardHeader>
-          <CardTitle>Referidores</CardTitle>
-          <CardDescription>
-            Saldo aprobado = pendiente de liquidar. La liquidación marca las comisiones como pagadas
-            con la referencia del pago real.
-          </CardDescription>
+          <CardTitle>{t('referrersTitle')}</CardTitle>
+          <CardDescription>{t('referrersDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           {referrers.length === 0 ? (
-            <p className="text-sm text-text-subtle">
-              Aún no hay referidores: aparecerán cuando los miembros generen su enlace.
-            </p>
+            <p className="text-sm text-text-subtle">{t('referrersEmpty')}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border-soft text-left text-xs text-text-subtle">
-                    <th className="py-2 pr-3">Código</th>
-                    <th className="py-2 pr-3">Clics</th>
-                    <th className="py-2 pr-3">Altas</th>
-                    <th className="py-2 pr-3">Pendiente</th>
-                    <th className="py-2 pr-3">Aprobado</th>
-                    <th className="py-2 pr-3">Pagado</th>
+                    <th className="py-2 pr-3">{t('colCode')}</th>
+                    <th className="py-2 pr-3">{t('colClicks')}</th>
+                    <th className="py-2 pr-3">{t('colSignups')}</th>
+                    <th className="py-2 pr-3">{t('colPending')}</th>
+                    <th className="py-2 pr-3">{t('colApproved')}</th>
+                    <th className="py-2 pr-3">{t('colPaid')}</th>
                     <th className="py-2" />
                   </tr>
                 </thead>
@@ -345,11 +342,9 @@ export default function AdminReferidosPage() {
                       <td className="py-2 pr-3 font-mono">{r.code}</td>
                       <td className="py-2 pr-3">{r.clicks}</td>
                       <td className="py-2 pr-3">{r.referrals}</td>
-                      <td className="py-2 pr-3">{formatReferralCents(r.pendingCents)}</td>
-                      <td className="py-2 pr-3 font-semibold">
-                        {formatReferralCents(r.approvedCents)}
-                      </td>
-                      <td className="py-2 pr-3">{formatReferralCents(r.paidCents)}</td>
+                      <td className="py-2 pr-3">{amountLabel(r.pendingCents)}</td>
+                      <td className="py-2 pr-3 font-semibold">{amountLabel(r.approvedCents)}</td>
+                      <td className="py-2 pr-3">{amountLabel(r.paidCents)}</td>
                       <td className="py-2 text-right">
                         <Button
                           type="button"
@@ -363,11 +358,11 @@ export default function AdminReferidosPage() {
                           onClick={() => void liquidate(r)}
                           title={
                             minPayoutCents > 0 && r.approvedCents < minPayoutCents
-                              ? `Por debajo del mínimo (${formatReferralCents(minPayoutCents)})`
+                              ? t('belowMinimum', { amount: amountLabel(minPayoutCents) })
                               : undefined
                           }
                         >
-                          Liquidar
+                          {t('liquidate')}
                         </Button>
                       </td>
                     </tr>
@@ -381,53 +376,58 @@ export default function AdminReferidosPage() {
 
       <Card data-testid="referrals-commissions-card">
         <CardHeader>
-          <CardTitle>Comisiones</CardTitle>
+          <CardTitle>{t('commissionsTitle')}</CardTitle>
           <CardDescription>
             {totals.length === 0
-              ? 'Sin comisiones todavía.'
+              ? t('commissionsEmptyTotals')
               : totals
-                  .map(
-                    (t) =>
-                      `${STATUS_LABEL[t.status] ?? t.status}: ${t.count} (${formatReferralCents(t.totalCents)})`,
+                  .map((row) =>
+                    t('totalsItem', {
+                      status: labelOr(tStatus, row.status, row.status),
+                      count: String(row.count),
+                      amount: amountLabel(row.totalCents),
+                    }),
                   )
                   .join(' · ')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mb-3 max-w-xs">
-            <Label htmlFor="ref-filter">Filtrar por estado</Label>
+            <Label htmlFor="ref-filter">{t('filterLabel')}</Label>
             <Select
               id="ref-filter"
               value={statusFilter}
               onChange={(e) => {
                 const next = e.target.value as '' | ReferralCommissionStatus;
                 setStatusFilter(next);
-                void reload(next).catch(() => setError('No pudimos filtrar.'));
+                void reload(next).catch((err) => setError(apiErrorMessage(err, tErrors)));
               }}
             >
-              <option value="">Todas</option>
-              <option value="PENDING">Pendientes</option>
-              <option value="APPROVED">Aprobadas</option>
-              <option value="PAID">Pagadas</option>
-              <option value="REVOKED">Revocadas</option>
+              <option value="">{t('filterAll')}</option>
+              <option value="PENDING">{t('filterPending')}</option>
+              <option value="APPROVED">{t('filterApproved')}</option>
+              <option value="PAID">{t('filterPaid')}</option>
+              <option value="REVOKED">{t('filterRevoked')}</option>
             </Select>
           </div>
           {commissions.length === 0 ? (
-            <p className="text-sm text-text-subtle">Nada que mostrar con este filtro.</p>
+            <p className="text-sm text-text-subtle">{t('commissionsEmpty')}</p>
           ) : (
             <ul className="divide-y divide-border-soft">
               {commissions.map((c) => (
                 <li key={c.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
                   <span className="text-text-subtle">{dateLabel(c.createdAt)}</span>
                   <span className="font-semibold text-text">
-                    {formatReferralCents(c.amountCents, c.currency)}
+                    {amountLabel(c.amountCents, c.currency)}
                   </span>
                   <span className="text-xs text-text-subtle">
-                    sobre {formatReferralCents(c.baseAmountCents, c.currency)} ·{' '}
-                    {(c.commissionBps / 100).toFixed(0)}%
+                    {t('commissionBase', {
+                      amount: amountLabel(c.baseAmountCents, c.currency),
+                      percent: (c.commissionBps / 100).toFixed(0),
+                    })}
                   </span>
                   <Badge variant={STATUS_VARIANT[c.status] ?? 'muted'}>
-                    {STATUS_LABEL[c.status] ?? c.status}
+                    {labelOr(tStatus, c.status, c.status)}
                   </Badge>
                   {c.status === 'REVOKED' && c.revokeReason ? (
                     <span className="text-xs text-danger-700">{c.revokeReason}</span>
@@ -440,12 +440,12 @@ export default function AdminReferidosPage() {
                           className="text-xs text-brand-700 hover:underline"
                           disabled={busy}
                           onClick={() =>
-                            void run('Comisión aprobada.', () =>
+                            void run(t('commissionApproved'), () =>
                               referralsAdminApi.approveCommission(c.id),
                             )
                           }
                         >
-                          Aprobar ya
+                          {t('approveNow')}
                         </button>
                         <button
                           type="button"
@@ -453,7 +453,7 @@ export default function AdminReferidosPage() {
                           disabled={busy}
                           onClick={() => void revoke(c)}
                         >
-                          Revocar
+                          {t('revoke')}
                         </button>
                       </>
                     ) : c.status === 'APPROVED' ? (
@@ -463,7 +463,7 @@ export default function AdminReferidosPage() {
                         disabled={busy}
                         onClick={() => void revoke(c)}
                       >
-                        Revocar
+                        {t('revoke')}
                       </button>
                     ) : null}
                   </span>

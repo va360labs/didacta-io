@@ -6,16 +6,17 @@
  */
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon, type IconName } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { invalidateCourseCategoriesCache } from '@/lib/course-categories';
 import { coursesApi, type CourseCategory } from '@/lib/courses';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 
 const SUGGESTED_COLORS = [
   '#1E5AA8',
@@ -50,6 +51,8 @@ interface FormState {
 const EMPTY_FORM: FormState = { name: '', color: SUGGESTED_COLORS[0]!, icon: '' };
 
 export default function CourseCategoriesAdminPage() {
+  const t = useTranslations('adminMonetizacion.categories');
+  const tErrors = useTranslations('errors');
   const [items, setItems] = useState<CourseCategory[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -64,7 +67,7 @@ export default function CourseCategoriesAdminPage() {
       setItems(await coursesApi.listManagedCategories());
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las categorías.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -101,19 +104,14 @@ export default function CourseCategoriesAdminPage() {
       cancelEdit();
       await reload();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos guardar la categoría.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setPending(false);
     }
   }
 
   async function handleDelete(c: CourseCategory) {
-    if (
-      !window.confirm(
-        `¿Eliminar la categoría "${c.name}"? Los cursos que la tienen seguirán mostrando el nombre como texto plano.`,
-      )
-    )
-      return;
+    if (!window.confirm(t('confirmDelete', { name: c.name }))) return;
     setPending(true);
     setError(null);
     try {
@@ -122,7 +120,7 @@ export default function CourseCategoriesAdminPage() {
       if (editing?.id === c.id) cancelEdit();
       await reload();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos eliminar la categoría.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setPending(false);
     }
@@ -131,9 +129,7 @@ export default function CourseCategoriesAdminPage() {
   if (!canManage) {
     return (
       <Card>
-        <CardContent className="p-6 text-sm text-danger-700">
-          Solo los administradores del tenant pueden gestionar categorías de cursos.
-        </CardContent>
+        <CardContent className="p-6 text-sm text-danger-700">{t('onlyAdmins')}</CardContent>
       </Card>
     );
   }
@@ -141,12 +137,8 @@ export default function CourseCategoriesAdminPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Categorías de cursos</h1>
-        <p className="mt-1 max-w-2xl text-text-muted">
-          Cura las categorías oficiales del catálogo con color e icono. El builder ofrece este
-          listado al formador como select; el catálogo y la card del curso pintan el chip con el
-          estilo configurado.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('title')}</h1>
+        <p className="mt-1 max-w-2xl text-text-muted">{t('intro')}</p>
       </header>
 
       {error ? (
@@ -161,13 +153,13 @@ export default function CourseCategoriesAdminPage() {
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Categorías existentes</CardTitle>
+            <CardTitle>{t('listTitle')}</CardTitle>
             <CardDescription>
               {items === null
-                ? 'Cargando…'
+                ? t('loading')
                 : items.length === 0
-                  ? 'Aún no hay categorías. Crea la primera en el formulario de la derecha.'
-                  : `${items.length} categoría${items.length === 1 ? '' : 's'} curada${items.length === 1 ? '' : 's'}.`}
+                  ? t('listEmpty')
+                  : t('count', { count: items.length })}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -191,7 +183,7 @@ export default function CourseCategoriesAdminPage() {
                         onClick={() => startEdit(c)}
                         disabled={pending}
                       >
-                        Editar
+                        {t('edit')}
                       </Button>
                       <Button
                         type="button"
@@ -201,7 +193,7 @@ export default function CourseCategoriesAdminPage() {
                         disabled={pending}
                         className="text-danger-700 hover:bg-danger-50"
                       >
-                        Eliminar
+                        {t('delete')}
                       </Button>
                     </div>
                   </li>
@@ -213,17 +205,17 @@ export default function CourseCategoriesAdminPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{editing ? `Editar "${editing.name}"` : 'Nueva categoría'}</CardTitle>
+            <CardTitle>
+              {editing ? t('editTitle', { name: editing.name }) : t('newTitle')}
+            </CardTitle>
             <CardDescription>
-              {editing
-                ? 'Modifica el nombre, color o icono. Los cursos que ya usan esta categoría se actualizan al instante.'
-                : 'Crea una categoría oficial. El nombre es exact-match con la categoría del curso, así que mantenlo consistente.'}
+              {editing ? t('editDescription') : t('newDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="cat-name">Nombre</Label>
+                <Label htmlFor="cat-name">{t('nameLabel')}</Label>
                 <Input
                   id="cat-name"
                   value={form.name}
@@ -231,19 +223,19 @@ export default function CourseCategoriesAdminPage() {
                   required
                   minLength={1}
                   maxLength={60}
-                  placeholder="Tecnología, Liderazgo…"
+                  placeholder={t('namePlaceholder')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>Color</Label>
+                <Label>{t('colorLabel')}</Label>
                 <div className="flex flex-wrap gap-2">
                   {SUGGESTED_COLORS.map((c) => (
                     <button
                       key={c}
                       type="button"
                       onClick={() => setForm((f) => ({ ...f, color: c }))}
-                      aria-label={`Color ${c}`}
+                      aria-label={t('colorAria', { color: c })}
                       aria-pressed={form.color === c}
                       className={
                         form.color === c
@@ -265,13 +257,13 @@ export default function CourseCategoriesAdminPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="cat-icon">Icono</Label>
+                <Label htmlFor="cat-icon">{t('iconLabel')}</Label>
                 <Select
                   id="cat-icon"
                   value={form.icon}
                   onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
                 >
-                  <option value="">Sin icono</option>
+                  <option value="">{t('noIcon')}</option>
                   {ICON_OPTIONS.map((i) => (
                     <option key={i} value={i}>
                       {i}
@@ -281,13 +273,13 @@ export default function CourseCategoriesAdminPage() {
               </div>
 
               <div className="rounded-md border border-border-soft bg-surface-2 p-3">
-                <p className="text-xs text-text-subtle">Vista previa</p>
+                <p className="text-xs text-text-subtle">{t('previewLabel')}</p>
                 <div className="mt-2">
                   <CategoryPreview
                     category={{
                       id: 'preview',
                       tenantId: '',
-                      name: form.name || 'Tu categoría',
+                      name: form.name || t('previewFallback'),
                       color: form.color,
                       icon: form.icon || null,
                       createdAt: '',
@@ -300,11 +292,11 @@ export default function CourseCategoriesAdminPage() {
               <div className="flex justify-end gap-2 border-t border-border-soft pt-3">
                 {editing ? (
                   <Button type="button" variant="ghost" onClick={cancelEdit} disabled={pending}>
-                    Cancelar
+                    {t('cancel')}
                   </Button>
                 ) : null}
                 <Button type="submit" disabled={pending || form.name.trim().length === 0}>
-                  {pending ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear categoría'}
+                  {pending ? t('saving') : editing ? t('saveChanges') : t('create')}
                 </Button>
               </div>
             </form>
