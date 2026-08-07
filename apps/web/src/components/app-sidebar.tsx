@@ -8,7 +8,9 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState, type CSSProperties } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon, type IconName } from '@/components/icon';
+import { labelOr } from '@/lib/i18n/labels';
 import { useTenantTheme } from '@/components/tenant-theme-provider';
 import { VersionUpdateBanner } from '@/components/version-update-banner';
 import type { StoredSession } from '@/lib/auth-storage';
@@ -144,6 +146,15 @@ export function SidebarContent({
   onToggleCollapsed,
   backLink,
 }: SidebarContentProps) {
+  // Labels de nav: los `label`/`group` de sidebar-nav.ts y de los manifests de
+  // módulos son TOKENS canónicos en español (contrato de merge, ver
+  // mergeExtensionSidebarItems). Aquí solo se traduce la PRESENTACIÓN, con
+  // fallback al token crudo — así los módulos third-party sin traducción
+  // siguen mostrando su label tal cual y el estado plegado (openOverride)
+  // sigue keyeado por token.
+  const tNav = useTranslations('nav');
+  const groupLabel = (raw: string) => labelOr(tNav, `groups.${raw}`, raw);
+  const itemLabel = (raw: string) => labelOr(tNav, `items.${raw}`, raw);
   const theme = useTenantTheme();
   const logoUrl = theme?.logoUrl ?? null;
   // Nombre visible de la organización: el nombre real del tenant (editable en
@@ -236,8 +247,8 @@ export function SidebarContent({
             <Link
               href={backLink.href as never}
               onClick={onNavigate}
-              title={backLink.label}
-              aria-label={backLink.label}
+              title={itemLabel(backLink.label)}
+              aria-label={itemLabel(backLink.label)}
               className="grid h-9 w-full place-items-center rounded-xl text-white/40 transition-colors hover:bg-white/8 hover:text-white/80"
             >
               <Icon name="arrow-left" size={16} />
@@ -257,8 +268,8 @@ export function SidebarContent({
                     key={item.href}
                     href={item.href as never}
                     onClick={onNavigate}
-                    title={item.label}
-                    aria-label={item.label}
+                    title={itemLabel(item.label)}
+                    aria-label={itemLabel(item.label)}
                     className="mb-1 flex justify-center"
                   >
                     <span className="relative">
@@ -307,8 +318,8 @@ export function SidebarContent({
                       section.onAdd?.();
                       onNavigate?.();
                     }}
-                    title={`Añadir a ${section.label}`}
-                    aria-label={`Añadir a ${section.label}`}
+                    title={tNav('addToGroup', { group: groupLabel(section.label) })}
+                    aria-label={tNav('addToGroup', { group: groupLabel(section.label) })}
                     className="mb-1 flex w-full justify-center"
                   >
                     <span className="grid h-9 w-9 place-items-center rounded-xl border border-dashed border-white/20 text-white/40 transition-colors hover:border-white/40 hover:bg-white/5 hover:text-white">
@@ -328,8 +339,8 @@ export function SidebarContent({
                   <Link
                     href={section.canAddHref as never}
                     onClick={onNavigate}
-                    title={`Añadir a ${section.label}`}
-                    aria-label={`Añadir a ${section.label}`}
+                    title={tNav('addToGroup', { group: groupLabel(section.label) })}
+                    aria-label={tNav('addToGroup', { group: groupLabel(section.label) })}
                     className="mb-1 flex w-full justify-center"
                   >
                     <span className="grid h-9 w-9 place-items-center rounded-xl border border-dashed border-white/20 text-white/40 transition-colors hover:border-white/40 hover:bg-white/5 hover:text-white">
@@ -497,7 +508,7 @@ export function SidebarContent({
             className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] font-medium text-white/45 transition-colors hover:bg-white/5 hover:text-white/80"
           >
             <Icon name="arrow-left" size={14} />
-            <span>{backLink.label}</span>
+            <span>{itemLabel(backLink.label)}</span>
           </Link>
         </div>
       ) : null}
@@ -521,7 +532,7 @@ export function SidebarContent({
                     aria-expanded={expanded}
                     className="-mx-1 flex flex-1 items-center gap-1.5 rounded-lg px-1 py-1 text-[10px] font-bold uppercase tracking-widest text-white/50 transition-colors hover:bg-white/5 hover:text-white/90"
                   >
-                    <span>{section.label}</span>
+                    <span>{groupLabel(section.label)}</span>
                     <svg
                       width="12"
                       height="12"
@@ -541,7 +552,7 @@ export function SidebarContent({
                   </button>
                 ) : (
                   <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">
-                    {section.label}
+                    {groupLabel(section.label)}
                   </span>
                 )}
                 {section.canAdd ? (
@@ -552,7 +563,7 @@ export function SidebarContent({
                         section.onAdd?.();
                         onNavigate?.();
                       }}
-                      aria-label={`Añadir a ${section.label}`}
+                      aria-label={tNav('addToGroup', { group: groupLabel(section.label) })}
                       className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-white/8 text-white/50 ring-1 ring-white/10 transition-colors hover:bg-white/15 hover:text-white"
                     >
                       <svg
@@ -570,7 +581,7 @@ export function SidebarContent({
                     <Link
                       href={section.canAddHref as never}
                       onClick={onNavigate}
-                      aria-label={`Añadir a ${section.label}`}
+                      aria-label={tNav('addToGroup', { group: groupLabel(section.label) })}
                       className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-white/8 text-white/50 ring-1 ring-white/10 transition-colors hover:bg-white/15 hover:text-white"
                     >
                       <svg
@@ -587,7 +598,7 @@ export function SidebarContent({
                   ) : (
                     <button
                       type="button"
-                      aria-label={`Añadir a ${section.label}`}
+                      aria-label={tNav('addToGroup', { group: groupLabel(section.label) })}
                       className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-white/8 text-white/50 ring-1 ring-white/10 transition-colors hover:bg-white/15 hover:text-white"
                     >
                       <svg
@@ -651,7 +662,7 @@ export function SidebarContent({
                             )}
                           </span>
                         )}
-                        <span className="flex-1 truncate">{item.label}</span>
+                        <span className="flex-1 truncate">{itemLabel(item.label)}</span>
                         {item.dot ? (
                           <div className="h-1.75 w-1.75 shrink-0 rounded-full bg-[#FF6F61]" />
                         ) : null}

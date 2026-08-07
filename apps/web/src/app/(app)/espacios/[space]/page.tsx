@@ -80,7 +80,9 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
         await communityApi.addReactionToPost(postId, emoji);
       }
       await reload({ sort });
-    } catch {}
+    } catch {
+      // Best-effort: la reacción fallida no amerita romper el feed.
+    }
   }
 
   return (

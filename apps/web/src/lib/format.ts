@@ -12,6 +12,10 @@
 /**
  * Formatea una duración en minutos a un string legible en castellano.
  *
+ * @deprecated Usa `formatDuration(minutes, t)` de `@/lib/i18n/format` con
+ * `t = useTranslations('common')` — versión locale-aware con ICU. Esta se
+ * elimina cuando la última unidad de migración i18n deje de importarla.
+ *
  * Reglas:
  *  - `null` o `undefined` → `null` (el caller decide si mostrar nada).
  *  - 0 → `'0 min'`.

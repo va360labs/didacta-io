@@ -58,12 +58,12 @@ function run(cmd, args, opts = {}) {
 }
 
 async function composeUp() {
-  console.log('\n[integration] docker compose up -d (postgres-test, redis-test)');
+  console.info('\n[integration] docker compose up -d (postgres-test, redis-test)');
   await run(DOCKER_BIN, ['compose', '-f', COMPOSE_FILE, 'up', '-d']);
 }
 
 async function composeDown() {
-  console.log('\n[integration] docker compose down -v');
+  console.info('\n[integration] docker compose down -v');
   try {
     await run(DOCKER_BIN, ['compose', '-f', COMPOSE_FILE, 'down', '-v']);
   } catch (err) {
@@ -72,7 +72,7 @@ async function composeDown() {
 }
 
 async function runVitest() {
-  console.log('\n[integration] vitest run --config vitest.integration.config.ts');
+  console.info('\n[integration] vitest run --config vitest.integration.config.ts');
   // Resolvemos vitest dinámicamente para no depender del PATH del shell.
   const req = createRequire(import.meta.url);
   const vitestPkg = req.resolve('vitest/package.json');

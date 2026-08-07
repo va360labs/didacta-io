@@ -152,7 +152,6 @@ export async function loadModuleUI(
     // Si el bundle ya hizo la asignación a globalThis (forma legacy), no rompe.
     const augmented = `${bundleCode}\n;try{globalThis.__didacta_module_exports__=__didacta_module_exports__;}catch(_){}`;
     try {
-      // eslint-disable-next-line no-new-func
       const evaluator = new Function(augmented);
       evaluator();
     } catch (err) {

@@ -85,7 +85,7 @@ async function rawFetch<T>(
   const response = await fetch(url, { ...init, headers });
   const text = await response.text();
   if (!response.ok) {
-    let body: { code?: string; message?: string; details?: unknown } = {};
+    let body: { code?: string; message?: string; details?: unknown };
     try {
       body = text ? JSON.parse(text) : {};
     } catch {

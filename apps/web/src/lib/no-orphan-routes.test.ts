@@ -244,7 +244,6 @@ describe('guard anti-huérfanas del sidebar', () => {
     const gaps = Object.entries(ALLOWLIST).filter(([, v]) => v.kind === 'knownGap');
     // No falla: solo deja constancia. Si la lista crece, revísala.
     for (const [route, v] of gaps) {
-      // eslint-disable-next-line no-console
       console.warn(`[gap conocido] ${route} — ${v.reason}`);
     }
     expect(gaps.length).toBeLessThanOrEqual(3);

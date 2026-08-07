@@ -10,6 +10,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import { LicenseExceptionFilter } from '@didacta/license-sdk';
 import { AppModule } from './app.module';
+import { HttpExceptionNormalizerFilter } from './common/http-exception-normalizer.filter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -122,7 +123,10 @@ async function bootstrap(): Promise<void> {
 
   // Captura CapabilityRequiredError y LicenseSignatureError, mapea a HTTP 402/401
   // con body JSON estructurado.
-  app.useGlobalFilters(new LicenseExceptionFilter());
+  // El normalizador va PRIMERO (menor precedencia en Nest: el último filter
+  // registrado que casa gana): garantiza `{ statusCode, code?, message }` en
+  // toda HttpException sin pisar al filter de licencia ni a los de dominio.
+  app.useGlobalFilters(new HttpExceptionNormalizerFilter(), new LicenseExceptionFilter());
 
   const config = new DocumentBuilder()
     .setTitle('Didacta API')

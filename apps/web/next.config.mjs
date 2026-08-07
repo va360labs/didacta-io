@@ -11,6 +11,13 @@
  * Next.js intentaría cargar TypeScript en runtime de producción y fallaría
  * con `Cannot find module 'typescript'` cuando devDeps están purgadas.
  */
+import createNextIntlPlugin from 'next-intl/plugin';
+
+// i18n sin routing por URL (cookie `didacta_locale`): el plugin NO añade
+// segmentos de idioma; solo registra `src/i18n/request.ts` para que las APIs
+// server de next-intl (getLocale/getMessages/getTranslations) lo encuentren.
+const withNextIntl = createNextIntlPlugin();
+
 const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? 'http://localhost:4000';
 
 const SKIP_TYPE_CHECK = process.env.SKIP_TYPE_CHECK === '1';
@@ -41,4 +48,4 @@ const config = {
   },
 };
 
-export default config;
+export default withNextIntl(config);

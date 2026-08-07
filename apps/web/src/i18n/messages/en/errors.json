@@ -1,0 +1,5 @@
+{
+  "unknown": "Something went wrong. Please try again.",
+  "mfa_required": "Two-step verification is required to continue.",
+  "AMBIGUOUS_TENANT": "Your account exists in several academies. Sign in from your academy's domain."
+}

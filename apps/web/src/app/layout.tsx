@@ -6,6 +6,9 @@
 import type { Metadata } from 'next';
 import { Inter, Sora } from 'next/font/google';
 import type { ReactNode } from 'react';
+import { NextIntlClientProvider } from 'next-intl';
+import { getLocale, getMessages } from 'next-intl/server';
+import { LocaleSync } from '@/components/locale-sync';
 import { TenantThemeProvider } from '@/components/tenant-theme-provider';
 import { TenantTitle } from '@/components/tenant-title';
 import './globals.css';
@@ -39,9 +42,13 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // Idioma por cookie `didacta_locale` (ver src/i18n/request.ts). LocaleSync
+  // la mantiene alineada con user.locale tras el login.
+  const locale = await getLocale();
+  const messages = await getMessages();
   return (
-    <html lang="es-ES" className={`${inter.variable} ${sora.variable}`} suppressHydrationWarning>
+    <html lang={locale} className={`${inter.variable} ${sora.variable}`} suppressHydrationWarning>
       <body>
         {/*
          * TenantThemeProvider en el ROOT para que el branding por tenant
@@ -50,8 +57,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
          * reset-password). Es un client component que envuelve children —
          * los children pueden seguir siendo server components.
          */}
-        <TenantTitle />
-        <TenantThemeProvider>{children}</TenantThemeProvider>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <TenantTitle />
+          <TenantThemeProvider>{children}</TenantThemeProvider>
+          <LocaleSync />
+        </NextIntlClientProvider>
       </body>
     </html>
   );

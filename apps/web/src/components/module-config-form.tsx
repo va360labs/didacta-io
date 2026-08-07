@@ -271,7 +271,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
         </div>
       );
 
-    case 'multiselect':
+    case 'multiselect': {
       // Para multiselect usamos checkboxes
       const selectedValues = Array.isArray(value) ? value : [];
       return (
@@ -302,6 +302,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
           {field.description && <p className="text-xs text-text-muted">{field.description}</p>}
         </div>
       );
+    }
 
     case 'textarea':
       return (
