@@ -8,12 +8,16 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { assessmentsApi, type QuizFormadorView } from '@/modules/assessments';
 import { QuizEditor } from './quiz-editor';
 
 export default function QuizEditorPage() {
+  const t = useTranslations('formadorAula');
+  const tErrors = useTranslations('errors');
   const params = useParams<{ id: string }>();
   const [quiz, setQuiz] = useState<QuizFormadorView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +28,7 @@ export default function QuizEditorPage() {
       setQuiz(await assessmentsApi.getQuizForFormador(params.id));
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'Error al cargar el quiz');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('quizPage.loadError'));
     }
   }
 
@@ -36,7 +40,7 @@ export default function QuizEditorPage() {
     return (
       <div className="space-y-4">
         <Button asChild variant="ghost" className="self-start">
-          <Link href="/formador/cursos">← Volver a mis cursos</Link>
+          <Link href="/formador/cursos">{t('quizPage.backToCourses')}</Link>
         </Button>
         <div
           role="alert"
@@ -60,7 +64,7 @@ export default function QuizEditorPage() {
   return (
     <div className="space-y-4">
       <Button asChild variant="ghost" className="self-start">
-        <Link href="/formador/cursos">← Volver a mis cursos</Link>
+        <Link href="/formador/cursos">{t('quizPage.backToCourses')}</Link>
       </Button>
       <QuizEditor initial={quiz} onChange={reload} />
     </div>

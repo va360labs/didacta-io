@@ -7,10 +7,13 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
 import { assessmentsApi, type AttemptSummary } from '@/modules/assessments';
 
 interface PendingAttempt extends AttemptSummary {
@@ -18,24 +21,26 @@ interface PendingAttempt extends AttemptSummary {
   answers: { id: string; questionId: string }[];
 }
 
-function formatRelative(iso: string): string {
-  try {
-    const d = new Date(iso);
-    const now = Date.now();
-    const diffMs = now - d.getTime();
-    const days = Math.floor(diffMs / 86_400_000);
-    if (days < 1) return 'hoy';
-    if (days === 1) return 'ayer';
-    if (days < 7) return `hace ${days} días`;
-    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
-  } catch {
-    return iso;
-  }
-}
-
 export default function CorreccionesPage() {
+  const t = useTranslations('formadorAula');
+  const tErrors = useTranslations('errors');
   const [pending, setPending] = useState<PendingAttempt[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  function formatRelative(iso: string): string {
+    try {
+      const d = new Date(iso);
+      const now = Date.now();
+      const diffMs = now - d.getTime();
+      const days = Math.floor(diffMs / 86_400_000);
+      if (days < 1) return t('correcciones.today');
+      if (days === 1) return t('correcciones.yesterday');
+      if (days < 7) return t('correcciones.daysAgo', { days });
+      return formatDate(d, { day: '2-digit', month: 'short' });
+    } catch {
+      return iso;
+    }
+  }
 
   async function reload() {
     try {
@@ -43,9 +48,7 @@ export default function CorreccionesPage() {
       setError(null);
     } catch (e) {
       setError(
-        e instanceof ApiHttpError
-          ? e.message
-          : 'No pudimos cargar la lista. Prueba refrescar la página.',
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('correcciones.loadError'),
       );
     }
   }
@@ -57,11 +60,10 @@ export default function CorreccionesPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Correcciones pendientes</h1>
-        <p className="mt-1 max-w-3xl text-text-muted">
-          Intentos esperando tu corrección. Tras calificar, se emite el resultado y la lección queda
-          completada si el alumno aprobó.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">
+          {t('correcciones.title')}
+        </h1>
+        <p className="mt-1 max-w-3xl text-text-muted">{t('correcciones.intro')}</p>
       </header>
 
       {error ? (
@@ -91,11 +93,8 @@ export default function CorreccionesPage() {
             >
               <Icon name="check" size={36} />
             </div>
-            <h3 className="font-display text-xl font-semibold">Estás al día</h3>
-            <p className="max-w-md text-text-muted">
-              No hay intentos pendientes de corrección. Te avisaremos cuando algún alumno envíe un
-              quiz con respuestas abiertas.
-            </p>
+            <h3 className="font-display text-xl font-semibold">{t('correcciones.emptyTitle')}</h3>
+            <p className="max-w-md text-text-muted">{t('correcciones.emptyHint')}</p>
           </CardContent>
         </Card>
       ) : (
@@ -113,17 +112,17 @@ export default function CorreccionesPage() {
                         {p.quiz.title}
                       </h3>
                       <p className="text-sm text-text-muted">
-                        {p.answers.length} respuesta{p.answers.length === 1 ? '' : 's'} para
-                        corregir
+                        {t('correcciones.answersToGrade', { count: p.answers.length })}
                       </p>
                       <p className="text-xs text-text-subtle tabular-nums">
-                        Enviado{' '}
-                        {p.submittedAt
-                          ? formatRelative(p.submittedAt)
-                          : 'hace un tiempo desconocido'}
+                        {t('correcciones.sentAt', {
+                          when: p.submittedAt
+                            ? formatRelative(p.submittedAt)
+                            : t('correcciones.unknownTime'),
+                        })}
                       </p>
                     </div>
-                    <Badge variant="warning">Pendiente</Badge>
+                    <Badge variant="warning">{t('correcciones.pendingBadge')}</Badge>
                   </CardContent>
                 </Card>
               </Link>

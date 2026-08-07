@@ -6,6 +6,7 @@
  */
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon, type IconName } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import {
   assessmentsApi,
   type FormadorQuestion,
@@ -23,23 +25,14 @@ import {
   type QuizStatus,
 } from '@/modules/assessments';
 
-const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
-  { value: 'SINGLE_CHOICE', label: 'Opción única' },
-  { value: 'MULTIPLE_CHOICE', label: 'Opciones múltiples' },
-  { value: 'TRUE_FALSE', label: 'Verdadero / Falso' },
-  { value: 'FILL_IN_BLANK', label: 'Rellenar el hueco' },
-  { value: 'SHORT_ANSWER', label: 'Respuesta corta (corrección manual)' },
-  { value: 'LONG_ANSWER', label: 'Respuesta larga (corrección manual)' },
+const QUESTION_TYPES: QuestionType[] = [
+  'SINGLE_CHOICE',
+  'MULTIPLE_CHOICE',
+  'TRUE_FALSE',
+  'FILL_IN_BLANK',
+  'SHORT_ANSWER',
+  'LONG_ANSWER',
 ];
-
-const QTYPE_LABEL: Record<QuestionType, string> = {
-  SINGLE_CHOICE: 'Opción única',
-  MULTIPLE_CHOICE: 'Opciones múltiples',
-  TRUE_FALSE: 'V/F',
-  FILL_IN_BLANK: 'Rellenar hueco',
-  SHORT_ANSWER: 'Respuesta corta',
-  LONG_ANSWER: 'Respuesta larga',
-};
 
 const QTYPE_ICON: Record<QuestionType, IconName> = {
   SINGLE_CHOICE: 'circle',
@@ -56,12 +49,6 @@ const STATUS_VARIANT: Record<QuizStatus, 'success' | 'warning' | 'muted'> = {
   ARCHIVED: 'muted',
 };
 
-const STATUS_LABEL: Record<QuizStatus, string> = {
-  PUBLISHED: 'Publicado',
-  DRAFT: 'Borrador',
-  ARCHIVED: 'Archivado',
-};
-
 interface DraftOption {
   label: string;
   isCorrect: boolean;
@@ -74,6 +61,8 @@ export function QuizEditor({
   initial: QuizFormadorView;
   onChange: () => Promise<void>;
 }) {
+  const t = useTranslations('formadorAula');
+  const tErrors = useTranslations('errors');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -84,7 +73,9 @@ export function QuizEditor({
       await action();
       await onChange();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'Error inesperado');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('quizEditor.unexpectedError'),
+      );
     } finally {
       setPending(false);
     }
@@ -111,7 +102,7 @@ export function QuizEditor({
   }
 
   async function handleDeleteQuestion(qid: string) {
-    if (!confirm('¿Eliminar esta pregunta? La acción no se puede deshacer.')) return;
+    if (!confirm(t('quizEditor.confirmDeleteQuestion'))) return;
     await withRefresh(() => assessmentsApi.deleteQuestion(initial.id, qid));
   }
 
@@ -131,18 +122,18 @@ export function QuizEditor({
             <div className="min-w-0 flex-1">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Badge variant={STATUS_VARIANT[initial.status]} dot>
-                  {STATUS_LABEL[initial.status]}
+                  {t(`quizStatus.${initial.status}`)}
                 </Badge>
                 <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-semibold text-white">
-                  Quiz
+                  {t('quizEditor.quizBadge')}
                 </span>
                 {initial.lessonId ? (
                   <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-semibold text-white">
-                    Vinculado a lección
+                    {t('quizEditor.linkedToLesson')}
                   </span>
                 ) : (
                   <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-medium text-white/70">
-                    Sin lección vinculada
+                    {t('quizEditor.noLinkedLesson')}
                   </span>
                 )}
               </div>
@@ -158,7 +149,7 @@ export function QuizEditor({
             {initial.status === 'DRAFT' ? (
               <Button onClick={handlePublish} disabled={pending || initial.questions.length === 0}>
                 <Icon name="check" size={16} />
-                Publicar quiz
+                {t('quizEditor.publishQuiz')}
               </Button>
             ) : null}
           </div>
@@ -171,20 +162,20 @@ export function QuizEditor({
               {initial.questions.length}
             </p>
             <p className="text-xs font-medium text-text-muted">
-              {initial.questions.length === 1 ? 'pregunta' : 'preguntas'}
+              {t('quizEditor.questionsMetric', { count: initial.questions.length })}
             </p>
           </div>
           <div className="p-4 text-center">
             <p className="font-display text-2xl font-bold tabular-nums text-text">{totalPoints}</p>
             <p className="text-xs font-medium text-text-muted">
-              {totalPoints === 1 ? 'punto' : 'puntos totales'}
+              {t('quizEditor.pointsMetric', { count: totalPoints })}
             </p>
           </div>
           <div className="p-4 text-center">
             <p className="font-display text-2xl font-bold tabular-nums text-text">
               {initial.passThreshold}%
             </p>
-            <p className="text-xs font-medium text-text-muted">aprobación</p>
+            <p className="text-xs font-medium text-text-muted">{t('quizEditor.passMetric')}</p>
           </div>
         </div>
       </Card>
@@ -213,19 +204,19 @@ export function QuizEditor({
               <Icon name="cog" size={18} />
             </span>
             <div className="min-w-0">
-              <CardTitle className="text-base">Configuración</CardTitle>
-              <CardDescription>Umbral, intentos y comportamiento del quiz.</CardDescription>
+              <CardTitle className="text-base">{t('quizEditor.settingsTitle')}</CardTitle>
+              <CardDescription>{t('quizEditor.settingsDescription')}</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <form action={handleSaveSettings} className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="title">Título</Label>
+              <Label htmlFor="title">{t('quizEditor.titleLabel')}</Label>
               <Input id="title" name="title" defaultValue={initial.title} required />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="description">Descripción</Label>
+              <Label htmlFor="description">{t('quizEditor.descriptionLabel')}</Label>
               <Textarea
                 id="description"
                 name="description"
@@ -234,7 +225,7 @@ export function QuizEditor({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="passThreshold">Umbral de aprobación (%)</Label>
+              <Label htmlFor="passThreshold">{t('quizEditor.passThresholdLabel')}</Label>
               <Input
                 id="passThreshold"
                 name="passThreshold"
@@ -246,25 +237,25 @@ export function QuizEditor({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="maxAttempts">Máx. intentos</Label>
+              <Label htmlFor="maxAttempts">{t('quizEditor.maxAttemptsLabel')}</Label>
               <Input
                 id="maxAttempts"
                 name="maxAttempts"
                 type="number"
                 min={1}
                 defaultValue={initial.maxAttempts ?? ''}
-                placeholder="Sin límite"
+                placeholder={t('quizEditor.noLimitPlaceholder')}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="timeLimitMinutes">Límite de tiempo (min)</Label>
+              <Label htmlFor="timeLimitMinutes">{t('quizEditor.timeLimitLabel')}</Label>
               <Input
                 id="timeLimitMinutes"
                 name="timeLimitMinutes"
                 type="number"
                 min={1}
                 defaultValue={initial.timeLimitMinutes ?? ''}
-                placeholder="Sin límite"
+                placeholder={t('quizEditor.noLimitPlaceholder')}
               />
             </div>
             <div className="space-y-2 rounded-lg border border-border-soft bg-surface-2 p-3 sm:col-span-2">
@@ -275,8 +266,8 @@ export function QuizEditor({
                   defaultChecked={initial.shuffleQuestions}
                   className="h-4 w-4 rounded border-border-strong"
                 />
-                <span className="font-medium text-text">Barajar preguntas</span>
-                <span className="text-text-subtle">— cada alumno ve un orden distinto.</span>
+                <span className="font-medium text-text">{t('quizEditor.shuffleQuestions')}</span>
+                <span className="text-text-subtle">{t('quizEditor.shuffleQuestionsHint')}</span>
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -285,13 +276,13 @@ export function QuizEditor({
                   defaultChecked={initial.showFeedback}
                   className="h-4 w-4 rounded border-border-strong"
                 />
-                <span className="font-medium text-text">Mostrar feedback al alumno</span>
-                <span className="text-text-subtle">— al finalizar el intento.</span>
+                <span className="font-medium text-text">{t('quizEditor.showFeedback')}</span>
+                <span className="text-text-subtle">{t('quizEditor.showFeedbackHint')}</span>
               </label>
             </div>
             <div className="sm:col-span-2">
               <Button type="submit" size="sm" disabled={pending}>
-                {pending ? 'Guardando…' : 'Guardar configuración'}
+                {pending ? t('quizEditor.saving') : t('quizEditor.saveSettings')}
               </Button>
             </div>
           </form>
@@ -313,14 +304,13 @@ export function QuizEditor({
               <Icon name="help" size={18} />
             </span>
             <div className="min-w-0">
-              <CardTitle className="text-base">Preguntas</CardTitle>
+              <CardTitle className="text-base">{t('quizEditor.questionsTitle')}</CardTitle>
               <CardDescription>
-                {initial.questions.length}{' '}
-                {initial.questions.length === 1 ? 'pregunta' : 'preguntas'} · {totalPoints}{' '}
-                {totalPoints === 1 ? 'punto' : 'puntos'}.
-                {initial.questions.length === 0
-                  ? ' Para publicar el quiz necesitas al menos una pregunta.'
-                  : ''}
+                {t('quizEditor.questionsSummary', {
+                  questions: initial.questions.length,
+                  points: totalPoints,
+                })}
+                {initial.questions.length === 0 ? ` ${t('quizEditor.needOneQuestion')}` : ''}
               </CardDescription>
             </div>
           </div>
@@ -339,10 +329,10 @@ export function QuizEditor({
                 <Icon name="help" size={28} />
               </div>
               <h3 className="font-display text-lg font-semibold text-text">
-                Empieza añadiendo tu primera pregunta
+                {t('quizEditor.emptyTitle')}
               </h3>
               <p className="mx-auto mt-1 max-w-md text-sm text-text-muted">
-                Tipo de pregunta, enunciado y opciones. Puedes mezclar tipos en un mismo quiz.
+                {t('quizEditor.emptyHint')}
               </p>
             </div>
           ) : (
@@ -374,6 +364,7 @@ function QuestionRow({
   pending: boolean;
   onDelete: () => void;
 }) {
+  const t = useTranslations('formadorAula');
   const isOpen = question.type === 'SHORT_ANSWER' || question.type === 'LONG_ANSWER';
   const numberLabel = `${index + 1}`.padStart(2, '0');
 
@@ -394,10 +385,10 @@ function QuestionRow({
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <Badge variant="info" className="font-mono text-[10px] tracking-wider">
               <Icon name={QTYPE_ICON[question.type]} size={11} />
-              {QTYPE_LABEL[question.type]}
+              {t(`qtype.${question.type}`)}
             </Badge>
             <span className="text-xs tabular-nums text-text-muted">
-              {question.points} {question.points === 1 ? 'pt' : 'pts'}
+              {t('quizEditor.pointsShort', { points: question.points })}
             </span>
           </div>
           <p className="text-sm leading-snug text-text">{question.prompt}</p>
@@ -406,8 +397,8 @@ function QuestionRow({
           type="button"
           onClick={onDelete}
           disabled={pending}
-          aria-label="Eliminar pregunta"
-          title="Eliminar pregunta"
+          aria-label={t('quizEditor.deleteQuestion')}
+          title={t('quizEditor.deleteQuestion')}
           className="rounded p-1.5 text-text-disabled transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:opacity-50"
         >
           <Icon name="trash" size={16} />
@@ -418,10 +409,10 @@ function QuestionRow({
         {question.type === 'FILL_IN_BLANK' ? (
           <div className="space-y-1.5">
             <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-              Respuestas aceptadas
+              {t('quizEditor.acceptedAnswersTitle')}
             </p>
             {question.acceptedAnswers.length === 0 ? (
-              <p className="text-sm italic text-warning-700">Ninguna definida.</p>
+              <p className="text-sm italic text-warning-700">{t('quizEditor.noneDefined')}</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {question.acceptedAnswers.map((a, i) => (
@@ -444,7 +435,7 @@ function QuestionRow({
             }}
           >
             <Icon name="alert" size={14} />
-            <span>Pregunta abierta — corrección manual requerida.</span>
+            <span>{t('quizEditor.openQuestionNotice')}</span>
           </div>
         ) : (
           <ul className="space-y-1.5">
@@ -452,7 +443,7 @@ function QuestionRow({
               <li key={o.id} className="flex items-center gap-2.5 text-sm">
                 {o.isCorrect ? (
                   <span
-                    aria-label="correcta"
+                    aria-label={t('quizEditor.correctOption')}
                     className="grid h-5 w-5 shrink-0 place-items-center rounded-full"
                     style={{
                       background: 'var(--didacta-success-bg)',
@@ -463,7 +454,7 @@ function QuestionRow({
                   </span>
                 ) : (
                   <span
-                    aria-label="incorrecta"
+                    aria-label={t('quizEditor.incorrectOption')}
                     className="h-5 w-5 shrink-0 rounded-full border-2 border-border-strong bg-transparent"
                   />
                 )}
@@ -478,7 +469,8 @@ function QuestionRow({
           <p className="mt-3 flex items-start gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-text-muted">
             <Icon name="sparkles" size={12} className="mt-0.5 shrink-0 text-brand-500" />
             <span>
-              <strong className="font-semibold text-text">Feedback:</strong> {question.feedback}
+              <strong className="font-semibold text-text">{t('quizEditor.feedbackTitle')}</strong>{' '}
+              {question.feedback}
             </span>
           </p>
         ) : null}
@@ -496,6 +488,8 @@ function NewQuestionForm({
   pending: boolean;
   onAdded: () => Promise<void>;
 }) {
+  const t = useTranslations('formadorAula');
+  const tErrors = useTranslations('errors');
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<QuestionType>('SINGLE_CHOICE');
   const [prompt, setPrompt] = useState('');
@@ -513,8 +507,8 @@ function NewQuestionForm({
     setType(next);
     if (next === 'TRUE_FALSE') {
       setOptions([
-        { label: 'Verdadero', isCorrect: false },
-        { label: 'Falso', isCorrect: false },
+        { label: t('quizEditor.trueLabel'), isCorrect: false },
+        { label: t('quizEditor.falseLabel'), isCorrect: false },
       ]);
     }
   }
@@ -575,8 +569,8 @@ function NewQuestionForm({
       setOptions(
         type === 'TRUE_FALSE'
           ? [
-              { label: 'Verdadero', isCorrect: false },
-              { label: 'Falso', isCorrect: false },
+              { label: t('quizEditor.trueLabel'), isCorrect: false },
+              { label: t('quizEditor.falseLabel'), isCorrect: false },
             ]
           : [
               { label: '', isCorrect: false },
@@ -586,7 +580,9 @@ function NewQuestionForm({
       setOpen(false);
       await onAdded();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'Error al añadir');
+      setError(
+        err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('quizEditor.addError'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -600,7 +596,7 @@ function NewQuestionForm({
         className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-strong bg-surface-2 px-4 py-4 text-sm font-semibold text-text-muted transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
       >
         <Icon name="plus" size={18} />
-        Añadir pregunta
+        {t('quizEditor.addQuestion')}
       </button>
     );
   }
@@ -614,26 +610,26 @@ function NewQuestionForm({
     >
       <p className="flex items-center gap-2 text-sm font-semibold text-text">
         <Icon name="plus" size={16} />
-        Nueva pregunta
+        {t('quizEditor.newQuestion')}
       </p>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="qtype">Tipo de pregunta</Label>
+          <Label htmlFor="qtype">{t('quizEditor.questionTypeLabel')}</Label>
           <Select
             id="qtype"
             value={type}
             onChange={(e) => setType_(e.target.value as QuestionType)}
           >
-            {QUESTION_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
+            {QUESTION_TYPES.map((value) => (
+              <option key={value} value={value}>
+                {t(`qtypeOption.${value}`)}
               </option>
             ))}
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="qpoints">Puntos</Label>
+          <Label htmlFor="qpoints">{t('quizEditor.pointsLabel')}</Label>
           <Input
             id="qpoints"
             type="number"
@@ -646,33 +642,32 @@ function NewQuestionForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="qprompt">Enunciado</Label>
+        <Label htmlFor="qprompt">{t('quizEditor.promptLabel')}</Label>
         <Textarea
           id="qprompt"
           rows={3}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           required
-          placeholder="¿Cuál es la capital de Francia?"
+          placeholder={t('quizEditor.promptPlaceholder')}
         />
       </div>
 
       {type === 'FILL_IN_BLANK' ? (
         <div className="space-y-1.5">
-          <Label htmlFor="qaccepted">Respuestas aceptadas (una por línea)</Label>
+          <Label htmlFor="qaccepted">{t('quizEditor.acceptedAnswersLabel')}</Label>
           <Textarea
             id="qaccepted"
             rows={3}
             value={acceptedAnswersText}
             onChange={(e) => setAcceptedAnswersText(e.target.value)}
-            placeholder={'París\nParis\nFRANCIA, capital'}
+            placeholder={t('quizEditor.acceptedAnswersPlaceholder')}
             required
             className="font-mono text-sm"
           />
           <p className="flex items-start gap-1.5 text-xs text-text-subtle">
             <Icon name="sparkles" size={12} className="mt-0.5 shrink-0 text-brand-500" />
-            La comparación es insensible a mayúsculas, acentos y espaciado: "Paris" coincidirá con
-            "PARÍS".
+            {t('quizEditor.acceptedAnswersHint')}
           </p>
         </div>
       ) : isOpenType ? (
@@ -685,15 +680,16 @@ function NewQuestionForm({
         >
           <Icon name="alert" size={14} className="mt-0.5 shrink-0" />
           <p>
-            Este tipo no se auto-corrige. Cuando un alumno envíe el quiz, el intento quedará en
-            <strong> PENDING_REVIEW</strong> hasta que lo corrijas manualmente desde el panel de
-            pendientes (<code>/formador/correcciones</code>).
+            {t.rich('quizEditor.openTypeWarning', {
+              strong: (chunks) => <strong>{chunks}</strong>,
+              code: (chunks) => <code>{chunks}</code>,
+            })}
           </p>
         </div>
       ) : (
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-            Opciones (marca las correctas)
+            {t('quizEditor.optionsTitle')}
           </p>
           {options.map((opt, idx) => (
             <div
@@ -710,12 +706,12 @@ function NewQuestionForm({
                 checked={opt.isCorrect}
                 onChange={() => updateOption(idx, { isCorrect: !opt.isCorrect })}
                 className="h-4 w-4"
-                aria-label={`Marcar opción ${idx + 1} como correcta`}
+                aria-label={t('quizEditor.markOptionCorrect', { number: idx + 1 })}
               />
               <Input
                 value={opt.label}
                 onChange={(e) => updateOption(idx, { label: e.target.value })}
-                placeholder={`Opción ${idx + 1}`}
+                placeholder={t('quizEditor.optionPlaceholder', { number: idx + 1 })}
                 required
                 disabled={type === 'TRUE_FALSE'}
                 className="border-0 bg-transparent shadow-none focus-visible:ring-1"
@@ -724,7 +720,7 @@ function NewQuestionForm({
                 <button
                   type="button"
                   onClick={() => removeOption(idx)}
-                  aria-label={`Quitar opción ${idx + 1}`}
+                  aria-label={t('quizEditor.removeOption', { number: idx + 1 })}
                   className="rounded p-1 text-text-disabled hover:bg-danger-50 hover:text-danger-700"
                 >
                   <Icon name="trash" size={14} />
@@ -735,19 +731,19 @@ function NewQuestionForm({
           {type !== 'TRUE_FALSE' && options.length < 10 ? (
             <Button type="button" variant="ghost" size="sm" onClick={addOption}>
               <Icon name="plus" size={14} />
-              Añadir opción
+              {t('quizEditor.addOption')}
             </Button>
           ) : null}
         </div>
       )}
 
       <div className="space-y-1.5">
-        <Label htmlFor="qfeedback">Feedback (opcional)</Label>
+        <Label htmlFor="qfeedback">{t('quizEditor.feedbackLabel')}</Label>
         <Input
           id="qfeedback"
           value={feedback}
           onChange={(e) => setFeedback(e.target.value)}
-          placeholder="Pista o explicación que verá el alumno tras responder"
+          placeholder={t('quizEditor.feedbackPlaceholder')}
         />
       </div>
 
@@ -762,7 +758,7 @@ function NewQuestionForm({
 
       <div className="flex items-center gap-2 border-t border-brand-200 pt-3">
         <Button type="submit" size="sm" disabled={submitting || pending}>
-          {submitting ? 'Añadiendo…' : 'Añadir pregunta'}
+          {submitting ? t('quizEditor.adding') : t('quizEditor.addQuestion')}
         </Button>
         <Button
           type="button"
@@ -771,7 +767,7 @@ function NewQuestionForm({
           onClick={() => setOpen(false)}
           disabled={submitting}
         >
-          Cancelar
+          {t('quizEditor.cancel')}
         </Button>
       </div>
     </form>

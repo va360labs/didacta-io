@@ -7,6 +7,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { coursesApi, type Course, type CourseDetail } from '@/lib/courses';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
+import { getBrowserTimeZone } from '@/lib/i18n/user-prefs';
 import { zoomLiveApi, type SessionStatus, type ZoomSession } from '@/modules/zoom-live';
 import {
   COMMON_TIMEZONES,
@@ -34,16 +38,9 @@ const STATUS_VARIANT: Record<SessionStatus, 'success' | 'warning' | 'muted' | 'd
   CANCELLED: 'danger',
 };
 
-const STATUS_LABEL: Record<SessionStatus, string> = {
-  SCHEDULED: 'Programada',
-  STARTED: 'En vivo',
-  ENDED: 'Finalizada',
-  CANCELLED: 'Cancelada',
-};
-
 function formatStart(iso: string, tz: string): string {
   try {
-    return new Date(iso).toLocaleString('es-ES', {
+    return formatDateTime(iso, {
       timeZone: tz,
       day: '2-digit',
       month: 'short',
@@ -57,6 +54,8 @@ function formatStart(iso: string, tz: string): string {
 }
 
 export default function AulaVirtualPage() {
+  const t = useTranslations('formadorAula');
+  const tErrors = useTranslations('errors');
   const [sessions, setSessions] = useState<ZoomSession[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -94,7 +93,7 @@ export default function AulaVirtualPage() {
       setError(null);
       setSessions(await zoomLiveApi.list());
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las sesiones.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('aula.loadError'));
     }
   }
 
@@ -103,12 +102,12 @@ export default function AulaVirtualPage() {
   }, []);
 
   async function handleCancel(id: string) {
-    if (!confirm('¿Cancelar esta sesión? Los alumnos no podrán unirse.')) return;
+    if (!confirm(t('aula.confirmCancel'))) return;
     try {
       await zoomLiveApi.cancel(id);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cancelar la sesión.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('aula.cancelError'));
     }
   }
 
@@ -116,16 +115,12 @@ export default function AulaVirtualPage() {
     <section className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Aula virtual</h1>
-          <p className="mt-1 max-w-3xl text-text-muted">
-            Clases en directo de tu organización. Cada sesión se crea en Zoom con las credenciales
-            S2S del tenant (Admin → Configuración → Aula virtual); comparte el enlace de inscripción
-            para que los miembros se apunten — solo los inscritos ven el link de Zoom.
-          </p>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{t('aula.title')}</h1>
+          <p className="mt-1 max-w-3xl text-text-muted">{t('aula.intro')}</p>
         </div>
         <Button type="button" onClick={openCreate}>
           <Icon name="plus" size={16} />
-          {showForm && !editing ? 'Cerrar' : 'Nueva sesión'}
+          {showForm && !editing ? t('aula.close') : t('aula.newSession')}
         </Button>
       </header>
 
@@ -170,11 +165,8 @@ export default function AulaVirtualPage() {
             >
               <Icon name="calendar" size={40} />
             </div>
-            <h3 className="font-display text-2xl font-semibold">Sin sesiones todavía</h3>
-            <p className="max-w-md text-text-muted">
-              Programa tu primera sesión Zoom desde el botón de arriba. Puedes vincularla a un curso
-              o dejarla como sesión libre del tenant.
-            </p>
+            <h3 className="font-display text-2xl font-semibold">{t('aula.emptyTitle')}</h3>
+            <p className="max-w-md text-text-muted">{t('aula.emptyHint')}</p>
           </CardContent>
         </Card>
       ) : (
@@ -198,13 +190,17 @@ export default function AulaVirtualPage() {
                       {s.topic}
                     </h3>
                     <Badge variant={STATUS_VARIANT[s.status]} dot>
-                      {STATUS_LABEL[s.status]}
+                      {t(`sessionStatus.${s.status}`)}
                     </Badge>
                   </div>
                   <p className="text-sm text-text-muted">
-                    <span className="tabular-nums">{formatStart(s.startTime, s.timezone)}</span> ·{' '}
-                    {s.durationMinutes} min · host {s.hostEmail} ·{' '}
-                    {s.registeredCount === 1 ? '1 inscrito' : `${s.registeredCount} inscritos`}
+                    {t.rich('aula.sessionMeta', {
+                      num: (chunks) => <span className="tabular-nums">{chunks}</span>,
+                      start: formatStart(s.startTime, s.timezone),
+                      minutes: s.durationMinutes,
+                      email: s.hostEmail,
+                      registered: s.registeredCount,
+                    })}
                   </p>
                   {s.description ? (
                     <p className="line-clamp-2 text-xs text-text-subtle">{s.description}</p>
@@ -215,14 +211,14 @@ export default function AulaVirtualPage() {
                     <Button asChild size="sm">
                       <Link href={s.startUrl as never} target="_blank">
                         <Icon name="play" size={13} />
-                        Iniciar
+                        {t('aula.start')}
                       </Link>
                     </Button>
                   ) : null}
                   {s.joinUrl && s.status !== 'CANCELLED' && s.status !== 'ENDED' ? (
                     <Button asChild size="sm" variant="secondary">
                       <Link href={s.joinUrl as never} target="_blank">
-                        Unirse
+                        {t('aula.join')}
                       </Link>
                     </Button>
                   ) : null}
@@ -237,7 +233,7 @@ export default function AulaVirtualPage() {
                       data-testid={`editar-clase-${s.id}`}
                     >
                       <Icon name="edit" size={13} />
-                      Editar
+                      {t('aula.edit')}
                     </Button>
                   ) : null}
                   {s.status !== 'CANCELLED' ? (
@@ -248,13 +244,13 @@ export default function AulaVirtualPage() {
                       onClick={() => handleCopyLink(s.id)}
                     >
                       <Icon name="link" size={13} />
-                      {copiedId === s.id ? 'Copiado' : 'Copiar enlace'}
+                      {copiedId === s.id ? t('aula.copied') : t('aula.copyLink')}
                     </Button>
                   ) : null}
                   <Button asChild size="sm" variant="ghost">
                     <Link href={`/clase/${s.id}`}>
                       <Icon name="users" size={13} />
-                      Ver clase
+                      {t('aula.viewClass')}
                     </Link>
                   </Button>
                   {s.status === 'SCHEDULED' ? (
@@ -265,7 +261,7 @@ export default function AulaVirtualPage() {
                       onClick={() => handleCancel(s.id)}
                     >
                       <Icon name="trash" size={13} />
-                      Cancelar
+                      {t('aula.cancel')}
                     </Button>
                   ) : null}
                 </div>
@@ -297,6 +293,8 @@ function SessionForm({
   onSaved: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const t = useTranslations('formadorAula');
+  const tErrors = useTranslations('errors');
   const isEdit = editing !== null;
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -306,8 +304,7 @@ function SessionForm({
   const [lessonId, setLessonId] = useState<string>('');
   const authSession = authStorage.getSession();
   const defaultEmail = authSession?.user.email ?? '';
-  const tzGuess =
-    typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC';
+  const tzGuess = getBrowserTimeZone() ?? 'UTC';
   const [timezone, setTimezone] = useState(editing?.timezone ?? tzGuess);
   // La zona del navegador va primero si no está ya en la lista, para que el
   // formador nunca tenga que buscar la suya.
@@ -366,7 +363,7 @@ function SessionForm({
     const form = new FormData(e.target as HTMLFormElement);
     const startTimeRaw = String(form.get('startTime') ?? '');
     if (!startTimeRaw) {
-      setError('Tienes que indicar fecha y hora.');
+      setError(t('sessionForm.missingStartTime'));
       return;
     }
     setPending(true);
@@ -403,10 +400,10 @@ function SessionForm({
     } catch (e) {
       setError(
         e instanceof ApiHttpError
-          ? e.message
+          ? apiErrorMessage(e, tErrors)
           : editing
-            ? 'No pudimos guardar los cambios.'
-            : 'No pudimos crear la sesión.',
+            ? t('sessionForm.updateError')
+            : t('sessionForm.createError'),
       );
     } finally {
       setPending(false);
@@ -428,11 +425,11 @@ function SessionForm({
             <Icon name={isEdit ? 'edit' : 'plus'} size={18} />
           </span>
           <div className="min-w-0">
-            <CardTitle>{isEdit ? 'Editar clase en directo' : 'Nueva sesión Zoom'}</CardTitle>
+            <CardTitle>
+              {isEdit ? t('sessionForm.editTitle') : t('sessionForm.createTitle')}
+            </CardTitle>
             <CardDescription>
-              {isEdit
-                ? 'Los cambios se aplican también a la reunión de Zoom. El host, el curso y la lección no se pueden cambiar: para eso hay que crear otra clase.'
-                : 'Programa una sesión síncrona. Si la vinculas a un curso, los alumnos matriculados verán el botón "Unirse" en su detalle.'}
+              {isEdit ? t('sessionForm.editDescription') : t('sessionForm.createDescription')}
             </CardDescription>
           </div>
         </div>
@@ -441,14 +438,14 @@ function SessionForm({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="topic">
-              Título <span className="text-danger-700">*</span>
+              {t('sessionForm.topicLabel')} <span className="text-danger-700">*</span>
             </Label>
             <Input
               id="topic"
               name="topic"
               required
               maxLength={200}
-              placeholder="Ej: Q&A semanal del curso de n8n"
+              placeholder={t('sessionForm.topicPlaceholder')}
               defaultValue={editing?.topic ?? ''}
               autoFocus
             />
@@ -456,7 +453,7 @@ function SessionForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="startTime">
-                Fecha y hora <span className="text-danger-700">*</span>
+                {t('sessionForm.startTimeLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input
                 id="startTime"
@@ -470,7 +467,7 @@ function SessionForm({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="durationMinutes">
-                Duración (min) <span className="text-danger-700">*</span>
+                {t('sessionForm.durationLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input
                 id="durationMinutes"
@@ -486,16 +483,15 @@ function SessionForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="hostEmail">
-                Email del host {isEdit ? null : <span className="text-danger-700">*</span>}
+                {t('sessionForm.hostEmailLabel')}{' '}
+                {isEdit ? null : <span className="text-danger-700">*</span>}
               </Label>
               {isEdit ? (
                 <>
                   <p className="rounded-lg border border-border-soft bg-bg-subtle px-3 py-2 text-sm text-text-muted">
                     {editing.hostEmail}
                   </p>
-                  <p className="text-xs text-text-subtle">
-                    El host queda fijo desde la creación: la reunión ya existe a su nombre en Zoom.
-                  </p>
+                  <p className="text-xs text-text-subtle">{t('sessionForm.hostFixedNote')}</p>
                 </>
               ) : (
                 <>
@@ -506,15 +502,12 @@ function SessionForm({
                     defaultValue={defaultEmail}
                     required
                   />
-                  <p className="text-xs text-text-subtle">
-                    Puede ser otra persona del equipo, pero ese email tiene que tener usuario en
-                    vuestra cuenta de Zoom: la reunión se crea a su nombre.
-                  </p>
+                  <p className="text-xs text-text-subtle">{t('sessionForm.hostCreateNote')}</p>
                 </>
               )}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="timezone">Zona horaria</Label>
+              <Label htmlFor="timezone">{t('sessionForm.timezoneLabel')}</Label>
               <Select
                 id="timezone"
                 name="timezone"
@@ -528,22 +521,20 @@ function SessionForm({
                   </option>
                 ))}
               </Select>
-              <p className="text-xs text-text-subtle">
-                La hora que escribas se interpreta en esta zona, no en la de tu ordenador.
-              </p>
+              <p className="text-xs text-text-subtle">{t('sessionForm.timezoneHint')}</p>
             </div>
           </div>
           {isEdit ? null : (
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="courseId">Curso (opcional)</Label>
+                <Label htmlFor="courseId">{t('sessionForm.courseLabel')}</Label>
                 <Select
                   id="courseId"
                   name="courseId"
                   value={courseId}
                   onChange={(e) => setCourseId(e.target.value)}
                 >
-                  <option value="">Sesión libre (sin curso)</option>
+                  <option value="">{t('sessionForm.freeSessionOption')}</option>
                   {courses.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.title}
@@ -552,7 +543,7 @@ function SessionForm({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="lessonId">Lección (opcional)</Label>
+                <Label htmlFor="lessonId">{t('sessionForm.lessonLabel')}</Label>
                 <Select
                   id="lessonId"
                   name="lessonId"
@@ -560,22 +551,19 @@ function SessionForm({
                   onChange={(e) => setLessonId(e.target.value)}
                   disabled={!courseId || lessonOptions.length === 0}
                 >
-                  <option value="">— Sin vincular a una lección —</option>
+                  <option value="">{t('sessionForm.noLessonOption')}</option>
                   {lessonOptions.map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.label}
                     </option>
                   ))}
                 </Select>
-                <p className="text-xs text-text-subtle">
-                  Si seleccionas una lección, la sesión aparece en su detalle para los alumnos
-                  matriculados.
-                </p>
+                <p className="text-xs text-text-subtle">{t('sessionForm.lessonHint')}</p>
               </div>
             </div>
           )}
           <div className="space-y-1.5">
-            <Label htmlFor="description">Agenda / notas (opcional)</Label>
+            <Label htmlFor="description">{t('sessionForm.agendaLabel')}</Label>
             <Textarea
               id="description"
               name="description"
@@ -599,12 +587,10 @@ function SessionForm({
             />
             <div className="min-w-0">
               <Label htmlFor="announce" className="cursor-pointer">
-                {isEdit ? 'Anunciar en la comunidad ahora' : 'Anunciar en la comunidad'}
+                {isEdit ? t('sessionForm.announceNow') : t('sessionForm.announce')}
               </Label>
               <p className="text-xs text-text-subtle">
-                {isEdit
-                  ? 'Publica la clase en el feed si todavía no lo estaba. Si ya la anunciaste, el post existente se actualiza solo con estos cambios — no se publica otro ni hace falta marcar nada.'
-                  : 'Publica la clase en el feed con una tarjeta desde la que los miembros pueden inscribirse sin salir de la comunidad. Desmárcalo si es una prueba.'}
+                {isEdit ? t('sessionForm.announceEditHint') : t('sessionForm.announceCreateHint')}
               </p>
             </div>
           </div>
@@ -620,10 +606,14 @@ function SessionForm({
 
           <div className="flex items-center gap-2 border-t border-border-soft pt-4">
             <Button type="submit" disabled={pending}>
-              {pending ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Crear sesión'}
+              {pending
+                ? t('sessionForm.saving')
+                : isEdit
+                  ? t('sessionForm.saveChanges')
+                  : t('sessionForm.createSession')}
             </Button>
             <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
-              Cancelar
+              {t('sessionForm.cancel')}
             </Button>
           </div>
         </form>

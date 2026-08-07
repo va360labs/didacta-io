@@ -7,12 +7,16 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { StatCard } from '@/components/stat-card';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formadorStatsApi, type FormadorStats } from '@/lib/formador-stats';
 
 export default function FormadorDashboardPage() {
+  const t = useTranslations('formadorAula');
+  const tErrors = useTranslations('errors');
   const [stats, setStats] = useState<FormadorStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,11 +26,7 @@ export default function FormadorDashboardPage() {
         setStats(await formadorStatsApi.get());
         setError(null);
       } catch (e) {
-        setError(
-          e instanceof ApiHttpError
-            ? e.message
-            : 'No pudimos cargar las stats. Prueba refrescar la página.',
-        );
+        setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('panel.loadError'));
       }
     })();
   }, []);
@@ -58,42 +58,38 @@ export default function FormadorDashboardPage() {
   return (
     <section className="space-y-8">
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Panel del formador</h1>
-        <p className="mt-1 text-text-muted">
-          Vista general de cursos, alumnos y correcciones pendientes en tu organización.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('panel.title')}</h1>
+        <p className="mt-1 text-text-muted">{t('panel.intro')}</p>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Cursos publicados"
+          label={t('panel.coursesPublished')}
           value={stats.coursesPublished}
-          hint={`${stats.coursesDraft} en borrador`}
+          hint={t('panel.coursesDraftHint', { count: stats.coursesDraft })}
           icon="book"
           tone="info"
           href="/formador/cursos"
         />
         <StatCard
-          label="Matriculaciones activas"
+          label={t('panel.activeEnrollments')}
           value={stats.totalActiveEnrollments}
-          hint={`${stats.totalCompletedEnrollments} completadas en total`}
+          hint={t('panel.completedEnrollmentsHint', { count: stats.totalCompletedEnrollments })}
           icon="users"
           tone="info"
         />
         <StatCard
-          label="Progreso promedio"
+          label={t('panel.averageProgress')}
           value={`${stats.averageProgressPercent}%`}
-          hint="del alumnado activo y finalizado"
+          hint={t('panel.averageProgressHint')}
           icon="trending"
           tone="success"
         />
         <StatCard
-          label="Correcciones pendientes"
+          label={t('panel.pendingGradings')}
           value={stats.pendingGradings}
           hint={
-            stats.pendingGradings > 0
-              ? 'respuestas abiertas por revisar'
-              : 'estás al día — sin pendientes'
+            stats.pendingGradings > 0 ? t('panel.pendingGradingsHint') : t('panel.upToDateHint')
           }
           icon="check"
           tone={stats.pendingGradings > 0 ? 'warn' : 'success'}
@@ -104,28 +100,28 @@ export default function FormadorDashboardPage() {
 
       <Card>
         <CardContent className="p-6">
-          <h2 className="font-display text-lg font-semibold mb-4">Atajos</h2>
+          <h2 className="font-display text-lg font-semibold mb-4">{t('panel.shortcuts')}</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             <ShortcutLink
               href="/formador/cursos"
-              label="Mis cursos"
-              hint="Crear, editar, publicar y archivar."
+              label={t('panel.myCourses')}
+              hint={t('panel.myCoursesHint')}
             />
             <ShortcutLink
               href="/formador/correcciones"
-              label="Correcciones pendientes"
-              hint="Revisar respuestas abiertas de quizzes."
+              label={t('panel.pendingGradings')}
+              hint={t('panel.pendingShortcutHint')}
               highlight={stats.pendingGradings > 0}
             />
             <ShortcutLink
               href="/formador/cursos/nuevo"
-              label="Crear curso nuevo"
-              hint="Empieza un curso desde cero."
+              label={t('panel.newCourse')}
+              hint={t('panel.newCourseHint')}
             />
             <ShortcutLink
               href="/cursos"
-              label="Ver el catálogo público"
-              hint="Verlo como lo ven los alumnos."
+              label={t('panel.publicCatalog')}
+              hint={t('panel.publicCatalogHint')}
             />
           </div>
         </CardContent>
