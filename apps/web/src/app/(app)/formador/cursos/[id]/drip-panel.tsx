@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import {
   learningApi,
   type DripSchedule,
@@ -31,6 +33,8 @@ import { authStorage } from '@/lib/auth-storage';
  * built-in (mod.learning) → vive en apps/web (no se sirve por ZIP).
  */
 export function DripPanel({ courseId }: { courseId: string }) {
+  const t = useTranslations('formadorCursos');
+  const tErrors = useTranslations('errors');
   const [schedules, setSchedules] = useState<DripSchedule[] | null>(null);
   const [groups, setGroups] = useState<Array<{ id: string; name: string }>>([]);
   const [tierNames, setTierNames] = useState<string[]>([]);
@@ -56,7 +60,7 @@ export function DripPanel({ courseId }: { courseId: string }) {
       setError(null);
       setSchedules(await learningApi.listDripSchedules(courseId));
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar el drip.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorLoadDrip'));
     }
   }
 
@@ -81,7 +85,7 @@ export function DripPanel({ courseId }: { courseId: string }) {
   async function add() {
     const audienceRef = (audienceKind === 'TIER' ? tierRef : groupRef).trim();
     if (!audienceRef) {
-      setError(audienceKind === 'TIER' ? 'Indica el nombre del tier.' : 'Elige un grupo.');
+      setError(audienceKind === 'TIER' ? t('errorTierRequired') : t('errorGroupRequired'));
       return;
     }
     setBusy(true);
@@ -98,7 +102,7 @@ export function DripPanel({ courseId }: { courseId: string }) {
       setGroupRef('');
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos crear el calendario.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorCreateSchedule'));
     } finally {
       setBusy(false);
     }
@@ -110,7 +114,7 @@ export function DripPanel({ courseId }: { courseId: string }) {
       await learningApi.updateDripSchedule(s.id, { isActive: !s.isActive });
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos actualizar.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorUpdate'));
     } finally {
       setBusy(false);
     }
@@ -136,39 +140,37 @@ export function DripPanel({ courseId }: { courseId: string }) {
       setEditId(null);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar los cambios.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorSaveChanges'));
     } finally {
       setBusy(false);
     }
   }
 
   async function remove(s: DripSchedule) {
-    if (!window.confirm('¿Eliminar este calendario de drip?')) return;
+    if (!window.confirm(t('confirmDeleteSchedule'))) return;
     setBusy(true);
     try {
       await learningApi.deleteDripSchedule(s.id);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorDelete'));
     } finally {
       setBusy(false);
     }
   }
 
   function audienceLabel(s: DripSchedule): string {
-    if (s.audienceKind === 'TIER') return `Tier: ${s.audienceRef}`;
+    if (s.audienceKind === 'TIER') return t('audienceTier', { name: s.audienceRef });
     const g = groups.find((x) => x.id === s.audienceRef);
-    return `Grupo: ${g?.name ?? s.audienceRef}`;
+    return t('audienceGroup', { name: g?.name ?? s.audienceRef });
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Liberación programada (drip)</CardTitle>
+        <CardTitle>{t('dripTitle')}</CardTitle>
         <CardDescription>
-          Libera las lecciones de forma escalonada según pasa el tiempo desde que cada alumno entra
-          al curso. Asigna un calendario a un <strong>tier</strong> (plan de suscripción) o a un{' '}
-          <strong>grupo de acceso</strong>. Si a un alumno le aplican varios, gana el más permisivo.
+          {t.rich('dripDescription', { strong: (chunks) => <strong>{chunks}</strong> })}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -181,26 +183,26 @@ export function DripPanel({ courseId }: { courseId: string }) {
         {/* Alta */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
-            <Label htmlFor="drip-audience">Audiencia</Label>
+            <Label htmlFor="drip-audience">{t('audienceLabel')}</Label>
             <Select
               id="drip-audience"
               value={audienceKind}
               onChange={(e) => setAudienceKind(e.target.value as DripAudienceKind)}
             >
-              <option value="TIER">Por tier</option>
-              <option value="GROUP">Por grupo de acceso</option>
+              <option value="TIER">{t('audienceByTier')}</option>
+              <option value="GROUP">{t('audienceByGroup')}</option>
             </Select>
           </div>
 
           {audienceKind === 'TIER' ? (
             <div>
-              <Label htmlFor="drip-tier">Tier</Label>
+              <Label htmlFor="drip-tier">{t('tierLabel')}</Label>
               <Input
                 id="drip-tier"
                 list="drip-tier-options"
                 value={tierRef}
                 onChange={(e) => setTierRef(e.target.value)}
-                placeholder="p.ej. Mensual 2026"
+                placeholder={t('tierPlaceholder')}
               />
               <datalist id="drip-tier-options">
                 {tierNames.map((n) => (
@@ -210,13 +212,13 @@ export function DripPanel({ courseId }: { courseId: string }) {
             </div>
           ) : (
             <div>
-              <Label htmlFor="drip-group">Grupo</Label>
+              <Label htmlFor="drip-group">{t('groupLabel')}</Label>
               <Select
                 id="drip-group"
                 value={groupRef}
                 onChange={(e) => setGroupRef(e.target.value)}
               >
-                <option value="">— Elige un grupo —</option>
+                <option value="">{t('groupNone')}</option>
                 {groups.map((g) => (
                   <option key={g.id} value={g.id}>
                     {g.name}
@@ -227,19 +229,19 @@ export function DripPanel({ courseId }: { courseId: string }) {
           )}
 
           <div>
-            <Label htmlFor="drip-unit">Libera por</Label>
+            <Label htmlFor="drip-unit">{t('unitLabel')}</Label>
             <Select
               id="drip-unit"
               value={unit}
               onChange={(e) => setUnit(e.target.value as DripUnit)}
             >
-              <option value="LESSON">Lección</option>
-              <option value="MODULE">Módulo / sección</option>
+              <option value="LESSON">{t('unitLesson')}</option>
+              <option value="MODULE">{t('unitModuleFull')}</option>
             </Select>
           </div>
 
           <div>
-            <Label htmlFor="drip-interval">Cada N días</Label>
+            <Label htmlFor="drip-interval">{t('intervalLabel')}</Label>
             <Input
               id="drip-interval"
               type="number"
@@ -250,7 +252,7 @@ export function DripPanel({ courseId }: { courseId: string }) {
           </div>
 
           <div>
-            <Label htmlFor="drip-offset">1ª unidad a los (días)</Label>
+            <Label htmlFor="drip-offset">{t('offsetLabel')}</Label>
             <Input
               id="drip-offset"
               type="number"
@@ -262,7 +264,7 @@ export function DripPanel({ courseId }: { courseId: string }) {
 
           <div className="flex items-end">
             <Button onClick={() => void add()} disabled={busy} className="w-full">
-              Añadir calendario
+              {t('addSchedule')}
             </Button>
           </div>
         </div>
@@ -272,9 +274,7 @@ export function DripPanel({ courseId }: { courseId: string }) {
           {schedules === null ? (
             <div className="skeleton h-16 w-full" />
           ) : schedules.length === 0 ? (
-            <p className="text-sm text-text-muted">
-              Sin drip: todas las lecciones están disponibles desde el inicio.
-            </p>
+            <p className="text-sm text-text-muted">{t('emptySchedules')}</p>
           ) : (
             schedules.map((s) => (
               <div
@@ -291,11 +291,11 @@ export function DripPanel({ courseId }: { courseId: string }) {
                       onChange={(e) => setEditUnit(e.target.value as DripUnit)}
                       className="w-32"
                     >
-                      <option value="LESSON">Lección</option>
-                      <option value="MODULE">Módulo</option>
+                      <option value="LESSON">{t('unitLesson')}</option>
+                      <option value="MODULE">{t('unitModuleShort')}</option>
                     </Select>
                     <label className="flex items-center gap-1">
-                      cada
+                      {t('everyWord')}
                       <Input
                         type="number"
                         min={1}
@@ -303,10 +303,10 @@ export function DripPanel({ courseId }: { courseId: string }) {
                         onChange={(e) => setEditInterval(Math.max(1, Number(e.target.value) || 1))}
                         className="w-16"
                       />
-                      día(s)
+                      {t('daysWord')}
                     </label>
                     <label className="flex items-center gap-1">
-                      offset
+                      {t('offsetWord')}
                       <Input
                         type="number"
                         min={0}
@@ -317,31 +317,36 @@ export function DripPanel({ courseId }: { courseId: string }) {
                     </label>
                     <div className="ml-auto flex items-center gap-2">
                       <Button onClick={() => void saveEdit()} disabled={busy}>
-                        Guardar
+                        {t('save')}
                       </Button>
                       <Button variant="ghost" onClick={() => setEditId(null)} disabled={busy}>
-                        Cancelar
+                        {t('cancel')}
                       </Button>
                     </div>
                   </>
                 ) : (
                   <>
                     <span className="text-text">
-                      1 {s.unit === 'MODULE' ? 'módulo' : 'lección'} cada{' '}
-                      <strong>{s.intervalDays}</strong> día(s)
-                      {s.startOffsetDays > 0 ? ` · empieza a los ${s.startOffsetDays}d` : ''}
+                      {t.rich('scheduleSummary', {
+                        strong: (chunks) => <strong>{chunks}</strong>,
+                        unit: s.unit === 'MODULE' ? t('unitModuleWord') : t('unitLessonWord'),
+                        interval: s.intervalDays,
+                      })}
+                      {s.startOffsetDays > 0
+                        ? ` · ${t('scheduleOffset', { days: s.startOffsetDays })}`
+                        : ''}
                     </span>
-                    {!s.isActive && <Badge variant="muted">Inactivo</Badge>}
+                    {!s.isActive && <Badge variant="muted">{t('inactive')}</Badge>}
                     <div className="ml-auto flex items-center gap-3">
                       <div className="flex items-center gap-1">
                         <Switch checked={s.isActive} onCheckedChange={() => void toggleActive(s)} />
-                        <span className="text-text-muted">Activo</span>
+                        <span className="text-text-muted">{t('activeLabel')}</span>
                       </div>
                       <Button variant="ghost" onClick={() => startEdit(s)} disabled={busy}>
-                        Editar
+                        {t('edit')}
                       </Button>
                       <Button variant="ghost" onClick={() => void remove(s)} disabled={busy}>
-                        Eliminar
+                        {t('delete')}
                       </Button>
                     </div>
                   </>

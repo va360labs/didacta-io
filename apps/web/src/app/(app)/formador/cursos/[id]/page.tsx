@@ -19,12 +19,16 @@ const CourseEditor = dynamic(() => import('./course-editor').then((m) => m.Cours
   loading: () => <div className="skeleton h-64 w-full" />,
 });
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { coursesApi, type CourseDetail } from '@/lib/courses';
 
 export default function CourseEditorPage() {
+  const t = useTranslations('formadorCursos');
+  const tErrors = useTranslations('errors');
   const params = useParams<{ id: string }>();
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +39,7 @@ export default function CourseEditorPage() {
       setCourse(await coursesApi.get(params.id));
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'Error al cargar el curso');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorLoadCourse'));
     }
   }
 
@@ -68,7 +72,7 @@ export default function CourseEditorPage() {
         <Button variant="secondary" asChild>
           <Link href={`/formador/cursos/${course.id}/alumnos` as never}>
             <Icon name="users" size={16} />
-            Ver alumnos
+            {t('viewStudents')}
           </Link>
         </Button>
       </div>

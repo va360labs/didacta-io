@@ -8,6 +8,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { CourseStatusBadge } from '@/components/course-status-badge';
 import { Icon } from '@/components/icon';
 import { NewCourseForm } from '@/components/new-course-form';
@@ -15,9 +16,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog } from '@/components/ui/dialog';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
 import { coursesApi, type Course } from '@/lib/courses';
 
 export default function FormadorCoursesPage() {
+  const t = useTranslations('formadorCursos');
+  const tErrors = useTranslations('errors');
   const router = useRouter();
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,11 +33,7 @@ export default function FormadorCoursesPage() {
       const data = await coursesApi.list();
       setCourses(data);
     } catch (e) {
-      setError(
-        e instanceof ApiHttpError
-          ? e.message
-          : 'No pudimos cargar tus cursos. Prueba refrescar la página.',
-      );
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorLoadCourses'));
     }
   }
 
@@ -49,22 +50,20 @@ export default function FormadorCoursesPage() {
     <section className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Mis cursos</h1>
-          <p className="mt-1 text-text-muted">
-            Cursos creados en tu organización: borradores, publicados y archivados.
-          </p>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{t('myCoursesTitle')}</h1>
+          <p className="mt-1 text-text-muted">{t('myCoursesSubtitle')}</p>
         </div>
         <Button type="button" onClick={() => setShowCreate(true)}>
           <Icon name="plus" size={16} />
-          Crear curso nuevo
+          {t('createCourse')}
         </Button>
       </header>
 
       <Dialog
         open={showCreate}
         onOpenChange={setShowCreate}
-        title="Nuevo curso"
-        description="El curso queda en estado borrador hasta que lo publiques. Tras crearlo te llevamos al builder para añadir secciones y lecciones."
+        title={t('newCourseTitle')}
+        description={t('newCourseDialogDescription')}
         maxWidthClass="max-w-2xl"
       >
         <NewCourseForm onCreated={handleCreated} onCancel={() => setShowCreate(false)} />
@@ -98,14 +97,11 @@ export default function FormadorCoursesPage() {
             >
               <Icon name="book" size={40} />
             </div>
-            <h3 className="font-display text-2xl font-semibold">Aún no tienes cursos</h3>
-            <p className="max-w-md text-text-muted">
-              Empieza creando tu primer curso. Vas a poder añadir secciones, lecciones, quizzes y
-              certificados después.
-            </p>
+            <h3 className="font-display text-2xl font-semibold">{t('noCoursesTitle')}</h3>
+            <p className="max-w-md text-text-muted">{t('noCoursesBody')}</p>
             <Button type="button" onClick={() => setShowCreate(true)} className="mt-2">
               <Icon name="plus" size={16} />
-              Crear mi primer curso
+              {t('createFirstCourse')}
             </Button>
           </CardContent>
         </Card>
@@ -125,7 +121,7 @@ export default function FormadorCoursesPage() {
                   }}
                 >
                   <div className="min-w-0">
-                    <p className="label-uppercase text-white/60">{c.category ?? 'Sin categoría'}</p>
+                    <p className="label-uppercase text-white/60">{c.category ?? t('noCategory')}</p>
                     <h3
                       className="mt-1 line-clamp-2 font-display text-lg font-bold leading-tight text-white"
                       style={{ letterSpacing: '-0.01em' }}
@@ -138,19 +134,20 @@ export default function FormadorCoursesPage() {
                 <CardContent className="space-y-3 p-5">
                   <p className="font-mono text-xs text-text-subtle">/{c.slug}</p>
                   <p className="line-clamp-2 text-sm leading-relaxed text-text-muted">
-                    {c.description ?? 'Sin descripción todavía.'}
+                    {c.description ?? t('noDescription')}
                   </p>
                   <div className="flex items-center justify-between border-t border-border-soft pt-3 text-xs text-text-subtle">
                     <span className="tabular-nums">
-                      Actualizado{' '}
-                      {new Date(c.updatedAt).toLocaleDateString('es-ES', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
+                      {t('updatedAt', {
+                        date: formatDate(c.updatedAt, {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        }),
                       })}
                     </span>
                     <span className="inline-flex items-center gap-1 font-semibold text-brand-600">
-                      Editar
+                      {t('edit')}
                       <Icon name="arrow-right" size={14} />
                     </span>
                   </div>
