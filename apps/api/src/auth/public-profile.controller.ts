@@ -70,7 +70,11 @@ export class PublicProfileController {
         createdAt: true,
       },
     });
-    if (!u) throw new NotFoundException('Usuario no encontrado.');
+    if (!u)
+      throw new NotFoundException({
+        message: 'Usuario no encontrado.',
+        code: 'AUTH_USER_NOT_FOUND',
+      });
     return u;
   }
 }

@@ -335,7 +335,10 @@ export class SamlService {
   async startFlow(tenantSlug: string): Promise<SamlAuthorizationParams> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant || tenant.status !== 'ACTIVE') {
-      throw new NotFoundException('Tenant no encontrado o inactivo.');
+      throw new NotFoundException({
+        message: 'Tenant no encontrado o inactivo.',
+        code: 'SSO_TENANT_NOT_FOUND',
+      });
     }
 
     // RLS F2: endpoint público — config + audit bajo el ALS del tenant.
@@ -350,7 +353,10 @@ export class SamlService {
   }): Promise<SamlAuthorizationParams> {
     const config = await this.getConfig(tenant.id);
     if (!config || !config.enabled) {
-      throw new NotFoundException('Este tenant no tiene SSO SAML habilitado.');
+      throw new NotFoundException({
+        message: 'Este tenant no tiene SSO SAML habilitado.',
+        code: 'SSO_SAML_NOT_ENABLED',
+      });
     }
 
     const relayState = b64url(randomBytes(RELAY_STATE_BYTES));
@@ -372,9 +378,10 @@ export class SamlService {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`SAML AuthnRequest build falló para ${config.idpEntityId}: ${msg}`);
-      throw new ServiceUnavailableException(
-        'No pudimos generar la solicitud SAML. Verifica la configuración del IdP.',
-      );
+      throw new ServiceUnavailableException({
+        message: 'No pudimos generar la solicitud SAML. Verifica la configuración del IdP.',
+        code: 'SSO_SAML_REQUEST_BUILD_FAILED',
+      });
     }
 
     const flow: SamlFlowState = {
@@ -410,18 +417,27 @@ export class SamlService {
     relayState?: string;
   }): Promise<SamlCallbackResult> {
     if (!params.samlResponse || !params.relayState) {
-      throw new BadRequestException('Faltan parámetros SAMLResponse / RelayState en el callback.');
+      throw new BadRequestException({
+        message: 'Faltan parámetros SAMLResponse / RelayState en el callback.',
+        code: 'SSO_SAML_CALLBACK_PARAMS_MISSING',
+      });
     }
 
     const flow = this.flowStore.get(params.relayState);
     if (!flow) {
-      throw new UnauthorizedException('RelayState desconocido o expirado.');
+      throw new UnauthorizedException({
+        message: 'RelayState desconocido o expirado.',
+        code: 'SSO_SAML_RELAY_STATE_UNKNOWN',
+      });
     }
     // Defensa replay: el flow se consume una sola vez.
     this.flowStore.delete(params.relayState);
 
     if (Date.now() > flow.expiresAt) {
-      throw new UnauthorizedException('RelayState expirado.');
+      throw new UnauthorizedException({
+        message: 'RelayState expirado.',
+        code: 'SSO_SAML_RELAY_STATE_EXPIRED',
+      });
     }
 
     // RLS F2: endpoint público — el cierre del flow (config, upsert de user,
@@ -443,12 +459,16 @@ export class SamlService {
   ): Promise<SamlCallbackResult> {
     const config = await this.getConfig(flow.tenantId);
     if (!config || !config.enabled) {
-      throw new UnauthorizedException(
-        'La config SAML del tenant fue deshabilitada durante el flow.',
-      );
+      throw new UnauthorizedException({
+        message: 'La config SAML del tenant fue deshabilitada durante el flow.',
+        code: 'SSO_SAML_CONFIG_DISABLED_MID_FLOW',
+      });
     }
     if (config.idpEntityId !== flow.idpEntityId) {
-      throw new UnauthorizedException('La config SAML cambió durante el flow. Reintenta el login.');
+      throw new UnauthorizedException({
+        message: 'La config SAML cambió durante el flow. Reintenta el login.',
+        code: 'SSO_SAML_CONFIG_CHANGED_MID_FLOW',
+      });
     }
 
     const provider = this.buildProvider({
@@ -465,28 +485,35 @@ export class SamlService {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.warn(`SAMLResponse rechazado para tenant ${flow.tenantId}: ${msg}`);
-      throw new UnauthorizedException(`SAMLResponse inválido: ${msg}`);
+      throw new UnauthorizedException({
+        message: `SAMLResponse inválido: ${msg}`,
+        code: 'SSO_SAML_RESPONSE_INVALID',
+      });
     }
 
     if (parsed.issuer !== config.idpEntityId) {
-      throw new UnauthorizedException(
-        'Issuer del SAMLResponse no coincide con el IdP configurado.',
-      );
+      throw new UnauthorizedException({
+        message: 'Issuer del SAMLResponse no coincide con el IdP configurado.',
+        code: 'SSO_SAML_ISSUER_MISMATCH',
+      });
     }
 
     const email = this.resolveEmail(parsed, config.attributeMapping.email);
     if (!isValidEmail(email)) {
-      throw new UnauthorizedException(
-        'El IdP no devolvió un email válido en el Assertion. Verifica el attribute mapping.',
-      );
+      throw new UnauthorizedException({
+        message:
+          'El IdP no devolvió un email válido en el Assertion. Verifica el attribute mapping.',
+        code: 'SSO_SAML_EMAIL_MISSING',
+      });
     }
 
     if (config.allowedEmailDomains.length > 0) {
       const domain = email.split('@')[1];
       if (!domain || !config.allowedEmailDomains.includes(domain)) {
-        throw new UnauthorizedException(
-          `El email "${email}" no pertenece a los dominios permitidos para SSO en este tenant.`,
-        );
+        throw new UnauthorizedException({
+          message: `El email "${email}" no pertenece a los dominios permitidos para SSO en este tenant.`,
+          code: 'SSO_EMAIL_DOMAIN_NOT_ALLOWED',
+        });
       }
     }
 
@@ -507,9 +534,11 @@ export class SamlService {
           resourceId: params.relayState.slice(0, 12),
           metadata: { reason: 'user_not_provisioned', email },
         });
-        throw new UnauthorizedException(
-          'No tienes cuenta en este tenant. Pídele al admin que active el auto-provisioning o que te dé de alta primero.',
-        );
+        throw new UnauthorizedException({
+          message:
+            'No tienes cuenta en este tenant. Pídele al admin que active el auto-provisioning o que te dé de alta primero.',
+          code: 'SSO_USER_NOT_PROVISIONED',
+        });
       }
 
       user = await this.prisma.user.create({
@@ -533,7 +562,10 @@ export class SamlService {
       });
     } else {
       if (user.status !== 'ACTIVE') {
-        throw new UnauthorizedException('Tu cuenta no está activa. Contacta al admin del tenant.');
+        throw new UnauthorizedException({
+          message: 'Tu cuenta no está activa. Contacta al admin del tenant.',
+          code: 'SSO_ACCOUNT_INACTIVE',
+        });
       }
       await this.prisma.user.update({
         where: { id: user.id },
@@ -583,14 +615,20 @@ export class SamlService {
   async getSpMetadataXml(tenantSlug: string): Promise<string> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant || tenant.status !== 'ACTIVE') {
-      throw new NotFoundException('Tenant no encontrado o inactivo.');
+      throw new NotFoundException({
+        message: 'Tenant no encontrado o inactivo.',
+        code: 'SSO_TENANT_NOT_FOUND',
+      });
     }
     // RLS F2: endpoint público — la config se lee bajo el ALS del tenant.
     const config = await runAsTenant(tenant.id, () => this.getConfig(tenant.id), {
       traceLabel: 'saml-metadata',
     });
     if (!config) {
-      throw new NotFoundException('Este tenant no tiene config SAML.');
+      throw new NotFoundException({
+        message: 'Este tenant no tiene config SAML.',
+        code: 'SSO_SAML_CONFIG_MISSING',
+      });
     }
     const provider = this.buildProvider({
       idpEntityId: config.idpEntityId,

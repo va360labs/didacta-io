@@ -38,7 +38,10 @@ export class JwtOrApiKeyGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest<FastifyRequest>();
     const auth = req.headers['authorization'];
     if (!auth || typeof auth !== 'string') {
-      throw new UnauthorizedException('Falta header Authorization');
+      throw new UnauthorizedException({
+        message: 'Falta header Authorization',
+        code: 'AUTH_MISSING_AUTHORIZATION_HEADER',
+      });
     }
 
     if (auth.startsWith('Bearer ')) {
@@ -47,7 +50,10 @@ export class JwtOrApiKeyGuard implements CanActivate {
         req.user = await this.tokens.verifyAccess(token);
         return true;
       } catch {
-        throw new UnauthorizedException('Bearer token inválido o expirado');
+        throw new UnauthorizedException({
+          message: 'Bearer token inválido o expirado',
+          code: 'AUTH_BEARER_TOKEN_INVALID',
+        });
       }
     }
 
@@ -55,7 +61,10 @@ export class JwtOrApiKeyGuard implements CanActivate {
       const token = auth.slice('ApiKey '.length).trim();
       const key = await this.apiKeys.findValidByToken(token);
       if (!key) {
-        throw new UnauthorizedException('API key inválida, expirada o revocada');
+        throw new UnauthorizedException({
+          message: 'API key inválida, expirada o revocada',
+          code: 'AUTH_API_KEY_INVALID',
+        });
       }
       req.user = {
         sub: key.userId,
@@ -66,6 +75,9 @@ export class JwtOrApiKeyGuard implements CanActivate {
       return true;
     }
 
-    throw new UnauthorizedException('Esquema de Authorization no soportado');
+    throw new UnauthorizedException({
+      message: 'Esquema de Authorization no soportado',
+      code: 'AUTH_UNSUPPORTED_AUTH_SCHEME',
+    });
   }
 }

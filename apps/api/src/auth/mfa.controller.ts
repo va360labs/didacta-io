@@ -84,10 +84,18 @@ export class MfaController {
   ) {
     if (!user) throw new UnauthorizedException();
     const dbUser = await this.prisma.user.findUnique({ where: { id: user.sub } });
-    if (!dbUser?.mfaSecret) throw new BadRequestException('Setup no iniciado');
+    if (!dbUser?.mfaSecret)
+      throw new BadRequestException({
+        message: 'Setup no iniciado',
+        code: 'AUTH_MFA_SETUP_NOT_STARTED',
+      });
 
     const valid = this.mfa.verifyCode(dbUser.mfaSecret, body.code);
-    if (!valid) throw new ForbiddenException('Código TOTP incorrecto');
+    if (!valid)
+      throw new ForbiddenException({
+        message: 'Código TOTP incorrecto',
+        code: 'AUTH_MFA_TOTP_CODE_INCORRECT',
+      });
 
     await this.prisma.user.update({
       where: { id: user.sub },
@@ -128,7 +136,10 @@ export class MfaController {
     if (!user) throw new UnauthorizedException();
     const dbUser = await this.prisma.user.findUnique({ where: { id: user.sub } });
     if (!dbUser?.mfaSecret || !dbUser.mfaEnabled) {
-      throw new BadRequestException('MFA no está activo para este usuario');
+      throw new BadRequestException({
+        message: 'MFA no está activo para este usuario',
+        code: 'AUTH_MFA_NOT_ACTIVE',
+      });
     }
 
     const sanitized = body.code.replace(/\s+/g, '');
@@ -155,7 +166,10 @@ export class MfaController {
         ip: ctx.ip ?? undefined,
         userAgent: ctx.userAgent ?? undefined,
       });
-      throw new ForbiddenException('Código incorrecto');
+      throw new ForbiddenException({
+        message: 'Código incorrecto',
+        code: 'AUTH_MFA_CODE_INCORRECT',
+      });
     }
 
     if (updatedRecoveryCodes) {

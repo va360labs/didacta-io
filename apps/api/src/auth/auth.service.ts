@@ -128,9 +128,11 @@ export class AuthService {
       email: dto.email,
     });
     if (!tenant) {
-      throw new UnauthorizedException(
-        'No pudimos identificar tu organización. Prueba desde el enlace que te dio el admin o pide ayuda.',
-      );
+      throw new UnauthorizedException({
+        message:
+          'No pudimos identificar tu organización. Prueba desde el enlace que te dio el admin o pide ayuda.',
+        code: 'AUTH_TENANT_UNRESOLVED',
+      });
     }
 
     // RLS F2: el alta entera corre bajo el ALS del tenant resuelto — sin esto
@@ -141,9 +143,10 @@ export class AuthService {
       tenant.id,
       async () => {
         if (!(await this.isSignupEnabledForTenant(tenant.id))) {
-          throw new ForbiddenException(
-            'El registro público está deshabilitado. Pide acceso a tu organización.',
-          );
+          throw new ForbiddenException({
+            message: 'El registro público está deshabilitado. Pide acceso a tu organización.',
+            code: 'AUTH_SIGNUP_DISABLED',
+          });
         }
         return this.signupInTenant(tenant, dto, ctx);
       },
@@ -168,7 +171,10 @@ export class AuthService {
       where: { tenantId_email: { tenantId: tenant.id, email: dto.email } },
     });
     if (existing) {
-      throw new ConflictException('El email ya está registrado en este tenant');
+      throw new ConflictException({
+        message: 'El email ya está registrado en este tenant',
+        code: 'AUTH_EMAIL_TAKEN',
+      });
     }
 
     const passwordHash = await this.passwords.hash(dto.password);
@@ -271,7 +277,10 @@ export class AuthService {
       email: dto.email,
     });
     if (!tenant) {
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new UnauthorizedException({
+        message: 'Credenciales inválidas',
+        code: 'AUTH_INVALID_CREDENTIALS',
+      });
     }
 
     // RLS F2: mismo racional que en signup.
@@ -300,7 +309,10 @@ export class AuthService {
         ip: ctx.ip ?? undefined,
         userAgent: ctx.userAgent ?? undefined,
       });
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new UnauthorizedException({
+        message: 'Credenciales inválidas',
+        code: 'AUTH_INVALID_CREDENTIALS',
+      });
     }
 
     const valid = await this.passwords.verify(user.passwordHash, dto.password);
@@ -315,7 +327,10 @@ export class AuthService {
         ip: ctx.ip ?? undefined,
         userAgent: ctx.userAgent ?? undefined,
       });
-      throw new UnauthorizedException('Credenciales inválidas');
+      throw new UnauthorizedException({
+        message: 'Credenciales inválidas',
+        code: 'AUTH_INVALID_CREDENTIALS',
+      });
     }
 
     await this.prisma.user.update({
@@ -413,7 +428,10 @@ export class AuthService {
   ): Promise<SignedTokens> {
     const claims = await this.tokens.verifyRefresh(refreshToken).catch(() => null);
     if (!claims) {
-      throw new UnauthorizedException('Refresh token inválido o expirado');
+      throw new UnauthorizedException({
+        message: 'Refresh token inválido o expirado',
+        code: 'AUTH_REFRESH_TOKEN_INVALID',
+      });
     }
     // RLS F2: lookup por id de usuario ANTES de conocer el tenant — acceso
     // global sancionado (inventario del flip F3).
@@ -424,7 +442,10 @@ export class AuthService {
       }),
     );
     if (!user || user.status !== 'ACTIVE') {
-      throw new UnauthorizedException('Usuario no válido');
+      throw new UnauthorizedException({
+        message: 'Usuario no válido',
+        code: 'AUTH_USER_INVALID',
+      });
     }
     const roles = user.roles.map((r: { role: { name: string } }) => r.role.name);
     // Rotar y no re-emitir: si cada refresh abriera una sesión nueva, la lista

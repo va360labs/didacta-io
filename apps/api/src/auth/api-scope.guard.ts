@@ -42,9 +42,10 @@ export class ApiScopeGuard implements CanActivate {
     const granted = new Set(user.roles ?? []);
     const missing = required.filter((scope) => !granted.has(scope));
     if (missing.length > 0) {
-      throw new ForbiddenException(
-        `La API key no tiene el/los scope(s) requerido(s): ${missing.join(', ')}`,
-      );
+      throw new ForbiddenException({
+        message: `La API key no tiene el/los scope(s) requerido(s): ${missing.join(', ')}`,
+        code: 'AUTH_API_KEY_MISSING_SCOPES',
+      });
     }
     return true;
   }

@@ -50,7 +50,10 @@ export class JwtAuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<FastifyRequest>();
     const authHeader = request.headers['authorization'];
     if (!authHeader || typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Falta header Authorization Bearer');
+      throw new UnauthorizedException({
+        message: 'Falta header Authorization Bearer',
+        code: 'AUTH_MISSING_BEARER_HEADER',
+      });
     }
     const token = authHeader.slice('Bearer '.length).trim();
 
@@ -58,7 +61,10 @@ export class JwtAuthGuard implements CanActivate {
       const claims = await this.tokens.verifyAccess(token);
       request.user = claims;
     } catch {
-      throw new UnauthorizedException('Token inválido o expirado');
+      throw new UnauthorizedException({
+        message: 'Token inválido o expirado',
+        code: 'AUTH_TOKEN_INVALID',
+      });
     }
 
     const requiresMfa = this.reflector.getAllAndOverride<boolean>(REQUIRES_MFA_KEY, [
@@ -66,7 +72,10 @@ export class JwtAuthGuard implements CanActivate {
       context.getClass(),
     ]);
     if (requiresMfa && !request.user.mfaVerified) {
-      throw new UnauthorizedException('Esta acción requiere MFA verificado');
+      throw new UnauthorizedException({
+        message: 'Esta acción requiere MFA verificado',
+        code: 'AUTH_MFA_VERIFICATION_REQUIRED',
+      });
     }
 
     // Enforcement por rol: cualquier acción de un super_admin / tenant_admin
