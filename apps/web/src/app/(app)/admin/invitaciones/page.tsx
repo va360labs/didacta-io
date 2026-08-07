@@ -6,13 +6,15 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { accessGroupsApi, type AccessGroupListItem } from '@/lib/access-groups';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
 import { authStorage } from '@/lib/auth-storage';
 import {
   invitationsApi,
@@ -33,6 +35,8 @@ const TAMANOS = [5, 25, 50, 100, 150];
 const PAGINA = 100;
 
 export default function AdminInvitacionesPage() {
+  const t = useTranslations('adminUsuarios');
+  const tErrors = useTranslations('errors');
   const [summary, setSummary] = useState<InvitationsSummary | null>(null);
   const [filtro, setFiltro] = useState<InvitationFilter>('invitados');
   const [items, setItems] = useState<InvitationRow[] | null>(null);
@@ -82,11 +86,9 @@ export default function AdminInvitacionesPage() {
       setHayMas(page.hasMore);
       setError(null);
     } catch (e) {
-      setError(
-        e instanceof ApiHttpError ? e.message : 'No pudimos cargar el estado de las invitaciones.',
-      );
+      setError(apiErrorMessage(e, tErrors));
     }
-  }, [filtro, busqueda]);
+  }, [filtro, busqueda, tErrors]);
 
   /**
    * Trae la siguiente página y la añade. Sin esto, el panel enseñaba solo los
@@ -107,11 +109,11 @@ export default function AdminInvitacionesPage() {
       setItems((previos) => [...(previos ?? []), ...page.items]);
       setHayMas(page.hasMore);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar más resultados.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setCargandoMas(false);
     }
-  }, [filtro, busqueda, items]);
+  }, [filtro, busqueda, items, tErrors]);
 
   /**
    * Mientras hay un lote en vuelo, refrescamos cada 3 s para que los
@@ -140,11 +142,11 @@ export default function AdminInvitacionesPage() {
         accessGroupId: groupId || undefined,
       });
       if (r.yaEnCurso) {
-        setError('Ya hay un lote en marcha. Espera a que termine antes de lanzar otro.');
+        setError(t('invitations.alreadyRunning'));
       }
       await cargar();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudo arrancar el lote.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setArrancando(false);
     }
@@ -153,10 +155,10 @@ export default function AdminInvitacionesPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight text-text">Invitaciones</h1>
-        <p className="mt-2 max-w-3xl text-text-muted">
-          Quién ha recibido la invitación al aula, quién ha acabado entrando y a quién le falta.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight text-text">
+          {t('invitations.title')}
+        </h1>
+        <p className="mt-2 max-w-3xl text-text-muted">{t('invitations.subtitle')}</p>
       </header>
 
       {error ? (
@@ -168,21 +170,21 @@ export default function AdminInvitacionesPage() {
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metrica valor={summary?.invitados} etiqueta="Invitaciones enviadas" />
+        <Metrica valor={summary?.invitados} etiqueta={t('invitations.metricSent')} />
         <Metrica
           valor={summary?.activadosTrasInvitacion}
-          etiqueta="Ya han entrado"
+          etiqueta={t('invitations.metricEntered')}
           detalle={
             summary?.tasaConversion !== null && summary?.tasaConversion !== undefined
-              ? `${summary.tasaConversion}% de los invitados`
+              ? t('invitations.conversionDetail', { rate: summary.tasaConversion })
               : undefined
           }
         />
-        <Metrica valor={summary?.sinInvitar} etiqueta="Sin invitar todavía" />
+        <Metrica valor={summary?.sinInvitar} etiqueta={t('invitations.metricPending')} />
         <Metrica
           valor={summary?.pendientesSinAcceso}
-          etiqueta="Sin ningún curso asignado"
-          detalle="Entrarían a un aula vacía"
+          etiqueta={t('invitations.metricNoAccess')}
+          detalle={t('invitations.noAccessDetail')}
           alerta={(summary?.pendientesSinAcceso ?? 0) > 0}
         />
       </div>
@@ -190,12 +192,11 @@ export default function AdminInvitacionesPage() {
       {/* Envío por lotes */}
       <Card>
         <CardHeader>
-          <CardTitle>Enviar el siguiente lote</CardTitle>
+          <CardTitle>{t('invitations.batchTitle')}</CardTitle>
           <CardDescription>
-            Se envía solo a quien <strong>aún no ha recibido</strong> la invitación, así que puedes
-            repetirlo sin miedo a escribir dos veces a nadie. Se manda de uno en uno y con una pausa
-            entre correos: de golpe, el dominio acaba marcado como spam y eso arrastraría también a
-            los correos de contraseña y certificados.
+            {t.rich('invitations.batchDescription', {
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -220,13 +221,17 @@ export default function AdminInvitacionesPage() {
               disabled={arrancando || envio?.enCurso || (summary?.sinInvitar ?? 0) === 0}
               className="ml-auto"
             >
-              {envio?.enCurso ? 'Enviando…' : arrancando ? 'Arrancando…' : `Enviar a ${tamanoLote}`}
+              {envio?.enCurso
+                ? t('invitations.sending')
+                : arrancando
+                  ? t('invitations.starting')
+                  : t('invitations.sendTo', { count: tamanoLote })}
             </Button>
           </div>
 
           {groups ? (
             <div className="space-y-2">
-              <Label htmlFor="batchAccessGroup">Grupo de acceso para el lote (opcional)</Label>
+              <Label htmlFor="batchAccessGroup">{t('invitations.groupLabel')}</Label>
               <Select
                 id="batchAccessGroup"
                 value={groupId}
@@ -234,33 +239,30 @@ export default function AdminInvitacionesPage() {
                 disabled={arrancando || envio?.enCurso}
                 data-testid="batch-invite-group-select"
               >
-                <option value="">Sin grupo</option>
+                <option value="">{t('invitations.noGroup')}</option>
                 {groups.map((g) => (
                   <option key={g.id} value={g.id}>
                     {g.name}
                   </option>
                 ))}
               </Select>
-              <p className="text-xs text-text-subtle">
-                Se añade a cada persona del lote a este grupo (sin quitarles los que ya tuvieran),
-                así entran con su aula lista en vez de a un campus vacío.
-              </p>
+              <p className="text-xs text-text-subtle">{t('invitations.groupHint')}</p>
             </div>
           ) : null}
 
           {(summary?.sinInvitar ?? 0) === 0 && summary ? (
-            <p className="text-sm text-text-muted">
-              No queda nadie por invitar. Cuando se creen cuentas nuevas aparecerán aquí.
-            </p>
+            <p className="text-sm text-text-muted">{t('invitations.nobodyLeft')}</p>
           ) : null}
 
           {envio ? (
             <div className="rounded-lg border border-border bg-bg-subtle p-4 text-sm">
               <p className="font-semibold text-text">
                 {envio.enCurso
-                  ? `Enviando… ${envio.enviados} de ${envio.total}`
-                  : `Enviadas ${envio.enviados} invitaciones`}
-                {envio.fallidos.length > 0 ? ` · ${envio.fallidos.length} fallaron` : ''}
+                  ? t('invitations.progressRunning', { sent: envio.enviados, total: envio.total })
+                  : t('invitations.progressDone', { sent: envio.enviados })}
+                {envio.fallidos.length > 0
+                  ? t('invitations.failedSuffix', { count: envio.fallidos.length })
+                  : ''}
               </p>
               {envio.enCurso ? (
                 <>
@@ -278,14 +280,11 @@ export default function AdminInvitacionesPage() {
                       }}
                     />
                   </div>
-                  <p className="mt-2 text-text-muted">
-                    Va de uno en uno, así que tarda alrededor de un segundo por correo. Sigue en el
-                    servidor: puedes cerrar esta página sin cortarlo.
-                  </p>
+                  <p className="mt-2 text-text-muted">{t('invitations.progressHint')}</p>
                 </>
               ) : (
                 <p className="mt-1 text-text-muted">
-                  Quedan {summary?.sinInvitar ?? 0} por invitar.
+                  {t('invitations.remaining', { count: summary?.sinInvitar ?? 0 })}
                 </p>
               )}
               {envio.fallidos.length > 0 ? (
@@ -306,16 +305,16 @@ export default function AdminInvitacionesPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="flex flex-wrap gap-2">
           <Filtro actual={filtro} valor="invitados" onSelect={setFiltro}>
-            Invitados
+            {t('invitations.filterInvited')}
           </Filtro>
           <Filtro actual={filtro} valor="activados" onSelect={setFiltro}>
-            Ya entraron
+            {t('invitations.filterEntered')}
           </Filtro>
           <Filtro actual={filtro} valor="sin-enviar" onSelect={setFiltro}>
-            Sin invitar
+            {t('invitations.filterNotSent')}
           </Filtro>
           <Filtro actual={filtro} valor="sin-acceso" onSelect={setFiltro}>
-            Sin acceso
+            {t('invitations.filterNoAccess')}
           </Filtro>
         </div>
         <div className="flex-1">
@@ -323,8 +322,8 @@ export default function AdminInvitacionesPage() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por email o nombre…"
-            aria-label="Buscar en las invitaciones"
+            placeholder={t('invitations.searchPlaceholder')}
+            aria-label={t('invitations.searchAria')}
           />
         </div>
       </div>
@@ -338,20 +337,20 @@ export default function AdminInvitacionesPage() {
               ))}
             </div>
           ) : items.length === 0 ? (
-            <p className="p-8 text-center text-sm text-text-muted">
-              No hay nadie en esta lista todavía.
-            </p>
+            <p className="p-8 text-center text-sm text-text-muted">{t('invitations.empty')}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-text-muted">
-                    <th className="px-5 py-3 font-semibold">Alumno</th>
-                    <th className="px-5 py-3 font-semibold">Estado</th>
-                    <th className="px-5 py-3 font-semibold">Qué verá al entrar</th>
-                    <th className="px-5 py-3 font-semibold">Invitado</th>
-                    <th className="px-5 py-3 font-semibold">Último acceso</th>
-                    <th className="px-5 py-3 text-right font-semibold">Envíos</th>
+                    <th className="px-5 py-3 font-semibold">{t('invitations.colStudent')}</th>
+                    <th className="px-5 py-3 font-semibold">{t('invitations.colStatus')}</th>
+                    <th className="px-5 py-3 font-semibold">{t('invitations.colAccess')}</th>
+                    <th className="px-5 py-3 font-semibold">{t('invitations.colInvited')}</th>
+                    <th className="px-5 py-3 font-semibold">{t('invitations.colLastLogin')}</th>
+                    <th className="px-5 py-3 text-right font-semibold">
+                      {t('invitations.colSends')}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -364,18 +363,18 @@ export default function AdminInvitacionesPage() {
                       <td className="px-5 py-3">
                         {u.entrado ? (
                           <span className="rounded-full bg-success-50 px-2 py-0.5 text-xs font-semibold text-success-700">
-                            Ya entró
+                            {t('invitations.entered')}
                           </span>
                         ) : (
                           <span className="rounded-full bg-bg-subtle px-2 py-0.5 text-xs font-semibold text-text-muted">
-                            Pendiente
+                            {t('invitations.pending')}
                           </span>
                         )}
                       </td>
                       <td className="px-5 py-3">
                         {u.grupos.length === 0 ? (
                           <span className="rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700">
-                            Sin ningún curso
+                            {t('invitations.noCourses')}
                           </span>
                         ) : (
                           <div className="flex flex-wrap gap-1">
@@ -410,7 +409,7 @@ export default function AdminInvitacionesPage() {
               {total > items.length ? (
                 <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-3">
                   <p className="text-xs text-text-muted">
-                    Mostrando {items.length} de {total}.
+                    {t('invitations.showing', { shown: items.length, total })}
                   </p>
                   {hayMas ? (
                     <Button
@@ -420,7 +419,7 @@ export default function AdminInvitacionesPage() {
                       onClick={() => void cargarMas()}
                       disabled={cargandoMas}
                     >
-                      {cargandoMas ? 'Cargando…' : 'Cargar más'}
+                      {cargandoMas ? t('invitations.loadingMore') : t('invitations.loadMore')}
                     </Button>
                   ) : null}
                 </div>
@@ -488,9 +487,5 @@ function Filtro({
 
 function fecha(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatDate(iso, { day: '2-digit', month: 'short', year: 'numeric' });
 }

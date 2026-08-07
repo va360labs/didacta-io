@@ -7,6 +7,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 
 /**
  * Esta ficha se fusionó con `/u/[id]`.
@@ -22,6 +23,7 @@ import { useEffect } from 'react';
  * siguen funcionando gracias a esta redirección.
  */
 export default function AdminUserDetailRedirect() {
+  const t = useTranslations('adminUsuarios');
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params.id;
@@ -31,7 +33,5 @@ export default function AdminUserDetailRedirect() {
     router.replace(`/u/${encodeURIComponent(id)}?tab=acceso` as never);
   }, [id, router]);
 
-  return (
-    <div className="p-8 text-center text-sm text-text-muted">Abriendo la ficha del usuario…</div>
-  );
+  return <div className="p-8 text-center text-sm text-text-muted">{t('detail.opening')}</div>;
 }

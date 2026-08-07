@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,16 +17,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { UserChip } from '@/components/user-chip';
-import { ApiHttpError } from '@/lib/api-client';
 import {
   accessGroupsApi,
-  ACCESS_GROUP_KIND_LABELS,
   type AccessGroupDetail,
   type AccessGroupKind,
   type AccessGroupListItem,
   type CourseCatalogItem,
   type UserCandidate,
 } from '@/lib/access-groups';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { paymentTiersApi } from '@/lib/payment-connections';
 import { authStorage } from '@/lib/auth-storage';
 
@@ -36,6 +36,20 @@ const KIND_VARIANT: Record<AccessGroupKind, 'success' | 'warning' | 'muted'> = {
 };
 
 export default function GruposAccesoPage() {
+  const t = useTranslations('adminUsuarios');
+  const tErrors = useTranslations('errors');
+
+  // Textos de notices/confirms usados dentro de funciones async cuyo scope
+  // local llama `t` a su variable de token: se resuelven aquí, en el scope
+  // del hook, y las funciones capturan el resultado.
+  const noticeCreated = t('groups.created');
+  const noticeMarkedDefault = t('groups.markedDefault');
+  const noticeCoursesSaved = t('groups.coursesSaved');
+  const noticeTierUnlinked = t('groups.tierUnlinkedNotice');
+  const deleteConfirmText = t('groups.deleteConfirm');
+  const noticeDeleted = (count: number) => t('groups.deleted', { count });
+  const noticeTierLinked = (name: string) => t('groups.tierLinkedNotice', { name });
+
   const [groups, setGroups] = useState<AccessGroupListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -70,7 +84,7 @@ export default function GruposAccesoPage() {
       const res = await accessGroupsApi.list(t);
       setGroups(res.groups);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los grupos de acceso.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -92,10 +106,10 @@ export default function GruposAccesoPage() {
       });
       setNewName('');
       setNewDescription('');
-      setNotice('Grupo creado.');
+      setNotice(noticeCreated);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos crear el grupo.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setCreating(false);
     }
@@ -126,7 +140,7 @@ export default function GruposAccesoPage() {
         setTierCatalog([]);
       }
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos abrir el grupo.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -137,11 +151,11 @@ export default function GruposAccesoPage() {
     if (!t) return;
     try {
       await accessGroupsApi.update(t, id, { isDefaultForApproval: true });
-      setNotice('Marcado como grupo por defecto al aprobar.');
+      setNotice(noticeMarkedDefault);
       await reload();
       if (detail?.id === id) await openDetail(id);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos actualizar el grupo.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -152,21 +166,21 @@ export default function GruposAccesoPage() {
       await accessGroupsApi.update(t, g.id, { autoGrantNewCourses: !g.autoGrantNewCourses });
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos actualizar el grupo.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
   async function deleteGroup(id: string) {
     const t = token();
     if (!t) return;
-    if (!window.confirm('¿Eliminar el grupo? Se revocará el acceso de sus miembros.')) return;
+    if (!window.confirm(deleteConfirmText)) return;
     try {
       const res = await accessGroupsApi.remove(t, id);
-      setNotice(`Grupo eliminado (${res.revokedMembers} miembros revocados).`);
+      setNotice(noticeDeleted(res.revokedMembers));
       if (detail?.id === id) setDetail(null);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar el grupo.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -186,10 +200,10 @@ export default function GruposAccesoPage() {
     try {
       const d = await accessGroupsApi.setCourses(t, detail.id, Array.from(selectedCourses));
       setDetail(d);
-      setNotice('Cursos del grupo actualizados.');
+      setNotice(noticeCoursesSaved);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar los cursos.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -204,16 +218,10 @@ export default function GruposAccesoPage() {
       const value = linkedTier.trim();
       const d = await accessGroupsApi.update(t, detail.id, { linkedTierName: value || null });
       setDetail(d);
-      setNotice(
-        value
-          ? `Grupo vinculado al tier «${value}». Los miembros con ese tier se reconcilian al sincronizar pagos.`
-          : 'Vínculo con tier eliminado.',
-      );
+      setNotice(value ? noticeTierLinked(value) : noticeTierUnlinked);
       await reload();
     } catch (e) {
-      setError(
-        e instanceof ApiHttpError ? e.message : 'No pudimos guardar el vínculo con el tier.',
-      );
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -226,7 +234,7 @@ export default function GruposAccesoPage() {
       const res = await accessGroupsApi.userCatalog(t, userQuery);
       setUserResults(res);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos buscar usuarios.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -239,7 +247,7 @@ export default function GruposAccesoPage() {
       await openDetail(detail.id);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos asignar el usuario.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -254,7 +262,7 @@ export default function GruposAccesoPage() {
       await openDetail(detail.id);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos revocar el usuario.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -263,11 +271,8 @@ export default function GruposAccesoPage() {
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
       <header>
-        <h1 className="text-2xl font-semibold text-text">Grupos de acceso</h1>
-        <p className="text-text-muted">
-          Define qué conjunto de cursos puede ver cada miembro. El grupo marcado «por defecto» se
-          asigna automáticamente al aprobar una inscripción.
-        </p>
+        <h1 className="text-2xl font-semibold text-text">{t('groups.title')}</h1>
+        <p className="text-text-muted">{t('groups.subtitle')}</p>
       </header>
 
       {error && (
@@ -284,45 +289,43 @@ export default function GruposAccesoPage() {
       {/* Crear grupo */}
       <Card>
         <CardHeader>
-          <CardTitle>Nuevo grupo</CardTitle>
-          <CardDescription>
-            Crea un grupo de acceso y luego asígnale cursos y miembros.
-          </CardDescription>
+          <CardTitle>{t('groups.newTitle')}</CardTitle>
+          <CardDescription>{t('groups.newDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1">
-            <Label htmlFor="ag-name">Nombre</Label>
+            <Label htmlFor="ag-name">{t('groups.nameLabel')}</Label>
             <Input
               id="ag-name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="p.ej. Cohorte 2026"
+              placeholder={t('groups.namePlaceholder')}
             />
           </div>
           <div className="w-full sm:w-52">
-            <Label htmlFor="ag-kind">Tipo</Label>
+            <Label htmlFor="ag-kind">{t('groups.kindLabel')}</Label>
             <Select
               id="ag-kind"
               value={newKind}
               onChange={(e) => setNewKind(e.target.value as AccessGroupKind)}
             >
-              <option value="ALL_COURSES">Todos los cursos</option>
-              <option value="MULTI_COURSE">Varios cursos</option>
-              <option value="COURSE">Un curso</option>
+              <option value="ALL_COURSES">{t('groupKind.ALL_COURSES')}</option>
+              <option value="MULTI_COURSE">{t('groupKind.MULTI_COURSE')}</option>
+              <option value="COURSE">{t('groupKind.COURSE')}</option>
             </Select>
           </div>
           <Button onClick={() => void createGroup()} disabled={creating || !newName.trim()}>
-            {creating ? 'Creando…' : 'Crear'}
+            {creating ? t('groups.creating') : t('groups.create')}
           </Button>
         </CardContent>
         <CardContent className="pt-0">
-          <Label htmlFor="ag-desc">Descripción (opcional)</Label>
+          <Label htmlFor="ag-desc">{t('groups.descriptionLabel')}</Label>
           <Textarea
             id="ag-desc"
             value={newDescription}
             onChange={(e) => setNewDescription(e.target.value)}
             rows={2}
-            placeholder="Para qué sirve este grupo"
+            placeholder={t('groups.descriptionPlaceholder')}
           />
         </CardContent>
       </Card>
@@ -332,7 +335,7 @@ export default function GruposAccesoPage() {
         {groups === null ? (
           <Skeleton className="h-24 w-full" />
         ) : groups.length === 0 ? (
-          <p className="text-text-muted">Todavía no hay grupos de acceso.</p>
+          <p className="text-text-muted">{t('groups.empty')}</p>
         ) : (
           groups.map((g) => (
             <Card key={g.id} className={detail?.id === g.id ? 'border-brand-500' : undefined}>
@@ -340,27 +343,33 @@ export default function GruposAccesoPage() {
                 <div className="flex-1 min-w-[12rem]">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-text">{g.name}</span>
-                    <Badge variant={KIND_VARIANT[g.kind]}>{ACCESS_GROUP_KIND_LABELS[g.kind]}</Badge>
-                    {g.isDefaultForApproval && <Badge variant="success">Por defecto</Badge>}
-                    {g.linkedTierName && <Badge variant="warning">Tier: {g.linkedTierName}</Badge>}
+                    <Badge variant={KIND_VARIANT[g.kind]}>{t(`groupKind.${g.kind}`)}</Badge>
+                    {g.isDefaultForApproval && (
+                      <Badge variant="success">{t('groups.defaultBadge')}</Badge>
+                    )}
+                    {g.linkedTierName && (
+                      <Badge variant="warning">
+                        {t('groups.tierBadge', { name: g.linkedTierName })}
+                      </Badge>
+                    )}
                     {g.kind === 'ALL_COURSES' && g.autoGrantNewCourses && (
-                      <Badge variant="muted">Auto-otorga nuevos</Badge>
+                      <Badge variant="muted">{t('groups.autoGrantBadge')}</Badge>
                     )}
                   </div>
                   <p className="text-sm text-text-muted">
-                    {g.memberCount} miembro(s)
+                    {t('groups.memberCount', { count: g.memberCount })}
                     {g.courseCount !== null
-                      ? ` · ${g.courseCount} curso(s)`
-                      : ' · todos los cursos'}
+                      ? t('groups.courseCountSuffix', { count: g.courseCount })
+                      : t('groups.allCoursesSuffix')}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" onClick={() => void openDetail(g.id)}>
-                    Gestionar
+                    {t('groups.manage')}
                   </Button>
                   {!g.isDefaultForApproval && (
                     <Button variant="ghost" onClick={() => void markDefault(g.id)}>
-                      Marcar por defecto
+                      {t('groups.markDefault')}
                     </Button>
                   )}
                   {g.kind === 'ALL_COURSES' && (
@@ -369,11 +378,11 @@ export default function GruposAccesoPage() {
                         checked={g.autoGrantNewCourses}
                         onCheckedChange={() => void toggleAutoGrant(g)}
                       />
-                      <span className="text-sm text-text-muted">Auto-otorga</span>
+                      <span className="text-sm text-text-muted">{t('groups.autoGrantSwitch')}</span>
                     </div>
                   )}
                   <Button variant="ghost" onClick={() => void deleteGroup(g.id)}>
-                    Eliminar
+                    {t('groups.delete')}
                   </Button>
                 </div>
               </CardContent>
@@ -386,24 +395,26 @@ export default function GruposAccesoPage() {
       {detail && (
         <Card>
           <CardHeader>
-            <CardTitle>Gestionar: {detail.name}</CardTitle>
+            <CardTitle>{t('groups.manageTitle', { name: detail.name })}</CardTitle>
             <CardDescription>
-              {ACCESS_GROUP_KIND_LABELS[detail.kind]} · {detail.memberCount} miembro(s)
+              {t(`groupKind.${detail.kind}`)} ·{' '}
+              {t('groups.memberCount', { count: detail.memberCount })}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
             {/* Cursos */}
             {detail.kind === 'ALL_COURSES' ? (
               <p className="text-sm text-text-muted">
-                Este grupo otorga acceso a <strong>todos los cursos publicados</strong>. No requiere
-                selección de cursos.
+                {t.rich('groups.allCoursesInfo', {
+                  strong: (chunks) => <strong>{chunks}</strong>,
+                })}
               </p>
             ) : (
               <div>
-                <h3 className="mb-2 font-medium text-text">Cursos del grupo</h3>
+                <h3 className="mb-2 font-medium text-text">{t('groups.coursesTitle')}</h3>
                 <div className="flex flex-col gap-1">
                   {courseCatalog.length === 0 ? (
-                    <p className="text-sm text-text-muted">No hay cursos publicados.</p>
+                    <p className="text-sm text-text-muted">{t('groups.noCourses')}</p>
                   ) : (
                     courseCatalog.map((c) => {
                       const on = selectedCourses.has(c.id);
@@ -424,28 +435,24 @@ export default function GruposAccesoPage() {
                   )}
                 </div>
                 <Button className="mt-3" onClick={() => void saveCourses()} disabled={busy}>
-                  Guardar cursos
+                  {t('groups.saveCourses')}
                 </Button>
               </div>
             )}
 
             {/* Vínculo con tier */}
             <div>
-              <h3 className="mb-1 font-medium text-text">Vínculo con tier (pagos)</h3>
-              <p className="mb-2 text-sm text-text-muted">
-                Si vinculas un tier, los usuarios cuyo tier efectivo coincida se añaden a este grupo
-                (y se matriculan en sus cursos) al pulsar «Sincronizar tiers desde pagos». Bajar de
-                tier los retira. No afecta a los miembros añadidos a mano.
-              </p>
+              <h3 className="mb-1 font-medium text-text">{t('groups.tierTitle')}</h3>
+              <p className="mb-2 text-sm text-text-muted">{t('groups.tierHelp')}</p>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <div className="flex-1">
-                  <Label htmlFor="ag-tier">Nombre del tier</Label>
+                  <Label htmlFor="ag-tier">{t('groups.tierNameLabel')}</Label>
                   <Input
                     id="ag-tier"
                     list="ag-tier-options"
                     value={linkedTier}
                     onChange={(e) => setLinkedTier(e.target.value)}
-                    placeholder="p.ej. Mensual 2026 (vacío = sin vínculo)"
+                    placeholder={t('groups.tierNamePlaceholder')}
                   />
                   <datalist id="ag-tier-options">
                     {tierCatalog.map((name) => (
@@ -454,30 +461,33 @@ export default function GruposAccesoPage() {
                   </datalist>
                 </div>
                 <Button variant="secondary" onClick={() => void saveTierLink()} disabled={busy}>
-                  Guardar vínculo
+                  {t('groups.saveTierLink')}
                 </Button>
               </div>
               {detail.linkedTierName && (
                 <p className="mt-2 text-sm text-brand-700">
-                  Vinculado al tier <strong>{detail.linkedTierName}</strong>.
+                  {t.rich('groups.linkedToTier', {
+                    name: detail.linkedTierName,
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                  })}
                 </p>
               )}
             </div>
 
             {/* Miembros */}
             <div>
-              <h3 className="mb-2 font-medium text-text">Miembros</h3>
+              <h3 className="mb-2 font-medium text-text">{t('groups.membersTitle')}</h3>
               <div className="flex gap-2">
                 <Input
                   value={userQuery}
                   onChange={(e) => setUserQuery(e.target.value)}
-                  placeholder="Buscar por nombre o email"
+                  placeholder={t('groups.memberSearchPlaceholder')}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') void searchUsers();
                   }}
                 />
                 <Button variant="secondary" onClick={() => void searchUsers()}>
-                  Buscar
+                  {t('groups.search')}
                 </Button>
               </div>
               {userResults.length > 0 && (
@@ -491,7 +501,7 @@ export default function GruposAccesoPage() {
                         {u.name ?? u.email} <span className="text-text-muted">({u.email})</span>
                       </span>
                       <Button variant="ghost" onClick={() => void assignUser(u.id)} disabled={busy}>
-                        Añadir
+                        {t('groups.add')}
                       </Button>
                     </div>
                   ))}
@@ -499,11 +509,11 @@ export default function GruposAccesoPage() {
               )}
               <div className="mt-4">
                 <p className="mb-1 text-sm text-text-muted">
-                  Miembros actuales ({detail.members.length})
+                  {t('groups.currentMembers', { count: detail.members.length })}
                 </p>
                 <div className="flex flex-col gap-1">
                   {detail.members.length === 0 ? (
-                    <p className="text-sm text-text-muted">Sin miembros todavía.</p>
+                    <p className="text-sm text-text-muted">{t('groups.noMembers')}</p>
                   ) : (
                     detail.members.map((m) => (
                       <div
@@ -520,15 +530,19 @@ export default function GruposAccesoPage() {
                             nameClassName="block truncate"
                             subtitle={m.name && m.email ? m.email : null}
                           />
-                          {m.source === 'TIER' && <Badge variant="warning">Por tier</Badge>}
-                          {m.source === 'MEMBERSHIP' && <Badge variant="info">Por membresía</Badge>}
+                          {m.source === 'TIER' && (
+                            <Badge variant="warning">{t('groups.byTier')}</Badge>
+                          )}
+                          {m.source === 'MEMBERSHIP' && (
+                            <Badge variant="info">{t('groups.byMembership')}</Badge>
+                          )}
                         </span>
                         <Button
                           variant="ghost"
                           onClick={() => void revokeUser(m.userId)}
                           disabled={busy}
                         >
-                          Quitar
+                          {t('groups.remove')}
                         </Button>
                       </div>
                     ))
@@ -539,7 +553,7 @@ export default function GruposAccesoPage() {
 
             <div>
               <Button variant="ghost" onClick={() => setDetail(null)}>
-                Cerrar
+                {t('groups.close')}
               </Button>
             </div>
           </CardContent>

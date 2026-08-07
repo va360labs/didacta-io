@@ -24,12 +24,15 @@
  */
 
 import { useEffect, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import { fetchInscripcionConfig, type InscripcionVerifier } from '@/lib/inscripcion';
 import { tenantSettingsApi } from '@/lib/tenant-settings';
 
@@ -56,23 +59,25 @@ const EMPTY_FORM: FormState = {
 };
 
 /** Describe el modo resultante para que el admin entienda qué está eligiendo. */
-function modeDescription(form: FormState): string {
+function modeDescription(form: FormState, t: TranslatorLike): string {
   if (!form.enabled) {
-    return 'Registro CERRADO: nadie puede solicitar acceso; las altas las hace el administrador.';
+    return t('registration.modeClosed');
   }
   if (form.requireTelegram && form.requireOtp) {
-    return 'El aspirante verifica su Telegram (pertenencia al grupo) y su email con un código antes de enviar la solicitud.';
+    return t('registration.modeBoth');
   }
   if (form.requireTelegram) {
-    return 'El aspirante verifica su Telegram (pertenencia al grupo); el email se pide sin verificar.';
+    return t('registration.modeTelegram');
   }
   if (form.requireOtp) {
-    return 'El aspirante verifica su email con un código de 6 dígitos antes de enviar la solicitud.';
+    return t('registration.modeOtp');
   }
-  return 'Registro LIBRE: cualquiera puede enviar una solicitud; el único gate es tu aprobación manual.';
+  return t('registration.modeFree');
 }
 
 export function MemberRegistrationSettingsCard(): React.JSX.Element {
+  const t = useTranslations('adminUsuarios');
+  const tErrors = useTranslations('errors');
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [hasStoredToken, setHasStoredToken] = useState(false);
   const [status, setStatus] = useState<'loading' | 'idle' | 'saving' | 'saved' | 'error'>(
@@ -143,9 +148,7 @@ export function MemberRegistrationSettingsCard(): React.JSX.Element {
     setError(null);
     try {
       if (form.requireTelegram && !form.groupId.trim() && form.enabled) {
-        throw new Error(
-          'Para exigir Telegram configura el bot (grupo y token) — sin él el flujo quedaría indisponible.',
-        );
+        throw new Error(t('registration.telegramConfigRequired'));
       }
 
       const verifiers: InscripcionVerifier[] = [
@@ -185,9 +188,7 @@ export function MemberRegistrationSettingsCard(): React.JSX.Element {
       setForm((f) => ({ ...f, botToken: '' }));
     } catch (err) {
       setStatus('error');
-      setError(
-        err instanceof Error ? err.message : 'No pudimos guardar la configuración del registro.',
-      );
+      setError(apiErrorMessage(err, tErrors));
     }
   }
 
@@ -204,75 +205,71 @@ export function MemberRegistrationSettingsCard(): React.JSX.Element {
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <CardTitle>Registro de miembros</CardTitle>
+          <CardTitle>{t('registration.title')}</CardTitle>
           {form.enabled ? (
-            <Badge variant="success">Abierto</Badge>
+            <Badge variant="success">{t('registration.open')}</Badge>
           ) : (
-            <Badge variant="muted">Cerrado</Badge>
+            <Badge variant="muted">{t('registration.closed')}</Badge>
           )}
         </div>
         <CardDescription>
-          Cómo entra la gente a tu comunidad por <code>/inscripcion-miembros</code>: elige qué
-          verificaciones exiges antes de que te llegue cada solicitud. La aprobación final siempre
-          es tuya (email de 1 click o panel de solicitudes).
+          {t.rich('registration.description', {
+            code: (chunks) => <code>{chunks}</code>,
+          })}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSave} className="space-y-5">
           <label className="flex items-center justify-between gap-3 rounded-md border border-border-soft bg-surface-2 px-3 py-2.5">
-            <span className="text-sm font-medium text-text">
-              Registro habilitado (los visitantes pueden solicitar acceso)
-            </span>
+            <span className="text-sm font-medium text-text">{t('registration.enabledLabel')}</span>
             <Switch
               checked={form.enabled}
               onCheckedChange={(v) => setForm((f) => ({ ...f, enabled: v }))}
-              label="Registro habilitado"
+              label={t('registration.enabledSwitch')}
             />
           </label>
 
           <fieldset className="space-y-2" disabled={!form.enabled}>
-            <legend className="text-sm font-semibold text-text">Verificaciones exigidas</legend>
+            <legend className="text-sm font-semibold text-text">
+              {t('registration.verifiersLegend')}
+            </legend>
             <label className="flex items-center justify-between gap-3 rounded-md border border-border-soft px-3 py-2.5">
-              <span className="text-sm text-text">
-                Pertenencia a tu grupo de Telegram (Login Widget)
-              </span>
+              <span className="text-sm text-text">{t('registration.telegramOption')}</span>
               <Switch
                 checked={form.requireTelegram}
                 onCheckedChange={(v) => setForm((f) => ({ ...f, requireTelegram: v }))}
-                label="Exigir verificación por Telegram"
+                label={t('registration.telegramSwitch')}
               />
             </label>
             <label className="flex items-center justify-between gap-3 rounded-md border border-border-soft px-3 py-2.5">
-              <span className="text-sm text-text">Email con código de 6 dígitos (OTP)</span>
+              <span className="text-sm text-text">{t('registration.otpOption')}</span>
               <Switch
                 checked={form.requireOtp}
                 onCheckedChange={(v) => setForm((f) => ({ ...f, requireOtp: v }))}
-                label="Exigir verificación por email"
+                label={t('registration.otpSwitch')}
               />
             </label>
           </fieldset>
 
           <p className="rounded-lg border border-border-soft bg-surface-2 p-3 text-sm text-text-muted">
-            {modeDescription(form)}
+            {modeDescription(form, t)}
           </p>
 
           {form.requireTelegram ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="mr-bot-username">Username del bot (sin @)</Label>
+                <Label htmlFor="mr-bot-username">{t('registration.botUsernameLabel')}</Label>
                 <Input
                   id="mr-bot-username"
                   value={form.botUsername}
                   onChange={(e) => setForm((f) => ({ ...f, botUsername: e.target.value }))}
-                  placeholder="mi_academia_bot"
+                  placeholder={t('registration.botUsernamePlaceholder')}
                   className="font-mono"
                 />
-                <p className="text-xs text-text-subtle">
-                  Necesario para mostrar el Login Widget en el formulario público.
-                </p>
+                <p className="text-xs text-text-subtle">{t('registration.botUsernameHint')}</p>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="mr-group-id">ID del grupo</Label>
+                <Label htmlFor="mr-group-id">{t('registration.groupIdLabel')}</Label>
                 <Input
                   id="mr-group-id"
                   value={form.groupId}
@@ -280,42 +277,35 @@ export function MemberRegistrationSettingsCard(): React.JSX.Element {
                   placeholder="-1001234567890"
                   className="font-mono"
                 />
-                <p className="text-xs text-text-subtle">
-                  ID numérico del grupo/supergrupo (con el prefijo -100 en supergrupos).
-                </p>
+                <p className="text-xs text-text-subtle">{t('registration.groupIdHint')}</p>
               </div>
               <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="mr-bot-token">Token del bot</Label>
+                <Label htmlFor="mr-bot-token">{t('registration.tokenLabel')}</Label>
                 <Input
                   id="mr-bot-token"
                   type="password"
                   value={form.botToken}
                   onChange={(e) => setForm((f) => ({ ...f, botToken: e.target.value }))}
                   placeholder={
-                    hasStoredToken ? '(dejar vacío para conservar el actual)' : '123456:ABC-DEF…'
+                    hasStoredToken ? t('registration.tokenKeepPlaceholder') : '123456:ABC-DEF…'
                   }
                   className="font-mono"
                 />
-                <p className="text-xs text-text-subtle">
-                  Se cifra con AES-256-GCM antes de persistir. La API nunca lo devuelve en claro.
-                </p>
+                <p className="text-xs text-text-subtle">{t('registration.tokenHint')}</p>
               </div>
             </div>
           ) : null}
 
           <div className="space-y-1.5">
-            <Label htmlFor="mr-approver">Email del aprobador</Label>
+            <Label htmlFor="mr-approver">{t('registration.approverLabel')}</Label>
             <Input
               id="mr-approver"
               type="email"
               value={form.approverEmail}
               onChange={(e) => setForm((f) => ({ ...f, approverEmail: e.target.value }))}
-              placeholder="admin@tuacademia.com"
+              placeholder={t('registration.approverPlaceholder')}
             />
-            <p className="text-xs text-text-subtle">
-              Recibe cada solicitud con los enlaces de aprobar/rechazar en 1 click. Vacío = usa el
-              aprobador global del despliegue, si existe.
-            </p>
+            <p className="text-xs text-text-subtle">{t('registration.approverHint')}</p>
           </div>
 
           {error ? (
@@ -327,12 +317,12 @@ export function MemberRegistrationSettingsCard(): React.JSX.Element {
             </div>
           ) : null}
           {status === 'saved' ? (
-            <p className="text-sm text-success-700">Guardado correctamente.</p>
+            <p className="text-sm text-success-700">{t('registration.saved')}</p>
           ) : null}
 
           <div className="flex justify-end gap-2 border-t border-border-soft pt-4">
             <Button type="submit" disabled={status === 'saving'}>
-              {status === 'saving' ? 'Guardando…' : 'Guardar configuración'}
+              {status === 'saving' ? t('registration.saving') : t('registration.save')}
             </Button>
           </div>
         </form>

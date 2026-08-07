@@ -19,15 +19,19 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { tenantSettingsApi } from '@/lib/tenant-settings';
 
 const SCOPE = 'auth';
 const KEY = 'signup';
 
 export function SignupPolicyCard() {
+  const t = useTranslations('adminUsuarios');
+  const tErrors = useTranslations('errors');
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -44,7 +48,7 @@ export function SignupPolicyCard() {
         if (cancelled) return;
         // 404 = todavía no configurado → default cerrado, no es un error.
         if (!(err instanceof ApiHttpError && err.status === 404)) {
-          setError(err instanceof ApiHttpError ? err.message : 'No pudimos cargar el ajuste.');
+          setError(apiErrorMessage(err, tErrors));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -53,6 +57,7 @@ export function SignupPolicyCard() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleToggle(next: boolean): Promise<void> {
@@ -64,7 +69,7 @@ export function SignupPolicyCard() {
       await tenantSettingsApi.upsert(SCOPE, KEY, { value: { enabled: next }, isSecret: false });
     } catch (err) {
       setEnabled(prev);
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos guardar el ajuste.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setSaving(false);
     }
@@ -73,11 +78,11 @@ export function SignupPolicyCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Registro público</CardTitle>
+        <CardTitle>{t('signupPolicy.title')}</CardTitle>
         <CardDescription>
-          Permite que cualquiera cree una cuenta directamente desde <code>/signup</code>, sin
-          aprobación manual (rol <code>alumno</code> por defecto). Si tu academia capta alumnos por
-          inscripción o invitación, déjalo apagado — es la opción segura por defecto.
+          {t.rich('signupPolicy.description', {
+            code: (chunks) => <code>{chunks}</code>,
+          })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -91,11 +96,11 @@ export function SignupPolicyCard() {
         ) : null}
         <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-2/40 p-3">
           <div>
-            <p className="text-sm font-medium">Aceptar altas públicas en este tenant</p>
+            <p className="text-sm font-medium">{t('signupPolicy.toggleTitle')}</p>
             <p className="text-xs text-text-subtle">
-              Si el operador de la instalación fijó <code>AUTH_SIGNUP_ENABLED=true</code> por
-              variable de entorno (solo pensado para desarrollo/pruebas), el registro queda abierto
-              para todos los tenants sin importar este interruptor.
+              {t.rich('signupPolicy.toggleHint', {
+                code: (chunks) => <code>{chunks}</code>,
+              })}
             </p>
           </div>
           <Switch
@@ -103,7 +108,7 @@ export function SignupPolicyCard() {
             checked={enabled}
             onCheckedChange={(checked) => void handleToggle(checked)}
             disabled={loading || saving}
-            label="Activar registro público"
+            label={t('signupPolicy.switchLabel')}
           />
         </div>
       </CardContent>
