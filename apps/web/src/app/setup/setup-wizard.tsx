@@ -7,11 +7,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 
 type Step = 'welcome' | 'organization' | 'modules' | 'admin' | 'creating' | 'tour';
 
@@ -55,13 +58,13 @@ interface PasswordStrength {
   hint: string;
 }
 
-function evaluatePassword(pw: string): PasswordStrength {
+function evaluatePassword(pw: string, t: TranslatorLike): PasswordStrength {
   if (pw.length === 0) return { score: 0, label: '', hint: '' };
   if (pw.length < 12) {
     return {
       score: 1,
-      label: 'Muy corta',
-      hint: 'Mínimo 12 caracteres.',
+      label: t('setup.strengthTooShort'),
+      hint: t('setup.strengthTooShortHint'),
     };
   }
   let variety = 0;
@@ -71,14 +74,16 @@ function evaluatePassword(pw: string): PasswordStrength {
   if (/[^a-zA-Z0-9]/.test(pw)) variety++;
   const long = pw.length >= 16;
   if (variety <= 2)
-    return { score: 2, label: 'Aceptable', hint: 'Mezcla mayúsculas, números y símbolos.' };
+    return { score: 2, label: t('setup.strengthFair'), hint: t('setup.strengthFairHint') };
   if (variety === 3 && !long)
-    return { score: 3, label: 'Buena', hint: 'Si la haces más larga, mejor.' };
-  return { score: 4, label: 'Excelente', hint: '' };
+    return { score: 3, label: t('setup.strengthGood'), hint: t('setup.strengthGoodHint') };
+  return { score: 4, label: t('setup.strengthExcellent'), hint: '' };
 }
 
 export function SetupWizard() {
   const router = useRouter();
+  const t = useTranslations('auth');
+  const tErrors = useTranslations('errors');
   const searchParams = useSearchParams();
   // Token de un solo uso impreso en los logs del contenedor al primer
   // arranque (ver SetupTokenService en el backend). Sin `?token=` en la URL
@@ -136,14 +141,15 @@ export function SetupWizard() {
       .catch((e) => {
         if (cancelled) return;
         setModulesError(
-          e instanceof ApiHttpError
-            ? e.message
-            : 'No pudimos cargar la lista de módulos. Intenta de nuevo.',
+          e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('setup.modulesLoadError'),
         );
       });
     return () => {
       cancelled = true;
     };
+    // `t`/`tErrors` fuera de las deps a propósito: next-intl no garantiza
+    // identidad estable y este efecto no debe re-ejecutar el fetch por render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, availableModules]);
 
   // Auto-slug mientras el usuario no lo haya editado a mano.
@@ -153,7 +159,7 @@ export function SetupWizard() {
     }
   }, [orgName, slugTouched]);
 
-  const passwordStrength = useMemo(() => evaluatePassword(adminPassword), [adminPassword]);
+  const passwordStrength = useMemo(() => evaluatePassword(adminPassword, t), [adminPassword, t]);
   const passwordsMatch = adminPassword === adminPasswordConfirm;
 
   const orgValid =
@@ -195,17 +201,14 @@ export function SetupWizard() {
       });
       setStep('tour');
     } catch (e) {
-      let msg = 'No pudimos completar la configuración. Prueba de nuevo en unos segundos.';
+      let msg = t('setup.initError');
       if (e instanceof ApiHttpError) {
         if (e.status === 409) {
-          msg =
-            'Esta plataforma ya fue inicializada. Vuelve a la pantalla de inicio de sesión y entra con tu cuenta admin.';
+          msg = t('setup.initConflict');
         } else if (e.status === 403) {
-          msg = setupToken
-            ? 'El token de setup no es válido o ya se usó. Revisa los logs del contenedor del primer arranque (docker logs) y abre el enlace más reciente.'
-            : 'Falta el token de setup en la URL. Ábrela con el enlace que aparece en los logs del contenedor tras el primer arranque (docker logs), con el formato /setup?token=...';
+          msg = setupToken ? t('setup.initTokenInvalid') : t('setup.initTokenMissing');
         } else if (e.message) {
-          msg = e.message;
+          msg = apiErrorMessage(e, tErrors);
         }
       }
       setError(msg);
@@ -216,13 +219,11 @@ export function SetupWizard() {
   return (
     <div className="flex flex-1 flex-col">
       <header className="mb-10 text-center">
-        <p className="label-uppercase text-text-muted">CONFIGURACIÓN</p>
+        <p className="label-uppercase text-text-muted">{t('setup.kicker')}</p>
         <h1 className="font-display mt-2 text-4xl font-extrabold tracking-tight text-brand-700">
           Didacta
         </h1>
-        <p className="mt-1 text-sm text-text-subtle">
-          Plataforma educativa abierta y modular — configuración inicial
-        </p>
+        <p className="mt-1 text-sm text-text-subtle">{t('setup.tagline')}</p>
       </header>
 
       <ProgressIndicator step={step} />
@@ -290,21 +291,19 @@ export function SetupWizard() {
         {step === 'tour' && <StepTour onFinish={() => router.push('/cursos')} />}
       </section>
 
-      <footer className="mt-8 text-center text-xs text-text-subtle">
-        Esta pantalla solo aparece la primera vez. Tras crear tu cuenta admin puedes invitar al
-        resto de tu equipo desde Configuración → Usuarios.
-      </footer>
+      <footer className="mt-8 text-center text-xs text-text-subtle">{t('setup.footer')}</footer>
     </div>
   );
 }
 
 function ProgressIndicator({ step }: { step: Step }) {
+  const t = useTranslations('auth');
   const steps: { id: Step | 'creating'; label: string }[] = [
-    { id: 'welcome', label: 'Bienvenida' },
-    { id: 'organization', label: 'Organización' },
-    { id: 'modules', label: 'Módulos' },
-    { id: 'admin', label: 'Tu cuenta' },
-    { id: 'tour', label: 'Listo' },
+    { id: 'welcome', label: t('setup.stepWelcome') },
+    { id: 'organization', label: t('setup.stepOrganization') },
+    { id: 'modules', label: t('setup.stepModules') },
+    { id: 'admin', label: t('setup.stepAdmin') },
+    { id: 'tour', label: t('setup.stepDone') },
   ];
   const order: Step[] = ['welcome', 'organization', 'modules', 'admin', 'tour'];
   const currentIdx = order.indexOf(step === 'creating' ? 'admin' : step);
@@ -352,35 +351,26 @@ function ProgressIndicator({ step }: { step: Step }) {
 }
 
 function StepWelcome({ onContinue }: { onContinue: () => void }) {
+  const t = useTranslations('auth');
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-text">Bienvenido a Didacta</h2>
-        <p className="mt-2 text-sm text-text-muted">
-          Acabas de instalar tu propia copia de la plataforma. En menos de un minuto vas a tener tu
-          organización configurada y vas a poder empezar a crear cursos, invitar formadores y
-          gestionar alumnos.
-        </p>
+        <h2 className="text-2xl font-bold text-text">{t('setup.welcomeTitle')}</h2>
+        <p className="mt-2 text-sm text-text-muted">{t('setup.welcomeBody')}</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Bullet title="Tuyo, sin compromisos">
-          Self-hosted, código abierto. Tus datos viven en tu infraestructura.
+        <Bullet title={t('setup.bulletYoursTitle')}>{t('setup.bulletYoursBody')}</Bullet>
+        <Bullet title={t('setup.bulletModularTitle')}>{t('setup.bulletModularBody')}</Bullet>
+        <Bullet title={t('setup.bulletMultiTenantTitle')}>
+          {t('setup.bulletMultiTenantBody')}
         </Bullet>
-        <Bullet title="Modular">
-          Activa solo los módulos que necesites: cursos, comunidad, FUNDAE, certificados, IA…
-        </Bullet>
-        <Bullet title="Multi-tenant">
-          Una instancia, múltiples organizaciones aisladas con RLS de Postgres.
-        </Bullet>
-        <Bullet title="Open-core">
-          La community es libre. Las features Enterprise se activan con licencia.
-        </Bullet>
+        <Bullet title={t('setup.bulletOpenCoreTitle')}>{t('setup.bulletOpenCoreBody')}</Bullet>
       </div>
 
       <div className="flex justify-end pt-2">
         <Button onClick={onContinue} size="lg">
-          Empezar configuración
+          {t('setup.welcomeCta')}
         </Button>
       </div>
     </div>
@@ -409,43 +399,38 @@ function StepOrganization(props: {
   onContinue: () => void;
   canContinue: boolean;
 }) {
+  const t = useTranslations('auth');
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-text">Tu organización</h2>
-        <p className="mt-1 text-sm text-text-muted">
-          Datos básicos del tenant principal. Puedes añadir más organizaciones después desde el
-          panel de super_admin.
-        </p>
+        <h2 className="text-2xl font-bold text-text">{t('setup.orgTitle')}</h2>
+        <p className="mt-1 text-sm text-text-muted">{t('setup.orgDescription')}</p>
       </div>
 
       <div className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="orgName">
-            Nombre de la organización <span className="text-danger-700">*</span>
+            {t('setup.orgNameLabel')} <span className="text-danger-700">*</span>
           </Label>
           <Input
             id="orgName"
             value={props.name}
             onChange={(e) => props.onChangeName(e.target.value)}
-            placeholder="Academia Didacta"
+            placeholder={t('setup.orgNamePlaceholder')}
             autoFocus
             required
           />
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="hostname">Dominio público</Label>
+          <Label htmlFor="hostname">{t('setup.hostnameLabel')}</Label>
           <Input
             id="hostname"
             value={props.hostname}
             onChange={(e) => props.onChangeHostname(e.target.value)}
-            placeholder="didacta.miempresa.com"
+            placeholder={t('setup.hostnamePlaceholder')}
           />
-          <p className="text-xs text-text-subtle">
-            Detectado automáticamente. Cambialo si vas a acceder por otro dominio o si configuras un
-            CDN delante.
-          </p>
+          <p className="text-xs text-text-subtle">{t('setup.hostnameHint')}</p>
         </div>
 
         <button
@@ -454,32 +439,29 @@ function StepOrganization(props: {
           className="flex items-center gap-2 text-xs font-semibold text-text-muted hover:text-text"
         >
           <span aria-hidden="true">{props.showAdvanced ? '▾' : '▸'}</span>
-          Configuración avanzada
+          {t('setup.advancedToggle')}
         </button>
 
         {props.showAdvanced ? (
           <div className="space-y-1.5 rounded-lg border border-border-soft bg-surface-2 p-4">
-            <Label htmlFor="orgSlug">Slug del tenant</Label>
+            <Label htmlFor="orgSlug">{t('setup.slugLabel')}</Label>
             <Input
               id="orgSlug"
               value={props.slug}
               onChange={(e) => props.onChangeSlug(e.target.value)}
-              placeholder="academia-didacta"
+              placeholder={t('setup.slugPlaceholder')}
             />
-            <p className="text-xs text-text-subtle">
-              Identificador interno (DNS-safe). Lo usa la API y es visible si tienes que iniciar
-              sesión sin pasar por tu dominio. Por defecto se autogenera del nombre.
-            </p>
+            <p className="text-xs text-text-subtle">{t('setup.slugHint')}</p>
           </div>
         ) : null}
       </div>
 
       <div className="flex items-center justify-between gap-3 pt-2">
         <Button variant="ghost" onClick={props.onBack}>
-          Atrás
+          {t('setup.back')}
         </Button>
         <Button onClick={props.onContinue} disabled={!props.canContinue} size="lg">
-          Continuar
+          {t('setup.continue')}
         </Button>
       </div>
     </div>
@@ -495,6 +477,7 @@ function StepModules(props: {
   onContinue: () => void;
 }) {
   const { modules, selected, error, onToggle, onBack, onContinue } = props;
+  const t = useTranslations('auth');
   const loading = modules === null && error === null;
   // Separamos core (no-toggleables, informativos) de los opcionales para
   // que el operador entienda visualmente qué viene siempre y qué decide él.
@@ -504,12 +487,8 @@ function StepModules(props: {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-text">Activa los módulos que vas a usar</h2>
-        <p className="mt-2 text-sm text-text-muted">
-          Esto define qué áreas de la plataforma están disponibles para tu organización al arrancar.
-          Los marcados aquí quedan activos por defecto en tu tenant; cualquiera puede activarse o
-          desactivarse después desde Configuración → Módulos.
-        </p>
+        <h2 className="text-2xl font-bold text-text">{t('setup.modulesTitle')}</h2>
+        <p className="mt-2 text-sm text-text-muted">{t('setup.modulesDescription')}</p>
       </div>
 
       {error && (
@@ -518,12 +497,12 @@ function StepModules(props: {
         </div>
       )}
 
-      {loading && <p className="text-sm text-text-muted">Cargando módulos disponibles…</p>}
+      {loading && <p className="text-sm text-text-muted">{t('setup.modulesLoading')}</p>}
 
       {coreModules.length > 0 && (
         <section>
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-text-subtle">
-            Núcleo (siempre activos)
+            {t('setup.modulesCoreHeading')}
           </h3>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {coreModules.map((m) => (
@@ -542,7 +521,7 @@ function StepModules(props: {
       {optionalModules.length > 0 && (
         <section>
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-text-subtle">
-            Módulos opcionales
+            {t('setup.modulesOptionalHeading')}
           </h3>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {optionalModules.map((m) => (
@@ -560,10 +539,10 @@ function StepModules(props: {
 
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
         <Button variant="secondary" onClick={onBack}>
-          Atrás
+          {t('setup.back')}
         </Button>
         <Button onClick={onContinue} disabled={loading}>
-          Continuar
+          {t('setup.continue')}
         </Button>
       </div>
     </div>
@@ -620,6 +599,7 @@ function StepAdmin(props: {
   submitting: boolean;
   error: string | null;
 }) {
+  const t = useTranslations('auth');
   const meterColor = [
     'bg-border-strong',
     'bg-danger-500',
@@ -630,23 +610,20 @@ function StepAdmin(props: {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-text">Tu cuenta de administrador</h2>
-        <p className="mt-1 text-sm text-text-muted">
-          Esta cuenta tiene acceso completo a la plataforma. Guarda la contraseña en un gestor: por
-          motivos de seguridad no podemos recuperarla por email todavía si eres el único admin.
-        </p>
+        <h2 className="text-2xl font-bold text-text">{t('setup.adminTitle')}</h2>
+        <p className="mt-1 text-sm text-text-muted">{t('setup.adminDescription')}</p>
       </div>
 
       <div className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="adminName">
-            Nombre completo <span className="text-danger-700">*</span>
+            {t('setup.adminNameLabel')} <span className="text-danger-700">*</span>
           </Label>
           <Input
             id="adminName"
             value={props.name}
             onChange={(e) => props.onChangeName(e.target.value)}
-            placeholder="Tu nombre"
+            placeholder={t('setup.adminNamePlaceholder')}
             autoFocus
             required
           />
@@ -654,7 +631,7 @@ function StepAdmin(props: {
 
         <div className="space-y-1.5">
           <Label htmlFor="adminEmail">
-            Email <span className="text-danger-700">*</span>
+            {t('setup.adminEmailLabel')} <span className="text-danger-700">*</span>
           </Label>
           <Input
             id="adminEmail"
@@ -662,14 +639,14 @@ function StepAdmin(props: {
             value={props.email}
             onChange={(e) => props.onChangeEmail(e.target.value)}
             autoComplete="email"
-            placeholder="admin@miempresa.com"
+            placeholder={t('setup.adminEmailPlaceholder')}
             required
           />
         </div>
 
         <div className="space-y-1.5">
           <Label htmlFor="adminPassword">
-            Contraseña <span className="text-danger-700">*</span>
+            {t('setup.adminPasswordLabel')} <span className="text-danger-700">*</span>
           </Label>
           <Input
             id="adminPassword"
@@ -699,13 +676,13 @@ function StepAdmin(props: {
               </p>
             </div>
           ) : (
-            <p className="text-xs text-text-subtle">Mínimo 12 caracteres.</p>
+            <p className="text-xs text-text-subtle">{t('setup.passwordMinHint')}</p>
           )}
         </div>
 
         <div className="space-y-1.5">
           <Label htmlFor="adminPasswordConfirm">
-            Confirmar contraseña <span className="text-danger-700">*</span>
+            {t('setup.adminPasswordConfirmLabel')} <span className="text-danger-700">*</span>
           </Label>
           <Input
             id="adminPasswordConfirm"
@@ -717,7 +694,7 @@ function StepAdmin(props: {
             required
           />
           {props.passwordConfirm.length > 0 && !props.passwordsMatch ? (
-            <p className="text-xs text-danger-700">Las contraseñas no coinciden.</p>
+            <p className="text-xs text-danger-700">{t('setup.passwordsMismatch')}</p>
           ) : null}
         </div>
       </div>
@@ -733,10 +710,10 @@ function StepAdmin(props: {
 
       <div className="flex items-center justify-between gap-3 pt-2">
         <Button variant="ghost" onClick={props.onBack} disabled={props.submitting}>
-          Atrás
+          {t('setup.back')}
         </Button>
         <Button onClick={props.onSubmit} disabled={!props.canSubmit} size="lg">
-          {props.submitting ? 'Creando…' : 'Crear plataforma'}
+          {props.submitting ? t('setup.submitPending') : t('setup.submit')}
         </Button>
       </div>
     </div>
@@ -744,42 +721,38 @@ function StepAdmin(props: {
 }
 
 function StepTour({ onFinish }: { onFinish: () => void }) {
+  const t = useTranslations('auth');
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-text">¡Listo! Esto es lo que viene</h2>
-        <p className="mt-1 text-sm text-text-muted">
-          Tu instancia ya está activa. Aquí los tres lugares donde vas a pasar más tiempo al
-          principio:
-        </p>
+        <h2 className="text-2xl font-bold text-text">{t('setup.tourTitle')}</h2>
+        <p className="mt-1 text-sm text-text-muted">{t('setup.tourDescription')}</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <TourCard icon="📚" title="Cursos">
-          Crea tu primer curso, organiza módulos y matricula alumnos. Es donde vive el contenido.
+        <TourCard icon="📚" title={t('setup.tourCoursesTitle')}>
+          {t('setup.tourCoursesBody')}
         </TourCard>
-        <TourCard icon="💬" title="Comunidad">
-          Foros y feed por curso. Útil cuando quieres que los alumnos colaboren y resuelvan dudas
-          entre ellos.
+        <TourCard icon="💬" title={t('setup.tourCommunityTitle')}>
+          {t('setup.tourCommunityBody')}
         </TourCard>
-        <TourCard icon="⚙️" title="Administración">
-          Usuarios, roles, branding, módulos activos, integraciones. Todo lo de la organización vive
-          bajo /admin.
+        <TourCard icon="⚙️" title={t('setup.tourAdminTitle')}>
+          {t('setup.tourAdminBody')}
         </TourCard>
       </div>
 
       <div className="rounded-lg border border-brand-200 bg-brand-50 p-4 text-sm text-text">
-        <p className="font-semibold text-brand-700">Próximo paso recomendado</p>
+        <p className="font-semibold text-brand-700">{t('setup.tourNextStepTitle')}</p>
         <p className="mt-1 text-text-muted">
-          Activa MFA para tu cuenta admin desde tu perfil{' '}
-          <span className="font-mono text-xs">(Mi perfil → Seguridad)</span> en cuanto entres. Es lo
-          único que te separa del resto del mundo.
+          {t.rich('setup.tourNextStepBody', {
+            mono: (chunks) => <span className="font-mono text-xs">{chunks}</span>,
+          })}
         </p>
       </div>
 
       <div className="flex justify-end pt-2">
         <Button onClick={onFinish} size="lg">
-          Empezar
+          {t('setup.tourCta')}
         </Button>
       </div>
     </div>

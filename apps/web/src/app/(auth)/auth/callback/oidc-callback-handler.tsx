@@ -22,12 +22,14 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { authStorage } from '@/lib/auth-storage';
 import { consumeIntendedPath } from '@/lib/post-login-redirect';
 
 export function OidcCallbackHandler() {
   const router = useRouter();
+  const t = useTranslations('auth');
   const params = useSearchParams();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -43,7 +45,7 @@ export function OidcCallbackHandler() {
     const mfaEnabledRaw = params.get('mfaEnabled');
 
     if (!accessToken || !refreshToken || !userId || !email || !tenantId || !tenantSlug) {
-      setErrorMessage('Faltan datos en el callback. Reintenta iniciar sesión.');
+      setErrorMessage(t('oidcCallback.missingData'));
       router.replace('/auth/error?reason=missing_tokens');
       return;
     }
@@ -75,13 +77,16 @@ export function OidcCallbackHandler() {
     // el roundtrip por el IdP ocurre en la misma pestaña, así que el valor
     // guardado en sessionStorage sobrevive y volvemos a la ruta original.
     router.replace(consumeIntendedPath() ?? '/');
+    // `t` fuera de las deps a propósito: next-intl no garantiza identidad
+    // estable y este efecto NO debe re-ejecutarse (guarda tokens y navega).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, router]);
 
   if (errorMessage) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-2xl">No pudimos completar el inicio</CardTitle>
+          <CardTitle className="text-2xl">{t('oidcCallback.errorTitle')}</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-danger-700">{errorMessage}</p>
@@ -93,14 +98,12 @@ export function OidcCallbackHandler() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-2xl">Iniciando sesión…</CardTitle>
+        <CardTitle className="text-2xl">{t('oidcCallback.progressTitle')}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="flex items-center gap-3">
           <div className="h-2 w-2 animate-pulse rounded-full bg-brand-500" />
-          <p className="text-sm text-text-muted">
-            Recibimos tu autorización del IdP, ya casi estás dentro.
-          </p>
+          <p className="text-sm text-text-muted">{t('oidcCallback.progressBody')}</p>
         </div>
       </CardContent>
     </Card>

@@ -6,6 +6,7 @@
  */
 
 import type { CSSProperties, ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { useTenantContext } from '@/lib/tenant-context';
 
 /**
@@ -15,8 +16,8 @@ import { useTenantContext } from '@/lib/tenant-context';
  * El panel de marca NO inventa nada:
  *  - Logo y nombre salen del tenant resuelto por dominio (`/auth/tenant-context`).
  *  - El titular es el copy que el admin escribe en /admin/branding; si no hay,
- *    se usa la frase genérica de Didacta (`DEFAULT_HEADLINE`), que no afirma
- *    nada concreto de ningún tenant.
+ *    se usa la frase genérica de Didacta (`layout.defaultHeadline` del catálogo
+ *    i18n), que no afirma nada concreto de ningún tenant.
  *  - Las dos cifras son COUNT reales del tenant (miembros activos, cursos
  *    publicados). Si un contador viene a 0, ese tile no se pinta.
  *
@@ -31,16 +32,13 @@ const BRAND_PANEL_STYLE: CSSProperties = {
     'linear-gradient(180deg, rgba(46,125,206,0.18) 0%, rgba(13,27,42,0) 38%, rgba(24,181,168,0.12) 100%)',
 };
 
-/**
- * Copy por defecto cuando el tenant no configuró el suyo. Deliberadamente
- * neutro: no promete módulos que ese tenant puede no tener contratados.
- */
-const DEFAULT_HEADLINE = 'Entra en tu espacio de formación.';
-
 export default function AuthLayout({ children }: { children: ReactNode }) {
+  const t = useTranslations('auth');
   const { tenant } = useTenantContext();
   const stats = tenant?.stats;
-  const headline = tenant?.headline?.trim() || DEFAULT_HEADLINE;
+  // Copy por defecto cuando el tenant no configuró el suyo. Deliberadamente
+  // neutro: no promete módulos que ese tenant puede no tener contratados.
+  const headline = tenant?.headline?.trim() || t('layout.defaultHeadline');
   const subheadline = tenant?.subheadline?.trim() || null;
   const hasStats = !!stats && (stats.activeMembers > 0 || stats.publishedCourses > 0);
 
@@ -106,23 +104,23 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
               <dl className="mt-6 flex flex-wrap gap-x-12 gap-y-5 lg:mt-9">
                 {stats.activeMembers > 0 ? (
                   <div>
-                    <dt className="sr-only">Alumnos activos</dt>
+                    <dt className="sr-only">{t('layout.activeMembersSr')}</dt>
                     <dd className="font-display text-3xl font-extrabold leading-none lg:text-4xl">
                       {stats.activeMembers}
                     </dd>
                     <p className="mt-1.5 text-sm text-white/65">
-                      {stats.activeMembers === 1 ? 'alumno activo' : 'alumnos activos'}
+                      {t('layout.activeMembersCount', { count: stats.activeMembers })}
                     </p>
                   </div>
                 ) : null}
                 {stats.publishedCourses > 0 ? (
                   <div>
-                    <dt className="sr-only">Cursos incluidos</dt>
+                    <dt className="sr-only">{t('layout.publishedCoursesSr')}</dt>
                     <dd className="font-display text-3xl font-extrabold leading-none lg:text-4xl">
                       {stats.publishedCourses}
                     </dd>
                     <p className="mt-1.5 text-sm text-white/65">
-                      {stats.publishedCourses === 1 ? 'curso incluido' : 'cursos incluidos'}
+                      {t('layout.publishedCoursesCount', { count: stats.publishedCourses })}
                     </p>
                   </div>
                 ) : null}
@@ -131,7 +129,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           </div>
 
           <p className="hidden text-sm text-white/45 lg:block">
-            {tenant?.name ?? 'Didacta'} · Acceso privado a la plataforma
+            {t('layout.privateAccess', { name: tenant?.name ?? 'Didacta' })}
           </p>
         </aside>
 

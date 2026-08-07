@@ -6,10 +6,12 @@
  */
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { useTenantContext } from '@/lib/tenant-context';
 
 interface ForgotResponse {
@@ -18,6 +20,8 @@ interface ForgotResponse {
 }
 
 export function ForgotPasswordForm() {
+  const t = useTranslations('auth');
+  const tErrors = useTranslations('errors');
   const { loading: tenantLoading, tenant } = useTenantContext();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -35,9 +39,7 @@ export function ForgotPasswordForm() {
       });
       setSuccess(response.message);
     } catch (e) {
-      setError(
-        e instanceof ApiHttpError ? e.message : 'No pudimos procesar tu pedido. Prueba de nuevo.',
-      );
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('forgot.submitError'));
     } finally {
       setPending(false);
     }
@@ -47,12 +49,10 @@ export function ForgotPasswordForm() {
     return (
       <div role="status" className="space-y-3">
         <div className="rounded-lg border border-success-200 bg-success-50 p-4">
-          <h4 className="font-semibold text-success-700">Revisa tu email</h4>
+          <h4 className="font-semibold text-success-700">{t('forgot.successTitle')}</h4>
           <p className="mt-1 text-sm text-text">{success}</p>
         </div>
-        <p className="text-sm text-text-subtle">
-          Si no aparece en pocos minutos, revisa la carpeta de spam o pide un nuevo enlace.
-        </p>
+        <p className="text-sm text-text-subtle">{t('forgot.successHint')}</p>
       </div>
     );
   }
@@ -70,25 +70,26 @@ export function ForgotPasswordForm() {
     <form action={onSubmit} className="space-y-4">
       {tenant ? (
         <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
-          <span className="text-text-muted">Recuperas contraseña para</span>{' '}
+          <span className="text-text-muted">{t('forgot.tenantIntro')}</span>{' '}
           <strong className="text-brand-700">{tenant.name}</strong>
         </div>
       ) : (
         <div className="space-y-1.5">
           <Label htmlFor="tenantSlug">
-            Organización <span className="text-text-subtle text-xs">(opcional)</span>
+            {t('forgot.tenantSlugLabel')}{' '}
+            <span className="text-text-subtle text-xs">{t('forgot.optionalTag')}</span>
           </Label>
           <Input
             id="tenantSlug"
             name="tenantSlug"
             autoComplete="organization"
-            placeholder="mi-academia"
+            placeholder={t('forgot.tenantSlugPlaceholder')}
           />
         </div>
       )}
 
       <div className="space-y-1.5">
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email">{t('forgot.emailLabel')}</Label>
         <Input
           id="email"
           name="email"
@@ -106,7 +107,7 @@ export function ForgotPasswordForm() {
       ) : null}
 
       <Button type="submit" disabled={pending} size="lg" className="h-13 w-full">
-        {pending ? 'Enviando…' : 'Enviar enlace'}
+        {pending ? t('forgot.submitPending') : t('forgot.submit')}
       </Button>
     </form>
   );

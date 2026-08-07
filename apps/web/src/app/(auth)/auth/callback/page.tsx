@@ -17,11 +17,15 @@
  */
 
 import { Suspense } from 'react';
+import { getTranslations } from 'next-intl/server';
 import { OidcCallbackHandler } from './oidc-callback-handler';
 
-export const metadata = {
-  title: 'Iniciando sesión…',
-};
+export async function generateMetadata() {
+  const t = await getTranslations('auth');
+  return {
+    title: t('oidcCallback.metaTitle'),
+  };
+}
 
 // Next 15 exige envolver páginas que usan `useSearchParams()` en <Suspense>
 // cuando hay static generation. Sin esto, el build de producción falla con

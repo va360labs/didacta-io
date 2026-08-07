@@ -8,11 +8,13 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { consumeIntendedPath } from '@/lib/post-login-redirect';
 import { invalidateCommunitySpacesCache } from '@/modules/community';
 import { buildOidcStartUrl, buildWpSsoTryUrl, fetchOidcStatus, fetchWpSsoStatus } from '@/lib/sso';
@@ -44,6 +46,8 @@ interface AmbiguousTenantError {
 
 export function SignInForm() {
   const router = useRouter();
+  const t = useTranslations('auth');
+  const tErrors = useTranslations('errors');
   const { loading: tenantLoading, tenant } = useTenantContext();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -146,12 +150,12 @@ export function SignInForm() {
         const issuesAny = (e as { issues?: unknown }).issues as AmbiguousTenantError | undefined;
         if (issuesAny && (issuesAny as { candidateSlugs?: string[] }).candidateSlugs) {
           setTenantCandidates((issuesAny as { candidateSlugs: string[] }).candidateSlugs);
-          setError('Tu email pertenece a más de una organización. Elige cuál quieres usar:');
+          setError(t('signin.ambiguousTenant'));
         } else {
-          setError(e.message);
+          setError(apiErrorMessage(e, tErrors));
         }
       } else {
-        setError('No pudimos completar el ingreso. Prueba de nuevo en unos segundos.');
+        setError(t('signin.submitError'));
       }
     } finally {
       setPending(false);
@@ -163,7 +167,7 @@ export function SignInForm() {
     return (
       <div className="flex items-center gap-3 py-4">
         <div className="h-2 w-2 animate-pulse rounded-full bg-brand-500" />
-        <p className="text-sm text-text-muted">Conectando con tu plataforma de origen…</p>
+        <p className="text-sm text-text-muted">{t('signin.wpBouncing')}</p>
       </div>
     );
   }
@@ -184,8 +188,7 @@ export function SignInForm() {
       {/* Volvimos de WordPress sin sesión activa: explicamos por qué ven el form. */}
       {wpLoginRequired ? (
         <div className="rounded-lg border border-border-soft bg-surface-2 p-3 text-sm text-text-muted">
-          No detectamos una sesión activa en tu plataforma de origen. Inicia sesión aquí con tu
-          email y contraseña.
+          {t('signin.wpLoginRequired')}
         </div>
       ) : null}
 
@@ -199,12 +202,12 @@ export function SignInForm() {
             className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-border-strong bg-surface text-sm font-semibold transition-colors hover:bg-surface-2"
           >
             <span aria-hidden="true">🔐</span>
-            Iniciar sesión con SSO
+            {t('signin.ssoButton')}
           </a>
           <div className="flex items-center gap-3">
             <div className="h-px flex-1 bg-border-soft" />
             <span className="text-xs uppercase tracking-wide text-text-subtle">
-              o con tu contraseña
+              {t('signin.orWithPassword')}
             </span>
             <div className="h-px flex-1 bg-border-soft" />
           </div>
@@ -217,7 +220,7 @@ export function SignInForm() {
           NO mostramos ni el campo "Organización" ni un banner de tenant. */}
         {tenantCandidates && tenantCandidates.length > 0 ? (
           <div className="space-y-1.5">
-            <Label htmlFor="tenantSlugSelect">Elige tu organización</Label>
+            <Label htmlFor="tenantSlugSelect">{t('signin.tenantSelectLabel')}</Label>
             <select
               id="tenantSlugSelect"
               name="tenantSlug"
@@ -234,7 +237,7 @@ export function SignInForm() {
         ) : null}
 
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">{t('signin.emailLabel')}</Label>
           <Input
             id="email"
             name="email"
@@ -247,12 +250,12 @@ export function SignInForm() {
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="password">Contraseña</Label>
+            <Label htmlFor="password">{t('signin.passwordLabel')}</Label>
             <Link
               href="/forgot-password"
               className="text-[0.8125rem] font-semibold text-brand-600 hover:underline"
             >
-              ¿Olvidaste tu contraseña?
+              {t('signin.forgotLink')}
             </Link>
           </div>
           <Input
@@ -276,7 +279,7 @@ export function SignInForm() {
             className="h-[18px] w-[18px] shrink-0 cursor-pointer rounded-[5px] border border-border-strong accent-brand-500 focus-visible:outline-none focus-visible:shadow-focus"
           />
           <Label htmlFor="remember" className="cursor-pointer font-normal text-text-muted">
-            Mantener la sesión abierta
+            {t('signin.rememberLabel')}
           </Label>
         </div>
 
@@ -290,7 +293,7 @@ export function SignInForm() {
         ) : null}
 
         <Button type="submit" disabled={pending} className="h-13 w-full text-[1.0625rem]" size="lg">
-          {pending ? 'Entrando…' : 'Entrar'}
+          {pending ? t('signin.submitPending') : t('signin.submit')}
         </Button>
       </form>
 
@@ -300,9 +303,9 @@ export function SignInForm() {
         <>
           <div className="h-px w-full bg-border-soft" />
           <p className="text-center text-[0.9375rem] text-text-muted">
-            ¿Aún no tienes cuenta?{' '}
+            {t('signin.noAccountPrompt')}{' '}
             <Link href="/unete" className="font-semibold text-brand-600 hover:underline">
-              Ver la membresía
+              {t('signin.membershipLink')}
             </Link>
           </p>
         </>
