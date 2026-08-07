@@ -28,6 +28,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { EeGate, LICENSE_CAPABILITIES } from '@didacta/license-sdk/react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +39,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import {
   oidcAdminApi,
   buildOidcStartUrl,
@@ -50,17 +53,12 @@ const DEFAULT_SCOPES = ['openid', 'email', 'profile'];
 
 /** Pestaña "OIDC" de /admin/sso. Antes era la página `/admin/sso`. */
 export function OidcTab() {
+  const t = useTranslations('adminSso');
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h2 className="font-display text-lg font-semibold tracking-tight">
-          SSO con OpenID Connect
-        </h2>
-        <p className="text-text-muted">
-          Permite a tus usuarios iniciar sesión con su identidad corporativa (Okta, Azure AD, Auth0,
-          Google Workspace, Keycloak…). Una vez configurado, aparece un botón &ldquo;Iniciar sesión
-          con SSO&rdquo; en la pantalla de login del tenant.
-        </p>
+        <h2 className="font-display text-lg font-semibold tracking-tight">{t('oidc.title')}</h2>
+        <p className="text-text-muted">{t('oidc.subtitle')}</p>
       </header>
 
       <EeGate capability={LICENSE_CAPABILITIES.SSO_OIDC} fallback={<SsoUpsellCard />}>
@@ -74,6 +72,8 @@ export function OidcTab() {
  * Panel principal — sólo se renderiza cuando la capability está activa.
  */
 function SsoPanel() {
+  const t = useTranslations('adminSso');
+  const tErrors = useTranslations('errors');
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -116,7 +116,7 @@ function SsoPanel() {
     if (session?.user.tenantSlug) setTenantSlug(session.user.tenantSlug);
     const token = authStorage.getAccessToken();
     if (!token) {
-      setLoadError('Sesión sin token. Vuelve a iniciar sesión.');
+      setLoadError(t('sso.noToken'));
       setLoading(false);
       return;
     }
@@ -139,9 +139,7 @@ function SsoPanel() {
           setRedirectUri(res.redirectUri);
         }
       } catch (e) {
-        setLoadError(
-          e instanceof ApiHttpError ? e.message : 'No se pudo cargar la configuración OIDC.',
-        );
+        setLoadError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('oidc.loadError'));
       } finally {
         setLoading(false);
       }
@@ -159,7 +157,7 @@ function SsoPanel() {
     setActionSuccess(null);
     setDiscovery(null);
     if (!form.issuer.trim()) {
-      setActionError('Pega el issuer URL antes de probar.');
+      setActionError(t('oidc.probeMissingIssuer'));
       return;
     }
     const token = authStorage.getAccessToken();
@@ -170,7 +168,7 @@ function SsoPanel() {
       setDiscovery(probe);
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError ? e.message : 'No se pudo probar el discovery del IdP.',
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('oidc.probeError'),
       );
     } finally {
       setProbing(false);
@@ -203,14 +201,10 @@ function SsoPanel() {
       const res = await oidcAdminApi.saveConfig(token, body);
       setServerConfig(res.config);
       setForm((prev) => ({ ...prev, clientSecret: '' }));
-      setActionSuccess(
-        serverConfig
-          ? 'Configuración actualizada correctamente.'
-          : 'Configuración creada correctamente.',
-      );
+      setActionSuccess(serverConfig ? t('sso.savedUpdated') : t('sso.savedCreated'));
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError ? formatApiError(e) : 'No se pudo guardar la configuración.',
+        e instanceof ApiHttpError ? formatApiError(e, t, tErrors) : t('sso.saveError'),
       );
     } finally {
       setSaving(false);
@@ -218,11 +212,7 @@ function SsoPanel() {
   }
 
   async function handleDelete() {
-    if (
-      !window.confirm(
-        '¿Eliminar la configuración SSO? Los usuarios dejarán de poder loguearse con SSO inmediatamente.',
-      )
-    ) {
+    if (!window.confirm(t('oidc.deleteConfirm'))) {
       return;
     }
     setActionError(null);
@@ -243,10 +233,10 @@ function SsoPanel() {
         scopes: DEFAULT_SCOPES,
       });
       setDiscovery(null);
-      setActionSuccess('Configuración eliminada.');
+      setActionSuccess(t('sso.deleted'));
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError ? e.message : 'No se pudo eliminar la configuración.',
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('sso.deleteError'),
       );
     } finally {
       setDeleting(false);
@@ -279,15 +269,15 @@ function SsoPanel() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Icon name="lock" size={18} />
-            Estado SSO
+            {t('oidc.statusTitle')}
             <SsoStatusBadge enabled={serverConfig?.enabled ?? false} hasConfig={!!serverConfig} />
           </CardTitle>
           <CardDescription>
             {serverConfig?.enabled
-              ? 'El botón de SSO aparecerá en /signin y los usuarios podrán entrar con su IdP corporativo.'
+              ? t('oidc.statusEnabledDesc')
               : serverConfig
-                ? 'Hay configuración guardada pero está deshabilitada — el flow no se ofrece.'
-                : 'Aún no has configurado un IdP. Empieza pegando el issuer URL abajo.'}
+                ? t('sso.statusDisabledDesc')
+                : t('oidc.statusEmptyDesc')}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -295,51 +285,45 @@ function SsoPanel() {
       {/* Formulario */}
       <Card>
         <CardHeader>
-          <CardTitle>Configuración del IdP</CardTitle>
-          <CardDescription>
-            Necesitas haber dado de alta una aplicación &ldquo;OpenID Connect / Web&rdquo; en tu
-            IdP. Pega la URL de callback de abajo en su configuración como URI de redirección
-            autorizada.
-          </CardDescription>
+          <CardTitle>{t('sso.idpConfigTitle')}</CardTitle>
+          <CardDescription>{t('oidc.idpConfigDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           {/* enabled */}
           <div className="flex items-center justify-between rounded-lg border border-border-soft bg-surface-2 p-4">
             <div>
-              <p className="text-sm font-semibold">Habilitar SSO</p>
-              <p className="text-xs text-text-muted">
-                Activa el botón &ldquo;Iniciar sesión con SSO&rdquo; en /signin para este tenant.
-              </p>
+              <p className="text-sm font-semibold">{t('oidc.enableLabel')}</p>
+              <p className="text-xs text-text-muted">{t('oidc.enableHelp')}</p>
             </div>
             <Switch
               checked={form.enabled}
               onCheckedChange={(next) => setForm((prev) => ({ ...prev, enabled: next }))}
-              label="Habilitar SSO"
+              label={t('oidc.enableLabel')}
             />
           </div>
 
           {/* issuer */}
           <div className="space-y-1.5">
             <Label htmlFor="oidc-issuer">
-              Issuer URL <span className="text-danger-700">*</span>
+              {t('oidc.issuerLabel')} <span className="text-danger-700">*</span>
             </Label>
             <div className="flex gap-2">
               <Input
                 id="oidc-issuer"
                 type="url"
                 inputMode="url"
-                placeholder="https://tu-idp.example.com"
+                placeholder={t('oidc.issuerPlaceholder')}
                 value={form.issuer}
                 onChange={(e) => setForm((prev) => ({ ...prev, issuer: e.target.value }))}
               />
               <Button type="button" variant="ghost" onClick={handleProbe} disabled={probing}>
-                {probing ? 'Probando…' : 'Probar discovery'}
+                {probing ? t('sso.probing') : t('oidc.probeButton')}
               </Button>
             </div>
             <p className="text-xs text-text-subtle">
-              Debe ser HTTPS (acepta http://localhost para dev). Lo concatenamos con{' '}
-              <code className="font-mono">/.well-known/openid-configuration</code> para descubrir
-              endpoints.
+              {t.rich('oidc.issuerHelp', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+              })}
             </p>
             {discovery ? <DiscoveryFeedback probe={discovery} /> : null}
           </div>
@@ -347,11 +331,11 @@ function SsoPanel() {
           {/* clientId */}
           <div className="space-y-1.5">
             <Label htmlFor="oidc-client-id">
-              Client ID <span className="text-danger-700">*</span>
+              {t('oidc.clientIdLabel')} <span className="text-danger-700">*</span>
             </Label>
             <Input
               id="oidc-client-id"
-              placeholder="abc123-client-id"
+              placeholder={t('oidc.clientIdPlaceholder')}
               value={form.clientId}
               onChange={(e) => setForm((prev) => ({ ...prev, clientId: e.target.value }))}
             />
@@ -360,11 +344,9 @@ function SsoPanel() {
           {/* clientSecret */}
           <div className="space-y-1.5">
             <Label htmlFor="oidc-client-secret">
-              Client Secret{' '}
+              {t('oidc.clientSecretLabel')}{' '}
               {serverConfig?.hasSecret ? (
-                <span className="text-text-subtle text-xs">
-                  (deja vacío para mantener el actual)
-                </span>
+                <span className="text-text-subtle text-xs">{t('sso.secretKeepHint')}</span>
               ) : (
                 <span className="text-danger-700">*</span>
               )}
@@ -374,22 +356,22 @@ function SsoPanel() {
               type="password"
               autoComplete="off"
               placeholder={
-                serverConfig?.hasSecret ? '••••••••• (sin cambios)' : 'pega el secret del IdP'
+                serverConfig?.hasSecret
+                  ? t('sso.secretUnchangedPlaceholder')
+                  : t('oidc.clientSecretPlaceholder')
               }
               value={form.clientSecret}
               onChange={(e) => setForm((prev) => ({ ...prev, clientSecret: e.target.value }))}
             />
-            <p className="text-xs text-text-subtle">
-              Se cifra at-rest con AES-256-GCM. Mín 16 caracteres cuando se escribe.
-            </p>
+            <p className="text-xs text-text-subtle">{t('oidc.clientSecretHelp')}</p>
           </div>
 
           {/* scopes */}
           <div className="space-y-1.5">
-            <Label htmlFor="oidc-scopes">Scopes</Label>
+            <Label htmlFor="oidc-scopes">{t('oidc.scopesLabel')}</Label>
             <Input
               id="oidc-scopes"
-              placeholder="openid email profile"
+              placeholder={t('oidc.scopesPlaceholder')}
               value={form.scopes.join(' ')}
               onChange={(e) =>
                 setForm((prev) => ({
@@ -399,59 +381,56 @@ function SsoPanel() {
               }
             />
             <p className="text-xs text-text-subtle">
-              <code className="font-mono">openid</code> es obligatorio. Otros comunes:{' '}
-              <code className="font-mono">email</code>, <code className="font-mono">profile</code>,{' '}
-              <code className="font-mono">offline_access</code>.
+              {t.rich('oidc.scopesHelp', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+              })}
             </p>
           </div>
 
           {/* allowedEmailDomains */}
           <div className="space-y-1.5">
             <Label htmlFor="oidc-allowed-domains">
-              Dominios de email permitidos{' '}
-              <span className="text-text-subtle text-xs">(opcional)</span>
+              {t('sso.allowedDomainsLabel')}{' '}
+              <span className="text-text-subtle text-xs">{t('sso.optionalHint')}</span>
             </Label>
             <Input
               id="oidc-allowed-domains"
-              placeholder="acme.com, partner.com"
+              placeholder={t('sso.allowedDomainsPlaceholder')}
               value={form.allowedEmailDomainsCsv}
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, allowedEmailDomainsCsv: e.target.value }))
               }
             />
-            <p className="text-xs text-text-subtle">
-              Vacío = cualquier email del IdP es aceptado. Si listas, el callback rechaza emails
-              fuera de esos dominios incluso si el IdP los autenticó.
-            </p>
+            <p className="text-xs text-text-subtle">{t('oidc.allowedDomainsHelp')}</p>
           </div>
 
           {/* autoProvisionUsers */}
           <div className="flex items-center justify-between rounded-lg border border-border-soft bg-surface-2 p-4">
             <div>
-              <p className="text-sm font-semibold">Auto-provisionar usuarios</p>
+              <p className="text-sm font-semibold">{t('sso.autoProvisionLabel')}</p>
               <p className="text-xs text-text-muted">
-                Si está activo, el primer login crea automáticamente la cuenta con role{' '}
-                <code className="font-mono">student</code>. Si está apagado, sólo dejan entrar
-                usuarios que ya existen en el tenant (provisionados por SCIM o manualmente).
+                {t.rich('oidc.autoProvisionHelp', {
+                  code: (chunks) => <code className="font-mono">{chunks}</code>,
+                })}
               </p>
             </div>
             <Switch
               checked={form.autoProvisionUsers}
               onCheckedChange={(next) => setForm((prev) => ({ ...prev, autoProvisionUsers: next }))}
-              label="Auto-provisionar usuarios"
+              label={t('sso.autoProvisionLabel')}
             />
           </div>
 
           {/* redirectUri (readonly) */}
           <div className="space-y-1.5">
-            <Label>URL de callback (pegar en el IdP)</Label>
+            <Label>{t('oidc.callbackLabel')}</Label>
             <code className="block break-all rounded bg-surface-2 px-3 py-2 font-mono text-sm">
               {redirectUri || '—'}
             </code>
             <p className="text-xs text-text-subtle">
-              Configurala en el IdP como &ldquo;Redirect URI&rdquo; / &ldquo;Authorized redirect
-              URI&rdquo;. Si tu API está detrás de un proxy con dominio público distinto, override
-              con la env var <code className="font-mono">OIDC_REDIRECT_URI</code>.
+              {t.rich('oidc.callbackHelp', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+              })}
             </p>
           </div>
 
@@ -474,11 +453,11 @@ function SsoPanel() {
 
           <div className="flex flex-wrap gap-2 pt-2">
             <Button type="button" onClick={handleSave} disabled={saving}>
-              {saving ? 'Guardando…' : serverConfig ? 'Guardar cambios' : 'Crear configuración'}
+              {saving ? t('sso.saving') : serverConfig ? t('sso.saveExisting') : t('sso.saveNew')}
             </Button>
             {serverConfig ? (
               <Button type="button" variant="ghost" onClick={handleDelete} disabled={deleting}>
-                {deleting ? 'Eliminando…' : 'Eliminar configuración'}
+                {deleting ? t('sso.deleting') : t('sso.deleteButton')}
               </Button>
             ) : null}
             {serverConfig?.enabled && startUrl ? (
@@ -488,7 +467,7 @@ function SsoPanel() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50"
               >
-                Probar flow ↗
+                {t('sso.tryFlow')}
               </a>
             ) : null}
           </div>
@@ -500,63 +479,50 @@ function SsoPanel() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Icon name="help" size={18} />
-            Configurar tu IdP
+            {t('oidc.guideTitle')}
           </CardTitle>
-          <CardDescription>
-            Pasos genéricos que aplican a la mayoría de IdPs (Okta, Azure AD, Auth0, Google
-            Workspace, Keycloak). Los nombres de campos pueden variar levemente.
-          </CardDescription>
+          <CardDescription>{t('oidc.guideDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div>
-            <p className="font-semibold">1. Crear app OIDC en el IdP</p>
+            <p className="font-semibold">{t('oidc.guideStep1Title')}</p>
             <p className="text-text-muted">
-              Tipo de aplicación: <strong>Web</strong> o <strong>OIDC Web Application</strong>.
-              Authorization Code Flow con PKCE.
+              {t.rich('oidc.guideStep1Desc', {
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
             </p>
           </div>
           <div>
-            <p className="font-semibold">2. Configurar el redirect URI</p>
+            <p className="font-semibold">{t('oidc.guideStep2Title')}</p>
             <p className="text-text-muted">
-              Pega la URL de callback (la de arriba) en el campo{' '}
-              <code className="font-mono">Sign-in redirect URIs</code> /{' '}
-              <code className="font-mono">Authorized redirect URIs</code>.
+              {t.rich('oidc.guideStep2Desc', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+              })}
             </p>
           </div>
           <div>
-            <p className="font-semibold">3. Copiar issuer + clientId + clientSecret</p>
+            <p className="font-semibold">{t('oidc.guideStep3Title')}</p>
             <p className="text-text-muted">
-              Pega el issuer URL del IdP arriba (sin <code className="font-mono">/.well-known</code>
-              ), y el clientId / clientSecret que el IdP genere. Para Okta el issuer es{' '}
-              <code className="font-mono">https://&#123;tu-org&#125;.okta.com/oauth2/default</code>.
-              Para Azure AD:{' '}
-              <code className="font-mono">
-                https://login.microsoftonline.com/&#123;tenant&#125;/v2.0
-              </code>
-              .
+              {t.rich('oidc.guideStep3Desc', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+              })}
             </p>
           </div>
           <div>
-            <p className="font-semibold">4. Probar discovery</p>
-            <p className="text-text-muted">
-              Click &ldquo;Probar discovery&rdquo; — debería responder con los endpoints. Si falla,
-              revisa que el issuer sea HTTPS y accesible desde el server.
-            </p>
+            <p className="font-semibold">{t('oidc.guideStep4Title')}</p>
+            <p className="text-text-muted">{t('oidc.guideStep4Desc')}</p>
           </div>
           <div>
-            <p className="font-semibold">5. Habilitar y probar el flow</p>
-            <p className="text-text-muted">
-              Toggle &ldquo;Habilitar SSO&rdquo; → guardar → click &ldquo;Probar flow&rdquo;. Te
-              redirige al IdP y vuelve loguead@.
-            </p>
+            <p className="font-semibold">{t('oidc.guideStep5Title')}</p>
+            <p className="text-text-muted">{t('oidc.guideStep5Desc')}</p>
           </div>
           <div className="rounded-lg border border-warning-200 bg-warning-50 p-4 text-warning-800">
-            <p className="font-semibold">Nota: scope acotado en este piloto</p>
+            <p className="font-semibold">{t('oidc.guideNoteTitle')}</p>
             <p className="text-xs">
-              1 IdP por tenant, sólo Authorization Code + PKCE, sin role mapping desde el IdP. Los
-              usuarios provisionados automáticamente reciben role{' '}
-              <code className="font-mono">student</code>; los admins lo cambian luego en{' '}
-              <a href="/admin/usuarios">Usuarios</a>.
+              {t.rich('oidc.guideNoteDesc', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+                link: (chunks) => <a href="/admin/usuarios">{chunks}</a>,
+              })}
             </p>
           </div>
         </CardContent>
@@ -566,28 +532,32 @@ function SsoPanel() {
 }
 
 function SsoStatusBadge({ enabled, hasConfig }: { enabled: boolean; hasConfig: boolean }) {
-  if (enabled) return <Badge className="bg-success-600 text-white">Activo</Badge>;
-  if (hasConfig) return <Badge variant="outline">Deshabilitado</Badge>;
-  return <Badge variant="outline">Sin configurar</Badge>;
+  const t = useTranslations('adminSso');
+  if (enabled) return <Badge className="bg-success-600 text-white">{t('sso.statusActive')}</Badge>;
+  if (hasConfig) return <Badge variant="outline">{t('sso.statusDisabled')}</Badge>;
+  return <Badge variant="outline">{t('sso.statusNotConfigured')}</Badge>;
 }
 
 function DiscoveryFeedback({ probe }: { probe: OidcDiscoveryProbe }) {
+  const t = useTranslations('adminSso');
   if (probe.ok) {
     return (
       <div className="rounded-lg border border-success-200 bg-success-50 p-3 text-xs text-success-800">
-        <p className="font-semibold">✓ Discovery OK</p>
+        <p className="font-semibold">{t('oidc.discoveryOk')}</p>
         <ul className="mt-1 space-y-0.5 font-mono text-[11px]">
-          <li>authorization_endpoint: {probe.authorizationEndpoint}</li>
-          <li>token_endpoint: {probe.tokenEndpoint}</li>
-          <li>jwks_uri: {probe.jwksUri}</li>
-          <li>issuer (echo): {probe.issuer}</li>
+          <li>
+            {t('oidc.discoveryAuthorizationEndpoint', { value: probe.authorizationEndpoint })}
+          </li>
+          <li>{t('oidc.discoveryTokenEndpoint', { value: probe.tokenEndpoint })}</li>
+          <li>{t('oidc.discoveryJwksUri', { value: probe.jwksUri })}</li>
+          <li>{t('oidc.discoveryIssuerEcho', { value: probe.issuer })}</li>
         </ul>
       </div>
     );
   }
   return (
     <div className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-xs text-danger-700">
-      <p className="font-semibold">✗ Discovery falló</p>
+      <p className="font-semibold">{t('oidc.discoveryFailed')}</p>
       <p className="mt-1 font-mono text-[11px]">{probe.error}</p>
     </div>
   );
@@ -597,28 +567,24 @@ function DiscoveryFeedback({ probe }: { probe: OidcDiscoveryProbe }) {
  * Tarjeta de upsell para plan community (sin licencia EE).
  */
 export function SsoUpsellCard() {
+  const t = useTranslations('adminSso');
   return (
-    <Card role="region" aria-label="SSO con OIDC (Enterprise)" className="border-dashed">
+    <Card role="region" aria-label={t('oidc.upsellAria')} className="border-dashed">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="lock" size={18} />
-          Función Enterprise — actualiza tu plan
+          {t('upsell.title')}
         </CardTitle>
-        <CardDescription>
-          Single Sign-On con OpenID Connect es parte del paquete Didacta Enterprise. Permite a tus
-          usuarios entrar a Didacta con su identidad corporativa de Okta, Azure AD, Auth0, Google
-          Workspace, Keycloak o cualquier IdP OIDC-compatible.
-        </CardDescription>
+        <CardDescription>{t('oidc.upsellDesc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-text-muted">
-          La capability requerida es{' '}
-          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">
-            feat:sso.oidc
-          </code>
-          . Sin Enterprise, los endpoints <code className="font-mono">/admin/sso/oidc/*</code>{' '}
-          devuelven <code className="font-mono">402 Payment Required</code> y los flows de login
-          federado no se inician.
+          {t.rich('oidc.upsellCapability', {
+            chip: (chunks) => (
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">{chunks}</code>
+            ),
+            code: (chunks) => <code className="font-mono">{chunks}</code>,
+          })}
         </p>
         <a
           href="https://didacta.io/pricing"
@@ -626,7 +592,7 @@ export function SsoUpsellCard() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
         >
-          Ver planes Enterprise
+          {t('upsell.cta')}
           <Icon name="arrow-right" size={14} />
         </a>
       </CardContent>
@@ -634,13 +600,13 @@ export function SsoUpsellCard() {
   );
 }
 
-function formatApiError(e: ApiHttpError): string {
+function formatApiError(e: ApiHttpError, t: TranslatorLike, tErrors: TranslatorLike): string {
   if (e.status === 402) {
-    return 'Esta función requiere un plan Enterprise con la capability `feat:sso.oidc`.';
+    return t('oidc.error402');
   }
   if (e.issues && e.issues.length > 0) {
     const list = e.issues.map((iss) => `${iss.path}: ${iss.message}`).join('; ');
     return `${e.message} — ${list}`;
   }
-  return e.message;
+  return apiErrorMessage(e, tErrors);
 }

@@ -29,6 +29,7 @@
  */
 
 import { useEffect, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -50,6 +51,9 @@ import {
 } from '@/lib/admin-smtp';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import { smtpFormSchema, type SmtpFormValues } from './smtp-form-schema';
 
 // Re-export para que los tests existentes que ya importaban el schema desde
@@ -89,6 +93,8 @@ export function SmtpSettingsCard({
   api = adminSmtpApi,
   currentAdminEmail,
 }: SmtpSettingsCardProps): React.JSX.Element {
+  const t = useTranslations('adminSso');
+  const tErrors = useTranslations('errors');
   const [dto, setDto] = useState<AdminSmtpDto | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [form, setForm] = useState<SmtpFormValues>(EMPTY_FORM);
@@ -120,9 +126,7 @@ export function SmtpSettingsCard({
       } catch (err) {
         if (cancelled) return;
         setLoadError(
-          err instanceof ApiHttpError
-            ? err.message
-            : 'No pudimos cargar la configuración SMTP. Reintenta.',
+          err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('smtp.loadError'),
         );
       }
     })();
@@ -147,13 +151,17 @@ export function SmtpSettingsCard({
       const firstIssue = parsed.error.issues[0];
       setToast({
         variant: 'error',
-        message: firstIssue?.message ?? 'Revisa los campos del formulario.',
+        // Los mensajes custom del schema son keys del grupo `validation`;
+        // los defaults de Zod (sin key en el catálogo) se muestran tal cual.
+        message: firstIssue
+          ? labelOr(t, firstIssue.message, firstIssue.message)
+          : t('smtp.formInvalid'),
       });
       return;
     }
     // Si NO hay password guardado y el campo está vacío → required.
     if (!dto?.hasPassword && !parsed.data.password) {
-      setToast({ variant: 'error', message: 'Contraseña requerida (no hay una guardada).' });
+      setToast({ variant: 'error', message: t('smtp.passwordRequired') });
       return;
     }
     setSaving(true);
@@ -171,14 +179,11 @@ export function SmtpSettingsCard({
       const updated = await api.upsert(payload);
       setDto(updated);
       setForm((f) => ({ ...f, password: '' }));
-      setToast({
-        variant: 'success',
-        message: 'Configuración guardada. Manda un email de prueba para verificar que llega bien.',
-      });
+      setToast({ variant: 'success', message: t('smtp.saved') });
     } catch (err) {
       setToast({
         variant: 'error',
-        message: err instanceof ApiHttpError ? err.message : 'No pudimos guardar la configuración.',
+        message: err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('smtp.saveError'),
       });
     } finally {
       setSaving(false);
@@ -192,7 +197,7 @@ export function SmtpSettingsCard({
       setDto((prev) => (prev ? { ...prev, verifiedAt: result.verifiedAt } : prev));
       setToast({
         variant: 'success',
-        message: `Email de prueba enviado a ${result.sentTo}. Revisa tu bandeja.`,
+        message: t('smtp.testSent', { email: result.sentTo }),
       });
       setTestDialogOpen(false);
     } catch (err) {
@@ -200,8 +205,7 @@ export function SmtpSettingsCard({
       // rechazada, etc.). Lo mostramos textual para que el admin diagnostique.
       setToast({
         variant: 'error',
-        message:
-          err instanceof ApiHttpError ? err.message : 'No pudimos enviar el email de prueba.',
+        message: err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('smtp.testError'),
       });
     } finally {
       setSendingTest(false);
@@ -227,15 +231,15 @@ export function SmtpSettingsCard({
       setToast({
         variant: 'success',
         message: refreshed.hasGlobalFallback
-          ? 'Configuración eliminada. El tenant ahora usa el SMTP global del host.'
-          : 'Configuración eliminada. Sin SMTP no se envían emails — guarda una nueva.',
+          ? t('smtp.deletedFallback')
+          : t('smtp.deletedNoFallback'),
       });
       setDeleteDialogOpen(false);
     } catch (err) {
       setToast({
         variant: 'error',
         message:
-          err instanceof ApiHttpError ? err.message : 'No pudimos eliminar la configuración.',
+          err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('smtp.deleteError'),
       });
     } finally {
       setDeleting(false);
@@ -245,12 +249,8 @@ export function SmtpSettingsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Notificaciones · SMTP</CardTitle>
-        <CardDescription>
-          Servidor saliente para enviar emails transaccionales (activación de cuenta, reset de
-          contraseña, notificaciones de cursos). Si no se configura, el tenant hereda el SMTP global
-          del host (si el operador lo expuso por env).
-        </CardDescription>
+        <CardTitle>{t('smtp.title')}</CardTitle>
+        <CardDescription>{t('smtp.subtitle')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         {loadError ? (
@@ -266,17 +266,17 @@ export function SmtpSettingsCard({
 
         <form onSubmit={handleSubmit} aria-busy={saving} className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="smtp-host">Host</Label>
+            <Label htmlFor="smtp-host">{t('smtp.hostLabel')}</Label>
             <Input
               id="smtp-host"
               required
               value={form.host}
               onChange={(e) => setForm({ ...form, host: e.target.value })}
-              placeholder="smtp-relay.brevo.com"
+              placeholder={t('smtp.hostPlaceholder')}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="smtp-port">Puerto</Label>
+            <Label htmlFor="smtp-port">{t('smtp.portLabel')}</Label>
             <Input
               id="smtp-port"
               required
@@ -285,39 +285,38 @@ export function SmtpSettingsCard({
               max={65535}
               value={form.port}
               onChange={(e) => setForm({ ...form, port: Number(e.target.value) })}
-              placeholder="587"
+              placeholder={t('smtp.portPlaceholder')}
             />
           </div>
           <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-2/40 p-3 sm:col-span-2">
             <div>
               <Label htmlFor="smtp-secure" className="text-sm font-medium">
-                Conexión segura (TLS)
+                {t('smtp.secureLabel')}
               </Label>
-              <p className="text-xs text-text-subtle">
-                Activa si tu provider usa STARTTLS/SSL. Por defecto ON; los puertos 25 y 587 sin
-                cifrado quedan deshabilitados.
-              </p>
+              <p className="text-xs text-text-subtle">{t('smtp.secureHelp')}</p>
             </div>
             <Switch
               id="smtp-secure"
               checked={form.secure}
               onCheckedChange={(checked) => setForm({ ...form, secure: checked })}
-              label="Activar TLS"
+              label={t('smtp.secureSwitchLabel')}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="smtp-username">Usuario</Label>
+            <Label htmlFor="smtp-username">{t('smtp.usernameLabel')}</Label>
             <Input
               id="smtp-username"
               required
               autoComplete="off"
               value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
-              placeholder="apikey, postmaster@dominio, etc."
+              placeholder={t('smtp.usernamePlaceholder')}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="smtp-password">Contraseña{dto?.hasPassword ? ' (opcional)' : ''}</Label>
+            <Label htmlFor="smtp-password">
+              {dto?.hasPassword ? t('smtp.passwordLabelOptional') : t('smtp.passwordLabel')}
+            </Label>
             <Input
               id="smtp-password"
               required={!dto?.hasPassword}
@@ -327,29 +326,29 @@ export function SmtpSettingsCard({
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               placeholder={
                 dto?.hasPassword
-                  ? '•••••• (déjalo vacío para mantener el actual)'
-                  : 'API key / SMTP password'
+                  ? t('smtp.passwordUnchangedPlaceholder')
+                  : t('smtp.passwordPlaceholder')
               }
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="smtp-from-email">From email</Label>
+            <Label htmlFor="smtp-from-email">{t('smtp.fromEmailLabel')}</Label>
             <Input
               id="smtp-from-email"
               required
               type="email"
               value={form.fromEmail}
               onChange={(e) => setForm({ ...form, fromEmail: e.target.value })}
-              placeholder="noreply@tu-dominio.com"
+              placeholder={t('smtp.fromEmailPlaceholder')}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="smtp-from-name">From name (opcional)</Label>
+            <Label htmlFor="smtp-from-name">{t('smtp.fromNameLabel')}</Label>
             <Input
               id="smtp-from-name"
               value={form.fromName ?? ''}
               onChange={(e) => setForm({ ...form, fromName: e.target.value })}
-              placeholder="Equipo Didacta"
+              placeholder={t('smtp.fromNamePlaceholder')}
             />
           </div>
 
@@ -374,7 +373,7 @@ export function SmtpSettingsCard({
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-soft pt-4 sm:col-span-2">
             <div className="flex flex-wrap items-center gap-2">
               <Button type="submit" disabled={saving}>
-                {saving ? 'Guardando…' : 'Guardar'}
+                {saving ? t('smtp.saving') : t('smtp.saveButton')}
               </Button>
               <Button
                 type="button"
@@ -382,7 +381,7 @@ export function SmtpSettingsCard({
                 disabled={!dto?.hasTenantConfig}
                 onClick={() => setTestDialogOpen(true)}
               >
-                Enviar email de prueba
+                {t('smtp.testButton')}
               </Button>
             </div>
             <Button
@@ -392,7 +391,7 @@ export function SmtpSettingsCard({
               onClick={() => setDeleteDialogOpen(true)}
               className="text-danger-700 hover:bg-danger-50"
             >
-              Eliminar configuración
+              {t('smtp.deleteButton')}
             </Button>
           </div>
         </form>
@@ -403,20 +402,17 @@ export function SmtpSettingsCard({
       <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Enviar email de prueba</DialogTitle>
-            <DialogDescription>
-              Vamos a usar la configuración guardada para mandar un correo a la dirección que
-              indiques. Si llega, marcamos la config como verificada.
-            </DialogDescription>
+            <DialogTitle>{t('smtp.testButton')}</DialogTitle>
+            <DialogDescription>{t('smtp.testDialogDesc')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
-            <Label htmlFor="smtp-test-email">Destinatario</Label>
+            <Label htmlFor="smtp-test-email">{t('smtp.testRecipientLabel')}</Label>
             <Input
               id="smtp-test-email"
               type="email"
               value={testEmail}
               onChange={(e) => setTestEmail(e.target.value)}
-              placeholder="tu-email@dominio.com"
+              placeholder={t('smtp.testRecipientPlaceholder')}
             />
           </div>
           <DialogFooter>
@@ -426,14 +422,14 @@ export function SmtpSettingsCard({
               onClick={() => setTestDialogOpen(false)}
               disabled={sendingTest}
             >
-              Cancelar
+              {t('smtp.cancel')}
             </Button>
             <Button
               type="button"
               onClick={() => void handleSendTest()}
               disabled={sendingTest || !testEmail}
             >
-              {sendingTest ? 'Enviando…' : 'Enviar'}
+              {sendingTest ? t('smtp.sending') : t('smtp.sendButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -442,12 +438,8 @@ export function SmtpSettingsCard({
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Eliminar configuración SMTP</DialogTitle>
-            <DialogDescription>
-              Vas a borrar las credenciales guardadas para este tenant. Si el host tiene un SMTP
-              global expuesto por env, el tenant cae a ese fallback; si no, los emails dejan de
-              enviarse hasta que guardes una nueva configuración.
-            </DialogDescription>
+            <DialogTitle>{t('smtp.deleteDialogTitle')}</DialogTitle>
+            <DialogDescription>{t('smtp.deleteDialogDesc')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
@@ -456,7 +448,7 @@ export function SmtpSettingsCard({
               onClick={() => setDeleteDialogOpen(false)}
               disabled={deleting}
             >
-              Cancelar
+              {t('smtp.cancel')}
             </Button>
             <Button
               type="button"
@@ -464,7 +456,7 @@ export function SmtpSettingsCard({
               onClick={() => void handleDelete()}
               disabled={deleting}
             >
-              {deleting ? 'Eliminando…' : 'Eliminar'}
+              {deleting ? t('smtp.deleting') : t('smtp.deleteConfirmButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -479,11 +471,12 @@ export function SmtpSettingsCard({
  * exportadas para los snapshot tests.
  */
 export function StatusBanner({ dto }: { dto: AdminSmtpDto }): React.JSX.Element {
+  const t = useTranslations('adminSso');
   const status = deriveSmtpStatus(dto);
 
   if (status === 'verified') {
     const date = dto.verifiedAt
-      ? new Date(dto.verifiedAt).toLocaleString('es-ES', {
+      ? formatDateTime(dto.verifiedAt, {
           day: '2-digit',
           month: 'short',
           year: 'numeric',
@@ -499,7 +492,10 @@ export function StatusBanner({ dto }: { dto: AdminSmtpDto }): React.JSX.Element 
       >
         <span aria-hidden="true">●</span>
         <span>
-          <strong>Verificado</strong> el {date}.
+          {t.rich('smtp.bannerVerified', {
+            strong: (chunks) => <strong>{chunks}</strong>,
+            date,
+          })}
         </span>
       </div>
     );
@@ -514,8 +510,9 @@ export function StatusBanner({ dto }: { dto: AdminSmtpDto }): React.JSX.Element 
       >
         <span aria-hidden="true">●</span>
         <span>
-          Configurado pero sin verificar — usa el botón <em>Enviar email de prueba</em> para
-          confirmar que llega.
+          {t.rich('smtp.bannerUnverified', {
+            em: (chunks) => <em>{chunks}</em>,
+          })}
         </span>
       </div>
     );
@@ -529,10 +526,7 @@ export function StatusBanner({ dto }: { dto: AdminSmtpDto }): React.JSX.Element 
         className="flex items-center gap-2 rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-sm text-brand-700"
       >
         <span aria-hidden="true">●</span>
-        <span>
-          Usando SMTP global del host (fallback). Si quieres un remitente propio, guarda una
-          configuración de tenant.
-        </span>
+        <span>{t('smtp.bannerFallback')}</span>
       </div>
     );
   }
@@ -544,10 +538,7 @@ export function StatusBanner({ dto }: { dto: AdminSmtpDto }): React.JSX.Element 
       className="flex items-center gap-2 rounded-lg border border-danger-100 bg-danger-50 px-3 py-2 text-sm text-danger-700"
     >
       <span aria-hidden="true">●</span>
-      <span>
-        Sin SMTP configurado — los emails (activación, reset de contraseña, notificaciones) no se
-        envían.
-      </span>
+      <span>{t('smtp.bannerNone')}</span>
     </div>
   );
 }

@@ -20,6 +20,7 @@
  */
 
 import { useEffect, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { EeGate, LICENSE_CAPABILITIES } from '@didacta/license-sdk/react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -29,9 +30,13 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
 import { MFA_GRACE_PERIOD_OPTIONS_DAYS, mfaPolicyApi, type MfaPolicyState } from '@/lib/mfa-policy';
 
 export default function AdminSeguridadPage() {
+  const t = useTranslations('adminSso');
+  const tErrors = useTranslations('errors');
   const [state, setState] = useState<MfaPolicyState | null>(null);
   const [requiredForAll, setRequiredForAll] = useState(false);
   const [gracePeriodDays, setGracePeriodDays] = useState<number>(7);
@@ -48,7 +53,9 @@ export default function AdminSeguridadPage() {
         setRequiredForAll(fresh.policy.requiredForAll);
         setGracePeriodDays(fresh.policy.gracePeriodDays);
       } catch (e) {
-        setError(e instanceof ApiHttpError ? e.message : 'No se pudo cargar la política MFA.');
+        setError(
+          e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('seguridad.loadError'),
+        );
       }
     })();
   }, []);
@@ -70,9 +77,7 @@ export default function AdminSeguridadPage() {
     } catch (e) {
       setStatus('error');
       setError(
-        e instanceof ApiHttpError
-          ? e.message
-          : 'No se pudo actualizar la política. Prueba nuevamente.',
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('seguridad.updateError'),
       );
     }
   }
@@ -80,7 +85,7 @@ export default function AdminSeguridadPage() {
   if (!state && !error) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="font-display text-2xl font-bold">Seguridad</h1>
+        <h1 className="font-display text-2xl font-bold">{t('seguridad.title')}</h1>
         <div className="space-y-3">
           <div className="skeleton h-32 w-full" />
           <div className="skeleton h-48 w-full" />
@@ -92,40 +97,37 @@ export default function AdminSeguridadPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Seguridad</h1>
-        <p className="text-text-muted">
-          Política de autenticación de tu organización. Estos ajustes afectan a todos los usuarios
-          del tenant.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('seguridad.title')}</h1>
+        <p className="text-text-muted">{t('seguridad.subtitle')}</p>
       </header>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Icon name="shield" size={18} />
-            Estado actual
+            {t('seguridad.currentStatus')}
           </CardTitle>
           <CardDescription>
-            En plan Community el MFA es obligatorio para roles administrativos (super_admin,
-            tenant_admin) y opcional para el resto. La política tenant-wide te permite{' '}
-            <strong>forzar MFA a todos los usuarios</strong>.
+            {t.rich('seguridad.currentStatusDesc', {
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-3 text-sm">
-          <span className="text-text-muted">Plan:</span>
+          <span className="text-text-muted">{t('seguridad.planLabel')}</span>
           {state?.licensed ? (
             <Badge variant="outline" className="border-success-200 bg-success-50 text-success-700">
-              Enterprise
+              {t('seguridad.planEnterprise')}
             </Badge>
           ) : (
-            <Badge variant="outline">Community</Badge>
+            <Badge variant="outline">{t('seguridad.planCommunity')}</Badge>
           )}
           <span className="text-text-muted">·</span>
-          <span className="text-text-muted">Enforcement tenant-wide:</span>
+          <span className="text-text-muted">{t('seguridad.enforcementLabel')}</span>
           {state?.enforcementActive ? (
-            <Badge className="bg-success-600 text-white">Activo</Badge>
+            <Badge className="bg-success-600 text-white">{t('seguridad.enforcementActive')}</Badge>
           ) : (
-            <Badge variant="outline">Inactivo</Badge>
+            <Badge variant="outline">{t('seguridad.enforcementInactive')}</Badge>
           )}
         </CardContent>
       </Card>
@@ -141,11 +143,8 @@ export default function AdminSeguridadPage() {
       >
         <Card>
           <CardHeader>
-            <CardTitle>Política de MFA</CardTitle>
-            <CardDescription>
-              Esto afecta a TODOS los usuarios actuales del tenant (incluidos alumnos). Tienen el
-              período de gracia configurado para activar MFA antes de que se les bloquee el login.
-            </CardDescription>
+            <CardTitle>{t('seguridad.policyTitle')}</CardTitle>
+            <CardDescription>{t('seguridad.policyDesc')}</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="flex flex-col gap-6">
@@ -158,18 +157,16 @@ export default function AdminSeguridadPage() {
                 />
                 <span className="flex-1">
                   <span className="block text-sm font-semibold text-text">
-                    Requerir MFA a todos los usuarios
+                    {t('seguridad.requireAllLabel')}
                   </span>
                   <span className="block text-xs text-text-muted">
-                    Cuando esto está activo y la licencia Enterprise sigue válida, cualquier usuario
-                    sin MFA configurado fuera del período de gracia recibirá un 401 al iniciar
-                    sesión y será dirigido al flujo de setup MFA.
+                    {t('seguridad.requireAllHelp')}
                   </span>
                 </span>
               </label>
 
               <div className="flex max-w-sm flex-col gap-1.5">
-                <Label htmlFor="gracePeriodDays">Período de gracia (días)</Label>
+                <Label htmlFor="gracePeriodDays">{t('seguridad.gracePeriodLabel')}</Label>
                 <Select
                   id="gracePeriodDays"
                   value={String(gracePeriodDays)}
@@ -177,24 +174,21 @@ export default function AdminSeguridadPage() {
                 >
                   {MFA_GRACE_PERIOD_OPTIONS_DAYS.map((d) => (
                     <option key={d} value={d}>
-                      {d} {d === 1 ? 'día' : 'días'}
+                      {t('seguridad.graceDays', { days: d })}
                     </option>
                   ))}
                 </Select>
-                <p className="text-xs text-text-subtle">
-                  Aplica desde el momento en que se guarda la política. Pasado el plazo, los
-                  usuarios sin MFA no pueden iniciar sesión hasta configurarlo.
-                </p>
+                <p className="text-xs text-text-subtle">{t('seguridad.gracePeriodHelp')}</p>
               </div>
 
               <div className="flex items-center gap-3">
                 <Button type="submit" disabled={status === 'saving'}>
-                  {status === 'saving' ? 'Guardando…' : 'Guardar política'}
+                  {status === 'saving' ? t('seguridad.saving') : t('seguridad.saveButton')}
                 </Button>
                 {status === 'saved' ? (
                   <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-success-700">
                     <Icon name="check" size={16} />
-                    Política actualizada
+                    {t('seguridad.saved')}
                   </span>
                 ) : null}
                 {status === 'error' && error ? (
@@ -205,8 +199,14 @@ export default function AdminSeguridadPage() {
 
             {state?.policy.updatedAt ? (
               <p className="mt-6 text-xs text-text-subtle">
-                Última actualización: {new Date(state.policy.updatedAt).toLocaleString('es-ES')}
-                {state.policy.updatedBy ? ` · por ${state.policy.updatedBy}` : ''}
+                {state.policy.updatedBy
+                  ? t('seguridad.lastUpdatedBy', {
+                      date: formatDateTime(state.policy.updatedAt),
+                      name: state.policy.updatedBy,
+                    })
+                  : t('seguridad.lastUpdated', {
+                      date: formatDateTime(state.policy.updatedAt),
+                    })}
               </p>
             ) : null}
           </CardContent>
@@ -230,31 +230,23 @@ export default function AdminSeguridadPage() {
  * @RequiresCapability — esto solo es UX.
  */
 function MfaEnforcementUpsellCard() {
+  const t = useTranslations('adminSso');
   return (
-    <Card
-      role="region"
-      aria-label="Política MFA tenant-wide (Enterprise)"
-      className="border-dashed"
-    >
+    <Card role="region" aria-label={t('seguridad.upsellAria')} className="border-dashed">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="lock" size={18} />
-          Función Enterprise — actualiza tu plan
+          {t('upsell.title')}
         </CardTitle>
-        <CardDescription>
-          Forzar MFA a todos los usuarios del tenant es parte del paquete de seguridad Didacta
-          Enterprise. Tu plan actual (community) ya obliga MFA a los administradores; con Enterprise
-          puedes extenderlo a alumnos, formadores y managers con período de gracia configurable.
-        </CardDescription>
+        <CardDescription>{t('seguridad.upsellDesc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-text-muted">
-          La capability requerida es{' '}
-          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">
-            feat:mfa.enforcement
-          </code>
-          . Si tu licencia Enterprise expira o se revoca, el enforcement se desactiva
-          automáticamente — la configuración guardada queda inerte hasta renovar.
+          {t.rich('seguridad.upsellCapability', {
+            chip: (chunks) => (
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">{chunks}</code>
+            ),
+          })}
         </p>
         <a
           href="https://didacta.io/pricing"
@@ -262,7 +254,7 @@ function MfaEnforcementUpsellCard() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
         >
-          Ver planes Enterprise
+          {t('upsell.cta')}
           <Icon name="arrow-right" size={14} />
         </a>
       </CardContent>
