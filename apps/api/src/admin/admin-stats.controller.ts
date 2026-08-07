@@ -29,7 +29,10 @@ function requireTenantAdmin(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   const isAdmin = user.roles.some((r) => (ADMIN_ROLES as readonly string[]).includes(r));
   if (!isAdmin) {
-    throw new ForbiddenException('Esta acción requiere rol tenant_admin o super_admin.');
+    throw new ForbiddenException({
+      message: 'Esta acción requiere rol tenant_admin o super_admin.',
+      code: 'ADMIN_FORBIDDEN_TENANT_ADMIN_REQUIRED',
+    });
   }
   return user;
 }

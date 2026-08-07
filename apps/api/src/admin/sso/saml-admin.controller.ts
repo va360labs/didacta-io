@@ -53,9 +53,10 @@ const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 function requireTenantAdmin(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-    throw new ForbiddenException(
-      'Solo super_admin y tenant_admin pueden gestionar la configuración SSO.',
-    );
+    throw new ForbiddenException({
+      message: 'Solo super_admin y tenant_admin pueden gestionar la configuración SSO.',
+      code: 'ADMIN_SSO_CONFIG_FORBIDDEN',
+    });
   }
   return user;
 }

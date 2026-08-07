@@ -95,7 +95,10 @@ function requireAdmin(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   const isAdmin = user.roles.some((r) => ADMIN_ROLES.has(r));
   if (!isAdmin) {
-    throw new ForbiddenException('Solo super_admin o tenant_admin pueden gestionar SMTP');
+    throw new ForbiddenException({
+      message: 'Solo super_admin o tenant_admin pueden gestionar SMTP',
+      code: 'ADMIN_SMTP_FORBIDDEN',
+    });
   }
   return user;
 }
@@ -173,9 +176,11 @@ export class AdminSmtpController {
     const finalPassword =
       body.password && body.password.length > 0 ? body.password : existingPassword;
     if (!finalPassword) {
-      throw new BadRequestException(
-        'Falta password: no hay password previo guardado o no se pudo descifrar. Envía uno nuevo en el body.',
-      );
+      throw new BadRequestException({
+        message:
+          'Falta password: no hay password previo guardado o no se pudo descifrar. Envía uno nuevo en el body.',
+        code: 'ADMIN_SMTP_PASSWORD_REQUIRED',
+      });
     }
 
     const secret = {
@@ -224,9 +229,10 @@ export class AdminSmtpController {
 
     const resolved = await this.resolver.resolveTenantOnly(claims.tenantId);
     if (!resolved) {
-      throw new BadRequestException(
-        'SMTP no configurado para este tenant — guarda credenciales antes de probar.',
-      );
+      throw new BadRequestException({
+        message: 'SMTP no configurado para este tenant — guarda credenciales antes de probar.',
+        code: 'ADMIN_SMTP_NOT_CONFIGURED',
+      });
     }
 
     const tenant = await this.prisma.tenant.findUnique({
@@ -258,7 +264,10 @@ export class AdminSmtpController {
     if (!result.ok) {
       // El error real del MTA (auth failed, host inválido, etc.) viaja en
       // la respuesta para que el admin pueda diagnosticar — no es secreto.
-      throw new BadRequestException(`SMTP falló: ${result.error ?? 'sin detalle'}`);
+      throw new BadRequestException({
+        message: `SMTP falló: ${result.error ?? 'sin detalle'}`,
+        code: 'ADMIN_SMTP_TEST_FAILED',
+      });
     }
 
     // Marca verificado: actualiza meta sin tocar las credenciales.
@@ -298,7 +307,10 @@ export class AdminSmtpController {
     // que se quiere probar es el email, no las credenciales del tenant.
     const resolved = await this.resolver.resolve(claims.tenantId);
     if (!resolved) {
-      throw new BadRequestException('No hay SMTP configurado ni en el tenant ni en el despliegue.');
+      throw new BadRequestException({
+        message: 'No hay SMTP configurado ni en el tenant ni en el despliegue.',
+        code: 'ADMIN_SMTP_NOT_CONFIGURED_ANYWHERE',
+      });
     }
 
     const variables = body.variables ?? {};
@@ -314,7 +326,10 @@ export class AdminSmtpController {
     });
     const fallback = HUB_TEMPLATE_DEFAULTS[body.templateKey];
     if (!override && !fallback) {
-      throw new BadRequestException(`No existe la plantilla "${body.templateKey}".`);
+      throw new BadRequestException({
+        message: `No existe la plantilla "${body.templateKey}".`,
+        code: 'ADMIN_SMTP_TEMPLATE_NOT_FOUND',
+      });
     }
 
     const branding = await resolveEmailBranding(
@@ -345,7 +360,10 @@ export class AdminSmtpController {
       );
 
     if (!result.ok) {
-      throw new BadRequestException(`SMTP falló: ${result.error ?? 'sin detalle'}`);
+      throw new BadRequestException({
+        message: `SMTP falló: ${result.error ?? 'sin detalle'}`,
+        code: 'ADMIN_SMTP_TEST_FAILED',
+      });
     }
     this.logger.log(
       `Prueba de plantilla "${body.templateKey}" enviada a ${body.toEmail} (tenant ${claims.tenantId})`,

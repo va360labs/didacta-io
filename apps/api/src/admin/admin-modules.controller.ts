@@ -28,7 +28,10 @@ function requireTenantAdmin(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   const isAdmin = user.roles.some((r) => (ADMIN_ROLES as readonly string[]).includes(r));
   if (!isAdmin) {
-    throw new ForbiddenException('Esta acción requiere rol tenant_admin o super_admin.');
+    throw new ForbiddenException({
+      message: 'Esta acción requiere rol tenant_admin o super_admin.',
+      code: 'ADMIN_FORBIDDEN_TENANT_ADMIN_REQUIRED',
+    });
   }
   return user;
 }
@@ -44,9 +47,11 @@ function resolveTargetTenant(user: SessionClaims, queryTenantId?: string): strin
   if (!queryTenantId) return user.tenantId;
   if (queryTenantId === user.tenantId) return queryTenantId;
   if (!user.roles.includes('super_admin')) {
-    throw new ForbiddenException(
-      'Solo super_admin puede operar módulos en otro tenant. Omite ?tenantId para usar el tuyo.',
-    );
+    throw new ForbiddenException({
+      message:
+        'Solo super_admin puede operar módulos en otro tenant. Omite ?tenantId para usar el tuyo.',
+      code: 'ADMIN_MODULES_CROSS_TENANT_FORBIDDEN',
+    });
   }
   return queryTenantId;
 }

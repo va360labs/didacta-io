@@ -20,7 +20,10 @@ import { SuperUsersService, type SuperUsersListResult } from './super-users.serv
 function requireSuperAdmin(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   if (!user.roles.includes('super_admin')) {
-    throw new ForbiddenException('Esta acción requiere rol super_admin.');
+    throw new ForbiddenException({
+      message: 'Esta acción requiere rol super_admin.',
+      code: 'ADMIN_FORBIDDEN_SUPER_ADMIN_REQUIRED',
+    });
   }
   return user;
 }

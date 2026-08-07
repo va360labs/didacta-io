@@ -181,7 +181,11 @@ export class AdminUsersService {
         },
       },
     });
-    if (!user) throw new NotFoundException('Usuario no encontrado');
+    if (!user)
+      throw new NotFoundException({
+        message: 'Usuario no encontrado',
+        code: 'ADMIN_USER_NOT_FOUND',
+      });
 
     return {
       ...this.toListItem(user),
@@ -235,21 +239,35 @@ export class AdminUsersService {
   ): Promise<UserListItem> {
     const sendInvite = options.sendInvite ?? true;
     if (!TENANT_ASSIGNABLE_ROLES.includes(dto.role)) {
-      throw new BadRequestException(`Rol "${dto.role}" no asignable.`);
+      throw new BadRequestException({
+        message: `Rol "${dto.role}" no asignable.`,
+        code: 'ADMIN_ROLE_NOT_ASSIGNABLE',
+      });
     }
 
     const existing = await this.prisma.user.findUnique({
       where: { tenantId_email: { tenantId, email: dto.email } },
     });
     if (existing) {
-      throw new ConflictException('Ya existe un usuario con ese email en esta organización.');
+      throw new ConflictException({
+        message: 'Ya existe un usuario con ese email en esta organización.',
+        code: 'ADMIN_USER_EMAIL_EXISTS',
+      });
     }
 
     const role = await this.prisma.role.findUnique({ where: { name: dto.role } });
-    if (!role) throw new BadRequestException(`El rol "${dto.role}" no existe en el sistema.`);
+    if (!role)
+      throw new BadRequestException({
+        message: `El rol "${dto.role}" no existe en el sistema.`,
+        code: 'ADMIN_ROLE_NOT_FOUND',
+      });
 
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
-    if (!tenant) throw new NotFoundException('Tenant no encontrado.');
+    if (!tenant)
+      throw new NotFoundException({
+        message: 'Tenant no encontrado.',
+        code: 'ADMIN_TENANT_NOT_FOUND',
+      });
 
     // Antes de crear nada: un grupo inexistente (o de otro tenant) debe abortar
     // el alta entera con 404, no crear un user a medio configurar.
@@ -463,13 +481,20 @@ export class AdminUsersService {
     ctx: ClientContext = NO_CTX,
   ): Promise<UserListItem> {
     if (userId === actorId && status !== 'ACTIVE') {
-      throw new BadRequestException('No puedes suspender ni desactivar tu propio usuario.');
+      throw new BadRequestException({
+        message: 'No puedes suspender ni desactivar tu propio usuario.',
+        code: 'ADMIN_USER_SELF_STATUS_FORBIDDEN',
+      });
     }
 
     const user = await this.prisma.user.findFirst({
       where: { id: userId, tenantId, deletedAt: null },
     });
-    if (!user) throw new NotFoundException('Usuario no encontrado.');
+    if (!user)
+      throw new NotFoundException({
+        message: 'Usuario no encontrado.',
+        code: 'ADMIN_USER_NOT_FOUND',
+      });
 
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: userId }, data: { status } });
@@ -507,15 +532,26 @@ export class AdminUsersService {
     ctx: ClientContext = NO_CTX,
   ): Promise<UserListItem> {
     if (!TENANT_ASSIGNABLE_ROLES.includes(roleName)) {
-      throw new BadRequestException(`Rol "${roleName}" no asignable.`);
+      throw new BadRequestException({
+        message: `Rol "${roleName}" no asignable.`,
+        code: 'ADMIN_ROLE_NOT_ASSIGNABLE',
+      });
     }
     const user = await this.prisma.user.findFirst({
       where: { id: userId, tenantId, deletedAt: null },
     });
-    if (!user) throw new NotFoundException('Usuario no encontrado.');
+    if (!user)
+      throw new NotFoundException({
+        message: 'Usuario no encontrado.',
+        code: 'ADMIN_USER_NOT_FOUND',
+      });
 
     const role = await this.prisma.role.findUnique({ where: { name: roleName } });
-    if (!role) throw new BadRequestException(`Rol "${roleName}" no existe.`);
+    if (!role)
+      throw new BadRequestException({
+        message: `Rol "${roleName}" no existe.`,
+        code: 'ADMIN_ROLE_NOT_FOUND',
+      });
 
     await this.prisma.userRole.upsert({
       where: { userId_roleId: { userId, roleId: role.id } },
@@ -547,15 +583,25 @@ export class AdminUsersService {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, tenantId, deletedAt: null },
     });
-    if (!user) throw new NotFoundException('Usuario no encontrado.');
+    if (!user)
+      throw new NotFoundException({
+        message: 'Usuario no encontrado.',
+        code: 'ADMIN_USER_NOT_FOUND',
+      });
 
     const role = await this.prisma.role.findUnique({ where: { name: roleName } });
-    if (!role) throw new BadRequestException(`Rol "${roleName}" no existe.`);
+    if (!role)
+      throw new BadRequestException({
+        message: `Rol "${roleName}" no existe.`,
+        code: 'ADMIN_ROLE_NOT_FOUND',
+      });
 
     if (userId === actorId && roleName === 'tenant_admin') {
-      throw new BadRequestException(
-        'No puedes quitarte el rol tenant_admin a ti mismo (te quedarías sin acceso al panel).',
-      );
+      throw new BadRequestException({
+        message:
+          'No puedes quitarte el rol tenant_admin a ti mismo (te quedarías sin acceso al panel).',
+        code: 'ADMIN_USER_SELF_ROLE_REMOVAL_FORBIDDEN',
+      });
     }
 
     await this.prisma.userRole.deleteMany({
@@ -590,10 +636,18 @@ export class AdminUsersService {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, tenantId, deletedAt: null },
     });
-    if (!user) throw new NotFoundException('Usuario no encontrado.');
+    if (!user)
+      throw new NotFoundException({
+        message: 'Usuario no encontrado.',
+        code: 'ADMIN_USER_NOT_FOUND',
+      });
 
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
-    if (!tenant) throw new NotFoundException('Tenant no encontrado.');
+    if (!tenant)
+      throw new NotFoundException({
+        message: 'Tenant no encontrado.',
+        code: 'ADMIN_TENANT_NOT_FOUND',
+      });
 
     // `allowPending: true` porque el use case típico de resend es justo para
     // users PENDING que no recibieron el primer email. Ver CORE-FIX-03.

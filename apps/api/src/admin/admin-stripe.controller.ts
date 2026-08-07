@@ -59,7 +59,10 @@ function requireAdmin(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   const isAdmin = user.roles.some((r) => ADMIN_ROLES.has(r));
   if (!isAdmin) {
-    throw new ForbiddenException('Solo super_admin o tenant_admin pueden gestionar Stripe');
+    throw new ForbiddenException({
+      message: 'Solo super_admin o tenant_admin pueden gestionar Stripe',
+      code: 'ADMIN_STRIPE_FORBIDDEN',
+    });
   }
   return user;
 }
@@ -138,9 +141,11 @@ export class AdminStripeController {
     };
     const parsed = StripeCredentialsSchema.safeParse(merged);
     if (!parsed.success) {
-      throw new BadRequestException(
-        'Faltan credenciales: secretKey y webhookSecret son obligatorios (no hay valores previos guardados para completar lo que falta en el body).',
-      );
+      throw new BadRequestException({
+        message:
+          'Faltan credenciales: secretKey y webhookSecret son obligatorios (no hay valores previos guardados para completar lo que falta en el body).',
+        code: 'ADMIN_STRIPE_CREDENTIALS_REQUIRED',
+      });
     }
 
     await config.set(claims.tenantId, 'billing', 'stripe', parsed.data, {
@@ -171,9 +176,10 @@ export class AdminStripeController {
     const claims = requireAdmin(user);
     const resolved = await this.resolver.resolveTenantOnly(claims.tenantId);
     if (!resolved) {
-      throw new BadRequestException(
-        'Stripe no configurado para este tenant — guarda credenciales antes de probar.',
-      );
+      throw new BadRequestException({
+        message: 'Stripe no configurado para este tenant — guarda credenciales antes de probar.',
+        code: 'ADMIN_STRIPE_NOT_CONFIGURED',
+      });
     }
 
     // Carga perezosa del SDK — evita romper en NODE_ENV=test si no está
@@ -192,7 +198,10 @@ export class AdminStripeController {
     } catch (err) {
       // El error real de Stripe (clave inválida, revocada, etc.) viaja en
       // la respuesta para que el admin pueda diagnosticar — no es secreto.
-      throw new BadRequestException(`Stripe rechazó la clave: ${(err as Error).message}`);
+      throw new BadRequestException({
+        message: `Stripe rechazó la clave: ${(err as Error).message}`,
+        code: 'ADMIN_STRIPE_KEY_REJECTED',
+      });
     }
 
     const verifiedAt = new Date().toISOString();

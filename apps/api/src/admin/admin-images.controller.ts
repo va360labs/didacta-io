@@ -53,7 +53,10 @@ export class AdminImagesController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException('Esta acción requiere rol de administrador.');
+      throw new ForbiddenException({
+        message: 'Esta acción requiere rol de administrador.',
+        code: 'ADMIN_FORBIDDEN_ADMIN_ROLE_REQUIRED',
+      });
     }
     return user;
   }

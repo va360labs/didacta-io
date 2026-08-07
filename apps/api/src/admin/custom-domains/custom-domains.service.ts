@@ -68,9 +68,10 @@ export class CustomDomainsService {
     const config = await this.loadConfig(tenantId);
     const exists = config.domains.find((d) => d.hostname === dto.hostname);
     if (exists) {
-      throw new ConflictException(
-        `El dominio ${dto.hostname} ya está registrado para este tenant.`,
-      );
+      throw new ConflictException({
+        message: `El dominio ${dto.hostname} ya está registrado para este tenant.`,
+        code: 'ADMIN_CUSTOM_DOMAIN_EXISTS',
+      });
     }
 
     const domain: CustomDomain = {
@@ -110,13 +111,17 @@ export class CustomDomainsService {
     const config = await this.loadConfig(tenantId);
     const idx = config.domains.findIndex((d) => d.id === domainId);
     if (idx === -1) {
-      throw new NotFoundException(`Dominio ${domainId} no encontrado.`);
+      throw new NotFoundException({
+        message: `Dominio ${domainId} no encontrado.`,
+        code: 'ADMIN_CUSTOM_DOMAIN_NOT_FOUND',
+      });
     }
     const current = config.domains[idx]!;
     if (current.verificationToken !== dto.providedToken) {
-      throw new ConflictException(
-        'El token de verificación no coincide. Revisa el TXT record en tu DNS.',
-      );
+      throw new ConflictException({
+        message: 'El token de verificación no coincide. Revisa el TXT record en tu DNS.',
+        code: 'ADMIN_CUSTOM_DOMAIN_TOKEN_MISMATCH',
+      });
     }
     const updated: CustomDomain = {
       ...current,
@@ -145,7 +150,10 @@ export class CustomDomainsService {
     const config = await this.loadConfig(tenantId);
     const idx = config.domains.findIndex((d) => d.id === domainId);
     if (idx === -1) {
-      throw new NotFoundException(`Dominio ${domainId} no encontrado.`);
+      throw new NotFoundException({
+        message: `Dominio ${domainId} no encontrado.`,
+        code: 'ADMIN_CUSTOM_DOMAIN_NOT_FOUND',
+      });
     }
     const updated: CustomDomain = {
       ...config.domains[idx]!,
@@ -169,7 +177,10 @@ export class CustomDomainsService {
     const config = await this.loadConfig(tenantId);
     const idx = config.domains.findIndex((d) => d.id === domainId);
     if (idx === -1) {
-      throw new NotFoundException(`Dominio ${domainId} no encontrado.`);
+      throw new NotFoundException({
+        message: `Dominio ${domainId} no encontrado.`,
+        code: 'ADMIN_CUSTOM_DOMAIN_NOT_FOUND',
+      });
     }
     const removed = config.domains[idx]!;
     const nextDomains = config.domains.filter((d) => d.id !== domainId);
