@@ -29,6 +29,7 @@
  */
 
 import { useEffect, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { EeGate, LICENSE_CAPABILITIES } from '@didacta/license-sdk/react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -39,15 +40,19 @@ import { Label } from '@/components/ui/label';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { customDomainsApi, type CustomDomain, type CustomDomainStatus } from '@/lib/custom-domains';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
 
 export default function AdminDominiosPage() {
+  const t = useTranslations('adminMarca');
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Dominios propios</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('dominios.title')}</h1>
         <p className="text-text-muted">
-          Permite a tu organización acceder a Didacta a través de un dominio personalizado (ej.{' '}
-          <code>learn.acme.com</code>) en lugar del subdominio compartido.
+          {t.rich('dominios.description', {
+            code: (chunks) => <code>{chunks}</code>,
+          })}
         </p>
       </header>
 
@@ -66,6 +71,8 @@ export default function AdminDominiosPage() {
  * Listado + form de alta + acciones por dominio.
  */
 function CustomDomainsPanel() {
+  const t = useTranslations('adminMarca');
+  const tErrors = useTranslations('errors');
   const [domains, setDomains] = useState<CustomDomain[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hostname, setHostname] = useState('');
@@ -80,9 +87,10 @@ function CustomDomainsPanel() {
         const fresh = await customDomainsApi.list(token);
         setDomains(fresh.domains);
       } catch (e) {
-        setError(e instanceof ApiHttpError ? e.message : 'No se pudieron cargar los dominios.');
+        setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('dominios.loadError'));
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function refresh() {
@@ -111,7 +119,7 @@ function CustomDomainsPanel() {
       setHostname('');
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError ? e.message : 'No se pudo añadir el dominio. Prueba nuevamente.',
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('dominios.addError'),
       );
     } finally {
       setAdding(false);
@@ -129,7 +137,9 @@ function CustomDomainsPanel() {
       await customDomainsApi.verify(token, domain.id, domain.verificationToken);
       await refresh();
     } catch (e) {
-      setActionError(e instanceof ApiHttpError ? e.message : 'No se pudo validar el dominio.');
+      setActionError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('dominios.verifyError'),
+      );
     }
   }
 
@@ -142,20 +152,24 @@ function CustomDomainsPanel() {
       await customDomainsApi.setStatus(token, domain.id, next);
       await refresh();
     } catch (e) {
-      setActionError(e instanceof ApiHttpError ? e.message : 'No se pudo cambiar el estado.');
+      setActionError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('dominios.statusError'),
+      );
     }
   }
 
   async function handleDelete(domain: CustomDomain) {
     const token = authStorage.getAccessToken();
     if (!token) return;
-    if (!window.confirm(`¿Eliminar el dominio ${domain.hostname}?`)) return;
+    if (!window.confirm(t('dominios.deleteConfirm', { hostname: domain.hostname }))) return;
     setActionError(null);
     try {
       await customDomainsApi.remove(token, domain.id);
       setDomains((prev) => (prev ? prev.filter((d) => d.id !== domain.id) : prev));
     } catch (e) {
-      setActionError(e instanceof ApiHttpError ? e.message : 'No se pudo eliminar el dominio.');
+      setActionError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('dominios.deleteError'),
+      );
     }
   }
 
@@ -187,21 +201,22 @@ function CustomDomainsPanel() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Icon name="plus" size={18} />
-            Añadir un dominio
+            {t('dominios.addTitle')}
           </CardTitle>
           <CardDescription>
-            Introduce el hostname sin protocolo (ej. <code>learn.acme.com</code>). Una vez añadido,
-            configura un CNAME en tu proveedor DNS apuntando al destino indicado y pulsa{' '}
-            <strong>Validar</strong>.
+            {t.rich('dominios.addDescription', {
+              code: (chunks) => <code>{chunks}</code>,
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleAdd} className="flex flex-col gap-3 md:flex-row md:items-end">
             <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="hostname">Hostname</Label>
+              <Label htmlFor="hostname">{t('dominios.hostnameLabel')}</Label>
               <Input
                 id="hostname"
-                placeholder="learn.acme.com"
+                placeholder={t('dominios.hostnamePlaceholder')}
                 value={hostname}
                 onChange={(e) => setHostname(e.target.value)}
                 autoComplete="off"
@@ -210,7 +225,7 @@ function CustomDomainsPanel() {
               />
             </div>
             <Button type="submit" disabled={adding || hostname.trim().length === 0}>
-              {adding ? 'Añadiendo…' : 'Añadir'}
+              {adding ? t('dominios.adding') : t('dominios.addButton')}
             </Button>
           </form>
           {actionError ? <p className="mt-3 text-sm text-danger-700">{actionError}</p> : null}
@@ -220,9 +235,7 @@ function CustomDomainsPanel() {
       {/* Lista */}
       {list.length === 0 ? (
         <Card>
-          <CardContent className="p-6 text-sm text-text-muted">
-            Aún no has añadido ningún dominio personalizado.
-          </CardContent>
+          <CardContent className="p-6 text-sm text-text-muted">{t('dominios.empty')}</CardContent>
         </Card>
       ) : (
         <div className="flex flex-col gap-4">
@@ -252,6 +265,7 @@ function DomainRow({
   onToggle: () => void;
   onDelete: () => void;
 }) {
+  const t = useTranslations('adminMarca');
   return (
     <Card>
       <CardHeader>
@@ -261,51 +275,55 @@ function DomainRow({
           <DomainStatusBadge status={domain.status} />
         </CardTitle>
         <CardDescription>
-          Añadido {new Date(domain.createdAt).toLocaleString('es-ES')}
+          {t('dominios.addedAt', { date: formatDateTime(domain.createdAt) })}
           {domain.verifiedAt
-            ? ` · validado ${new Date(domain.verifiedAt).toLocaleString('es-ES')}`
+            ? t('dominios.verifiedAtSuffix', { date: formatDateTime(domain.verifiedAt) })
             : ''}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {domain.status === 'pending' ? (
           <div className="rounded-lg border border-warning-200 bg-warning-50 p-4 text-sm text-warning-800">
-            <p className="font-semibold">Configura tu DNS y pulsa Validar:</p>
+            <p className="font-semibold">{t('dominios.dnsTitle')}</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>
-                Crea un CNAME desde <code className="font-mono">{domain.hostname}</code> hacia{' '}
-                <code className="font-mono">{domain.cnameTarget}</code>.
+                {t.rich('dominios.dnsCname', {
+                  hostname: domain.hostname,
+                  target: domain.cnameTarget,
+                  mono: (chunks) => <code className="font-mono">{chunks}</code>,
+                })}
               </li>
               <li>
-                Añade un TXT en{' '}
-                <code className="font-mono">_didacta-challenge.{domain.hostname}</code> con el
-                valor:
-                <code className="ml-2 break-all rounded bg-surface-2 px-2 py-0.5 font-mono text-xs">
-                  {domain.verificationToken}
-                </code>
+                {t.rich('dominios.dnsTxt', {
+                  hostname: domain.hostname,
+                  token: domain.verificationToken,
+                  mono: (chunks) => <code className="font-mono">{chunks}</code>,
+                  tokenCode: (chunks) => (
+                    <code className="ml-2 break-all rounded bg-surface-2 px-2 py-0.5 font-mono text-xs">
+                      {chunks}
+                    </code>
+                  ),
+                })}
               </li>
             </ul>
-            <p className="mt-2 text-xs text-warning-700">
-              Nota: en este piloto la validación se ejecuta cuando pulsas el botón. La verificación
-              DNS automática (cron DNS-01 challenge) llegará en una iteración posterior.
-            </p>
+            <p className="mt-2 text-xs text-warning-700">{t('dominios.dnsNote')}</p>
           </div>
         ) : null}
 
         <div className="flex flex-wrap gap-2">
           {domain.status === 'pending' ? (
             <Button type="button" onClick={onVerify}>
-              Validar dominio
+              {t('dominios.verifyButton')}
             </Button>
           ) : null}
           {domain.status !== 'pending' ? (
             <Button type="button" variant="secondary" onClick={onToggle}>
-              {domain.status === 'inactive' ? 'Reactivar' : 'Desactivar'}
+              {domain.status === 'inactive' ? t('dominios.reactivate') : t('dominios.deactivate')}
             </Button>
           ) : null}
           <Button type="button" variant="ghost" onClick={onDelete}>
             <Icon name="trash" size={16} />
-            Eliminar
+            {t('dominios.deleteButton')}
           </Button>
         </div>
       </CardContent>
@@ -314,15 +332,16 @@ function DomainRow({
 }
 
 function DomainStatusBadge({ status }: { status: CustomDomainStatus }) {
+  const t = useTranslations('adminMarca');
   if (status === 'verified') {
-    return <Badge className="bg-success-600 text-white">Verificado</Badge>;
+    return <Badge className="bg-success-600 text-white">{t('dominios.statusVerified')}</Badge>;
   }
   if (status === 'inactive') {
-    return <Badge variant="outline">Inactivo</Badge>;
+    return <Badge variant="outline">{t('dominios.statusInactive')}</Badge>;
   }
   return (
     <Badge variant="outline" className="border-warning-200 bg-warning-50 text-warning-700">
-      Pendiente
+      {t('dominios.statusPending')}
     </Badge>
   );
 }
@@ -333,29 +352,28 @@ function DomainStatusBadge({ status }: { status: CustomDomainStatus }) {
  * backend gatea con @RequiresCapability — esto solo es UX.
  */
 export function CustomDomainsUpsellCard() {
+  const t = useTranslations('adminMarca');
   return (
-    <Card role="region" aria-label="Dominios personalizados (Enterprise)" className="border-dashed">
+    <Card role="region" aria-label={t('dominios.upsellAria')} className="border-dashed">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="lock" size={18} />
-          Función Enterprise — actualiza tu plan
+          {t('dominios.upsellTitle')}
         </CardTitle>
         <CardDescription>
-          Los dominios personalizados son parte del paquete Didacta Enterprise. Tu plan actual
-          (community) usa el subdominio compartido{' '}
-          <code className="font-mono">&lt;slug&gt;.didacta.io</code>; con Enterprise puedes servir
-          tu LMS desde tu propio hostname (ej. <code className="font-mono">learn.acme.com</code>).
+          {t.rich('dominios.upsellDescription', {
+            slugHost: '<slug>.didacta.io',
+            code: (chunks) => <code className="font-mono">{chunks}</code>,
+          })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-text-muted">
-          La capability requerida es{' '}
-          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">
-            feat:custom_domains
-          </code>
-          . Si tu licencia Enterprise expira o se revoca, los dominios validados quedan inertes y
-          los usuarios siguen accediendo por el subdominio compartido — la configuración guardada NO
-          se borra.
+          {t.rich('dominios.upsellBody', {
+            code: (chunks) => (
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">{chunks}</code>
+            ),
+          })}
         </p>
         <a
           href="https://didacta.io/pricing"
@@ -363,7 +381,7 @@ export function CustomDomainsUpsellCard() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
         >
-          Ver planes Enterprise
+          {t('dominios.upsellCta')}
           <Icon name="arrow-right" size={14} />
         </a>
       </CardContent>

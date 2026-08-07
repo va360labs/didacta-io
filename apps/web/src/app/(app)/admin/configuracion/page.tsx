@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +24,9 @@ import { meApi } from '@/lib/me';
 import { adminTenantsApi, type TenantListItem } from '@/lib/admin-tenants';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import { tenantSettingsApi, type TenantSettingMetadata } from '@/lib/tenant-settings';
 import { flatAdminConfigTabs } from '@/modules';
 
@@ -37,8 +41,11 @@ import { flatAdminConfigTabs } from '@/modules';
 
 interface ConfigTabSpec {
   key: string;
-  label: string;
-  description: string;
+  /// Solo set para tabs aportados por un módulo: el core traduce sus tabs
+  /// por `key` contra el catálogo (`adminMarca.configTabs`).
+  label?: string;
+  /// Solo set para tabs de extensión (metadata del módulo, hoy sin render).
+  description?: string;
   /// Solo set para tabs aportados por un módulo. Si el módulo NO está
   /// activo para el tenant, el tab desaparece. Tabs del core NO declaran
   /// `requiresModule`.
@@ -52,51 +59,28 @@ interface ConfigTabSpec {
 /// Tabs base disponibles para cualquier tenant_admin. `general` se inyecta
 /// dinámicamente al principio sólo cuando la sesión tiene rol super_admin
 /// (la API rechaza el PATCH /admin/tenants/:id con 403 para cualquier otro
-/// rol — ocultar el tab evita un click muerto).
+/// rol — ocultar el tab evita un click muerto). El copy (label) de cada tab
+/// del core vive en el catálogo i18n bajo `adminMarca.configTabs.<key>`.
 const CORE_TABS: ConfigTabSpec[] = [
-  {
-    key: 'notifications',
-    label: 'Notificaciones',
-    description: 'Servidor SMTP saliente para emails transaccionales.',
-  },
-  {
-    key: 'registro',
-    label: 'Registro',
-    description:
-      'Cómo entran los miembros: verificadores exigidos (Telegram/OTP), bot y aprobador.',
-  },
-  {
-    key: 'pagos',
-    label: 'Pagos',
-    description: 'Cuenta de Stripe para vender cursos sueltos y suscripciones/membresía.',
-  },
-  {
-    key: 'modules',
-    label: 'Módulos',
-    description: 'Activa o desactiva módulos del producto para tu organización.',
-  },
-  {
-    key: 'storage',
-    label: 'Storage',
-    description: 'Backend de archivos (S3 o disco local) configurado vía variables de entorno.',
-  },
-  {
-    key: 'raw',
-    label: 'Avanzado',
-    description:
-      'Vista cruda (debug) de todos los valores guardados en este tenant, agrupados por módulo. Útil para troubleshooting; lo normal es usar las tabs específicas.',
-  },
+  // Servidor SMTP saliente para emails transaccionales.
+  { key: 'notifications' },
+  // Cómo entran los miembros: verificadores exigidos (Telegram/OTP), bot y aprobador.
+  { key: 'registro' },
+  // Cuenta de Stripe para vender cursos sueltos y suscripciones/membresía.
+  { key: 'pagos' },
+  // Activa o desactiva módulos del producto para tu organización.
+  { key: 'modules' },
+  // Backend de archivos (S3 o disco local) configurado vía variables de entorno.
+  { key: 'storage' },
+  // Vista cruda (debug) de todos los valores guardados en este tenant.
+  { key: 'raw' },
 ];
 
-/// Tab "general" (identidad del tenant). Va PRIMERO porque renombrar la
-/// organización es el setting más fundamental — antes que SMTP, storage o
-/// cualquier módulo. Sólo aplica a super_admin (gating duro en
-/// `visibleTabs` dentro del componente).
-const GENERAL_TAB: ConfigTabSpec = {
-  key: 'general',
-  label: 'General',
-  description: 'Nombre de la organización (usado en emails y header).',
-};
+/// Tab "general" (identidad del tenant: nombre usado en emails y header).
+/// Va PRIMERO porque renombrar la organización es el setting más
+/// fundamental — antes que SMTP, storage o cualquier módulo. Sólo aplica a
+/// super_admin (gating duro en `visibleTabs` dentro del componente).
+const GENERAL_TAB: ConfigTabSpec = { key: 'general' };
 
 /// Lista combinada CORE + EXTENSIONS, calculada una vez por mount. El
 /// orden es: tab general (super_admin), tabs del core en su orden
@@ -118,6 +102,8 @@ const ALL_TABS: ConfigTabSpec[] = [
 type TabKey = string;
 
 export default function ConfiguracionPage() {
+  const t = useTranslations('adminMarca');
+  const tErrors = useTranslations('errors');
   const [items, setItems] = useState<TenantSettingMetadata[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeModules, setActiveModules] = useState<Set<string> | null>(null);
@@ -171,18 +157,18 @@ export default function ConfiguracionPage() {
   /// mostraba durante el flash) y el operador veía el tab incluso con el
   /// módulo desactivado. Tabs del core (sin `requiresModule`) siempre
   /// visibles.
-  const visibleTabs = ALL_TABS.filter((t) => {
-    if (t.key === 'general') return isSuperAdmin;
-    if (!t.requiresModule) return true;
+  const visibleTabs = ALL_TABS.filter((spec) => {
+    if (spec.key === 'general') return isSuperAdmin;
+    if (!spec.requiresModule) return true;
     if (!activeModules) return false;
-    return activeModules.has(t.requiresModule);
+    return activeModules.has(spec.requiresModule);
   });
 
   // Si la tab seleccionada queda oculta tras el filtro (ej. el admin
   // desactivó mod.zoom-live mientras estaba en el tab "Aula virtual"),
   // saltamos a la primera visible.
   useEffect(() => {
-    if (!visibleTabs.find((t) => t.key === tab) && visibleTabs[0]) {
+    if (!visibleTabs.find((spec) => spec.key === tab) && visibleTabs[0]) {
       setTab(visibleTabs[0].key);
     }
   }, [activeModules, tab, visibleTabs]);
@@ -196,41 +182,30 @@ export default function ConfiguracionPage() {
       setItems(await tenantSettingsApi.listAll());
       setError(null);
     } catch (e) {
-      setError(
-        e instanceof ApiHttpError
-          ? e.message
-          : 'No pudimos cargar la configuración. Prueba a refrescar la página.',
-      );
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('config.loadError'));
     }
   }
 
   useEffect(() => {
     void reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleDelete(scope: string, key: string) {
-    if (
-      !confirm(
-        `¿Eliminar ${scope}.${key}? Si era una credencial, la integración asociada va a dejar de funcionar.`,
-      )
-    )
-      return;
+    if (!confirm(t('config.deleteConfirm', { setting: `${scope}.${key}` }))) return;
     try {
       await tenantSettingsApi.remove(scope, key);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar el setting.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('config.deleteError'));
     }
   }
 
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Configuración del tenant</h1>
-        <p className="mt-1 max-w-3xl text-text-muted">
-          Credenciales y preferencias de los módulos para tu organización. Los secretos se almacenan
-          cifrados (AES-256-GCM) y nunca se devuelven en claro desde la API.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('config.title')}</h1>
+        <p className="mt-1 max-w-3xl text-text-muted">{t('config.description')}</p>
       </header>
 
       {error ? (
@@ -244,22 +219,22 @@ export default function ConfiguracionPage() {
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-1 border-b border-border" role="tablist">
-        {visibleTabs.map((t) => {
-          const isActive = tab === t.key;
+        {visibleTabs.map((spec) => {
+          const isActive = tab === spec.key;
           return (
             <button
-              key={t.key}
+              key={spec.key}
               type="button"
               role="tab"
               aria-selected={isActive}
-              onClick={() => setTab(t.key)}
+              onClick={() => setTab(spec.key)}
               className={
                 isActive
                   ? 'relative px-4 py-2.5 text-sm font-semibold text-brand-700 transition-colors'
                   : 'relative px-4 py-2.5 text-sm font-medium text-text-muted hover:text-text transition-colors'
               }
             >
-              {t.label}
+              {spec.label ?? labelOr(t, `configTabs.${spec.key}`, spec.key)}
               {isActive ? (
                 <span
                   aria-hidden="true"
@@ -291,7 +266,7 @@ export default function ConfiguracionPage() {
           coincide con su `key`. Filtrado por activeModules ya aplicado
           en `visibleTabs`. */}
       {(() => {
-        const ext = ALL_TABS.find((t) => t.key === tab && t.Component);
+        const ext = ALL_TABS.find((spec) => spec.key === tab && spec.Component);
         if (!ext || !ext.Component) return null;
         const Component = ext.Component;
         return <Component />;
@@ -306,17 +281,15 @@ export default function ConfiguracionPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <CardTitle>Avanzado · vista debug</CardTitle>
-              <Badge variant="warning">Solo troubleshooting</Badge>
+              <CardTitle>{t('config.rawTitle')}</CardTitle>
+              <Badge variant="warning">{t('config.rawBadge')}</Badge>
             </div>
             <CardDescription>
-              Lista todos los valores guardados en <code>tenant_setting</code> agrupados por módulo.
-              Lo normal es configurar cada cosa desde su tab específica (Notificaciones, Storage,
-              etc.). Esta vista es útil cuando hay que revisar/limpiar settings huérfanos. Los
-              valores marcados como <Badge variant="warning">secreto •••</Badge> están cifrados
-              at-rest y no se pueden leer desde la UI por diseño; sólo el servidor los descifra al
-              consumirlos. <strong>Eliminar</strong> remueve el setting completo y desactiva la
-              integración asociada.
+              {t.rich('config.rawDescription', {
+                code: (chunks) => <code>{chunks}</code>,
+                secret: (chunks) => <Badge variant="warning">{chunks}</Badge>,
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -327,17 +300,17 @@ export default function ConfiguracionPage() {
               </div>
             ) : items.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border-strong bg-surface-2 p-8 text-center text-sm text-text-muted">
-                Aún no configuraste nada en este tenant.
+                {t('config.rawEmpty')}
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-left">
                     <tr className="border-b border-border text-xs uppercase tracking-wide text-text-muted">
-                      <th className="py-2 pr-4 font-semibold">Módulo</th>
-                      <th className="py-2 pr-4 font-semibold">Clave</th>
-                      <th className="py-2 pr-4 font-semibold">Tipo</th>
-                      <th className="py-2 pr-4 font-semibold">Actualizado</th>
+                      <th className="py-2 pr-4 font-semibold">{t('config.colModule')}</th>
+                      <th className="py-2 pr-4 font-semibold">{t('config.colKey')}</th>
+                      <th className="py-2 pr-4 font-semibold">{t('config.colType')}</th>
+                      <th className="py-2 pr-4 font-semibold">{t('config.colUpdated')}</th>
                       <th className="py-2 text-right" />
                     </tr>
                   </thead>
@@ -351,13 +324,13 @@ export default function ConfiguracionPage() {
                         <td className="py-2 pr-4 font-mono text-xs">{it.key}</td>
                         <td className="py-2 pr-4">
                           {it.isSecret ? (
-                            <Badge variant="warning">secreto •••</Badge>
+                            <Badge variant="warning">{t('config.secretBadge')}</Badge>
                           ) : (
-                            <Badge variant="muted">plano</Badge>
+                            <Badge variant="muted">{t('config.plainBadge')}</Badge>
                           )}
                         </td>
                         <td className="py-2 pr-4 text-xs text-text-subtle tabular-nums">
-                          {new Date(it.updatedAt).toLocaleDateString('es-ES', {
+                          {formatDate(it.updatedAt, {
                             day: '2-digit',
                             month: 'short',
                             year: 'numeric',
@@ -369,7 +342,7 @@ export default function ConfiguracionPage() {
                             onClick={() => handleDelete(it.moduleName, it.key)}
                             className="text-xs font-semibold text-danger-700 hover:underline"
                           >
-                            Eliminar
+                            {t('config.deleteAction')}
                           </button>
                         </td>
                       </tr>
@@ -386,6 +359,8 @@ export default function ConfiguracionPage() {
 }
 
 function ModulesTab() {
+  const t = useTranslations('adminMarca');
+  const tErrors = useTranslations('errors');
   const [items, setItems] = useState<TenantModuleListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -406,12 +381,13 @@ function ModulesTab() {
       setItems(await adminModulesApi.list(tenantId));
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los módulos.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('modulesTab.loadError'));
     }
   }
 
   useEffect(() => {
     void reload(targetTenantId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetTenantId]);
 
   // Carga lista de tenants para el selector de super_admin (lazy, solo si tiene rol).
@@ -458,7 +434,9 @@ function ModulesTab() {
         const dependents = extractDependents(e);
         setConfirmCascade({ name: item.name, dependents });
       } else {
-        setError(e instanceof ApiHttpError ? e.message : 'No pudimos actualizar el módulo.');
+        setError(
+          e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('modulesTab.updateError'),
+        );
       }
     } finally {
       setBusy(null);
@@ -478,18 +456,18 @@ function ModulesTab() {
     <div className="space-y-3">
       {isSuperAdmin && tenants && tenants.length > 1 ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-warning-200 bg-warning-50/40 p-3 text-sm">
-          <span className="font-semibold text-warning-900">Modo super_admin:</span>
+          <span className="font-semibold text-warning-900">{t('modulesTab.superAdminMode')}</span>
           <label className="inline-flex items-center gap-2">
-            <span className="text-text-muted">operar sobre tenant</span>
+            <span className="text-text-muted">{t('modulesTab.operateOn')}</span>
             <select
               className="rounded border border-border-strong bg-surface px-2 py-1 text-sm"
               value={targetTenantId ?? ''}
               onChange={(e) => setTargetTenantId(e.target.value || undefined)}
             >
-              <option value="">(el mío)</option>
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} · {t.slug}
+              <option value="">{t('modulesTab.myTenant')}</option>
+              {tenants.map((tn) => (
+                <option key={tn.id} value={tn.id}>
+                  {tn.name} · {tn.slug}
                 </option>
               ))}
             </select>
@@ -518,9 +496,9 @@ function ModulesTab() {
                     {item.name}@{item.version}
                   </Badge>
                   {item.enabled ? (
-                    <Badge variant="success">Activo</Badge>
+                    <Badge variant="success">{t('modulesTab.enabled')}</Badge>
                   ) : (
-                    <Badge variant="muted">Desactivado</Badge>
+                    <Badge variant="muted">{t('modulesTab.disabled')}</Badge>
                   )}
                 </div>
                 {item.description ? (
@@ -528,24 +506,34 @@ function ModulesTab() {
                 ) : null}
                 {item.dependencies.length > 0 ? (
                   <p className="text-xs text-text-subtle">
-                    Depende de: <span className="font-mono">{item.dependencies.join(', ')}</span>
+                    {t('modulesTab.dependsOn')}{' '}
+                    <span className="font-mono">{item.dependencies.join(', ')}</span>
                   </p>
                 ) : null}
                 {item.dependents.length > 0 ? (
                   <p className="text-xs text-text-subtle">
-                    Usado por: <span className="font-mono">{item.dependents.join(', ')}</span>
+                    {t('modulesTab.usedBy')}{' '}
+                    <span className="font-mono">{item.dependents.join(', ')}</span>
                   </p>
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-text-subtle tabular-nums">
-                  {busy === item.name ? 'Guardando…' : item.enabled ? 'Activo' : 'Desactivado'}
+                  {busy === item.name
+                    ? t('modulesTab.saving')
+                    : item.enabled
+                      ? t('modulesTab.enabled')
+                      : t('modulesTab.disabled')}
                 </span>
                 <Switch
                   checked={item.enabled}
                   onCheckedChange={() => toggle(item)}
                   disabled={busy !== null}
-                  label={`${item.enabled ? 'Desactivar' : 'Activar'} ${item.displayName}`}
+                  label={
+                    item.enabled
+                      ? t('modulesTab.disableLabel', { name: item.displayName })
+                      : t('modulesTab.enableLabel', { name: item.displayName })
+                  }
                 />
               </div>
             </CardContent>
@@ -558,13 +546,13 @@ function ModulesTab() {
           className="rounded-lg border border-warning-200 bg-warning-50 p-4 text-sm"
         >
           <p className="font-semibold text-warning-900">
-            Hay módulos activos que dependen de{' '}
-            <span className="font-mono">{confirmCascade.name}</span>:
+            {t.rich('modulesTab.cascadeTitle', {
+              name: confirmCascade.name,
+              mono: (chunks) => <span className="font-mono">{chunks}</span>,
+            })}
           </p>
           <p className="mt-1 font-mono text-warning-800">{confirmCascade.dependents.join(', ')}</p>
-          <p className="mt-2 text-warning-800">
-            Si confirmas, se desactivarán también esos módulos en cascada.
-          </p>
+          <p className="mt-2 text-warning-800">{t('modulesTab.cascadeWarning')}</p>
           <div className="mt-3 flex gap-2">
             <Button
               type="button"
@@ -574,10 +562,10 @@ function ModulesTab() {
                 if (item) void toggle(item, true);
               }}
             >
-              Desactivar en cascada
+              {t('modulesTab.cascadeConfirm')}
             </Button>
             <Button type="button" variant="ghost" onClick={() => setConfirmCascade(null)}>
-              Cancelar
+              {t('modulesTab.cancel')}
             </Button>
           </div>
         </div>
@@ -615,6 +603,8 @@ const EMPTY_STORAGE: StorageDraft = {
 };
 
 function StorageTab() {
+  const t = useTranslations('adminMarca');
+  const tErrors = useTranslations('errors');
   const [draft, setDraft] = useState<StorageDraft>(EMPTY_STORAGE);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -657,7 +647,7 @@ function StorageTab() {
     setError(null);
     try {
       if (draft.driver === 's3' && (!draft.s3Bucket.trim() || !draft.s3AccessKeyId.trim())) {
-        throw new Error('Bucket y Access Key ID son requeridos para S3.');
+        throw new Error(t('storage.s3Required'));
       }
       const config =
         draft.driver === 'local'
@@ -682,84 +672,82 @@ function StorageTab() {
       setDraft((d) => ({ ...d, s3SecretAccessKey: '' }));
     } catch (e) {
       setStatus('error');
-      setError(e instanceof Error ? e.message : 'No pudimos guardar la configuración de storage.');
+      setError(
+        e instanceof ApiHttpError
+          ? apiErrorMessage(e, tErrors)
+          : e instanceof Error && e.message
+            ? e.message
+            : t('storage.saveError'),
+      );
     }
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Storage</CardTitle>
-        <CardDescription>
-          Backend de archivos para uploads (avatares, certificados, lecciones, evidencias). Disco
-          local del container o un bucket S3-compatible (AWS, Hetzner, MinIO, Backblaze).
-        </CardDescription>
+        <CardTitle>{t('storage.title')}</CardTitle>
+        <CardDescription>{t('storage.description')}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSave} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="storage-driver">Provider</Label>
+            <Label htmlFor="storage-driver">{t('storage.providerLabel')}</Label>
             <Select
               id="storage-driver"
               value={draft.driver}
               onChange={(e) => setDraft({ ...draft, driver: e.target.value as StorageDriver })}
             >
-              <option value="local">Disco local del container (volumen Docker)</option>
-              <option value="s3">S3-compatible (AWS, Hetzner, MinIO, Backblaze)</option>
+              <option value="local">{t('storage.driverLocal')}</option>
+              <option value="s3">{t('storage.driverS3')}</option>
             </Select>
           </div>
 
           {draft.driver === 'local' ? (
             <div className="space-y-1.5">
-              <Label htmlFor="storage-localDir">Directorio del volumen</Label>
+              <Label htmlFor="storage-localDir">{t('storage.localDirLabel')}</Label>
               <Input
                 id="storage-localDir"
                 value={draft.localDir}
                 onChange={(e) => setDraft({ ...draft, localDir: e.target.value })}
-                placeholder="/data/storage"
+                placeholder={t('storage.localDirPlaceholder')}
                 className="font-mono"
               />
-              <p className="text-xs text-text-subtle">
-                Asegúrate de montar un volumen Docker apuntando a esta ruta para que los archivos
-                sobrevivan a redespliegues.
-              </p>
+              <p className="text-xs text-text-subtle">{t('storage.localDirHint')}</p>
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="s3-bucket">Bucket *</Label>
+                <Label htmlFor="s3-bucket">{t('storage.bucketLabel')}</Label>
                 <Input
                   id="s3-bucket"
                   value={draft.s3Bucket}
                   onChange={(e) => setDraft({ ...draft, s3Bucket: e.target.value })}
-                  placeholder="mi-tenant-uploads"
+                  placeholder={t('storage.bucketPlaceholder')}
                   required
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="s3-region">Region *</Label>
+                <Label htmlFor="s3-region">{t('storage.regionLabel')}</Label>
                 <Input
                   id="s3-region"
                   value={draft.s3Region}
                   onChange={(e) => setDraft({ ...draft, s3Region: e.target.value })}
-                  placeholder="eu-central-1"
+                  placeholder={t('storage.regionPlaceholder')}
                   required
                 />
               </div>
               <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="s3-endpoint">Endpoint (opcional)</Label>
+                <Label htmlFor="s3-endpoint">{t('storage.endpointLabel')}</Label>
                 <Input
                   id="s3-endpoint"
                   value={draft.s3Endpoint}
                   onChange={(e) => setDraft({ ...draft, s3Endpoint: e.target.value })}
-                  placeholder="https://s3.eu-central-1.hetzner.com"
+                  placeholder={t('storage.endpointPlaceholder')}
                 />
-                <p className="text-xs text-text-subtle">
-                  Sólo necesario para S3-compatible no-AWS (Hetzner, MinIO, Backblaze).
-                </p>
+                <p className="text-xs text-text-subtle">{t('storage.endpointHint')}</p>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="s3-accessKey">Access Key ID *</Label>
+                <Label htmlFor="s3-accessKey">{t('storage.accessKeyLabel')}</Label>
                 <Input
                   id="s3-accessKey"
                   value={draft.s3AccessKeyId}
@@ -769,18 +757,16 @@ function StorageTab() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="s3-secret">Secret Access Key</Label>
+                <Label htmlFor="s3-secret">{t('storage.secretKeyLabel')}</Label>
                 <Input
                   id="s3-secret"
                   type="password"
                   value={draft.s3SecretAccessKey}
                   onChange={(e) => setDraft({ ...draft, s3SecretAccessKey: e.target.value })}
-                  placeholder="(dejar vacío para conservar el actual)"
+                  placeholder={t('storage.secretKeyPlaceholder')}
                   className="font-mono"
                 />
-                <p className="text-xs text-text-subtle">
-                  Se cifra con AES-256-GCM antes de persistir. La API nunca lo devuelve en claro.
-                </p>
+                <p className="text-xs text-text-subtle">{t('storage.secretKeyHint')}</p>
               </div>
             </div>
           )}
@@ -794,20 +780,21 @@ function StorageTab() {
             </div>
           ) : null}
           {status === 'saved' ? (
-            <p className="text-sm text-success-700">Guardado correctamente.</p>
+            <p className="text-sm text-success-700">{t('storage.saved')}</p>
           ) : null}
 
           <div className="flex justify-end gap-2 border-t border-border-soft pt-4">
             <Button type="submit" disabled={status === 'saving'}>
-              {status === 'saving' ? 'Guardando…' : 'Guardar configuración'}
+              {status === 'saving' ? t('storage.saving') : t('storage.saveButton')}
             </Button>
           </div>
         </form>
 
         <div className="mt-6 rounded-lg border border-success-200 bg-success-50/50 p-3 text-xs text-success-800">
-          <strong>Activo:</strong> los uploads de imágenes y los archivos del tenant ya usan esta
-          configuración cuando el driver es <code>s3</code>. Si eliges disco local o no completas el
-          bucket, el server cae al adapter global del env.
+          {t.rich('storage.activeNote', {
+            strong: (chunks) => <strong>{chunks}</strong>,
+            code: (chunks) => <code>{chunks}</code>,
+          })}
         </div>
       </CardContent>
     </Card>

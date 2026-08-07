@@ -8,6 +8,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,8 +17,11 @@ import { Label } from '@/components/ui/label';
 import { ApiHttpError } from '@/lib/api-client';
 import { adminTenantsApi } from '@/lib/admin-tenants';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 
 export default function NuevoTenantPage() {
+  const t = useTranslations('adminMarca');
+  const tErrors = useTranslations('errors');
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +38,7 @@ export default function NuevoTenantPage() {
     setError(null);
     const token = authStorage.getAccessToken();
     if (!token) {
-      setError('Tu sesión expiró.');
+      setError(t('tenantNew.sessionExpired'));
       setPending(false);
       return;
     }
@@ -48,7 +52,9 @@ export default function NuevoTenantPage() {
       });
       router.push(`/admin/tenants/${created.id}` as never);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos crear el tenant.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('tenantNew.createError'),
+      );
     } finally {
       setPending(false);
     }
@@ -57,14 +63,12 @@ export default function NuevoTenantPage() {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <Button asChild variant="ghost" className="self-start">
-        <Link href="/admin/tenants">← Volver al listado</Link>
+        <Link href="/admin/tenants">{t('tenantNew.backLink')}</Link>
       </Button>
 
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Crear tenant</h1>
-        <p className="mt-1 text-text-muted">
-          Configura una nueva organización con su primer admin y un dominio primario.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('tenantNew.title')}</h1>
+        <p className="mt-1 text-text-muted">{t('tenantNew.description')}</p>
       </header>
 
       <Card>
@@ -81,11 +85,8 @@ export default function NuevoTenantPage() {
               <Icon name="building" size={18} />
             </span>
             <div className="min-w-0">
-              <CardTitle>Datos de la organización</CardTitle>
-              <CardDescription>
-                Tras crearla, el primer admin recibirá un email con un enlace para definir su
-                contraseña y acceder.
-              </CardDescription>
+              <CardTitle>{t('tenantNew.cardTitle')}</CardTitle>
+              <CardDescription>{t('tenantNew.cardDescription')}</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -94,30 +95,28 @@ export default function NuevoTenantPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="slug">
-                  Slug <span className="text-danger-700">*</span>
+                  {t('tenantNew.slugLabel')} <span className="text-danger-700">*</span>
                 </Label>
                 <Input
                   id="slug"
                   value={slug}
                   onChange={(e) => setSlug(e.target.value.toLowerCase())}
-                  placeholder="acme"
+                  placeholder={t('tenantNew.slugPlaceholder')}
                   required
                   pattern="[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?"
                   className="font-mono"
                 />
-                <p className="text-xs text-text-subtle">
-                  Solo minúsculas, números y guiones. Sin espacios.
-                </p>
+                <p className="text-xs text-text-subtle">{t('tenantNew.slugHint')}</p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="name">
-                  Nombre legible <span className="text-danger-700">*</span>
+                  {t('tenantNew.nameLabel')} <span className="text-danger-700">*</span>
                 </Label>
                 <Input
                   id="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="ACME Corp"
+                  placeholder={t('tenantNew.namePlaceholder')}
                   required
                 />
               </div>
@@ -125,26 +124,23 @@ export default function NuevoTenantPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="primaryHostname">
-                Dominio primario <span className="text-danger-700">*</span>
+                {t('tenantNew.hostnameLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input
                 id="primaryHostname"
                 value={primaryHostname}
                 onChange={(e) => setPrimaryHostname(e.target.value.toLowerCase())}
-                placeholder="aprende.acme.com"
+                placeholder={t('tenantNew.hostnamePlaceholder')}
                 required
                 className="font-mono"
               />
-              <p className="text-xs text-text-subtle">
-                Donde estarán signin y signup. Puede ser un subdominio de Didacta o un dominio
-                custom (en ese caso configura el CNAME por afuera).
-              </p>
+              <p className="text-xs text-text-subtle">{t('tenantNew.hostnameHint')}</p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="adminEmail">
-                  Email del primer admin <span className="text-danger-700">*</span>
+                  {t('tenantNew.adminEmailLabel')} <span className="text-danger-700">*</span>
                 </Label>
                 <Input
                   id="adminEmail"
@@ -155,7 +151,7 @@ export default function NuevoTenantPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="adminName">Nombre del admin (opcional)</Label>
+                <Label htmlFor="adminName">{t('tenantNew.adminNameLabel')}</Label>
                 <Input
                   id="adminName"
                   value={adminName}
@@ -175,10 +171,10 @@ export default function NuevoTenantPage() {
 
             <div className="flex items-center justify-end gap-3 border-t border-border-soft pt-4">
               <Button type="button" variant="ghost" onClick={() => router.back()}>
-                Cancelar
+                {t('tenantNew.cancel')}
               </Button>
               <Button type="submit" disabled={pending} size="lg">
-                {pending ? 'Creando…' : 'Crear tenant'}
+                {pending ? t('tenantNew.creating') : t('tenantNew.submit')}
               </Button>
             </div>
           </form>
