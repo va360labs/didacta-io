@@ -249,7 +249,10 @@ export class ReferralsController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     const u = this.requireUser(user);
     if (!u.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException('Sólo super_admin / tenant_admin pueden gestionar referidos.');
+      throw new ForbiddenException({
+        message: 'Sólo super_admin / tenant_admin pueden gestionar referidos.',
+        code: 'REFERRALS_ADMIN_REQUIRED',
+      });
     }
     return u;
   }
@@ -260,7 +263,10 @@ export class ReferralsController {
     const hostStr = Array.isArray(host) ? host[0] : host;
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
     if (!tenant) {
-      throw new ForbiddenException('Comunidad no encontrada para este dominio.');
+      throw new ForbiddenException({
+        message: 'Comunidad no encontrada para este dominio.',
+        code: 'REFERRALS_TENANT_NOT_FOUND',
+      });
     }
     return tenant.id;
   }

@@ -63,7 +63,7 @@ const uuidSchema = z.string().uuid();
  */
 function ensureUuid(id: string): string {
   if (!uuidSchema.safeParse(id).success) {
-    throw new NotFoundException('No encontrado.');
+    throw new NotFoundException({ message: 'No encontrado.', code: 'RESOURCES_ID_NOT_FOUND' });
   }
   return id;
 }
@@ -192,7 +192,10 @@ export class ResourcesController {
   private requireStaff(user: SessionClaims | undefined): SessionClaims {
     const u = this.requireUser(user);
     if (!u.roles.some((r) => STAFF_ROLES.has(r))) {
-      throw new ForbiddenException('Sólo admin o formador pueden gestionar colecciones.');
+      throw new ForbiddenException({
+        message: 'Sólo admin o formador pueden gestionar colecciones.',
+        code: 'RESOURCES_COLLECTIONS_STAFF_REQUIRED',
+      });
     }
     return u;
   }

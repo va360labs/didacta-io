@@ -48,7 +48,10 @@ export class MembershipAdminController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException('Solo administradores pueden configurar la membresía.');
+      throw new ForbiddenException({
+        message: 'Solo administradores pueden configurar la membresía.',
+        code: 'SUBS_ADMIN_ROLE_REQUIRED',
+      });
     }
     return user;
   }

@@ -55,7 +55,10 @@ export class FundaeController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException('Solo super_admin y tenant_admin pueden gestionar Fundae.');
+      throw new ForbiddenException({
+        message: 'Solo super_admin y tenant_admin pueden gestionar Fundae.',
+        code: 'FUNDAE_ADMIN_REQUIRED',
+      });
     }
     return user;
   }

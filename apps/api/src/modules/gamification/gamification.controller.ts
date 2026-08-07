@@ -128,7 +128,8 @@ const uuidSchema = z.string().uuid();
 
 /** Un id malformado daría P2023 (columna Uuid) → 500. Mismo criterio que resources. */
 function ensureUuid(id: string): string {
-  if (!uuidSchema.safeParse(id).success) throw new NotFoundException('No encontrado.');
+  if (!uuidSchema.safeParse(id).success)
+    throw new NotFoundException({ message: 'No encontrado.', code: 'GAMIF_NOT_FOUND' });
   return id;
 }
 
@@ -565,7 +566,10 @@ export class GamificationController {
   private requireStaff(user: SessionClaims | undefined): SessionClaims {
     const u = this.requireUser(user);
     if (!u.roles?.some((r) => STAFF_ROLES.has(r))) {
-      throw new ForbiddenException('Solo el equipo puede gestionar los retos.');
+      throw new ForbiddenException({
+        message: 'Solo el equipo puede gestionar los retos.',
+        code: 'GAMIF_STAFF_REQUIRED',
+      });
     }
     return u;
   }
@@ -573,7 +577,10 @@ export class GamificationController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     const u = this.requireUser(user);
     if (!u.roles?.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException('Solo un administrador puede tocar el catálogo de puntos.');
+      throw new ForbiddenException({
+        message: 'Solo un administrador puede tocar el catálogo de puntos.',
+        code: 'GAMIF_ADMIN_REQUIRED',
+      });
     }
     return u;
   }

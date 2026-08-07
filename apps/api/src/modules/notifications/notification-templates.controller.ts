@@ -67,7 +67,10 @@ export class NotificationTemplatesController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException('Sólo super_admin / tenant_admin pueden gestionar templates.');
+      throw new ForbiddenException({
+        message: 'Sólo super_admin / tenant_admin pueden gestionar templates.',
+        code: 'NOTIF_TEMPLATES_ADMIN_REQUIRED',
+      });
     }
     return user;
   }
@@ -162,7 +165,7 @@ export class NotificationTemplatesController {
       return { deleted: true };
     }
     if (!['EMAIL', 'IN_APP', 'WEBHOOK'].includes(channel)) {
-      throw new ForbiddenException('channel inválido');
+      throw new ForbiddenException({ message: 'channel inválido', code: 'NOTIF_CHANNEL_INVALID' });
     }
     await this.prisma.notificationTemplate.deleteMany({
       where: {

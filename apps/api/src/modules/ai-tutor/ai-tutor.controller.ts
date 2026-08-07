@@ -53,7 +53,10 @@ export class AiTutorController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     const u = this.requireAuth(user);
     if (!u.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException('Solo admins pueden re-indexar cursos.');
+      throw new ForbiddenException({
+        message: 'Solo admins pueden re-indexar cursos.',
+        code: 'AI_TUTOR_REINDEX_ADMIN_REQUIRED',
+      });
     }
     return u;
   }
@@ -89,7 +92,10 @@ export class AiTutorController {
     const u = this.requireAdmin(user);
     const indexer = this.registry.getAiTutorIndexerServiceOrNull();
     if (!indexer) {
-      throw new ForbiddenException('mod.ai-tutor no está activo en este tenant.');
+      throw new ForbiddenException({
+        message: 'mod.ai-tutor no está activo en este tenant.',
+        code: 'AI_TUTOR_MODULE_INACTIVE',
+      });
     }
     return indexer.indexCourse(u.tenantId, courseId, { force: dto.force });
   }
@@ -103,7 +109,10 @@ export class AiTutorController {
     const u = this.requireAdmin(user);
     const indexer = this.registry.getAiTutorIndexerServiceOrNull();
     if (!indexer) {
-      throw new ForbiddenException('mod.ai-tutor no está activo en este tenant.');
+      throw new ForbiddenException({
+        message: 'mod.ai-tutor no está activo en este tenant.',
+        code: 'AI_TUTOR_MODULE_INACTIVE',
+      });
     }
     const courses = await this.registry
       .getCoursesService()

@@ -178,12 +178,18 @@ export class CommunityApiController {
         roles: { select: { role: { select: { name: true } } } },
       },
     });
-    if (!owner) throw new UnauthorizedException('El usuario dueño de la API key no existe.');
+    if (!owner)
+      throw new UnauthorizedException({
+        message: 'El usuario dueño de la API key no existe.',
+        code: 'COMMUNITY_API_KEY_OWNER_NOT_FOUND',
+      });
     const roleNames = owner.roles.map((r) => r.role.name);
     if (!roleNames.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException(
-        'Solo las API keys de un admin (super_admin/tenant_admin) pueden publicar en la comunidad.',
-      );
+      throw new ForbiddenException({
+        message:
+          'Solo las API keys de un admin (super_admin/tenant_admin) pueden publicar en la comunidad.',
+        code: 'COMMUNITY_API_KEY_ADMIN_REQUIRED',
+      });
     }
 
     const author = { id: user.sub, displayName: owner.name ?? owner.email ?? null };
@@ -197,12 +203,13 @@ export class CommunityApiController {
     if (dto.space) {
       const match = spaces.find((s) => s.slug === dto.space);
       if (!match) {
-        throw new UnprocessableEntityException(
-          `El espacio "${dto.space}" no existe. Espacios válidos: ${
+        throw new UnprocessableEntityException({
+          message: `El espacio "${dto.space}" no existe. Espacios válidos: ${
             spaces.map((s) => s.slug).join(', ') ||
             '(ninguno — créalos en /admin/comunidad/espacios)'
           }. Consulta GET /community-api/spaces.`,
-        );
+          code: 'COMMUNITY_SPACE_UNKNOWN',
+        });
       }
       spaceSlug = match.slug;
     } else {

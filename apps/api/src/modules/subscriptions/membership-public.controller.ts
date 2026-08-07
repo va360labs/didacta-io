@@ -76,7 +76,10 @@ export class MembershipPublicController {
     const hostStr = Array.isArray(host) ? host[0] : host;
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
     if (!tenant) {
-      throw new NotFoundException('Comunidad no encontrada para este dominio.');
+      throw new NotFoundException({
+        message: 'Comunidad no encontrada para este dominio.',
+        code: 'SUBS_TENANT_NOT_FOUND',
+      });
     }
     return tenant.id;
   }

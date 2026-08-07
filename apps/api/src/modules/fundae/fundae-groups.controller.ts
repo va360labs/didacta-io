@@ -64,9 +64,10 @@ export class FundaeGroupsController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException(
-        'Solo super_admin y tenant_admin pueden gestionar grupos bonificables.',
-      );
+      throw new ForbiddenException({
+        message: 'Solo super_admin y tenant_admin pueden gestionar grupos bonificables.',
+        code: 'FUNDAE_GROUPS_ADMIN_REQUIRED',
+      });
     }
     return user;
   }

@@ -158,7 +158,10 @@ export class AccessGroupsController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     const u = this.requireUser(user);
     if (!u.roles.some((r) => ADMIN_ROLES.includes(r))) {
-      throw new ForbiddenException('Requiere rol super_admin o tenant_admin');
+      throw new ForbiddenException({
+        message: 'Requiere rol super_admin o tenant_admin',
+        code: 'ACCESS_GROUPS_ADMIN_ROLE_REQUIRED',
+      });
     }
     return u;
   }

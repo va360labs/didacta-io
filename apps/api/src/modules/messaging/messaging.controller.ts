@@ -66,7 +66,10 @@ export class MessagingController {
       select: { name: true, email: true, status: true, deletedAt: true },
     });
     if (!dbUser || dbUser.deletedAt || dbUser.status !== 'ACTIVE') {
-      throw new ForbiddenException('Tu cuenta no puede usar la mensajería.');
+      throw new ForbiddenException({
+        message: 'Tu cuenta no puede usar la mensajería.',
+        code: 'MSG_ACCOUNT_RESTRICTED',
+      });
     }
     return {
       userId: user.sub,

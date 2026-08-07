@@ -154,13 +154,18 @@ export class SubscriptionsController {
     @CurrentUser() user: SessionClaims | undefined,
   ): Promise<object> {
     if (!user) throw new UnauthorizedException();
-    if (!id || id.length < 5) throw new BadRequestException('id inválido');
+    if (!id || id.length < 5)
+      throw new BadRequestException({ message: 'id inválido', code: 'SUBS_ID_INVALID' });
     // Re-leemos la sub para verificar ownership antes de listar invoices.
     const subs = await this.registry.getSubscriptionsService().listMine(user.tenantId, user.sub);
     const owned = subs.find((s) => s.id === id);
     // 404 (no 401): hay sesión válida; la sub no existe o es de otro usuario,
     // y no confirmamos cuál de las dos para no permitir enumerar ids ajenos.
-    if (!owned) throw new NotFoundException('Esa suscripción no es tuya o no existe.');
+    if (!owned)
+      throw new NotFoundException({
+        message: 'Esa suscripción no es tuya o no existe.',
+        code: 'SUBS_NOT_OWNED',
+      });
     const invoices = await this.registry
       .getSubscriptionsService()
       .listInvoicesForSubscription(user.tenantId, id);
@@ -197,7 +202,10 @@ export class SubscriptionsController {
   async runGraceExpirationNow(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.includes('super_admin')) {
-      throw new ForbiddenException('Solo super_admin puede disparar grace-expiration manualmente.');
+      throw new ForbiddenException({
+        message: 'Solo super_admin puede disparar grace-expiration manualmente.',
+        code: 'SUBS_SUPER_ADMIN_REQUIRED',
+      });
     }
     await this.graceExpiration.triggerNow();
     return { enqueued: true };

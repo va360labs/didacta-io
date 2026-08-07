@@ -97,9 +97,16 @@ export class BillingController {
       where: { id: courseId, tenantId: user.tenantId, deletedAt: null },
       select: { status: true },
     });
-    if (!course) throw new NotFoundException('Curso no encontrado.');
+    if (!course)
+      throw new NotFoundException({
+        message: 'Curso no encontrado.',
+        code: 'BILLING_COURSE_NOT_FOUND',
+      });
     if (course.status !== 'PUBLISHED') {
-      throw new ConflictException('Este curso no está disponible para la compra.');
+      throw new ConflictException({
+        message: 'Este curso no está disponible para la compra.',
+        code: 'BILLING_COURSE_NOT_PURCHASABLE',
+      });
     }
     const yaTieneAcceso = await this.prisma.modLearningEnrollment.findFirst({
       where: {
@@ -111,7 +118,10 @@ export class BillingController {
       select: { id: true },
     });
     if (yaTieneAcceso) {
-      throw new ConflictException('Ya tienes acceso a este curso.');
+      throw new ConflictException({
+        message: 'Ya tienes acceso a este curso.',
+        code: 'BILLING_ALREADY_ENROLLED',
+      });
     }
 
     // SessionClaims no incluye email; lo resolvemos vía lookup. Pre-rellena

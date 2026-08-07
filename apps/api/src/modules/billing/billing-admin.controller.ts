@@ -70,7 +70,10 @@ function requireAdmin(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   const allowed = user.roles.some((r) => (ADMIN_ROLES as readonly string[]).includes(r));
   if (!allowed) {
-    throw new ForbiddenException('Esta acción requiere rol tenant_admin o super_admin.');
+    throw new ForbiddenException({
+      message: 'Esta acción requiere rol tenant_admin o super_admin.',
+      code: 'BILLING_ADMIN_ROLE_REQUIRED',
+    });
   }
   return user;
 }
@@ -108,11 +111,16 @@ export class BillingAdminController {
       where: { id: dto.courseId, tenantId: u.tenantId, deletedAt: null },
       select: { title: true, status: true },
     });
-    if (!course) throw new NotFoundException('El curso no existe en esta organización.');
+    if (!course)
+      throw new NotFoundException({
+        message: 'El curso no existe en esta organización.',
+        code: 'BILLING_ADMIN_COURSE_NOT_FOUND',
+      });
     if (course.status !== 'PUBLISHED') {
-      throw new BadRequestException(
-        'Solo se pueden poner a la venta cursos publicados. Publica el curso primero.',
-      );
+      throw new BadRequestException({
+        message: 'Solo se pueden poner a la venta cursos publicados. Publica el curso primero.',
+        code: 'BILLING_COURSE_NOT_PUBLISHED',
+      });
     }
     const product = await this.registry.getBillingService().createProduct({
       tenantId: u.tenantId,

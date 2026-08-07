@@ -54,9 +54,10 @@ export class FundaeRlptController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException(
-        'Solo super_admin y tenant_admin pueden gestionar notificaciones RLPT.',
-      );
+      throw new ForbiddenException({
+        message: 'Solo super_admin y tenant_admin pueden gestionar notificaciones RLPT.',
+        code: 'FUNDAE_RLPT_ADMIN_REQUIRED',
+      });
     }
     return user;
   }
@@ -83,16 +84,25 @@ export class FundaeRlptController {
   ) {
     const u = this.requireAdmin(user);
     if (!ALLOWED_MIME.has(dto.contentType)) {
-      throw new ForbiddenException('Tipo MIME no permitido para notificación RLPT.');
+      throw new ForbiddenException({
+        message: 'Tipo MIME no permitido para notificación RLPT.',
+        code: 'FUNDAE_RLPT_MIME_NOT_ALLOWED',
+      });
     }
     let blob: Buffer;
     try {
       blob = Buffer.from(dto.data, 'base64');
     } catch {
-      throw new ForbiddenException('Base64 inválido.');
+      throw new ForbiddenException({
+        message: 'Base64 inválido.',
+        code: 'FUNDAE_RLPT_BASE64_INVALID',
+      });
     }
     if (blob.length === 0 || blob.length > MAX_BYTES) {
-      throw new ForbiddenException(`El documento debe pesar entre 1 byte y ${MAX_BYTES} bytes.`);
+      throw new ForbiddenException({
+        message: `El documento debe pesar entre 1 byte y ${MAX_BYTES} bytes.`,
+        code: 'FUNDAE_RLPT_SIZE_INVALID',
+      });
     }
 
     const dtoToService: CreateRlptNoticeDto = {

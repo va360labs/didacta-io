@@ -57,7 +57,10 @@ export class AiTutorReviewController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException('Solo admins pueden revisar las respuestas del tutor.');
+      throw new ForbiddenException({
+        message: 'Solo admins pueden revisar las respuestas del tutor.',
+        code: 'AI_TUTOR_REVIEW_ADMIN_REQUIRED',
+      });
     }
     return user;
   }

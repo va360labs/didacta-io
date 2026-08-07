@@ -166,7 +166,11 @@ export class AccessGroupsService {
         },
       },
     });
-    if (!group) throw new NotFoundException('Grupo de acceso no encontrado');
+    if (!group)
+      throw new NotFoundException({
+        message: 'Grupo de acceso no encontrado',
+        code: 'ACCESS_GROUPS_NOT_FOUND',
+      });
 
     // Resolvemos nombre/email de cada miembro (mismo patrón tenant-safe que
     // listUserCandidates) para que el panel de admin muestre personas, no UUIDs.
@@ -203,18 +207,27 @@ export class AccessGroupsService {
 
   async createGroup(tenantId: string, dto: CreateAccessGroupDto): Promise<AccessGroupDetailResult> {
     if (dto.kind === 'ALL_COURSES' && dto.courseIds && dto.courseIds.length > 0) {
-      throw new BadRequestException(
-        'Un grupo ALL_COURSES otorga todos los cursos; no admite lista explícita',
-      );
+      throw new BadRequestException({
+        message: 'Un grupo ALL_COURSES otorga todos los cursos; no admite lista explícita',
+        code: 'ACCESS_GROUPS_ALL_COURSES_EXPLICIT_LIST',
+      });
     }
     const slug = dto.slug ?? slugify(dto.name);
-    if (!slug) throw new BadRequestException('No se pudo derivar un slug válido del nombre');
+    if (!slug)
+      throw new BadRequestException({
+        message: 'No se pudo derivar un slug válido del nombre',
+        code: 'ACCESS_GROUPS_SLUG_INVALID',
+      });
 
     const existing = await this.prisma.modAccessGroup.findFirst({
       where: { tenantId, slug, deletedAt: null },
       select: { id: true },
     });
-    if (existing) throw new BadRequestException(`Ya existe un grupo con el slug "${slug}"`);
+    if (existing)
+      throw new BadRequestException({
+        message: `Ya existe un grupo con el slug "${slug}"`,
+        code: 'ACCESS_GROUPS_SLUG_TAKEN',
+      });
 
     const group = await this.prisma.modAccessGroup.create({
       data: {
@@ -335,9 +348,10 @@ export class AccessGroupsService {
   ): Promise<AccessGroupDetailResult> {
     const group = await this.requireGroup(tenantId, id);
     if (group.kind === 'ALL_COURSES') {
-      throw new BadRequestException(
-        'Un grupo ALL_COURSES otorga todos los cursos; no se editan sus cursos',
-      );
+      throw new BadRequestException({
+        message: 'Un grupo ALL_COURSES otorga todos los cursos; no se editan sus cursos',
+        code: 'ACCESS_GROUPS_ALL_COURSES_IMMUTABLE',
+      });
     }
 
     const desired = Array.from(new Set(dto.courseIds));
@@ -571,7 +585,11 @@ export class AccessGroupsService {
     const group = await this.prisma.modAccessGroup.findFirst({
       where: { id, tenantId, deletedAt: null },
     });
-    if (!group) throw new NotFoundException('Grupo de acceso no encontrado');
+    if (!group)
+      throw new NotFoundException({
+        message: 'Grupo de acceso no encontrado',
+        code: 'ACCESS_GROUPS_NOT_FOUND',
+      });
     return group;
   }
 
