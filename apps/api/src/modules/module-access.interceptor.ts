@@ -64,9 +64,10 @@ export class ModuleAccessInterceptor implements NestInterceptor {
       if (user?.tenantId) {
         const enabled = await this.isEnabled(user.tenantId, moduleName);
         if (!enabled) {
-          throw new ForbiddenException(
-            `El módulo "${moduleName}" no está activo para este tenant. Contacta al administrador.`,
-          );
+          throw new ForbiddenException({
+            message: `El módulo "${moduleName}" no está activo para este tenant. Contacta al administrador.`,
+            code: 'TENANT_MODULES_MODULE_NOT_ACTIVE',
+          });
         }
       }
     }

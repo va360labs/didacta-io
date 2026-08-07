@@ -57,7 +57,10 @@ const COURSE_EDITOR_ROLES = new Set(['super_admin', 'tenant_admin', 'formador'])
 function requireCourseEditor(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   if (!user.roles.some((r) => COURSE_EDITOR_ROLES.has(r))) {
-    throw new ForbiddenException('Esta acción requiere rol formador, tenant_admin o super_admin.');
+    throw new ForbiddenException({
+      message: 'Esta acción requiere rol formador, tenant_admin o super_admin.',
+      code: 'COURSES_REQUIRES_EDITOR_ROLE',
+    });
   }
   return user;
 }
@@ -238,7 +241,7 @@ export class CoursesController {
 
       // Alumno: el curso debe estar publicado (no filtramos DRAFT/ARCHIVED).
       if ((course as { status?: string }).status !== 'PUBLISHED') {
-        throw new NotFoundException('Curso no encontrado');
+        throw new NotFoundException({ message: 'Curso no encontrado', code: 'COURSE_NOT_FOUND' });
       }
 
       const learning = this.registry.getLearningService();

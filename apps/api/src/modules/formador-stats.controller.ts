@@ -43,9 +43,10 @@ export class FormadorStatsController {
     if (!user) throw new UnauthorizedException();
     const isFormador = user.roles.some((r) => FORMADOR_ROLES.has(r));
     if (!isFormador) {
-      throw new ForbiddenException(
-        'Solo formador / tenant_admin / super_admin puede ver estas stats',
-      );
+      throw new ForbiddenException({
+        message: 'Solo formador / tenant_admin / super_admin puede ver estas stats',
+        code: 'FORMADOR_STATS_FORBIDDEN',
+      });
     }
 
     const tenantId = user.tenantId;

@@ -105,7 +105,11 @@ export class GroupsController {
       },
     });
 
-    if (!group) throw new NotFoundException('Grupo no encontrado');
+    if (!group)
+      throw new NotFoundException({
+        message: 'Grupo no encontrado',
+        code: 'GROUPS_GROUP_NOT_FOUND',
+      });
     return { ...group, memberCount: group._count.members };
   }
 
@@ -117,7 +121,11 @@ export class GroupsController {
   ) {
     if (!user) throw new UnauthorizedException();
     const isAdmin = user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r));
-    if (!isAdmin) throw new ForbiddenException('Solo admins o formadores pueden crear grupos');
+    if (!isAdmin)
+      throw new ForbiddenException({
+        message: 'Solo admins o formadores pueden crear grupos',
+        code: 'GROUPS_CREATE_FORBIDDEN',
+      });
 
     const group = await this.prisma.modGroup.create({
       data: {
@@ -149,7 +157,11 @@ export class GroupsController {
     const group = await this.prisma.modGroup.findFirst({
       where: { id, tenantId: user.tenantId, deletedAt: null },
     });
-    if (!group) throw new NotFoundException('Grupo no encontrado');
+    if (!group)
+      throw new NotFoundException({
+        message: 'Grupo no encontrado',
+        code: 'GROUPS_GROUP_NOT_FOUND',
+      });
 
     // El join es idempotente: solo se incrementa memberCount cuando la
     // membresía se CREA. El upsert anterior no distinguía y cada re-join

@@ -44,7 +44,10 @@ export class StorageFileController {
     try {
       buffer = await this.storage.download(keyPath);
     } catch {
-      throw new NotFoundException('Fichero no encontrado.');
+      throw new NotFoundException({
+        message: 'Fichero no encontrado.',
+        code: 'STORAGE_FILE_NOT_FOUND',
+      });
     }
     const ext = keyPath.split('.').pop()?.toLowerCase() ?? '';
     const type = MIME_BY_EXT[ext] ?? 'application/octet-stream';

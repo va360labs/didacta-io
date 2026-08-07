@@ -44,7 +44,10 @@ const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 function requireAdmin(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-    throw new ForbiddenException('Esta acción requiere rol de administrador.');
+    throw new ForbiddenException({
+      message: 'Esta acción requiere rol de administrador.',
+      code: 'MEMBER_REG_ADMIN_ROLE_REQUIRED',
+    });
   }
   return user;
 }

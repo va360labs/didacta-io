@@ -94,7 +94,10 @@ export class AdminSystemController {
   ): Promise<HealthDetailResponse> {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException('Solo super_admin / tenant_admin pueden ver el health-detail.');
+      throw new ForbiddenException({
+        message: 'Solo super_admin / tenant_admin pueden ver el health-detail.',
+        code: 'ADMIN_SYSTEM_HEALTH_FORBIDDEN',
+      });
     }
 
     const [db, redis, storage, smtp, outbox] = await Promise.all([

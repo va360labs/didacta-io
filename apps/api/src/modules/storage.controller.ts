@@ -139,22 +139,32 @@ export class StorageController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => UPLOAD_ROLES.has(r))) {
-      throw new ForbiddenException(
-        'Necesitas estar autenticado con un rol válido para subir archivos.',
-      );
+      throw new ForbiddenException({
+        message: 'Necesitas estar autenticado con un rol válido para subir archivos.',
+        code: 'STORAGE_UPLOAD_ROLE_REQUIRED',
+      });
     }
     if (!ALLOWED_MIME.has(dto.contentType)) {
-      throw new ForbiddenException('Tipo MIME no permitido.');
+      throw new ForbiddenException({
+        message: 'Tipo MIME no permitido.',
+        code: 'STORAGE_MIME_NOT_ALLOWED',
+      });
     }
 
     let buffer: Buffer;
     try {
       buffer = Buffer.from(dto.data, 'base64');
     } catch {
-      throw new ForbiddenException('Base64 inválido.');
+      throw new ForbiddenException({
+        message: 'Base64 inválido.',
+        code: 'STORAGE_INVALID_BASE64',
+      });
     }
     if (buffer.length === 0 || buffer.length > MAX_BYTES) {
-      throw new ForbiddenException(`El archivo debe pesar entre 1 byte y ${MAX_BYTES} bytes.`);
+      throw new ForbiddenException({
+        message: `El archivo debe pesar entre 1 byte y ${MAX_BYTES} bytes.`,
+        code: 'STORAGE_FILE_SIZE_OUT_OF_RANGE',
+      });
     }
 
     // Normalizamos el filename para evitar traversal y caracteres
@@ -217,19 +227,26 @@ export class StorageController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => OPTIMIZE_ROLES.has(r))) {
-      throw new ForbiddenException('No tienes permiso para optimizar imágenes.');
+      throw new ForbiddenException({
+        message: 'No tienes permiso para optimizar imágenes.',
+        code: 'STORAGE_OPTIMIZE_FORBIDDEN',
+      });
     }
 
     const key = extractLocalStorageKey(dto.url);
     if (!key) {
-      throw new BadRequestException(
-        'La imagen no está alojada en el storage de Didacta; no se puede optimizar.',
-      );
+      throw new BadRequestException({
+        message: 'La imagen no está alojada en el storage de Didacta; no se puede optimizar.',
+        code: 'STORAGE_NOT_DIDACTA_HOSTED',
+      });
     }
     // Aislamiento de tenant: solo se puede reprocesar lo que vive bajo el
     // prefijo del propio tenant.
     if (!key.startsWith(`tenants/${user.tenantId}/`)) {
-      throw new ForbiddenException('La imagen pertenece a otro tenant.');
+      throw new ForbiddenException({
+        message: 'La imagen pertenece a otro tenant.',
+        code: 'STORAGE_IMAGE_OTHER_TENANT',
+      });
     }
 
     const storage = await this.factory.getStorageForTenant(user.tenantId);
@@ -237,7 +254,10 @@ export class StorageController {
     try {
       original = await storage.download(key);
     } catch {
-      throw new NotFoundException('No pudimos leer la imagen original.');
+      throw new NotFoundException({
+        message: 'No pudimos leer la imagen original.',
+        code: 'STORAGE_ORIGINAL_UNREADABLE',
+      });
     }
 
     const contentType = await detectRasterContentType(original);

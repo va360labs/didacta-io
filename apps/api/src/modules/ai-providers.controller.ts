@@ -77,9 +77,10 @@ export class AiProvidersController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException(
-        'Solo super_admin y tenant_admin pueden gestionar providers IA.',
-      );
+      throw new ForbiddenException({
+        message: 'Solo super_admin y tenant_admin pueden gestionar providers IA.',
+        code: 'AI_PROVIDERS_ADMIN_ONLY',
+      });
     }
     return user;
   }
@@ -129,18 +130,24 @@ export class AiProvidersController {
     // Validar capability del provider para el purpose pedido
     const adapter = this.registry.get(dto.provider);
     if (!adapter) {
-      throw new UnauthorizedException(`Provider ${dto.provider} no registrado.`);
+      throw new UnauthorizedException({
+        message: `Provider ${dto.provider} no registrado.`,
+        code: 'AI_PROVIDERS_PROVIDER_NOT_REGISTERED',
+      });
     }
     if (!adapter.capabilities.includes(purposeParsed)) {
-      throw new UnauthorizedException(
-        `Provider ${dto.provider} no soporta ${purposeParsed}. Capabilities: ${adapter.capabilities.join(', ')}.`,
-      );
+      throw new UnauthorizedException({
+        message: `Provider ${dto.provider} no soporta ${purposeParsed}. Capabilities: ${adapter.capabilities.join(', ')}.`,
+        code: 'AI_PROVIDERS_PURPOSE_NOT_SUPPORTED',
+      });
     }
 
     if (!this.cipher.isReady()) {
-      throw new UnauthorizedException(
-        'AI_CONFIG_ENCRYPTION_KEY no está configurada en el cluster. Pide al super_admin que la configure antes de gestionar providers per-tenant.',
-      );
+      throw new UnauthorizedException({
+        message:
+          'AI_CONFIG_ENCRYPTION_KEY no está configurada en el cluster. Pide al super_admin que la configure antes de gestionar providers per-tenant.',
+        code: 'AI_PROVIDERS_ENCRYPTION_KEY_MISSING',
+      });
     }
     const enc = this.cipher.encrypt(dto.apiKey);
 
