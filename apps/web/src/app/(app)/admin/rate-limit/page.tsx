@@ -26,15 +26,19 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { LICENSE_CAPABILITIES, useLicense } from '@didacta/license-sdk/react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { rateLimitApi, type RateLimitInfo } from '@/lib/rate-limit';
 
 export default function AdminRateLimitPage() {
+  const t = useTranslations('adminApi');
+  const tErrors = useTranslations('errors');
   const [info, setInfo] = useState<RateLimitInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,9 +51,7 @@ export default function AdminRateLimitPage() {
         setInfo(fresh);
       } catch (e) {
         setError(
-          e instanceof ApiHttpError
-            ? e.message
-            : 'No se pudo cargar la configuración de rate limit.',
+          e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('rateLimit.loadError'),
         );
       }
     })();
@@ -58,12 +60,12 @@ export default function AdminRateLimitPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Límites API</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('rateLimit.title')}</h1>
         <p className="text-text-muted">
-          Cuotas por minuto que la API aplica a tu organización. Si superas el límite recibes
-          respuesta <code>429 Too Many Requests</code> con cabeceras{' '}
-          <code className="font-mono">Retry-After</code> y{' '}
-          <code className="font-mono">X-RateLimit-*</code>.
+          {t.rich('rateLimit.subtitle', {
+            code: (chunks) => <code>{chunks}</code>,
+            codeMono: (chunks) => <code className="font-mono">{chunks}</code>,
+          })}
         </p>
       </header>
 
@@ -89,6 +91,7 @@ export default function AdminRateLimitPage() {
  * comparativa enterprise.
  */
 function RateLimitPanel({ info }: { info: RateLimitInfo }) {
+  const t = useTranslations('adminApi');
   const isEnterprise = info.tier === 'enterprise';
 
   return (
@@ -98,11 +101,12 @@ function RateLimitPanel({ info }: { info: RateLimitInfo }) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Icon name="trending" size={18} />
-            Plan activo
+            {t('rateLimit.activePlan')}
             <TierBadge tier={info.tier} />
           </CardTitle>
           <CardDescription>
-            Capability asociada: <code className="font-mono text-xs">{info.capability}</code>
+            {t('rateLimit.capabilityLabel')}{' '}
+            <code className="font-mono text-xs">{info.capability}</code>
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -110,21 +114,33 @@ function RateLimitPanel({ info }: { info: RateLimitInfo }) {
             <table className="w-full text-sm">
               <thead className="bg-surface-2">
                 <tr>
-                  <th className="px-4 py-2 text-left font-semibold">Bucket</th>
-                  <th className="px-4 py-2 text-left font-semibold">Límite efectivo</th>
-                  <th className="px-4 py-2 text-left font-semibold">Ventana</th>
+                  <th className="px-4 py-2 text-left font-semibold">{t('rateLimit.colBucket')}</th>
+                  <th className="px-4 py-2 text-left font-semibold">
+                    {t('rateLimit.colEffectiveLimit')}
+                  </th>
+                  <th className="px-4 py-2 text-left font-semibold">{t('rateLimit.colWindow')}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-t border-border-soft">
-                  <td className="px-4 py-3">Endpoints autenticados</td>
-                  <td className="px-4 py-3 font-mono">{info.authenticated.limit} req</td>
-                  <td className="px-4 py-3 font-mono">{info.authenticated.windowSeconds}s</td>
+                  <td className="px-4 py-3">{t('rateLimit.rowAuthenticated')}</td>
+                  <td className="px-4 py-3 font-mono">
+                    {t('rateLimit.reqCount', { limit: String(info.authenticated.limit) })}
+                  </td>
+                  <td className="px-4 py-3 font-mono">
+                    {t('rateLimit.windowSeconds', {
+                      seconds: String(info.authenticated.windowSeconds),
+                    })}
+                  </td>
                 </tr>
                 <tr className="border-t border-border-soft">
-                  <td className="px-4 py-3">Endpoints públicos</td>
-                  <td className="px-4 py-3 font-mono">{info.public.limit} req</td>
-                  <td className="px-4 py-3 font-mono">{info.public.windowSeconds}s</td>
+                  <td className="px-4 py-3">{t('rateLimit.rowPublic')}</td>
+                  <td className="px-4 py-3 font-mono">
+                    {t('rateLimit.reqCount', { limit: String(info.public.limit) })}
+                  </td>
+                  <td className="px-4 py-3 font-mono">
+                    {t('rateLimit.windowSeconds', { seconds: String(info.public.windowSeconds) })}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -135,32 +151,37 @@ function RateLimitPanel({ info }: { info: RateLimitInfo }) {
       {/* Comparativa community vs enterprise */}
       <Card>
         <CardHeader>
-          <CardTitle>Comparativa de planes</CardTitle>
-          <CardDescription>
-            Cifras por minuto y por tenant. Los buckets son independientes — un pico de tráfico
-            público no consume tu cuota autenticada.
-          </CardDescription>
+          <CardTitle>{t('rateLimit.planComparison')}</CardTitle>
+          <CardDescription>{t('rateLimit.planComparisonDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto rounded-lg border border-border-soft">
             <table className="w-full text-sm">
               <thead className="bg-surface-2">
                 <tr>
-                  <th className="px-4 py-2 text-left font-semibold">Bucket</th>
-                  <th className="px-4 py-2 text-left font-semibold">Community</th>
-                  <th className="px-4 py-2 text-left font-semibold">Enterprise</th>
+                  <th className="px-4 py-2 text-left font-semibold">{t('rateLimit.colBucket')}</th>
+                  <th className="px-4 py-2 text-left font-semibold">{t('tier.community')}</th>
+                  <th className="px-4 py-2 text-left font-semibold">{t('tier.enterprise')}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-t border-border-soft">
-                  <td className="px-4 py-3">Autenticados</td>
-                  <td className="px-4 py-3 font-mono">{info.community.authenticated} req/min</td>
-                  <td className="px-4 py-3 font-mono">{info.enterprise.authenticated} req/min</td>
+                  <td className="px-4 py-3">{t('rateLimit.rowAuth')}</td>
+                  <td className="px-4 py-3 font-mono">
+                    {t('rateLimit.reqPerMin', { count: String(info.community.authenticated) })}
+                  </td>
+                  <td className="px-4 py-3 font-mono">
+                    {t('rateLimit.reqPerMin', { count: String(info.enterprise.authenticated) })}
+                  </td>
                 </tr>
                 <tr className="border-t border-border-soft">
-                  <td className="px-4 py-3">Públicos</td>
-                  <td className="px-4 py-3 font-mono">{info.community.public} req/min</td>
-                  <td className="px-4 py-3 font-mono">{info.enterprise.public} req/min</td>
+                  <td className="px-4 py-3">{t('rateLimit.rowPub')}</td>
+                  <td className="px-4 py-3 font-mono">
+                    {t('rateLimit.reqPerMin', { count: String(info.community.public) })}
+                  </td>
+                  <td className="px-4 py-3 font-mono">
+                    {t('rateLimit.reqPerMin', { count: String(info.enterprise.public) })}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -177,10 +198,11 @@ function RateLimitPanel({ info }: { info: RateLimitInfo }) {
  * Badge visual del tier — verde para enterprise, gris discreto para community.
  */
 function TierBadge({ tier }: { tier: RateLimitInfo['tier'] }) {
+  const t = useTranslations('adminApi');
   if (tier === 'enterprise') {
-    return <Badge className="bg-success-600 text-white">Enterprise</Badge>;
+    return <Badge className="bg-success-600 text-white">{t('tier.enterprise')}</Badge>;
   }
-  return <Badge variant="outline">Community</Badge>;
+  return <Badge variant="outline">{t('tier.community')}</Badge>;
 }
 
 /**
@@ -191,6 +213,7 @@ function TierBadge({ tier }: { tier: RateLimitInfo['tier'] }) {
  * tiene EE).
  */
 function UpgradeCta() {
+  const t = useTranslations('adminApi');
   // Hook puro — usamos useLicense() en lugar de <EeGate> aquí porque
   // necesitamos el comportamiento "renderizar SI NO tiene la capability"
   // (negative gate). El componente <EeGate> está pensado para el caso
@@ -200,17 +223,13 @@ function UpgradeCta() {
     return null;
   }
   return (
-    <Card role="region" aria-label="Upgrade a Enterprise" className="border-dashed">
+    <Card role="region" aria-label={t('rateLimit.upgradeAria')} className="border-dashed">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="lock" size={18} />
-          ¿Necesitas más capacidad?
+          {t('rateLimit.upgradeTitle')}
         </CardTitle>
-        <CardDescription>
-          El plan Enterprise multiplica los límites por ~10x. Recomendado si tu integración hace
-          polling agresivo, sincroniza Fundae XML al cierre de mes o sirve un portal público con
-          tráfico estacional.
-        </CardDescription>
+        <CardDescription>{t('rateLimit.upgradeDescription')}</CardDescription>
       </CardHeader>
       <CardContent>
         <a
@@ -219,7 +238,7 @@ function UpgradeCta() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
         >
-          Ver planes Enterprise
+          {t('rateLimit.seePlans')}
           <Icon name="arrow-right" size={14} />
         </a>
       </CardContent>

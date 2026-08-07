@@ -15,6 +15,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ApiDocsTab } from '@/components/admin/api-docs-tab';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -27,22 +28,23 @@ import { ApiHttpError } from '@/lib/api-client';
 import {
   adminApiKeysApi,
   API_KEY_SCOPES,
-  API_KEY_SCOPE_LABELS,
-  type ApiKeyScope,
   type CreatedApiKey,
   type TenantApiKey,
 } from '@/lib/admin-api-keys';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
 
 function fmtDate(value: string | null): string {
   if (!value) return '—';
-  return new Date(value).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
+  return formatDateTime(value, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 const TABS = ['claves', 'docs'] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function ApiKeysPage() {
+  const t = useTranslations('adminApi');
   const router = useRouter();
   const params = useSearchParams();
   const requested = params.get('tab');
@@ -53,10 +55,11 @@ export default function ApiKeysPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold text-text">Claves API</h1>
+        <h1 className="text-2xl font-semibold text-text">{t('keys.title')}</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Cómo inscriben alumnos tus sistemas externos (tu página de ventas, n8n, WooCommerce…) vía{' '}
-          <code>POST /api/v1/inscribe</code>.
+          {t.rich('keys.subtitle', {
+            code: (chunks) => <code>{chunks}</code>,
+          })}
         </p>
       </header>
 
@@ -67,8 +70,8 @@ export default function ApiKeysPage() {
         }
       >
         <TabsList>
-          <TabsTrigger value="claves">Claves</TabsTrigger>
-          <TabsTrigger value="docs">Documentación</TabsTrigger>
+          <TabsTrigger value="claves">{t('keys.tabKeys')}</TabsTrigger>
+          <TabsTrigger value="docs">{t('keys.tabDocs')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="claves" className="mt-5">
@@ -83,6 +86,8 @@ export default function ApiKeysPage() {
 }
 
 function KeysTab() {
+  const t = useTranslations('adminApi');
+  const tErrors = useTranslations('errors');
   const [keys, setKeys] = useState<TenantApiKey[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -92,6 +97,19 @@ function KeysTab() {
   const [createdKey, setCreatedKey] = useState<CreatedApiKey | null>(null);
   const [copied, setCopied] = useState(false);
 
+  function scopeLabel(scope: string): string {
+    switch (scope) {
+      case 'enrollments:write':
+        return t('keys.scopeEnrollmentsWrite');
+      case 'courses:read':
+        return t('keys.scopeCoursesRead');
+      case 'community:post':
+        return t('keys.scopeCommunityPost');
+      default:
+        return scope;
+    }
+  }
+
   async function reload() {
     const token = authStorage.getAccessToken();
     if (!token) return;
@@ -100,7 +118,7 @@ function KeysTab() {
       const list = await adminApiKeysApi.list(token);
       setKeys(list);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las claves API.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('keys.loadError'));
     }
   }
 
@@ -128,7 +146,7 @@ function KeysTab() {
       setCreating(false);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos crear la clave.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('keys.createError'));
     } finally {
       setPending(false);
     }
@@ -137,14 +155,13 @@ function KeysTab() {
   async function handleRevoke(id: string) {
     const token = authStorage.getAccessToken();
     if (!token) return;
-    if (!window.confirm('¿Revocar esta clave? Las integraciones que la usen dejarán de funcionar.'))
-      return;
+    if (!window.confirm(t('keys.confirmRevoke'))) return;
     setError(null);
     try {
       await adminApiKeysApi.revoke(token, id);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos revocar la clave.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('keys.revokeError'));
     }
   }
 
@@ -152,11 +169,13 @@ function KeysTab() {
     <section className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <p className="max-w-2xl text-sm text-text-muted">
-          El contrato estático y público está en <code>/api/docs</code>; la pestaña
-          &ldquo;Documentación&rdquo; muestra tus grupos y cursos reales con payloads listos para
-          copiar.
+          {t.rich('keys.contractNote', {
+            code: (chunks) => <code>{chunks}</code>,
+          })}
         </p>
-        {!creating ? <Button onClick={() => setCreating(true)}>Crear clave</Button> : null}
+        {!creating ? (
+          <Button onClick={() => setCreating(true)}>{t('keys.createKey')}</Button>
+        ) : null}
       </div>
 
       {error ? (
@@ -171,10 +190,10 @@ function KeysTab() {
       {createdKey ? (
         <Card className="border-success-200">
           <CardHeader>
-            <CardTitle className="text-base">Clave creada: {createdKey.name}</CardTitle>
-            <CardDescription>
-              Cópiala ahora. Por seguridad, no se volverá a mostrar el token completo.
-            </CardDescription>
+            <CardTitle className="text-base">
+              {t('keys.keyCreated', { name: createdKey.name })}
+            </CardTitle>
+            <CardDescription>{t('keys.copyNow')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex gap-2">
@@ -182,7 +201,7 @@ function KeysTab() {
                 value={createdKey.token}
                 readOnly
                 className="flex-1 font-mono text-xs"
-                aria-label="Token de la API key"
+                aria-label={t('keys.tokenAria')}
               />
               <Button
                 type="button"
@@ -193,11 +212,11 @@ function KeysTab() {
                   window.setTimeout(() => setCopied(false), 1500);
                 }}
               >
-                {copied ? 'Copiado' : 'Copiar'}
+                {copied ? t('keys.copied') : t('keys.copy')}
               </Button>
             </div>
             <Button type="button" variant="ghost" size="sm" onClick={() => setCreatedKey(null)}>
-              Ya la guardé
+              {t('keys.savedIt')}
             </Button>
           </CardContent>
         </Card>
@@ -206,13 +225,13 @@ function KeysTab() {
       {creating ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Nueva clave API</CardTitle>
+            <CardTitle className="text-base">{t('keys.newKeyTitle')}</CardTitle>
             <CardDescription>
-              Permisos que se otorgan:{' '}
+              {t('keys.grantedScopes')}{' '}
               {API_KEY_SCOPES.map((s, i) => (
                 <span key={s}>
                   {i > 0 ? ' · ' : ''}
-                  <strong>{API_KEY_SCOPE_LABELS[s]}</strong>
+                  <strong>{scopeLabel(s)}</strong>
                 </span>
               ))}
               .
@@ -221,18 +240,18 @@ function KeysTab() {
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="key-name">
-                Nombre <span className="text-danger-700">*</span>
+                {t('keys.nameLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input
                 id="key-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 maxLength={100}
-                placeholder="p.ej. Página de ventas"
+                placeholder={t('keys.namePlaceholder')}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="key-expires">Caduca (opcional)</Label>
+              <Label htmlFor="key-expires">{t('keys.expiresLabel')}</Label>
               <Input
                 id="key-expires"
                 type="date"
@@ -242,7 +261,7 @@ function KeysTab() {
             </div>
             <div className="flex items-center gap-2 border-t border-border-soft pt-4">
               <Button onClick={handleCreate} disabled={pending || !name.trim()}>
-                {pending ? 'Creando…' : 'Crear clave'}
+                {pending ? t('keys.creating') : t('keys.createKey')}
               </Button>
               <Button
                 variant="ghost"
@@ -253,7 +272,7 @@ function KeysTab() {
                 }}
                 disabled={pending}
               >
-                Cancelar
+                {t('keys.cancel')}
               </Button>
             </div>
           </CardContent>
@@ -268,9 +287,7 @@ function KeysTab() {
               <Skeleton className="h-10 w-full" />
             </div>
           ) : keys.length === 0 ? (
-            <p className="p-6 text-sm text-text-muted">
-              Aún no hay claves API. Crea una para integrar tu página de ventas.
-            </p>
+            <p className="p-6 text-sm text-text-muted">{t('keys.emptyKeys')}</p>
           ) : (
             <div className="divide-y divide-border-soft">
               {keys.map((k) => {
@@ -282,28 +299,30 @@ function KeysTab() {
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-text">{k.name}</span>
                         {revoked ? (
-                          <Badge variant="danger">Revocada</Badge>
+                          <Badge variant="danger">{t('keys.badgeRevoked')}</Badge>
                         ) : expired ? (
-                          <Badge variant="warning">Caducada</Badge>
+                          <Badge variant="warning">{t('keys.badgeExpired')}</Badge>
                         ) : (
-                          <Badge variant="success">Activa</Badge>
+                          <Badge variant="success">{t('keys.badgeActive')}</Badge>
                         )}
                       </div>
                       <p className="mt-1 text-xs text-text-subtle">
-                        {k.scopes
-                          .map((s) => API_KEY_SCOPE_LABELS[s as ApiKeyScope] ?? s)
-                          .join(', ')}
+                        {k.scopes.map((s) => scopeLabel(s)).join(', ')}
                       </p>
                       <p className="mt-0.5 text-xs text-text-subtle">
-                        Creada {fmtDate(k.createdAt)}
-                        {k.createdByEmail ? ` por ${k.createdByEmail}` : ''} · Último uso{' '}
-                        {fmtDate(k.lastUsedAt)}
-                        {k.expiresAt ? ` · Caduca ${fmtDate(k.expiresAt)}` : ''}
+                        {t('keys.keyMeta', {
+                          created: fmtDate(k.createdAt),
+                          hasCreator: String(Boolean(k.createdByEmail)),
+                          creator: k.createdByEmail ?? '',
+                          lastUsed: fmtDate(k.lastUsedAt),
+                          hasExpiry: String(Boolean(k.expiresAt)),
+                          expires: k.expiresAt ? fmtDate(k.expiresAt) : '',
+                        })}
                       </p>
                     </div>
                     {!revoked ? (
                       <Button variant="ghost" size="sm" onClick={() => handleRevoke(k.id)}>
-                        Revocar
+                        {t('keys.revoke')}
                       </Button>
                     ) : null}
                   </div>
