@@ -6,12 +6,15 @@
  */
 
 import { Shield, ShieldBan } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate, formatDateTime } from '@/lib/i18n/format';
 import {
   expiresAtFromDuration,
   invalidateRestrictionCache,
@@ -71,12 +74,16 @@ export function RestrictionShield({
   size?: number;
   className?: string;
 }) {
+  const t = useTranslations('cuentaComponentes');
   const [open, setOpen] = useState(false);
   const isRestricted = !!active;
 
   const label = isRestricted
-    ? `${userName ?? 'Este usuario'} está sancionado: ${active.scopeLabels.join(', ')}`
-    : `Restringir a ${userName ?? 'este usuario'}`;
+    ? t('restriction.sanctionedLabel', {
+        name: userName ?? t('restriction.thisUser'),
+        scopes: active.scopeLabels.join(', '),
+      })
+    : t('restriction.restrictLabel', { name: userName ?? t('restriction.thisUserLower') });
 
   return (
     <>
@@ -120,6 +127,8 @@ export function RestrictionDialog({
   userName: string | null | undefined;
   onClose: () => void;
 }) {
+  const t = useTranslations('cuentaComponentes');
+  const tErrors = useTranslations('errors');
   const [history, setHistory] = useState<Restriction[] | null>(null);
   const [scopes, setScopes] = useState<string[]>([]);
   const [duration, setDuration] = useState<DurationValue>('7d');
@@ -131,9 +140,11 @@ export function RestrictionDialog({
     try {
       setHistory(await restrictionsApi.list(userId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo cargar el historial.');
+      setError(apiErrorMessage(err, tErrors));
       setHistory([]);
     }
+    // `tErrors` es estable entre renders y queda fuera de deps a propósito: no
+    // tiene sentido recargar el historial por un cambio de traductor.
   }, [userId]);
 
   useEffect(() => {
@@ -155,11 +166,11 @@ export function RestrictionDialog({
   const submit = async () => {
     setError(null);
     if (scopes.length === 0) {
-      setError('Elige al menos un área.');
+      setError(t('restriction.chooseArea'));
       return;
     }
     if (!reason.trim()) {
-      setError('El motivo es obligatorio: se le muestra a la persona cuando intente publicar.');
+      setError(t('restriction.reasonRequired'));
       return;
     }
     setBusy(true);
@@ -174,7 +185,7 @@ export function RestrictionDialog({
       setReason('');
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo aplicar la sanción.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setBusy(false);
     }
@@ -188,7 +199,7 @@ export function RestrictionDialog({
       invalidateRestrictionCache(userId);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo levantar la sanción.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setBusy(false);
     }
@@ -200,15 +211,15 @@ export function RestrictionDialog({
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
-      title={`Moderar a ${userName ?? 'este usuario'}`}
-      description="Sigue pudiendo entrar y leer. Solo deja de poder aportar contenido en las áreas que marques."
+      title={t('restriction.dialogTitle', { name: userName ?? t('restriction.thisUserLower') })}
+      description={t('restriction.dialogDesc')}
       maxWidthClass="max-w-xl"
     >
       <div className="space-y-5" data-testid="restriction-dialog">
         {activeOnes.length > 0 ? (
           <section className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/30">
             <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">
-              Sanciones vigentes
+              {t('restriction.activeSanctions')}
             </h3>
             <ul className="mt-2 space-y-2">
               {activeOnes.map((r) => (
@@ -217,11 +228,15 @@ export function RestrictionDialog({
                     <p className="font-medium">{r.scopeLabels.join(', ')}</p>
                     <p className="text-muted-foreground">
                       {r.expiresAt
-                        ? `Hasta el ${new Date(r.expiresAt).toLocaleString('es-ES')}`
-                        : 'Permanente'}
-                      {r.createdByName ? ` · por ${r.createdByName}` : ''}
+                        ? t('restriction.untilDateTime', { date: formatDateTime(r.expiresAt) })
+                        : t('restriction.permanent')}
+                      {r.createdByName
+                        ? ` · ${t('restriction.byName', { name: r.createdByName })}`
+                        : ''}
                     </p>
-                    <p className="mt-0.5 break-words text-muted-foreground">«{r.reason}»</p>
+                    <p className="mt-0.5 break-words text-muted-foreground">
+                      {t('restriction.quotedReason', { reason: r.reason })}
+                    </p>
                   </div>
                   <Button
                     type="button"
@@ -231,7 +246,7 @@ export function RestrictionDialog({
                     onClick={() => void lift(r.id)}
                     data-testid="lift-restriction"
                   >
-                    Levantar
+                    {t('restriction.liftCta')}
                   </Button>
                 </li>
               ))}
@@ -241,7 +256,7 @@ export function RestrictionDialog({
 
         <section className="space-y-3">
           <div>
-            <Label>Áreas a restringir</Label>
+            <Label>{t('restriction.areasLabel')}</Label>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {RESTRICTION_SCOPES.map((s) => (
                 <label
@@ -256,8 +271,10 @@ export function RestrictionDialog({
                     data-testid={`scope-${s.value}`}
                   />
                   <span>
-                    <span className="font-medium">{s.label}</span>
-                    <span className="block text-xs text-muted-foreground">{s.hint}</span>
+                    <span className="font-medium">{t(`restrictionScope.${s.value}`)}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {t(`restrictionScopeHint.${s.value}`)}
+                    </span>
                   </span>
                 </label>
               ))}
@@ -270,10 +287,9 @@ export function RestrictionDialog({
                   data-testid="scope-all"
                 />
                 <span>
-                  <span className="font-medium">Toda la plataforma</span>
+                  <span className="font-medium">{t('restrictionScope.all')}</span>
                   <span className="block text-xs text-muted-foreground">
-                    Todo lo anterior, más el perfil, los comentarios de lección y las entregas de
-                    retos. Nunca afecta a pagos ni al curso que ya compró.
+                    {t('restrictionScopeHint.all')}
                   </span>
                 </span>
               </label>
@@ -281,7 +297,7 @@ export function RestrictionDialog({
           </div>
 
           <div>
-            <Label htmlFor="restriction-duration">Duración</Label>
+            <Label htmlFor="restriction-duration">{t('restriction.durationLabel')}</Label>
             <div className="mt-2 flex flex-wrap gap-2">
               {RESTRICTION_DURATIONS.map((d) => (
                 <button
@@ -296,27 +312,24 @@ export function RestrictionDialog({
                       : 'hover:bg-muted',
                   ].join(' ')}
                 >
-                  {d.label}
+                  {t(`restrictionDuration.${d.value}`)}
                 </button>
               ))}
             </div>
           </div>
 
           <div>
-            <Label htmlFor="restriction-reason">Motivo (obligatorio)</Label>
+            <Label htmlFor="restriction-reason">{t('restriction.reasonLabel')}</Label>
             <Textarea
               id="restriction-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               maxLength={500}
               rows={3}
-              placeholder="Ej. Publicaciones promocionales repetidas tras dos avisos."
+              placeholder={t('restriction.reasonPlaceholder')}
               data-testid="restriction-reason"
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Se le muestra a la persona cuando intente publicar, y queda en el registro de
-              auditoría.
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">{t('restriction.reasonHint')}</p>
           </div>
 
           {error ? (
@@ -327,7 +340,7 @@ export function RestrictionDialog({
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
-              Cancelar
+              {t('restriction.cancel')}
             </Button>
             <Button
               type="button"
@@ -335,25 +348,27 @@ export function RestrictionDialog({
               disabled={busy}
               data-testid="apply-restriction"
             >
-              {busy ? 'Aplicando…' : 'Aplicar sanción'}
+              {busy ? t('restriction.applying') : t('restriction.applyCta')}
             </Button>
           </div>
         </section>
 
         {history && history.length > activeOnes.length ? (
           <section>
-            <h3 className="text-sm font-semibold">Historial</h3>
+            <h3 className="text-sm font-semibold">{t('restriction.historyTitle')}</h3>
             <ul className="mt-2 space-y-1.5 text-xs text-muted-foreground">
               {history
                 .filter((r) => !r.active)
                 .map((r) => (
                   <li key={r.id}>
                     <span className="font-medium">{r.scopeLabels.join(', ')}</span> ·{' '}
-                    {new Date(r.createdAt).toLocaleDateString('es-ES')}
+                    {formatDate(r.createdAt)}
                     {r.liftedAt
-                      ? ` · levantada por ${r.liftedByName ?? 'un admin'}`
-                      : ' · caducada'}{' '}
-                    · «{r.reason}»
+                      ? ` · ${t('restriction.liftedByName', {
+                          name: r.liftedByName ?? t('restriction.anAdmin'),
+                        })}`
+                      : ` · ${t('restriction.expired')}`}{' '}
+                    · {t('restriction.quotedReason', { reason: r.reason })}
                   </li>
                 ))}
             </ul>

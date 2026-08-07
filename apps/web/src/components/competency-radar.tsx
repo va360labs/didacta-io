@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
+
 /**
  * Radar de competencias en SVG puro (sin dependencia de charts, por el control
  * de bundle del proyecto). Dibuja N ejes (uno por competencia) con su score
@@ -17,6 +19,7 @@ export function CompetencyRadar({
   data: Array<{ name: string; score: number }>;
   size?: number;
 }) {
+  const t = useTranslations('cuentaComponentes');
   const n = data.length;
   if (n < 3) return null;
 
@@ -35,7 +38,7 @@ export function CompetencyRadar({
       viewBox={`0 0 ${size} ${size}`}
       className="h-auto w-full max-w-[320px] overflow-visible"
       role="img"
-      aria-label="Radar de competencias"
+      aria-label={t('radar.ariaLabel')}
     >
       {[0.25, 0.5, 0.75, 1].map((ring) => (
         <polygon

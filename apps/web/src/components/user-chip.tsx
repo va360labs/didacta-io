@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { publicProfileHref } from '@/lib/public-users';
 import { useUserRestriction } from '@/lib/restrictions';
@@ -41,6 +42,10 @@ export function initialsOf(name: string | null | undefined, fallback = 'A'): str
  *
  * Nunca devuelve un UUID: un identificador en pantalla no le dice nada a nadie
  * y era lo que se veía en la lista de miembros de un grupo.
+ *
+ * Es una función pura (la usan tests y componentes sin contexto de i18n), así
+ * que el `fallback` por defecto queda literal: los componentes de este fichero
+ * le pasan el traducido (`chip.memberFallback`).
  */
 export function displayNameOf(
   name: string | null | undefined,
@@ -87,7 +92,7 @@ export function UserAvatar({
   email,
   avatarUrl,
   size = 44,
-  fallback = 'Miembro',
+  fallback,
 }: {
   name: string | null | undefined;
   email?: string | null;
@@ -95,7 +100,8 @@ export function UserAvatar({
   size?: number;
   fallback?: string;
 }) {
-  const label = displayNameOf(name, email, fallback);
+  const t = useTranslations('cuentaComponentes');
+  const label = displayNameOf(name, email, fallback ?? t('chip.memberFallback'));
   const dim = { width: `${size}px`, height: `${size}px` };
 
   return (
@@ -125,7 +131,7 @@ export function UserChip({
   email,
   avatarUrl,
   size = 32,
-  fallback = 'Miembro',
+  fallback,
   showAvatar = true,
   showName = true,
   showShield = true,
@@ -136,15 +142,23 @@ export function UserChip({
   subtitleClassName,
   stopPropagation = false,
 }: UserChipProps) {
+  const t = useTranslations('cuentaComponentes');
   const canModerate = useCanModerate(userId);
   // El hook agrupa las peticiones de toda la pantalla en una sola llamada.
   const restriction = useUserRestriction(userId, canModerate && showShield);
 
-  const label = displayNameOf(name, email, fallback);
+  const resolvedFallback = fallback ?? t('chip.memberFallback');
+  const label = displayNameOf(name, email, resolvedFallback);
   const stop = stopPropagation ? (e: React.MouseEvent) => e.stopPropagation() : undefined;
 
   const avatar = showAvatar ? (
-    <UserAvatar name={name} email={email} avatarUrl={avatarUrl} size={size} fallback={fallback} />
+    <UserAvatar
+      name={name}
+      email={email}
+      avatarUrl={avatarUrl}
+      size={size}
+      fallback={resolvedFallback}
+    />
   ) : null;
 
   const text =

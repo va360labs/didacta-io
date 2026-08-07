@@ -5,9 +5,11 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { uploadCommunityImage } from '@/lib/community-upload';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 
 /**
  * Iniciales para el fallback del avatar (mismo criterio que /cuenta y el
@@ -41,6 +43,8 @@ export function AvatarUpload({
   email: string;
   size?: number;
 }) {
+  const t = useTranslations('cuentaComponentes');
+  const tErrors = useTranslations('errors');
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +58,7 @@ export function AvatarUpload({
       const url = await uploadCommunityImage(file, { maxWidth: 512 });
       onChange(url);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No pudimos subir la imagen.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -97,7 +101,7 @@ export function AvatarUpload({
             disabled={uploading}
             onClick={() => inputRef.current?.click()}
           >
-            {uploading ? 'Subiendo…' : value ? 'Cambiar foto' : 'Subir foto'}
+            {uploading ? t('avatar.uploading') : value ? t('avatar.change') : t('avatar.upload')}
           </Button>
           {value ? (
             <Button
@@ -107,11 +111,11 @@ export function AvatarUpload({
               disabled={uploading}
               onClick={() => onChange(null)}
             >
-              Quitar
+              {t('avatar.remove')}
             </Button>
           ) : null}
         </div>
-        <p className="text-xs text-text-subtle">PNG, JPG o WebP. Máx 5 MB.</p>
+        <p className="text-xs text-text-subtle">{t('avatar.hint')}</p>
         {error ? (
           <p role="alert" className="text-xs text-danger-700">
             {error}

@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
@@ -17,6 +18,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import { meApi, type ActiveSession } from '@/lib/me';
 
 /**
@@ -26,6 +30,8 @@ import { meApi, type ActiveSession } from '@/lib/me';
  * temporal (`mustChangePassword`) redirige a /cuenta?tab=seguridad.
  */
 export function AccountSecurityTab() {
+  const t = useTranslations('cuentaComponentes');
+  const tErrors = useTranslations('errors');
   const router = useRouter();
   const [mfaOpen, setMfaOpen] = useState(false);
   const [sessions, setSessions] = useState<ActiveSession[] | null>(null);
@@ -53,7 +59,9 @@ export function AccountSecurityTab() {
       setError(null);
       setSessions(await meApi.listSessions(token));
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar tus sesiones.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('security.sessionsLoadError'),
+      );
     }
   }
 
@@ -78,11 +86,11 @@ export function AccountSecurityTab() {
     setPwError(null);
     setPwSuccess(false);
     if (newPassword !== confirmPassword) {
-      setPwError('Las contraseñas nuevas no coinciden.');
+      setPwError(t('security.pwMismatch'));
       return;
     }
     if (newPassword.length < 12) {
-      setPwError('La nueva contraseña debe tener al menos 12 caracteres.');
+      setPwError(t('security.pwTooShort'));
       return;
     }
     const token = authStorage.getAccessToken();
@@ -100,14 +108,16 @@ export function AccountSecurityTab() {
         router.replace('/signin');
       }, 2000);
     } catch (e) {
-      setPwError(e instanceof ApiHttpError ? e.message : 'No pudimos cambiar tu contraseña.');
+      setPwError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('security.pwChangeError'),
+      );
     } finally {
       setPending(false);
     }
   }
 
   async function handleRevoke(id: string) {
-    if (!confirm('¿Cerrar esta sesión?')) return;
+    if (!confirm(t('security.revokeConfirm'))) return;
     const token = authStorage.getAccessToken();
     if (!token) return;
     setBusy(`rm-${id}`);
@@ -115,18 +125,14 @@ export function AccountSecurityTab() {
       await meApi.revokeSession(token, id);
       await loadSessions();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cerrar la sesión.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('security.revokeError'));
     } finally {
       setBusy(null);
     }
   }
 
   async function handleRevokeAll() {
-    if (
-      !confirm(
-        '¿Cerrar TODAS las sesiones, incluyendo la actual? Vas a tener que volver a iniciar sesión.',
-      )
-    ) {
+    if (!confirm(t('security.revokeAllConfirm'))) {
       return;
     }
     const token = authStorage.getAccessToken();
@@ -137,7 +143,9 @@ export function AccountSecurityTab() {
       authStorage.clear();
       router.replace('/signin');
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cerrar las sesiones.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('security.revokeAllError'),
+      );
       setBusy(null);
     }
   }
@@ -146,11 +154,8 @@ export function AccountSecurityTab() {
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>Cambiar contraseña</CardTitle>
-          <CardDescription>
-            Al cambiar la contraseña se cerrarán TODAS tus sesiones. Vas a tener que iniciar sesión
-            otra vez con la nueva.
-          </CardDescription>
+          <CardTitle>{t('security.changePasswordTitle')}</CardTitle>
+          <CardDescription>{t('security.changePasswordDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           {mustChange ? (
@@ -158,14 +163,12 @@ export function AccountSecurityTab() {
               role="alert"
               className="mb-4 rounded-lg border border-warning-200 bg-warning-50 p-3 text-sm text-warning-800"
             >
-              Tu contraseña es temporal. Por seguridad, debes establecer una nueva antes de seguir
-              usando la plataforma. Introduce la contraseña temporal que recibiste por email como
-              «contraseña actual».
+              {t('security.tempPasswordNotice')}
             </div>
           ) : null}
           <form onSubmit={handleChangePassword} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="currentPassword">Contraseña actual</Label>
+              <Label htmlFor="currentPassword">{t('security.currentPassword')}</Label>
               <Input
                 id="currentPassword"
                 type="password"
@@ -177,7 +180,7 @@ export function AccountSecurityTab() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="newPassword">Nueva contraseña</Label>
+                <Label htmlFor="newPassword">{t('security.newPassword')}</Label>
                 <Input
                   id="newPassword"
                   type="password"
@@ -187,10 +190,10 @@ export function AccountSecurityTab() {
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
                 />
-                <p className="text-xs text-text-subtle">Mínimo 12 caracteres.</p>
+                <p className="text-xs text-text-subtle">{t('security.minChars')}</p>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="confirmPassword">Confirma la nueva</Label>
+                <Label htmlFor="confirmPassword">{t('security.confirmPassword')}</Label>
                 <Input
                   id="confirmPassword"
                   type="password"
@@ -210,11 +213,11 @@ export function AccountSecurityTab() {
             {pwSuccess ? (
               <div className="inline-flex items-center gap-2 rounded-lg bg-success-50 px-3 py-2 text-sm font-semibold text-success-700">
                 <Icon name="check" size={16} />
-                Contraseña actualizada. Te redirigimos a iniciar sesión otra vez…
+                {t('security.pwChanged')}
               </div>
             ) : null}
             <Button type="submit" disabled={pending}>
-              {pending ? 'Guardando…' : 'Cambiar contraseña'}
+              {pending ? t('security.saving') : t('security.changePasswordCta')}
             </Button>
           </form>
         </CardContent>
@@ -224,14 +227,11 @@ export function AccountSecurityTab() {
         <CardHeader>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <CardTitle>Sesiones activas</CardTitle>
-              <CardDescription>
-                Estas son las sesiones abiertas en tus distintos dispositivos. Si ves alguna que no
-                reconoces, ciérrala.
-              </CardDescription>
+              <CardTitle>{t('security.sessionsTitle')}</CardTitle>
+              <CardDescription>{t('security.sessionsDesc')}</CardDescription>
             </div>
             <Button variant="destructive" onClick={handleRevokeAll} disabled={busy === 'all'}>
-              Cerrar todas las sesiones
+              {t('security.revokeAllCta')}
             </Button>
           </div>
         </CardHeader>
@@ -244,7 +244,7 @@ export function AccountSecurityTab() {
               <div className="skeleton h-12 w-full" />
             </div>
           ) : sessions.length === 0 ? (
-            <p className="text-sm text-text-subtle">No tienes sesiones activas registradas.</p>
+            <p className="text-sm text-text-subtle">{t('security.noSessions')}</p>
           ) : (
             <ul className="divide-y divide-border-soft">
               {sessions.map((s) => (
@@ -261,10 +261,13 @@ export function AccountSecurityTab() {
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-text">
-                        {parseUserAgent(s.userAgent)}
+                        {parseUserAgent(s.userAgent, t)}
                       </p>
                       <p className="mt-0.5 text-xs tabular-nums text-text-subtle">
-                        Iniciada {relTime(s.createdAt)} · IP {s.ip ?? '—'}
+                        {t('security.sessionMeta', {
+                          time: relTime(s.createdAt, t),
+                          ip: s.ip ?? '—',
+                        })}
                       </p>
                     </div>
                   </div>
@@ -274,7 +277,7 @@ export function AccountSecurityTab() {
                     disabled={busy === `rm-${s.id}`}
                     className="text-xs font-semibold text-danger-700 transition-colors hover:underline"
                   >
-                    Cerrar sesión
+                    {t('security.revokeCta')}
                   </button>
                 </li>
               ))}
@@ -295,33 +298,31 @@ export function AccountSecurityTab() {
             <div className="min-w-0 flex-1 space-y-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-display text-lg font-semibold text-text">
-                  Autenticación de dos factores (MFA)
+                  {t('security.mfaTitle')}
                 </h3>
                 {mfaEnabled ? (
                   <Badge variant="success" dot>
-                    Activado
+                    {t('security.mfaEnabled')}
                   </Badge>
                 ) : (
                   <Badge variant="warning" dot>
-                    Sin configurar
+                    {t('security.mfaNotConfigured')}
                   </Badge>
                 )}
               </div>
               <p className="text-sm leading-relaxed text-text-muted">
-                {mfaEnabled
-                  ? 'Tu cuenta tiene un segundo factor configurado: un código temporal de tu app de autenticación además de la contraseña.'
-                  : 'Añade una capa extra contra contraseñas robadas: un código temporal de tu app TOTP (Google Authenticator, 1Password, Authy).'}
+                {mfaEnabled ? t('security.mfaEnabledDesc') : t('security.mfaSetupDesc')}
               </p>
             </div>
             {mfaEnabled ? (
               <Badge variant="outline" className="gap-1.5">
                 <Icon name="check" size={14} />
-                Configurado
+                {t('security.mfaConfigured')}
               </Badge>
             ) : (
               <Button onClick={() => setMfaOpen(true)}>
                 <Icon name="lock" size={16} />
-                Configurar MFA
+                {t('security.mfaSetupCta')}
               </Button>
             )}
           </CardContent>
@@ -333,18 +334,15 @@ export function AccountSecurityTab() {
         onOpenChange={(o) => {
           if (!o) setMfaOpen(false);
         }}
-        ariaLabel="Configurar MFA"
+        ariaLabel={t('security.mfaSetupCta')}
         maxWidthClass="max-w-md"
         contentClassName="p-6"
       >
         <div className="mb-5">
           <h2 className="font-display text-lg font-bold tracking-tight text-text">
-            Configurar segundo factor
+            {t('security.mfaDialogTitle')}
           </h2>
-          <p className="mt-0.5 text-sm text-text-muted">
-            Escanea el QR con tu app TOTP (Google Authenticator, 1Password, Authy) y confirma el
-            código.
-          </p>
+          <p className="mt-0.5 text-sm text-text-muted">{t('security.mfaDialogDesc')}</p>
         </div>
         {mfaOpen ? (
           <MfaSetupFlow
@@ -360,20 +358,20 @@ export function AccountSecurityTab() {
   );
 }
 
-function relTime(iso: string): string {
+function relTime(iso: string, t: TranslatorLike): string {
   const ms = Date.now() - new Date(iso).getTime();
   const min = Math.floor(ms / 60_000);
-  if (min < 1) return 'recién';
-  if (min < 60) return `hace ${min} min`;
+  if (min < 1) return t('security.justNow');
+  if (min < 60) return t('security.minutesAgo', { minutes: min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `hace ${h} h`;
+  if (h < 24) return t('security.hoursAgo', { hours: h });
   const d = Math.floor(h / 24);
-  if (d < 7) return `hace ${d} d`;
-  return new Date(iso).toLocaleDateString('es-ES');
+  if (d < 7) return t('security.daysAgo', { days: d });
+  return formatDate(iso);
 }
 
-function parseUserAgent(ua: string | null): string {
-  if (!ua) return 'Dispositivo desconocido';
+function parseUserAgent(ua: string | null, t: TranslatorLike): string {
+  if (!ua) return t('security.unknownDevice');
   const browser =
     /Edg\/(\d+)/.exec(ua)?.[0] ||
     /Chrome\/(\d+)/.exec(ua)?.[0] ||
@@ -390,7 +388,7 @@ function parseUserAgent(ua: string | null): string {
           : /iPhone|iPad/.test(ua)
             ? 'iOS'
             : null;
-  if (browser && os) return `${browser} en ${os}`;
+  if (browser && os) return t('security.browserOnOs', { browser, os });
   if (browser) return browser;
   if (os) return os;
   return ua.length > 60 ? ua.slice(0, 57) + '…' : ua;
