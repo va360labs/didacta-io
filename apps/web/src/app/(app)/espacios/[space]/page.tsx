@@ -6,6 +6,7 @@
  */
 
 import { use, useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { CommunityGalleryModal } from '@/components/community-gallery-modal';
 import { ThreadCard } from '@/components/community-thread-card';
 import { usePublicUsers } from '@/lib/public-users';
@@ -16,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog } from '@/components/ui/dialog';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { authStorage } from '@/lib/auth-storage';
 import { usePostModalRoute } from '@/lib/use-post-modal-route';
 import { SpaceIcon } from '@/components/space-icon';
@@ -27,13 +29,16 @@ import {
   type PostSort,
 } from '@/modules/community';
 
-const SORT_LABELS: Record<PostSort, string> = {
-  recent: 'Más recientes',
-  oldest: 'Más antiguas',
-  most_commented: 'Más comentadas',
+/** Enum cerrado de la API → key del catálogo (el orden fija el del selector). */
+const SORT_KEYS: Record<PostSort, 'ordenRecientes' | 'ordenAntiguas' | 'ordenComentadas'> = {
+  recent: 'ordenRecientes',
+  oldest: 'ordenAntiguas',
+  most_commented: 'ordenComentadas',
 };
 
 export default function SpacePage({ params }: { params: Promise<{ space: string }> }) {
+  const t = useTranslations('alumnoSocial');
+  const tErrors = useTranslations('errors');
   const { space } = use(params);
   const spaces = useCommunitySpaces();
   const meta = spaces.find((s) => s.slug === space) ?? spaces[0];
@@ -60,7 +65,7 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
       setPosts(data);
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudieron cargar las publicaciones.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('espacios.errorCarga'));
     }
   }
 
@@ -98,7 +103,7 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
         open={galleryOpen}
         onClose={() => setGalleryOpen(false)}
         tag={space}
-        title={`${meta?.title ?? space} · Galería`}
+        title={t('espacios.galeriaTitulo', { title: meta?.title ?? space })}
       />
 
       {/* Cabecera */}
@@ -125,11 +130,11 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
         <div className="flex items-center gap-2">
           <Button onClick={() => setComposerOpen(true)}>
             <Icon name="plus" size={16} />
-            Nueva publicación
+            {t('espacios.nuevaPublicacion')}
           </Button>
           <Button variant="secondary" onClick={() => setGalleryOpen(true)}>
             <Icon name="image" size={16} />
-            Galería
+            {t('espacios.galeria')}
           </Button>
         </div>
       </header>
@@ -140,15 +145,15 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
           <Card>
             <CardContent className="flex items-center justify-end p-3">
               <label className="flex items-center gap-2 text-xs text-text-subtle">
-                Ordenar:
+                {t('espacios.ordenar')}
                 <select
                   value={sort}
                   onChange={(e) => setSort(e.target.value as PostSort)}
                   className="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-text focus:outline-none focus:ring-2 focus:ring-brand-500"
                 >
-                  {(Object.keys(SORT_LABELS) as PostSort[]).map((k) => (
+                  {(Object.keys(SORT_KEYS) as PostSort[]).map((k) => (
                     <option key={k} value={k}>
-                      {SORT_LABELS[k]}
+                      {t(`espacios.${SORT_KEYS[k]}`)}
                     </option>
                   ))}
                 </select>
@@ -174,7 +179,7 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
           ) : posts.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 p-12 text-center text-sm text-text-muted">
-                Aún no hay publicaciones en #{meta?.title ?? space}. ¡Sé el primero!
+                {t('espacios.vacio', { title: meta?.title ?? space })}
               </CardContent>
             </Card>
           ) : (
@@ -197,7 +202,9 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
         <aside className="flex flex-col gap-4">
           <Card>
             <CardContent className="p-5">
-              <h4 className="font-display text-base font-semibold text-text">Acerca del espacio</h4>
+              <h4 className="font-display text-base font-semibold text-text">
+                {t('espacios.acercaEspacio')}
+              </h4>
               <p className="mt-2 text-sm text-text-muted">{meta?.description}</p>
             </CardContent>
           </Card>
@@ -205,7 +212,9 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
           {otherSpaces.length > 0 && (
             <Card>
               <CardContent className="p-5">
-                <h4 className="font-display text-base font-semibold text-text">Otros espacios</h4>
+                <h4 className="font-display text-base font-semibold text-text">
+                  {t('espacios.otrosEspacios')}
+                </h4>
                 <div className="mt-3 divide-y divide-border-soft">
                   {otherSpaces.map((s) => (
                     <a
@@ -229,7 +238,7 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
         onOpenChange={(open) => {
           if (!open) closePost();
         }}
-        ariaLabel="Detalle de la publicación"
+        ariaLabel={t('espacios.detallePublicacion')}
         maxWidthClass="max-w-5xl"
         contentClassName="p-6 sm:p-8"
       >

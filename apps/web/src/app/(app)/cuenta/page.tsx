@@ -6,7 +6,9 @@
  */
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon, type IconName } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,6 +25,11 @@ import { AvatarUpload } from '@/components/avatar-upload';
 import { CompetencyRadar } from '@/components/competency-radar';
 import { NotificationMatrix, fullMatrix } from '@/components/notification-preferences-form';
 import { ApiHttpError } from '@/lib/api-client';
+import { toSupportedLocale } from '@/i18n/config';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate, formatDateTime } from '@/lib/i18n/format';
+import { writeLocaleCookie } from '@/lib/i18n/locale-cookie';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import { learningApi, type MyCompetencies } from '@/lib/learning';
 import { authStorage } from '@/lib/auth-storage';
 import { loadProfileStats, type ProfileStats } from '@/lib/profile-stats';
@@ -36,23 +43,19 @@ import {
   type UserProfile,
 } from '@/lib/me';
 
-function humanRole(role: string): string {
-  switch (role) {
-    case 'super_admin':
-      return 'Super admin';
-    case 'tenant_admin':
-      return 'Admin';
-    case 'formador':
-      return 'Formador';
-    case 'alumno':
-      return 'Alumno';
-    case 'auditor':
-      return 'Auditor';
-    case 'empresa_manager':
-      return 'Manager';
-    default:
-      return role;
-  }
+/** Rol (enum del backend) → key del catálogo. Clave abierta: desconocido → crudo. */
+const ROLE_KEYS: Record<string, string> = {
+  super_admin: 'cuenta.roleSuperAdmin',
+  tenant_admin: 'cuenta.roleAdmin',
+  formador: 'cuenta.roleFormador',
+  alumno: 'cuenta.roleAlumno',
+  auditor: 'cuenta.roleAuditor',
+  empresa_manager: 'cuenta.roleManager',
+};
+
+function humanRole(role: string, t: TranslatorLike): string {
+  const key = ROLE_KEYS[role];
+  return key ? t(key) : role;
 }
 
 function getInitials(name: string | null, email: string): string {
@@ -69,11 +72,14 @@ function localeLabel(value: string): string {
 }
 
 function monthYear(iso: string): string {
-  const s = new Date(iso).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+  const s = formatDate(iso, { month: 'long', year: 'numeric' });
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 export default function CuentaPage() {
+  const router = useRouter();
+  const t = useTranslations('alumnoSocial');
+  const tErrors = useTranslations('errors');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [recentCerts, setRecentCerts] = useState<Certificate[] | null>(null);
@@ -136,7 +142,7 @@ export default function CuentaPage() {
       }
       setPrefs(matrix);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar tu perfil.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('cuenta.errorPerfil'));
     }
   }
 
@@ -208,12 +214,19 @@ export default function CuentaPage() {
         authStorage.saveSession(session);
         window.dispatchEvent(new Event('didacta:session-updated'));
       }
+      // Cambio de idioma: además del evento (que LocaleSync resuelve async con
+      // un GET /me), escribimos la cookie YA y refrescamos los RSC para que la
+      // UI cambie de idioma en este mismo ciclo, sin carrera con la red.
+      if (profile && locale !== profile.locale) {
+        writeLocaleCookie(toSupportedLocale(locale));
+        router.refresh();
+      }
       setSuccess(true);
       setTimeout(() => setSuccess(false), 2500);
       await reload();
       setEditing(false);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar los cambios.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('cuenta.errorGuardar'));
     } finally {
       setPending(false);
     }
@@ -267,7 +280,7 @@ export default function CuentaPage() {
           </div>
           <span
             className="absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full border-2 border-surface bg-success-500"
-            title="En línea"
+            title={t('cuenta.enLinea')}
           />
         </div>
 
@@ -281,7 +294,7 @@ export default function CuentaPage() {
             </h1>
             {profile.roles.slice(0, 1).map((r) => (
               <Badge key={r} variant={isAdmin ? 'premium' : 'info'}>
-                {humanRole(r)}
+                {humanRole(r, t)}
               </Badge>
             ))}
           </div>
@@ -308,17 +321,17 @@ export default function CuentaPage() {
         {!editing ? (
           <Button variant="secondary" onClick={() => setEditing(true)}>
             <Icon name="edit" size={16} />
-            Editar perfil
+            {t('cuenta.editarPerfil')}
           </Button>
         ) : null}
       </header>
 
       <Tabs defaultValue={initialTab} className="space-y-6">
         <TabsList>
-          <TabsTrigger value="datos">Datos</TabsTrigger>
-          <TabsTrigger value="notificaciones">Notificaciones</TabsTrigger>
-          <TabsTrigger value="suscripcion">Suscripción</TabsTrigger>
-          <TabsTrigger value="seguridad">Seguridad</TabsTrigger>
+          <TabsTrigger value="datos">{t('cuenta.tabDatos')}</TabsTrigger>
+          <TabsTrigger value="notificaciones">{t('cuenta.tabNotificaciones')}</TabsTrigger>
+          <TabsTrigger value="suscripcion">{t('cuenta.tabSuscripcion')}</TabsTrigger>
+          <TabsTrigger value="seguridad">{t('cuenta.tabSeguridad')}</TabsTrigger>
         </TabsList>
 
         {/* ── Datos ── */}
@@ -363,7 +376,7 @@ export default function CuentaPage() {
                   {profile.bio ? (
                     <Card>
                       <CardHeader>
-                        <CardTitle className="text-base">Biografía</CardTitle>
+                        <CardTitle className="text-base">{t('cuenta.biografia')}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-muted">
@@ -387,32 +400,27 @@ export default function CuentaPage() {
         <TabsContent value="notificaciones" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Notificaciones</CardTitle>
+              <CardTitle>{t('cuenta.notificaciones')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <NotificationMatrix value={prefs} onChange={setPrefs} disabled={prefsPending} />
               {!digestAvailable ? (
-                <p className="text-xs text-text-subtle">
-                  La comunidad no está habilitada en tu organización todavía; la fila «Comunidad» no
-                  tendrá efecto hasta que se active.
-                </p>
+                <p className="text-xs text-text-subtle">{t('cuenta.comunidadNoHabilitada')}</p>
               ) : null}
               <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
                 {prefsSaved ? (
                   <span className="text-sm font-semibold text-success-700">
-                    ✓ Preferencias guardadas
+                    {t('cuenta.preferenciasGuardadas')}
                   </span>
                 ) : (
-                  <span className="text-sm text-text-subtle">
-                    Tus cambios se aplican al guardar.
-                  </span>
+                  <span className="text-sm text-text-subtle">{t('cuenta.cambiosAlGuardar')}</span>
                 )}
                 <Button
                   type="button"
                   onClick={() => void handleSavePrefs()}
                   disabled={prefsPending}
                 >
-                  {prefsPending ? 'Guardando…' : 'Guardar preferencias'}
+                  {prefsPending ? t('cuenta.guardando') : t('cuenta.guardarPreferencias')}
                 </Button>
               </div>
             </CardContent>
@@ -436,29 +444,36 @@ export default function CuentaPage() {
 // ── Sub-componentes ──────────────────────────────────────────────────────────
 
 function StatCards({ stats }: { stats: ProfileStats | null }) {
+  const t = useTranslations('alumnoSocial');
   const items: Array<{ icon: IconName; value: string; label: string; accent: string }> = [
     {
       icon: 'book',
       value: stats?.completedCourses != null ? String(stats.completedCourses) : '—',
-      label: 'cursos completados',
+      label: t('cuenta.statCursosCompletados'),
       accent: '#2E7DCE',
     },
     {
       icon: 'clock',
-      value: stats?.trainingHours != null ? `${stats.trainingHours} h` : '—',
-      label: 'horas de formación',
+      value:
+        stats?.trainingHours != null
+          ? t('cuenta.statHorasValor', { hours: stats.trainingHours })
+          : '—',
+      label: t('cuenta.statHorasFormacion'),
       accent: '#18B5A8',
     },
     {
       icon: 'award',
       value: stats?.certificates != null ? String(stats.certificates) : '—',
-      label: 'certificados',
+      label: t('cuenta.statCertificados'),
       accent: '#1E5AA8',
     },
     {
       icon: 'trending',
-      value: stats?.rankingTopPercent != null ? `Top ${stats.rankingTopPercent}%` : '—',
-      label: 'ranking de la comunidad',
+      value:
+        stats?.rankingTopPercent != null
+          ? t('cuenta.statTop', { percent: stats.rankingTopPercent })
+          : '—',
+      label: t('cuenta.statRanking'),
       accent: '#FF6F61',
     },
   ];
@@ -502,47 +517,53 @@ function InfoRow({ icon, label, value }: { icon: IconName; label: string; value:
 }
 
 function PersonalInfoCard({ profile }: { profile: UserProfile }) {
+  const t = useTranslations('alumnoSocial');
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Información personal</CardTitle>
+        <CardTitle className="text-base">{t('cuenta.infoPersonal')}</CardTitle>
       </CardHeader>
       <CardContent className="divide-y divide-[#F1F5F9] py-0">
-        <InfoRow icon="briefcase" label="Cargo" value={profile.jobTitle} />
-        <InfoRow icon="building" label="Departamento" value={profile.department} />
-        <InfoRow icon="globe" label="Idioma" value={localeLabel(profile.locale)} />
-        <InfoRow icon="clock" label="Zona horaria" value={profile.timezone} />
-        <InfoRow icon="calendar" label="Miembro desde" value={monthYear(profile.createdAt)} />
-        <InfoRow icon="shield" label="DNI / NIE" value={profile.documentId} />
+        <InfoRow icon="briefcase" label={t('cuenta.cargo')} value={profile.jobTitle} />
+        <InfoRow icon="building" label={t('cuenta.departamento')} value={profile.department} />
+        <InfoRow icon="globe" label={t('cuenta.idioma')} value={localeLabel(profile.locale)} />
+        <InfoRow icon="clock" label={t('cuenta.zonaHoraria')} value={profile.timezone} />
+        <InfoRow
+          icon="calendar"
+          label={t('cuenta.miembroDesde')}
+          value={monthYear(profile.createdAt)}
+        />
+        <InfoRow icon="shield" label={t('cuenta.dniNie')} value={profile.documentId} />
       </CardContent>
     </Card>
   );
 }
 
 function AccountInfoCard({ profile }: { profile: UserProfile }) {
+  const t = useTranslations('alumnoSocial');
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Información de la cuenta</CardTitle>
+        <CardTitle className="text-base">{t('cuenta.infoCuenta')}</CardTitle>
       </CardHeader>
       <CardContent className="divide-y divide-[#F1F5F9] py-0">
         <div className="flex items-center justify-between gap-3 py-2.5">
           <span className="inline-flex items-center gap-2 text-sm text-text-muted">
             <Icon name="lock" size={15} className="text-text-subtle" />
-            MFA
+            {t('cuenta.mfa')}
           </span>
           {profile.mfaEnabled ? (
             <Badge variant="success" dot>
-              Activo
+              {t('cuenta.mfaActivo')}
             </Badge>
           ) : (
-            <Badge variant="muted">No configurado</Badge>
+            <Badge variant="muted">{t('cuenta.mfaNoConfigurado')}</Badge>
           )}
         </div>
         <InfoRow
           icon="calendar"
-          label="Cuenta creada"
-          value={new Date(profile.createdAt).toLocaleDateString('es-ES', {
+          label={t('cuenta.cuentaCreada')}
+          value={formatDate(profile.createdAt, {
             day: '2-digit',
             month: 'short',
             year: 'numeric',
@@ -550,8 +571,8 @@ function AccountInfoCard({ profile }: { profile: UserProfile }) {
         />
         <InfoRow
           icon="clock"
-          label="Último acceso"
-          value={profile.lastLoginAt ? new Date(profile.lastLoginAt).toLocaleString('es-ES') : '—'}
+          label={t('cuenta.ultimoAcceso')}
+          value={profile.lastLoginAt ? formatDateTime(profile.lastLoginAt) : '—'}
         />
       </CardContent>
     </Card>
@@ -559,15 +580,16 @@ function AccountInfoCard({ profile }: { profile: UserProfile }) {
 }
 
 function RecentCertificatesCard({ certs }: { certs: Certificate[] | null }) {
+  const t = useTranslations('alumnoSocial');
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between">
-        <CardTitle className="text-base">Certificados recientes</CardTitle>
+        <CardTitle className="text-base">{t('cuenta.certsRecientes')}</CardTitle>
         <Link
           href="/mis-certificados"
           className="text-xs font-medium text-brand-700 hover:underline"
         >
-          Ver todos →
+          {t('cuenta.verTodos')}
         </Link>
       </CardHeader>
       <CardContent>
@@ -577,9 +599,7 @@ function RecentCertificatesCard({ certs }: { certs: Certificate[] | null }) {
             <Skeleton className="h-14 w-full" />
           </div>
         ) : certs.length === 0 ? (
-          <p className="py-6 text-center text-sm text-text-muted">
-            Aún no tienes certificados. Completa un curso para obtener el primero.
-          </p>
+          <p className="py-6 text-center text-sm text-text-muted">{t('cuenta.sinCertificados')}</p>
         ) : (
           <ul className="flex flex-col gap-2.5">
             {certs.map((c) => (
@@ -592,19 +612,20 @@ function RecentCertificatesCard({ certs }: { certs: Certificate[] | null }) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-text">
-                    {c.snapshot?.courseTitle ?? `Certificado ${c.number}`}
+                    {c.snapshot?.courseTitle ?? t('cuenta.certificadoNumero', { number: c.number })}
                   </p>
                   <p className="text-xs text-text-muted">
-                    Emitido el{' '}
-                    {new Date(c.issuedAt).toLocaleDateString('es-ES', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
+                    {t('cuenta.emitidoEl', {
+                      date: formatDate(c.issuedAt, {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      }),
                     })}
                   </p>
                 </div>
                 <Badge variant="success" dot>
-                  Verificado
+                  {t('cuenta.verificado')}
                 </Badge>
               </li>
             ))}
@@ -616,6 +637,7 @@ function RecentCertificatesCard({ certs }: { certs: Certificate[] | null }) {
 }
 
 function CompetencyMapCard({ data }: { data: MyCompetencies | null }) {
+  const t = useTranslations('alumnoSocial');
   if (data === null) {
     return (
       <Card>
@@ -629,14 +651,10 @@ function CompetencyMapCard({ data }: { data: MyCompetencies | null }) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Mapa de competencias</CardTitle>
+          <CardTitle>{t('cuenta.mapaCompetencias')}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="py-8 text-center text-sm text-text-muted">
-            Aún no hay competencias evaluadas. Tus competencias se calculan a partir del progreso de
-            los cursos asociados a cada una; cuando avances en cursos etiquetados con competencias,
-            aparecerán aquí.
-          </p>
+          <p className="py-8 text-center text-sm text-text-muted">{t('cuenta.sinCompetencias')}</p>
         </CardContent>
       </Card>
     );
@@ -645,14 +663,16 @@ function CompetencyMapCard({ data }: { data: MyCompetencies | null }) {
     <Card>
       <CardHeader className="flex-row items-center justify-between">
         <div>
-          <CardTitle>Mapa de competencias</CardTitle>
-          <p className="mt-0.5 text-sm text-text-muted">Basado en tu progreso formativo</p>
+          <CardTitle>{t('cuenta.mapaCompetencias')}</CardTitle>
+          <p className="mt-0.5 text-sm text-text-muted">{t('cuenta.basadoProgreso')}</p>
         </div>
         {data.globalScore != null ? (
           <div className="rounded-xl border border-border bg-surface-2 px-3 py-1.5 text-right">
-            <div className="label-uppercase text-[10px] text-text-subtle">Nivel global</div>
+            <div className="label-uppercase text-[10px] text-text-subtle">
+              {t('cuenta.nivelGlobal')}
+            </div>
             <div className="font-display text-sm font-bold text-text">
-              {data.globalLevel} · {data.globalScore}
+              {t('cuenta.nivelValor', { level: data.globalLevel ?? '', score: data.globalScore })}
             </div>
           </div>
         ) : null}
@@ -714,15 +734,16 @@ function EditProfileForm(props: {
   onCancel: () => void;
 }) {
   const p = props;
+  const t = useTranslations('alumnoSocial');
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Editar perfil</CardTitle>
+        <CardTitle>{t('cuenta.editarPerfil')}</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={p.onSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Foto de perfil</Label>
+            <Label>{t('cuenta.fotoPerfil')}</Label>
             <AvatarUpload
               value={p.avatarUrl || null}
               onChange={(u) => p.setAvatarUrl(u ?? '')}
@@ -733,61 +754,59 @@ function EditProfileForm(props: {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="name">Nombre completo</Label>
+              <Label htmlFor="name">{t('cuenta.nombreCompleto')}</Label>
               <Input
                 id="name"
                 value={p.name}
                 onChange={(e) => p.setName(e.target.value)}
                 maxLength={120}
               />
-              <p className="text-xs text-text-subtle">
-                Aparece tal cual en tus certificados. Usa tu nombre y apellidos reales.
-              </p>
+              <p className="text-xs text-text-subtle">{t('cuenta.nombreAyuda')}</p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t('cuenta.email')}</Label>
               <Input id="email" value={p.email} disabled />
-              <p className="text-xs text-text-subtle">Para cambiar tu email, pídele a tu admin.</p>
+              <p className="text-xs text-text-subtle">{t('cuenta.emailAyuda')}</p>
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="jobTitle">Cargo</Label>
+              <Label htmlFor="jobTitle">{t('cuenta.cargo')}</Label>
               <Input
                 id="jobTitle"
                 value={p.jobTitle}
                 onChange={(e) => p.setJobTitle(e.target.value)}
                 maxLength={120}
-                placeholder="Ej. Director de Formación"
+                placeholder={t('cuenta.cargoPlaceholder')}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="department">Departamento</Label>
+              <Label htmlFor="department">{t('cuenta.departamento')}</Label>
               <Input
                 id="department"
                 value={p.department}
                 onChange={(e) => p.setDepartment(e.target.value)}
                 maxLength={120}
-                placeholder="Ej. Talento y Cultura"
+                placeholder={t('cuenta.departamentoPlaceholder')}
               />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="location">Ubicación</Label>
+            <Label htmlFor="location">{t('cuenta.ubicacion')}</Label>
             <Input
               id="location"
               value={p.location}
               onChange={(e) => p.setLocation(e.target.value)}
               maxLength={120}
-              placeholder="Ej. Madrid, España"
+              placeholder={t('cuenta.ubicacionPlaceholder')}
             />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="locale">Idioma</Label>
+              <Label htmlFor="locale">{t('cuenta.idioma')}</Label>
               <Select id="locale" value={p.locale} onChange={(e) => p.setLocale(e.target.value)}>
                 {LOCALE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -797,7 +816,7 @@ function EditProfileForm(props: {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="timezone">Zona horaria</Label>
+              <Label htmlFor="timezone">{t('cuenta.zonaHoraria')}</Label>
               <Select
                 id="timezone"
                 value={p.timezone}
@@ -817,32 +836,32 @@ function EditProfileForm(props: {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="bio">Biografía</Label>
+            <Label htmlFor="bio">{t('cuenta.biografia')}</Label>
             <Textarea
               id="bio"
               value={p.bio}
               onChange={(e) => p.setBio(e.target.value)}
               maxLength={280}
               rows={3}
-              placeholder="Cuéntanos algo sobre ti (máx 280 caracteres)"
+              placeholder={t('cuenta.bioPlaceholder')}
             />
-            <p className="text-right text-xs text-text-subtle">{p.bio.length}/280</p>
+            <p className="text-right text-xs text-text-subtle">
+              {t('cuenta.bioLimite', { count: p.bio.length })}
+            </p>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="documentId">DNI / NIE</Label>
+            <Label htmlFor="documentId">{t('cuenta.dniNie')}</Label>
             <Input
               id="documentId"
               value={p.documentId}
               onChange={(e) => p.setDocumentId(e.target.value)}
-              placeholder="12345678Z o X1234567L (vacío si no aplica)"
+              placeholder={t('cuenta.dniPlaceholder')}
               autoComplete="off"
               spellCheck={false}
               maxLength={20}
             />
-            <p className="text-xs text-text-subtle">
-              Solo necesario para solicitar facturas de pago.
-            </p>
+            <p className="text-xs text-text-subtle">{t('cuenta.dniAyuda')}</p>
           </div>
 
           {p.error ? (
@@ -854,14 +873,14 @@ function EditProfileForm(props: {
           <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
             {p.success ? (
               <span className="mr-auto text-sm font-semibold text-success-700">
-                ✓ Cambios guardados
+                {t('cuenta.cambiosGuardados')}
               </span>
             ) : null}
             <Button type="button" variant="ghost" onClick={p.onCancel} disabled={p.pending}>
-              Cancelar
+              {t('cuenta.cancelar')}
             </Button>
             <Button type="submit" disabled={p.pending}>
-              {p.pending ? 'Guardando…' : 'Guardar cambios'}
+              {p.pending ? t('cuenta.guardando') : t('cuenta.guardarCambios')}
             </Button>
           </div>
         </form>

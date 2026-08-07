@@ -7,6 +7,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { coursesApi, type Course } from '@/lib/courses';
 import { learningApi, type Enrollment } from '@/lib/learning';
 
@@ -15,6 +16,7 @@ interface EnrollmentWithCourse extends Enrollment {
 }
 
 export default function MiPanelPage() {
+  const t = useTranslations('alumnoSocial');
   const [loading, setLoading] = useState(true);
   const [enrollments, setEnrollments] = useState<EnrollmentWithCourse[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export default function MiPanelPage() {
           }));
         setEnrollments(active);
       } catch {
-        if (!cancelled) setError('No se pudo cargar el panel. Inténtalo de nuevo.');
+        if (!cancelled) setError(t('inicio.errorPanel'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -46,7 +48,7 @@ export default function MiPanelPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const avgProgress =
     enrollments.length > 0
@@ -56,8 +58,8 @@ export default function MiPanelPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-bold text-text">Mi panel</h1>
-        <p className="mt-1 text-sm text-text-muted">Tu actividad y progreso en la comunidad</p>
+        <h1 className="font-display text-2xl font-bold text-text">{t('inicio.titulo')}</h1>
+        <p className="mt-1 text-sm text-text-muted">{t('inicio.subtitulo')}</p>
       </div>
 
       {error && (
@@ -70,31 +72,39 @@ export default function MiPanelPage() {
       {!error && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <StatCard
-            label="Cursos en marcha"
+            label={t('inicio.statCursos')}
             value={loading ? '—' : String(enrollments.length)}
             sub={
               loading
-                ? 'Cargando…'
+                ? t('inicio.cargando')
                 : enrollments.length === 0
-                  ? 'Sin matriculaciones'
-                  : `${enrollments.filter((e) => e.progressPercent === 100).length} completados`
+                  ? t('inicio.sinMatriculaciones')
+                  : t('inicio.completados', {
+                      count: enrollments.filter((e) => e.progressPercent === 100).length,
+                    })
             }
           />
           <StatCard
-            label="Progreso medio"
-            value={loading ? '—' : avgProgress !== null ? `${avgProgress}%` : '—'}
+            label={t('inicio.statProgreso')}
+            value={
+              loading
+                ? '—'
+                : avgProgress !== null
+                  ? t('inicio.progresoValor', { percent: avgProgress })
+                  : '—'
+            }
             sub={
               loading
-                ? 'Cargando…'
+                ? t('inicio.cargando')
                 : avgProgress !== null
-                  ? 'Sobre tus cursos activos'
-                  : 'Sin cursos activos'
+                  ? t('inicio.sobreActivos')
+                  : t('inicio.sinActivos')
             }
           />
           <StatCard
-            label="Certificados"
+            label={t('inicio.statCertificados')}
             value={loading ? '—' : String(enrollments.filter((e) => e.completedAt).length)}
-            sub={loading ? 'Cargando…' : 'Cursos completados'}
+            sub={loading ? t('inicio.cargando') : t('inicio.cursosCompletados')}
           />
         </div>
       )}
@@ -102,17 +112,17 @@ export default function MiPanelPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Cursos activos */}
         <div className="rounded-xl border border-border bg-surface p-4">
-          <h2 className="mb-3 font-semibold text-text">Mis cursos activos</h2>
+          <h2 className="mb-3 font-semibold text-text">{t('inicio.misCursosActivos')}</h2>
           {loading ? (
-            <p className="text-sm text-text-muted">Cargando…</p>
+            <p className="text-sm text-text-muted">{t('inicio.cargando')}</p>
           ) : enrollments.length === 0 ? (
             <div className="py-6 text-center">
-              <p className="text-sm text-text-muted">Aún no estás matriculado en ningún curso.</p>
+              <p className="text-sm text-text-muted">{t('inicio.sinMatricula')}</p>
               <Link
                 href="/cursos"
                 className="mt-2 inline-block text-sm font-medium text-(--didacta-trust) hover:underline"
               >
-                Explorar cursos →
+                {t('inicio.explorarCursos')}
               </Link>
             </div>
           ) : (
@@ -121,7 +131,9 @@ export default function MiPanelPage() {
                 <div key={e.id}>
                   <div className="mb-1 flex justify-between text-sm">
                     <span className="truncate font-medium text-text">{e.courseTitle}</span>
-                    <span className="ml-2 shrink-0 text-text-muted">{e.progressPercent}%</span>
+                    <span className="ml-2 shrink-0 text-text-muted">
+                      {t('inicio.progresoValor', { percent: e.progressPercent })}
+                    </span>
                   </div>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
                     <div
@@ -135,7 +147,7 @@ export default function MiPanelPage() {
                 href="/cursos"
                 className="mt-1 block text-xs font-medium text-(--didacta-trust) hover:underline"
               >
-                Ver todos los cursos →
+                {t('inicio.verTodosCursos')}
               </Link>
             </div>
           )}
@@ -143,14 +155,14 @@ export default function MiPanelPage() {
 
         {/* Grupos */}
         <div className="rounded-xl border border-border bg-surface p-4">
-          <h2 className="mb-3 font-semibold text-text">Mis grupos</h2>
+          <h2 className="mb-3 font-semibold text-text">{t('inicio.misGrupos')}</h2>
           <div className="py-6 text-center">
-            <p className="text-sm text-text-muted">Los grupos estarán disponibles próximamente.</p>
+            <p className="text-sm text-text-muted">{t('inicio.gruposProximamente')}</p>
             <Link
               href="/grupos"
               className="mt-2 inline-block text-sm font-medium text-(--didacta-trust) hover:underline"
             >
-              Ver grupos →
+              {t('inicio.verGrupos')}
             </Link>
           </div>
         </div>

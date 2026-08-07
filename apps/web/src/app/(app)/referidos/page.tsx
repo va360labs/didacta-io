@@ -14,18 +14,28 @@
 /// backend con código estable). Cero datos inventados (regla #3).
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
-import { formatReferralCents, referralsApi, type MemberReferralStats } from '@/lib/referrals';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatCents, formatDate } from '@/lib/i18n/format';
+import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
+import { referralsApi, type MemberReferralStats } from '@/lib/referrals';
 
+/** Estado de comisión → key del catálogo. Viene de la API: desconocido → crudo. */
 const STATUS_LABEL: Record<string, string> = {
-  PENDING: 'Pendiente',
-  APPROVED: 'Aprobada',
-  PAID: 'Pagada',
-  REVOKED: 'Revocada',
+  PENDING: 'referidos.estadoPendiente',
+  APPROVED: 'referidos.estadoAprobada',
+  PAID: 'referidos.estadoPagada',
+  REVOKED: 'referidos.estadoRevocada',
 };
+
+function statusLabel(status: string, t: TranslatorLike): string {
+  const key = STATUS_LABEL[status];
+  return key ? labelOr(t, key, status) : status;
+}
 
 const STATUS_VARIANT: Record<string, 'warning' | 'info' | 'success' | 'danger'> = {
   PENDING: 'warning',
@@ -35,14 +45,12 @@ const STATUS_VARIANT: Record<string, 'warning' | 'info' | 'success' | 'danger'> 
 };
 
 function dateLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatDate(iso, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 export default function ReferidosPage() {
+  const t = useTranslations('alumnoSocial');
+  const tErrors = useTranslations('errors');
   const [stats, setStats] = useState<MemberReferralStats | null>(null);
   const [link, setLink] = useState<{ code: string; url: string } | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -67,22 +75,22 @@ export default function ReferidosPage() {
             if (cancelled) return;
             setLinkError(
               e instanceof ApiHttpError && e.code === 'REFERRALS_MEMBERSHIP_REQUIRED'
-                ? 'Necesitas una membresía activa para participar en el programa de referidos.'
-                : 'No pudimos generar tu enlace. Recarga para reintentar.',
+                ? t('referidos.membresiaRequerida')
+                : t('referidos.errorEnlace'),
             );
           });
       })
       .catch((e) => {
         if (!cancelled) {
           setError(
-            e instanceof ApiHttpError ? e.message : 'No pudimos cargar tus referidos. Recarga.',
+            e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('referidos.errorCarga'),
           );
         }
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t, tErrors]);
 
   async function copyLink() {
     if (!link) return;
@@ -124,26 +132,25 @@ export default function ReferidosPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-text">Referidos</h1>
+        <h1 className="text-xl font-bold text-text">{t('referidos.titulo')}</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Recomienda la comunidad con tu enlace y gana el {commissionPercent}% de los pagos de quien
-          entre por él.
+          {t('referidos.descripcion', { percent: commissionPercent })}
         </p>
       </div>
 
       {!stats.programActive ? (
         <Card>
           <CardContent className="py-6 text-sm text-text-muted">
-            El programa de referidos no está activo en este momento.
+            {t('referidos.programaInactivo')}{' '}
             {stats.totals.paidCents + stats.totals.approvedCents + stats.totals.pendingCents > 0
-              ? ' Tu historial de comisiones sigue disponible más abajo.'
+              ? t('referidos.historialDisponible')
               : ''}
           </CardContent>
         </Card>
       ) : (
         <Card data-testid="referral-link-card">
           <CardHeader>
-            <CardTitle>Tu enlace</CardTitle>
+            <CardTitle>{t('referidos.tuEnlace')}</CardTitle>
             {stats.memberCopy ? <CardDescription>{stats.memberCopy}</CardDescription> : null}
           </CardHeader>
           <CardContent>
@@ -161,15 +168,18 @@ export default function ReferidosPage() {
                   onFocus={(e) => e.currentTarget.select()}
                 />
                 <Button type="button" onClick={() => void copyLink()}>
-                  {copied ? '¡Copiado!' : 'Copiar enlace'}
+                  {copied ? t('referidos.copiado') : t('referidos.copiarEnlace')}
                 </Button>
               </div>
             )}
             <p className="mt-2 text-xs text-text-subtle">
-              La atribución dura {stats.attributionWindowDays} días desde el último clic. Las
-              comisiones se aprueban{' '}
-              {stats.scope === 'FIRST_PAYMENT' ? 'sobre el primer pago' : 'sobre cada cobro'} tras
-              un periodo de garantía.
+              {t('referidos.atribucion', {
+                days: stats.attributionWindowDays,
+                scope:
+                  stats.scope === 'FIRST_PAYMENT'
+                    ? t('referidos.scopePrimerPago')
+                    : t('referidos.scopeCadaCobro'),
+              })}
             </p>
           </CardContent>
         </Card>
@@ -177,11 +187,11 @@ export default function ReferidosPage() {
 
       <div className="grid gap-3 sm:grid-cols-3" data-testid="referral-stats">
         {[
-          { label: 'Clics en tu enlace', value: String(stats.clicks) },
-          { label: 'Altas atribuidas', value: String(stats.referrals) },
+          { label: t('referidos.statClics'), value: String(stats.clicks) },
+          { label: t('referidos.statAltas'), value: String(stats.referrals) },
           {
-            label: 'Pagado hasta hoy',
-            value: formatReferralCents(stats.totals.paidCents),
+            label: t('referidos.statPagado'),
+            value: formatCents(stats.totals.paidCents),
           },
         ].map((tile) => (
           <Card key={tile.label}>
@@ -195,34 +205,35 @@ export default function ReferidosPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Tus comisiones</CardTitle>
+          <CardTitle>{t('referidos.tusComisiones')}</CardTitle>
           <CardDescription>
-            Pendiente: {formatReferralCents(stats.totals.pendingCents)} · Aprobado (por liquidar):{' '}
-            {formatReferralCents(stats.totals.approvedCents)}
+            {t('referidos.resumenComisiones', {
+              pending: formatCents(stats.totals.pendingCents),
+              approved: formatCents(stats.totals.approvedCents),
+            })}{' '}
             {stats.minPayoutCents > 0
-              ? ` · Mínimo de liquidación: ${formatReferralCents(stats.minPayoutCents)}`
+              ? t('referidos.minimoLiquidacion', { min: formatCents(stats.minPayoutCents) })
               : ''}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {stats.commissions.length === 0 ? (
-            <p className="text-sm text-text-subtle">
-              Todavía no hay comisiones. Se generan cuando alguien que entró con tu enlace paga su
-              suscripción.
-            </p>
+            <p className="text-sm text-text-subtle">{t('referidos.sinComisiones')}</p>
           ) : (
             <ul className="divide-y divide-border-soft">
               {stats.commissions.map((c) => (
                 <li key={c.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
                   <span className="text-text-subtle">{dateLabel(c.createdAt)}</span>
                   <span className="font-semibold text-text">
-                    {formatReferralCents(c.amountCents, c.currency)}
+                    {formatCents(c.amountCents, c.currency)}
                   </span>
                   <span className="text-xs text-text-subtle">
-                    (sobre {formatReferralCents(c.baseAmountCents, c.currency)})
+                    {t('referidos.sobreBase', {
+                      amount: formatCents(c.baseAmountCents, c.currency),
+                    })}
                   </span>
                   <Badge variant={STATUS_VARIANT[c.status] ?? 'muted'}>
-                    {STATUS_LABEL[c.status] ?? c.status}
+                    {statusLabel(c.status, t)}
                   </Badge>
                   {c.status === 'REVOKED' && c.revokeReason ? (
                     <span className="text-xs text-danger-700">{c.revokeReason}</span>
@@ -237,7 +248,7 @@ export default function ReferidosPage() {
       {stats.payouts.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Liquidaciones recibidas</CardTitle>
+            <CardTitle>{t('referidos.liquidaciones')}</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="divide-y divide-border-soft">
@@ -245,9 +256,11 @@ export default function ReferidosPage() {
                 <li key={p.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
                   <span className="text-text-subtle">{dateLabel(p.createdAt)}</span>
                   <span className="font-semibold text-text">
-                    {formatReferralCents(p.totalCents, p.currency)}
+                    {formatCents(p.totalCents, p.currency)}
                   </span>
-                  <span className="text-xs text-text-subtle">Ref: {p.externalReference}</span>
+                  <span className="text-xs text-text-subtle">
+                    {t('referidos.ref', { reference: p.externalReference })}
+                  </span>
                 </li>
               ))}
             </ul>

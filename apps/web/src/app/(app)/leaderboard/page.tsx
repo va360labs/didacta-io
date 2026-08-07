@@ -6,7 +6,9 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { UserChip } from '@/components/user-chip';
+import { formatNumber } from '@/lib/i18n/format';
 import {
   gamificationApi,
   type LeaderboardEntry,
@@ -14,10 +16,11 @@ import {
   type Standing,
 } from '@/modules/gamification';
 
-const RANGE_LABELS: { label: string; value: LeaderboardRange }[] = [
-  { label: 'Este mes', value: 'month' },
-  { label: 'Esta semana', value: 'week' },
-  { label: 'Global', value: 'all' },
+/** Rangos del selector. El `key` es del catálogo; el `value` va a la API. */
+const RANGES: { key: 'rangoMes' | 'rangoSemana' | 'rangoGlobal'; value: LeaderboardRange }[] = [
+  { key: 'rangoMes', value: 'month' },
+  { key: 'rangoSemana', value: 'week' },
+  { key: 'rangoGlobal', value: 'all' },
 ];
 
 const RANK_STYLE: Record<number, string> = {
@@ -27,6 +30,7 @@ const RANK_STYLE: Record<number, string> = {
 };
 
 export default function LeaderboardPage() {
+  const t = useTranslations('alumnoSocial');
   const [range, setRange] = useState<LeaderboardRange>('month');
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [standing, setStanding] = useState<Standing | null>(null);
@@ -46,48 +50,48 @@ export default function LeaderboardPage() {
       })
       .catch(() => {
         if (cancelled) return;
-        setError('No se pudo cargar la clasificación.');
+        setError(t('leaderboard.errorCarga'));
         setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [range]);
+  }, [range, t]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-bold text-text">Clasificación</h1>
-        <p className="mt-1 text-sm text-text-muted">
-          Puntos de la comunidad por publicar, responder, compartir recursos y terminar cursos.
-        </p>
+        <h1 className="font-display text-2xl font-bold text-text">{t('leaderboard.titulo')}</h1>
+        <p className="mt-1 text-sm text-text-muted">{t('leaderboard.subtitulo')}</p>
       </div>
 
       {standing && standing.points > 0 ? (
         <div className="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-xl border border-border bg-surface px-5 py-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-              Tus puntos
+              {t('leaderboard.tusPuntos')}
             </p>
             <p className="font-display text-xl font-bold text-text">
-              {standing.points.toLocaleString('es-ES')}
+              {formatNumber(standing.points)}
             </p>
           </div>
           {standing.rank !== null ? (
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-                Tu puesto
+                {t('leaderboard.tuPuesto')}
               </p>
               <p className="font-display text-xl font-bold text-text">
                 #{standing.rank}{' '}
-                <span className="text-sm font-medium text-text-muted">de {standing.total}</span>
+                <span className="text-sm font-medium text-text-muted">
+                  {t('leaderboard.deTotal', { total: standing.total })}
+                </span>
               </p>
             </div>
           ) : null}
           {standing.levelName ? (
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-                Tu nivel
+                {t('leaderboard.tuNivel')}
               </p>
               <p className="font-display text-xl font-bold text-text">{standing.levelName}</p>
             </div>
@@ -96,7 +100,7 @@ export default function LeaderboardPage() {
       ) : null}
 
       <div className="flex gap-2">
-        {RANGE_LABELS.map(({ label, value }) => (
+        {RANGES.map(({ key, value }) => (
           <button
             key={value}
             type="button"
@@ -107,30 +111,28 @@ export default function LeaderboardPage() {
                 : 'border-border text-text-muted hover:text-text'
             }`}
           >
-            {label}
+            {t(`leaderboard.${key}`)}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <p className="text-sm text-text-muted">Cargando clasificación…</p>
+        <p className="text-sm text-text-muted">{t('leaderboard.cargando')}</p>
       ) : error ? (
         <div className="rounded-xl border border-border bg-surface p-4 text-sm text-text-muted">
           {error}
         </div>
       ) : entries.length === 0 ? (
         <div className="rounded-xl border border-border bg-surface p-12 text-center">
-          <p className="text-base font-semibold text-text">Aún no hay actividad registrada</p>
-          <p className="mt-1 text-sm text-text-muted">
-            La clasificación aparecerá cuando los miembros publiquen, comenten o compartan recursos.
-          </p>
+          <p className="text-base font-semibold text-text">{t('leaderboard.vacioTitulo')}</p>
+          <p className="mt-1 text-sm text-text-muted">{t('leaderboard.vacioNota')}</p>
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-border bg-surface">
           <div className="grid grid-cols-[auto_1fr_auto] gap-x-4 border-b border-border px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
             <span>#</span>
-            <span>Miembro</span>
-            <span>Puntos</span>
+            <span>{t('leaderboard.colMiembro')}</span>
+            <span>{t('leaderboard.colPuntos')}</span>
           </div>
           {entries.map((e) => (
             <div
@@ -150,9 +152,7 @@ export default function LeaderboardPage() {
                 size={32}
                 nameClassName="block truncate text-sm font-medium text-text"
               />
-              <span className="text-sm font-semibold text-text">
-                {e.points.toLocaleString('es-ES')}
-              </span>
+              <span className="text-sm font-semibold text-text">{formatNumber(e.points)}</span>
             </div>
           ))}
         </div>

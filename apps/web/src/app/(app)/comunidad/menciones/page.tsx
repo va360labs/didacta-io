@@ -7,9 +7,13 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import { postPath } from '@/lib/post-link';
 import { communityApi } from '@/modules/community';
 
@@ -22,16 +26,18 @@ interface Mention {
   createdAt: string;
 }
 
-function relTime(iso: string): string {
+function relTime(iso: string, t: TranslatorLike): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return 'ahora';
-  if (diff < 3600) return `hace ${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `hace ${Math.floor(diff / 3600)}h`;
-  if (diff < 86400 * 7) return `hace ${Math.floor(diff / 86400)}d`;
-  return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+  if (diff < 60) return t('menciones.ahora');
+  if (diff < 3600) return t('menciones.haceMin', { minutes: Math.floor(diff / 60) });
+  if (diff < 86400) return t('menciones.haceHoras', { hours: Math.floor(diff / 3600) });
+  if (diff < 86400 * 7) return t('menciones.haceDias', { days: Math.floor(diff / 86400) });
+  return formatDate(iso, { day: '2-digit', month: 'short' });
 }
 
 export default function MisMencionesPage() {
+  const t = useTranslations('alumnoSocial');
+  const tErrors = useTranslations('errors');
   const [mentions, setMentions] = useState<Mention[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,21 +50,24 @@ export default function MisMencionesPage() {
       })
       .catch((e: unknown) => {
         if (!cancelled) {
-          setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar tus menciones.');
+          setError(
+            e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('menciones.errorCarga'),
+          );
         }
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t, tErrors]);
 
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Mis menciones</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('menciones.titulo')}</h1>
         <p className="mt-1 text-text-muted">
-          Cada vez que alguien te menciona con <code className="font-mono">@usuario</code> en un
-          post o comentario, aparece acá.
+          {t.rich('menciones.subtitulo', {
+            code: (chunks) => <code className="font-mono">{chunks}</code>,
+          })}
         </p>
       </header>
 
@@ -90,10 +99,11 @@ export default function MisMencionesPage() {
             >
               <Icon name="message" size={40} />
             </div>
-            <h3 className="font-display text-2xl font-semibold">Aún no te mencionó nadie</h3>
+            <h3 className="font-display text-2xl font-semibold">{t('menciones.vacioTitulo')}</h3>
             <p className="max-w-md text-text-muted">
-              Cuando alguien te etiquete con <code className="font-mono">@tu-handle</code>, vas a
-              recibir una notificación in-app y la mención aparecerá acá.
+              {t.rich('menciones.vacioNota', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+              })}
             </p>
           </CardContent>
         </Card>
@@ -112,20 +122,23 @@ export default function MisMencionesPage() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm">
-                    Te mencionaron como{' '}
-                    <span
-                      className="rounded px-1 font-mono font-semibold"
-                      style={{
-                        background: 'var(--didacta-info-bg)',
-                        color: 'var(--didacta-info-fg)',
-                      }}
-                    >
-                      @{m.mentionedHandle}
-                    </span>{' '}
-                    {m.commentId ? 'en un comentario' : 'en un post'}.
+                    {t.rich(m.commentId ? 'menciones.mencionComentario' : 'menciones.mencionPost', {
+                      mark: (chunks) => (
+                        <span
+                          className="rounded px-1 font-mono font-semibold"
+                          style={{
+                            background: 'var(--didacta-info-bg)',
+                            color: 'var(--didacta-info-fg)',
+                          }}
+                        >
+                          {chunks}
+                        </span>
+                      ),
+                      handle: m.mentionedHandle,
+                    })}
                   </p>
                   <p className="mt-0.5 text-xs text-text-subtle tabular-nums">
-                    {relTime(m.createdAt)}
+                    {relTime(m.createdAt, t)}
                   </p>
                 </div>
                 {target ? (
@@ -133,7 +146,7 @@ export default function MisMencionesPage() {
                     href={target as never}
                     className="text-xs font-semibold text-brand-600 hover:underline"
                   >
-                    Ir al hilo →
+                    {t('menciones.irHilo')}
                   </Link>
                 ) : null}
               </li>
