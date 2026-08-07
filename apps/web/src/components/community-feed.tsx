@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { CommunityGalleryModal } from '@/components/community-gallery-modal';
 import { CommunityTagChip } from '@/components/community-tag-chip';
@@ -17,8 +18,8 @@ import { PostDetailView } from '@/components/post-detail-view';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog } from '@/components/ui/dialog';
-import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { usePostModalRoute } from '@/lib/use-post-modal-route';
 import { cn } from '@/lib/utils';
 import {
@@ -29,11 +30,13 @@ import {
   type PostSort,
 } from '@/modules/community';
 
-const SORT_LABELS: Record<PostSort, string> = {
-  recent: 'Más recientes',
-  oldest: 'Más antiguas',
-  most_commented: 'Más comentadas',
-};
+const SORT_OPTIONS: readonly PostSort[] = ['recent', 'oldest', 'most_commented'];
+
+/**
+ * Valor centinela del filtro «todos los tags». Es INTERNO (viaja al estado y
+ * decide si se manda `tag` a la API); lo que se pinta es `t('filterAll')`.
+ */
+const ALL_TAGS = 'Todo';
 
 /**
  * Feed de la comunidad + modal de detalle con URL canónica por post.
@@ -50,13 +53,15 @@ export function CommunityFeed({
   initialPostId?: string;
   focusCommentId?: string;
 }) {
+  const t = useTranslations('comunidadComponentes');
+  const tErrors = useTranslations('errors');
   const [posts, setPosts] = useState<Post[] | null>(null);
   // Avatares de los autores (resueltos por authorId; no vienen en el post).
   const authorAvatars = usePublicUsers((posts ?? []).map((p) => p.authorId));
   const [error, setError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
-  const [activeTag, setActiveTag] = useState<string>('Todo');
+  const [activeTag, setActiveTag] = useState<string>(ALL_TAGS);
   const [sort, setSort] = useState<PostSort>('recent');
   // El post abierto se deriva de la URL (usePathname); en el deep-link
   // /comunidad/[id] la propia URL ya abre el modal, sin estado extra.
@@ -70,12 +75,12 @@ export function CommunityFeed({
       setPosts(
         await communityApi.listPosts({
           sort: opts.sort ?? sort,
-          tag: tagFilter === 'Todo' ? undefined : tagFilter,
+          tag: tagFilter === ALL_TAGS ? undefined : tagFilter,
         }),
       );
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar la comunidad.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -85,9 +90,9 @@ export function CommunityFeed({
   }, [sort, activeTag]);
 
   const allTags = useMemo(() => {
-    const set = new Set<string>(['Todo']);
-    if (posts) for (const p of posts) for (const t of p.tags) set.add(t);
-    if (activeTag !== 'Todo') set.add(activeTag);
+    const set = new Set<string>([ALL_TAGS]);
+    if (posts) for (const p of posts) for (const tag of p.tags) set.add(tag);
+    if (activeTag !== ALL_TAGS) set.add(activeTag);
     return Array.from(set).slice(0, 8);
   }, [posts, activeTag]);
 
@@ -108,7 +113,7 @@ export function CommunityFeed({
       }
       await reload({ sort, tag: activeTag });
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos actualizar la reacción.');
+      setError(apiErrorMessage(err, tErrors));
     }
   }
 
@@ -124,7 +129,7 @@ export function CommunityFeed({
       <CommunityGalleryModal
         open={galleryOpen}
         onClose={() => setGalleryOpen(false)}
-        title="Comunidad · Galería"
+        title={t('galleryTitle')}
       />
 
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -133,20 +138,18 @@ export function CommunityFeed({
             className="font-display text-2xl font-bold tracking-tight text-text"
             style={{ letterSpacing: '-0.02em' }}
           >
-            Comunidad
+            {t('feedTitle')}
           </h1>
-          <p className="mt-1.5 text-text-muted">
-            Conversaciones útiles entre formadores, alumnos y administradores.
-          </p>
+          <p className="mt-1.5 text-text-muted">{t('feedSubtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => setComposerOpen(true)}>
             <Icon name="plus" size={16} />
-            Nueva conversación
+            {t('newConversation')}
           </Button>
           <Button variant="secondary" onClick={() => setGalleryOpen(true)}>
             <Icon name="image" size={16} />
-            Galería
+            {t('gallery')}
           </Button>
         </div>
       </header>
@@ -156,15 +159,15 @@ export function CommunityFeed({
         <div className="flex min-w-0 flex-col gap-4">
           <Card>
             <CardContent className="flex flex-wrap items-center gap-2 p-3">
-              {allTags.map((t) => {
-                const isActive = activeTag === t;
-                const curated = t === 'Todo' ? undefined : tagsByName.get(t);
+              {allTags.map((tag) => {
+                const isActive = activeTag === tag;
+                const curated = tag === ALL_TAGS ? undefined : tagsByName.get(tag);
                 if (curated) {
                   return (
                     <button
-                      key={t}
+                      key={tag}
                       type="button"
-                      onClick={() => setActiveTag(t)}
+                      onClick={() => setActiveTag(tag)}
                       aria-pressed={isActive}
                       className={cn(
                         'rounded-full transition-shadow',
@@ -176,15 +179,15 @@ export function CommunityFeed({
                           : undefined
                       }
                     >
-                      <CommunityTagChip name={t} tag={curated} />
+                      <CommunityTagChip name={tag} tag={curated} />
                     </button>
                   );
                 }
                 return (
                   <button
-                    key={t}
+                    key={tag}
                     type="button"
-                    onClick={() => setActiveTag(t)}
+                    onClick={() => setActiveTag(tag)}
                     className={cn(
                       'rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors',
                       isActive
@@ -192,20 +195,20 @@ export function CommunityFeed({
                         : 'bg-[var(--didacta-surface)] text-text-muted hover:text-text',
                     )}
                   >
-                    {t}
+                    {tag === ALL_TAGS ? t('filterAll') : tag}
                   </button>
                 );
               })}
               <label className="ml-auto flex items-center gap-2 text-xs text-text-subtle">
-                Ordenar:
+                {t('sortLabel')}
                 <select
                   value={sort}
                   onChange={(e) => setSort(e.target.value as PostSort)}
                   className="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-text focus:outline-none focus:ring-2 focus:ring-brand-500"
                 >
-                  {(Object.keys(SORT_LABELS) as PostSort[]).map((k) => (
+                  {SORT_OPTIONS.map((k) => (
                     <option key={k} value={k}>
-                      {SORT_LABELS[k]}
+                      {t(`sort.${k}`)}
                     </option>
                   ))}
                 </select>
@@ -231,20 +234,23 @@ export function CommunityFeed({
           ) : filtered.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 p-12 text-center text-sm text-text-muted">
-                {activeTag === 'Todo' ? (
-                  'Aún no hay conversaciones. Empieza tú: haz click en "Nueva conversación".'
+                {activeTag === ALL_TAGS ? (
+                  t('emptyFeed')
                 ) : (
                   <>
                     <span>
-                      Sin conversaciones con el tag <strong>{activeTag}</strong>.
+                      {t.rich('emptyTagFiltered', {
+                        tag: activeTag,
+                        strong: (chunks) => <strong>{chunks}</strong>,
+                      })}
                     </span>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => setActiveTag('Todo')}
+                      onClick={() => setActiveTag(ALL_TAGS)}
                     >
-                      Limpiar filtro
+                      {t('clearFilter')}
                     </Button>
                   </>
                 )}
@@ -259,7 +265,7 @@ export function CommunityFeed({
                 tagsByName={tagsByName}
                 authorAvatarUrl={authorAvatars.get(p.authorId)?.avatarUrl ?? null}
                 onOpen={() => openPost(p.id)}
-                onTagClick={(t) => setActiveTag(t)}
+                onTagClick={(tag) => setActiveTag(tag)}
                 onReactionToggle={(emoji) => void handleReactPost(p.id, emoji)}
               />
             ))
@@ -274,28 +280,28 @@ export function CommunityFeed({
 
           <Card>
             <CardContent className="p-5">
-              <h4 className="font-display text-base font-semibold text-text">Actividad</h4>
+              <h4 className="font-display text-base font-semibold text-text">{t('activity')}</h4>
               <div className="mt-3 divide-y divide-border-soft text-sm">
                 {/* Solo datos reales: nº de publicaciones del feed actual. Las
                     métricas "Respuestas útiles"/"Reconocimientos" se quitaron por
                     no tener endpoint que las respalde (regla: cero datos de cartón). */}
-                <ActivityRow label="Publicaciones en el feed" value={posts?.length ?? 0} />
+                <ActivityRow label={t('postsInFeed')} value={posts?.length ?? 0} />
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardContent className="p-5">
-              <h4 className="font-display text-base font-semibold text-text">Tags activos</h4>
+              <h4 className="font-display text-base font-semibold text-text">{t('activeTags')}</h4>
               <div className="mt-3 space-y-2">
                 {allTags
-                  .filter((t) => t !== 'Todo')
-                  .map((t, i) => {
-                    const curated = tagsByName.get(t);
+                  .filter((tag) => tag !== ALL_TAGS)
+                  .map((tag, i) => {
+                    const curated = tagsByName.get(tag);
                     const swatchColor = curated?.color ?? TAG_COLORS[i % TAG_COLORS.length]!;
                     return (
                       <div
-                        key={t}
+                        key={tag}
                         className={cn(
                           'flex items-center gap-2.5 py-1.5',
                           i > 0 ? 'border-t border-border-soft pt-3' : '',
@@ -307,18 +313,16 @@ export function CommunityFeed({
                           style={{ background: swatchColor, opacity: 0.18 }}
                         />
                         <span className="min-w-0 flex-1 wrap-break-word text-sm font-medium text-text">
-                          {t}
+                          {tag}
                         </span>
                         <span className="text-xs text-text-subtle tabular-nums">
-                          {posts?.filter((p) => p.tags.includes(t)).length ?? 0}
+                          {posts?.filter((p) => p.tags.includes(tag)).length ?? 0}
                         </span>
                       </div>
                     );
                   })}
                 {allTags.length <= 1 ? (
-                  <p className="text-xs text-text-subtle">
-                    Aún no hay tags. Etiqueta tu próxima publicación para organizar la comunidad.
-                  </p>
+                  <p className="text-xs text-text-subtle">{t('noTags')}</p>
                 ) : null}
               </div>
             </CardContent>
@@ -331,7 +335,7 @@ export function CommunityFeed({
         onOpenChange={(open) => {
           if (!open) closePost();
         }}
-        ariaLabel="Detalle de la conversación"
+        ariaLabel={t('conversationDetailAria')}
         maxWidthClass="max-w-5xl"
         contentClassName="p-6 sm:p-8"
       >

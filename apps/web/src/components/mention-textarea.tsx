@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import {
   forwardRef,
   useEffect,
@@ -40,6 +41,7 @@ interface UserMatch {
  */
 export const MentionTextarea = forwardRef<HTMLTextAreaElement, ComponentProps<typeof Textarea>>(
   function MentionTextarea({ value, onChange, ...props }, ref) {
+    const t = useTranslations('comunidadComponentes');
     const taRef = useRef<HTMLTextAreaElement | null>(null);
     useImperativeHandle(ref, () => taRef.current!, []);
 
@@ -177,7 +179,7 @@ export const MentionTextarea = forwardRef<HTMLTextAreaElement, ComponentProps<ty
         {open ? (
           <ul
             role="listbox"
-            aria-label="Sugerencias de menciones"
+            aria-label={t('mentionSuggestionsAria')}
             className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-auto rounded-lg border border-border bg-surface shadow-lg"
           >
             {dropdownItems.map((m, idx) => (

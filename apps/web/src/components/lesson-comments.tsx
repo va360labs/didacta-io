@@ -5,14 +5,17 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { UserChip } from '@/components/user-chip';
-import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import { learningApi, type LessonComment } from '@/lib/learning';
 
 interface Props {
@@ -31,6 +34,8 @@ interface Props {
  * (cola completa del curso) vive en el builder del profesor.
  */
 export function LessonComments({ lessonId, courseId }: Props) {
+  const t = useTranslations('comunidadComponentes');
+  const tErrors = useTranslations('errors');
   const [items, setItems] = useState<LessonComment[] | null>(null);
   const [body, setBody] = useState('');
   const [pending, setPending] = useState(false);
@@ -46,7 +51,7 @@ export function LessonComments({ lessonId, courseId }: Props) {
       setItems(await learningApi.listLessonComments(lessonId));
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los comentarios.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -65,11 +70,7 @@ export function LessonComments({ lessonId, courseId }: Props) {
       setBody('');
       await reload();
     } catch (e) {
-      setError(
-        e instanceof ApiHttpError
-          ? e.message
-          : 'No pudimos publicar tu comentario. Prueba de nuevo.',
-      );
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(false);
     }
@@ -81,34 +82,33 @@ export function LessonComments({ lessonId, courseId }: Props) {
       await learningApi.approveLessonComment(c.id);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos aprobar el comentario.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(false);
     }
   }
 
   async function handleReject(c: LessonComment) {
-    const reason =
-      window.prompt('Motivo del rechazo (opcional, se muestra al autor):') ?? undefined;
+    const reason = window.prompt(t('promptRejectReason')) ?? undefined;
     setPending(true);
     try {
       await learningApi.rejectLessonComment(c.id, reason || undefined);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos rechazar el comentario.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(false);
     }
   }
 
   async function handleDelete(c: LessonComment) {
-    if (!window.confirm('¿Eliminar tu comentario?')) return;
+    if (!window.confirm(t('confirmDeleteOwnComment'))) return;
     setPending(true);
     try {
       await learningApi.deleteLessonComment(c.id);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar el comentario.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(false);
     }
@@ -118,10 +118,8 @@ export function LessonComments({ lessonId, courseId }: Props) {
     <Card>
       <CardContent className="space-y-4 p-5">
         <div>
-          <h3 className="font-display text-lg font-semibold text-text">Comentarios</h3>
-          <p className="text-xs text-text-subtle">
-            Tus comentarios pasan por el profesor del curso antes de ser visibles para el resto.
-          </p>
+          <h3 className="font-display text-lg font-semibold text-text">{t('commentsTitle')}</h3>
+          <p className="text-xs text-text-subtle">{t('commentsModerationNote')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-2">
@@ -129,12 +127,12 @@ export function LessonComments({ lessonId, courseId }: Props) {
             rows={3}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="¿Tienes una pregunta o anotación sobre esta lección?"
+            placeholder={t('lessonCommentPlaceholder')}
             maxLength={4000}
           />
           <div className="flex items-center justify-end gap-2">
             <Button type="submit" disabled={pending || !body.trim()}>
-              {pending ? 'Enviando…' : 'Enviar comentario'}
+              {pending ? t('sending') : t('submitComment')}
             </Button>
           </div>
         </form>
@@ -154,7 +152,7 @@ export function LessonComments({ lessonId, courseId }: Props) {
             <div className="skeleton h-16 w-full" />
           </div>
         ) : items.length === 0 ? (
-          <p className="text-sm text-text-subtle">Aún no hay comentarios. Sé el primero.</p>
+          <p className="text-sm text-text-subtle">{t('noLessonComments')}</p>
         ) : (
           <ul className="space-y-3">
             {items.map((c) => {
@@ -164,29 +162,29 @@ export function LessonComments({ lessonId, courseId }: Props) {
                   <div className="flex flex-wrap items-center gap-2">
                     <UserChip
                       userId={c.authorId}
-                      name={c.authorDisplayName ?? (isMine ? 'Vos' : null)}
-                      fallback="Anónimo"
+                      name={c.authorDisplayName ?? (isMine ? t('you') : null)}
+                      fallback={t('anonymous')}
                       showAvatar={false}
                       size={20}
                       nameClassName="block truncate text-sm font-semibold text-text"
                     />
                     {c.status === 'PENDING' ? (
                       <Badge variant="warning" dot>
-                        En revisión
+                        {t('inReview')}
                       </Badge>
                     ) : c.status === 'REJECTED' ? (
                       <Badge variant="muted" dot>
-                        Rechazado
+                        {t('rejected')}
                       </Badge>
                     ) : null}
-                    <span className="text-xs text-text-subtle">{relTime(c.createdAt)}</span>
+                    <span className="text-xs text-text-subtle">{relTime(c.createdAt, t)}</span>
                   </div>
                   <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-text">
                     {c.body}
                   </p>
                   {c.status === 'REJECTED' && c.rejectionReason ? (
                     <p className="mt-1 text-xs text-warning-700">
-                      Motivo del rechazo: {c.rejectionReason}
+                      {t('rejectionReason', { reason: c.rejectionReason })}
                     </p>
                   ) : null}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -199,7 +197,7 @@ export function LessonComments({ lessonId, courseId }: Props) {
                           onClick={() => void handleApprove(c)}
                           disabled={pending}
                         >
-                          Aprobar
+                          {t('approve')}
                         </Button>
                         <Button
                           type="button"
@@ -208,7 +206,7 @@ export function LessonComments({ lessonId, courseId }: Props) {
                           onClick={() => void handleReject(c)}
                           disabled={pending}
                         >
-                          Rechazar
+                          {t('reject')}
                         </Button>
                       </>
                     ) : null}
@@ -219,7 +217,7 @@ export function LessonComments({ lessonId, courseId }: Props) {
                         disabled={pending}
                         className="ml-auto text-xs text-danger-700 hover:underline"
                       >
-                        Eliminar
+                        {t('delete')}
                       </button>
                     ) : null}
                   </div>
@@ -233,11 +231,11 @@ export function LessonComments({ lessonId, courseId }: Props) {
   );
 }
 
-function relTime(iso: string): string {
+function relTime(iso: string, t: TranslatorLike): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return 'ahora';
-  if (diff < 3600) return `hace ${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `hace ${Math.floor(diff / 3600)}h`;
-  if (diff < 86400 * 7) return `hace ${Math.floor(diff / 86400)}d`;
-  return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+  if (diff < 60) return t('relTimeNow');
+  if (diff < 3600) return t('relTimeMinutes', { minutes: Math.floor(diff / 60) });
+  if (diff < 86400) return t('relTimeHours', { hours: Math.floor(diff / 3600) });
+  if (diff < 86400 * 7) return t('relTimeDays', { days: Math.floor(diff / 86400) });
+  return formatDate(iso, { day: '2-digit', month: 'short' });
 }

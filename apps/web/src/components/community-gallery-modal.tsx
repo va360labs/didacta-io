@@ -5,12 +5,13 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { relTime } from '@/components/community-thread-card';
 import { Icon } from '@/components/icon';
 import { ImageLightbox } from '@/components/image-lightbox';
 import { Dialog } from '@/components/ui/dialog';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import {
   communityApi,
   filterGalleryAttachments,
@@ -23,11 +24,7 @@ import {
 
 const PAGE_SIZE = 60;
 
-const TYPE_TABS: Array<{ value: GalleryType; label: string }> = [
-  { value: 'all', label: 'Todo' },
-  { value: 'image', label: 'Imágenes' },
-  { value: 'file', label: 'Archivos' },
-];
+const TYPE_TABS: readonly GalleryType[] = ['all', 'image', 'file'];
 
 const SELECT_CLASS =
   'rounded-md border border-border bg-surface px-2 py-1.5 text-xs font-medium text-text focus:outline-none focus:ring-2 focus:ring-brand-500';
@@ -58,6 +55,8 @@ export function CommunityGalleryModal({
   tag?: string;
   title: string;
 }) {
+  const t = useTranslations('comunidadComponentes');
+  const tErrors = useTranslations('errors');
   const [items, setItems] = useState<CommunityAttachment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<InternalFilters>(INITIAL_FILTERS);
@@ -77,8 +76,7 @@ export function CommunityGalleryModal({
         if (alive) setItems(data);
       })
       .catch((e) => {
-        if (alive)
-          setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar la galería.');
+        if (alive) setError(apiErrorMessage(e, tErrors));
       });
     return () => {
       alive = false;
@@ -122,41 +120,41 @@ export function CommunityGalleryModal({
       {/* Filtros */}
       <div className="mt-4 flex flex-wrap items-end gap-x-4 gap-y-3">
         <div className="inline-flex rounded-lg border border-border bg-surface p-0.5">
-          {TYPE_TABS.map((t) => (
+          {TYPE_TABS.map((value) => (
             <button
-              key={t.value}
+              key={value}
               type="button"
-              onClick={() => patch({ type: t.value })}
+              onClick={() => patch({ type: value })}
               className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-                filters.type === t.value
+                filters.type === value
                   ? 'bg-brand-500 text-text-on-brand'
                   : 'text-text-muted hover:text-text'
               }`}
             >
-              {t.label}
+              {t(`galleryType.${value}`)}
             </button>
           ))}
         </div>
 
         <label className="flex flex-col gap-1 text-[11px] font-medium text-text-subtle">
-          Buscar
+          {t('searchLabel')}
           <input
             type="search"
             value={filters.search}
             onChange={(e) => patch({ search: e.target.value })}
-            placeholder="Nombre del archivo…"
+            placeholder={t('searchPlaceholder')}
             className={SELECT_CLASS}
           />
         </label>
 
         <label className="flex flex-col gap-1 text-[11px] font-medium text-text-subtle">
-          Autor
+          {t('authorLabel')}
           <select
             value={filters.authorId}
             onChange={(e) => patch({ authorId: e.target.value })}
             className={SELECT_CLASS}
           >
-            <option value="all">Todos</option>
+            <option value="all">{t('allAuthors')}</option>
             {authors.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -166,7 +164,7 @@ export function CommunityGalleryModal({
         </label>
 
         <label className="flex flex-col gap-1 text-[11px] font-medium text-text-subtle">
-          Desde
+          {t('fromLabel')}
           <input
             type="date"
             value={filters.from}
@@ -177,7 +175,7 @@ export function CommunityGalleryModal({
         </label>
 
         <label className="flex flex-col gap-1 text-[11px] font-medium text-text-subtle">
-          Hasta
+          {t('toLabel')}
           <input
             type="date"
             value={filters.to}
@@ -188,14 +186,14 @@ export function CommunityGalleryModal({
         </label>
 
         <label className="flex flex-col gap-1 text-[11px] font-medium text-text-subtle">
-          Orden
+          {t('orderLabel')}
           <select
             value={filters.sort}
             onChange={(e) => patch({ sort: e.target.value as GalleryFilters['sort'] })}
             className={SELECT_CLASS}
           >
-            <option value="recent">Más recientes</option>
-            <option value="oldest">Más antiguos</option>
+            <option value="recent">{t('gallerySort.recent')}</option>
+            <option value="oldest">{t('gallerySort.oldest')}</option>
           </select>
         </label>
 
@@ -207,7 +205,7 @@ export function CommunityGalleryModal({
           }}
           className="ml-auto text-xs font-medium text-brand-700 hover:underline"
         >
-          Limpiar filtros
+          {t('clearFilters')}
         </button>
       </div>
 
@@ -225,18 +223,16 @@ export function CommunityGalleryModal({
           </div>
         ) : filtered.length === 0 ? (
           <p className="py-10 text-center text-sm text-text-muted">
-            {items.length === 0
-              ? 'Todavía no hay imágenes ni archivos en este espacio.'
-              : 'Ningún adjunto coincide con los filtros.'}
+            {items.length === 0 ? t('emptyGallery') : t('noMatches')}
           </p>
         ) : (
           <>
             <p className="mb-3 text-xs text-text-subtle">
-              {filtered.length} {filtered.length === 1 ? 'adjunto' : 'adjuntos'}
+              {t('attachmentsCount', { count: filtered.length })}
             </p>
             <div className="flex flex-wrap gap-2">
               {shown.map((a, i) => {
-                const tip = `${a.name}\n${a.authorName ?? 'Anónimo'} · ${relTime(a.createdAt)}`;
+                const tip = `${a.name}\n${a.authorName ?? t('anonymous')} · ${relTime(a.createdAt, t)}`;
                 return a.kind === 'image' ? (
                   <button
                     key={`${a.postId}-${i}`}
@@ -273,7 +269,7 @@ export function CommunityGalleryModal({
                   onClick={() => setVisible((v) => v + PAGE_SIZE)}
                   className="rounded-lg border border-border-strong bg-surface px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-surface-2"
                 >
-                  Cargar más
+                  {t('loadMore')}
                 </button>
               </div>
             ) : null}

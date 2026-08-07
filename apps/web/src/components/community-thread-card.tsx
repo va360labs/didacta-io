@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { CommunityTagChip } from '@/components/community-tag-chip';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,6 +16,8 @@ import { AuthorNameLink, CommunityAvatar } from '@/components/community-avatar';
 import { ClaseEmbedCard } from '@/components/clase-embed-card';
 import { RichBody } from '@/components/rich-body';
 import { parseClaseEmbed } from '@/lib/clase-embed';
+import { formatDate } from '@/lib/i18n/format';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 
 export const TAG_COLORS = ['#1E5AA8', '#18B5A8', '#FF6F61', '#2E7DCE', '#0D1B2A'];
 
@@ -26,13 +29,31 @@ type AttachmentTile =
   | { kind: 'file'; name: string }
   | { kind: 'overflow'; count: number };
 
-export function relTime(iso: string): string {
+/**
+ * Tiempo relativo corto («ahora», «hace 5m»…); a partir de una semana, fecha.
+ *
+ * `t` es el `useTranslations('comunidadComponentes')` del componente que la
+ * llama. Va OPCIONAL solo por compatibilidad: `modules/messaging` todavía la
+ * importa y no ha pasado por su unidad de i18n, así que sin `t` devuelve el
+ * español cableado de siempre (nunca una key en pantalla). Cuando messaging
+ * migre, `t` pasa a obligatorio y esa rama desaparece.
+ */
+export function relTime(iso: string, t?: TranslatorLike): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return 'ahora';
-  if (diff < 3600) return `hace ${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `hace ${Math.floor(diff / 3600)}h`;
-  if (diff < 86400 * 7) return `hace ${Math.floor(diff / 86400)}d`;
-  return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+  if (diff >= 86400 * 7) return formatDate(iso, { day: '2-digit', month: 'short' });
+  const minutes = Math.floor(diff / 60);
+  const hours = Math.floor(diff / 3600);
+  const days = Math.floor(diff / 86400);
+  if (!t) {
+    if (diff < 60) return 'ahora';
+    if (diff < 3600) return `hace ${minutes}m`;
+    if (diff < 86400) return `hace ${hours}h`;
+    return `hace ${days}d`;
+  }
+  if (diff < 60) return t('relTimeNow');
+  if (diff < 3600) return t('relTimeMinutes', { minutes });
+  if (diff < 86400) return t('relTimeHours', { hours });
+  return t('relTimeDays', { days });
 }
 
 export function ThreadCard({
@@ -53,6 +74,7 @@ export function ThreadCard({
   onTagClick: (tag: string) => void;
   onReactionToggle: (emoji: string) => void;
 }) {
+  const t = useTranslations('comunidadComponentes');
   // El body trae los adjuntos serializados en un comentario HTML al final.
   // En el feed mostramos solo el texto + miniaturas de los adjuntos.
   const { cleanBody: bodyWithoutAttachments, images, files } = parseBodyAttachments(post.body);
@@ -99,7 +121,7 @@ export function ThreadCard({
               <div className="flex flex-wrap items-center gap-2">
                 {post.pinnedAt ? (
                   <Badge variant="warning" dot>
-                    Fijado
+                    {t('pinnedBadge')}
                   </Badge>
                 ) : null}
                 <AuthorNameLink
@@ -107,18 +129,18 @@ export function ThreadCard({
                   name={post.authorDisplayName}
                   className="text-sm font-semibold text-text"
                 />
-                {post.tags.slice(0, 2).map((t) => (
+                {post.tags.slice(0, 2).map((tag) => (
                   <CommunityTagChip
-                    key={t}
-                    name={t}
-                    tag={tagsByName.get(t)}
+                    key={tag}
+                    name={tag}
+                    tag={tagsByName.get(tag)}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onTagClick(t);
+                      onTagClick(tag);
                     }}
                   />
                 ))}
-                <span className="text-xs text-text-subtle">{relTime(post.createdAt)}</span>
+                <span className="text-xs text-text-subtle">{relTime(post.createdAt, t)}</span>
               </div>
               <h3
                 className="font-display text-lg font-semibold wrap-break-word text-text"
@@ -133,7 +155,7 @@ export function ThreadCard({
               ) : null}
               {cleanBody.length > 240 ? (
                 <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand-700">
-                  Leer más →
+                  {t('readMore')}
                 </span>
               ) : null}
               {claseId ? <ClaseEmbedCard sessionId={claseId} /> : null}
@@ -172,8 +194,8 @@ export function ThreadCard({
                 <span className="inline-flex items-center gap-1.5 text-xs text-text-muted">
                   <Icon name="message" size={14} />
                   {post._count && post._count.comments > 0
-                    ? `${post._count.comments} ${post._count.comments === 1 ? 'comentario' : 'comentarios'}`
-                    : 'Ver conversación'}
+                    ? t('commentCount', { count: post._count.comments })
+                    : t('viewConversation')}
                 </span>
                 <PostReactions
                   reactions={post.reactions}

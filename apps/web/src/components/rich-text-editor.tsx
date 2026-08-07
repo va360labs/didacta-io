@@ -10,8 +10,10 @@ import { Link } from '@tiptap/extension-link';
 import { Placeholder } from '@tiptap/extension-placeholder';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { storageApi } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 
@@ -45,6 +47,7 @@ export function RichTextEditor({
   className,
   ariaLabel,
 }: RichTextEditorProps) {
+  const t = useTranslations('comunidadComponentes');
   const editor = useEditor({
     immediatelyRender: false, // SSR-safe: evita warning de Next.js
     extensions: [
@@ -59,7 +62,7 @@ export function RichTextEditor({
         HTMLAttributes: { class: 'rounded-md border border-border-soft' },
       }),
       Placeholder.configure({
-        placeholder: placeholder ?? 'Escribe algo…',
+        placeholder: placeholder ?? t('editorPlaceholder'),
         emptyEditorClass:
           'before:content-[attr(data-placeholder)] before:float-left before:text-text-subtle before:pointer-events-none',
       }),
@@ -67,7 +70,7 @@ export function RichTextEditor({
     content: value,
     editorProps: {
       attributes: {
-        'aria-label': ariaLabel ?? 'Editor de texto enriquecido',
+        'aria-label': ariaLabel ?? t('editorAria'),
         class: cn(
           'prose prose-slate max-w-none min-h-[10rem] px-3 py-2',
           'prose-headings:font-display prose-a:text-brand-700',
@@ -92,7 +95,7 @@ export function RichTextEditor({
   if (!editor) {
     return (
       <div className="rounded-md border border-border bg-surface px-3 py-6 text-sm text-text-subtle">
-        Cargando editor…
+        {t('editorLoading')}
       </div>
     );
   }
@@ -110,6 +113,8 @@ interface ToolbarProps {
 }
 
 function Toolbar({ editor }: ToolbarProps) {
+  const t = useTranslations('comunidadComponentes');
+  const tErrors = useTranslations('errors');
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -126,8 +131,8 @@ function Toolbar({ editor }: ToolbarProps) {
     } catch (err) {
       window.alert(
         err instanceof ApiHttpError
-          ? `No pudimos subir la imagen: ${err.message}`
-          : 'No pudimos subir la imagen. Prueba de nuevo.',
+          ? t('uploadImageErrorDetail', { message: apiErrorMessage(err, tErrors) })
+          : t('uploadImageErrorRetry'),
       );
     } finally {
       setUploading(false);
@@ -137,14 +142,14 @@ function Toolbar({ editor }: ToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-0.5 border-b border-border-soft bg-surface-2 p-1">
       <ToolbarButton
-        label="Negrita"
+        label={t('boldTitle')}
         active={editor.isActive('bold')}
         onClick={() => editor.chain().focus().toggleBold().run()}
       >
         <span className="font-bold">B</span>
       </ToolbarButton>
       <ToolbarButton
-        label="Cursiva"
+        label={t('italic')}
         active={editor.isActive('italic')}
         onClick={() => editor.chain().focus().toggleItalic().run()}
       >
@@ -152,14 +157,14 @@ function Toolbar({ editor }: ToolbarProps) {
       </ToolbarButton>
       <Separator />
       <ToolbarButton
-        label="Encabezado nivel 2"
+        label={t('heading2')}
         active={editor.isActive('heading', { level: 2 })}
         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
       >
         H2
       </ToolbarButton>
       <ToolbarButton
-        label="Encabezado nivel 3"
+        label={t('heading3')}
         active={editor.isActive('heading', { level: 3 })}
         onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
       >
@@ -167,28 +172,28 @@ function Toolbar({ editor }: ToolbarProps) {
       </ToolbarButton>
       <Separator />
       <ToolbarButton
-        label="Lista con viñetas"
+        label={t('bulletList')}
         active={editor.isActive('bulletList')}
         onClick={() => editor.chain().focus().toggleBulletList().run()}
       >
         •
       </ToolbarButton>
       <ToolbarButton
-        label="Lista numerada"
+        label={t('orderedList')}
         active={editor.isActive('orderedList')}
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
       >
         1.
       </ToolbarButton>
       <ToolbarButton
-        label="Cita"
+        label={t('blockquote')}
         active={editor.isActive('blockquote')}
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
       >
         ❝
       </ToolbarButton>
       <ToolbarButton
-        label="Código en línea"
+        label={t('inlineCode')}
         active={editor.isActive('code')}
         onClick={() => editor.chain().focus().toggleCode().run()}
       >
@@ -196,7 +201,7 @@ function Toolbar({ editor }: ToolbarProps) {
       </ToolbarButton>
       <Separator />
       <ToolbarButton
-        label={uploading ? 'Subiendo…' : 'Subir imagen'}
+        label={uploading ? t('uploading') : t('uploadImage')}
         onClick={() => fileRef.current?.click()}
         disabled={uploading}
       >
@@ -211,11 +216,11 @@ function Toolbar({ editor }: ToolbarProps) {
       />
       <Separator />
       <ToolbarButton
-        label="Insertar enlace"
+        label={t('insertLink')}
         active={editor.isActive('link')}
         onClick={() => {
           const previous = (editor.getAttributes('link').href as string | undefined) ?? '';
-          const next = window.prompt('URL del enlace (vacío para quitar)', previous);
+          const next = window.prompt(t('linkPromptWithRemove'), previous);
           if (next === null) return;
           if (next === '') {
             editor.chain().focus().extendMarkRange('link').unsetLink().run();
@@ -228,14 +233,14 @@ function Toolbar({ editor }: ToolbarProps) {
       </ToolbarButton>
       <Separator />
       <ToolbarButton
-        label="Deshacer"
+        label={t('undo')}
         onClick={() => editor.chain().focus().undo().run()}
         disabled={!editor.can().undo()}
       >
         ↶
       </ToolbarButton>
       <ToolbarButton
-        label="Rehacer"
+        label={t('redo')}
         onClick={() => editor.chain().focus().redo().run()}
         disabled={!editor.can().redo()}
       >

@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { CommunityTagChip } from '@/components/community-tag-chip';
 import { EmojiPicker } from '@/components/emoji-picker';
@@ -13,8 +14,10 @@ import { ImageLightbox } from '@/components/image-lightbox';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { MentionTextarea } from '@/components/mention-textarea';
-import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import { postShareUrl } from '@/lib/post-link';
 import { cn } from '@/lib/utils';
 import { AuthorNameLink, CommunityAvatar } from '@/components/community-avatar';
@@ -54,6 +57,8 @@ export function PostDetailView({
   onClose,
   onChanged,
 }: PostDetailViewProps) {
+  const t = useTranslations('comunidadComponentes');
+  const tErrors = useTranslations('errors');
   const [post, setPost] = useState<PostDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -78,7 +83,7 @@ export function PostDetailView({
       setError(null);
       if (!opts.silent) onChanged?.();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar el post.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -100,12 +105,12 @@ export function PostDetailView({
       setReplyBody('');
     }
     // Esperamos un tick a que monte el composer antes de hacer scroll.
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       document
         .getElementById(`comment-${focusCommentId}`)
         ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 120);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [post, focusCommentId]);
 
   function insertCommentEmoji(emoji: string) {
@@ -131,7 +136,7 @@ export function PostDetailView({
       setCommentBody('');
       await reload();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos publicar el comentario.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setPending(false);
     }
@@ -146,7 +151,7 @@ export function PostDetailView({
       setReplyTarget(null);
       await reload();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos publicar la respuesta.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setPending(false);
     }
@@ -156,24 +161,24 @@ export function PostDetailView({
     if (!post) return;
     const isHidden = post.hiddenAt !== null;
     if (isHidden) {
-      if (!window.confirm('¿Restaurar este post? Volverá a ser visible para los alumnos.')) return;
+      if (!window.confirm(t('confirmRestorePost'))) return;
       setPending(true);
       try {
         await communityApi.moderatePost(post.id, false);
         await reload();
       } catch (err) {
-        setError(err instanceof ApiHttpError ? err.message : 'No pudimos restaurar el post.');
+        setError(apiErrorMessage(err, tErrors));
       } finally {
         setPending(false);
       }
     } else {
-      const reason = window.prompt('Motivo de ocultar el post (opcional):') ?? undefined;
+      const reason = window.prompt(t('promptHidePostReason')) ?? undefined;
       setPending(true);
       try {
         await communityApi.moderatePost(post.id, true, reason || undefined);
         await reload();
       } catch (err) {
-        setError(err instanceof ApiHttpError ? err.message : 'No pudimos ocultar el post.');
+        setError(apiErrorMessage(err, tErrors));
       } finally {
         setPending(false);
       }
@@ -192,7 +197,7 @@ export function PostDetailView({
       }
       await reload();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos cambiar el pin.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setPending(false);
     }
@@ -200,24 +205,24 @@ export function PostDetailView({
 
   async function handleModerateComment(commentId: string, isHidden: boolean) {
     if (isHidden) {
-      if (!window.confirm('¿Restaurar este comentario?')) return;
+      if (!window.confirm(t('confirmRestoreComment'))) return;
       setPending(true);
       try {
         await communityApi.moderateComment(commentId, false);
         await reload();
       } catch (err) {
-        setError(err instanceof ApiHttpError ? err.message : 'No pudimos restaurar.');
+        setError(apiErrorMessage(err, tErrors));
       } finally {
         setPending(false);
       }
     } else {
-      const reason = window.prompt('Motivo de ocultar el comentario (opcional):') ?? undefined;
+      const reason = window.prompt(t('promptHideCommentReason')) ?? undefined;
       setPending(true);
       try {
         await communityApi.moderateComment(commentId, true, reason || undefined);
         await reload();
       } catch (err) {
-        setError(err instanceof ApiHttpError ? err.message : 'No pudimos ocultar.');
+        setError(apiErrorMessage(err, tErrors));
       } finally {
         setPending(false);
       }
@@ -247,7 +252,7 @@ export function PostDetailView({
     }
     if (!copied) {
       // Sin confirmación falsa: dejamos el enlace a la vista para copiarlo a mano.
-      setError(`No pudimos copiar el enlace. Copialo manualmente: ${url}`);
+      setError(t('copyLinkError', { url }));
       return;
     }
     setLinkCopied(true);
@@ -256,14 +261,14 @@ export function PostDetailView({
 
   async function handleDeletePost() {
     if (!post) return;
-    if (!window.confirm('¿Eliminar este post? Solo el autor puede.')) return;
+    if (!window.confirm(t('confirmDeletePost'))) return;
     setPending(true);
     try {
       await communityApi.deletePost(post.id);
       onChanged?.();
       onClose?.();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos eliminar el post.');
+      setError(apiErrorMessage(err, tErrors));
       setPending(false);
     }
   }
@@ -305,7 +310,7 @@ export function PostDetailView({
   }
 
   async function handleDeleteComment(id: string) {
-    if (!window.confirm('¿Eliminar este comentario?')) return;
+    if (!window.confirm(t('confirmDeleteComment'))) return;
     setPending(true);
     try {
       await communityApi.deleteComment(id);
@@ -351,29 +356,29 @@ export function PostDetailView({
               name={post.authorDisplayName}
               className="text-sm font-semibold text-[#0D1B2A]"
             />
-            {post.tags.slice(0, 3).map((t) => (
-              <CommunityTagChip key={t} name={t} tag={tagsByName.get(t)} />
+            {post.tags.slice(0, 3).map((tag) => (
+              <CommunityTagChip key={tag} name={tag} tag={tagsByName.get(tag)} />
             ))}
-            <span className="text-xs text-[#94A3B8]">{relTime(post.createdAt)}</span>
+            <span className="text-xs text-[#94A3B8]">{relTime(post.createdAt, t)}</span>
             {post.editedAt ? (
-              <span className="text-xs text-[#CBD5E1]" title="Editado">
-                · editado
+              <span className="text-xs text-[#CBD5E1]" title={t('editedTitle')}>
+                {t('editedMarker')}
               </span>
             ) : null}
             {post.pinnedAt ? (
               <Badge variant="warning" dot>
-                Fijado
+                {t('pinnedBadge')}
               </Badge>
             ) : null}
             {post.hiddenAt ? (
               <Badge variant="warning" dot>
-                Oculto
+                {t('hiddenBadge')}
               </Badge>
             ) : null}
           </div>
           {post.hiddenAt && post.hiddenReason ? (
             <p className="mt-2 rounded-md bg-warning-50 px-3 py-1.5 text-xs text-warning-700">
-              Motivo: {post.hiddenReason}
+              {t('hiddenReason', { reason: post.hiddenReason })}
             </p>
           ) : null}
         </div>
@@ -432,12 +437,12 @@ export function PostDetailView({
           variant="ghost"
           size="sm"
           onClick={() => void handleCopyLink()}
-          title="Copiar enlace directo"
-          aria-label="Copiar enlace directo"
+          title={t('copyLinkTitle')}
+          aria-label={t('copyLinkTitle')}
           className="ml-auto text-[#64748B]"
         >
           <Icon name={linkCopied ? 'check' : 'link'} size={14} />
-          {linkCopied ? 'Enlace copiado' : 'Copiar enlace'}
+          {linkCopied ? t('linkCopied') : t('copyLink')}
         </Button>
         {isAuthor || canModerate ? (
           <Button
@@ -448,7 +453,7 @@ export function PostDetailView({
             disabled={pending}
             className="text-[#64748B]"
           >
-            Editar
+            {t('edit')}
           </Button>
         ) : null}
         {canModerate ? (
@@ -460,7 +465,7 @@ export function PostDetailView({
             disabled={pending}
             className="text-[#64748B]"
           >
-            {post.pinnedAt ? 'Desfijar' : 'Fijar'}
+            {post.pinnedAt ? t('unpin') : t('pin')}
           </Button>
         ) : null}
         {canModerate ? (
@@ -472,7 +477,7 @@ export function PostDetailView({
             disabled={pending}
             className="text-[#64748B]"
           >
-            {post.hiddenAt ? 'Restaurar post' : 'Ocultar post'}
+            {post.hiddenAt ? t('restorePost') : t('hidePost')}
           </Button>
         ) : null}
         {isAuthor ? (
@@ -484,7 +489,7 @@ export function PostDetailView({
             disabled={pending}
             className="text-danger-700 hover:bg-danger-50"
           >
-            Eliminar post
+            {t('deletePost')}
           </Button>
         ) : null}
       </div>
@@ -504,7 +509,7 @@ export function PostDetailView({
             rows={3}
             value={commentBody}
             onChange={(e) => setCommentBody(e.target.value)}
-            placeholder="Aporta tu respuesta… puedes mencionar con @usuario"
+            placeholder={t('commentPlaceholder')}
             required
             className="border-[#E2E8F0] bg-[#F8FAFC] text-[15px] focus:border-[#1E5AA8] focus:bg-white transition-colors"
           />
@@ -513,7 +518,7 @@ export function PostDetailView({
             <div className="relative">
               <button
                 type="button"
-                title="Emoji"
+                title={t('emojiTitle')}
                 onClick={() => setCommentEmojiOpen((v) => !v)}
                 aria-expanded={commentEmojiOpen}
                 aria-haspopup="dialog"
@@ -543,7 +548,7 @@ export function PostDetailView({
             <div className="ml-auto">
               <Button type="submit" disabled={pending || !commentBody.trim()}>
                 <Icon name="message" size={16} />
-                {pending ? 'Enviando…' : 'Responder'}
+                {pending ? t('sending') : t('reply')}
               </Button>
             </div>
           </div>
@@ -558,7 +563,7 @@ export function PostDetailView({
           className="font-display text-base font-semibold text-[#0D1B2A]"
           style={{ letterSpacing: '-0.01em' }}
         >
-          {post.comments.length} respuesta{post.comments.length === 1 ? '' : 's'}
+          {t('commentsCount', { count: post.comments.length })}
         </h2>
       </div>
 
@@ -683,14 +688,11 @@ interface CommentsSectionProps {
 }
 
 function CommentsSection(props: CommentsSectionProps) {
+  const t = useTranslations('comunidadComponentes');
   const { comments } = props;
 
   if (comments.length === 0) {
-    return (
-      <div className="py-8 text-center text-sm text-[#94A3B8]">
-        Aún no hay respuestas. Aporta tú la primera.
-      </div>
-    );
+    return <div className="py-8 text-center text-sm text-[#94A3B8]">{t('noComments')}</div>;
   }
 
   const rootComments = comments.filter((c) => c.parentCommentId === null);
@@ -765,6 +767,7 @@ function CommentThread({
   onDelete: (commentId: string) => void;
   onModerate: (commentId: string, isHidden: boolean) => void;
 }) {
+  const t = useTranslations('comunidadComponentes');
   return (
     <div className="py-4" id={`comment-${comment.id}`}>
       <CommentBody
@@ -791,17 +794,19 @@ function CommentThread({
           <MentionTextarea
             value={replyBody}
             onChange={(e) => onReplyChange(e.target.value)}
-            placeholder={`Responder a ${comment.authorDisplayName ?? 'este comentario'}… (@usuario para mencionar)`}
+            placeholder={t('replyPlaceholder', {
+              name: comment.authorDisplayName ?? t('replyPlaceholderFallback'),
+            })}
             rows={2}
             autoFocus
             className="border-[#E2E8F0] bg-[#F8FAFC] text-sm"
           />
           <div className="flex items-center gap-2">
             <Button type="submit" size="sm" disabled={pending || !replyBody.trim()}>
-              Publicar respuesta
+              {t('publishReply')}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={onReplyClose}>
-              Cancelar
+              {t('cancel')}
             </Button>
           </div>
         </form>
@@ -852,6 +857,7 @@ function CommentBody({
   onReply?: () => void;
   isReply: boolean;
 }) {
+  const t = useTranslations('comunidadComponentes');
   const grouped = groupReactions(reactions.filter((r) => r.commentId === comment.id));
   const mine = new Set(
     reactions
@@ -876,13 +882,15 @@ function CommentBody({
             name={comment.authorDisplayName}
             className="text-sm font-semibold text-[#0D1B2A]"
           />
-          <span className="text-xs text-[#94A3B8]">{relTime(comment.createdAt)}</span>
+          <span className="text-xs text-[#94A3B8]">{relTime(comment.createdAt, t)}</span>
           {isReply ? (
-            <span className="text-[10px] uppercase tracking-wider text-[#CBD5E1]">· respuesta</span>
+            <span className="text-[10px] uppercase tracking-wider text-[#CBD5E1]">
+              {t('replyMarker')}
+            </span>
           ) : null}
           {comment.hiddenAt ? (
             <Badge variant="warning" dot>
-              Oculto
+              {t('hiddenBadge')}
             </Badge>
           ) : null}
         </div>
@@ -918,7 +926,7 @@ function CommentBody({
               disabled={pending}
               className="text-xs font-semibold text-[#1E5AA8] hover:underline"
             >
-              Responder
+              {t('reply')}
             </button>
           ) : null}
           {canModerate ? (
@@ -928,7 +936,7 @@ function CommentBody({
               disabled={pending}
               className="text-xs font-semibold text-[#94A3B8] hover:underline"
             >
-              {comment.hiddenAt ? 'Restaurar' : 'Ocultar'}
+              {comment.hiddenAt ? t('restore') : t('hide')}
             </button>
           ) : null}
           {isAuthor ? (
@@ -938,7 +946,7 @@ function CommentBody({
               disabled={pending}
               className="ml-auto text-xs text-danger-700 hover:underline"
             >
-              Eliminar
+              {t('delete')}
             </button>
           ) : null}
         </div>
@@ -947,11 +955,11 @@ function CommentBody({
   );
 }
 
-function relTime(iso: string): string {
+function relTime(iso: string, t: TranslatorLike): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return 'ahora';
-  if (diff < 3600) return `hace ${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `hace ${Math.floor(diff / 3600)}h`;
-  if (diff < 86400 * 7) return `hace ${Math.floor(diff / 86400)}d`;
-  return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+  if (diff < 60) return t('relTimeNow');
+  if (diff < 3600) return t('relTimeMinutes', { minutes: Math.floor(diff / 60) });
+  if (diff < 86400) return t('relTimeHours', { hours: Math.floor(diff / 3600) });
+  if (diff < 86400 * 7) return t('relTimeDays', { days: Math.floor(diff / 86400) });
+  return formatDate(iso, { day: '2-digit', month: 'short' });
 }

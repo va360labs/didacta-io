@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { publicProfileHref } from '@/lib/public-users';
 import { useUserRestriction } from '@/lib/restrictions';
@@ -35,7 +36,12 @@ export function CommunityAvatar({
   size?: number;
   linkToProfile?: boolean;
 }) {
-  const box = <UserAvatar name={name} avatarUrl={avatarUrl} size={size} fallback="Anónimo" />;
+  const t = useTranslations('comunidadComponentes');
+  // `displayNameOf` es pura y su test aserta el default 'Miembro': el fallback
+  // traducido se decide AQUÍ, en el llamante, y se le pasa hecho.
+  const box = (
+    <UserAvatar name={name} avatarUrl={avatarUrl} size={size} fallback={t('anonymous')} />
+  );
 
   if (userId && linkToProfile) {
     return (
@@ -71,9 +77,10 @@ export function AuthorNameLink({
   className?: string;
   showShield?: boolean;
 }) {
+  const t = useTranslations('comunidadComponentes');
   const canModerate = useCanModerate(userId);
   const restriction = useUserRestriction(userId, canModerate && showShield);
-  const label = displayNameOf(name, null, 'Anónimo');
+  const label = displayNameOf(name, null, t('anonymous'));
 
   if (!userId) return <span className={className}>{label}</span>;
 

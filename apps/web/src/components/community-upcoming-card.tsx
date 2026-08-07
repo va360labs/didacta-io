@@ -5,11 +5,13 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Icon } from '@/components/icon';
 import { Card, CardContent } from '@/components/ui/card';
 import { fetchUpcoming, phaseOf, type CalendarItem } from '@/lib/agenda';
+import { formatDate, formatTime } from '@/lib/i18n/format';
 
 /**
  * Bloque «Próximas citas» de la barra derecha del feed de la comunidad.
@@ -24,13 +26,13 @@ const MAX_ITEMS = 4;
 const TICK_MS = 60_000;
 
 function formatWhen(item: CalendarItem): string {
-  const d = new Date(item.startAt);
-  const fecha = d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
-  const hora = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  const fecha = formatDate(item.startAt, { weekday: 'short', day: 'numeric', month: 'short' });
+  const hora = formatTime(item.startAt, { hour: '2-digit', minute: '2-digit' });
   return `${fecha} · ${hora}`;
 }
 
 export function CommunityUpcomingCard() {
+  const t = useTranslations('comunidadComponentes');
   const [items, setItems] = useState<CalendarItem[] | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -58,13 +60,13 @@ export function CommunityUpcomingCard() {
     <Card>
       <CardContent className="p-5">
         <div className="flex items-center justify-between gap-2">
-          <h4 className="font-display text-base font-semibold text-text">Próximas citas</h4>
+          <h4 className="font-display text-base font-semibold text-text">{t('upcomingTitle')}</h4>
           <Link
             href="/calendario"
             className="text-xs font-medium text-brand-700 hover:underline"
-            aria-label="Ver el calendario completo"
+            aria-label={t('seeCalendarAria')}
           >
-            Ver todo
+            {t('seeAll')}
           </Link>
         </div>
 
@@ -74,9 +76,7 @@ export function CommunityUpcomingCard() {
             <div className="skeleton h-10 w-full" />
           </div>
         ) : items.length === 0 ? (
-          <p className="mt-3 text-xs text-text-subtle">
-            No hay clases ni eventos programados. Cuando se publique alguno, aparecerá aquí.
-          </p>
+          <p className="mt-3 text-xs text-text-subtle">{t('noUpcoming')}</p>
         ) : (
           <ul className="mt-3 space-y-1" data-testid="proximas-citas">
             {items.map((item, i) => {
@@ -103,12 +103,12 @@ export function CommunityUpcomingCard() {
                     {live ? (
                       <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-(--didacta-growth)">
                         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-(--didacta-growth)" />
-                        En directo ahora
+                        {t('liveNow')}
                       </span>
                     ) : (
                       <p className="mt-0.5 text-[11px] text-text-muted first-letter:uppercase">
                         {formatWhen(item)}
-                        {item.isRegistered ? ' · inscrito' : ''}
+                        {item.isRegistered ? ` · ${t('registered')}` : ''}
                       </p>
                     )}
                   </div>
