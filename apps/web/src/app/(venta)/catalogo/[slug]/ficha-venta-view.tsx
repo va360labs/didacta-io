@@ -18,9 +18,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon';
 import { authStorage } from '@/lib/auth-storage';
+import { formatDuration } from '@/lib/i18n/format';
 import { useTenantContext } from '@/lib/tenant-context';
 import { formatCents } from '@/lib/membership';
 import {
@@ -30,14 +32,9 @@ import {
   type CatalogCourse,
 } from '@/lib/catalog';
 
-function durationLabel(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return `${m} min`;
-  return m === 0 ? `${h} h` : `${h} h ${m} min`;
-}
-
 export function FichaVentaView() {
+  const t = useTranslations('publicSite');
+  const tCommon = useTranslations('common');
   const params = useParams<{ slug: string }>();
   const { tenant } = useTenantContext();
 
@@ -80,15 +77,15 @@ export function FichaVentaView() {
       });
       window.location.assign(url);
     } catch {
-      setPayError('No se pudo iniciar el pago. Inténtalo de nuevo en unos segundos.');
+      setPayError(t('ficha.payError'));
       setPaying(false);
     }
-  }, [course, selected, session]);
+  }, [course, selected, session, t]);
 
   if (course === undefined) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center text-sm text-text-muted">
-        Cargando…
+        {t('loading')}
       </div>
     );
   }
@@ -99,12 +96,10 @@ export function FichaVentaView() {
         <span className="grid h-12 w-12 place-items-center rounded-full bg-surface-3 text-text-muted">
           <Icon name="alert" className="h-6 w-6" />
         </span>
-        <h1 className="text-xl font-bold">Curso no disponible</h1>
-        <p className="text-text-muted">
-          Este curso no está a la venta ahora mismo. Echa un vistazo al resto del catálogo.
-        </p>
+        <h1 className="text-xl font-bold">{t('ficha.notAvailableTitle')}</h1>
+        <p className="text-text-muted">{t('ficha.notAvailableBody')}</p>
         <Button asChild variant="ghost">
-          <Link href="/catalogo">Volver al catálogo</Link>
+          <Link href="/catalogo">{t('backToCatalog')}</Link>
         </Button>
       </div>
     );
@@ -116,7 +111,7 @@ export function FichaVentaView() {
       <div className="space-y-6">
         <nav className="text-sm text-text-subtle">
           <Link href="/catalogo" className="hover:underline">
-            Cursos
+            {t('ficha.breadcrumbCourses')}
           </Link>{' '}
           / <span className="text-text-muted">{course.title}</span>
         </nav>
@@ -140,7 +135,7 @@ export function FichaVentaView() {
             {course.estimatedMinutes ? (
               <span className="inline-flex items-center gap-1">
                 <Icon name="clock" size={14} />
-                {durationLabel(course.estimatedMinutes)}
+                {formatDuration(course.estimatedMinutes, tCommon)}
               </span>
             ) : null}
           </div>
@@ -155,8 +150,9 @@ export function FichaVentaView() {
         </div>
 
         <div className="rounded-xl border border-border bg-surface-2 px-4 py-3 text-sm text-text-muted">
-          Tras el pago recibirás un email para <strong>definir tu contraseña</strong> y entrar
-          directamente al curso. Si ya tienes cuenta, el curso se añade a la tuya.
+          {t.rich('ficha.afterPayment', {
+            strong: (chunks) => <strong>{chunks}</strong>,
+          })}
         </div>
       </div>
 
@@ -177,12 +173,16 @@ export function FichaVentaView() {
             ) : (
               <span className="text-lg font-extrabold text-white">{tenant?.name ?? ''}</span>
             )}
-            <p className="mt-2 text-sm text-white/70">Pago único · Acceso inmediato</p>
+            <p className="mt-2 text-sm text-white/70">{t('ficha.oneTimePayment')}</p>
           </div>
 
           <div className="flex flex-col gap-4 p-6">
             {course.options.length > 1 ? (
-              <div role="radiogroup" aria-label="Formatos" className="flex flex-col gap-2.5">
+              <div
+                role="radiogroup"
+                aria-label={t('ficha.formatsAriaLabel')}
+                className="flex flex-col gap-2.5"
+              >
                 {course.options.map((option) => {
                   const isSelected = option.id === selectedId;
                   return (
@@ -200,10 +200,10 @@ export function FichaVentaView() {
                     >
                       <div className="flex items-center justify-between gap-3">
                         <span className="font-medium text-text">
-                          {option.name || 'Curso'}
+                          {option.name || t('ficha.defaultOptionName')}
                           {option.isFeatured ? (
                             <span className="ml-2 rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-semibold text-white">
-                              Recomendado
+                              {t('ficha.recommended')}
                             </span>
                           ) : null}
                         </span>
@@ -247,7 +247,7 @@ export function FichaVentaView() {
                 ) : null}
                 {selected.discountPercent ? (
                   <span className="rounded-full bg-success-100 px-2 py-0.5 text-xs font-semibold text-success-700">
-                    −{selected.discountPercent}%
+                    {t('discountBadge', { percent: selected.discountPercent })}
                   </span>
                 ) : null}
               </div>
@@ -260,20 +260,20 @@ export function FichaVentaView() {
             ) : null}
 
             <Button size="lg" onClick={comprar} disabled={!selected || paying}>
-              {paying ? 'Abriendo pago seguro…' : 'Comprar ahora'}
+              {paying ? t('ficha.openingPayment') : t('ficha.buyNow')}
             </Button>
-            <p className="text-center text-xs text-text-subtle">
-              Pago seguro con Stripe. IVA incluido.
-            </p>
+            <p className="text-center text-xs text-text-subtle">{t('ficha.securePayment')}</p>
           </div>
         </section>
 
         <p className="text-center text-sm text-text-subtle">
-          ¿Ya tienes cuenta?{' '}
-          <Link href="/signin" className="font-medium text-brand-700 hover:underline">
-            Inicia sesión
-          </Link>{' '}
-          para comprar desde tu ficha del curso.
+          {t.rich('ficha.haveAccountToBuy', {
+            link: (chunks) => (
+              <Link href="/signin" className="font-medium text-brand-700 hover:underline">
+                {chunks}
+              </Link>
+            ),
+          })}
         </p>
       </aside>
     </div>

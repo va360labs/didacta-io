@@ -20,10 +20,12 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 
 function SuccessContent() {
+  const t = useTranslations('publicSite');
   const params = useSearchParams();
   const sessionId = params.get('session_id');
 
@@ -32,27 +34,27 @@ function SuccessContent() {
       <span className="grid h-12 w-12 place-items-center rounded-full bg-success-100 text-success-700">
         <Icon name="check" className="h-6 w-6" />
       </span>
-      <h1 className="text-xl font-bold">¡Gracias por tu compra!</h1>
+      <h1 className="text-xl font-bold">{t('checkoutSuccess.title')}</h1>
       <p className="text-text-muted">
-        Tu pago se procesó correctamente y tu curso se está activando. Revisa tu correo: te hemos
-        enviado un enlace para <strong>definir tu contraseña</strong> y entrar directamente. Si no
-        lo ves en unos minutos, mira en spam o usa &ldquo;¿Olvidaste tu contraseña?&rdquo; en el
-        inicio de sesión.
+        {t.rich('checkoutSuccess.body', {
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
       </p>
-      <p className="text-sm text-text-muted">
-        ¿Ya tenías cuenta? Inicia sesión con tu email de siempre: el curso ya está en ella.
-      </p>
+      <p className="text-sm text-text-muted">{t('checkoutSuccess.hadAccount')}</p>
       <div className="flex flex-wrap gap-3 pt-1">
         <Button asChild>
-          <Link href="/signin">Ir al inicio de sesión</Link>
+          <Link href="/signin">{t('goToSignIn')}</Link>
         </Button>
         <Button asChild variant="ghost">
-          <Link href="/catalogo">Volver al catálogo</Link>
+          <Link href="/catalogo">{t('backToCatalog')}</Link>
         </Button>
       </div>
       {sessionId ? (
         <p className="pt-3 text-xs text-text-subtle">
-          Referencia de pago: <code className="font-mono">{sessionId}</code>
+          {t.rich('checkoutSuccess.paymentReference', {
+            id: sessionId,
+            code: (chunks) => <code className="font-mono">{chunks}</code>,
+          })}
         </p>
       ) : null}
     </div>
