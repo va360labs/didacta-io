@@ -93,6 +93,26 @@ export function formatCurrency(
 }
 
 /**
+ * Céntimos → string de moneda. ÚNICA conversión canónica de cents del
+ * producto: la regla de decimales («sin decimales si es cantidad redonda»)
+ * vive aquí y solo aquí. Sustituye a los wrappers locales por página y a
+ * `formatCents`/`formatReferralCents` de lib/membership y lib/referrals
+ * (que quedan como delegaciones o desaparecen al migrar sus consumidores).
+ */
+export function formatCents(
+  cents: number,
+  currency = 'EUR',
+  opts?: Intl.NumberFormatOptions & FmtOverrides,
+): string {
+  const whole = cents % 100 === 0;
+  return formatCurrency(cents / 100, currency, {
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: 2,
+    ...opts,
+  });
+}
+
+/**
  * Sucesora locale-aware de `formatDuration` de `@/lib/format` (deprecada).
  * Mantiene el contrato: null/undefined/negativo/no-finito → null.
  *

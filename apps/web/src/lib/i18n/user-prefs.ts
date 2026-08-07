@@ -33,14 +33,23 @@ export function resetUserFormatPrefs(): void {
   prefs = {};
 }
 
+let cachedBrowserTz: string | undefined | null = null;
+
 /**
  * Timezone del navegador — ÚNICO sitio permitido para `Intl.*` fuera de los
  * helpers de formato (el guardarraíl de ESLint exime `lib/i18n/**`).
+ *
+ * Cacheada a nivel de módulo: `resolvedOptions()` es la ruta lenta de Intl y
+ * los helpers de formato la consultan en cada llamada (listas de cientos de
+ * filas la invocaban cientos de veces por render). La TZ del navegador no
+ * cambia durante la sesión.
  */
 export function getBrowserTimeZone(): string | undefined {
+  if (cachedBrowserTz !== null) return cachedBrowserTz;
   try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    cachedBrowserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   } catch {
-    return undefined;
+    cachedBrowserTz = undefined;
   }
+  return cachedBrowserTz;
 }

@@ -3,6 +3,7 @@ import { createTranslator } from 'next-intl';
 import es from '@/i18n/messages/es';
 import en from '@/i18n/messages/en';
 import {
+  formatCents,
   formatCurrency,
   formatDate,
   formatDateTime,
@@ -69,6 +70,19 @@ describe('formatNumber / formatCurrency', () => {
   it('moneda EUR por defecto, otras monedas configurables', () => {
     expect(formatCurrency(1234.5, 'EUR', { locale: 'es-ES' })).toContain('€');
     expect(formatCurrency(99, 'USD', { locale: 'en-US' })).toBe('$99.00');
+  });
+});
+
+describe('formatCents', () => {
+  it('cantidad redonda → sin decimales; con resto → 2 decimales', () => {
+    expect(formatCents(99900, 'USD', { locale: 'en-US' })).toBe('$999');
+    expect(formatCents(99950, 'USD', { locale: 'en-US' })).toBe('$999.50');
+  });
+
+  it('respeta overrides explícitos de decimales', () => {
+    expect(formatCents(99900, 'USD', { locale: 'en-US', minimumFractionDigits: 2 })).toBe(
+      '$999.00',
+    );
   });
 });
 
