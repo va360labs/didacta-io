@@ -5,14 +5,15 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 import { useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ApiHttpError } from '@/lib/api-client';
 import { coursesApi, type Course } from '@/lib/courses';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 
 // Carga diferida del editor (tiptap ~200KB): solo se baja cuando se monta el
 // formulario, no en el bundle base.
@@ -38,6 +39,8 @@ interface Props {
 }
 
 export function NewCourseForm({ onCreated, onCancel }: Props) {
+  const t = useTranslations('playersContenido');
+  const tErrors = useTranslations('errors');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -66,8 +69,7 @@ export function NewCourseForm({ onCreated, onCancel }: Props) {
       });
       onCreated(course);
     } catch (e) {
-      if (e instanceof ApiHttpError) setError(e.message);
-      else setError('Error inesperado');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(false);
     }
@@ -79,7 +81,9 @@ export function NewCourseForm({ onCreated, onCancel }: Props) {
     <form onSubmit={onSubmit} className="space-y-5">
       <div className="space-y-1.5">
         <Label htmlFor="title">
-          Título <span className="text-danger-700">*</span>
+          {t.rich('newCourse.titleLabel', {
+            req: (chunks) => <span className="text-danger-700">{chunks}</span>,
+          })}
         </Label>
         <Input
           id="title"
@@ -88,14 +92,16 @@ export function NewCourseForm({ onCreated, onCancel }: Props) {
           maxLength={160}
           value={title}
           onChange={(e) => handleTitleChange(e.target.value)}
-          placeholder="Ej: Introducción a n8n para automatización"
+          placeholder={t('newCourse.titlePlaceholder')}
           autoFocus
         />
       </div>
 
       <div className="space-y-1.5">
         <Label htmlFor="slug">
-          Slug <span className="text-danger-700">*</span>
+          {t.rich('newCourse.slugLabel', {
+            req: (chunks) => <span className="text-danger-700">{chunks}</span>,
+          })}
         </Label>
         <div className="flex items-center gap-2 rounded-md border border-border bg-surface focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-1">
           <span className="select-none pl-3 font-mono text-sm text-text-subtle">/</span>
@@ -111,7 +117,7 @@ export function NewCourseForm({ onCreated, onCancel }: Props) {
               setSlugTouched(true);
             }}
             className="flex-1 bg-transparent py-2 pr-3 font-mono text-sm focus:outline-none"
-            placeholder="introduccion-n8n"
+            placeholder={t('newCourse.slugPlaceholder')}
           />
           {slug && slugValid ? (
             <span className="pr-3 text-success-700">
@@ -119,38 +125,33 @@ export function NewCourseForm({ onCreated, onCancel }: Props) {
             </span>
           ) : null}
         </div>
-        <p className="text-xs text-text-subtle">
-          Se genera automáticamente desde el título. Usar kebab-case, sin acentos. Es la URL pública
-          del curso.
-        </p>
+        <p className="text-xs text-text-subtle">{t('newCourse.slugHelp')}</p>
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="description">Descripción</Label>
+        <Label htmlFor="description">{t('newCourse.descriptionLabel')}</Label>
         <RichTextEditor
           value={description}
           onChange={setDescription}
-          placeholder="¿De qué trata este curso? ¿A quién está dirigido? ¿Qué van a aprender?"
-          ariaLabel="Descripción del curso"
+          placeholder={t('newCourse.descriptionPlaceholder')}
+          ariaLabel={t('newCourse.descriptionAriaLabel')}
         />
-        <p className="text-xs text-text-subtle">
-          Recomendado para SEO y para el catálogo. Soporta negrita, listas, encabezados y enlaces.
-        </p>
+        <p className="text-xs text-text-subtle">{t('newCourse.descriptionHelp')}</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="category">Categoría</Label>
+          <Label htmlFor="category">{t('newCourse.categoryLabel')}</Label>
           <Input
             id="category"
             name="category"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            placeholder="Ej: Tecnología"
+            placeholder={t('newCourse.categoryPlaceholder')}
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="estimatedMinutes">Duración estimada (min)</Label>
+          <Label htmlFor="estimatedMinutes">{t('newCourse.estimatedMinutesLabel')}</Label>
           <Input
             id="estimatedMinutes"
             name="estimatedMinutes"
@@ -158,7 +159,7 @@ export function NewCourseForm({ onCreated, onCancel }: Props) {
             min={1}
             value={estimatedMinutes}
             onChange={(e) => setEstimatedMinutes(e.target.value)}
-            placeholder="Ej: 90"
+            placeholder={t('newCourse.estimatedMinutesPlaceholder')}
           />
         </div>
       </div>
@@ -175,11 +176,11 @@ export function NewCourseForm({ onCreated, onCancel }: Props) {
       <div className="flex items-center justify-end gap-2 border-t border-border-soft pt-4">
         {onCancel ? (
           <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
-            Cancelar
+            {t('newCourse.cancel')}
           </Button>
         ) : null}
         <Button type="submit" disabled={pending || !title || !slugValid}>
-          {pending ? 'Creando…' : 'Crear curso'}
+          {pending ? t('newCourse.submitPending') : t('newCourse.submit')}
         </Button>
       </div>
     </form>

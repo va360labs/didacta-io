@@ -5,10 +5,14 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Icon } from '@/components/icon';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate, formatDateTime } from '@/lib/i18n/format';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import { AddToCalendarDialog, zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
 import { cn } from '@/lib/utils';
 
@@ -26,9 +30,12 @@ import { cn } from '@/lib/utils';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// La timezone que manda es la de la sesión (`session.timezone`): la clase
+// ocurre a una hora concreta del calendario del host, no de quien mira. Si
+// llega una zona inválida, se cae al formato sin timezone explícita.
 function formatFullDate(iso: string, tz: string): string {
   try {
-    return new Date(iso).toLocaleString('es-ES', {
+    return formatDateTime(iso, {
       timeZone: tz,
       weekday: 'long',
       day: 'numeric',
@@ -37,36 +44,37 @@ function formatFullDate(iso: string, tz: string): string {
       minute: '2-digit',
     });
   } catch {
-    return new Date(iso).toLocaleString('es-ES');
+    return formatDateTime(iso);
   }
 }
 
 function monthShort(iso: string, tz: string): string {
   try {
-    return new Date(iso).toLocaleDateString('es-ES', { timeZone: tz, month: 'short' });
+    return formatDate(iso, { timeZone: tz, month: 'short' });
   } catch {
-    return new Date(iso).toLocaleDateString('es-ES', { month: 'short' });
+    return formatDate(iso, { month: 'short' });
   }
 }
 
 function dayNumber(iso: string, tz: string): string {
   try {
-    return new Date(iso).toLocaleDateString('es-ES', { timeZone: tz, day: 'numeric' });
+    return formatDate(iso, { timeZone: tz, day: 'numeric' });
   } catch {
     return String(new Date(iso).getDate());
   }
 }
 
 /** Cuenta atrás humana. Devuelve '' cuando ya empezó. */
-function countdown(startIso: string, now: number): string {
+function countdown(startIso: string, now: number, t: TranslatorLike): string {
   const diff = new Date(startIso).getTime() - now;
   if (diff <= 0) return '';
   const days = Math.floor(diff / DAY_MS);
-  if (days >= 1) return days === 1 ? 'Mañana' : `En ${days} días`;
+  if (days >= 1)
+    return days === 1 ? t('claseEmbed.countdownTomorrow') : t('claseEmbed.countdownDays', { days });
   const hours = Math.floor(diff / (60 * 60 * 1000));
-  if (hours >= 1) return hours === 1 ? 'En 1 hora' : `En ${hours} horas`;
+  if (hours >= 1) return t('claseEmbed.countdownHours', { hours });
   const mins = Math.max(1, Math.floor(diff / 60_000));
-  return `En ${mins} min`;
+  return t('claseEmbed.countdownMinutes', { minutes: mins });
 }
 
 type Phase = 'proxima' | 'curso' | 'pasada';
@@ -81,6 +89,8 @@ function phaseOf(s: ZoomSession, now: number): Phase {
 }
 
 export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
+  const t = useTranslations('playersContenido');
+  const tErrors = useTranslations('errors');
   const [session, setSession] = useState<ZoomSession | null>(null);
   const [gone, setGone] = useState(false);
   const [pending, setPending] = useState(false);
@@ -120,7 +130,9 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
       setSession(await zoomLiveApi.register(session.id));
       setCalendarOpen(true);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos completar la inscripción.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('claseEmbed.registerError'),
+      );
     } finally {
       setPending(false);
     }
@@ -140,7 +152,7 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
   if (session.status === 'CANCELLED') {
     return (
       <div className="mt-3 rounded-card border border-border bg-bg-subtle px-4 py-3 text-sm text-text-muted">
-        Esta clase se canceló.
+        {t('claseEmbed.cancelled')}
       </div>
     );
   }
@@ -148,7 +160,7 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
   const phase = phaseOf(session, now);
   const live = phase === 'curso';
   const past = phase === 'pasada';
-  const falta = countdown(session.startTime, now);
+  const falta = countdown(session.startTime, now, t);
 
   return (
     // `stopPropagation`: la tarjeta vive dentro de un post clicable del feed;
@@ -198,7 +210,7 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
             {live ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-(--didacta-growth) px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-                En directo
+                {t('claseEmbed.live')}
               </span>
             ) : (
               <span
@@ -210,7 +222,7 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
                 )}
               >
                 <Icon name="video" size={11} />
-                {past ? 'Clase finalizada' : 'Clase en directo'}
+                {past ? t('claseEmbed.past') : t('claseEmbed.upcoming')}
               </span>
             )}
             {!past && falta ? (
@@ -222,8 +234,11 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
             {session.topic}
           </p>
           <p className="mt-0.5 text-xs text-text-muted first-letter:uppercase">
-            {formatFullDate(session.startTime, session.timezone)} · {session.durationMinutes} min ·{' '}
-            {session.registeredCount === 1 ? '1 inscrito' : `${session.registeredCount} inscritos`}
+            {t('claseEmbed.meta', {
+              date: formatFullDate(session.startTime, session.timezone),
+              duration: session.durationMinutes,
+              count: session.registeredCount,
+            })}
           </p>
         </div>
 
@@ -234,7 +249,7 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
               href={`/clase/${session.id}`}
               className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-border-strong hover:text-text"
             >
-              Ver la clase
+              {t('claseEmbed.viewClass')}
             </Link>
           ) : session.isRegistered ? (
             <>
@@ -251,7 +266,7 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
                   style={{ background: 'var(--didacta-growth)' }}
                 >
                   <Icon name="play" size={13} />
-                  {live ? 'Unirme ahora' : 'Unirme a la clase'}
+                  {live ? t('claseEmbed.joinNow') : t('claseEmbed.join')}
                 </a>
               ) : null}
               <Link
@@ -259,7 +274,7 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-(--didacta-growth)"
               >
                 <Icon name="check" size={13} />
-                Inscrito
+                {t('claseEmbed.registered')}
               </Link>
             </>
           ) : (
@@ -271,13 +286,13 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
                 className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 style={{ background: 'var(--didacta-trust)' }}
               >
-                {pending ? 'Inscribiendo…' : 'Inscribirme'}
+                {pending ? t('claseEmbed.registerPending') : t('claseEmbed.register')}
               </button>
               <Link
                 href={`/clase/${session.id}`}
                 className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-border-strong hover:text-text"
               >
-                Detalles
+                {t('claseEmbed.details')}
               </Link>
             </>
           )}

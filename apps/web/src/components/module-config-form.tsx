@@ -21,6 +21,7 @@
  * @see Notion: Schema completo de module.json
  */
 
+import { useTranslations } from 'next-intl';
 import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -108,6 +109,9 @@ export function ModuleConfigForm({
   onSave,
   onError,
 }: ModuleConfigFormProps) {
+  // `field.label`, `field.description` y `opt.label` vienen del `module.json`
+  // del módulo: son datos del paquete, no copy del producto. No se traducen.
+  const t = useTranslations('playersContenido');
   const [values, setValues] = useState<Record<string, unknown>>(() => {
     // Inicializar con defaults del schema + valores existentes
     const initial: Record<string, unknown> = {};
@@ -136,7 +140,7 @@ export function ModuleConfigForm({
       const errors: string[] = [];
       for (const [key, field] of Object.entries(schema)) {
         if (field.required && isEmpty(values[key])) {
-          errors.push(`${field.label} es requerido.`);
+          errors.push(t('moduleConfig.requiredField', { label: field.label }));
         }
       }
       if (errors.length > 0) {
@@ -148,7 +152,7 @@ export function ModuleConfigForm({
       setTouched(new Set());
     } catch (err) {
       setStatus('error');
-      const message = err instanceof Error ? err.message : 'Error guardando configuración.';
+      const message = err instanceof Error ? err.message : t('moduleConfig.saveError');
       setError(message);
       onError?.(err instanceof Error ? err : new Error(message));
     }
@@ -161,8 +165,8 @@ export function ModuleConfigForm({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Configuración</CardTitle>
-          <CardDescription>Este módulo no tiene campos configurables.</CardDescription>
+          <CardTitle>{t('moduleConfig.title')}</CardTitle>
+          <CardDescription>{t('moduleConfig.noFields')}</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -171,10 +175,8 @@ export function ModuleConfigForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Configuración de {moduleName}</CardTitle>
-        <CardDescription>
-          Ajusta los parámetros del módulo. Los campos marcados con * son obligatorios.
-        </CardDescription>
+        <CardTitle>{t('moduleConfig.titleFor', { moduleName })}</CardTitle>
+        <CardDescription>{t('moduleConfig.description')}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -198,13 +200,13 @@ export function ModuleConfigForm({
 
           {status === 'saved' && (
             <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-              Configuración guardada correctamente.
+              {t('moduleConfig.saved')}
             </div>
           )}
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button type="submit" disabled={status === 'saving' || !hasChanges}>
-              {status === 'saving' ? 'Guardando…' : 'Guardar configuración'}
+              {status === 'saving' ? t('moduleConfig.savePending') : t('moduleConfig.save')}
             </Button>
           </div>
         </form>
@@ -225,6 +227,7 @@ interface ConfigFieldProps {
 }
 
 function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
+  const t = useTranslations('playersContenido');
   const id = `config-${fieldKey}`;
   const isRequired = field.required ?? false;
   const label = `${field.label}${isRequired ? ' *' : ''}`;
@@ -257,7 +260,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
           <Label htmlFor={id}>{label}</Label>
           <Select value={String(value ?? '')} onValueChange={onChange}>
             <SelectTrigger id={id}>
-              <SelectValue placeholder={field.placeholder ?? 'Seleccionar...'} />
+              <SelectValue placeholder={field.placeholder ?? t('moduleConfig.selectPlaceholder')} />
             </SelectTrigger>
             <SelectContent>
               {field.options?.map((opt) => (
@@ -390,7 +393,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
             type="url"
             value={String(value ?? '')}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={field.placeholder ?? 'https://...'}
+            placeholder={field.placeholder ?? t('moduleConfig.urlPlaceholder')}
             required={isRequired}
           />
           {field.description && <p className="text-xs text-text-muted">{field.description}</p>}
@@ -406,7 +409,7 @@ function ConfigField({ fieldKey, field, value, onChange }: ConfigFieldProps) {
             type="email"
             value={String(value ?? '')}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={field.placeholder ?? 'email@ejemplo.com'}
+            placeholder={field.placeholder ?? t('moduleConfig.emailPlaceholder')}
             required={isRequired}
           />
           {field.description && <p className="text-xs text-text-muted">{field.description}</p>}

@@ -5,13 +5,14 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { Icon, type IconName } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useCourseCategories } from '@/lib/course-categories';
-import { formatDuration } from '@/lib/format';
+import { formatDuration } from '@/lib/i18n/format';
 import { richHtmlToPlainText } from '@/lib/sanitize-html';
 import { cn } from '@/lib/utils';
 
@@ -60,6 +61,8 @@ function pickGradient(seed: string): string {
  *    (Continuar / Certificado / Empezar).
  */
 export function CourseCard({ course, href }: Props) {
+  const t = useTranslations('playersContenido');
+  const tCommon = useTranslations('common');
   const target = href ?? (`/cursos/${course.slug}` as const);
   const status = resolveStatus(course);
   const cover = course.thumbnailUrl ? null : pickGradient(course.slug || course.id || course.title);
@@ -69,10 +72,10 @@ export function CourseCard({ course, href }: Props) {
   const ctaTone = status === 'completed' ? 'success' : 'info';
   const ctaLabel =
     status === 'completed'
-      ? 'Certificado'
+      ? t('courseCard.ctaCertificate')
       : progress != null && progress > 0
-        ? 'Continuar'
-        : 'Empezar';
+        ? t('courseCard.ctaContinue')
+        : t('courseCard.ctaStart');
   const ctaIcon = status === 'completed' ? 'award' : 'arrow-right';
 
   return (
@@ -124,10 +127,10 @@ export function CourseCard({ course, href }: Props) {
               dot
             >
               {status === 'completed'
-                ? 'Completado'
+                ? t('courseCard.statusCompleted')
                 : status === 'pending'
-                  ? 'Pendiente'
-                  : 'En curso'}
+                  ? t('courseCard.statusPending')
+                  : t('courseCard.statusInProgress')}
             </Badge>
             {course.category ? (
               curatedCategory ? (
@@ -165,7 +168,9 @@ export function CourseCard({ course, href }: Props) {
           <div className="mt-auto space-y-3">
             {course.estimatedMinutes ? (
               <div className="text-xs font-medium text-text-subtle tabular-nums">
-                ≈ {formatDuration(course.estimatedMinutes)}
+                {t('courseCard.estimated', {
+                  duration: formatDuration(course.estimatedMinutes, tCommon) ?? '',
+                })}
               </div>
             ) : null}
 
@@ -173,7 +178,7 @@ export function CourseCard({ course, href }: Props) {
               <Progress
                 value={progress}
                 tone={status === 'completed' ? 'success' : 'info'}
-                label={`Progreso ${Math.round(progress)}%`}
+                label={t('courseCard.progressLabel', { percent: Math.round(progress) })}
               />
             ) : null}
 
@@ -184,7 +189,9 @@ export function CourseCard({ course, href }: Props) {
                   status === 'completed' ? 'text-[var(--didacta-success-fg)]' : 'text-text',
                 )}
               >
-                {progress != null ? `${Math.round(progress)}% completado` : 'Sin matricular'}
+                {progress != null
+                  ? t('courseCard.percentCompleted', { percent: Math.round(progress) })
+                  : t('courseCard.notEnrolled')}
               </span>
               <span
                 className={cn(

@@ -29,15 +29,17 @@
  * mantiene su propio estado local (no propaga `pending` hacia arriba).
  */
 
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import { billingApi } from '@/modules/billing';
 
 interface BuyCourseButtonProps {
   courseId: string;
-  /** Texto del botón en estado idle. Default: "Comprar curso". */
+  /** Texto del botón en estado idle. Default: `buyCourse.label` del catálogo. */
   label?: string;
   /** Opción de compra elegida. Sin ella, el backend usa la destacada. */
   optionId?: string;
@@ -52,11 +54,12 @@ interface BuyCourseButtonProps {
 export function BuyCourseButton({
   courseId,
   optionId,
-  label = 'Comprar curso',
+  label,
   variant = 'primary',
   size = 'lg',
   className,
 }: BuyCourseButtonProps) {
+  const t = useTranslations('playersContenido');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +69,7 @@ export function BuyCourseButton({
     try {
       const token = authStorage.getAccessToken();
       if (!token) {
-        setError('Tu sesión expiró. Inicia sesión y vuelve a intentarlo.');
+        setError(t('buyCourse.sessionExpired'));
         setPending(false);
         return;
       }
@@ -76,7 +79,7 @@ export function BuyCourseButton({
       window.location.href = url;
       // No reseteamos `pending` adrede: la página se está descargando.
     } catch (e) {
-      setError(translateBillingError(e));
+      setError(translateBillingError(e, t));
       setPending(false);
     }
   }
@@ -91,7 +94,7 @@ export function BuyCourseButton({
         disabled={pending}
         aria-busy={pending}
       >
-        {pending ? 'Redirigiendo a Stripe…' : label}
+        {pending ? t('buyCourse.pending') : (label ?? t('buyCourse.label'))}
       </Button>
       {error ? (
         <p
@@ -112,21 +115,24 @@ export function BuyCourseButton({
  *  - BILLING_PRODUCT_INACTIVE      (409) → producto desactivado por el admin
  *  - BILLING_STRIPE_API_ERROR      (502) → Stripe falló (red, etc.)
  *  - BILLING_STRIPE_CONFIG_MISSING (503) → tenant sin Stripe configurado
+ *
+ * El copy de estos códigos es específico del alumno comprando un curso (no
+ * genérico del backend), por eso vive en `playersContenido` y no en `errors`.
  */
-function translateBillingError(e: unknown): string {
+function translateBillingError(e: unknown, t: TranslatorLike): string {
   if (e instanceof ApiHttpError) {
     switch (e.code) {
       case 'BILLING_PRODUCT_NOT_FOUND':
-        return 'Este curso aún no está disponible para la compra. Contacta a tu organización.';
+        return t('buyCourse.errors.BILLING_PRODUCT_NOT_FOUND');
       case 'BILLING_PRODUCT_INACTIVE':
-        return 'La venta de este curso está pausada en este momento.';
+        return t('buyCourse.errors.BILLING_PRODUCT_INACTIVE');
       case 'BILLING_STRIPE_API_ERROR':
-        return 'Hubo un problema con la pasarela de pago. Intenta de nuevo en unos minutos.';
+        return t('buyCourse.errors.BILLING_STRIPE_API_ERROR');
       case 'BILLING_STRIPE_CONFIG_MISSING':
-        return 'Los pagos no están habilitados en tu organización. Contacta al admin.';
+        return t('buyCourse.errors.BILLING_STRIPE_CONFIG_MISSING');
       default:
-        return e.message || 'No pudimos iniciar el pago. Intenta de nuevo.';
+        return e.message || t('buyCourse.errors.fallback');
     }
   }
-  return 'No pudimos iniciar el pago. Intenta de nuevo.';
+  return t('buyCourse.errors.fallback');
 }

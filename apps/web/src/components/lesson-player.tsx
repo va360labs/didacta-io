@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { QuizPlayer } from '@/components/quiz-player';
 import { VideoEmbed } from '@/components/video-embed';
@@ -12,6 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
 import type { CourseLesson } from '@/lib/courses';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { labelOr } from '@/lib/i18n/labels';
 import { learningApi } from '@/lib/learning';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { parseBunny } from '@/lib/video';
@@ -58,12 +61,16 @@ interface Props {
 // sigue contabilizando con granularidad de 1 min, imperceptible para el alumno).
 const TICK_SEC = 60;
 
-const LESSON_TYPE_META: Record<string, { label: string; icon: string }> = {
-  VIDEO: { label: 'Video', icon: '▶' },
-  HTML: { label: 'Lectura', icon: '📖' },
-  PDF: { label: 'Documento PDF', icon: '📄' },
-  TEXT: { label: 'Texto', icon: '✍' },
-  QUIZ: { label: 'Quiz', icon: '✓' },
+/**
+ * Iconos por tipo de lección. Decoración pura (`aria-hidden`), no copy: las
+ * etiquetas visibles viven en el catálogo (`playersContenido.lesson.type.*`).
+ */
+const LESSON_TYPE_ICON: Record<string, string> = {
+  VIDEO: '▶',
+  HTML: '📖',
+  PDF: '📄',
+  TEXT: '✍',
+  QUIZ: '✓',
 };
 
 /**
@@ -85,6 +92,8 @@ export function LessonPlayer({
   onPosition,
   preview = false,
 }: Props) {
+  const t = useTranslations('playersContenido');
+  const tErrors = useTranslations('errors');
   const [completed, setCompleted] = useState(initialCompleted);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -114,13 +123,11 @@ export function LessonPlayer({
         if (typeof result.progressPercent === 'number') onProgress?.(result.progressPercent);
       } catch (e) {
         setError(
-          e instanceof ApiHttpError
-            ? e.message
-            : 'No pudimos guardar tu progreso. Tus minutos quedan registrados localmente.',
+          e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('lesson.progressErrorBody'),
         );
       }
     },
-    [enrollmentId, lesson.id, onProgress, preview],
+    [enrollmentId, lesson.id, onProgress, preview, t, tErrors],
   );
 
   useEffect(() => {
@@ -168,22 +175,25 @@ export function LessonPlayer({
   // en backend cuando el alumno aprueba (assessments.attempt.passed). En
   // preview no se puede completar (no hay matrícula).
   const showManualCompleteButton = lesson.type !== 'QUIZ' && !preview;
-  const meta = LESSON_TYPE_META[lesson.type] ?? { label: lesson.type, icon: '·' };
+  // El tipo llega de la API: uno desconocido degrada al valor crudo, nunca a
+  // una key del catálogo.
+  const typeLabel = labelOr(t, `lesson.type.${lesson.type}`, lesson.type);
+  const typeIcon = LESSON_TYPE_ICON[lesson.type] ?? '·';
 
   return (
     <article className="overflow-hidden rounded-card border border-border bg-surface shadow-sm">
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-surface-2 px-6 py-4">
         <div className="space-y-1.5">
           <Badge variant="outline" className="gap-1.5">
-            <span aria-hidden="true">{meta.icon}</span>
-            {meta.label}
+            <span aria-hidden="true">{typeIcon}</span>
+            {typeLabel}
           </Badge>
           <h2 className="font-display text-2xl font-bold tracking-tight text-text">
             {lesson.title}
           </h2>
           {lesson.durationMinutes ? (
             <p className="text-sm text-text-subtle tabular-nums">
-              ⏱ {lesson.durationMinutes} min estimados
+              {t('lesson.durationEstimated', { minutes: lesson.durationMinutes })}
             </p>
           ) : null}
         </div>
@@ -191,11 +201,11 @@ export function LessonPlayer({
           {completed ? (
             <Badge variant="success" className="gap-1.5">
               <span aria-hidden="true">✓</span>
-              Completada
+              {t('lesson.completed')}
             </Badge>
           ) : showManualCompleteButton ? (
             <Button onClick={markCompleted} disabled={pending} variant="success">
-              {pending ? 'Guardando…' : 'Marcar como completada'}
+              {pending ? t('lesson.markCompletedPending') : t('lesson.markCompleted')}
             </Button>
           ) : null}
         </div>
@@ -218,7 +228,7 @@ export function LessonPlayer({
             role="alert"
             className="mt-4 rounded-lg border border-warning-200 bg-warning-50 p-3 text-sm text-warning-700"
           >
-            <p className="font-semibold">No se sincronizó tu progreso</p>
+            <p className="font-semibold">{t('lesson.progressErrorTitle')}</p>
             <p className="mt-0.5">{error}</p>
           </div>
         ) : null}
@@ -245,11 +255,12 @@ function LessonContent({
   watchEnabled: boolean;
   preview?: boolean;
 }) {
+  const t = useTranslations('playersContenido');
   const content = lesson.content;
 
   if (lesson.type === 'VIDEO') {
     const url = typeof content['videoUrl'] === 'string' ? content['videoUrl'] : '';
-    if (!url) return <Empty hint="Falta el video. Pídele al formador que lo cargue." />;
+    if (!url) return <Empty hint={t('lesson.emptyVideo')} />;
 
     // VideoEmbed resuelve YouTube / Bunny Stream / fichero directo, y debajo
     // del vídeo pinta los recursos: las líneas `MM:SS - Texto` se vuelven
@@ -281,7 +292,7 @@ function LessonContent({
 
   if (lesson.type === 'HTML') {
     const html = typeof content['html'] === 'string' ? content['html'] : '';
-    if (!html) return <Empty hint="Esta lectura está vacía." />;
+    if (!html) return <Empty hint={t('lesson.emptyHtml')} />;
     // Se renderiza CRUDO (sin sanitizar) a propósito: las lecciones HTML legacy
     // llevan el vídeo embebido como `<iframe>`, que la whitelist de DOMPurify
     // eliminaría. El memo evita que el iframe se recree en cada reporte de
@@ -292,7 +303,7 @@ function LessonContent({
 
   if (lesson.type === 'PDF') {
     const url = typeof content['pdfUrl'] === 'string' ? content['pdfUrl'] : '';
-    if (!url) return <Empty hint="Falta el PDF. Pídele al formador que lo suba." />;
+    if (!url) return <Empty hint={t('lesson.emptyPdf')} />;
     return (
       <iframe
         src={url}
@@ -304,7 +315,7 @@ function LessonContent({
 
   if (lesson.type === 'TEXT') {
     const text = typeof content['text'] === 'string' ? content['text'] : '';
-    if (!text) return <Empty hint="Esta lección de texto está vacía." />;
+    if (!text) return <Empty hint={t('lesson.emptyText')} />;
     return (
       <div className="prose prose-slate max-w-none">
         <p className="whitespace-pre-wrap leading-relaxed text-text">{text}</p>
@@ -314,15 +325,11 @@ function LessonContent({
 
   if (lesson.type === 'QUIZ') {
     if (preview || !enrollmentId) {
-      return (
-        <Empty hint="Vista previa: los cuestionarios se resuelven al matricularse en el curso." />
-      );
+      return <Empty hint={t('lesson.previewQuiz')} />;
     }
     const quizId = typeof content['quizId'] === 'string' ? content['quizId'] : '';
     if (!quizId) {
-      return (
-        <Empty hint="Esta lección está marcada como Quiz pero el formador aún no vinculó las preguntas." />
-      );
+      return <Empty hint={t('lesson.emptyQuiz')} />;
     }
     return (
       <QuizPlayer
@@ -336,17 +343,17 @@ function LessonContent({
 
   if (lesson.type === 'SCORM') {
     if (preview) {
-      return (
-        <Empty hint="Vista previa: el contenido SCORM se ejecuta al matricularse en el curso." />
-      );
+      return <Empty hint={t('lesson.previewScorm')} />;
     }
     return <ScormFrame lessonId={lesson.id} title={lesson.title} />;
   }
 
-  return <Empty hint={`Tipo de lección "${lesson.type}" no soportado todavía.`} />;
+  return <Empty hint={t('lesson.unsupportedType', { type: lesson.type })} />;
 }
 
 function ScormFrame({ lessonId, title }: { lessonId: string; title: string }) {
+  const t = useTranslations('playersContenido');
+  const tErrors = useTranslations('errors');
   const [url, setUrl] = useState<string | null>(null);
   const [initialCmi, setInitialCmi] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -396,9 +403,7 @@ function ScormFrame({ lessonId, title }: { lessonId: string; title: string }) {
       } catch (e) {
         if (cancelled) return;
         setError(
-          e instanceof ApiHttpError
-            ? e.message
-            : 'No pudimos cargar el paquete SCORM. Pídele al formador que lo suba.',
+          e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('lesson.scormLoadError'),
         );
       }
     })();
@@ -408,7 +413,7 @@ function ScormFrame({ lessonId, title }: { lessonId: string; title: string }) {
       if (autoCommitTimer) clearInterval(autoCommitTimer);
       bridge?.detach();
     };
-  }, [lessonId]);
+  }, [lessonId, t, tErrors]);
 
   if (error) return <Empty hint={error} />;
   if (!url || !initialCmi) return <div className="skeleton h-[72dvh] w-full rounded-lg" />;
