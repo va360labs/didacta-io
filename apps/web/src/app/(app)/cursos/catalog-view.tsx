@@ -8,6 +8,7 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { CourseCard, type CourseCardData } from '@/components/course-card';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,15 +20,20 @@ import {
   type CatalogEnrollmentInfo as EnrollmentInfo,
 } from '@/lib/catalog-sections';
 import { coursesApi, type Course } from '@/lib/courses';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { labelOr } from '@/lib/i18n/labels';
 import { learningApi, type Enrollment } from '@/lib/learning';
 import { useTenantDisplayName } from '@/lib/tenant-context';
 
 const ALL_CATEGORIES = '__all__';
+const ALL_LANGUAGES = '__all__';
 
 export function CatalogView() {
   const router = useRouter();
   const params = useSearchParams();
   const tenantName = useTenantDisplayName();
+  const t = useTranslations('alumnoAprendizaje');
+  const tErrors = useTranslations('errors');
 
   const initialQ = params.get('q') ?? '';
   const initialCategory = params.get('category') ?? ALL_CATEGORIES;
@@ -49,10 +55,14 @@ export function CatalogView() {
   const [searchInput, setSearchInput] = useState(initialQ);
   const [debouncedQ, setDebouncedQ] = useState(initialQ);
   const [category, setCategory] = useState(initialCategory);
+  // Filtro por idioma del curso: puramente client-side (el idioma ya viene en
+  // el listado), sin sincronizar con la URL. Solo se ofrece cuando el catálogo
+  // cargado tiene más de un idioma distinto.
+  const [language, setLanguage] = useState(ALL_LANGUAGES);
 
   useEffect(() => {
-    const t = window.setTimeout(() => setDebouncedQ(searchInput.trim()), 300);
-    return () => window.clearTimeout(t);
+    const timer = window.setTimeout(() => setDebouncedQ(searchInput.trim()), 300);
+    return () => window.clearTimeout(timer);
   }, [searchInput]);
 
   // Sincroniza filtros activos con la URL para que el estado sea
@@ -101,15 +111,14 @@ export function CatalogView() {
       })
       .catch((e) => {
         if (aborted) return;
-        setError(
-          e instanceof ApiHttpError
-            ? e.message
-            : 'No pudimos cargar el catálogo. Prueba refrescar la página.',
-        );
+        setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('catalogLoadError'));
       });
     return () => {
       aborted = true;
     };
+    // Deps limitadas a las entradas reales del fetch: `t`/`tErrors` solo
+    // componen el mensaje de error, no deciden qué se pide.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQ, category]);
 
   // Las matriculaciones del usuario se cargan en paralelo solo en el
@@ -142,13 +151,31 @@ export function CatalogView() {
   }, []);
 
   const hasActiveFilters = useMemo(
-    () => debouncedQ.length > 0 || (category !== '' && category !== ALL_CATEGORIES),
-    [debouncedQ, category],
+    () =>
+      debouncedQ.length > 0 ||
+      (category !== '' && category !== ALL_CATEGORIES) ||
+      language !== ALL_LANGUAGES,
+    [debouncedQ, category, language],
   );
 
+  // Idiomas distintos presentes en el catálogo cargado (para el filtro).
+  const languages = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of courses ?? []) {
+      if (c.language) set.add(c.language);
+    }
+    return [...set].sort();
+  }, [courses]);
+
+  // Filtro por idioma aplicado en cliente sobre el listado ya cargado.
+  const visibleCourses = useMemo(() => {
+    const list = courses ?? [];
+    return language === ALL_LANGUAGES ? list : list.filter((c) => c.language === language);
+  }, [courses, language]);
+
   const { mine, others } = useMemo(
-    () => splitCoursesBySection(courses ?? [], enrollments),
-    [courses, enrollments],
+    () => splitCoursesBySection(visibleCourses, enrollments),
+    [visibleCourses, enrollments],
   );
 
   function toCardData(c: Course): CourseCardData {
@@ -171,6 +198,7 @@ export function CatalogView() {
     setSearchInput('');
     setDebouncedQ('');
     setCategory(ALL_CATEGORIES);
+    setLanguage(ALL_LANGUAGES);
   }
 
   return (
@@ -180,12 +208,9 @@ export function CatalogView() {
           className="font-display text-2xl font-bold tracking-tight text-text"
           style={{ letterSpacing: '-0.02em' }}
         >
-          Catálogo de cursos
+          {t('catalogTitle')}
         </h1>
-        <p className="mt-2 max-w-2xl text-text-muted">
-          Explora los cursos publicados de tu organización. Haz clic en uno para ver el detalle y
-          matricularte.
-        </p>
+        <p className="mt-2 max-w-2xl text-text-muted">{t('catalogSubtitle')}</p>
       </header>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -194,17 +219,17 @@ export function CatalogView() {
             type="search"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Buscar por título o descripción..."
-            aria-label="Buscar cursos"
+            placeholder={t('searchPlaceholder')}
+            aria-label={t('searchAria')}
           />
         </div>
         <div className="sm:w-64">
           <Select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            aria-label="Filtrar por temática"
+            aria-label={t('categoryFilterAria')}
           >
-            <option value={ALL_CATEGORIES}>Todas las temáticas</option>
+            <option value={ALL_CATEGORIES}>{t('allCategories')}</option>
             {categories.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -212,9 +237,28 @@ export function CatalogView() {
             ))}
           </Select>
         </div>
+        {/* Filtro por idioma del curso: aparece solo cuando el catálogo tiene
+            más de un idioma (o cuando ya hay uno seleccionado, para poder
+            deshacerlo aunque el listado filtrado quede monolingüe). */}
+        {languages.length > 1 || language !== ALL_LANGUAGES ? (
+          <div className="sm:w-44">
+            <Select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              aria-label={t('languageFilterAria')}
+            >
+              <option value={ALL_LANGUAGES}>{t('allLanguages')}</option>
+              {languages.map((lang) => (
+                <option key={lang} value={lang}>
+                  {labelOr(t, `courseLanguage.${lang}`, lang)}
+                </option>
+              ))}
+            </Select>
+          </div>
+        ) : null}
         {hasActiveFilters ? (
           <Button variant="ghost" type="button" onClick={clearFilters}>
-            Limpiar
+            {t('clear')}
           </Button>
         ) : null}
       </div>
@@ -235,22 +279,18 @@ export function CatalogView() {
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
             <h3 className="font-display text-2xl font-semibold">
-              {hasActiveFilters
-                ? 'No encontramos cursos con esos filtros'
-                : 'Aún no hay cursos publicados'}
+              {hasActiveFilters ? t('noCoursesFiltered') : t('noCoursesYet')}
             </h3>
             <p className="max-w-md text-text-muted">
-              {hasActiveFilters
-                ? 'Prueba con otra búsqueda o limpia los filtros para ver todo el catálogo.'
-                : 'Cuando un formador publique el primer curso, aparecerá acá. Si eres formador, puedes empezar a crear uno.'}
+              {hasActiveFilters ? t('noCoursesFilteredHint') : t('noCoursesYetHint')}
             </p>
             {hasActiveFilters ? (
               <Button variant="ghost" type="button" onClick={clearFilters} className="mt-2">
-                Limpiar filtros
+                {t('clearFilters')}
               </Button>
             ) : (
               <Button asChild className="mt-2">
-                <Link href="/formador/cursos/nuevo">Crear un curso</Link>
+                <Link href="/formador/cursos/nuevo">{t('createCourse')}</Link>
               </Button>
             )}
           </CardContent>
@@ -258,13 +298,9 @@ export function CatalogView() {
       ) : (
         <div className="space-y-10">
           <CatalogSection
-            title="Mis cursos"
+            title={t('myCourses')}
             count={mine.length}
-            emptyText={
-              hasActiveFilters
-                ? 'Ninguno de tus cursos coincide con estos filtros.'
-                : 'Aún no estás matriculado en ningún curso. Elige uno de abajo para empezar.'
-            }
+            emptyText={hasActiveFilters ? t('myCoursesEmptyFiltered') : t('myCoursesEmpty')}
           >
             {mine.map((c) => (
               <CourseCard key={c.id} course={toCardData(c)} />
@@ -272,13 +308,9 @@ export function CatalogView() {
           </CatalogSection>
 
           <CatalogSection
-            title={`Otros cursos de ${tenantName}`}
+            title={t('otherCourses', { name: tenantName })}
             count={others.length}
-            emptyText={
-              hasActiveFilters
-                ? 'No hay más cursos que coincidan con estos filtros.'
-                : 'Ya estás matriculado en todos los cursos disponibles.'
-            }
+            emptyText={hasActiveFilters ? t('otherCoursesEmptyFiltered') : t('otherCoursesEmpty')}
           >
             {others.map((c) => (
               <CourseCard key={c.id} course={toCardData(c)} />

@@ -7,6 +7,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   buildGrid,
   dateKeyOf,
@@ -17,23 +18,8 @@ import {
   phaseOf,
   type CalendarItem,
 } from '@/lib/agenda';
+import { formatDate, formatTime } from '@/lib/i18n/format';
 import { EventosView } from './eventos-view';
-
-const MONTH_NAMES = [
-  'Enero',
-  'Febrero',
-  'Marzo',
-  'Abril',
-  'Mayo',
-  'Junio',
-  'Julio',
-  'Agosto',
-  'Septiembre',
-  'Octubre',
-  'Noviembre',
-  'Diciembre',
-];
-const DAY_NAMES = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
 /** Ventana de la agenda: medio año atrás y un año hacia delante. */
 const AGENDA_MONTHS_BACK = 6;
@@ -43,21 +29,35 @@ const TICK_MS = 60_000;
 /** Cuántas citas pasadas se pintan antes de cortar (evita listas enormes). */
 const PAST_VISIBLE = 25;
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-}
+const HHMM: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' };
+
+/**
+ * Semilla para las cabeceras de la rejilla: lunes 1 de enero de 2024 en UTC.
+ * Va en UTC (y se formatea en UTC) a propósito — con una fecha en hora local
+ * y una timezone de perfil distinta a la del navegador, el nombre del día se
+ * desplazaría y la rejilla saldría empezando en el día equivocado.
+ */
+const WEEK_SEED_UTC = Date.UTC(2024, 0, 1);
+const DAY_MS = 86_400_000;
 
 function formatDayLong(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-ES', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
+  return formatDate(iso, { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
+/**
+ * Valor interno de la vista activa. NO es copy: los rótulos de los botones
+ * salen del catálogo (`viewMonth`/`viewAgenda`/`viewEvents`).
+ */
 type View = 'Mes' | 'Agenda' | 'Eventos';
 
+const VIEW_LABEL_KEY = {
+  Mes: 'viewMonth',
+  Agenda: 'viewAgenda',
+  Eventos: 'viewEvents',
+} as const;
+
 export default function CalendarioPage() {
+  const t = useTranslations('alumnoAprendizaje');
   const today = new Date();
   const [view, setView] = useState<View>('Mes');
 
@@ -181,11 +181,18 @@ export default function CalendarioPage() {
   const todayKey = dateKeyOf(today);
   const upcoming = agenda.curso.concat(agenda.proximas).slice(0, 6);
 
+  // Cabeceras de la rejilla derivadas del locale activo (L M X J V S D en
+  // es-ES). Sin memoizar: el locale se resuelve en cada render y un `useMemo`
+  // vacío se quedaría con el del primer render.
+  const dayNames = Array.from({ length: 7 }, (_, i) =>
+    formatDate(WEEK_SEED_UTC + i * DAY_MS, { weekday: 'narrow', timeZone: 'UTC' }),
+  );
+
   return (
     <div className="flex gap-6">
       <div className="min-w-0 flex-1 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="font-display text-2xl font-bold text-text">Agenda · Calendario</h1>
+          <h1 className="font-display text-2xl font-bold text-text">{t('calendarTitle')}</h1>
           <div className="flex items-center gap-2">
             {view === 'Mes' && !isCurrentMonth ? (
               <button
@@ -193,7 +200,7 @@ export default function CalendarioPage() {
                 onClick={goToday}
                 className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text-muted hover:border-border-strong hover:text-text"
               >
-                Hoy
+                {t('today')}
               </button>
             ) : null}
             <div className="flex rounded-lg border border-border">
@@ -208,7 +215,7 @@ export default function CalendarioPage() {
                       : 'text-text-muted hover:text-text'
                   }`}
                 >
-                  {v}
+                  {t(VIEW_LABEL_KEY[v])}
                 </button>
               ))}
             </div>
@@ -221,18 +228,27 @@ export default function CalendarioPage() {
               <button
                 type="button"
                 onClick={prevMonth}
-                aria-label="Mes anterior"
+                aria-label={t('prevMonth')}
                 className="rounded-lg border border-border p-1.5 text-text-muted hover:border-border-strong hover:text-text"
               >
                 ←
               </button>
-              <h2 className="font-display text-base font-bold text-text">
-                {MONTH_NAMES[month]} {year}
+              {/* `first-letter:uppercase`: en español el nombre del mes que
+                  devuelve Intl va en minúscula ("agosto de 2026"). En UTC
+                  porque es la etiqueta de un mes de la rejilla, no un
+                  instante: con la timezone del perfil, el día 1 a medianoche
+                  podría caer en el mes anterior. */}
+              <h2 className="font-display text-base font-bold text-text first-letter:uppercase">
+                {formatDate(Date.UTC(year, month, 1), {
+                  month: 'long',
+                  year: 'numeric',
+                  timeZone: 'UTC',
+                })}
               </h2>
               <button
                 type="button"
                 onClick={nextMonth}
-                aria-label="Mes siguiente"
+                aria-label={t('nextMonth')}
                 className="rounded-lg border border-border p-1.5 text-text-muted hover:border-border-strong hover:text-text"
               >
                 →
@@ -240,9 +256,11 @@ export default function CalendarioPage() {
             </div>
 
             <div className="grid grid-cols-7 border-b border-border">
-              {DAY_NAMES.map((d) => (
+              {/* Key por índice: en inglés los nombres estrechos se repiten
+                  (M T W T F S S) y no sirven como clave. */}
+              {dayNames.map((d, i) => (
                 <div
-                  key={d}
+                  key={i}
                   className="py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-text-muted"
                 >
                   {d}
@@ -292,7 +310,7 @@ export default function CalendarioPage() {
                           title={item.title}
                         >
                           {phase === 'curso' ? '● ' : ''}
-                          {formatTime(item.startAt)} {item.title}
+                          {formatTime(item.startAt, HHMM)} {item.title}
                         </div>
                       );
                       return item.href ? (
@@ -305,7 +323,7 @@ export default function CalendarioPage() {
                     })}
                     {dayItems.length > 2 && (
                       <div className="mt-0.5 text-[9px] text-text-muted">
-                        +{dayItems.length - 2} más
+                        {t('moreItems', { count: dayItems.length - 2 })}
                       </div>
                     )}
                   </div>
@@ -324,31 +342,27 @@ export default function CalendarioPage() {
               agenda.proximas.length === 0 &&
               agenda.pasadas.length === 0 ? (
               <div className="rounded-xl border border-border bg-surface p-12 text-center">
-                <p className="text-base font-semibold text-text">
-                  No hay eventos ni clases programados
-                </p>
-                <p className="mt-1 text-sm text-text-muted">
-                  Los próximos eventos y clases en directo aparecerán aquí cuando estén disponibles.
-                </p>
+                <p className="text-base font-semibold text-text">{t('agendaEmptyTitle')}</p>
+                <p className="mt-1 text-sm text-text-muted">{t('agendaEmptyHint')}</p>
               </div>
             ) : (
               <>
                 <AgendaSection
-                  title="En curso"
+                  title={t('inProgress')}
                   items={agenda.curso}
                   now={now}
                   onPick={goToItem}
                   emptyHint={null}
                 />
                 <AgendaSection
-                  title="Próximas"
+                  title={t('upcomingSection')}
                   items={agenda.proximas}
                   now={now}
                   onPick={goToItem}
-                  emptyHint="No hay nada programado por delante."
+                  emptyHint={t('noUpcoming')}
                 />
                 <AgendaSection
-                  title="Pasadas"
+                  title={t('pastSection')}
                   items={agenda.pasadas}
                   now={now}
                   onPick={goToItem}
@@ -356,8 +370,11 @@ export default function CalendarioPage() {
                 />
                 {agenda.pasadasOcultas > 0 ? (
                   <p className="text-xs text-text-muted">
-                    Se muestran las {PAST_VISIBLE} más recientes de los últimos {AGENDA_MONTHS_BACK}{' '}
-                    meses ({agenda.pasadasOcultas} más antiguas ocultas).
+                    {t('pastHidden', {
+                      visible: PAST_VISIBLE,
+                      months: AGENDA_MONTHS_BACK,
+                      hidden: agenda.pasadasOcultas,
+                    })}
                   </p>
                 ) : null}
               </>
@@ -371,12 +388,12 @@ export default function CalendarioPage() {
       <aside className="hidden w-60 shrink-0 space-y-4 xl:block">
         <div className="rounded-xl border border-border bg-surface p-4">
           <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.08em] text-text-muted">
-            Próximas citas
+            {t('upcomingAppointments')}
           </p>
           {agendaItems === null ? (
             <div className="skeleton h-16 w-full" />
           ) : upcoming.length === 0 ? (
-            <p className="text-sm text-text-muted">Sin eventos ni clases próximos.</p>
+            <p className="text-sm text-text-muted">{t('noUpcomingShort')}</p>
           ) : (
             <ul className="space-y-2">
               {upcoming.map((item) => {
@@ -394,11 +411,14 @@ export default function CalendarioPage() {
                       </p>
                       <p className="text-[10px] text-text-muted">
                         {live
-                          ? 'En curso ahora'
-                          : `${new Date(item.startAt).toLocaleDateString('es-ES', {
-                              day: 'numeric',
-                              month: 'short',
-                            })} · ${formatTime(item.startAt)}`}
+                          ? t('inProgressNow')
+                          : t('dateAtTime', {
+                              date: formatDate(item.startAt, {
+                                day: 'numeric',
+                                month: 'short',
+                              }),
+                              time: formatTime(item.startAt, HHMM),
+                            })}
                       </p>
                     </div>
                   </>
@@ -443,6 +463,7 @@ function AgendaSection({
   /** Si es null y no hay items, la sección no se renderiza. */
   emptyHint: string | null;
 }) {
+  const t = useTranslations('alumnoAprendizaje');
   if (items.length === 0 && !emptyHint) return null;
 
   return (
@@ -466,10 +487,10 @@ function AgendaSection({
               <div className="flex items-center gap-4 px-5 py-4">
                 <div className="grid w-12 shrink-0 place-items-center text-center">
                   <span className="text-[11px] font-semibold uppercase text-text-muted">
-                    {MONTH_NAMES[new Date(item.startAt).getMonth()]?.slice(0, 3)}
+                    {formatDate(item.startAt, { month: 'short' })}
                   </span>
                   <span className="text-xl font-bold leading-none text-text">
-                    {new Date(item.startAt).getDate()}
+                    {formatDate(item.startAt, { day: 'numeric' })}
                   </span>
                 </div>
                 <div className="min-w-0 flex-1">
@@ -478,14 +499,14 @@ function AgendaSection({
                       mayúscula la primera letra de la frase ("lunes, 3 de
                       agosto"), no la de cada palabra. */}
                   <p className="text-xs text-text-muted first-letter:uppercase">
-                    {formatDayLong(item.startAt)} · {formatTime(item.startAt)}–
-                    {formatTime(item.endAt)}
+                    {formatDayLong(item.startAt)} · {formatTime(item.startAt, HHMM)}–
+                    {formatTime(item.endAt, HHMM)}
                     {item.location ? ` · ${item.location}` : ''}
                   </p>
                 </div>
                 {phase === 'curso' ? (
                   <span className="shrink-0 rounded-full bg-(--didacta-growth)/10 px-2 py-0.5 text-[10px] font-semibold text-(--didacta-growth)">
-                    En curso
+                    {t('inProgress')}
                   </span>
                 ) : null}
                 <span
@@ -495,11 +516,11 @@ function AgendaSection({
                       : 'bg-(--didacta-trust)/10 text-(--didacta-trust)'
                   }`}
                 >
-                  {item.kind === 'clase' ? 'Clase en directo' : 'Evento'}
+                  {item.kind === 'clase' ? t('liveClassChip') : t('eventChip')}
                 </span>
                 {item.isRegistered ? (
                   <span className="shrink-0 rounded-full bg-(--didacta-growth)/10 px-2 py-0.5 text-[10px] font-semibold text-(--didacta-growth)">
-                    Inscrito
+                    {t('registered')}
                   </span>
                 ) : null}
               </div>

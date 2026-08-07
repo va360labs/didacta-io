@@ -18,12 +18,15 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
 import {
   AddToCalendarDialog,
   zoomLiveApi,
@@ -41,13 +44,6 @@ const STATUS_VARIANT: Record<SessionStatus, 'success' | 'warning' | 'muted' | 'd
   CANCELLED: 'danger',
 };
 
-const STATUS_LABEL: Record<SessionStatus, string> = {
-  SCHEDULED: 'Programada',
-  STARTED: 'En vivo',
-  ENDED: 'Finalizada',
-  CANCELLED: 'Cancelada',
-};
-
 const STAFF_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
 
 /**
@@ -56,7 +52,7 @@ const STAFF_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
  * La hora del formador va en el tooltip (`hostTime`).
  */
 function formatStartLocal(iso: string): string {
-  return new Date(iso).toLocaleString('es-ES', {
+  return formatDateTime(iso, {
     weekday: 'long',
     day: '2-digit',
     month: 'long',
@@ -68,7 +64,7 @@ function formatStartLocal(iso: string): string {
 
 function formatStartHost(iso: string, tz: string): string {
   try {
-    return new Date(iso).toLocaleString('es-ES', {
+    return formatDateTime(iso, {
       timeZone: tz,
       day: '2-digit',
       month: 'short',
@@ -84,6 +80,8 @@ function formatStartHost(iso: string, tz: string): string {
 export default function ClasePage() {
   const params = useParams<{ id: string }>();
   const sessionId = params.id;
+  const t = useTranslations('alumnoAprendizaje');
+  const tErrors = useTranslations('errors');
 
   const [session, setSession] = useState<ZoomSession | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -114,11 +112,15 @@ export default function ClasePage() {
       .catch((e) => {
         if (cancelled) return;
         if (e instanceof ApiHttpError && e.status === 404) setNotFound(true);
-        else setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar la clase.');
+        else
+          setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('claseLoadError'));
       });
     return () => {
       cancelled = true;
     };
+    // Deps limitadas a las entradas reales del fetch: `t`/`tErrors` solo
+    // componen el mensaje de error, no deciden qué se pide.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   async function handleRegister() {
@@ -130,7 +132,7 @@ export default function ClasePage() {
       setJustRegistered(true);
       setCalendarOpen(true);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos completar la inscripción.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('registerError'));
     } finally {
       setPending(false);
     }
@@ -138,14 +140,14 @@ export default function ClasePage() {
 
   async function handleUnregister() {
     if (!session) return;
-    if (!confirm('¿Cancelar tu inscripción a esta clase?')) return;
+    if (!confirm(t('unregisterConfirm'))) return;
     setPending(true);
     setError(null);
     try {
       await zoomLiveApi.unregister(session.id);
       setSession(await zoomLiveApi.get(session.id));
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cancelar la inscripción.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('unregisterError'));
     } finally {
       setPending(false);
     }
@@ -178,12 +180,10 @@ export default function ClasePage() {
       <Card>
         <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
           <Icon name="alert" size={40} />
-          <h1 className="font-display text-2xl font-semibold">Clase no encontrada</h1>
-          <p className="max-w-md text-text-muted">
-            El enlace no corresponde a ninguna clase de esta comunidad, o la clase fue eliminada.
-          </p>
+          <h1 className="font-display text-2xl font-semibold">{t('claseNotFound')}</h1>
+          <p className="max-w-md text-text-muted">{t('claseNotFoundHint')}</p>
           <Button asChild variant="secondary">
-            <Link href="/calendario">Ver calendario</Link>
+            <Link href="/calendario">{t('viewCalendar')}</Link>
           </Button>
         </CardContent>
       </Card>
@@ -216,12 +216,12 @@ export default function ClasePage() {
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={STATUS_VARIANT[session.status]} dot>
-                  {STATUS_LABEL[session.status]}
+                  {t(`sessionStatus.${session.status}`)}
                 </Badge>
                 {session.isRegistered ? (
                   <Badge variant="success">
                     <Icon name="check" size={12} />
-                    Inscrito
+                    {t('registered')}
                   </Badge>
                 ) : null}
               </div>
@@ -230,24 +230,24 @@ export default function ClasePage() {
               </h1>
               <p
                 className="text-sm text-text-muted"
-                title={`Hora del formador: ${formatStartHost(session.startTime, session.timezone)}`}
+                title={t('trainerTimeTooltip', {
+                  time: formatStartHost(session.startTime, session.timezone),
+                })}
               >
                 <Icon name="calendar" size={14} className="mr-1 inline-block align-[-2px]" />
                 <span className="capitalize">{formatStartLocal(session.startTime)}</span>
                 {' · '}
                 <Icon name="clock" size={14} className="mr-1 inline-block align-[-2px]" />
-                {session.durationMinutes} min
+                {t('minutesShort', { minutes: session.durationMinutes })}
               </p>
               <p className="text-xs text-text-subtle">
                 <Icon name="users" size={13} className="mr-1 inline-block align-[-2px]" />
-                {session.registeredCount === 1
-                  ? '1 miembro inscrito'
-                  : `${session.registeredCount} miembros inscritos`}
+                {t('registeredMembers', { count: session.registeredCount })}
               </p>
             </div>
             <Button type="button" size="sm" variant="ghost" onClick={handleCopyLink}>
               <Icon name="link" size={14} />
-              {copied ? 'Copiado' : 'Copiar enlace'}
+              {copied ? t('copied') : t('copyLink')}
             </Button>
           </div>
 
@@ -266,7 +266,7 @@ export default function ClasePage() {
 
           {session.status === 'CANCELLED' ? (
             <div className="rounded-lg border border-danger-100 bg-danger-50 p-4 text-sm text-danger-700">
-              Esta clase fue cancelada. Si se reprograma, aparecerá de nuevo en el calendario.
+              {t('claseCancelled')}
             </div>
           ) : null}
 
@@ -274,7 +274,7 @@ export default function ClasePage() {
             {isOpen && !session.isRegistered ? (
               <Button type="button" onClick={handleRegister} disabled={pending}>
                 <Icon name="check" size={15} />
-                {pending ? 'Inscribiendo…' : 'Inscribirme'}
+                {pending ? t('registering') : t('register')}
               </Button>
             ) : null}
 
@@ -282,7 +282,7 @@ export default function ClasePage() {
               <Button asChild>
                 <Link href={session.joinUrl as never} target="_blank" onClick={handleJoinClick}>
                   <Icon name="video" size={15} />
-                  {session.status === 'STARTED' ? 'Unirme ahora' : 'Unirme a la clase'}
+                  {session.status === 'STARTED' ? t('joinNow') : t('joinClase')}
                 </Link>
               </Button>
             ) : null}
@@ -297,7 +297,7 @@ export default function ClasePage() {
                 }}
               >
                 <Icon name="calendar" size={15} />
-                Añadir al calendario
+                {t('addToCalendar')}
               </Button>
             ) : null}
 
@@ -305,7 +305,7 @@ export default function ClasePage() {
               <Button asChild variant="secondary">
                 <Link href={session.startUrl as never} target="_blank">
                   <Icon name="play" size={14} />
-                  Iniciar (host)
+                  {t('startHost')}
                 </Link>
               </Button>
             ) : null}
@@ -314,31 +314,30 @@ export default function ClasePage() {
               <Button asChild variant="secondary">
                 <Link href={session.recordingUrl as never} target="_blank">
                   <Icon name="play" size={14} />
-                  Ver grabación
                   {session.recordingDurationMinutes
-                    ? ` (${session.recordingDurationMinutes} min)`
-                    : ''}
+                    ? t('watchRecordingWithDuration', {
+                        minutes: session.recordingDurationMinutes,
+                      })
+                    : t('watchRecording')}
                 </Link>
               </Button>
             ) : null}
 
             {isOpen && session.isRegistered ? (
               <Button type="button" variant="ghost" onClick={handleUnregister} disabled={pending}>
-                Cancelar inscripción
+                {t('cancelRegistration')}
               </Button>
             ) : null}
           </div>
 
           {isOpen && !session.isRegistered ? (
-            <p className="text-xs text-text-subtle">
-              El enlace de Zoom solo es visible para los miembros inscritos.
-            </p>
+            <p className="text-xs text-text-subtle">{t('zoomLinkVisibility')}</p>
           ) : null}
           {session.status === 'ENDED' && !session.recordingUrl ? (
             <p className="text-xs text-text-subtle">
               {session.isRegistered || isStaff
-                ? 'La grabación aparecerá aquí cuando Zoom termine de procesarla.'
-                : 'Esta clase ya finalizó. La grabación es visible solo para los inscritos.'}
+                ? t('recordingProcessing')
+                : t('recordingForRegistered')}
             </p>
           ) : null}
         </CardContent>
@@ -363,18 +362,6 @@ export default function ClasePage() {
   );
 }
 
-/**
- * Etiqueta honesta de la evidencia (ADR-018): un click en "Unirme" no es lo
- * mismo que una confirmación de Zoom, y el formador tiene que poder
- * distinguirlo de un vistazo antes de dar una asistencia por buena.
- */
-const CONFIDENCE_LABEL: Record<AttendanceRow['confidence'], string> = {
-  ZOOM: 'Confirmado por Zoom',
-  PROXY: 'Abrió el enlace desde Didacta (sin confirmar por Zoom)',
-  MANUAL: 'Marcado a mano por un formador',
-  NONE: 'Sin evidencia',
-};
-
 /** Panel de asistencia — solo staff (el endpoint además lo gatea por rol). */
 function AttendancePanel({
   sessionId,
@@ -384,6 +371,8 @@ function AttendancePanel({
   /** Cambia con registeredCount: re-carga el panel tras register/unregister. */
   refreshKey: number;
 }) {
+  const t = useTranslations('alumnoAprendizaje');
+  const tErrors = useTranslations('errors');
   const [report, setReport] = useState<AttendanceReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -398,12 +387,17 @@ function AttendancePanel({
       })
       .catch((e) => {
         if (!cancelled) {
-          setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar la asistencia.');
+          setError(
+            e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('attendanceLoadError'),
+          );
         }
       });
     return () => {
       cancelled = true;
     };
+    // Deps limitadas a las entradas reales del fetch: `t`/`tErrors` solo
+    // componen el mensaje de error, no deciden qué se pide.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, refreshKey]);
 
   async function handleSync() {
@@ -412,7 +406,7 @@ function AttendancePanel({
     try {
       setReport(await zoomLiveApi.syncAttendance(sessionId));
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos sincronizar con Zoom.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('attendanceSyncError'));
     } finally {
       setSyncing(false);
     }
@@ -428,7 +422,7 @@ function AttendancePanel({
     try {
       setReport(await zoomLiveApi.setManualAttendance(sessionId, row.userId, next));
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar la marca.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('attendanceSaveError'));
     } finally {
       setPendingUserId(null);
     }
@@ -441,18 +435,25 @@ function AttendancePanel({
           <div>
             <h2 className="font-display text-base font-bold text-text">
               <Icon name="users" size={16} className="mr-1.5 inline-block align-[-3px]" />
-              Asistencia
+              {t('attendanceTitle')}
             </h2>
             {report ? (
               <p className="text-xs text-text-subtle">
-                {report.attendedCount} de {report.registeredCount}{' '}
-                {report.registeredCount === 1 ? 'inscrito' : 'inscritos'}
                 {report.syncedAt
-                  ? ` · sincronizado con Zoom el ${new Date(report.syncedAt).toLocaleString(
-                      'es-ES',
-                      { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' },
-                    )}`
-                  : ' · sin sincronizar con Zoom'}
+                  ? t('attendanceSummarySynced', {
+                      attended: report.attendedCount,
+                      registered: report.registeredCount,
+                      time: formatDateTime(report.syncedAt, {
+                        day: '2-digit',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }),
+                    })
+                  : t('attendanceSummaryNotSynced', {
+                      attended: report.attendedCount,
+                      registered: report.registeredCount,
+                    })}
               </p>
             ) : null}
           </div>
@@ -465,7 +466,7 @@ function AttendancePanel({
               disabled={syncing}
             >
               <Icon name="download-cloud" size={14} />
-              {syncing ? 'Sincronizando…' : 'Sincronizar con Zoom'}
+              {syncing ? t('syncing') : t('syncWithZoom')}
             </Button>
           ) : null}
         </div>
@@ -474,21 +475,18 @@ function AttendancePanel({
 
         {report?.syncError ? (
           <div className="rounded-lg border border-warning-200 bg-warning-50 p-3 text-xs text-warning-800">
-            Zoom no devolvió los participantes: {report.syncError}
+            {t('zoomNoParticipants', { error: report.syncError })}
           </div>
         ) : null}
 
         {report && !report.syncedAt && report.rows.some((r) => r.confidence === 'PROXY') ? (
-          <p className="text-xs text-text-subtle">
-            Todavía no hemos podido confirmar la asistencia con Zoom. Lo que ves abajo es quién
-            abrió el enlace desde Didacta.
-          </p>
+          <p className="text-xs text-text-subtle">{t('attendanceUnconfirmed')}</p>
         ) : null}
 
         {report === null && !error ? (
           <div className="skeleton h-16 w-full" />
         ) : report && report.rows.length === 0 ? (
-          <p className="text-sm text-text-muted">Todavía no hay inscritos ni asistentes.</p>
+          <p className="text-sm text-text-muted">{t('noAttendees')}</p>
         ) : report ? (
           <ul className="divide-y divide-border">
             {report.rows.map((r, i) => (
@@ -517,23 +515,27 @@ function AttendancePanel({
                     {r.name ?? r.email ?? r.zoomName ?? r.zoomEmail}
                   </p>
                   <p className="truncate text-xs text-text-muted">
-                    {r.userId ? (
-                      <>
-                        {r.email}
-                        {!r.registered ? ' · asistió sin inscribirse' : ''}
-                      </>
-                    ) : (
-                      'Participante de Zoom sin identificar'
-                    )}
+                    {r.userId
+                      ? !r.registered
+                        ? t('emailAttendedWithout', { email: r.email ?? '' })
+                        : r.email
+                      : t('unidentifiedParticipant')}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {r.minutes > 0 ? (
-                    <span className="text-xs tabular-nums text-text-subtle">{r.minutes} min</span>
+                    <span className="text-xs tabular-nums text-text-subtle">
+                      {t('minutesShort', { minutes: r.minutes })}
+                    </span>
                   ) : null}
-                  <span title={CONFIDENCE_LABEL[r.confidence]}>
+                  {/* Etiqueta honesta de la evidencia (ADR-018): un click en
+                      "Unirme" no es lo mismo que una confirmación de Zoom, y
+                      el formador tiene que poder distinguirlo de un vistazo
+                      antes de dar una asistencia por buena. Las variantes
+                      viven en `attendanceConfidence.*` del catálogo. */}
+                  <span title={t(`attendanceConfidence.${r.confidence}`)}>
                     <Badge variant={r.attended ? 'success' : 'muted'} dot>
-                      {r.attended ? 'Asistió' : 'No asistió'}
+                      {r.attended ? t('attended') : t('notAttended')}
                     </Badge>
                   </span>
                   {r.userId ? (
@@ -545,17 +547,17 @@ function AttendancePanel({
                       disabled={pendingUserId === r.userId}
                       title={
                         r.manualPresent === null
-                          ? 'Marcar como presente'
+                          ? t('markPresent')
                           : r.manualPresent
-                            ? 'Marcar como ausente'
-                            : 'Volver al cálculo automático'
+                            ? t('markAbsent')
+                            : t('backToAuto')
                       }
                     >
                       {r.manualPresent === null
-                        ? 'Marcar'
+                        ? t('mark')
                         : r.manualPresent
-                          ? 'Presente'
-                          : 'Ausente'}
+                          ? t('present')
+                          : t('absent')}
                     </Button>
                   ) : null}
                 </div>

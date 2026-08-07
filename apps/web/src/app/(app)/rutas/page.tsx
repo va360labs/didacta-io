@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import {
   listPaths,
   listMyPaths,
@@ -17,6 +18,7 @@ import {
 type Tab = 'todas' | 'mis-rutas';
 
 function PathCard({ path, href }: { path: LearningPath; href: string }) {
+  const t = useTranslations('alumnoAprendizaje');
   const enrolled = path.enrollment;
   const progress = enrolled?.progressPercent ?? 0;
   const isCompleted = enrolled?.status === 'COMPLETED';
@@ -29,7 +31,7 @@ function PathCard({ path, href }: { path: LearningPath; href: string }) {
             <h2 className="font-semibold text-text">{path.title}</h2>
             {isCompleted && (
               <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
-                Completada
+                {t('pathCompleted')}
               </span>
             )}
           </div>
@@ -37,11 +39,9 @@ function PathCard({ path, href }: { path: LearningPath; href: string }) {
             <p className="mt-1 line-clamp-2 text-sm text-text-muted">{path.description}</p>
           )}
           <div className="mt-2 flex items-center gap-4 text-xs text-text-muted">
-            <span>
-              {path.courseCount} {path.courseCount === 1 ? 'curso' : 'cursos'}
-            </span>
+            <span>{t('courseCount', { count: path.courseCount })}</span>
             {path.estimatedMinutes && (
-              <span>{Math.round(path.estimatedMinutes / 60)} h aprox.</span>
+              <span>{t('hoursApprox', { hours: Math.round(path.estimatedMinutes / 60) })}</span>
             )}
           </div>
         </div>
@@ -50,14 +50,14 @@ function PathCard({ path, href }: { path: LearningPath; href: string }) {
             href={href}
             className="shrink-0 rounded-lg border border-(--didacta-trust) px-4 py-2 text-sm font-semibold text-(--didacta-trust) hover:bg-(--didacta-trust)/10"
           >
-            {enrolled ? 'Continuar' : 'Ver ruta'}
+            {enrolled ? t('continue') : t('viewPath')}
           </Link>
         )}
       </div>
       {enrolled && progress > 0 && (
         <div className="mt-3 border-t border-border pt-3">
           <div className="mb-1 flex justify-between text-xs text-text-muted">
-            <span>Progreso</span>
+            <span>{t('progress')}</span>
             <span>{progress}%</span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
@@ -73,6 +73,7 @@ function PathCard({ path, href }: { path: LearningPath; href: string }) {
 }
 
 export default function RutasPage() {
+  const t = useTranslations('alumnoAprendizaje');
   const [tab, setTab] = useState<Tab>('todas');
   const [paths, setPaths] = useState<LearningPath[]>([]);
   const [myPaths, setMyPaths] = useState<LearningPathWithEnrolledAt[]>([]);
@@ -85,8 +86,10 @@ export default function RutasPage() {
         setPaths(all);
         setMyPaths(mine);
       })
-      .catch(() => setError('No se pudieron cargar las rutas'))
+      .catch(() => setError(t('pathsLoadError')))
       .finally(() => setLoading(false));
+    // Deps vacías: es la carga inicial. `t` solo compone el mensaje de error.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const displayPaths = tab === 'mis-rutas' ? myPaths : paths;
@@ -94,22 +97,20 @@ export default function RutasPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-bold text-text">Rutas de aprendizaje</h1>
-        <p className="mt-1 text-sm text-text-muted">
-          Itinerarios estructurados para avanzar paso a paso
-        </p>
+        <h1 className="font-display text-2xl font-bold text-text">{t('pathsTitle')}</h1>
+        <p className="mt-1 text-sm text-text-muted">{t('pathsSubtitle')}</p>
       </div>
 
       <div className="flex gap-1 rounded-lg border border-border bg-surface p-1 w-fit">
-        {(['todas', 'mis-rutas'] as const).map((t) => (
+        {(['todas', 'mis-rutas'] as const).map((tabId) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={tabId}
+            onClick={() => setTab(tabId)}
             className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-              tab === t ? 'bg-(--didacta-trust) text-white' : 'text-text-muted hover:text-text'
+              tab === tabId ? 'bg-(--didacta-trust) text-white' : 'text-text-muted hover:text-text'
             }`}
           >
-            {t === 'todas' ? 'Todas las rutas' : 'Mis rutas'}
+            {tabId === 'todas' ? t('allPaths') : t('myPaths')}
           </button>
         ))}
       </div>
@@ -130,16 +131,14 @@ export default function RutasPage() {
       {!loading && !error && displayPaths.length === 0 && (
         <div className="rounded-xl border border-border bg-surface p-10 text-center">
           <p className="text-text-muted">
-            {tab === 'mis-rutas'
-              ? 'Aún no estás matriculado en ninguna ruta.'
-              : 'Aún no hay rutas disponibles.'}
+            {tab === 'mis-rutas' ? t('myPathsEmpty') : t('pathsEmpty')}
           </p>
           {tab === 'mis-rutas' && (
             <button
               onClick={() => setTab('todas')}
               className="mt-3 text-sm font-medium text-(--didacta-trust) hover:underline"
             >
-              Explorar rutas
+              {t('explorePaths')}
             </button>
           )}
         </div>

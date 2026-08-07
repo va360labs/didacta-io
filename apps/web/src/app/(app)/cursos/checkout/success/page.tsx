@@ -27,6 +27,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -34,6 +35,7 @@ import { Card, CardContent } from '@/components/ui/card';
 function SuccessContent() {
   const params = useSearchParams();
   const sessionId = params.get('session_id');
+  const t = useTranslations('alumnoAprendizaje');
 
   return (
     <section className="mx-auto max-w-2xl space-y-6 py-10">
@@ -51,24 +53,24 @@ function SuccessContent() {
           </span>
           <div className="space-y-2">
             <h1 className="font-display text-2xl font-bold tracking-tight text-text">
-              ¡Gracias por tu compra!
+              {t('purchaseThanks')}
             </h1>
-            <p className="text-text-muted">
-              Tu pago se procesó correctamente. En unos segundos verás el curso disponible en tu
-              catálogo. Si no aparece de inmediato, refresca la página.
-            </p>
+            <p className="text-text-muted">{t('purchaseThanksBody')}</p>
           </div>
           <div className="flex flex-wrap justify-center gap-3 pt-2">
             <Button asChild size="lg">
-              <Link href="/cursos">Ir a mis cursos</Link>
+              <Link href="/cursos">{t('goToMyCourses')}</Link>
             </Button>
             <Button asChild variant="secondary" size="lg">
-              <Link href="/mis-certificados">Ver mis certificados</Link>
+              <Link href="/mis-certificados">{t('viewMyCertificates')}</Link>
             </Button>
           </div>
           {sessionId ? (
             <p className="pt-4 text-xs text-text-subtle">
-              Referencia de pago: <code className="font-mono">{sessionId}</code>
+              {t.rich('paymentReference', {
+                id: sessionId,
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+              })}
             </p>
           ) : null}
         </CardContent>

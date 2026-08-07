@@ -7,21 +7,20 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
 import { useTenantDisplayName } from '@/lib/tenant-context';
 import { certificatesApi, type Certificate } from '@/modules/certificates';
 
-function formatDate(iso: string): string {
+function formatIssuedAt(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+    return formatDate(iso, { year: 'numeric', month: 'long', day: 'numeric' });
   } catch {
     return iso;
   }
@@ -32,12 +31,13 @@ function formatDate(iso: string): string {
  * certificado. `certUrl` apunta a la página pública de verificación
  * (`/verificar/<id>`), así la credencial en LinkedIn es verificable.
  * `organizationName` es el nombre del tenant emisor (resuelto por host).
+ * `courseName` viene ya resuelto por el caller (con su fallback traducido).
  */
-function openLinkedIn(cert: Certificate, organizationName: string) {
+function openLinkedIn(cert: Certificate, organizationName: string, courseName: string) {
   const issued = new Date(cert.snapshot?.issuedAt ?? cert.issuedAt);
   const params = new URLSearchParams({
     startTask: 'CERTIFICATION_NAME',
-    name: cert.snapshot?.courseTitle ?? 'Curso',
+    name: courseName,
     organizationName,
     certId: cert.number,
     certUrl: `${window.location.origin}/verificar/${cert.id}`,
@@ -55,6 +55,8 @@ function openLinkedIn(cert: Certificate, organizationName: string) {
 
 export default function MisCertificadosPage() {
   const tenantName = useTenantDisplayName();
+  const t = useTranslations('alumnoAprendizaje');
+  const tErrors = useTranslations('errors');
   const [certs, setCerts] = useState<Certificate[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -68,15 +70,14 @@ export default function MisCertificadosPage() {
       })
       .catch((e) => {
         if (!aborted)
-          setError(
-            e instanceof ApiHttpError
-              ? e.message
-              : 'No pudimos cargar tus certificados. Prueba refrescar la página.',
-          );
+          setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('certsLoadError'));
       });
     return () => {
       aborted = true;
     };
+    // Deps limitadas a la carga inicial: `t`/`tErrors` solo se usan para
+    // componer el mensaje de error, no son entradas del fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleDownload(cert: Certificate) {
@@ -85,7 +86,7 @@ export default function MisCertificadosPage() {
     try {
       await certificatesApi.openInNewTab(cert.id, `${cert.number}.pdf`);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos descargar el PDF.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('pdfDownloadError'));
     } finally {
       setDownloadingId(null);
     }
@@ -98,12 +99,9 @@ export default function MisCertificadosPage() {
           className="font-display text-2xl font-bold tracking-tight text-text"
           style={{ letterSpacing: '-0.02em' }}
         >
-          Mis certificados
+          {t('myCertificates')}
         </h1>
-        <p className="mt-2 max-w-2xl text-text-muted">
-          Cada vez que completas un curso, generamos un certificado nominal con número correlativo y
-          hash de verificación.
-        </p>
+        <p className="mt-2 max-w-2xl text-text-muted">{t('certsSubtitle')}</p>
       </header>
 
       {error ? (
@@ -134,19 +132,17 @@ export default function MisCertificadosPage() {
             >
               <Icon name="award" size={40} />
             </div>
-            <h3 className="font-display text-2xl font-semibold">Aún no tienes certificados</h3>
-            <p className="max-w-md text-text-muted">
-              Cuando completes tu primer curso, vas a verlo acá listo para descargar y compartir.
-            </p>
+            <h3 className="font-display text-2xl font-semibold">{t('noCertsTitle')}</h3>
+            <p className="max-w-md text-text-muted">{t('noCertsHint')}</p>
             <Button asChild className="mt-2">
-              <Link href="/cursos">Ver el catálogo</Link>
+              <Link href="/cursos">{t('viewCatalog')}</Link>
             </Button>
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-5 md:grid-cols-2">
           {certs.map((cert) => {
-            const courseTitle = cert.snapshot?.courseTitle ?? 'Curso';
+            const courseTitle = cert.snapshot?.courseTitle ?? t('courseFallback');
             return (
               <Card key={cert.id} className="flex h-full flex-col overflow-hidden p-0">
                 {/* Cover institucional Azul noche con award icon prominente */}
@@ -179,7 +175,7 @@ export default function MisCertificadosPage() {
                     >
                       <Icon name="award" size={28} />
                     </div>
-                    <p className="label-uppercase text-white/70">Certificado de finalización</p>
+                    <p className="label-uppercase text-white/70">{t('certOfCompletion')}</p>
                     <p className="font-display text-2xl font-bold tabular-nums">{cert.number}</p>
                   </div>
                 </div>
@@ -193,7 +189,7 @@ export default function MisCertificadosPage() {
                       {courseTitle}
                     </h3>
                     <p className="mt-1.5 text-sm text-text-subtle">
-                      Emitido el {formatDate(cert.issuedAt)}
+                      {t('issuedOn', { date: formatIssuedAt(cert.issuedAt) })}
                     </p>
                   </div>
                   <div className="mt-auto flex items-center gap-2">
@@ -202,13 +198,16 @@ export default function MisCertificadosPage() {
                       disabled={downloadingId === cert.id}
                     >
                       <Icon name="award" size={16} />
-                      {downloadingId === cert.id ? 'Descargando…' : 'Descargar PDF'}
+                      {downloadingId === cert.id ? t('downloading') : t('downloadPdf')}
                     </Button>
-                    <Button variant="secondary" onClick={() => openLinkedIn(cert, tenantName)}>
-                      Añadir a LinkedIn
+                    <Button
+                      variant="secondary"
+                      onClick={() => openLinkedIn(cert, tenantName, courseTitle)}
+                    >
+                      {t('addToLinkedIn')}
                     </Button>
                     <Badge variant="premium" dot className="ml-auto">
-                      Verificado
+                      {t('verified')}
                     </Badge>
                   </div>
                 </CardContent>

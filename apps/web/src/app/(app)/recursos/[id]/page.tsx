@@ -8,11 +8,13 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Icon } from '@/components/icon';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import {
   ShareResourceModal,
   resourcesApi,
@@ -29,6 +31,8 @@ const STAFF_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
 export default function ColeccionPage() {
   const params = useParams<{ id: string }>();
   const collectionId = params?.id;
+  const t = useTranslations('alumnoAprendizaje');
+  const tErrors = useTranslations('errors');
 
   const [collection, setCollection] = useState<CollectionView | null>(null);
   const [resources, setResources] = useState<ResourceView[] | null>(null);
@@ -61,9 +65,16 @@ export default function ColeccionPage() {
       } catch (e) {
         if (seq !== requestSeq.current) return;
         if (e instanceof ApiHttpError && e.status === 404) setNotFound(true);
-        else setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar la colección.');
+        else
+          setError(
+            e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('collectionLoadError'),
+          );
       }
     },
+    // Deps limitadas a la entrada real del fetch: `t`/`tErrors` solo componen
+    // el mensaje de error y cambiar la identidad de `reload` re-dispararía el
+    // efecto del buscador.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [collectionId],
   );
 
@@ -101,12 +112,12 @@ export default function ColeccionPage() {
   }
 
   async function removeResource(r: ResourceView) {
-    if (!window.confirm(`¿Eliminar "${r.title}"? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(t('deleteResourceConfirm', { title: r.title }))) return;
     try {
       await resourcesApi.remove(r.id);
       void reload(q);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar el recurso.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('deleteResourceError'));
     }
   }
 
@@ -115,16 +126,16 @@ export default function ColeccionPage() {
       setAllCollections(await resourcesApi.listCollections());
       setShareOpen(true);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las colecciones.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('collectionsLoadError'));
     }
   }
 
   if (notFound) {
     return (
       <div className="rounded-xl border border-border bg-surface p-12 text-center">
-        <p className="text-base font-semibold text-text">Colección no encontrada</p>
+        <p className="text-base font-semibold text-text">{t('collectionNotFound')}</p>
         <Button asChild variant="secondary" className="mt-4">
-          <Link href={'/recursos' as never}>← Volver a Recursos</Link>
+          <Link href={'/recursos' as never}>{t('backToResources')}</Link>
         </Button>
       </div>
     );
@@ -143,7 +154,7 @@ export default function ColeccionPage() {
             {error}
           </div>
           <Button asChild variant="secondary">
-            <Link href={'/recursos' as never}>← Volver a Recursos</Link>
+            <Link href={'/recursos' as never}>{t('backToResources')}</Link>
           </Button>
         </div>
       );
@@ -162,7 +173,7 @@ export default function ColeccionPage() {
         href={'/recursos' as never}
         className="inline-flex items-center gap-1.5 text-sm font-medium text-text-muted transition-colors hover:text-text"
       >
-        ← Recursos
+        {t('backToResourcesShort')}
       </Link>
 
       {/* Cabecera con la portada de la colección. */}
@@ -191,12 +202,12 @@ export default function ColeccionPage() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar en esta colección…"
+          placeholder={t('searchInCollection')}
           className="w-full max-w-xs rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
         />
         <Button onClick={() => void openShare()}>
           <Icon name="download-cloud" size={15} />
-          Compartir recurso
+          {t('shareResource')}
         </Button>
       </div>
 
@@ -217,12 +228,10 @@ export default function ColeccionPage() {
       ) : resources.length === 0 ? (
         <div className="rounded-xl border border-border bg-surface p-12 text-center">
           <p className="text-base font-semibold text-text">
-            {q.trim() ? 'Nada por aquí con esa búsqueda' : 'Esta colección llega pronto'}
+            {q.trim() ? t('searchNoResults') : t('collectionComingSoon')}
           </p>
           <p className="mt-1 text-sm text-text-muted">
-            {q.trim()
-              ? 'Prueba con otras palabras.'
-              : 'Sé quien la estrene: comparte el primer recurso.'}
+            {q.trim() ? t('searchNoResultsHint') : t('collectionEmptyHint')}
           </p>
         </div>
       ) : (
@@ -265,6 +274,7 @@ function ResourceCard({
   onOpen: () => void;
   onRemove: () => void;
 }) {
+  const t = useTranslations('alumnoAprendizaje');
   return (
     <Card data-testid="resource-card">
       <CardContent className="flex h-full flex-col gap-2.5 p-5">
@@ -276,8 +286,8 @@ function ResourceCard({
             <button
               type="button"
               onClick={onRemove}
-              aria-label={`Eliminar ${resource.title}`}
-              title="Eliminar"
+              aria-label={t('deleteResourceAria', { title: resource.title })}
+              title={t('delete')}
               className="grid h-6 w-6 place-items-center rounded-md text-text-subtle transition-colors hover:bg-danger-50 hover:text-danger-700"
             >
               <Icon name="x" size={14} />
@@ -295,11 +305,11 @@ function ResourceCard({
         </div>
         <div className="flex items-center justify-between">
           <p className="text-xs text-text-subtle">
-            {resource.downloadCount} descarga{resource.downloadCount !== 1 ? 's' : ''}
+            {t('downloadCount', { count: resource.downloadCount })}
           </p>
           <Button size="sm" variant="secondary" onClick={onOpen}>
             <Icon name={resource.kind === 'FILE' ? 'download-cloud' : 'link'} size={13} />
-            {resource.kind === 'FILE' ? 'Descargar' : 'Abrir'}
+            {resource.kind === 'FILE' ? t('download') : t('open')}
           </Button>
         </div>
       </CardContent>

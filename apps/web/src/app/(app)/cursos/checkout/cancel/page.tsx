@@ -17,11 +17,13 @@
  */
 
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
 export default function CheckoutCancelPage() {
+  const t = useTranslations('alumnoAprendizaje');
   return (
     <section className="mx-auto max-w-2xl space-y-6 py-10">
       <Card>
@@ -38,16 +40,13 @@ export default function CheckoutCancelPage() {
           </span>
           <div className="space-y-2">
             <h1 className="font-display text-2xl font-bold tracking-tight text-text">
-              Pago cancelado
+              {t('paymentCancelled')}
             </h1>
-            <p className="text-text-muted">
-              No se realizó ningún cargo. Si quieres continuar, puedes volver al catálogo y
-              reiniciar el pago en cualquier momento.
-            </p>
+            <p className="text-text-muted">{t('paymentCancelledBody')}</p>
           </div>
           <div className="flex flex-wrap justify-center gap-3 pt-2">
             <Button asChild size="lg">
-              <Link href="/cursos">Volver al catálogo</Link>
+              <Link href="/cursos">{t('backToCatalogPlain')}</Link>
             </Button>
           </div>
         </CardContent>
