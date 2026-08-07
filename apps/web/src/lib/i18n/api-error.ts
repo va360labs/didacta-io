@@ -26,6 +26,12 @@ export function apiErrorMessage(e: unknown, t: TranslatorLike): string {
     if (e.code && !e.code.includes('.') && t.has(e.code)) return t(e.code);
     return e.message;
   }
+  // Fallos de red de fetch (API caída, sin conexión) son TypeError con
+  // mensajes de motor ("Failed to fetch", "Load failed"), y un proxy que
+  // devuelve HTML rompe JSON.parse con SyntaxError. Ninguno debe llegar a
+  // pantalla. Los `Error` normales sí conservan su message: hay throws
+  // intencionales con copy propio en libs y componentes.
+  if (e instanceof TypeError || e instanceof SyntaxError) return t('unknown');
   if (e instanceof Error && e.message) return e.message;
   return t('unknown');
 }

@@ -38,6 +38,15 @@ describe('apiErrorMessage', () => {
     expect(apiErrorMessage(new Error('boom'), tEn)).toBe('boom');
   });
 
+  it('TypeError de red (Failed to fetch) → errors.unknown, nunca el mensaje del motor', () => {
+    expect(apiErrorMessage(new TypeError('Failed to fetch'), tEn)).toBe(
+      'Something went wrong. Please try again.',
+    );
+    expect(apiErrorMessage(new TypeError('Load failed'), tEs)).toBe(
+      'Algo salió mal. Inténtalo de nuevo.',
+    );
+  });
+
   it('no-Error (throw raro) → errors.unknown', () => {
     expect(apiErrorMessage('cadena', tEn)).toBe('Something went wrong. Please try again.');
     expect(apiErrorMessage(undefined, tEs)).toBe('Algo salió mal. Inténtalo de nuevo.');
