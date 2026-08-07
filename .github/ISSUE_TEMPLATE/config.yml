@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: 📖 Cómo reportar un error
+    url: https://docs.didacta.io/comunidad/reportar-un-error/
+    about: Qué mirar antes de abrir la issue, qué datos recoger y qué anonimizar.
   - name: 💬 Preguntas y dudas
     url: https://github.com/va360labs/didacta-io/discussions
     about: Para preguntas de uso e instalación que no son bugs.

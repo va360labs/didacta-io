@@ -21,10 +21,10 @@ body:
     attributes:
       label: Para ti, ¿qué prioridad tiene?
       options:
-        - 🔴 Bloqueante: no puedo usar Didacta sin esto
-        - 🟠 Alta: lo necesito en próximas semanas
-        - 🟡 Media: lo agradecería en algún momento
-        - 🟢 Baja: nice-to-have
+        - '🔴 Bloqueante — no puedo usar Didacta sin esto'
+        - '🟠 Alta — lo necesito en próximas semanas'
+        - '🟡 Media — lo agradecería en algún momento'
+        - '🟢 Baja — nice-to-have'
     validations:
       required: true
   - type: dropdown
