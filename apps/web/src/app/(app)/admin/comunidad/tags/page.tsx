@@ -6,13 +6,14 @@
  */
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon, type IconName } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { authStorage } from '@/lib/auth-storage';
 import {
   COMMUNITY_TAG_ICONS,
@@ -46,6 +47,8 @@ interface FormState {
 const EMPTY_FORM: FormState = { name: '', color: SUGGESTED_COLORS[0]!, icon: '' };
 
 export default function CommunityTagsAdminPage() {
+  const t = useTranslations('adminEngagement');
+  const tErrors = useTranslations('errors');
   const [tags, setTags] = useState<CommunityTag[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -63,7 +66,7 @@ export default function CommunityTagsAdminPage() {
       setTags(await communityApi.listTags());
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los tags.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -104,14 +107,14 @@ export default function CommunityTagsAdminPage() {
       cancelEdit();
       await reload();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos guardar el tag.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setPending(false);
     }
   }
 
   async function handleDelete(tag: CommunityTag) {
-    if (!window.confirm(`¿Eliminar el tag "${tag.name}"?`)) return;
+    if (!window.confirm(t('tags.deleteConfirm', { name: tag.name }))) return;
     setPending(true);
     setError(null);
     try {
@@ -120,7 +123,7 @@ export default function CommunityTagsAdminPage() {
       if (editing?.id === tag.id) cancelEdit();
       await reload();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos eliminar el tag.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setPending(false);
     }
@@ -129,9 +132,7 @@ export default function CommunityTagsAdminPage() {
   if (!canManage) {
     return (
       <Card>
-        <CardContent className="p-6 text-sm text-danger-700">
-          Solo los administradores del tenant pueden gestionar los tags de comunidad.
-        </CardContent>
+        <CardContent className="p-6 text-sm text-danger-700">{t('tags.noAccess')}</CardContent>
       </Card>
     );
   }
@@ -139,12 +140,8 @@ export default function CommunityTagsAdminPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Tags de comunidad</h1>
-        <p className="mt-1 max-w-2xl text-text-muted">
-          Cura los tags oficiales del tenant con color e icono. Los autores siguen pudiendo escribir
-          tags libres en sus posts; los curados acá se pintan con el estilo configurado en el feed y
-          la sidebar.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('tags.title')}</h1>
+        <p className="mt-1 max-w-2xl text-text-muted">{t('tags.subtitle')}</p>
       </header>
 
       {error ? (
@@ -159,13 +156,13 @@ export default function CommunityTagsAdminPage() {
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Tags existentes</CardTitle>
+            <CardTitle>{t('tags.listTitle')}</CardTitle>
             <CardDescription>
               {tags === null
-                ? 'Cargando…'
+                ? t('tags.loading')
                 : tags.length === 0
-                  ? 'Aún no hay tags. Crea el primero en el formulario de la derecha.'
-                  : `${tags.length} tag${tags.length === 1 ? '' : 's'} curado${tags.length === 1 ? '' : 's'}.`}
+                  ? t('tags.emptyList')
+                  : t('tags.count', { count: tags.length })}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -177,29 +174,29 @@ export default function CommunityTagsAdminPage() {
               </div>
             ) : tags.length === 0 ? null : (
               <ul className="divide-y divide-border-soft">
-                {tags.map((t) => (
-                  <li key={t.id} className="flex items-center gap-3 py-3">
-                    <TagPreview tag={t} />
-                    <span className="font-mono text-xs text-text-subtle">{t.color}</span>
+                {tags.map((tag) => (
+                  <li key={tag.id} className="flex items-center gap-3 py-3">
+                    <TagPreview tag={tag} />
+                    <span className="font-mono text-xs text-text-subtle">{tag.color}</span>
                     <div className="ml-auto flex items-center gap-2">
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => startEdit(t)}
+                        onClick={() => startEdit(tag)}
                         disabled={pending}
                       >
-                        Editar
+                        {t('tags.edit')}
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => void handleDelete(t)}
+                        onClick={() => void handleDelete(tag)}
                         disabled={pending}
                         className="text-danger-700 hover:bg-danger-50"
                       >
-                        Eliminar
+                        {t('tags.delete')}
                       </Button>
                     </div>
                   </li>
@@ -211,17 +208,17 @@ export default function CommunityTagsAdminPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{editing ? `Editar "${editing.name}"` : 'Nuevo tag'}</CardTitle>
+            <CardTitle>
+              {editing ? t('tags.formEditTitle', { name: editing.name }) : t('tags.formNewTitle')}
+            </CardTitle>
             <CardDescription>
-              {editing
-                ? 'Modifica el nombre, color o icono. El cambio impacta a todos los posts que usen este tag.'
-                : 'Crea un tag oficial. El nombre se normaliza a minúsculas para evitar duplicados.'}
+              {editing ? t('tags.formEditDescription') : t('tags.formNewDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="tag-name">Nombre</Label>
+                <Label htmlFor="tag-name">{t('tags.nameLabel')}</Label>
                 <Input
                   id="tag-name"
                   value={form.name}
@@ -229,19 +226,19 @@ export default function CommunityTagsAdminPage() {
                   required
                   minLength={1}
                   maxLength={40}
-                  placeholder="ayuda, anuncios, ideas..."
+                  placeholder={t('tags.namePlaceholder')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>Color</Label>
+                <Label>{t('tags.colorLabel')}</Label>
                 <div className="flex flex-wrap gap-2">
                   {SUGGESTED_COLORS.map((c) => (
                     <button
                       key={c}
                       type="button"
                       onClick={() => setForm((f) => ({ ...f, color: c }))}
-                      aria-label={`Color ${c}`}
+                      aria-label={t('tags.colorAria', { value: c })}
                       aria-pressed={form.color === c}
                       className={
                         form.color === c
@@ -264,7 +261,7 @@ export default function CommunityTagsAdminPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="tag-icon">Icono</Label>
+                <Label htmlFor="tag-icon">{t('tags.iconLabel')}</Label>
                 <Select
                   id="tag-icon"
                   value={form.icon}
@@ -272,7 +269,7 @@ export default function CommunityTagsAdminPage() {
                     setForm((f) => ({ ...f, icon: e.target.value as FormState['icon'] }))
                   }
                 >
-                  <option value="">Sin icono</option>
+                  <option value="">{t('tags.noIcon')}</option>
                   {COMMUNITY_TAG_ICONS.map((i) => (
                     <option key={i} value={i}>
                       {i}
@@ -282,13 +279,13 @@ export default function CommunityTagsAdminPage() {
               </div>
 
               <div className="rounded-md border border-border-soft bg-surface-2 p-3">
-                <p className="text-xs text-text-subtle">Vista previa</p>
+                <p className="text-xs text-text-subtle">{t('tags.preview')}</p>
                 <div className="mt-2">
                   <TagPreview
                     tag={{
                       id: 'preview',
                       tenantId: '',
-                      name: form.name || 'tu-tag',
+                      name: form.name || t('tags.previewFallback'),
                       color: form.color,
                       icon: form.icon || null,
                       createdAt: '',
@@ -301,11 +298,11 @@ export default function CommunityTagsAdminPage() {
               <div className="flex justify-end gap-2 border-t border-border-soft pt-3">
                 {editing ? (
                   <Button type="button" variant="ghost" onClick={cancelEdit} disabled={pending}>
-                    Cancelar
+                    {t('tags.cancel')}
                   </Button>
                 ) : null}
                 <Button type="submit" disabled={pending || form.name.trim().length === 0}>
-                  {pending ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear tag'}
+                  {pending ? t('tags.saving') : editing ? t('tags.saveChanges') : t('tags.create')}
                 </Button>
               </div>
             </form>

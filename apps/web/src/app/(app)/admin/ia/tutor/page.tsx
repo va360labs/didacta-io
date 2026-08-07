@@ -6,6 +6,7 @@
  */
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminTutorCorrecciones, AdminTutorInforme, AdminTutorRevision } from '@/modules/ai-tutor';
 
@@ -21,23 +22,21 @@ import { AdminTutorCorrecciones, AdminTutorInforme, AdminTutorRevision } from '@
  * proveedor: aquello es fontanería, esto es contenido.
  */
 export default function AdminTutorIaPage(): React.JSX.Element {
+  const t = useTranslations('adminEngagement');
   const [tab, setTab] = useState('revision');
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-text">Tutor IA</h1>
-        <p className="mt-1 text-sm text-text-muted">
-          Qué le preguntan tus alumnos al tutor, qué les responde y qué hay que corregir. Lo que
-          corrijas aquí lo usa el tutor en las siguientes respuestas, sin reindexar nada.
-        </p>
+        <h1 className="text-xl font-bold text-text">{t('aiTutor.title')}</h1>
+        <p className="mt-1 text-sm text-text-muted">{t('aiTutor.subtitle')}</p>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="revision">Revisión</TabsTrigger>
-          <TabsTrigger value="conocimiento">Conocimiento validado</TabsTrigger>
-          <TabsTrigger value="informe">Informe mensual</TabsTrigger>
+          <TabsTrigger value="revision">{t('aiTutor.tabRevision')}</TabsTrigger>
+          <TabsTrigger value="conocimiento">{t('aiTutor.tabKnowledge')}</TabsTrigger>
+          <TabsTrigger value="informe">{t('aiTutor.tabReport')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="revision" className="mt-4">

@@ -6,13 +6,14 @@
  */
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon, type IconName } from '@/components/icon';
 import { SpaceIcon, isIconName } from '@/components/space-icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { authStorage } from '@/lib/auth-storage';
 import {
   COMMUNITY_SPACE_ICONS,
@@ -62,6 +63,8 @@ function slugify(value: string): string {
 }
 
 export default function EspaciosAdminPage() {
+  const t = useTranslations('adminEngagement');
+  const tErrors = useTranslations('errors');
   const [spaces, setSpaces] = useState<CommunitySpace[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -77,7 +80,7 @@ export default function EspaciosAdminPage() {
       setSpaces(await communityApi.listSpaces());
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los espacios.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -125,15 +128,14 @@ export default function EspaciosAdminPage() {
       cancelEdit();
       await reload();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos guardar el espacio.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setPending(false);
     }
   }
 
   async function handleDelete(space: CommunitySpace) {
-    if (!window.confirm(`¿Eliminar el espacio "${space.title}"? Esta acción no se puede deshacer.`))
-      return;
+    if (!window.confirm(t('spaces.deleteConfirm', { name: space.title }))) return;
     setPending(true);
     setError(null);
     try {
@@ -142,7 +144,7 @@ export default function EspaciosAdminPage() {
       if (editing?.slug === space.slug) cancelEdit();
       await reload();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos eliminar el espacio.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setPending(false);
     }
@@ -151,9 +153,7 @@ export default function EspaciosAdminPage() {
   if (!canManage) {
     return (
       <Card>
-        <CardContent className="p-6 text-sm text-danger-700">
-          Solo los administradores del tenant pueden gestionar los espacios de comunidad.
-        </CardContent>
+        <CardContent className="p-6 text-sm text-danger-700">{t('spaces.noAccess')}</CardContent>
       </Card>
     );
   }
@@ -161,11 +161,8 @@ export default function EspaciosAdminPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Espacios de comunidad</h1>
-        <p className="mt-1 max-w-2xl text-text-muted">
-          Crea, edita y reordena los espacios que aparecen en el sidebar. Los espacios de sistema
-          (marcados con 🔒) no se pueden eliminar.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('spaces.title')}</h1>
+        <p className="mt-1 max-w-2xl text-text-muted">{t('spaces.subtitle')}</p>
       </header>
 
       {error ? (
@@ -180,13 +177,13 @@ export default function EspaciosAdminPage() {
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Espacios existentes</CardTitle>
+            <CardTitle>{t('spaces.listTitle')}</CardTitle>
             <CardDescription>
               {spaces === null
-                ? 'Cargando…'
+                ? t('spaces.loading')
                 : spaces.length === 0
-                  ? 'Aún no hay espacios. Crea el primero.'
-                  : `${spaces.length} espacio${spaces.length === 1 ? '' : 's'}.`}
+                  ? t('spaces.emptyList')
+                  : t('spaces.count', { count: spaces.length })}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -210,16 +207,13 @@ export default function EspaciosAdminPage() {
                       <div className="flex items-center gap-1.5 text-sm font-medium">
                         {s.title}
                         {s.isSystem ? (
-                          <span
-                            title="Espacio de sistema — no se puede eliminar"
-                            className="text-text-subtle"
-                          >
+                          <span title={t('spaces.systemTitle')} className="text-text-subtle">
                             🔒
                           </span>
                         ) : null}
                       </div>
                       <div className="text-xs text-text-subtle">
-                        /{s.slug} · orden {s.sortOrder}
+                        /{s.slug} · {t('spaces.orderMeta', { order: s.sortOrder })}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -230,7 +224,7 @@ export default function EspaciosAdminPage() {
                         onClick={() => startEdit(s)}
                         disabled={pending}
                       >
-                        Editar
+                        {t('spaces.edit')}
                       </Button>
                       {!s.isSystem ? (
                         <Button
@@ -241,7 +235,7 @@ export default function EspaciosAdminPage() {
                           disabled={pending}
                           className="text-danger-700 hover:bg-danger-50"
                         >
-                          Eliminar
+                          {t('spaces.delete')}
                         </Button>
                       ) : null}
                     </div>
@@ -254,17 +248,19 @@ export default function EspaciosAdminPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{editing ? `Editar "${editing.title}"` : 'Nuevo espacio'}</CardTitle>
-            <CardDescription>
+            <CardTitle>
               {editing
-                ? 'El slug no se puede cambiar. Modifica el resto de campos.'
-                : 'Crea un nuevo espacio. El slug es permanente una vez creado.'}
+                ? t('spaces.formEditTitle', { name: editing.title })
+                : t('spaces.formNewTitle')}
+            </CardTitle>
+            <CardDescription>
+              {editing ? t('spaces.formEditDescription') : t('spaces.formNewDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="space-title">Nombre</Label>
+                <Label htmlFor="space-title">{t('spaces.nameLabel')}</Label>
                 <Input
                   id="space-title"
                   value={form.title}
@@ -279,12 +275,12 @@ export default function EspaciosAdminPage() {
                   required
                   minLength={1}
                   maxLength={60}
-                  placeholder="Recursos compartidos"
+                  placeholder={t('spaces.namePlaceholder')}
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="space-slug">Slug</Label>
+                <Label htmlFor="space-slug">{t('spaces.slugLabel')}</Label>
                 <Input
                   id="space-slug"
                   value={form.slug}
@@ -295,28 +291,28 @@ export default function EspaciosAdminPage() {
                   required
                   minLength={1}
                   maxLength={60}
-                  placeholder="recursos-compartidos"
+                  placeholder={t('spaces.slugPlaceholder')}
                   className="font-mono"
                 />
                 {editing ? (
-                  <p className="text-xs text-text-subtle">El slug no se puede modificar.</p>
+                  <p className="text-xs text-text-subtle">{t('spaces.slugLocked')}</p>
                 ) : null}
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="space-desc">Descripción (opcional)</Label>
+                <Label htmlFor="space-desc">{t('spaces.descLabel')}</Label>
                 <Input
                   id="space-desc"
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                   maxLength={200}
-                  placeholder="Comparte materiales y referencias útiles"
+                  placeholder={t('spaces.descPlaceholder')}
                 />
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>Icono</Label>
+                  <Label>{t('spaces.iconLabel')}</Label>
                   <div className="flex rounded-md border border-border text-xs">
                     <button
                       type="button"
@@ -330,7 +326,7 @@ export default function EspaciosAdminPage() {
                           : 'rounded-l-md px-2.5 py-1 text-text-muted hover:text-text'
                       }
                     >
-                      Icono
+                      {t('spaces.iconMode')}
                     </button>
                     <button
                       type="button"
@@ -341,7 +337,7 @@ export default function EspaciosAdminPage() {
                           : 'rounded-r-md px-2.5 py-1 text-text-muted hover:text-text'
                       }
                     >
-                      Emoji
+                      {t('spaces.emojiMode')}
                     </button>
                   </div>
                 </div>
@@ -370,13 +366,11 @@ export default function EspaciosAdminPage() {
                     <Input
                       value={form.icon}
                       onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
-                      placeholder="Pega o escribe un emoji: 🚀 📚 💡 🎯"
+                      placeholder={t('spaces.emojiPlaceholder')}
                       maxLength={4}
                       className="text-lg"
                     />
-                    <p className="text-[11px] text-text-subtle">
-                      Un solo emoji o carácter especial.
-                    </p>
+                    <p className="text-[11px] text-text-subtle">{t('spaces.emojiHint')}</p>
                   </div>
                 )}
 
@@ -386,20 +380,20 @@ export default function EspaciosAdminPage() {
                 >
                   <SpaceIcon icon={form.icon || 'hash'} color={form.color} size={16} />
                   <span className="text-sm font-medium" style={{ color: form.color }}>
-                    {form.title || 'Vista previa'}
+                    {form.title || t('spaces.previewFallback')}
                   </span>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Color</Label>
+                <Label>{t('spaces.colorLabel')}</Label>
                 <div className="flex flex-wrap gap-2">
                   {SUGGESTED_COLORS.map((c) => (
                     <button
                       key={c}
                       type="button"
                       onClick={() => setForm((f) => ({ ...f, color: c }))}
-                      aria-label={`Color ${c}`}
+                      aria-label={t('spaces.colorAria', { value: c })}
                       aria-pressed={form.color === c}
                       className={
                         form.color === c
@@ -422,7 +416,7 @@ export default function EspaciosAdminPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="space-order">Orden</Label>
+                <Label htmlFor="space-order">{t('spaces.orderLabel')}</Label>
                 <Input
                   id="space-order"
                   type="number"
@@ -431,15 +425,13 @@ export default function EspaciosAdminPage() {
                   onChange={(e) => setForm((f) => ({ ...f, sortOrder: e.target.value }))}
                   placeholder="0"
                 />
-                <p className="text-xs text-text-subtle">
-                  Número menor → aparece antes en el sidebar.
-                </p>
+                <p className="text-xs text-text-subtle">{t('spaces.orderHint')}</p>
               </div>
 
               <div className="flex justify-end gap-2 border-t border-border-soft pt-3">
                 {editing ? (
                   <Button type="button" variant="ghost" onClick={cancelEdit} disabled={pending}>
-                    Cancelar
+                    {t('spaces.cancel')}
                   </Button>
                 ) : null}
                 <Button
@@ -450,7 +442,11 @@ export default function EspaciosAdminPage() {
                     (!editing && form.slug.trim().length === 0)
                   }
                 >
-                  {pending ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear espacio'}
+                  {pending
+                    ? t('spaces.saving')
+                    : editing
+                      ? t('spaces.saveChanges')
+                      : t('spaces.create')}
                 </Button>
               </div>
             </form>
