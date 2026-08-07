@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +13,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ApiHttpError } from '@/lib/api-client';
 import {
   auditApi,
   entriesToCsv,
@@ -21,8 +21,12 @@ import {
   type ChainVerifyResult,
 } from '@/lib/audit';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate, formatDateTime, formatNumber, formatTime } from '@/lib/i18n/format';
 
 export default function AuditoriaPage() {
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const [entries, setEntries] = useState<AuditEntry[] | null>(null);
   const [verifyResult, setVerifyResult] = useState<ChainVerifyResult | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -36,7 +40,7 @@ export default function AuditoriaPage() {
       setError(null);
       setEntries(await auditApi.list(token, applyFilters));
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar el log.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -52,7 +56,7 @@ export default function AuditoriaPage() {
       const result = await auditApi.verify(token);
       setVerifyResult(result);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos verificar la cadena.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setVerifying(false);
     }
@@ -76,7 +80,7 @@ export default function AuditoriaPage() {
     if (!entries) return null;
     const map = new Map<string, AuditEntry[]>();
     for (const e of entries) {
-      const date = new Date(e.timestamp).toLocaleDateString('es-ES', {
+      const date = formatDate(e.timestamp, {
         day: '2-digit',
         month: 'long',
         year: 'numeric',
@@ -92,11 +96,8 @@ export default function AuditoriaPage() {
     <div className="flex flex-col gap-6">
       <header className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Auditoría</h1>
-          <p className="mt-1 text-text-muted">
-            Registro inmutable de todas las acciones críticas del tenant. La cadena de hashes
-            permite detectar cualquier modificación posterior.
-          </p>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{t('audit.title')}</h1>
+          <p className="mt-1 text-text-muted">{t('audit.description')}</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -104,10 +105,10 @@ export default function AuditoriaPage() {
             onClick={handleExport}
             disabled={!entries || entries.length === 0}
           >
-            Exportar CSV
+            {t('audit.exportCsv')}
           </Button>
           <Button onClick={handleVerify} disabled={verifying}>
-            {verifying ? 'Verificando…' : 'Verificar integridad'}
+            {verifying ? t('audit.verifying') : t('audit.verify')}
           </Button>
         </div>
       </header>
@@ -129,11 +130,12 @@ export default function AuditoriaPage() {
                 </div>
                 <div>
                   <h3 className="font-display text-lg font-semibold text-success-700">
-                    Cadena íntegra
+                    {t('audit.chainValidTitle')}
                   </h3>
                   <p className="mt-1 text-sm text-text-muted">
-                    Verificamos {verifyResult.totalEntries.toLocaleString('es-ES')} entradas
-                    consecutivas. Ninguna fue modificada después de su registro original.
+                    {t('audit.chainValidDescription', {
+                      count: formatNumber(verifyResult.totalEntries),
+                    })}
                   </p>
                 </div>
               </div>
@@ -151,19 +153,17 @@ export default function AuditoriaPage() {
                 </div>
                 <div>
                   <h3 className="font-display text-lg font-semibold text-danger-700">
-                    Cadena comprometida
+                    {t('audit.chainBrokenTitle')}
                   </h3>
                   <p className="mt-1 text-sm text-text">
-                    Detectamos un quiebre en la entrada {verifyResult.firstBrokenId} (
-                    {verifyResult.brokenAt
-                      ? new Date(verifyResult.brokenAt).toLocaleString('es-ES')
-                      : 'fecha desconocida'}
-                    ). Las entradas previas a ese punto siguen siendo confiables.
+                    {t('audit.chainBrokenDescription', {
+                      id: String(verifyResult.firstBrokenId),
+                      fecha: verifyResult.brokenAt
+                        ? formatDateTime(verifyResult.brokenAt)
+                        : t('audit.dateUnknown'),
+                    })}
                   </p>
-                  <p className="mt-2 text-xs text-text-subtle">
-                    Esto NO debería pasar en operación normal — investiga quién tuvo acceso directo
-                    a la base de datos.
-                  </p>
+                  <p className="mt-2 text-xs text-text-subtle">{t('audit.chainBrokenNote')}</p>
                 </div>
               </div>
             )}
@@ -175,11 +175,11 @@ export default function AuditoriaPage() {
         <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="text-xs font-semibold text-text-muted" htmlFor="action">
-              Acción contiene
+              {t('audit.filterActionLabel')}
             </label>
             <Input
               id="action"
-              placeholder="user.signin, admin.user, ..."
+              placeholder={t('audit.filterActionPlaceholder')}
               value={filters.action ?? ''}
               onChange={(e) => setFilters({ ...filters, action: e.target.value })}
               className="mt-1"
@@ -187,11 +187,11 @@ export default function AuditoriaPage() {
           </div>
           <div>
             <label className="text-xs font-semibold text-text-muted" htmlFor="resourceType">
-              Tipo de recurso
+              {t('audit.filterResourceLabel')}
             </label>
             <Input
               id="resourceType"
-              placeholder="user, course, quiz…"
+              placeholder={t('audit.filterResourcePlaceholder')}
               value={filters.resourceType ?? ''}
               onChange={(e) => setFilters({ ...filters, resourceType: e.target.value })}
               className="mt-1"
@@ -199,7 +199,7 @@ export default function AuditoriaPage() {
           </div>
           <div>
             <label className="text-xs font-semibold text-text-muted" htmlFor="dateFrom">
-              Desde
+              {t('audit.filterFrom')}
             </label>
             <Input
               id="dateFrom"
@@ -211,7 +211,7 @@ export default function AuditoriaPage() {
           </div>
           <div>
             <label className="text-xs font-semibold text-text-muted" htmlFor="dateTo">
-              Hasta
+              {t('audit.filterTo')}
             </label>
             <Input
               id="dateTo"
@@ -229,9 +229,9 @@ export default function AuditoriaPage() {
                 void reload({});
               }}
             >
-              Limpiar
+              {t('audit.clear')}
             </Button>
-            <Button onClick={() => void reload(filters)}>Aplicar</Button>
+            <Button onClick={() => void reload(filters)}>{t('audit.apply')}</Button>
           </div>
         </CardContent>
       </Card>
@@ -252,23 +252,17 @@ export default function AuditoriaPage() {
       ) : entries.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
-            <h3 className="font-display text-xl font-semibold">Sin registros</h3>
-            <p className="max-w-md text-text-muted">
-              No hay entradas que coincidan con los filtros. Prueba ampliando el rango o quitando
-              filtros.
-            </p>
+            <h3 className="font-display text-xl font-semibold">{t('audit.emptyTitle')}</h3>
+            <p className="max-w-md text-text-muted">{t('audit.emptyDescription')}</p>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {entries.length.toLocaleString('es-ES')} entradas
+              {t('audit.entriesCount', { count: formatNumber(entries.length) })}
             </CardTitle>
-            <CardDescription>
-              Ordenadas por fecha descendente. Cada fila muestra el actor, la acción y el recurso
-              afectado.
-            </CardDescription>
+            <CardDescription>{t('audit.entriesDescription')}</CardDescription>
           </CardHeader>
           <div className="space-y-6 px-6 pb-6">
             {grouped?.map(([date, dayEntries]) => (
@@ -281,7 +275,7 @@ export default function AuditoriaPage() {
                       className="flex flex-wrap items-start gap-3 border-b border-border bg-surface p-3 text-sm last:border-0 hover:bg-surface-2"
                     >
                       <span className="tabular-nums text-text-subtle min-w-[5rem]">
-                        {new Date(e.timestamp).toLocaleTimeString('es-ES', {
+                        {formatTime(e.timestamp, {
                           hour: '2-digit',
                           minute: '2-digit',
                           second: '2-digit',
@@ -296,7 +290,8 @@ export default function AuditoriaPage() {
                       </span>
                       {e.actorId ? (
                         <span className="ml-auto text-xs text-text-subtle">
-                          por <span className="font-mono">{e.actorId.slice(0, 8)}…</span>
+                          {t('audit.by')}{' '}
+                          <span className="font-mono">{e.actorId.slice(0, 8)}…</span>
                         </span>
                       ) : null}
                       {e.ip ? (

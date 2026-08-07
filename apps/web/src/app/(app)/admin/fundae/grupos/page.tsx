@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -13,14 +14,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
 import {
   fundaeGroupParticipantsApi,
   fundaeGroupsApi,
   formatCents,
-  STATUS_LABELS,
-  TIPO_LABELS,
-  MODALIDAD_LABELS,
   type CreateCostInput,
   type CreateGroupInput,
   type FundaeCost,
@@ -43,6 +42,8 @@ const STATUS_VARIANT: Record<GroupStatus, 'info' | 'success' | 'muted' | 'warnin
  * Lista filtrable + alta + transiciones de estado + costes.
  */
 export default function FundaeGruposPage() {
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const [groups, setGroups] = useState<FundaeGroup[] | null>(null);
   const [statusFilter, setStatusFilter] = useState<GroupStatus | ''>('');
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +62,7 @@ export default function FundaeGruposPage() {
       });
       setGroups(list);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los grupos.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -79,13 +80,12 @@ export default function FundaeGruposPage() {
       ]);
       setDetail({ group, costs, participants });
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar el detalle.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
   async function handleTransition(id: string, action: 'start' | 'close' | 'cancel') {
-    const labels = { start: 'iniciar', close: 'cerrar', cancel: 'cancelar' };
-    if (!confirm(`¿Seguro que quieres ${labels[action]} este grupo?`)) return;
+    if (!confirm(t('groups.transitionConfirm', { verb: t(`transitionVerb.${action}`) }))) return;
     try {
       await fundaeGroupsApi[action](id);
       await reload();
@@ -98,18 +98,18 @@ export default function FundaeGruposPage() {
         setDetail({ group, costs, participants });
       }
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'La transición no fue posible.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
   async function handleRemoveCost(groupId: string, costId: string) {
-    if (!confirm('¿Eliminar este coste?')) return;
+    if (!confirm(t('groups.deleteCostConfirm'))) return;
     try {
       await fundaeGroupsApi.removeCost(groupId, costId);
       const costs = await fundaeGroupsApi.listCosts(groupId);
       setDetail((prev) => (prev ? { ...prev, costs } : prev));
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar el coste.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -117,11 +117,8 @@ export default function FundaeGruposPage() {
     <section className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Grupos bonificables</h1>
-          <p className="mt-1 max-w-3xl text-text-muted">
-            Agrupación de participantes de una acción formativa vinculados a una empresa Fundae. El
-            crédito consumido se debita del crédito de la empresa al cerrar.
-          </p>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{t('groups.title')}</h1>
+          <p className="mt-1 max-w-3xl text-text-muted">{t('groups.description')}</p>
         </div>
         <Button
           type="button"
@@ -131,30 +128,30 @@ export default function FundaeGruposPage() {
           }}
         >
           <Icon name="plus" size={16} />
-          {showForm ? 'Cerrar' : 'Nuevo grupo'}
+          {showForm ? t('shared.close') : t('groups.newGroup')}
         </Button>
       </header>
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
-          <Label htmlFor="statusFilter">Estado</Label>
+          <Label htmlFor="statusFilter">{t('groups.statusFilterLabel')}</Label>
           <select
             id="statusFilter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as GroupStatus | '')}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm"
           >
-            <option value="">Todos</option>
+            <option value="">{t('groups.statusAll')}</option>
             {(['DRAFT', 'ACTIVE', 'CLOSED', 'CANCELLED'] as const).map((s) => (
               <option key={s} value={s}>
-                {STATUS_LABELS[s]}
+                {t(`groupStatus.${s}`)}
               </option>
             ))}
           </select>
         </div>
         <Button type="button" variant="secondary" onClick={() => void reload()}>
           <Icon name="arrow-right" size={14} />
-          Actualizar
+          {t('groups.refresh')}
         </Button>
       </div>
 
@@ -205,10 +202,8 @@ export default function FundaeGruposPage() {
       ) : groups.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
-            <h3 className="font-display text-2xl font-semibold">Sin grupos registrados</h3>
-            <p className="max-w-md text-text-muted">
-              Crea el primer grupo bonificable vinculando una acción formativa a una empresa Fundae.
-            </p>
+            <h3 className="font-display text-2xl font-semibold">{t('groups.emptyTitle')}</h3>
+            <p className="max-w-md text-text-muted">{t('groups.emptyDescription')}</p>
           </CardContent>
         </Card>
       ) : (
@@ -219,18 +214,19 @@ export default function FundaeGruposPage() {
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono text-sm font-semibold text-text">
-                      Grupo {g.numeroGrupo}
+                      {t('groups.groupNumber', { numero: String(g.numeroGrupo) })}
                     </span>
-                    <Badge variant={STATUS_VARIANT[g.status]}>{STATUS_LABELS[g.status]}</Badge>
-                    <Badge variant="muted">{MODALIDAD_LABELS[g.modalidad]}</Badge>
+                    <Badge variant={STATUS_VARIANT[g.status]}>{t(`groupStatus.${g.status}`)}</Badge>
+                    <Badge variant="muted">{t(`modalidad.${g.modalidad}`)}</Badge>
                   </div>
                   <p className="text-xs text-text-muted">
-                    {new Date(g.fechaInicioPrevista).toLocaleDateString('es-ES')} →{' '}
-                    {new Date(g.fechaFinPrevista).toLocaleDateString('es-ES')}
+                    {formatDate(g.fechaInicioPrevista)} → {formatDate(g.fechaFinPrevista)}
                   </p>
                   <p className="text-sm tabular-nums text-text-muted">
-                    Crédito estimado: {formatCents(g.creditoEstimadoCents)} · consumido:{' '}
-                    {formatCents(g.creditoConsumidoCents)}
+                    {t('groups.creditRow', {
+                      estimado: formatCents(g.creditoEstimadoCents),
+                      consumido: formatCents(g.creditoConsumidoCents),
+                    })}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -241,7 +237,7 @@ export default function FundaeGruposPage() {
                     onClick={() => void openDetail(g)}
                   >
                     <Icon name="eye" size={13} />
-                    Ver detalle
+                    {t('groups.viewDetail')}
                   </Button>
                   {g.status === 'DRAFT' ? (
                     <Button
@@ -251,7 +247,7 @@ export default function FundaeGruposPage() {
                       onClick={() => void handleTransition(g.id, 'start')}
                     >
                       <Icon name="play" size={13} />
-                      Iniciar
+                      {t('groups.start')}
                     </Button>
                   ) : null}
                   {g.status === 'ACTIVE' ? (
@@ -262,7 +258,7 @@ export default function FundaeGruposPage() {
                       onClick={() => void handleTransition(g.id, 'close')}
                     >
                       <Icon name="check" size={13} />
-                      Cerrar
+                      {t('groups.close')}
                     </Button>
                   ) : null}
                   {g.status === 'DRAFT' || g.status === 'ACTIVE' ? (
@@ -273,7 +269,7 @@ export default function FundaeGruposPage() {
                       onClick={() => void handleTransition(g.id, 'cancel')}
                     >
                       <Icon name="alert" size={13} />
-                      Cancelar
+                      {t('groups.cancel')}
                     </Button>
                   ) : null}
                 </div>
@@ -295,6 +291,8 @@ function GroupForm({
   onSaved: (g: FundaeGroup) => Promise<void>;
   onCancel: () => void;
 }) {
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -319,7 +317,7 @@ function GroupForm({
       const created = await fundaeGroupsApi.create(dto);
       await onSaved(created);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos crear el grupo.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(false);
     }
@@ -328,36 +326,33 @@ function GroupForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Nuevo grupo bonificable</CardTitle>
-        <CardDescription>
-          El grupo se crea en estado Borrador. Inicia la formación para activarlo (requiere
-          antelación RLPT de 15 días y crédito disponible suficiente).
-        </CardDescription>
+        <CardTitle>{t('groups.formTitle')}</CardTitle>
+        <CardDescription>{t('groups.formDescription')}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="actionId">
-                ID Acción formativa <span className="text-danger-700">*</span>
+                {t('groups.actionIdLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input
                 id="actionId"
                 name="actionId"
                 required
-                placeholder="UUID de la acción"
+                placeholder={t('groups.actionIdPlaceholder')}
                 className="font-mono text-xs"
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="companyId">
-                ID Empresa bonificada <span className="text-danger-700">*</span>
+                {t('groups.companyIdLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input
                 id="companyId"
                 name="companyId"
                 required
-                placeholder="UUID de la empresa"
+                placeholder={t('groups.companyIdPlaceholder')}
                 className="font-mono text-xs"
               />
             </div>
@@ -365,7 +360,7 @@ function GroupForm({
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
-              <Label htmlFor="modalidad">Modalidad</Label>
+              <Label htmlFor="modalidad">{t('groups.modalidadLabel')}</Label>
               <select
                 id="modalidad"
                 name="modalidad"
@@ -374,20 +369,20 @@ function GroupForm({
               >
                 {(['PRESENCIAL', 'TELEFORMACION', 'MIXTA'] as const).map((m) => (
                   <option key={m} value={m}>
-                    {MODALIDAD_LABELS[m]}
+                    {t(`modalidad.${m}`)}
                   </option>
                 ))}
               </select>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="fechaInicioPrevista">
-                Fecha inicio prevista <span className="text-danger-700">*</span>
+                {t('groups.startDateLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input id="fechaInicioPrevista" name="fechaInicioPrevista" type="date" required />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="fechaFinPrevista">
-                Fecha fin prevista <span className="text-danger-700">*</span>
+                {t('groups.endDateLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input id="fechaFinPrevista" name="fechaFinPrevista" type="date" required />
             </div>
@@ -395,18 +390,18 @@ function GroupForm({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="creditoEur">Crédito estimado (€)</Label>
+              <Label htmlFor="creditoEur">{t('groups.creditLabel')}</Label>
               <Input
                 id="creditoEur"
                 name="creditoEur"
                 type="number"
                 step="0.01"
                 min={0}
-                placeholder="0,00"
+                placeholder={t('groups.creditPlaceholder')}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="notas">Notas internas</Label>
+              <Label htmlFor="notas">{t('groups.notesLabel')}</Label>
               <Textarea id="notas" name="notas" rows={2} maxLength={2000} />
             </div>
           </div>
@@ -422,10 +417,10 @@ function GroupForm({
 
           <div className="flex items-center gap-2 border-t border-border-soft pt-4">
             <Button type="submit" disabled={pending}>
-              {pending ? 'Creando…' : 'Crear grupo'}
+              {pending ? t('shared.creating') : t('groups.createGroup')}
             </Button>
             <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
-              Cancelar
+              {t('shared.cancel')}
             </Button>
           </div>
         </form>
@@ -455,6 +450,8 @@ function GroupDetail({
   onParticipantsChanged: () => Promise<void>;
   onClose: () => void;
 }) {
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const isEditable = group.status === 'DRAFT' || group.status === 'ACTIVE';
   const [showCostForm, setShowCostForm] = useState(false);
   const [enrollUserId, setEnrollUserId] = useState('');
@@ -463,14 +460,19 @@ function GroupDetail({
   const [completionResult, setCompletionResult] = useState<GroupCompletionResult | null>(null);
 
   async function handleBulkEnroll() {
-    if (!confirm('Matricular todos los inscritos del curso del catálogo?')) return;
+    if (!confirm(t('groups.bulkEnrollConfirm'))) return;
     setParticipantError(null);
     try {
       const res = await fundaeGroupParticipantsApi.bulkEnroll(group.id);
-      alert(`Matriculados ${res.enrolled} (saltados ${res.skipped} ya existentes).`);
+      alert(
+        t('groups.bulkEnrollResult', {
+          enrolled: String(res.enrolled),
+          skipped: String(res.skipped),
+        }),
+      );
       await onParticipantsChanged();
     } catch (e) {
-      setParticipantError(e instanceof ApiHttpError ? e.message : 'Bulk enroll falló.');
+      setParticipantError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -484,20 +486,20 @@ function GroupDetail({
       setEnrollUserId('');
       await onParticipantsChanged();
     } catch (e) {
-      setParticipantError(e instanceof ApiHttpError ? e.message : 'No pudimos matricular.');
+      setParticipantError(apiErrorMessage(e, tErrors));
     } finally {
       setEnrolling(false);
     }
   }
 
   async function handleRemoveParticipant(participantId: string) {
-    if (!confirm('¿Eliminar matriculación? Quedará en histórico.')) return;
+    if (!confirm(t('groups.removeParticipantConfirm'))) return;
     setParticipantError(null);
     try {
       await fundaeGroupParticipantsApi.remove(group.id, participantId);
       await onParticipantsChanged();
     } catch (e) {
-      setParticipantError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar.');
+      setParticipantError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -509,7 +511,7 @@ function GroupDetail({
         await onParticipantsChanged();
       }
     } catch (e) {
-      alert(e instanceof ApiHttpError ? e.message : 'No pudimos calcular la finalización.');
+      alert(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -525,7 +527,7 @@ function GroupDetail({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (e) {
-      alert(e instanceof ApiHttpError ? e.message : 'No pudimos descargar el ZIP de auditoría.');
+      alert(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -545,7 +547,7 @@ function GroupDetail({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (e) {
-      alert(e instanceof ApiHttpError ? e.message : 'No pudimos descargar el XML.');
+      alert(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -554,13 +556,12 @@ function GroupDetail({
       <CardHeader className="flex flex-row items-start justify-between pb-2">
         <div>
           <CardTitle className="flex items-center gap-2 text-base">
-            Grupo {group.numeroGrupo}
-            <Badge variant={STATUS_VARIANT[group.status]}>{STATUS_LABELS[group.status]}</Badge>
+            {t('groups.groupNumber', { numero: String(group.numeroGrupo) })}
+            <Badge variant={STATUS_VARIANT[group.status]}>{t(`groupStatus.${group.status}`)}</Badge>
           </CardTitle>
           <CardDescription>
-            {MODALIDAD_LABELS[group.modalidad]} ·{' '}
-            {new Date(group.fechaInicioPrevista).toLocaleDateString('es-ES')} →{' '}
-            {new Date(group.fechaFinPrevista).toLocaleDateString('es-ES')}
+            {t(`modalidad.${group.modalidad}`)} · {formatDate(group.fechaInicioPrevista)} →{' '}
+            {formatDate(group.fechaFinPrevista)}
           </CardDescription>
         </div>
         <Button type="button" size="sm" variant="ghost" onClick={onClose}>
@@ -570,15 +571,15 @@ function GroupDetail({
       <CardContent className="space-y-4">
         <div className="grid gap-2 text-sm sm:grid-cols-3">
           <div>
-            <span className="text-text-muted">Crédito estimado:</span>{' '}
+            <span className="text-text-muted">{t('groups.creditEstimatedLabel')}</span>{' '}
             <span className="font-semibold">{formatCents(group.creditoEstimadoCents)}</span>
           </div>
           <div>
-            <span className="text-text-muted">Consumido:</span>{' '}
+            <span className="text-text-muted">{t('groups.consumedLabel')}</span>{' '}
             <span className="font-semibold">{formatCents(group.creditoConsumidoCents)}</span>
           </div>
           <div>
-            <span className="text-text-muted">Directo/Indirecto/Org:</span>{' '}
+            <span className="text-text-muted">{t('groups.tipoBreakdownLabel')}</span>{' '}
             <span className="font-mono text-xs">
               {formatCents(group.costsByTipo.DIRECTO)} / {formatCents(group.costsByTipo.INDIRECTO)}{' '}
               / {formatCents(group.costsByTipo.ORGANIZACION)}
@@ -591,13 +592,13 @@ function GroupDetail({
             {group.status === 'DRAFT' ? (
               <Button type="button" size="sm" onClick={() => onTransition('start')}>
                 <Icon name="play" size={13} />
-                Iniciar grupo
+                {t('groups.startGroup')}
               </Button>
             ) : null}
             {group.status === 'ACTIVE' ? (
               <Button type="button" size="sm" onClick={() => onTransition('close')}>
                 <Icon name="check" size={13} />
-                Cerrar grupo
+                {t('groups.closeGroup')}
               </Button>
             ) : null}
             <Button
@@ -607,7 +608,7 @@ function GroupDetail({
               onClick={() => onTransition('cancel')}
             >
               <Icon name="alert" size={13} />
-              Cancelar grupo
+              {t('groups.cancelGroup')}
             </Button>
             <Button
               type="button"
@@ -616,7 +617,7 @@ function GroupDetail({
               onClick={() => void handleDownloadXml('start')}
             >
               <Icon name="file" size={13} />
-              XML inicio
+              {t('groups.xmlStart')}
             </Button>
             <Button
               type="button"
@@ -625,7 +626,7 @@ function GroupDetail({
               onClick={() => void handleDownloadXml('end')}
             >
               <Icon name="file" size={13} />
-              XML finalización
+              {t('groups.xmlEnd')}
             </Button>
             <Button
               type="button"
@@ -634,7 +635,7 @@ function GroupDetail({
               onClick={() => void handleDownloadAuditZip()}
             >
               <Icon name="package" size={13} />
-              ZIP auditoría
+              {t('groups.auditZip')}
             </Button>
             <Button
               type="button"
@@ -643,7 +644,7 @@ function GroupDetail({
               onClick={() => void handleComputeCompletion(true)}
             >
               <Icon name="chart" size={13} />
-              Vista previa finalización
+              {t('groups.completionPreviewBtn')}
             </Button>
             {group.status === 'CLOSED' || group.status === 'ACTIVE' ? (
               <Button
@@ -653,7 +654,7 @@ function GroupDetail({
                 onClick={() => void handleComputeCompletion(false)}
               >
                 <Icon name="check" size={13} />
-                Persistir finalización
+                {t('groups.completionPersistBtn')}
               </Button>
             ) : null}
           </div>
@@ -663,27 +664,41 @@ function GroupDetail({
           <div className="rounded-lg border border-border-soft bg-surface-soft p-3 text-xs">
             <div className="mb-2 flex items-center gap-2">
               <h5 className="text-sm font-semibold">
-                Finalización {completionResult.preview ? '(preview)' : '(persistida)'}
+                {t('groups.completionTitle', {
+                  estado: completionResult.preview
+                    ? t('groups.completionPreview')
+                    : t('groups.completionPersisted'),
+                })}
               </h5>
-              <Badge variant="info">Umbral {completionResult.umbralAplicadoPct}%</Badge>
-              <Badge variant="success">APTO {completionResult.aptos}</Badge>
-              <Badge variant="warning">NO_APTO {completionResult.noAptos}</Badge>
-              <Badge variant="muted">EN_CURSO {completionResult.enCurso}</Badge>
+              <Badge variant="info">
+                {t('groups.thresholdBadge', {
+                  pct: String(completionResult.umbralAplicadoPct),
+                })}
+              </Badge>
+              <Badge variant="success">
+                {t('groups.aptoCount', { count: String(completionResult.aptos) })}
+              </Badge>
+              <Badge variant="warning">
+                {t('groups.noAptoCount', { count: String(completionResult.noAptos) })}
+              </Badge>
+              <Badge variant="muted">
+                {t('groups.enCursoCount', { count: String(completionResult.enCurso) })}
+              </Badge>
               <button
                 type="button"
                 onClick={() => setCompletionResult(null)}
                 className="ml-auto text-text-muted hover:text-text"
               >
-                Cerrar
+                {t('groups.closeCompletion')}
               </button>
             </div>
             <table className="w-full">
               <thead>
                 <tr className="text-left text-text-subtle">
-                  <th className="pb-1 font-medium">Alumno</th>
-                  <th className="pb-1 text-right font-medium">Progreso</th>
-                  <th className="pb-1 text-right font-medium">Horas</th>
-                  <th className="pb-1 text-right font-medium">Resultado</th>
+                  <th className="pb-1 font-medium">{t('groups.colAlumno')}</th>
+                  <th className="pb-1 text-right font-medium">{t('groups.colProgreso')}</th>
+                  <th className="pb-1 text-right font-medium">{t('groups.colHoras')}</th>
+                  <th className="pb-1 text-right font-medium">{t('groups.colResultado')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -691,7 +706,9 @@ function GroupDetail({
                   <tr key={p.participantId} className="border-t border-border-soft">
                     <td className="py-1 pr-2">{p.userName ?? p.userEmail ?? p.userId}</td>
                     <td className="py-1 text-right tabular-nums">{p.progressPercent}%</td>
-                    <td className="py-1 text-right tabular-nums">{p.horasAsistidas}h</td>
+                    <td className="py-1 text-right tabular-nums">
+                      {t('groups.hoursShort', { hours: String(p.horasAsistidas) })}
+                    </td>
                     <td className="py-1 text-right">
                       <Badge
                         variant={
@@ -714,7 +731,7 @@ function GroupDetail({
 
         <div className="space-y-2 border-t border-border-soft pt-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold">Costes</h4>
+            <h4 className="text-sm font-semibold">{t('groups.costsTitle')}</h4>
             {isEditable ? (
               <Button
                 type="button"
@@ -723,7 +740,7 @@ function GroupDetail({
                 onClick={() => setShowCostForm((v) => !v)}
               >
                 <Icon name="plus" size={13} />
-                Añadir coste
+                {t('groups.addCost')}
               </Button>
             ) : null}
           </div>
@@ -740,14 +757,14 @@ function GroupDetail({
           ) : null}
 
           {costs.length === 0 ? (
-            <p className="text-xs text-text-muted">Sin costes registrados.</p>
+            <p className="text-xs text-text-muted">{t('groups.costsEmpty')}</p>
           ) : (
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-text-subtle">
-                  <th className="pb-1 font-medium">Tipo</th>
-                  <th className="pb-1 font-medium">Concepto</th>
-                  <th className="pb-1 text-right font-medium">Importe</th>
+                  <th className="pb-1 font-medium">{t('groups.colTipo')}</th>
+                  <th className="pb-1 font-medium">{t('groups.colConcepto')}</th>
+                  <th className="pb-1 text-right font-medium">{t('groups.colImporte')}</th>
                   {isEditable ? <th /> : null}
                 </tr>
               </thead>
@@ -755,7 +772,7 @@ function GroupDetail({
                 {costs.map((c) => (
                   <tr key={c.id} className="border-t border-border-soft">
                     <td className="py-1 pr-2">
-                      <Badge variant="muted">{TIPO_LABELS[c.tipo]}</Badge>
+                      <Badge variant="muted">{t(`costTipo.${c.tipo}`)}</Badge>
                     </td>
                     <td className="py-1 pr-2">{c.concepto}</td>
                     <td className="py-1 text-right tabular-nums font-semibold">
@@ -782,7 +799,9 @@ function GroupDetail({
         <div className="space-y-2 border-t border-border-soft pt-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold">
-              Participantes ({participants.filter((p) => p.status === 'ENROLLED').length})
+              {t('groups.participantsTitle', {
+                count: String(participants.filter((p) => p.status === 'ENROLLED').length),
+              })}
             </h4>
             {isEditable ? (
               <Button
@@ -792,7 +811,7 @@ function GroupDetail({
                 onClick={() => void handleBulkEnroll()}
               >
                 <Icon name="users" size={13} />
-                Bulk enroll desde curso
+                {t('groups.bulkEnroll')}
               </Button>
             ) : null}
           </div>
@@ -802,12 +821,12 @@ function GroupDetail({
               <Input
                 value={enrollUserId}
                 onChange={(e) => setEnrollUserId(e.target.value)}
-                placeholder="UUID del alumno"
+                placeholder={t('groups.enrollPlaceholder')}
                 className="h-8 font-mono text-xs"
                 required
               />
               <Button type="submit" size="sm" disabled={enrolling || !enrollUserId}>
-                {enrolling ? '…' : 'Matricular'}
+                {enrolling ? '…' : t('groups.enroll')}
               </Button>
             </form>
           ) : null}
@@ -822,14 +841,14 @@ function GroupDetail({
           ) : null}
 
           {participants.length === 0 ? (
-            <p className="text-xs text-text-muted">Sin matriculaciones registradas.</p>
+            <p className="text-xs text-text-muted">{t('groups.participantsEmpty')}</p>
           ) : (
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-text-subtle">
-                  <th className="pb-1 font-medium">Alumno</th>
-                  <th className="pb-1 font-medium">NIF</th>
-                  <th className="pb-1 font-medium">Estado</th>
+                  <th className="pb-1 font-medium">{t('groups.colAlumno')}</th>
+                  <th className="pb-1 font-medium">{t('groups.colNif')}</th>
+                  <th className="pb-1 font-medium">{t('groups.colEstado')}</th>
                   {isEditable ? <th /> : null}
                 </tr>
               </thead>
@@ -843,7 +862,7 @@ function GroupDetail({
                     <td className="py-1 pr-2 font-mono">{p.nifAlumno ?? '—'}</td>
                     <td className="py-1 pr-2">
                       <Badge variant={p.status === 'ENROLLED' ? 'success' : 'muted'}>
-                        {p.status === 'ENROLLED' ? 'Matriculado' : 'Eliminado'}
+                        {t(`enrollmentStatus.${p.status}`)}
                       </Badge>
                     </td>
                     {isEditable && p.status === 'ENROLLED' ? (
@@ -881,6 +900,8 @@ function CostForm({
   onSaved: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -900,7 +921,7 @@ function CostForm({
       await fundaeGroupsApi.addCost(groupId, dto);
       await onSaved();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos añadir el coste.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(false);
     }
@@ -911,7 +932,7 @@ function CostForm({
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1">
           <Label htmlFor="tipo" className="text-xs">
-            Tipo
+            {t('groups.costTipoLabel')}
           </Label>
           <select
             id="tipo"
@@ -919,22 +940,22 @@ function CostForm({
             defaultValue="DIRECTO"
             className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
           >
-            {(['DIRECTO', 'INDIRECTO', 'ORGANIZACION'] as const).map((t) => (
-              <option key={t} value={t}>
-                {TIPO_LABELS[t]}
+            {(['DIRECTO', 'INDIRECTO', 'ORGANIZACION'] as const).map((tipo) => (
+              <option key={tipo} value={tipo}>
+                {t(`costTipo.${tipo}`)}
               </option>
             ))}
           </select>
         </div>
         <div className="space-y-1">
           <Label htmlFor="concepto" className="text-xs">
-            Concepto <span className="text-danger-700">*</span>
+            {t('groups.costConceptoLabel')} <span className="text-danger-700">*</span>
           </Label>
           <Input id="concepto" name="concepto" required maxLength={200} className="h-8 text-xs" />
         </div>
         <div className="space-y-1">
           <Label htmlFor="importeEur" className="text-xs">
-            Importe (€) <span className="text-danger-700">*</span>
+            {t('groups.costImporteLabel')} <span className="text-danger-700">*</span>
           </Label>
           <Input
             id="importeEur"
@@ -959,10 +980,10 @@ function CostForm({
 
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={pending}>
-          {pending ? 'Añadiendo…' : 'Añadir'}
+          {pending ? t('groups.adding') : t('groups.add')}
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={pending}>
-          Cancelar
+          {t('shared.cancel')}
         </Button>
       </div>
     </form>
