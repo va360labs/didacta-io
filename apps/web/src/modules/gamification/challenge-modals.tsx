@@ -5,14 +5,15 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Icon } from '@/components/icon';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ApiHttpError } from '@/lib/api-client';
 import { uploadCommunityFile } from '@/lib/community-upload';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { gamificationApi, type ChallengeView, type MyPerkView } from './client';
 
 /**
@@ -31,7 +32,7 @@ const inputClass =
  * El texto del control nativo de fichero ("Choose File / No file chosen") lo
  * pone el navegador en su propio idioma y no hay forma de traducirlo ni con
  * CSS. Como esta pantalla la ve el alumno, se oculta el input y se dispara
- * desde un botón propio en español.
+ * desde un botón propio con el copy del catálogo.
  */
 function FileField({
   id,
@@ -46,6 +47,8 @@ function FileField({
   onClear: () => void;
   disabled?: boolean;
 }) {
+  const t = useTranslations('modGamification');
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <input
@@ -59,7 +62,7 @@ function FileField({
         htmlFor={id}
         className="cursor-pointer rounded-lg bg-(--didacta-trust) px-3 py-2 text-sm font-semibold text-white hover:opacity-90"
       >
-        {fileName ? 'Cambiar archivo' : 'Elegir archivo'}
+        {fileName ? t('file.change') : t('file.pick')}
       </label>
       {fileName ? (
         <span className="flex min-w-0 items-center gap-1.5 text-sm text-text-muted">
@@ -70,11 +73,11 @@ function FileField({
             onClick={onClear}
             className="text-text-subtle underline hover:text-text"
           >
-            quitar
+            {t('file.remove')}
           </button>
         </span>
       ) : (
-        <span className="text-sm text-text-subtle">Ningún archivo seleccionado</span>
+        <span className="text-sm text-text-subtle">{t('file.none')}</span>
       )}
     </div>
   );
@@ -96,6 +99,8 @@ export function RequestPerkModal({
   onOpenChange: (open: boolean) => void;
   onRequested: () => void | Promise<void>;
 }) {
+  const t = useTranslations('modGamification');
+  const tErrors = useTranslations('errors');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,11 +120,7 @@ export function RequestPerkModal({
       onOpenChange(false);
       await onRequested();
     } catch (e) {
-      setError(
-        e instanceof ApiHttpError || e instanceof Error
-          ? e.message
-          : 'No se pudo enviar la solicitud.',
-      );
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -131,11 +132,11 @@ export function RequestPerkModal({
         <div className="space-y-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-              Pedir beneficio
+              {t('perk.eyebrow')}
             </p>
             <h2 className="mt-0.5 text-base font-bold text-text">{perk.title}</h2>
             <p className="mt-1 text-sm text-text-muted">
-              Desbloqueado con el nivel {perk.levelName}.
+              {t('perk.unlockedWith', { level: perk.levelName })}
             </p>
           </div>
 
@@ -146,31 +147,30 @@ export function RequestPerkModal({
           ) : null}
 
           <div className="space-y-1.5">
-            <Label htmlFor="perk-nota">¿Algo que debamos saber antes? (opcional)</Label>
+            <Label htmlFor="perk-nota">{t('perk.noteLabel')}</Label>
             <Textarea
               id="perk-nota"
               rows={3}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Por ejemplo, qué te gustaría trabajar o tu disponibilidad."
+              placeholder={t('perk.notePlaceholder')}
             />
           </div>
 
           <p className="text-sm text-text-muted">
-            Al enviarlo queda como solicitud pendiente: te escribiremos para cuadrarlo.
             {perk.quotaLeft !== null
-              ? ` Te ${perk.quotaLeft === 1 ? 'queda' : 'quedan'} ${perk.quotaLeft}.`
-              : ''}
+              ? t('perk.pendingNoticeWithQuota', { count: perk.quotaLeft })
+              : t('perk.pendingNotice')}
           </p>
 
           {error ? <p className="text-sm text-(--didacta-coral)">{error}</p> : null}
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-              Cancelar
+              {t('perk.cancel')}
             </Button>
             <Button onClick={() => void submit()} disabled={busy}>
-              {busy ? 'Enviando…' : 'Enviar solicitud'}
+              {busy ? t('perk.sending') : t('perk.send')}
             </Button>
           </div>
         </div>
@@ -197,6 +197,8 @@ export function SubmitChallengeModal({
   onOpenChange: (open: boolean) => void;
   onSubmitted: () => void | Promise<void>;
 }) {
+  const t = useTranslations('modGamification');
+  const tErrors = useTranslations('errors');
   const [step, setStep] = useState<'form' | 'confirm'>('form');
   const [note, setNote] = useState('');
   const [link, setLink] = useState('');
@@ -222,27 +224,30 @@ export function SubmitChallengeModal({
       ? { url: link.trim(), name: link.trim(), kind: 'link' }
       : null;
 
-  const handleFile = useCallback(async (input: HTMLInputElement) => {
-    const picked = input.files?.[0];
-    if (!picked) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const uploaded = await uploadCommunityFile(picked);
-      setFile({ url: uploaded.url, name: picked.name });
-      // Subir un archivo manda sobre el enlace: una sola prueba por entrega.
-      setLink('');
-    } catch {
-      setError('No se pudo subir el archivo. Prueba con otro formato o tamaño.');
-    } finally {
-      setBusy(false);
-      input.value = '';
-    }
-  }, []);
+  const handleFile = useCallback(
+    async (input: HTMLInputElement) => {
+      const picked = input.files?.[0];
+      if (!picked) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const uploaded = await uploadCommunityFile(picked);
+        setFile({ url: uploaded.url, name: picked.name });
+        // Subir un archivo manda sobre el enlace: una sola prueba por entrega.
+        setLink('');
+      } catch {
+        setError(t('submit.uploadError'));
+      } finally {
+        setBusy(false);
+        input.value = '';
+      }
+    },
+    [t],
+  );
 
   function goToConfirm() {
     if (challenge.proofRequired && !proof) {
-      setError('Este reto exige adjuntar la prueba: sube el archivo o pega el enlace.');
+      setError(t('submit.proofRequired'));
       return;
     }
     setError(null);
@@ -261,11 +266,7 @@ export function SubmitChallengeModal({
       onOpenChange(false);
       await onSubmitted();
     } catch (e) {
-      setError(
-        e instanceof ApiHttpError || e instanceof Error
-          ? e.message
-          : 'No se pudo enviar la entrega.',
-      );
+      setError(apiErrorMessage(e, tErrors));
       setStep('form');
     } finally {
       setBusy(false);
@@ -279,28 +280,28 @@ export function SubmitChallengeModal({
           <div className="space-y-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-                Entregar reto
+                {t('submit.eyebrow')}
               </p>
               <h2 className="mt-0.5 text-base font-bold text-text">{challenge.title}</h2>
               <p className="mt-1 text-sm text-text-muted">
-                Vale {challenge.points} puntos. La revisa el equipo antes de acreditarlos.
+                {t('submit.worth', { points: challenge.points })}
               </p>
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="entrega-nota">Cuéntanos qué has hecho</Label>
+              <Label htmlFor="entrega-nota">{t('submit.noteLabel')}</Label>
               <Textarea
                 id="entrega-nota"
                 rows={3}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Un par de líneas sobre el resultado."
+                placeholder={t('submit.notePlaceholder')}
               />
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="entrega-archivo">
-                Sube la prueba{challenge.proofRequired ? '' : ' (opcional)'}
+                {challenge.proofRequired ? t('submit.proofLabel') : t('submit.proofLabelOptional')}
               </Label>
               <FileField
                 id="entrega-archivo"
@@ -312,13 +313,13 @@ export function SubmitChallengeModal({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="entrega-enlace">…o pega un enlace</Label>
+              <Label htmlFor="entrega-enlace">{t('submit.linkLabel')}</Label>
               <input
                 id="entrega-enlace"
                 type="url"
                 value={link}
                 onChange={(e) => setLink(e.target.value)}
-                placeholder="https://…"
+                placeholder={t('submit.linkPlaceholder')}
                 disabled={file !== null}
                 className={inputClass}
               />
@@ -328,10 +329,10 @@ export function SubmitChallengeModal({
 
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancelar
+                {t('submit.cancel')}
               </Button>
               <Button onClick={goToConfirm} disabled={busy}>
-                {busy ? 'Subiendo…' : 'Continuar'}
+                {busy ? t('submit.uploading') : t('submit.continue')}
               </Button>
             </div>
           </div>
@@ -339,39 +340,43 @@ export function SubmitChallengeModal({
           <div className="space-y-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-                Confirmar entrega
+                {t('submit.confirmEyebrow')}
               </p>
               <h2 className="mt-0.5 text-base font-bold text-text">{challenge.title}</h2>
             </div>
 
             <div className="rounded-lg border border-border bg-bg-subtle p-3 text-sm">
-              <p className="font-medium text-text">Esto es lo que vas a enviar:</p>
+              <p className="font-medium text-text">{t('submit.confirmIntro')}</p>
               <dl className="mt-2 space-y-1.5 text-text-muted">
                 <div>
-                  <dt className="inline font-medium text-text">Prueba: </dt>
+                  <dt className="inline font-medium text-text">{t('submit.confirmProofTerm')} </dt>
                   <dd className="inline break-all">
-                    {proof ? (proof.kind === 'file' ? proof.name : proof.url) : 'sin adjuntar'}
+                    {proof
+                      ? proof.kind === 'file'
+                        ? proof.name
+                        : proof.url
+                      : t('submit.confirmNoProof')}
                   </dd>
                 </div>
                 <div>
-                  <dt className="inline font-medium text-text">Comentario: </dt>
-                  <dd className="inline whitespace-pre-line">{note.trim() || 'sin comentario'}</dd>
+                  <dt className="inline font-medium text-text">{t('submit.confirmNoteTerm')} </dt>
+                  <dd className="inline whitespace-pre-line">
+                    {note.trim() || t('submit.confirmNoNote')}
+                  </dd>
                 </div>
               </dl>
             </div>
 
-            <p className="text-sm text-text-muted">
-              Solo puedes entregar este reto una vez, así que revísalo antes de enviar.
-            </p>
+            <p className="text-sm text-text-muted">{t('submit.confirmWarning')}</p>
 
             {error ? <p className="text-sm text-(--didacta-coral)">{error}</p> : null}
 
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setStep('form')} disabled={busy}>
-                Volver
+                {t('submit.back')}
               </Button>
               <Button onClick={() => void submit()} disabled={busy}>
-                {busy ? 'Enviando…' : 'Confirmar y enviar'}
+                {busy ? t('submit.sending') : t('submit.confirmSend')}
               </Button>
             </div>
           </div>
