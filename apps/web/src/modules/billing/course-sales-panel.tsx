@@ -6,12 +6,15 @@
  */
 
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { BuyCourseButton } from '@/components/buy-course-button';
 import { Icon } from '@/components/icon';
 import { Card, CardContent } from '@/components/ui/card';
 import { getCourseOffer, type CourseOffer, type CourseOfferOption } from '@/modules/billing/client';
-import { getMembershipPage, formatCents, type MembershipPage } from '@/lib/membership';
+import { formatCents } from '@/lib/i18n/format';
+import type { TranslatorLike } from '@/lib/i18n/labels';
+import { getMembershipPage, type MembershipPage } from '@/lib/membership';
 
 /**
  * Panel de venta de un curso que el alumno todavía no tiene.
@@ -24,6 +27,7 @@ import { getMembershipPage, formatCents, type MembershipPage } from '@/lib/membe
  * inventa un precio.
  */
 export function CourseSalesPanel({ courseId }: { courseId: string }) {
+  const t = useTranslations('modBilling');
   const { offer, membership } = useOfertaYMembresia(courseId);
   const opciones = offer?.options ?? [];
   const plan = destacado(membership);
@@ -35,18 +39,20 @@ export function CourseSalesPanel({ courseId }: { courseId: string }) {
         <Card>
           <CardContent className="space-y-5 p-6">
             <div>
-              <h2 className="font-display text-xl font-semibold text-text">Empieza este curso</h2>
+              <h2 className="font-display text-xl font-semibold text-text">
+                {t('sales.startTitle')}
+              </h2>
               <p className="mt-1 text-sm text-text-muted">
                 {opciones.length > 0
-                  ? 'Acceso inmediato a todas las lecciones, con las actualizaciones incluidas.'
-                  : 'Este curso está incluido en la membresía. Si tu organización te dio un código de invitación, puedes canjearlo abajo.'}
+                  ? t('sales.startSubtitle')
+                  : t('sales.startSubtitleMembership')}
               </p>
             </div>
             <ul className="grid gap-2.5 sm:grid-cols-2">
-              <Beneficio texto="Acceso de por vida y actualizaciones" />
-              <Beneficio texto="Certificado verificable al terminar" />
-              <Beneficio texto="Aprendes a tu ritmo, desde cualquier dispositivo" />
-              <Beneficio texto="Comunidad de alumnos y soporte" />
+              <Beneficio texto={t('sales.benefitLifetime')} />
+              <Beneficio texto={t('sales.benefitCertificate')} />
+              <Beneficio texto={t('sales.benefitPace')} />
+              <Beneficio texto={t('sales.benefitCommunity')} />
             </ul>
           </CardContent>
         </Card>
@@ -61,8 +67,7 @@ export function CourseSalesPanel({ courseId }: { courseId: string }) {
           {offer !== null && opciones.length === 0 && !plan ? (
             <Card>
               <CardContent className="p-6 text-sm text-text-muted">
-                Este curso todavía no está disponible para la compra. Si tienes un código de
-                invitación, puedes canjearlo abajo.
+                {t('sales.notForSale')}
               </CardContent>
             </Card>
           ) : null}
@@ -74,10 +79,10 @@ export function CourseSalesPanel({ courseId }: { courseId: string }) {
       {variasOpciones ? (
         <section className="space-y-4">
           <div>
-            <h2 className="font-display text-xl font-semibold text-text">Elige tu formato</h2>
-            <p className="mt-1 text-sm text-text-muted">
-              El mismo curso con distinto nivel de acompañamiento.
-            </p>
+            <h2 className="font-display text-xl font-semibold text-text">
+              {t('sales.formatsTitle')}
+            </h2>
+            <p className="mt-1 text-sm text-text-muted">{t('sales.formatsSubtitle')}</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {opciones.map((o) => (
@@ -106,38 +111,42 @@ function CajaAccesoTotal({
 }: {
   plan: { amountCents: number; intervalMonths: number; currency: string };
 }) {
+  const t = useTranslations('modBilling');
+
   return (
     <Card className="acceso-total-card">
       <CardContent className="space-y-3 p-6">
         <div className="acceso-total-eyebrow flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
           <Icon name="sparkles" size={14} />
-          Acceso total
+          {t('membership.eyebrow')}
         </div>
         <p className="text-sm text-text">
-          Accede a <strong>todos los cursos</strong> desde{' '}
-          <strong>{formatCents(plan.amountCents, plan.currency)}</strong>{' '}
-          {periodo(plan.intervalMonths)}.
+          {t.rich('membership.pitch', {
+            price: formatCents(plan.amountCents, plan.currency),
+            period: periodo(plan.intervalMonths, t),
+            strong: (chunks) => <strong>{chunks}</strong>,
+          })}
         </p>
         <Link
           href="/unete"
           className="acceso-total-cta inline-flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors"
         >
-          Ver membresías
+          {t('membership.cta')}
         </Link>
-        <p className="text-center text-xs text-text-muted">
-          Cancela cuando quieras, sin permanencia
-        </p>
+        <p className="text-center text-xs text-text-muted">{t('membership.noCommitment')}</p>
       </CardContent>
     </Card>
   );
 }
 
 function CajaPrecio({ courseId, opcion }: { courseId: string; opcion: CourseOfferOption }) {
+  const t = useTranslations('modBilling');
+
   return (
     <Card>
       <CardContent className="space-y-4 p-6">
         <Precio opcion={opcion} grande />
-        <p className="text-xs text-text-muted">Pago único · IVA incluido</p>
+        <p className="text-xs text-text-muted">{t('sales.onePayment')}</p>
         <BuyCourseButton courseId={courseId} optionId={opcion.id} size="lg" className="w-full" />
       </CardContent>
     </Card>
@@ -145,21 +154,23 @@ function CajaPrecio({ courseId, opcion }: { courseId: string; opcion: CourseOffe
 }
 
 function TarjetaOpcion({ courseId, opcion }: { courseId: string; opcion: CourseOfferOption }) {
+  const t = useTranslations('modBilling');
+
   return (
     <Card
       className={opcion.isFeatured ? 'relative border-2 border-brand-500 shadow-md' : 'relative'}
     >
       {opcion.isFeatured ? (
         <span className="absolute -top-3 left-6 rounded-full bg-brand-600 px-3 py-0.5 text-xs font-semibold text-white">
-          El más elegido
+          {t('sales.featured')}
         </span>
       ) : null}
       <CardContent className="flex h-full flex-col gap-4 p-6">
         <h3 className="font-display text-base font-semibold text-text">
-          {opcion.name || 'Curso completo'}
+          {opcion.name || t('sales.defaultOptionName')}
         </h3>
         <Precio opcion={opcion} />
-        <p className="text-xs text-text-muted">Pago único · IVA incluido</p>
+        <p className="text-xs text-text-muted">{t('sales.onePayment')}</p>
         {opcion.perks.length > 0 ? (
           <ul className="flex-1 space-y-2">
             {opcion.perks.map((p) => (
@@ -172,7 +183,7 @@ function TarjetaOpcion({ courseId, opcion }: { courseId: string; opcion: CourseO
         <BuyCourseButton
           courseId={courseId}
           optionId={opcion.id}
-          label="Comprar"
+          label={t('sales.buy')}
           className="w-full"
         />
       </CardContent>
@@ -181,6 +192,8 @@ function TarjetaOpcion({ courseId, opcion }: { courseId: string; opcion: CourseO
 }
 
 function Precio({ opcion, grande = false }: { opcion: CourseOfferOption; grande?: boolean }) {
+  const t = useTranslations('modBilling');
+
   return (
     <div className="flex flex-wrap items-baseline gap-2">
       <span
@@ -195,7 +208,7 @@ function Precio({ opcion, grande = false }: { opcion: CourseOfferOption; grande?
       ) : null}
       {opcion.discountPercent ? (
         <span className="rounded-full bg-success-50 px-2 py-0.5 text-xs font-semibold text-success-700">
-          −{opcion.discountPercent}%
+          {t('sales.discount', { percent: opcion.discountPercent })}
         </span>
       ) : null}
     </div>
@@ -208,6 +221,7 @@ function Precio({ opcion, grande = false }: { opcion: CourseOfferOption; grande?
  * formatos ofrece el más barato ("desde X €") para no repetir la rejilla.
  */
 export function LockedContentActions({ courseId }: { courseId: string }) {
+  const t = useTranslations('modBilling');
   const { offer, membership } = useOfertaYMembresia(courseId);
   const plan = destacado(membership);
   const opciones = offer?.options ?? [];
@@ -222,8 +236,8 @@ export function LockedContentActions({ courseId }: { courseId: string }) {
           optionId={barata.id}
           label={
             opciones.length > 1
-              ? `Comprar desde ${formatCents(barata.unitAmount, barata.currency)}`
-              : `Comprar por ${formatCents(barata.unitAmount, barata.currency)}`
+              ? t('sales.buyFrom', { price: formatCents(barata.unitAmount, barata.currency) })
+              : t('sales.buyFor', { price: formatCents(barata.unitAmount, barata.currency) })
           }
         />
       ) : null}
@@ -232,7 +246,7 @@ export function LockedContentActions({ courseId }: { courseId: string }) {
           href="/unete"
           className="inline-flex items-center justify-center rounded-lg bg-warning-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-warning-700"
         >
-          Desbloquea todo · Ver membresías
+          {t('membership.unlockAll')}
         </Link>
       ) : null}
     </div>
@@ -289,8 +303,8 @@ function destacado(page: MembershipPage | null) {
   return [...planes].sort((a, b) => a.amountCents - b.amountCents)[0]!;
 }
 
-function periodo(meses: number): string {
-  if (meses === 1) return 'al mes';
-  if (meses === 12) return 'al año';
-  return `cada ${meses} meses`;
+function periodo(meses: number, t: TranslatorLike): string {
+  if (meses === 1) return t('membership.periodMonthly');
+  if (meses === 12) return t('membership.periodYearly');
+  return t('membership.periodEvery', { months: meses });
 }

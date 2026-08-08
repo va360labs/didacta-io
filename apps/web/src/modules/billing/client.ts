@@ -31,6 +31,7 @@
 
 import { apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { formatCurrency } from '@/lib/i18n/format';
 
 /**
  * Forma exacta del retorno del backend `BillingService.startCheckout`:
@@ -139,14 +140,16 @@ export const billingApi = {
 
 /**
  * Formatea un unitAmount (céntimos) + currency (ISO-4217 minúsculas) a una
- * cadena humana. Ej. (9900, 'eur') → "99,00 €".
+ * cadena humana. Ej. (9900, 'eur') → "99,00 €" en es-ES.
+ *
+ * A diferencia de `formatCents`, conserva SIEMPRE los dos decimales (es la
+ * vista de administración de precios de Stripe: ahí "99 €" y "99,00 €" no son
+ * lo mismo de un vistazo). El locale sale de las preferencias del usuario
+ * vía `formatCurrency`; el catch cubre un `currency` que Intl no reconozca.
  */
 export function formatPrice(unitAmount: number, currency: string): string {
   try {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: currency.toUpperCase(),
-    }).format(unitAmount / 100);
+    return formatCurrency(unitAmount / 100, currency.toUpperCase());
   } catch {
     return `${(unitAmount / 100).toFixed(2)} ${currency.toUpperCase()}`;
   }
