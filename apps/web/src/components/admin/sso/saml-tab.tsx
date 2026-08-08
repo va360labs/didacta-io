@@ -8,7 +8,7 @@
 /**
  * Panel admin · SSO con SAML 2.0 (9º piloto License SDK).
  *
- * Sigue al pie de la letra `docs/UI-EE-GATING.md`:
+ * Convención de gating EE:
  *   - Header h1 + descripción FUERA de <EeGate>.
  *   - Panel real DENTRO de <EeGate> con SamlUpsellCard fallback.
  *   - El backend gatea TODOS los endpoints admin con @RequiresCapability — esta

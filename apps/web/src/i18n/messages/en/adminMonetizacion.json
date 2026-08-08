@@ -152,7 +152,7 @@
     "uninstalling": "Uninstalling…",
     "uninstall": "Uninstall",
     "teaserTitle": "From the web marketplace (coming soon)",
-    "teaserDescription": "Soon you will be able to browse the public module catalog on didacta.io and push modules to this instance with one click. The flow is described in <code>docs/MARKETPLACE-WEB-SPEC.md</code>. Meanwhile, the offline upload above is the supported way."
+    "teaserDescription": "Soon you will be able to browse the public module catalog on didacta.io and push modules to this instance with one click. Meanwhile, the offline upload above is the supported way."
   },
   "moduleStatus": {
     "INSTALLING": "Installing…",

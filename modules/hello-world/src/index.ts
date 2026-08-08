@@ -9,7 +9,7 @@ import { HelloWorldService } from './service.js';
 
 /**
  * Implementación del contrato `DidactaModule` para mod.hello-world.
- * Ver docs/ARQUITECTURA-MODULAR.md §6 para detalles del lifecycle.
+ * El lifecycle lo define el contrato `DidactaModule` de @didacta/core-kernel.
  */
 export const helloWorldModule: DidactaModule = {
   manifest,

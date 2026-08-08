@@ -204,7 +204,6 @@ export interface ModuleContext {
 
 /**
  * Contrato que todo módulo de Didacta debe implementar.
- * Ver docs/ARQUITECTURA-MODULAR.md §3.3
  */
 export interface DidactaModule {
   readonly manifest: ModuleManifest;

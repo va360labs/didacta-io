@@ -6,7 +6,6 @@
 // - Sin FKs cross-module (los módulos usan IDs lógicos)
 // - Append-only en AuditLog (triggers en rls.sql)
 // - Soft delete preferido (deletedAt)
-// Referencia: docs/PRD.md §9.1, docs/ARQUITECTURA-MODULAR.md §4.1
 // ============================================================================
 
 generator client {

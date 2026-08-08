@@ -43,7 +43,7 @@ interface Args {
   audience: string;
   /// URL del `apps/license-issuer` cuando queremos firmar via API en
   /// lugar de invocar AWS CLI local. Modo recomendado en producción
-  /// (ver didacta-cloud/docs/MARKETPLACE-CI-SIGNING.md): solo el
+  /// (documentado en el repo privado de Cloud): solo el
   /// service tiene `kms:Sign`; los release managers le hablan via
   /// HTTPS con un Bearer token.
   remoteIssuer?: string;
@@ -174,7 +174,7 @@ function derToRaw(derSig: Buffer): Buffer {
 async function buildJwt(payload: Record<string, unknown>, args: Args): Promise<string> {
   // Modo `--remote-issuer`: pide al license-issuer (didacta-cloud) que
   // firme el manifest. Es el modo correcto en producción (ver
-  // `didacta-cloud/docs/MARKETPLACE-CI-SIGNING.md`). El runner CI no
+  // el repo privado de Cloud). El runner CI no
   // necesita credenciales AWS — el license-issuer es el único con
   // `kms:Sign` y nos devuelve el JWT ya armado.
   if (args.remoteIssuer) {

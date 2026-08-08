@@ -8,7 +8,7 @@ import type { FastifyReply } from 'fastify';
 import { MarketplacePackageError, type MarketplaceErrorCode } from './module-package.errors';
 
 /// Mapea cada código de `MarketplacePackageError` al status HTTP que el
-/// equipo web espera (ver `docs/MARKETPLACE-WEB-SPEC.md` §5.2). El cuerpo
+/// equipo web espera. El cuerpo
 /// devuelto siempre incluye `code` para que el cliente programe contra él
 /// sin parsear el mensaje.
 const STATUS_BY_CODE: Record<MarketplaceErrorCode, number> = {

@@ -152,7 +152,7 @@
     "uninstalling": "Desinstalando…",
     "uninstall": "Desinstalar",
     "teaserTitle": "Desde el marketplace web (próximamente)",
-    "teaserDescription": "Pronto vas a poder navegar el catálogo público de módulos en didacta.io y dispararlos a esta instancia con un click. El flujo está descrito en <code>docs/MARKETPLACE-WEB-SPEC.md</code>. Mientras, el upload offline de arriba es la forma soportada."
+    "teaserDescription": "Pronto vas a poder navegar el catálogo público de módulos en didacta.io y dispararlos a esta instancia con un click. Mientras, el upload offline de arriba es la forma soportada."
   },
   "moduleStatus": {
     "INSTALLING": "Instalando…",

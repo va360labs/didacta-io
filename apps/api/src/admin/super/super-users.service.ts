@@ -18,8 +18,7 @@ import { PrismaService } from '../../prisma/prisma.service';
  *
  * Nota sobre RLS: el rol Postgres que usa Prisma actualmente tiene BYPASSRLS,
  * por lo que las policies de `rls.sql` no enforzan a nivel BD. El enforcement
- * lógico vive en el código (filtros explícitos). Ver `docs/RLS-STRICT-PLAN.md`
- * para el plan de migración a un rol app no-superuser.
+ * lógico vive en el código (filtros explícitos).
  */
 export interface SuperUserListItem {
   id: string;

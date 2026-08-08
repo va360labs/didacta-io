@@ -23,7 +23,7 @@
  * advertencia para que el operador sea consciente del nivel de confianza.
  *
  * Tab "Desde marketplace web" es informativo: el flujo push install vive
- * en didacta.io y aún no está construido (ver `docs/MARKETPLACE-WEB-SPEC.md`).
+ * en didacta.io y aún no está construido.
  */
 
 import { useEffect, useRef, useState } from 'react';
