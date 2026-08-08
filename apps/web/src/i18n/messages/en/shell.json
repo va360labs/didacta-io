@@ -1,1 +1,54 @@
-{}
+{
+  "closeMenu": "Close menu",
+  "sidebar": {
+    "logoAlt": "Logo",
+    "expandMenu": "Expand menu",
+    "collapseMenu": "Collapse menu",
+    "search": "Search...",
+    "searchShortcut": "Search (⌘K)",
+    "communitySubtitle": "Community",
+    "myProfile": "My profile",
+    "logout": "Log out"
+  },
+  "roles": {
+    "super_admin": "Super admin",
+    "tenant_admin": "Administrator",
+    "formador": "Instructor",
+    "alumno": "Student",
+    "auditor": "Auditor",
+    "empresa_manager": "Manager"
+  },
+  "palette": {
+    "ariaLabel": "Search and navigate",
+    "placeholder": "Search sections…",
+    "inputAriaLabel": "Search sections",
+    "noResults": "No results"
+  },
+  "drawer": {
+    "ariaLabel": "Navigation menu"
+  },
+  "tabBar": {
+    "ariaLabel": "Main navigation",
+    "feed": "Feed",
+    "cursos": "Courses",
+    "miembros": "Members",
+    "perfil": "Profile",
+    "menu": "Menu"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "unreadAria": "{count, plural, one {# unread notification} other {# unread notifications}}",
+    "unreadShort": "{count} unread",
+    "toastDefaultTitle": "New notification",
+    "toastClose": "Close notification"
+  },
+  "versionBanner": {
+    "label": "New version:",
+    "view": "View",
+    "dismiss": "Dismiss new version notice"
+  },
+  "dialog": {
+    "close": "Close",
+    "fallbackLabel": "Dialog"
+  }
+}

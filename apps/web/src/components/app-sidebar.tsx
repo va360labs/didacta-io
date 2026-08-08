@@ -10,7 +10,7 @@ import Link from 'next/link';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { useTranslations } from 'next-intl';
 import { Icon, type IconName } from '@/components/icon';
-import { labelOr } from '@/lib/i18n/labels';
+import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import { useTenantTheme } from '@/components/tenant-theme-provider';
 import { VersionUpdateBanner } from '@/components/version-update-banner';
 import type { StoredSession } from '@/lib/auth-storage';
@@ -155,6 +155,9 @@ export function SidebarContent({
   const tNav = useTranslations('nav');
   const groupLabel = (raw: string) => labelOr(tNav, `groups.${raw}`, raw);
   const itemLabel = (raw: string) => labelOr(tNav, `items.${raw}`, raw);
+  // Copy propio del chrome del shell (aria-labels, tooltips, botones): a
+  // diferencia de los labels de nav, esto SÍ son textos, no tokens.
+  const t = useTranslations('shell');
   const theme = useTenantTheme();
   const logoUrl = theme?.logoUrl ?? null;
   // Nombre visible de la organización: el nombre real del tenant (editable en
@@ -188,7 +191,7 @@ export function SidebarContent({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={logoUrl}
-              alt="Logo"
+              alt={t('sidebar.logoAlt')}
               width={36}
               height={36}
               className="h-9 w-9 rounded-xl object-contain"
@@ -202,8 +205,8 @@ export function SidebarContent({
             <button
               type="button"
               onClick={onToggleCollapsed}
-              aria-label="Expandir menú"
-              title="Expandir menú"
+              aria-label={t('sidebar.expandMenu')}
+              title={t('sidebar.expandMenu')}
               className="grid h-7 w-7 place-items-center rounded-lg text-white/40 transition-colors hover:bg-white/8 hover:text-white/80"
             >
               <svg
@@ -224,8 +227,8 @@ export function SidebarContent({
           <button
             type="button"
             onClick={onOpenSearch}
-            aria-label="Buscar (⌘K)"
-            title="Buscar (⌘K)"
+            aria-label={t('sidebar.searchShortcut')}
+            title={t('sidebar.searchShortcut')}
             className="grid h-9 w-full place-items-center rounded-xl bg-white/8 text-white/40 ring-1 ring-white/5 transition-colors hover:bg-white/12 hover:text-white/70"
           >
             <svg
@@ -366,8 +369,8 @@ export function SidebarContent({
           <Link
             href={'/cuenta' as never}
             onClick={onNavigate}
-            title="Mi perfil"
-            aria-label="Mi perfil"
+            title={t('sidebar.myProfile')}
+            aria-label={t('sidebar.myProfile')}
           >
             {session.user.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -393,8 +396,8 @@ export function SidebarContent({
               onNavigate?.();
               onLogout();
             }}
-            aria-label="Cerrar sesión"
-            title="Cerrar sesión"
+            aria-label={t('sidebar.logout')}
+            title={t('sidebar.logout')}
             className="grid h-7 w-7 place-items-center rounded-lg text-white/30 transition-colors hover:bg-white/8 hover:text-white/60"
           >
             <svg
@@ -437,7 +440,9 @@ export function SidebarContent({
               <div className="truncate text-[14px] font-bold leading-tight text-white">
                 {orgName}
               </div>
-              <div className="mt-0.5 text-[11px] text-white/40">Comunidad</div>
+              <div className="mt-0.5 text-[11px] text-white/40">
+                {t('sidebar.communitySubtitle')}
+              </div>
             </div>
           </div>
         )}
@@ -445,8 +450,8 @@ export function SidebarContent({
           <button
             type="button"
             onClick={onToggleCollapsed}
-            aria-label="Plegar menú"
-            title="Plegar menú"
+            aria-label={t('sidebar.collapseMenu')}
+            title={t('sidebar.collapseMenu')}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white/40 transition-colors hover:bg-white/8 hover:text-white/80"
           >
             <svg
@@ -465,7 +470,7 @@ export function SidebarContent({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Cerrar menú"
+            aria-label={t('closeMenu')}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white/40 transition-colors hover:bg-white/8 hover:text-white/80"
           >
             <Icon name="x" size={18} />
@@ -492,7 +497,7 @@ export function SidebarContent({
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.35-4.35" />
           </svg>
-          <span className="flex-1 text-left">Buscar...</span>
+          <span className="flex-1 text-left">{t('sidebar.search')}</span>
           <kbd className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white/25">
             ⌘K
           </kbd>
@@ -688,8 +693,8 @@ export function SidebarContent({
           <Link
             href={'/cuenta' as never}
             onClick={onNavigate}
-            title="Mi perfil"
-            aria-label="Mi perfil"
+            title={t('sidebar.myProfile')}
+            aria-label={t('sidebar.myProfile')}
             className={
               (pathname?.startsWith('/cuenta') ? 'bg-white/8 ' : 'hover:bg-white/5 ') +
               'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors'
@@ -717,7 +722,7 @@ export function SidebarContent({
                 {name}
               </div>
               <div className="truncate text-[11px] text-white/40">
-                {humanRole(role)} · {session.user.tenantSlug}
+                {humanRole(role, t)} · {session.user.tenantSlug}
               </div>
             </div>
           </Link>
@@ -727,8 +732,8 @@ export function SidebarContent({
               onNavigate?.();
               onLogout();
             }}
-            aria-label="Cerrar sesión"
-            title="Cerrar sesión"
+            aria-label={t('sidebar.logout')}
+            title={t('sidebar.logout')}
             className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-white/30 transition-colors hover:bg-white/8 hover:text-white/60"
           >
             <svg
@@ -749,21 +754,11 @@ export function SidebarContent({
   );
 }
 
-function humanRole(role: string): string {
-  switch (role) {
-    case 'super_admin':
-      return 'Super admin';
-    case 'tenant_admin':
-      return 'Administradora';
-    case 'formador':
-      return 'Formador';
-    case 'alumno':
-      return 'Alumno';
-    case 'auditor':
-      return 'Auditor';
-    case 'empresa_manager':
-      return 'Manager';
-    default:
-      return role;
-  }
+/**
+ * Rol → etiqueta legible. El rol llega de la API, así que puede ser uno que el
+ * catálogo aún no conozca: `labelOr` degrada al valor CRUDO (nunca a la key),
+ * que es justo lo que hacía el `default` del switch anterior.
+ */
+function humanRole(role: string, t: TranslatorLike): string {
+  return labelOr(t, `roles.${role}`, role);
 }

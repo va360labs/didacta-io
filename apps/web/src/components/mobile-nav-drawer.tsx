@@ -6,6 +6,7 @@
  */
 
 import { useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import { SIDEBAR_BG_STYLE, SidebarContent, type SidebarGroup } from '@/components/app-sidebar';
 import type { StoredSession } from '@/lib/auth-storage';
 
@@ -43,6 +44,8 @@ export function MobileNavDrawer({
   onOpenSearch,
   backLink,
 }: Props) {
+  const t = useTranslations('shell');
+
   // Bloqueo de scroll del body + cierre con Escape mientras el drawer está abierto.
   useEffect(() => {
     if (!open) return;
@@ -67,7 +70,7 @@ export function MobileNavDrawer({
       <button
         type="button"
         tabIndex={open ? 0 : -1}
-        aria-label="Cerrar menú"
+        aria-label={t('closeMenu')}
         onClick={onClose}
         className={`absolute inset-0 bg-[#0d1b2a]/60 transition-opacity duration-300 ease-out ${
           open ? 'opacity-100' : 'opacity-0'
@@ -78,7 +81,7 @@ export function MobileNavDrawer({
       <aside
         role="dialog"
         aria-modal="true"
-        aria-label="Menú de navegación"
+        aria-label={t('drawer.ariaLabel')}
         className={`absolute inset-y-0 left-0 flex w-71 max-w-[85vw] flex-col overflow-hidden text-white shadow-xl transition-transform duration-300 ease-out ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}

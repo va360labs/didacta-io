@@ -16,9 +16,11 @@
 /// versión nueva) y "X" para descartar.
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { checkForUpdate, dismissVersion, type VersionCheckResult } from '@/lib/version-check';
 
 export function VersionUpdateBanner() {
+  const t = useTranslations('shell');
   const [check, setCheck] = useState<VersionCheckResult | null>(null);
 
   useEffect(() => {
@@ -42,7 +44,7 @@ export function VersionUpdateBanner() {
     <div className="border-t border-amber-400/20 bg-amber-400/[0.08] px-4 py-2 text-[11px] text-amber-100">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate">
-          <strong>Nueva versión:</strong> <span className="font-mono">{tag}</span>
+          <strong>{t('versionBanner.label')}</strong> <span className="font-mono">{tag}</span>
         </span>
         <div className="flex shrink-0 items-center gap-2">
           <a
@@ -51,7 +53,7 @@ export function VersionUpdateBanner() {
             rel="noreferrer"
             className="rounded bg-amber-400/[0.16] px-1.5 py-0.5 text-amber-100 hover:bg-amber-400/[0.25]"
           >
-            Ver
+            {t('versionBanner.view')}
           </a>
           <button
             type="button"
@@ -59,7 +61,7 @@ export function VersionUpdateBanner() {
               dismissVersion(tag);
               setCheck((c) => (c ? { ...c, hasUpdate: false } : c));
             }}
-            aria-label="Descartar aviso de versión nueva"
+            aria-label={t('versionBanner.dismiss')}
             className="rounded px-1 text-amber-200/60 hover:text-amber-100"
           >
             ✕

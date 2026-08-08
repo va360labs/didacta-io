@@ -8,6 +8,7 @@
 import * as React from 'react';
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 interface DialogContextValue {
@@ -104,6 +105,8 @@ export interface DialogContentProps {
 }
 
 export function DialogContent({ children, className }: DialogContentProps) {
+  // Antes de los early-returns de abajo: el orden de hooks no puede variar.
+  const t = useTranslations('shell');
   const ctx = React.useContext(DialogContext);
   const panelRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => ctx?.onOpenChange(false), [ctx]);
@@ -146,7 +149,7 @@ export function DialogContent({ children, className }: DialogContentProps) {
         <button
           type="button"
           onClick={close}
-          aria-label="Cerrar"
+          aria-label={t('dialog.close')}
           className="absolute right-3 top-3 z-10 rounded-md p-1 text-text-muted hover:text-text"
         >
           X
@@ -213,6 +216,8 @@ function DialogLegacy({
   maxWidthClass?: string;
   contentClassName?: string;
 }): React.JSX.Element | null {
+  // Antes de los early-returns de abajo: el orden de hooks no puede variar.
+  const t = useTranslations('shell');
   const panelRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
 
@@ -245,7 +250,7 @@ function DialogLegacy({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label={ariaLabel ?? 'Dialog'}
+        aria-label={ariaLabel ?? t('dialog.fallbackLabel')}
         className={cn(
           'relative flex max-h-[85vh] w-full flex-col overflow-hidden rounded-lg border bg-surface shadow-2xl',
           maxWidthClass,
@@ -261,7 +266,7 @@ function DialogLegacy({
         <button
           type="button"
           onClick={close}
-          aria-label="Cerrar"
+          aria-label={t('dialog.close')}
           className="absolute right-3 top-3 z-10 rounded-md p-1 text-text-muted hover:text-text"
         >
           X
