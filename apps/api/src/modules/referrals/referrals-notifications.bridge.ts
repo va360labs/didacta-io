@@ -97,7 +97,6 @@ export class ReferralsNotificationsBridge implements OnModuleInit {
           tenantId,
           channel,
           templateKey: args.templateKey,
-          locale: 'es-ES',
           to: userId,
           variables: args.variables,
           category: 'SYSTEM',

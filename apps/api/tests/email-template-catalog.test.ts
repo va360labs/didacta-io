@@ -5,7 +5,11 @@ import {
   buildEmailTemplateCatalog,
   fetchEmailOverride,
   interpolate,
+  resolveHubDefault,
+  toHubTemplateLang,
+  HUB_DEFAULT_LOCALE,
   HUB_TEMPLATE_DEFAULTS,
+  HUB_TEMPLATE_DEFAULTS_EN,
   TRANSACTIONAL_EMAIL_DEFS,
   type TemplateOverridePrisma,
 } from '../src/modules/notifications/email-template-catalog';
@@ -76,6 +80,65 @@ describe('applyEmailOverride', () => {
   });
 });
 
+describe('catálogo del hub por idioma', () => {
+  /** Placeholders `{{var}}`, `{{#var}}` y `{{^var}}` que usa una plantilla. */
+  function placeholders(def: { subject: string | null; body: string }): string[] {
+    const text = `${def.subject ?? ''}\n${def.body}`;
+    return [...text.matchAll(/\{\{[#^/]?\s*(\w+)\s*\}\}/g)].map((m) => m[1] as string).sort();
+  }
+
+  it('el inglés cubre exactamente las mismas keys que el español', () => {
+    expect(Object.keys(HUB_TEMPLATE_DEFAULTS_EN).sort()).toEqual(
+      Object.keys(HUB_TEMPLATE_DEFAULTS).sort(),
+    );
+  });
+
+  it('cada traducción conserva los placeholders del español', () => {
+    for (const [key, es] of Object.entries(HUB_TEMPLATE_DEFAULTS)) {
+      const en = HUB_TEMPLATE_DEFAULTS_EN[key];
+      expect(en, `falta la traducción de ${key}`).toBeDefined();
+      expect(placeholders(en as typeof es), `${key} cambia los placeholders`).toEqual(
+        placeholders(es),
+      );
+      // Un subject nulo (sin asunto) tiene que serlo en los dos idiomas.
+      expect(en?.subject === null, `${key} difiere en si tiene asunto`).toBe(es.subject === null);
+      expect((en?.body ?? '').length, `${key} tiene cuerpo vacío en inglés`).toBeGreaterThan(0);
+    }
+  });
+
+  it('toHubTemplateLang normaliza variantes regionales y mayúsculas', () => {
+    expect(toHubTemplateLang('en-US')).toBe('en');
+    expect(toHubTemplateLang('EN')).toBe('en');
+    expect(toHubTemplateLang('en_GB')).toBe('en');
+    expect(toHubTemplateLang('es-AR')).toBe('es');
+    expect(toHubTemplateLang(HUB_DEFAULT_LOCALE)).toBe('es');
+  });
+
+  it('un locale desconocido, vacío o nulo cae al español DELIBERADAMENTE', () => {
+    // pt-BR es alcanzable hoy: me.controller.ts lo admite pero no está traducido.
+    for (const locale of ['pt-BR', 'zz', '', '   ', null, undefined]) {
+      expect(toHubTemplateLang(locale)).toBe('es');
+      expect(resolveHubDefault('enrollment.created', locale)).toEqual(
+        HUB_TEMPLATE_DEFAULTS['enrollment.created'],
+      );
+    }
+  });
+
+  it('resolveHubDefault devuelve el copy del idioma pedido', () => {
+    expect(resolveHubDefault('enrollment.created', 'en-US')).toEqual(
+      HUB_TEMPLATE_DEFAULTS_EN['enrollment.created'],
+    );
+    expect(resolveHubDefault('enrollment.created', 'es-ES')).toEqual(
+      HUB_TEMPLATE_DEFAULTS['enrollment.created'],
+    );
+  });
+
+  it('resolveHubDefault sólo devuelve undefined si la key no existe', () => {
+    expect(resolveHubDefault('no.existe', 'en-US')).toBeUndefined();
+    expect(resolveHubDefault('no.existe')).toBeUndefined();
+  });
+});
+
 describe('fetchEmailOverride', () => {
   it('devuelve el override cuando existe', async () => {
     const prisma = prismaWithOverride({ subject: 'S', body: 'B' });
@@ -83,6 +146,23 @@ describe('fetchEmailOverride', () => {
       subject: 'S',
       body: 'B',
     });
+  });
+
+  it('busca el locale de referencia si el caller no lo pasa, y el pedido si lo pasa', async () => {
+    const seen: Array<{ locale: string }> = [];
+    const prisma: TemplateOverridePrisma = {
+      notificationTemplate: {
+        findUnique: (args: unknown) => {
+          const where = (args as { where: { tenantId_key_channel_locale: { locale: string } } })
+            .where.tenantId_key_channel_locale;
+          seen.push({ locale: where.locale });
+          return Promise.resolve(null);
+        },
+      },
+    };
+    await fetchEmailOverride(prisma, 't1', 'auth.password_reset');
+    await fetchEmailOverride(prisma, 't1', 'auth.password_reset', 'en-US');
+    expect(seen.map((s) => s.locale)).toEqual([HUB_DEFAULT_LOCALE, 'en-US']);
   });
 
   it('devuelve null si no hay override', async () => {

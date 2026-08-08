@@ -220,7 +220,6 @@ export class ZoomReminderWorker implements OnApplicationBootstrap, OnModuleDestr
           tenantId,
           channel,
           templateKey: 'zoom.class.reminder',
-          locale: 'es-ES',
           to: userId,
           variables,
           category: 'LEARNING',

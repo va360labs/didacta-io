@@ -31,8 +31,9 @@ import {
   type BrandingPrisma,
 } from '../common/branded-email';
 import {
-  HUB_TEMPLATE_DEFAULTS,
+  HUB_DEFAULT_LOCALE,
   interpolate,
+  resolveHubDefault,
 } from '../modules/notifications/email-template-catalog';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
@@ -73,6 +74,12 @@ const TemplateTestSchema = z.object({
   templateKey: z.string().trim().min(1).max(120),
   /** Variables de la plantilla. Las que falten se quedan vacías. */
   variables: z.record(z.string()).optional(),
+  /**
+   * Idioma a previsualizar (ej. `en-US`). Si se omite, el de referencia del
+   * producto. Se resuelve con la MISMA precedencia que usa el hub al enviar,
+   * para que la vista previa no mienta sobre lo que recibirá el miembro.
+   */
+  locale: z.string().trim().min(2).max(35).optional(),
 });
 
 interface SmtpResponseDto {
@@ -302,17 +309,35 @@ export class AdminSmtpController {
     }
 
     const variables = body.variables ?? {};
-    const override = await this.prisma.notificationTemplate.findUnique({
-      where: {
-        tenantId_key_channel_locale: {
-          tenantId: claims.tenantId,
-          key: body.templateKey,
-          channel: 'EMAIL',
-          locale: 'es-ES',
+    const locale = body.locale ?? HUB_DEFAULT_LOCALE;
+    // Misma precedencia que `renderForTenant` del hub: override en el locale
+    // pedido → override en el de referencia → default del producto. Si el
+    // tenant solo personalizó el español, la vista previa en inglés enseña ese
+    // override, que es exactamente lo que saldría por correo.
+    const override =
+      (await this.prisma.notificationTemplate.findUnique({
+        where: {
+          tenantId_key_channel_locale: {
+            tenantId: claims.tenantId,
+            key: body.templateKey,
+            channel: 'EMAIL',
+            locale,
+          },
         },
-      },
-    });
-    const fallback = HUB_TEMPLATE_DEFAULTS[body.templateKey];
+      })) ??
+      (locale !== HUB_DEFAULT_LOCALE
+        ? await this.prisma.notificationTemplate.findUnique({
+            where: {
+              tenantId_key_channel_locale: {
+                tenantId: claims.tenantId,
+                key: body.templateKey,
+                channel: 'EMAIL',
+                locale: HUB_DEFAULT_LOCALE,
+              },
+            },
+          })
+        : null);
+    const fallback = resolveHubDefault(body.templateKey, locale);
     if (!override && !fallback) {
       throw new BadRequestException(`No existe la plantilla "${body.templateKey}".`);
     }

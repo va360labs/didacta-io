@@ -93,6 +93,34 @@ export interface TemplateDef {
   body: string;
 }
 
+/**
+ * Locale de referencia del producto. Es el ÚNICO idioma con copy por defecto
+ * garantizado para todas las claves del catálogo, y por eso es el destino
+ * deliberado de cualquier camino degradado (destinatario desconocido, `locale`
+ * vacío o un locale que el producto todavía no traduce). No es un default
+ * implícito: quien caiga aquí lo hace porque no hay nada mejor que servir.
+ */
+export const HUB_DEFAULT_LOCALE = 'es-ES';
+
+/**
+ * Idiomas con catálogo de plantillas propio. Es una lista CERRADA y más corta
+ * que los locales que el usuario puede guardar en su perfil (`ALLOWED_LOCALES`
+ * de `me.controller.ts` admite además `es-AR` y `pt-BR`): las variantes
+ * regionales comparten catálogo por idioma base y `pt-BR` todavía no tiene
+ * traducción, así que cae a `es`.
+ */
+export const HUB_TEMPLATE_LANGS = ['es', 'en'] as const;
+export type HubTemplateLang = (typeof HUB_TEMPLATE_LANGS)[number];
+
+/**
+ * Reduce un locale BCP-47 (`en-US`, `es_AR`, `EN`) al idioma con catálogo.
+ * Cualquier cosa que no sea inglés cae a `es` — ver `HUB_DEFAULT_LOCALE`.
+ */
+export function toHubTemplateLang(locale: string | null | undefined): HubTemplateLang {
+  const base = (typeof locale === 'string' ? locale : '').trim().toLowerCase().split(/[-_]/)[0];
+  return base === 'en' ? 'en' : 'es';
+}
+
 export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
   'enrollment.created': {
     subject: 'Te matriculaste en {{course}}',
@@ -217,6 +245,140 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
     body: 'Ayer estuviste inscrito en "{{topic}}" y aún no nos has contado qué te pareció. Son 30 segundos y la respuesta es anónima — de verdad nos ayuda a mejorar las próximas clases.{{#surveyUrl}}\n\nValórala desde la página de la clase:\n{{surveyUrl}}{{/surveyUrl}}\n\n(Si ya la valoraste desde otra cuenta o no llegaste a asistir, ignora este mensaje.)',
   },
 };
+
+/**
+ * Traducción al inglés de `HUB_TEMPLATE_DEFAULTS`. MISMAS claves y MISMOS
+ * placeholders (`{{var}}`, secciones `{{#var}}`/`{{^var}}`): un test verifica
+ * que ambos catálogos no divergen. Si una clave faltara aquí,
+ * `resolveHubDefault` cae al español en vez de dejar la notificación vacía.
+ */
+export const HUB_TEMPLATE_DEFAULTS_EN: Record<string, TemplateDef> = {
+  'enrollment.created': {
+    subject: 'You enrolled in {{course}}',
+    body: 'You have just enrolled in the course "{{course}}". Time to learn! You can pick up where you left off from your dashboard.',
+  },
+  'course.completed': {
+    subject: 'Course completed!',
+    body: 'Congratulations, you completed the course "{{course}}". Your certificate is being generated and will be available in your certificates section.',
+  },
+  'certificate.issued': {
+    subject: 'Your certificate for "{{course}}" is ready',
+    body: 'You can now download certificate number {{number}} from My certificates.',
+  },
+  'attempt.passed': {
+    subject: 'You passed the quiz for "{{course}}"',
+    body: 'Your attempt at the quiz "{{quiz}}" scored {{scorePercent}}% — you passed!',
+  },
+  'attempt.failed': {
+    subject: 'Quiz result: not passed',
+    body: 'Your attempt at the quiz "{{quiz}}" scored {{scorePercent}}%, below the {{passThreshold}}% pass threshold. You can try again if the quiz allows it.',
+  },
+  'attempt.graded': {
+    subject: 'Your instructor graded your quiz',
+    body: 'Your attempt at the quiz "{{quiz}}" was graded manually. Result: {{scorePercent}}% ({{result}}).',
+  },
+  'admin.smtp.test': {
+    subject: 'SMTP test — {{tenantName}}',
+    body: 'If you received this email, the SMTP configuration for {{tenantName}} is working correctly.\n\nTenant: {{tenantSlug}}\nDate: {{timestamp}}',
+  },
+  'community.mention': {
+    subject: 'You were mentioned in the community',
+    body: '{{authorName}} mentioned you in a {{#commentId}}comment{{/commentId}}{{#postId}}post{{/postId}}.',
+  },
+  'community.comment.on_post': {
+    subject: '{{actorName}} commented on your post',
+    body: '{{actorName}} commented on your post "{{postTitle}}":\n\n"{{excerpt}}"',
+  },
+  'community.reply.to_comment': {
+    subject: '{{actorName}} replied to your comment',
+    body: '{{actorName}} replied to your comment on "{{postTitle}}":\n\n"{{excerpt}}"',
+  },
+  'community.digest.weekly': {
+    subject: 'Your weekly community digest ({{mentionsCount}} mentions · {{repliesCount}} replies)',
+    body: 'This week in the community:\n\n· {{mentionsCount}} new mention(s)\n· {{repliesCount}} new replies in threads you took part in\n\nReview them all in your mentions section. Since the previous digest: {{sinceIso}}.',
+  },
+  // Passthrough puro: el asunto y el cuerpo los escribe el admin al enviar el
+  // aviso, así que no hay nada que traducir — el copy viaja en las variables.
+  'community.broadcast': {
+    subject: '{{subject}}',
+    body: '{{body}}',
+  },
+  'lesson.unlocked': {
+    subject: 'Now available: {{lessonTitle}}',
+    body: 'The lesson "{{lessonTitle}}" from the course "{{courseTitle}}" is now available.',
+  },
+  'gamification.level.reached': {
+    subject: 'You reached {{levelName}}',
+    body: 'Congratulations: you have just reached the {{levelName}} level at {{tenantName}}.\n\nSee what it unlocks in the Challenges section.',
+  },
+  'gamification.challenge.approved': {
+    subject: 'Challenge completed: {{title}}',
+    body: 'We reviewed your submission for "{{title}}" and it is approved: {{points}} points for you.{{#reviewNote}}\n\nFeedback from the team: {{reviewNote}}{{/reviewNote}}\n\nThanks for documenting it and sharing it.',
+  },
+  'gamification.challenge.rejected': {
+    subject: 'Your submission for "{{title}}" needs another look',
+    body: 'We reviewed your submission for "{{title}}" and we cannot approve it yet.{{#reviewNote}}\n\nWhat is missing: {{reviewNote}}{{/reviewNote}}\n\nIf you adjust it and would like another try, get in touch.',
+  },
+  'gamification.staff.pending': {
+    subject: 'You have something to review',
+    body: '{{message}}\n\nYou will find it under Management → Points and challenges.',
+  },
+  // El resultado lo compone el emisor en `statusText`; aquí solo se enmarca.
+  'gamification.perk.handled': {
+    subject: 'About your request: {{perkTitle}}',
+    body: '{{statusText}}{{#staffNote}}\n\n{{staffNote}}{{/staffNote}}',
+  },
+  'referrals.commission.earned': {
+    subject: 'You earned a commission of {{amount}}!',
+    body: 'Your referral paid off: you earned {{amount}} from the {{baseAmount}} payment of someone who joined through your link.\n\nThe commission stays pending during the guarantee period; you can track it in your Referrals area.',
+  },
+  'referrals.payout.recorded': {
+    subject: 'We have paid you {{amount}}',
+    body: 'We have recorded the payment of your approved commissions: {{amount}}.\n\nPayment reference: {{reference}}. You have the details in your Referrals area.',
+  },
+  'zoom.class.registration.confirmed': {
+    subject: 'Registration confirmed: {{topic}}',
+    body: 'You have registered for the live class "{{topic}}" ({{startsAt}}).{{#classUrl}}\n\nWhen the time comes you will be able to join from the class page:\n{{classUrl}}{{/classUrl}}{{#calendarGoogleUrl}}\n\nSave it to your calendar so it does not slip by:\nGoogle Calendar: {{calendarGoogleUrl}}{{/calendarGoogleUrl}}{{#calendarIcsUrl}}\nOutlook, Apple and others: {{calendarIcsUrl}}{{/calendarIcsUrl}}\n\nWe will remind you again 2 hours before it starts.',
+  },
+  'zoom.class.reminder': {
+    subject: 'Your class "{{topic}}" starts in {{hoursBefore}} h',
+    body: 'Reminder: the live class "{{topic}}" starts {{startsAt}}.{{#classUrl}}\n\nJoin from the class page:\n{{classUrl}}{{/classUrl}}{{#calendarGoogleUrl}}\n\nStill not in your calendar?\nGoogle Calendar: {{calendarGoogleUrl}}{{/calendarGoogleUrl}}{{#calendarIcsUrl}}\nOutlook, Apple and others: {{calendarIcsUrl}}{{/calendarIcsUrl}}',
+  },
+  'zoom.class.cancelled': {
+    subject: 'Class cancelled: {{topic}}',
+    body: 'The live class "{{topic}}" scheduled for {{startsAt}} has been cancelled.\n\nIf it is rescheduled, you will see it again in the calendar.',
+  },
+  'surveys.post_class.invitation': {
+    subject: 'Rate the class: {{topic}}',
+    body: 'What did you think of "{{topic}}"? It takes 30 seconds and the answer is anonymous: it helps us decide what to record and what to improve.{{#surveyUrl}}\n\nAnswer from the class page:\n{{surveyUrl}}{{/surveyUrl}}',
+  },
+  'surveys.post_class.reminder': {
+    subject: 'One moment: what did you think of "{{topic}}"?',
+    body: 'Yesterday you were registered for "{{topic}}" and you have not told us what you thought yet. It takes 30 seconds and the answer is anonymous — it really helps us improve the next classes.{{#surveyUrl}}\n\nRate it from the class page:\n{{surveyUrl}}{{/surveyUrl}}\n\n(If you already rated it from another account or did not attend, please ignore this message.)',
+  },
+};
+
+/**
+ * Defaults del hub indexados por idioma. ADITIVO: `HUB_TEMPLATE_DEFAULTS` sigue
+ * exportándose tal cual y sus 16 importadores no cambian.
+ */
+export const HUB_TEMPLATE_DEFAULTS_BY_LOCALE: Record<
+  HubTemplateLang,
+  Record<string, TemplateDef>
+> = {
+  es: HUB_TEMPLATE_DEFAULTS,
+  en: HUB_TEMPLATE_DEFAULTS_EN,
+};
+
+/**
+ * Default del producto para (key, locale). Devuelve `undefined` SOLO si la key
+ * no existe en el catálogo — un idioma sin traducir nunca produce `undefined`,
+ * cae al español (`HUB_DEFAULT_LOCALE`) de forma deliberada.
+ */
+export function resolveHubDefault(key: string, locale?: string | null): TemplateDef | undefined {
+  const lang = toHubTemplateLang(locale);
+  return HUB_TEMPLATE_DEFAULTS_BY_LOCALE[lang][key] ?? HUB_TEMPLATE_DEFAULTS[key];
+}
 
 /** Metadatos de los templates del hub para la UI (nombre humano, trigger, vars). */
 const HUB_TEMPLATE_META: Record<
@@ -726,19 +888,25 @@ export interface TemplateOverridePrisma {
 
 /**
  * Busca el override per-tenant de un email transaccional: (tenantId, key,
- * channel EMAIL, locale es-ES). Best-effort: cualquier error devuelve null y
+ * channel EMAIL, locale). Best-effort: cualquier error devuelve null y
  * el email sale con su copy por defecto — la personalización NUNCA rompe un
  * envío. La interpolación la hace el composer, que conoce las variables.
+ *
+ * `locale` es opcional y por defecto `HUB_DEFAULT_LOCALE`: los composers
+ * transaccionales todavía redactan en español, así que omitirlo mantiene el
+ * comportamiento previo byte a byte. Cuando un composer sepa el idioma del
+ * destinatario, se lo pasa y busca primero su fila.
  */
 export async function fetchEmailOverride(
   prisma: TemplateOverridePrisma,
   tenantId: string,
   key: string,
+  locale: string = HUB_DEFAULT_LOCALE,
 ): Promise<RawEmailOverride | null> {
   try {
     const row = await prisma.notificationTemplate.findUnique({
       where: {
-        tenantId_key_channel_locale: { tenantId, key, channel: 'EMAIL', locale: 'es-ES' },
+        tenantId_key_channel_locale: { tenantId, key, channel: 'EMAIL', locale },
       },
       select: { subject: true, body: true },
     });
