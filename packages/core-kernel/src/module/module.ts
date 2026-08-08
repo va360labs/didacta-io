@@ -158,7 +158,13 @@ export interface NotificationHubService {
     tenantId: string;
     channel: 'email' | 'in-app' | 'webhook';
     templateKey: string;
-    locale: string;
+    /**
+     * Opcional desde la migración i18n. Omítelo salvo que sepas el idioma
+     * mejor que el propio destinatario: sin él, el hub resuelve `user.locale`
+     * a partir de `to` y cada persona recibe la notificación en su idioma.
+     * Pasarlo fija el idioma para TODOS los destinatarios de ese envío.
+     */
+    locale?: string;
     to: string;
     variables: Record<string, unknown>;
     /**

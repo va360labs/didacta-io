@@ -156,7 +156,6 @@ export class CommunityBroadcastWorker implements OnApplicationBootstrap, OnModul
             tenantId: broadcast.tenantId,
             channel: 'email',
             templateKey: 'community.broadcast',
-            locale: 'es-ES',
             to: r.userId,
             variables: { subject: broadcast.subject, body: emailBody },
           });
@@ -164,7 +163,6 @@ export class CommunityBroadcastWorker implements OnApplicationBootstrap, OnModul
             tenantId: broadcast.tenantId,
             channel: 'in-app',
             templateKey: 'community.broadcast',
-            locale: 'es-ES',
             to: r.userId,
             variables: { subject: broadcast.subject, body: broadcast.bodyText + postLine },
           });

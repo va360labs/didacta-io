@@ -160,7 +160,6 @@ export class CommunityDigestWorker implements OnApplicationBootstrap, OnModuleDe
             tenantId: u.tenantId,
             channel: 'email',
             templateKey: 'community.digest.weekly',
-            locale: 'es-ES',
             to: u.userId,
             variables: {
               mentionsCount: digest.mentions.length,

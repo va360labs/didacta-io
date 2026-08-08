@@ -115,7 +115,6 @@ export class SurveysZoomBridge implements OnModuleInit {
           tenantId,
           channel,
           templateKey: 'surveys.post_class.invitation',
-          locale: 'es-ES',
           to: userId,
           variables,
           category: 'LEARNING',

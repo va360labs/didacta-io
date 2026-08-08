@@ -193,7 +193,6 @@ export class SurveysReminderWorker implements OnApplicationBootstrap, OnModuleDe
           tenantId,
           channel,
           templateKey: 'surveys.post_class.reminder',
-          locale: 'es-ES',
           to: userId,
           variables,
           category: 'LEARNING',

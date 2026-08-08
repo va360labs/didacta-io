@@ -63,7 +63,6 @@ export class NotificationsBridge implements OnModuleInit {
         tenantId,
         channel: 'in-app',
         templateKey: 'enrollment.created',
-        locale: 'es-ES',
         to: userId,
         variables: { course: courseLabel, courseId },
       });
@@ -77,7 +76,6 @@ export class NotificationsBridge implements OnModuleInit {
         tenantId,
         channel: 'in-app',
         templateKey: 'course.completed',
-        locale: 'es-ES',
         to: userId,
         variables: { course: courseLabel, courseId },
       });
@@ -91,7 +89,6 @@ export class NotificationsBridge implements OnModuleInit {
         tenantId,
         channel: 'in-app',
         templateKey: 'certificate.issued',
-        locale: 'es-ES',
         to: userId,
         variables: { course: courseLabel, number },
       });
@@ -104,7 +101,6 @@ export class NotificationsBridge implements OnModuleInit {
         tenantId,
         channel: 'in-app',
         templateKey: 'attempt.passed',
-        locale: 'es-ES',
         to: userId,
         variables: { quiz: quizId, course: '', scorePercent },
       });
@@ -117,7 +113,6 @@ export class NotificationsBridge implements OnModuleInit {
         tenantId,
         channel: 'in-app',
         templateKey: 'attempt.failed',
-        locale: 'es-ES',
         to: userId,
         variables: { quiz: quizId, scorePercent, passThreshold: 0 },
       });
@@ -130,7 +125,6 @@ export class NotificationsBridge implements OnModuleInit {
         tenantId,
         channel: 'in-app',
         templateKey: 'attempt.graded',
-        locale: 'es-ES',
         to: userId,
         variables: {
           quiz: quizId,

@@ -160,7 +160,6 @@ export class LessonUnlockNotifierWorker implements OnApplicationBootstrap, OnMod
             tenantId: sub.tenantId,
             channel: 'in-app',
             templateKey: 'lesson.unlocked',
-            locale: 'es-ES',
             to: sub.userId,
             variables,
           });
@@ -170,7 +169,6 @@ export class LessonUnlockNotifierWorker implements OnApplicationBootstrap, OnMod
               tenantId: sub.tenantId,
               channel: 'email',
               templateKey: 'lesson.unlocked',
-              locale: 'es-ES',
               to: sub.userId,
               variables,
             });
