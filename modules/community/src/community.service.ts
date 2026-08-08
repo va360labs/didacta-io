@@ -366,7 +366,7 @@ export class CommunityService {
           tenantId: args.tenantId,
           channel,
           templateKey,
-          locale: 'es-ES',
+          // Sin `locale`: el hub resuelve el idioma de cada destinatario.
           to: recipient,
           category: 'COMMUNITY',
           variables,
@@ -949,7 +949,7 @@ export class CommunityService {
           tenantId,
           channel: 'in-app',
           templateKey: 'community.mention',
-          locale: 'es-ES',
+          // Sin `locale`: el hub resuelve el idioma de cada destinatario.
           to: m.mentionedUserId,
           variables: {
             authorId,
