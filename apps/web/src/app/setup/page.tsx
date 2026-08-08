@@ -5,13 +5,16 @@
 
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { getTranslations } from 'next-intl/server';
 import { SetupWizard } from './setup-wizard';
 
-export const metadata: Metadata = {
-  title: 'Configuración inicial · Didacta',
-  description:
-    'Asistente de primer arranque para crear tu organización y tu cuenta de administrador.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('auth');
+  return {
+    title: t('setup.metaTitle'),
+    description: t('setup.metaDescription'),
+  };
+}
 
 export default function SetupPage() {
   // SetupWizard lee `?token=` con useSearchParams (el token de un solo uso

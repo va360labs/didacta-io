@@ -4,26 +4,28 @@
  */
 
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import { ForgotPasswordForm } from './forgot-password-form';
 import { AuthHeading } from '../auth-heading';
 
-export const metadata = {
-  title: 'Recuperar contraseña',
-};
+export async function generateMetadata() {
+  const t = await getTranslations('auth');
+  return {
+    title: t('forgot.metaTitle'),
+  };
+}
 
-export default function ForgotPasswordPage() {
+export default async function ForgotPasswordPage() {
+  const t = await getTranslations('auth');
   return (
     <>
-      <AuthHeading
-        title="Recupera tu contraseña"
-        description="Escribe tu email y te enviaremos un enlace para definir una nueva contraseña."
-      />
+      <AuthHeading title={t('forgot.title')} description={t('forgot.description')} />
       <ForgotPasswordForm />
       <div className="mt-7 h-px w-full bg-border-soft" />
       <p className="mt-5 text-center text-[0.9375rem] text-text-muted">
-        ¿Te acordaste?{' '}
+        {t('forgot.rememberedPrompt')}{' '}
         <Link href="/signin" className="font-semibold text-brand-600 hover:underline">
-          Volver a iniciar sesión
+          {t('forgot.backToSignin')}
         </Link>
       </p>
     </>

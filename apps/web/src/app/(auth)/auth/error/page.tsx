@@ -30,11 +30,15 @@
  */
 
 import { Suspense } from 'react';
+import { getTranslations } from 'next-intl/server';
 import { OidcErrorContent } from './oidc-error-content';
 
-export const metadata = {
-  title: 'Error de inicio de sesión',
-};
+export async function generateMetadata() {
+  const t = await getTranslations('auth');
+  return {
+    title: t('oidcError.metaTitle'),
+  };
+}
 
 // Next 15 exige envolver páginas que usan `useSearchParams()` en <Suspense>
 // cuando hay static generation (router App + export). Sin esto, el build de

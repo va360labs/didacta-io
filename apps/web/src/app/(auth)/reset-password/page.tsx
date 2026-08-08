@@ -5,20 +5,22 @@
 
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { getTranslations } from 'next-intl/server';
 import { ResetPasswordForm } from './reset-password-form';
 import { AuthHeading } from '../auth-heading';
 
-export const metadata = {
-  title: 'Definir nueva contraseña',
-};
+export async function generateMetadata() {
+  const t = await getTranslations('auth');
+  return {
+    title: t('reset.metaTitle'),
+  };
+}
 
-export default function ResetPasswordPage() {
+export default async function ResetPasswordPage() {
+  const t = await getTranslations('auth');
   return (
     <>
-      <AuthHeading
-        title="Define tu nueva contraseña"
-        description="Elige una contraseña fuerte: mínimo 12 caracteres, mezcla mayúsculas, minúsculas, números y símbolos."
-      />
+      <AuthHeading title={t('reset.title')} description={t('reset.description')} />
       <Suspense
         fallback={
           <div className="space-y-3">
@@ -32,9 +34,9 @@ export default function ResetPasswordPage() {
       </Suspense>
       <div className="mt-7 h-px w-full bg-border-soft" />
       <p className="mt-5 text-center text-[0.9375rem] text-text-muted">
-        ¿No tienes un enlace válido?{' '}
+        {t('reset.noLinkPrompt')}{' '}
         <Link href="/forgot-password" className="font-semibold text-brand-600 hover:underline">
-          Pide uno nuevo
+          {t('reset.requestNewLink')}
         </Link>
       </p>
     </>

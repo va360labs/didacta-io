@@ -7,6 +7,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { AvatarUpload } from '@/components/avatar-upload';
 import { NotificationMatrix, fullMatrix } from '@/components/notification-preferences-form';
 import { Button } from '@/components/ui/button';
@@ -18,11 +19,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { consumeIntendedPath } from '@/lib/post-login-redirect';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { LOCALE_OPTIONS, meApi, TIMEZONE_OPTIONS, type NotificationPreference } from '@/lib/me';
 import { useTenantContext } from '@/lib/tenant-context';
 import { communityApi } from '@/modules/community';
-
-const STEPS = ['Foto', 'Tus datos', 'Notificaciones', 'Listo'];
 
 /**
  * Onboarding de primera vez (gate bloqueante). El shell `(app)` redirige aquí
@@ -32,6 +32,8 @@ const STEPS = ['Foto', 'Tus datos', 'Notificaciones', 'Listo'];
  */
 export default function OnboardingPage() {
   const router = useRouter();
+  const t = useTranslations('auth');
+  const tErrors = useTranslations('errors');
   const { tenant } = useTenantContext();
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(0);
@@ -82,7 +84,7 @@ export default function OnboardingPage() {
         setError(null);
       } catch {
         if (!cancelled) {
-          setError('No pudimos cargar tu perfil. Recarga la página.');
+          setError(t('onboarding.loadProfileError'));
           setLoading(false);
         }
         return;
@@ -111,7 +113,17 @@ export default function OnboardingPage() {
     return () => {
       cancelled = true;
     };
+    // `t` fuera de las deps a propósito: next-intl no garantiza identidad
+    // estable y este efecto de carga inicial no debe re-ejecutarse por render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
+
+  const steps = [
+    t('onboarding.stepPhoto'),
+    t('onboarding.stepData'),
+    t('onboarding.stepNotifications'),
+    t('onboarding.stepDone'),
+  ];
 
   const canNext = step === 0 ? avatarUrl !== null : step === 1 ? name.trim().length > 0 : true;
 
@@ -156,9 +168,7 @@ export default function OnboardingPage() {
       router.replace(consumeIntendedPath() ?? '/inicio');
     } catch (e) {
       setError(
-        e instanceof ApiHttpError
-          ? e.message
-          : 'No pudimos completar el onboarding. Revisa tus datos e inténtalo de nuevo.',
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('onboarding.completeError'),
       );
       setSubmitting(false);
     }
@@ -167,7 +177,9 @@ export default function OnboardingPage() {
   if (loading) {
     return (
       <Card>
-        <CardContent className="p-10 text-center text-text-muted">Cargando…</CardContent>
+        <CardContent className="p-10 text-center text-text-muted">
+          {t('onboarding.loading')}
+        </CardContent>
       </Card>
     );
   }
@@ -176,18 +188,16 @@ export default function OnboardingPage() {
     <div className="space-y-6">
       <header className="text-center">
         <p className="label-uppercase text-text-muted">
-          Bienvenido/a a {tenant?.name ?? 'Didacta'}
+          {t('onboarding.welcome', { name: tenant?.name ?? 'Didacta' })}
         </p>
         <h1 className="font-display mt-2 text-2xl font-bold tracking-tight">
-          Completa tu perfil para empezar
+          {t('onboarding.title')}
         </h1>
-        <p className="mt-1 text-sm text-text-subtle">
-          Solo te llevará un momento. Podrás cambiar todo esto luego en tu perfil.
-        </p>
+        <p className="mt-1 text-sm text-text-subtle">{t('onboarding.subtitle')}</p>
       </header>
 
       <ol className="flex items-center justify-center gap-2">
-        {STEPS.map((label, i) => (
+        {steps.map((label, i) => (
           <li key={label} className="flex items-center gap-2">
             <span
               className={
@@ -201,7 +211,7 @@ export default function OnboardingPage() {
             >
               {i < step ? '✓' : i + 1}
             </span>
-            {i < STEPS.length - 1 ? <span className="h-px w-6 bg-border-soft" /> : null}
+            {i < steps.length - 1 ? <span className="h-px w-6 bg-border-soft" /> : null}
           </li>
         ))}
       </ol>
@@ -211,10 +221,8 @@ export default function OnboardingPage() {
           {step === 0 ? (
             <div className="space-y-3">
               <div>
-                <h2 className="text-lg font-semibold">Tu foto de perfil</h2>
-                <p className="text-sm text-text-muted">
-                  Sube una imagen para que la comunidad te reconozca. Es obligatoria.
-                </p>
+                <h2 className="text-lg font-semibold">{t('onboarding.photoTitle')}</h2>
+                <p className="text-sm text-text-muted">{t('onboarding.photoDescription')}</p>
               </div>
               <AvatarUpload
                 value={avatarUrl}
@@ -228,26 +236,25 @@ export default function OnboardingPage() {
           {step === 1 ? (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-semibold">Tus datos</h2>
-                <p className="text-sm text-text-muted">
-                  Cómo te verán y cómo localizamos tu cuenta.
-                </p>
+                <h2 className="text-lg font-semibold">{t('onboarding.dataTitle')}</h2>
+                <p className="text-sm text-text-muted">{t('onboarding.dataDescription')}</p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ob-name">
-                  Nombre de perfil <span className="text-danger-700">*</span>
+                  {t('onboarding.nameLabel')} <span className="text-danger-700">*</span>
                 </Label>
                 <Input
                   id="ob-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   maxLength={120}
-                  placeholder="Tu nombre"
+                  placeholder={t('onboarding.namePlaceholder')}
                 />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ob-bio">
-                  Biografía <span className="text-text-subtle text-xs">(opcional)</span>
+                  {t('onboarding.bioLabel')}{' '}
+                  <span className="text-text-subtle text-xs">{t('onboarding.optionalTag')}</span>
                 </Label>
                 <Textarea
                   id="ob-bio"
@@ -255,13 +262,13 @@ export default function OnboardingPage() {
                   onChange={(e) => setBio(e.target.value)}
                   maxLength={280}
                   rows={3}
-                  placeholder="Cuéntanos algo sobre ti (máx 280 caracteres)"
+                  placeholder={t('onboarding.bioPlaceholder')}
                 />
                 <p className="text-right text-xs text-text-subtle">{bio.length}/280</p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="ob-locale">Idioma</Label>
+                  <Label htmlFor="ob-locale">{t('onboarding.localeLabel')}</Label>
                   <Select id="ob-locale" value={locale} onChange={(e) => setLocale(e.target.value)}>
                     {LOCALE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
@@ -271,7 +278,7 @@ export default function OnboardingPage() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="ob-tz">Zona horaria</Label>
+                  <Label htmlFor="ob-tz">{t('onboarding.timezoneLabel')}</Label>
                   <Select id="ob-tz" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
                     {TIMEZONE_OPTIONS.map((g) => (
                       <optgroup key={g.group} label={g.group}>
@@ -287,7 +294,8 @@ export default function OnboardingPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ob-doc">
-                  DNI / NIE <span className="text-text-subtle text-xs">(opcional)</span>
+                  {t('onboarding.documentLabel')}{' '}
+                  <span className="text-text-subtle text-xs">{t('onboarding.optionalTag')}</span>
                 </Label>
                 <Input
                   id="ob-doc"
@@ -296,11 +304,9 @@ export default function OnboardingPage() {
                   maxLength={20}
                   autoComplete="off"
                   spellCheck={false}
-                  placeholder="12345678Z o X1234567L"
+                  placeholder={t('onboarding.documentPlaceholder')}
                 />
-                <p className="text-xs text-text-subtle">
-                  Solo necesario para solicitar facturas de pago.
-                </p>
+                <p className="text-xs text-text-subtle">{t('onboarding.documentHint')}</p>
               </div>
             </div>
           ) : null}
@@ -308,9 +314,9 @@ export default function OnboardingPage() {
           {step === 2 ? (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-semibold">Tus notificaciones</h2>
+                <h2 className="text-lg font-semibold">{t('onboarding.notificationsTitle')}</h2>
                 <p className="text-sm text-text-muted">
-                  Elige cómo quieres que te avisemos. Podrás cambiarlo cuando quieras.
+                  {t('onboarding.notificationsDescription')}
                 </p>
               </div>
               <NotificationMatrix value={prefs} onChange={setPrefs} />
@@ -320,10 +326,8 @@ export default function OnboardingPage() {
           {step === 3 ? (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-semibold">¡Todo listo!</h2>
-                <p className="text-sm text-text-muted">
-                  Revisa y confirma para entrar a la plataforma.
-                </p>
+                <h2 className="text-lg font-semibold">{t('onboarding.readyTitle')}</h2>
+                <p className="text-sm text-text-muted">{t('onboarding.readyDescription')}</p>
               </div>
               <div className="flex items-center gap-4 rounded-lg border border-border-soft p-4">
                 <div
@@ -366,15 +370,15 @@ export default function OnboardingPage() {
               disabled={step === 0 || submitting}
               onClick={() => setStep((s) => Math.max(0, s - 1))}
             >
-              Atrás
+              {t('onboarding.back')}
             </Button>
-            {step < STEPS.length - 1 ? (
+            {step < steps.length - 1 ? (
               <Button type="button" disabled={!canNext} onClick={() => setStep((s) => s + 1)}>
-                Continuar
+                {t('onboarding.continue')}
               </Button>
             ) : (
               <Button type="button" disabled={submitting} onClick={() => void handleComplete()}>
-                {submitting ? 'Guardando…' : 'Entrar a la plataforma'}
+                {submitting ? t('onboarding.submitPending') : t('onboarding.submit')}
               </Button>
             )}
           </div>

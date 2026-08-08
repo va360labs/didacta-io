@@ -7,13 +7,17 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 
 export function ResetPasswordForm() {
   const router = useRouter();
+  const t = useTranslations('auth');
+  const tErrors = useTranslations('errors');
   const searchParams = useSearchParams();
   const token = searchParams?.get('token') ?? '';
   const [error, setError] = useState<string | null>(null);
@@ -23,10 +27,8 @@ export function ResetPasswordForm() {
   if (!token) {
     return (
       <div role="alert" className="rounded-lg border border-danger-100 bg-danger-50 p-4">
-        <h4 className="font-semibold text-danger-700">Falta el token</h4>
-        <p className="mt-1 text-sm text-text">
-          Este enlace no es válido. Pide uno nuevo desde la pantalla de recuperación.
-        </p>
+        <h4 className="font-semibold text-danger-700">{t('reset.missingTokenTitle')}</h4>
+        <p className="mt-1 text-sm text-text">{t('reset.missingTokenBody')}</p>
       </div>
     );
   }
@@ -39,12 +41,12 @@ export function ResetPasswordForm() {
     const confirm = String(form.get('confirm'));
 
     if (newPassword !== confirm) {
-      setError('Las contraseñas no coinciden.');
+      setError(t('reset.passwordsMismatch'));
       setPending(false);
       return;
     }
     if (newPassword.length < 12) {
-      setError('La contraseña debe tener al menos 12 caracteres.');
+      setError(t('reset.passwordTooShort'));
       setPending(false);
       return;
     }
@@ -58,11 +60,7 @@ export function ResetPasswordForm() {
       // Redirige a signin tras un momento corto para que el usuario lea el feedback.
       setTimeout(() => router.push('/signin'), 2000);
     } catch (e) {
-      setError(
-        e instanceof ApiHttpError
-          ? e.message
-          : 'No pudimos actualizar tu contraseña. Prueba de nuevo o pide un nuevo enlace.',
-      );
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('reset.submitError'));
     } finally {
       setPending(false);
     }
@@ -71,10 +69,8 @@ export function ResetPasswordForm() {
   if (done) {
     return (
       <div role="status" className="rounded-lg border border-success-200 bg-success-50 p-4">
-        <h4 className="font-semibold text-success-700">¡Listo!</h4>
-        <p className="mt-1 text-sm text-text">
-          Tu contraseña fue actualizada. Te redirigimos a iniciar sesión…
-        </p>
+        <h4 className="font-semibold text-success-700">{t('reset.doneTitle')}</h4>
+        <p className="mt-1 text-sm text-text">{t('reset.doneBody')}</p>
       </div>
     );
   }
@@ -82,7 +78,7 @@ export function ResetPasswordForm() {
   return (
     <form action={onSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="newPassword">Nueva contraseña</Label>
+        <Label htmlFor="newPassword">{t('reset.newPasswordLabel')}</Label>
         <Input
           id="newPassword"
           name="newPassword"
@@ -95,7 +91,7 @@ export function ResetPasswordForm() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="confirm">Confirma la contraseña</Label>
+        <Label htmlFor="confirm">{t('reset.confirmPasswordLabel')}</Label>
         <Input
           id="confirm"
           name="confirm"
@@ -114,7 +110,7 @@ export function ResetPasswordForm() {
       ) : null}
 
       <Button type="submit" disabled={pending} size="lg" className="h-13 w-full">
-        {pending ? 'Actualizando…' : 'Guardar nueva contraseña'}
+        {pending ? t('reset.submitPending') : t('reset.submit')}
       </Button>
     </form>
   );

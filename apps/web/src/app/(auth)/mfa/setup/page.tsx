@@ -3,18 +3,20 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { getTranslations } from 'next-intl/server';
 import { MfaSetupFlow } from '@/components/mfa-setup-flow';
 import { AuthHeading } from '../../auth-heading';
 
-export const metadata = { title: 'Configurar MFA' };
+export async function generateMetadata() {
+  const t = await getTranslations('auth');
+  return { title: t('mfaSetup.metaTitle') };
+}
 
-export default function MfaSetupPage() {
+export default async function MfaSetupPage() {
+  const t = await getTranslations('auth');
   return (
     <>
-      <AuthHeading
-        title="Configurar segundo factor"
-        description="Tu rol exige autenticación en dos pasos. Escanea el QR con tu app TOTP (Google Authenticator, 1Password, Authy) y confirma el código."
-      />
+      <AuthHeading title={t('mfaSetup.title')} description={t('mfaSetup.description')} />
       <MfaSetupFlow />
     </>
   );

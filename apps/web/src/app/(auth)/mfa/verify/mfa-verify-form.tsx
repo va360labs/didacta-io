@@ -7,11 +7,13 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { consumeIntendedPath } from '@/lib/post-login-redirect';
 
 interface VerifyResponse {
@@ -21,6 +23,8 @@ interface VerifyResponse {
 
 export function MfaVerifyForm() {
   const router = useRouter();
+  const t = useTranslations('auth');
+  const tErrors = useTranslations('errors');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -42,7 +46,9 @@ export function MfaVerifyForm() {
       // Deep link pendiente de antes del login (enlace compartido) → volvemos ahí.
       router.push(consumeIntendedPath() ?? '/');
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'Código incorrecto');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('mfaVerify.invalidCode'),
+      );
     } finally {
       setPending(false);
     }
@@ -51,14 +57,14 @@ export function MfaVerifyForm() {
   return (
     <form action={onSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="code">Código</Label>
+        <Label htmlFor="code">{t('mfaVerify.codeLabel')}</Label>
         <Input
           id="code"
           name="code"
           inputMode="text"
           minLength={6}
           maxLength={10}
-          placeholder="123456 o recovery code"
+          placeholder={t('mfaVerify.codePlaceholder')}
           required
           autoFocus
         />
@@ -69,7 +75,7 @@ export function MfaVerifyForm() {
         </p>
       ) : null}
       <Button type="submit" disabled={pending} className="w-full">
-        {pending ? 'Verificando…' : 'Verificar'}
+        {pending ? t('mfaVerify.submitPending') : t('mfaVerify.submit')}
       </Button>
     </form>
   );
