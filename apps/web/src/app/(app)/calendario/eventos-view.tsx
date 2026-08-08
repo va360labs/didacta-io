@@ -6,11 +6,12 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { eventsApi, type CommunityEvent } from '@/lib/events';
+import { formatDate } from '@/lib/i18n/format';
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString('es-ES', {
+function formatEventStart(iso: string): string {
+  return formatDate(iso, {
     weekday: 'short',
     day: 'numeric',
     month: 'long',
@@ -20,6 +21,7 @@ function formatDate(iso: string): string {
 }
 
 function EventCard({ event }: { event: CommunityEvent }) {
+  const t = useTranslations('alumnoAprendizaje');
   const [registering, setRegistering] = useState(false);
   const [isRegistered, setIsRegistered] = useState(event.isRegistered);
   const [registeredCount, setRegisteredCount] = useState(event.registeredCount);
@@ -51,16 +53,20 @@ function EventCard({ event }: { event: CommunityEvent }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-semibold text-text">{event.title}</p>
-          <p className="mt-0.5 text-sm text-text-muted">{formatDate(event.startAt)}</p>
-          {event.location && <p className="mt-0.5 text-xs text-text-muted">📍 {event.location}</p>}
+          <p className="mt-0.5 text-sm text-text-muted">{formatEventStart(event.startAt)}</p>
+          {event.location && (
+            <p className="mt-0.5 text-xs text-text-muted">
+              {t('eventLocation', { location: event.location })}
+            </p>
+          )}
         </div>
         {isRegistered ? (
           <span className="shrink-0 rounded-full bg-(--didacta-growth)/10 px-2.5 py-1 text-xs font-semibold text-(--didacta-growth)">
-            Inscrito
+            {t('registered')}
           </span>
         ) : isFull ? (
           <span className="shrink-0 rounded-full bg-bg-subtle px-2.5 py-1 text-xs font-semibold text-text-muted">
-            Completo
+            {t('eventFull')}
           </span>
         ) : null}
       </div>
@@ -71,8 +77,9 @@ function EventCard({ event }: { event: CommunityEvent }) {
 
       <div className="flex items-center justify-between">
         <p className="text-xs text-text-muted">
-          {registeredCount} inscrito{registeredCount !== 1 ? 's' : ''}
-          {event.capacity !== null && ` · ${event.capacity} plazas`}
+          {event.capacity !== null
+            ? t('eventRegisteredCapacity', { count: registeredCount, capacity: event.capacity })
+            : t('eventRegisteredCount', { count: registeredCount })}
         </p>
         {!isFull || isRegistered ? (
           <button
@@ -85,7 +92,7 @@ function EventCard({ event }: { event: CommunityEvent }) {
                 : 'bg-(--didacta-trust) text-white hover:opacity-90'
             }`}
           >
-            {registering ? '…' : isRegistered ? 'Cancelar' : 'Inscribirme'}
+            {registering ? '…' : isRegistered ? t('cancel') : t('register')}
           </button>
         ) : null}
       </div>
@@ -100,6 +107,7 @@ function EventCard({ event }: { event: CommunityEvent }) {
  * redirige a `/calendario?vista=eventos`.
  */
 export function EventosView() {
+  const t = useTranslations('alumnoAprendizaje');
   const [events, setEvents] = useState<CommunityEvent[]>([]);
 
   useEffect(() => {
@@ -117,14 +125,12 @@ export function EventosView() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-text-muted">Sesiones, talleres y mentorías programadas</p>
+      <p className="text-sm text-text-muted">{t('eventsSubtitle')}</p>
 
       {events.length === 0 ? (
         <div className="rounded-xl border border-border bg-surface p-12 text-center">
-          <p className="text-base font-semibold text-text">No hay eventos programados</p>
-          <p className="mt-1 text-sm text-text-muted">
-            Los próximos eventos aparecerán aquí cuando estén disponibles.
-          </p>
+          <p className="text-base font-semibold text-text">{t('eventsEmptyTitle')}</p>
+          <p className="mt-1 text-sm text-text-muted">{t('eventsEmptyHint')}</p>
         </div>
       ) : (
         <div className="space-y-3">

@@ -8,10 +8,10 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { AiTutorPanel } from '@/components/ai-tutor-panel';
 import { CourseStatusBadge } from '@/components/course-status-badge';
 import { authStorage } from '@/lib/auth-storage';
-import { BuyCourseButton } from '@/components/buy-course-button';
 import { CourseSalesPanel, LockedContentActions } from '@/modules/billing/course-sales-panel';
 import { LessonComments } from '@/components/lesson-comments';
 import { LessonPlayer } from '@/components/lesson-player';
@@ -26,19 +26,13 @@ import { Progress } from '@/components/ui/progress';
 import { ApiHttpError } from '@/lib/api-client';
 import { certificatesApi, type Certificate } from '@/modules/certificates';
 import { coursesApi, type CourseDetail, type CourseLesson } from '@/lib/courses';
-import { formatDuration } from '@/lib/format';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate, formatDateTime, formatDuration } from '@/lib/i18n/format';
+import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import { learningApi, type Enrollment } from '@/lib/learning';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { subscriptionsApi } from '@/modules/subscriptions';
 import { zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
-
-const LESSON_TYPE_LABEL: Record<string, string> = {
-  VIDEO: 'Video',
-  HTML: 'Lectura',
-  PDF: 'PDF',
-  TEXT: 'Texto',
-  QUIZ: 'Quiz',
-};
 
 // Roles que pueden PREVISUALIZAR un curso no publicado (sin matricularse).
 const PREVIEW_ROLES = ['super_admin', 'tenant_admin', 'formador'];
@@ -46,6 +40,9 @@ const PREVIEW_ROLES = ['super_admin', 'tenant_admin', 'formador'];
 export default function CourseAlumnoPage() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
+  const t = useTranslations('alumnoAprendizaje');
+  const tErrors = useTranslations('errors');
+  const tCommon = useTranslations('common');
   // Editor (profesor/admin): puede abrir cursos DRAFT/ARCHIVED y ver el contenido
   // en modo vista previa sin necesidad de publicarlos ni matricularse.
   const isEditor = useMemo(() => {
@@ -91,7 +88,7 @@ export default function CourseAlumnoPage() {
       ]);
       const matched = courseList.find((c) => c.slug === params.slug);
       if (!matched) {
-        setError('Este curso no existe o todavía no fue publicado en tu organización.');
+        setError(t('courseNotFound'));
         return;
       }
       const detail = await coursesApi.get(matched.id);
@@ -140,12 +137,11 @@ export default function CourseAlumnoPage() {
       setCertificate(certsList?.find((c) => c.courseId === detail.id) ?? null);
       setZoomSessions(zoomList ?? []);
     } catch (e) {
-      setError(
-        e instanceof ApiHttpError
-          ? e.message
-          : 'No pudimos cargar el curso. Prueba refrescar la página.',
-      );
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('courseLoadError'));
     }
+    // Deps limitadas a las entradas reales del fetch: `t`/`tErrors` solo
+    // componen el mensaje de error, no deciden qué se pide.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params?.slug, isEditor]);
 
   useEffect(() => {
@@ -177,7 +173,9 @@ export default function CourseAlumnoPage() {
     try {
       await certificatesApi.openInNewTab(certificate.id, `${certificate.number}.pdf`);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos descargar tu certificado.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('certificateDownloadError'),
+      );
     } finally {
       setDownloadingCert(false);
     }
@@ -224,7 +222,7 @@ export default function CourseAlumnoPage() {
       await learningApi.enrollByCode(String(form.get('code')));
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'El código no es válido o ya fue usado.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('invalidInviteCode'));
     } finally {
       setPending(false);
     }
@@ -234,7 +232,7 @@ export default function CourseAlumnoPage() {
     return (
       <div className="flex flex-col gap-4">
         <Button variant="ghost" size="sm" asChild className="self-start">
-          <a href="/cursos">← Volver al catálogo</a>
+          <a href="/cursos">{t('backToCatalog')}</a>
         </Button>
         <Card>
           <CardContent className="p-6 text-danger-700">{error}</CardContent>
@@ -268,18 +266,15 @@ export default function CourseAlumnoPage() {
         onClick={() => router.push('/cursos')}
         className="self-start"
       >
-        ← Volver al catálogo
+        {t('backToCatalog')}
       </Button>
 
       {isPreview ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm">
           <Icon name="eye" size={16} className="text-brand-700" />
-          <span className="font-semibold text-brand-800">Vista previa</span>
+          <span className="font-semibold text-brand-800">{t('previewBadge')}</span>
           <CourseStatusBadge status={course.status} />
-          <span className="text-brand-700">
-            Lo ves como editor, sin matrícula: el progreso no se guarda y los quizzes/SCORM se
-            activan al matricularse.
-          </span>
+          <span className="text-brand-700">{t('previewNote')}</span>
         </div>
       ) : null}
 
@@ -301,19 +296,29 @@ export default function CourseAlumnoPage() {
                 </h1>
                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-text-muted">
                   <div>
-                    <strong className="font-display text-text">{course.modules.length}</strong>{' '}
-                    módulo{course.modules.length === 1 ? '' : 's'}
+                    {t.rich('moduleCount', {
+                      count: course.modules.length,
+                      strong: (chunks) => (
+                        <strong className="font-display text-text">{chunks}</strong>
+                      ),
+                    })}
                   </div>
                   <div>
-                    <strong className="font-display text-text">{allLessons.length}</strong> lecció
-                    {allLessons.length === 1 ? 'n' : 'nes'}
+                    {t.rich('lessonCount', {
+                      count: allLessons.length,
+                      strong: (chunks) => (
+                        <strong className="font-display text-text">{chunks}</strong>
+                      ),
+                    })}
                   </div>
                   {course.estimatedMinutes ? (
                     <div>
-                      <strong className="font-display text-text tabular-nums">
-                        {formatDuration(course.estimatedMinutes)}
-                      </strong>{' '}
-                      de contenido
+                      {t.rich('contentDuration', {
+                        duration: formatDuration(course.estimatedMinutes, tCommon) ?? '',
+                        strong: (chunks) => (
+                          <strong className="font-display text-text tabular-nums">{chunks}</strong>
+                        ),
+                      })}
                     </div>
                   ) : null}
                 </div>
@@ -325,11 +330,11 @@ export default function CourseAlumnoPage() {
                     onClick={handleDownloadCertificate}
                     disabled={downloadingCert}
                   >
-                    {downloadingCert ? 'Descargando…' : 'Descargar certificado'}
+                    {downloadingCert ? t('downloading') : t('downloadCertificate')}
                   </Button>
                 ) : (
                   <Button variant="primary" onClick={handleContinue}>
-                    Continuar curso
+                    {t('continueCourse')}
                   </Button>
                 )}
               </div>
@@ -337,16 +342,19 @@ export default function CourseAlumnoPage() {
             <div>
               <div className="mb-2 flex justify-between text-sm font-semibold">
                 <span className="text-text">
-                  {enrollment.status === 'COMPLETED' ? '¡Curso completado!' : 'Tu progreso'}
+                  {enrollment.status === 'COMPLETED' ? t('courseCompleted') : t('yourProgress')}
                 </span>
                 <span className="tabular-nums text-[var(--didacta-success-fg)]">
-                  {progressPct}% · meta {enrollment.completionThreshold}%
+                  {t('progressMeta', {
+                    percent: progressPct,
+                    threshold: enrollment.completionThreshold,
+                  })}
                 </span>
               </div>
               <Progress
                 value={progressPct}
                 tone={enrollment.status === 'COMPLETED' ? 'success' : 'info'}
-                label={`Progreso ${progressPct}%`}
+                label={t('progressLabel', { percent: progressPct })}
               />
             </div>
           </div>
@@ -373,24 +381,34 @@ export default function CourseAlumnoPage() {
                 />
               ) : (
                 <p className="max-w-2xl text-base leading-relaxed text-text-muted">
-                  Este curso aún no tiene descripción.
+                  {t('noDescription')}
                 </p>
               )}
               <div className="flex flex-wrap gap-x-7 gap-y-2 text-sm text-text-muted">
                 <div>
-                  <strong className="font-display text-text">{course.modules.length}</strong> módulo
-                  {course.modules.length === 1 ? '' : 's'}
+                  {t.rich('moduleCount', {
+                    count: course.modules.length,
+                    strong: (chunks) => (
+                      <strong className="font-display text-text">{chunks}</strong>
+                    ),
+                  })}
                 </div>
                 <div>
-                  <strong className="font-display text-text">{allLessons.length}</strong> lecció
-                  {allLessons.length === 1 ? 'n' : 'nes'}
+                  {t.rich('lessonCount', {
+                    count: allLessons.length,
+                    strong: (chunks) => (
+                      <strong className="font-display text-text">{chunks}</strong>
+                    ),
+                  })}
                 </div>
                 {course.estimatedMinutes ? (
                   <div>
-                    <strong className="font-display text-text tabular-nums">
-                      {formatDuration(course.estimatedMinutes)}
-                    </strong>{' '}
-                    de contenido
+                    {t.rich('contentDuration', {
+                      duration: formatDuration(course.estimatedMinutes, tCommon) ?? '',
+                      strong: (chunks) => (
+                        <strong className="font-display text-text tabular-nums">{chunks}</strong>
+                      ),
+                    })}
                   </div>
                 ) : null}
               </div>
@@ -442,9 +460,9 @@ export default function CourseAlumnoPage() {
                     <Icon name="play" size={26} />
                   </div>
                   <div>
-                    <div className="text-xs opacity-85">Vista previa</div>
+                    <div className="text-xs opacity-85">{t('previewBadge')}</div>
                     <div className="font-display text-base font-semibold">
-                      {allLessons[0]?.title ?? 'Empieza por la primera lección'}
+                      {allLessons[0]?.title ?? t('startFirstLesson')}
                     </div>
                   </div>
                 </div>
@@ -473,10 +491,8 @@ export default function CourseAlumnoPage() {
           {!course.externalPurchaseUrl ? <CourseSalesPanel courseId={course.id} /> : null}
           <Card>
             <CardHeader>
-              <CardTitle>¿Tienes un código de invitación?</CardTitle>
-              <CardDescription>
-                Si tu organización te dio un código, canjéalo aquí para entrar al curso.
-              </CardDescription>
+              <CardTitle>{t('inviteCodeQuestion')}</CardTitle>
+              <CardDescription>{t('inviteCodeHint')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="flex flex-wrap gap-3">
@@ -485,23 +501,23 @@ export default function CourseAlumnoPage() {
                   // Tras el pago, esa página inscribe al alumno vía POST /api/v1/inscribe.
                   <Button asChild size="lg">
                     <a href={course.externalPurchaseUrl} target="_blank" rel="noopener noreferrer">
-                      Comprar curso
+                      {t('buyCourse')}
                     </a>
                   </Button>
                 ) : null}
               </div>
               <form action={handleEnrollByCode} className="space-y-2 border-t border-border pt-5">
-                <Label htmlFor="code">¿Tienes un código de invitación?</Label>
+                <Label htmlFor="code">{t('inviteCodeQuestion')}</Label>
                 <div className="flex gap-2">
                   <Input
                     id="code"
                     name="code"
                     required
-                    placeholder="ABCD-1234"
+                    placeholder={t('inviteCodePlaceholder')}
                     className="flex-1"
                   />
                   <Button type="submit" variant="secondary" disabled={pending}>
-                    Canjear código
+                    {t('redeemCode')}
                   </Button>
                 </div>
               </form>
@@ -513,10 +529,12 @@ export default function CourseAlumnoPage() {
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <Card className="min-w-0 self-start p-0 lg:max-h-[78dvh] lg:overflow-auto">
           <CardContent className="p-5">
-            <h3 className="font-display text-base font-semibold text-text">Contenido</h3>
+            <h3 className="font-display text-base font-semibold text-text">{t('contentTitle')}</h3>
             <p className="mt-0.5 text-xs text-text-muted">
-              {allLessons.length} lecció{allLessons.length === 1 ? 'n' : 'nes'} ·{' '}
-              {Object.values(progressByLesson).filter(Boolean).length} completadas
+              {t('lessonProgressSummary', {
+                count: allLessons.length,
+                completed: Object.values(progressByLesson).filter(Boolean).length,
+              })}
             </p>
 
             <nav className="mt-4 space-y-5">
@@ -537,7 +555,7 @@ export default function CourseAlumnoPage() {
                   modLocks.length === m.lessons.length &&
                   modLocks.every((x) => !x.available) &&
                   new Set(modLocks.map((x) => x.availableAt)).size === 1
-                    ? formatLockHint(modLocks[0]!.availableAt)
+                    ? formatLockHint(modLocks[0]!.availableAt, t)
                     : null;
                 return (
                   <div key={m.id}>
@@ -550,7 +568,7 @@ export default function CourseAlumnoPage() {
                       </span>
                       {moduleHint && (
                         <Badge variant="warning" className="shrink-0 text-[10px]">
-                          🔒 módulo · {moduleHint}
+                          {t('moduleLockBadge', { hint: moduleHint })}
                         </Badge>
                       )}
                     </h4>
@@ -583,15 +601,15 @@ export default function CourseAlumnoPage() {
                               </span>
                               {locked && lock.reason === 'TRIAL' ? (
                                 <Badge variant="warning" className="shrink-0 text-[10px]">
-                                  🔒 tras la prueba
+                                  {t('trialLockBadge')}
                                 </Badge>
                               ) : locked && lock.availableAt ? (
                                 <Badge variant="warning" className="shrink-0 text-[10px]">
-                                  🔒 {formatLockHint(lock.availableAt)}
+                                  {t('lockBadge', { hint: formatLockHint(lock.availableAt, t) })}
                                 </Badge>
                               ) : (
                                 <Badge variant="muted" className="shrink-0 text-[10px]">
-                                  {LESSON_TYPE_LABEL[l.type] ?? l.type}
+                                  {labelOr(t, `lessonType.${l.type}`, l.type)}
                                 </Badge>
                               )}
                             </button>
@@ -623,7 +641,7 @@ export default function CourseAlumnoPage() {
             ) : (
               <Card>
                 <CardContent className="py-12 text-center text-sm text-text-subtle">
-                  Este curso aún no tiene lecciones.
+                  {t('noLessons')}
                 </CardContent>
               </Card>
             )
@@ -633,10 +651,9 @@ export default function CourseAlumnoPage() {
                 <span className="grid h-12 w-12 place-items-center rounded-full bg-bg-subtle text-text-muted">
                   <Icon name="lock" size={22} />
                 </span>
-                <h3 className="font-display text-xl font-semibold">Contenido bloqueado</h3>
+                <h3 className="font-display text-xl font-semibold">{t('contentLocked')}</h3>
                 <p className="max-w-md text-sm text-text-muted">
-                  Consigue el curso para desbloquear las {allLessons.length} lecciones, marcar tu
-                  progreso y recibir el certificado al completarlo.
+                  {t('contentLockedHint', { count: allLessons.length })}
                 </p>
                 {/* Mismas dos vías de acceso que arriba, aquí donde el alumno
                     se topa con el muro. Se ocultan solas si no hay ninguna. */}
@@ -708,7 +725,7 @@ export default function CourseAlumnoPage() {
           ) : (
             <Card>
               <CardContent className="py-12 text-center text-sm text-text-subtle">
-                Este curso aún no tiene lecciones publicadas.
+                {t('noPublishedLessons')}
               </CardContent>
             </Card>
           )}
@@ -733,22 +750,19 @@ function TrialLockedLessonCard({
   lessonLimit: number | null;
   onUnlocked: () => Promise<void> | void;
 }) {
+  const t = useTranslations('alumnoAprendizaje');
+  const tErrors = useTranslations('errors');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function payNow() {
-    if (
-      !window.confirm(
-        '¿Terminar tu periodo de prueba y pagar ahora? Se cobrará el primer periodo inmediatamente y tendrás acceso completo al contenido de tu membresía.',
-      )
-    )
-      return;
+    if (!window.confirm(t('trialPayConfirm'))) return;
     setBusy(true);
     setError(null);
     try {
       const token = authStorage.getAccessToken();
       if (!token) {
-        setError('Tu sesión expiró. Inicia sesión y vuelve a intentarlo.');
+        setError(t('sessionExpired'));
         return;
       }
       const res = await subscriptionsApi.membershipPayNow(token);
@@ -756,11 +770,9 @@ function TrialLockedLessonCard({
         await onUnlocked();
         return;
       }
-      setError(
-        'No se pudo completar el cobro con tu tarjeta. Stripe lo reintentará automáticamente; si el problema persiste, contacta con tu academia.',
-      );
+      setError(t('trialChargeFailed'));
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudo procesar el pago.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('paymentFailed'));
     } finally {
       setBusy(false);
     }
@@ -770,27 +782,21 @@ function TrialLockedLessonCard({
     <Card>
       <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
         <span className="text-4xl">🔒</span>
-        <h3 className="font-display text-xl font-semibold">
-          Disponible cuando pase el periodo de prueba
-        </h3>
+        <h3 className="font-display text-xl font-semibold">{t('trialLockedTitle')}</h3>
         <p className="max-w-md text-sm text-text-muted">
-          «{title}» forma parte del contenido completo de tu membresía.
-          {lessonLimit
-            ? ` Durante la prueba puedes ver las primeras ${lessonLimit} ${
-                lessonLimit === 1 ? 'clase' : 'clases'
-              } de cada curso.`
-            : ''}{' '}
-          Al terminar tu prueba (o pagando ahora) se desbloquea el contenido de la membresía.
+          {t('trialLockedBody', { title })}
+          {lessonLimit ? ` ${t('trialLockedLimit', { count: lessonLimit })}` : ''}{' '}
+          {t('trialLockedOutro')}
         </p>
         {error ? <p className="max-w-md text-sm text-danger-700">{error}</p> : null}
         <Button size="lg" onClick={() => void payNow()} disabled={busy}>
-          {busy ? 'Procesando pago…' : 'Pagar ahora y desbloquear'}
+          {busy ? t('processingPayment') : t('payNowUnlock')}
         </Button>
         <a
           href="/cuenta?tab=suscripcion"
           className="text-xs font-semibold text-brand-700 underline"
         >
-          Gestionar mi suscripción
+          {t('manageSubscription')}
         </a>
       </CardContent>
     </Card>
@@ -811,6 +817,7 @@ function LockedLessonCard({
   title: string;
   availableAt: string;
 }) {
+  const t = useTranslations('alumnoAprendizaje');
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -848,22 +855,22 @@ function LockedLessonCard({
     <Card>
       <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
         <span className="text-4xl">🔒</span>
-        <h3 className="font-display text-xl font-semibold">Lección aún no disponible</h3>
+        <h3 className="font-display text-xl font-semibold">{t('lockedLessonTitle')}</h3>
         <p className="max-w-md text-sm text-text-muted">
-          «{title}» se desbloqueará {formatLockHint(availableAt)}.
+          {t('lockedLessonBody', { title, hint: formatLockHint(availableAt, t) })}
         </p>
         {subscribed ? (
           <div className="flex flex-col items-center gap-1.5">
             <Badge variant="success" dot>
-              Te avisaremos cuando se desbloquee
+              {t('unlockNotifyActive')}
             </Badge>
             <Button variant="ghost" size="sm" onClick={() => void toggle()} disabled={busy}>
-              Cancelar aviso
+              {t('unlockNotifyCancel')}
             </Button>
           </div>
         ) : (
           <Button onClick={() => void toggle()} disabled={busy || subscribed === null}>
-            {busy ? 'Guardando…' : '🔔 Avísame cuando se desbloquee'}
+            {busy ? t('saving') : t('unlockNotifyCta')}
           </Button>
         )}
       </CardContent>
@@ -875,19 +882,21 @@ function LockedLessonCard({
  * Texto de ayuda para una lección bloqueada por drip: "en X días", "mañana" o
  * "el DD/MM" según cuánto falte para `availableAt`.
  */
-function formatLockHint(availableAtIso: string): string {
+function formatLockHint(availableAtIso: string, t: TranslatorLike): string {
   const at = new Date(availableAtIso);
   const days = Math.ceil((at.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-  if (days <= 0) return 'hoy';
-  if (days === 1) return 'mañana';
-  if (days <= 14) return `en ${days} días`;
+  if (days <= 0) return t('lockToday');
+  if (days === 1) return t('lockTomorrow');
+  if (days <= 14) return t('lockInDays', { days });
   // Incluye el año cuando la fecha cae en otro año (drips largos: "el 03/12/2027").
   const sameYear = at.getFullYear() === new Date().getFullYear();
-  return `el ${at.toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: '2-digit',
-    ...(sameYear ? {} : { year: 'numeric' }),
-  })}`;
+  return t('lockOnDate', {
+    date: formatDate(at, {
+      day: '2-digit',
+      month: '2-digit',
+      ...(sameYear ? {} : { year: 'numeric' }),
+    }),
+  });
 }
 
 /**
@@ -942,6 +951,7 @@ function LessonAvatar({
  * (programada en los próximos 30 días). Si no hay, no renderiza nada.
  */
 function UpcomingZoomBanner({ sessions }: { sessions: ZoomSession[] }) {
+  const t = useTranslations('alumnoAprendizaje');
   const now = Date.now();
   const next = sessions
     .filter((s) => s.status === 'SCHEDULED' || s.status === 'STARTED')
@@ -973,49 +983,55 @@ function UpcomingZoomBanner({ sessions }: { sessions: ZoomSession[] }) {
             <p className="font-display text-base font-semibold text-text">{next.topic}</p>
             {isLive ? (
               <Badge variant="success" dot>
-                En vivo
+                {t('liveNow')}
               </Badge>
             ) : (
-              <Badge variant="info">Próxima sesión</Badge>
+              <Badge variant="info">{t('nextSession')}</Badge>
             )}
-            {next.isRegistered ? <Badge variant="success">Inscrito</Badge> : null}
+            {next.isRegistered ? <Badge variant="success">{t('registered')}</Badge> : null}
           </div>
           <p
             className="text-sm tabular-nums text-text-muted"
-            title={`Hora del host: ${start.toLocaleString('es-ES', {
-              timeZone: next.timezone,
-              day: '2-digit',
-              month: 'short',
-              hour: '2-digit',
-              minute: '2-digit',
-              timeZoneName: 'short',
-            })}`}
+            title={t('hostTimeTooltip', {
+              time: formatDateTime(start, {
+                timeZone: next.timezone,
+                day: '2-digit',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZoneName: 'short',
+              }),
+            })}
           >
-            {start.toLocaleString('es-ES', {
-              // Sin `timeZone` explícito: usa la del navegador. El tooltip
-              // arriba muestra la hora del host (next.timezone) para que el
-              // alumno entienda diferencias horarias sin tener que abrir el
-              // detalle. PR #170 mostraba la TZ del host en este texto, lo
-              // cual confundía a alumnos en otra zona ("yo no soy a las 10").
-              day: '2-digit',
-              month: 'short',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}{' '}
-            · {next.durationMinutes} min · host {next.hostEmail}
+            {t('sessionMeta', {
+              // Sin `timeZone` explícita: usa la del navegador/perfil. El
+              // tooltip arriba muestra la hora del host (next.timezone) para
+              // que el alumno entienda diferencias horarias sin tener que
+              // abrir el detalle. PR #170 mostraba la TZ del host en este
+              // texto, lo cual confundía a alumnos en otra zona ("yo no soy a
+              // las 10").
+              time: formatDateTime(start, {
+                day: '2-digit',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              minutes: next.durationMinutes,
+              email: next.hostEmail,
+            })}
           </p>
         </div>
         {next.joinUrl ? (
           <Button asChild size="sm">
             <a href={next.joinUrl} target="_blank" rel="noopener noreferrer">
-              {isLive ? 'Unirme ahora' : 'Unirme'}
+              {isLive ? t('joinNow') : t('join')}
             </a>
           </Button>
         ) : (
           // Sin joinUrl = no inscrito (gating server-side, ADR-017): el CTA
           // lleva a la página de la clase, donde puede inscribirse.
           <Button asChild size="sm">
-            <Link href={`/clase/${next.id}`}>Inscribirme</Link>
+            <Link href={`/clase/${next.id}`}>{t('register')}</Link>
           </Button>
         )}
       </CardContent>
@@ -1030,6 +1046,7 @@ function UpcomingZoomBanner({ sessions }: { sessions: ZoomSession[] }) {
  * configuró.
  */
 function RecordedZoomSessions({ sessions }: { sessions: ZoomSession[] }) {
+  const t = useTranslations('alumnoAprendizaje');
   const recorded = sessions
     .filter((s) => s.status === 'ENDED' && s.recordingUrl)
     .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
@@ -1040,36 +1057,41 @@ function RecordedZoomSessions({ sessions }: { sessions: ZoomSession[] }) {
     <Card>
       <CardContent className="p-4">
         <h3 className="font-display text-sm font-semibold text-text mb-3">
-          Grabaciones ({recorded.length})
+          {t('recordingsTitle', { count: recorded.length })}
         </h3>
         <ul className="space-y-2">
-          {recorded.map((s) => (
-            <li
-              key={s.id}
-              className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-surface px-3 py-2"
-            >
-              <Icon name="play" size={16} aria-hidden="true" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-text">{s.topic}</p>
-                <p className="text-xs tabular-nums text-text-muted">
-                  {new Date(s.startTime).toLocaleString('es-ES', {
-                    timeZone: s.timezone,
-                    day: '2-digit',
-                    month: 'short',
-                    year: 'numeric',
-                  })}
-                  {typeof s.recordingDurationMinutes === 'number'
-                    ? ` · ${s.recordingDurationMinutes} min`
-                    : ''}
-                </p>
-              </div>
-              <Button asChild size="sm" variant="secondary">
-                <a href={s.recordingUrl!} target="_blank" rel="noopener noreferrer">
-                  Ver grabación
-                </a>
-              </Button>
-            </li>
-          ))}
+          {recorded.map((s) => {
+            const startFormatted = formatDateTime(s.startTime, {
+              timeZone: s.timezone,
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+            });
+            return (
+              <li
+                key={s.id}
+                className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-surface px-3 py-2"
+              >
+                <Icon name="play" size={16} aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-text">{s.topic}</p>
+                  <p className="text-xs tabular-nums text-text-muted">
+                    {typeof s.recordingDurationMinutes === 'number'
+                      ? t('recordingMeta', {
+                          time: startFormatted,
+                          minutes: s.recordingDurationMinutes,
+                        })
+                      : startFormatted}
+                  </p>
+                </div>
+                <Button asChild size="sm" variant="secondary">
+                  <a href={s.recordingUrl!} target="_blank" rel="noopener noreferrer">
+                    {t('watchRecording')}
+                  </a>
+                </Button>
+              </li>
+            );
+          })}
         </ul>
       </CardContent>
     </Card>

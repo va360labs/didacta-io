@@ -7,12 +7,14 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Icon } from '@/components/icon';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import {
   CollectionFormModal,
   ShareResourceModal,
@@ -27,6 +29,8 @@ import {
 const STAFF_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
 
 export default function RecursosPage() {
+  const t = useTranslations('alumnoAprendizaje');
+  const tErrors = useTranslations('errors');
   const [collections, setCollections] = useState<CollectionView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -42,8 +46,11 @@ export default function RecursosPage() {
     try {
       setCollections(await resourcesApi.listCollections());
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los recursos.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('resourcesLoadError'));
     }
+    // Deps vacías a propósito: `reload` no debe cambiar de identidad (la
+    // dispara un efecto) y `t`/`tErrors` solo componen el mensaje de error.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -54,22 +61,22 @@ export default function RecursosPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold text-text">Recursos</h1>
+          <h1 className="font-display text-2xl font-bold text-text">{t('resourcesTitle')}</h1>
           <p className="mt-1 text-sm text-text-muted">
             {collections
-              ? `${collections.length} coleccion${collections.length === 1 ? '' : 'es'} con todo lo que usamos en clase.`
-              : 'Todo lo que usamos en clase, organizado en colecciones.'}
+              ? t('collectionsSummary', { count: collections.length })
+              : t('resourcesSubtitle')}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {isStaff ? (
             <Button variant="secondary" onClick={() => setEditing('new')}>
-              Nueva colección
+              {t('newCollection')}
             </Button>
           ) : null}
           <Button onClick={() => setShareOpen(true)}>
             <Icon name="download-cloud" size={15} />
-            Compartir recurso
+            {t('shareResource')}
           </Button>
         </div>
       </div>
@@ -136,6 +143,7 @@ function CollectionCard({
   isStaff: boolean;
   onEdit: () => void;
 }) {
+  const t = useTranslations('alumnoAprendizaje');
   return (
     <Card data-testid="collection-card" className="overflow-hidden">
       {/* Portada: imagen propia o degradado de marca. El título va bajo la imagen. */}
@@ -155,8 +163,8 @@ function CollectionCard({
           <button
             type="button"
             onClick={onEdit}
-            aria-label={`Editar ${collection.title}`}
-            title="Editar colección"
+            aria-label={t('editCollectionAria', { title: collection.title })}
+            title={t('editCollection')}
             className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg bg-white/15 text-white/80 backdrop-blur transition-colors hover:bg-white/25 hover:text-white"
           >
             <Icon name="edit" size={14} />
@@ -168,11 +176,9 @@ function CollectionCard({
         <div className="flex items-center gap-2">
           <p className="min-w-0 truncate font-semibold text-text">{collection.title}</p>
           {collection.resourceCount > 0 ? (
-            <Badge variant="info">
-              {collection.resourceCount} recurso{collection.resourceCount !== 1 ? 's' : ''}
-            </Badge>
+            <Badge variant="info">{t('resourceCount', { count: collection.resourceCount })}</Badge>
           ) : (
-            <Badge variant="success">Pronto</Badge>
+            <Badge variant="success">{t('comingSoon')}</Badge>
           )}
         </div>
         {collection.description ? (
@@ -181,7 +187,7 @@ function CollectionCard({
         <Button asChild>
           <Link href={`/recursos/${collection.id}` as never}>
             <Icon name="link" size={14} />
-            Explorar
+            {t('explore')}
           </Link>
         </Button>
       </CardContent>

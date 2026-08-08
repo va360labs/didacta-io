@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
   getPath,
   enrollPath,
@@ -18,6 +19,7 @@ import {
 export default function RutaDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
+  const t = useTranslations('alumnoAprendizaje');
 
   const [path, setPath] = useState<LearningPathDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,9 +88,9 @@ export default function RutaDetailPage() {
   if (notFound || !path) {
     return (
       <div className="flex flex-col items-center gap-4 py-20">
-        <p className="text-text-muted">Esta ruta no existe o no está disponible.</p>
+        <p className="text-text-muted">{t('pathNotFound')}</p>
         <Link href="/rutas" className="text-sm font-medium text-(--didacta-trust) hover:underline">
-          Volver a rutas
+          {t('backToPaths')}
         </Link>
       </div>
     );
@@ -108,19 +110,17 @@ export default function RutaDetailPage() {
             href="/rutas"
             className="mb-2 flex items-center gap-1 text-xs text-text-muted hover:text-text"
           >
-            ← Rutas de aprendizaje
+            {t('backToPathsBreadcrumb')}
           </Link>
           <h1 className="font-display text-2xl font-bold text-text">{path.title}</h1>
           {path.description && <p className="mt-1 text-sm text-text-muted">{path.description}</p>}
           <div className="mt-2 flex items-center gap-4 text-xs text-text-muted">
-            <span>
-              {path.courseCount} {path.courseCount === 1 ? 'curso' : 'cursos'}
-            </span>
+            <span>{t('courseCount', { count: path.courseCount })}</span>
             {path.estimatedMinutes && (
-              <span>{Math.round(path.estimatedMinutes / 60)} h estimadas</span>
+              <span>{t('hoursEstimated', { hours: Math.round(path.estimatedMinutes / 60) })}</span>
             )}
             <span className="capitalize">
-              {path.sequenceType === 'LINEAR' ? 'Secuencial' : 'Flexible'}
+              {path.sequenceType === 'LINEAR' ? t('sequential') : t('flexible')}
             </span>
           </div>
         </div>
@@ -128,11 +128,11 @@ export default function RutaDetailPage() {
         <div className="shrink-0 flex flex-col items-end gap-2">
           {isArchived ? (
             <span className="rounded-lg border border-border px-4 py-2 text-sm text-text-muted">
-              Ruta archivada
+              {t('pathArchived')}
             </span>
           ) : isCompleted ? (
             <span className="rounded-lg bg-green-100 px-4 py-2 text-sm font-semibold text-green-700">
-              ✓ Ruta completada
+              {t('pathCompletedFull')}
             </span>
           ) : enrolled ? (
             <>
@@ -141,14 +141,14 @@ export default function RutaDetailPage() {
                   href={path.nextStep.courseUrl}
                   className="rounded-lg bg-(--didacta-trust) px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
                 >
-                  Continuar
+                  {t('continue')}
                 </Link>
               )}
               <button
                 onClick={() => setShowCancelConfirm(true)}
                 className="text-xs text-text-muted hover:text-red-500"
               >
-                Abandonar ruta
+                {t('abandonPath')}
               </button>
             </>
           ) : (
@@ -157,7 +157,7 @@ export default function RutaDetailPage() {
               disabled={enrolling}
               className="rounded-lg bg-(--didacta-trust) px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
             >
-              {enrolling ? 'Matriculando…' : 'Matricularme en esta ruta'}
+              {enrolling ? t('enrolling') : t('enrollPath')}
             </button>
           )}
         </div>
@@ -165,14 +165,14 @@ export default function RutaDetailPage() {
 
       {isArchived && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Esta ruta está archivada y no acepta nuevas matriculaciones.
+          {t('pathArchivedNotice')}
         </div>
       )}
 
       {enrolled && !isCompleted && (
         <div className="rounded-xl border border-border bg-surface p-4">
           <div className="mb-2 flex justify-between text-sm">
-            <span className="font-medium text-text">Tu progreso</span>
+            <span className="font-medium text-text">{t('yourProgress')}</span>
             <span className="text-text-muted">{progress}%</span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-border">
@@ -186,10 +186,10 @@ export default function RutaDetailPage() {
 
       <div>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-muted">
-          Cursos de esta ruta
+          {t('pathCourses')}
         </h2>
         {courses.length === 0 ? (
-          <p className="text-sm text-text-muted">Esta ruta aún no tiene cursos asignados.</p>
+          <p className="text-sm text-text-muted">{t('pathNoCourses')}</p>
         ) : (
           <div className="space-y-3">
             {courses.map((c, idx) => {
@@ -206,10 +206,14 @@ export default function RutaDetailPage() {
                     {idx + 1}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-text">Curso {idx + 1}</p>
+                    <p className="text-sm font-medium text-text">
+                      {t('courseNumber', { number: idx + 1 })}
+                    </p>
                     <p className="text-xs text-text-muted">{c.courseId}</p>
                   </div>
-                  {isLinearBlocked && <span className="text-xs text-text-muted">🔒 Bloqueado</span>}
+                  {isLinearBlocked && (
+                    <span className="text-xs text-text-muted">{t('lockedChip')}</span>
+                  )}
                 </div>
               );
             })}
@@ -220,24 +224,21 @@ export default function RutaDetailPage() {
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 shadow-xl">
-            <h3 className="font-semibold text-text">¿Abandonar esta ruta?</h3>
-            <p className="mt-2 text-sm text-text-muted">
-              Tu progreso en los cursos individuales se conservará, pero perderás el seguimiento de
-              la ruta.
-            </p>
+            <h3 className="font-semibold text-text">{t('abandonConfirmTitle')}</h3>
+            <p className="mt-2 text-sm text-text-muted">{t('abandonConfirmBody')}</p>
             <div className="mt-5 flex gap-3">
               <button
                 onClick={() => setShowCancelConfirm(false)}
                 className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text"
               >
-                Cancelar
+                {t('cancel')}
               </button>
               <button
                 onClick={handleCancel}
                 disabled={cancelling}
                 className="flex-1 rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
               >
-                {cancelling ? 'Abandonando…' : 'Sí, abandonar'}
+                {cancelling ? t('abandoning') : t('abandonYes')}
               </button>
             </div>
           </div>
