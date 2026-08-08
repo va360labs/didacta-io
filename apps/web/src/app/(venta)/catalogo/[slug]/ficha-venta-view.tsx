@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon';
 import { authStorage } from '@/lib/auth-storage';
@@ -35,6 +35,10 @@ import {
 export function FichaVentaView() {
   const t = useTranslations('publicSite');
   const tCommon = useTranslations('common');
+  // Área pública: se pinta en SSR, donde el singleton de `user-prefs` está
+  // vacío. Sin `locale` explícito el importe del servidor y el del cliente no
+  // coinciden → mismatch de hidratación.
+  const locale = useLocale();
   const params = useParams<{ slug: string }>();
   const { tenant } = useTenantContext();
 
@@ -210,11 +214,11 @@ export function FichaVentaView() {
                         <span className="flex items-baseline gap-1.5">
                           {option.compareAtAmount ? (
                             <span className="text-xs text-text-subtle line-through">
-                              {formatCents(option.compareAtAmount, option.currency)}
+                              {formatCents(option.compareAtAmount, option.currency, { locale })}
                             </span>
                           ) : null}
                           <span className="font-bold text-text">
-                            {formatCents(option.unitAmount, option.currency)}
+                            {formatCents(option.unitAmount, option.currency, { locale })}
                           </span>
                         </span>
                       </div>
@@ -238,11 +242,11 @@ export function FichaVentaView() {
             ) : selected ? (
               <div className="flex items-baseline justify-center gap-2">
                 <span className="text-3xl font-bold text-text" data-testid="precio-curso">
-                  {formatCents(selected.unitAmount, selected.currency)}
+                  {formatCents(selected.unitAmount, selected.currency, { locale })}
                 </span>
                 {selected.compareAtAmount ? (
                   <span className="text-text-subtle line-through">
-                    {formatCents(selected.compareAtAmount, selected.currency)}
+                    {formatCents(selected.compareAtAmount, selected.currency, { locale })}
                   </span>
                 ) : null}
                 {selected.discountPercent ? (

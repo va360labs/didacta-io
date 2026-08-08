@@ -12,7 +12,7 @@
  */
 
 import { apiFetch } from './api-client';
-import { formatCents as formatCentsI18n } from './i18n/format';
+import { formatCents as formatCentsI18n, type FmtOverrides } from './i18n/format';
 
 const PUBLIC_BASE = '/api/v1/membership';
 const ADMIN_BASE = '/api/v1/membership/admin';
@@ -176,9 +176,18 @@ export const membershipAdminApi = {
  * conversión canónica de `@/lib/i18n/format`: la regla de decimales («sin
  * decimales si la cantidad es redonda») vive allí y solo allí, y coincide con
  * la que este wrapper aplicaba a mano — el español sale byte a byte igual.
+ *
+ * `opts` es OPCIONAL y solo reenvía overrides a la canónica. Lo necesitan las
+ * pantallas de `(public)`/`(venta)`, que sí se pintan en SSR: allí el singleton
+ * de `user-prefs` está vacío a propósito y hay que pasar `{ locale }` explícito
+ * para que servidor y cliente pinten el mismo importe.
  */
-export function formatCents(cents: number, currency = 'eur'): string {
-  return formatCentsI18n(cents, currency.toUpperCase());
+export function formatCents(
+  cents: number,
+  currency = 'eur',
+  opts?: Intl.NumberFormatOptions & FmtOverrides,
+): string {
+  return formatCentsI18n(cents, currency.toUpperCase(), opts);
 }
 
 /** Etiqueta de periodicidad: "/mes", "/trimestre", …, "/N meses". */

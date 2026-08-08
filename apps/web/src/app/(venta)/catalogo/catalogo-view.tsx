@@ -17,7 +17,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { formatDuration } from '@/lib/i18n/format';
 import { useTenantContext } from '@/lib/tenant-context';
@@ -27,6 +27,10 @@ import { featuredOption, getPublicCatalog, type CatalogCourse } from '@/lib/cata
 export function CatalogoView() {
   const t = useTranslations('publicSite');
   const tCommon = useTranslations('common');
+  // Área pública: se pinta en SSR, donde el singleton de `user-prefs` está
+  // vacío. Sin `locale` explícito el importe del servidor y el del cliente no
+  // coinciden → mismatch de hidratación.
+  const locale = useLocale();
   const { tenant } = useTenantContext();
   const [courses, setCourses] = useState<CatalogCourse[] | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -174,11 +178,11 @@ export function CatalogoView() {
                       {option ? (
                         <div className="flex items-baseline gap-2">
                           <span className="text-lg font-bold text-text">
-                            {formatCents(option.unitAmount, option.currency)}
+                            {formatCents(option.unitAmount, option.currency, { locale })}
                           </span>
                           {option.compareAtAmount ? (
                             <span className="text-sm text-text-subtle line-through">
-                              {formatCents(option.compareAtAmount, option.currency)}
+                              {formatCents(option.compareAtAmount, option.currency, { locale })}
                             </span>
                           ) : null}
                           {option.discountPercent ? (
