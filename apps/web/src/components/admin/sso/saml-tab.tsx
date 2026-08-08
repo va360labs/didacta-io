@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { EeGate, LICENSE_CAPABILITIES } from '@didacta/license-sdk/react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +28,8 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import {
   samlAdminApi,
   buildSamlLoginUrl,
@@ -42,15 +45,12 @@ const DEFAULT_LAST_NAME_ATTR = 'http://schemas.xmlsoap.org/ws/2005/05/identity/c
 
 /** Pestaña "SAML" de /admin/sso. Antes era la página `/admin/sso-saml`. */
 export function SamlTab() {
+  const t = useTranslations('adminSso');
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h2 className="font-display text-lg font-semibold tracking-tight">SSO con SAML 2.0</h2>
-        <p className="text-text-muted">
-          Permite a tus usuarios iniciar sesión con su identidad corporativa usando SAML 2.0 (Okta,
-          Azure AD, Auth0, OneLogin, ADFS, Keycloak…). Una vez configurado, aparece un botón
-          &ldquo;Iniciar sesión con SSO&rdquo; en la pantalla de login del tenant.
-        </p>
+        <h2 className="font-display text-lg font-semibold tracking-tight">{t('saml.title')}</h2>
+        <p className="text-text-muted">{t('saml.subtitle')}</p>
       </header>
 
       <EeGate capability={LICENSE_CAPABILITIES.SSO_SAML} fallback={<SamlUpsellCard />}>
@@ -61,6 +61,8 @@ export function SamlTab() {
 }
 
 function SamlPanel() {
+  const t = useTranslations('adminSso');
+  const tErrors = useTranslations('errors');
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -103,7 +105,7 @@ function SamlPanel() {
     if (session?.user.tenantSlug) setTenantSlug(session.user.tenantSlug);
     const token = authStorage.getAccessToken();
     if (!token) {
-      setLoadError('Sesión sin token. Vuelve a iniciar sesión.');
+      setLoadError(t('sso.noToken'));
       setLoading(false);
       return;
     }
@@ -132,9 +134,7 @@ function SamlPanel() {
           setSpInfo(res.sp);
         }
       } catch (e) {
-        setLoadError(
-          e instanceof ApiHttpError ? e.message : 'No se pudo cargar la configuración SAML.',
-        );
+        setLoadError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('saml.loadError'));
       } finally {
         setLoading(false);
       }
@@ -152,7 +152,7 @@ function SamlPanel() {
     setActionSuccess(null);
     setProbe(null);
     if (!form.idpSsoUrl.trim() || !form.idpCertificate.trim()) {
-      setActionError('Completa la URL SSO y el certificado del IdP antes de probar.');
+      setActionError(t('saml.probeMissing'));
       return;
     }
     const token = authStorage.getAccessToken();
@@ -167,7 +167,7 @@ function SamlPanel() {
       setProbe(result);
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError ? e.message : 'No se pudo validar la conexión SAML.',
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('saml.probeError'),
       );
     } finally {
       setProbing(false);
@@ -208,14 +208,10 @@ function SamlPanel() {
         acsUrl: res.config.spAcsUrl,
         metadataUrl: res.config.spMetadataUrl,
       });
-      setActionSuccess(
-        serverConfig
-          ? 'Configuración actualizada correctamente.'
-          : 'Configuración creada correctamente.',
-      );
+      setActionSuccess(serverConfig ? t('sso.savedUpdated') : t('sso.savedCreated'));
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError ? formatApiError(e) : 'No se pudo guardar la configuración.',
+        e instanceof ApiHttpError ? formatApiError(e, t, tErrors) : t('sso.saveError'),
       );
     } finally {
       setSaving(false);
@@ -223,11 +219,7 @@ function SamlPanel() {
   }
 
   async function handleDelete() {
-    if (
-      !window.confirm(
-        '¿Eliminar la configuración SSO SAML? Los usuarios dejarán de poder loguearse con SSO inmediatamente.',
-      )
-    ) {
+    if (!window.confirm(t('saml.deleteConfirm'))) {
       return;
     }
     setActionError(null);
@@ -250,10 +242,10 @@ function SamlPanel() {
         autoProvisionUsers: false,
       });
       setProbe(null);
-      setActionSuccess('Configuración eliminada.');
+      setActionSuccess(t('sso.deleted'));
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError ? e.message : 'No se pudo eliminar la configuración.',
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('sso.deleteError'),
       );
     } finally {
       setDeleting(false);
@@ -285,15 +277,15 @@ function SamlPanel() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Icon name="lock" size={18} />
-            Estado SSO SAML
+            {t('saml.statusTitle')}
             <SamlStatusBadge enabled={serverConfig?.enabled ?? false} hasConfig={!!serverConfig} />
           </CardTitle>
           <CardDescription>
             {serverConfig?.enabled
-              ? 'El botón de SSO SAML aparecerá en /signin y los usuarios podrán entrar con su IdP corporativo.'
+              ? t('saml.statusEnabledDesc')
               : serverConfig
-                ? 'Hay configuración guardada pero está deshabilitada — el flow no se ofrece.'
-                : 'Aún no has configurado un IdP. Empieza pegando los datos abajo.'}
+                ? t('sso.statusDisabledDesc')
+                : t('saml.statusEmptyDesc')}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -302,26 +294,24 @@ function SamlPanel() {
       {spInfo ? (
         <Card>
           <CardHeader>
-            <CardTitle>Datos del SP (Didacta) para configurar en el IdP</CardTitle>
-            <CardDescription>
-              Pega estos valores en el panel del IdP cuando crees la aplicación SAML.
-            </CardDescription>
+            <CardTitle>{t('saml.spTitle')}</CardTitle>
+            <CardDescription>{t('saml.spDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
-              <Label>SP Entity ID (Audience)</Label>
+              <Label>{t('saml.spEntityIdLabel')}</Label>
               <code className="block break-all rounded bg-surface-2 px-3 py-2 font-mono text-sm">
                 {spInfo.entityId}
               </code>
             </div>
             <div className="space-y-1.5">
-              <Label>ACS URL (Reply / Single Sign-On URL)</Label>
+              <Label>{t('saml.spAcsLabel')}</Label>
               <code className="block break-all rounded bg-surface-2 px-3 py-2 font-mono text-sm">
                 {spInfo.acsUrl}
               </code>
             </div>
             <div className="space-y-1.5">
-              <Label>Metadata URL (opcional, para IdPs que importan metadata)</Label>
+              <Label>{t('saml.spMetadataLabel')}</Label>
               <code className="block break-all rounded bg-surface-2 px-3 py-2 font-mono text-sm">
                 {spInfo.metadataUrl}
               </code>
@@ -333,97 +323,86 @@ function SamlPanel() {
       {/* Form de la config IdP */}
       <Card>
         <CardHeader>
-          <CardTitle>Configuración del IdP</CardTitle>
+          <CardTitle>{t('sso.idpConfigTitle')}</CardTitle>
           <CardDescription>
-            Pega el Entity ID, la URL del SSO endpoint y el certificado X.509 (PEM) del IdP. Si tu
-            IdP soporta &ldquo;descargar metadata&rdquo;, abre ese XML y copia los valores de{' '}
-            <code className="font-mono">entityID</code>,{' '}
-            <code className="font-mono">SingleSignOnService Location</code> y{' '}
-            <code className="font-mono">X509Certificate</code>.
+            {t.rich('saml.idpConfigDesc', {
+              code: (chunks) => <code className="font-mono">{chunks}</code>,
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="flex items-center justify-between rounded-lg border border-border-soft bg-surface-2 p-4">
             <div>
-              <p className="text-sm font-semibold">Habilitar SSO SAML</p>
-              <p className="text-xs text-text-muted">
-                Activa el botón &ldquo;Iniciar sesión con SSO&rdquo; en /signin.
-              </p>
+              <p className="text-sm font-semibold">{t('saml.enableLabel')}</p>
+              <p className="text-xs text-text-muted">{t('saml.enableHelp')}</p>
             </div>
             <Switch
               checked={form.enabled}
               onCheckedChange={(next) => setForm((prev) => ({ ...prev, enabled: next }))}
-              label="Habilitar SSO SAML"
+              label={t('saml.enableLabel')}
             />
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="saml-entity-id">
-              IdP Entity ID <span className="text-danger-700">*</span>
+              {t('saml.entityIdLabel')} <span className="text-danger-700">*</span>
             </Label>
             <Input
               id="saml-entity-id"
-              placeholder="https://idp.example.com/saml o urn:idp:example"
+              placeholder={t('saml.entityIdPlaceholder')}
               value={form.idpEntityId}
               onChange={(e) => setForm((prev) => ({ ...prev, idpEntityId: e.target.value }))}
             />
             <p className="text-xs text-text-subtle">
-              Identificador único del IdP. Lo encuentras como{' '}
-              <code className="font-mono">entityID</code> en el metadata.
+              {t.rich('saml.entityIdHelp', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+              })}
             </p>
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="saml-sso-url">
-              SSO URL (HTTP-Redirect binding) <span className="text-danger-700">*</span>
+              {t('saml.ssoUrlLabel')} <span className="text-danger-700">*</span>
             </Label>
             <div className="flex gap-2">
               <Input
                 id="saml-sso-url"
                 type="url"
                 inputMode="url"
-                placeholder="https://idp.example.com/sso"
+                placeholder={t('saml.ssoUrlPlaceholder')}
                 value={form.idpSsoUrl}
                 onChange={(e) => setForm((prev) => ({ ...prev, idpSsoUrl: e.target.value }))}
               />
               <Button type="button" variant="ghost" onClick={handleProbe} disabled={probing}>
-                {probing ? 'Probando…' : 'Probar conexión'}
+                {probing ? t('sso.probing') : t('saml.probeButton')}
               </Button>
             </div>
-            <p className="text-xs text-text-subtle">
-              URL a la que Didacta redirige para iniciar el login SAML. Debe ser HTTPS (acepta
-              http://localhost para dev).
-            </p>
+            <p className="text-xs text-text-subtle">{t('saml.ssoUrlHelp')}</p>
             {probe ? <ProbeFeedback probe={probe} /> : null}
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="saml-cert">
-              Certificado IdP (X.509 PEM) <span className="text-danger-700">*</span>
+              {t('saml.certLabel')} <span className="text-danger-700">*</span>
             </Label>
             <Textarea
               id="saml-cert"
               rows={8}
-              placeholder={'-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----'}
+              placeholder={t('saml.certPlaceholder')}
               value={form.idpCertificate}
               onChange={(e) => setForm((prev) => ({ ...prev, idpCertificate: e.target.value }))}
               className="font-mono text-xs"
             />
-            <p className="text-xs text-text-subtle">
-              Certificado público del IdP. Se usa para validar la firma de las SAMLResponse — sin
-              este cert, ningún login se acepta.
-            </p>
+            <p className="text-xs text-text-subtle">{t('saml.certHelp')}</p>
           </div>
 
           {/* Attribute mapping */}
           <div className="space-y-3 rounded-lg border border-border-soft bg-surface-2 p-4">
-            <p className="text-sm font-semibold">Mapeo de atributos del Assertion</p>
-            <p className="text-xs text-text-muted">
-              Cada IdP nombra los attributes diferente. Los defaults cubren Okta / Azure AD / ADFS.
-            </p>
+            <p className="text-sm font-semibold">{t('saml.attrTitle')}</p>
+            <p className="text-xs text-text-muted">{t('saml.attrDesc')}</p>
             <div className="space-y-1.5">
               <Label htmlFor="saml-attr-email">
-                Email <span className="text-danger-700">*</span>
+                {t('saml.attrEmailLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input
                 id="saml-attr-email"
@@ -433,7 +412,7 @@ function SamlPanel() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="saml-attr-first">First name (opcional)</Label>
+              <Label htmlFor="saml-attr-first">{t('saml.attrFirstLabel')}</Label>
               <Input
                 id="saml-attr-first"
                 value={form.firstNameAttr}
@@ -442,7 +421,7 @@ function SamlPanel() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="saml-attr-last">Last name (opcional)</Label>
+              <Label htmlFor="saml-attr-last">{t('saml.attrLastLabel')}</Label>
               <Input
                 id="saml-attr-last"
                 value={form.lastNameAttr}
@@ -454,36 +433,33 @@ function SamlPanel() {
 
           <div className="space-y-1.5">
             <Label htmlFor="saml-allowed-domains">
-              Dominios de email permitidos{' '}
-              <span className="text-text-subtle text-xs">(opcional)</span>
+              {t('sso.allowedDomainsLabel')}{' '}
+              <span className="text-text-subtle text-xs">{t('sso.optionalHint')}</span>
             </Label>
             <Input
               id="saml-allowed-domains"
-              placeholder="acme.com, partner.com"
+              placeholder={t('sso.allowedDomainsPlaceholder')}
               value={form.allowedEmailDomainsCsv}
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, allowedEmailDomainsCsv: e.target.value }))
               }
             />
-            <p className="text-xs text-text-subtle">
-              Vacío = cualquier email del IdP es aceptado. Si listas, el ACS rechaza emails fuera de
-              esos dominios incluso si el IdP los autenticó.
-            </p>
+            <p className="text-xs text-text-subtle">{t('saml.allowedDomainsHelp')}</p>
           </div>
 
           <div className="flex items-center justify-between rounded-lg border border-border-soft bg-surface-2 p-4">
             <div>
-              <p className="text-sm font-semibold">Auto-provisionar usuarios</p>
+              <p className="text-sm font-semibold">{t('sso.autoProvisionLabel')}</p>
               <p className="text-xs text-text-muted">
-                Si está activo, el primer login crea automáticamente la cuenta con role{' '}
-                <code className="font-mono">student</code>. Si está apagado, sólo dejan entrar
-                usuarios que ya existen en el tenant.
+                {t.rich('saml.autoProvisionHelp', {
+                  code: (chunks) => <code className="font-mono">{chunks}</code>,
+                })}
               </p>
             </div>
             <Switch
               checked={form.autoProvisionUsers}
               onCheckedChange={(next) => setForm((prev) => ({ ...prev, autoProvisionUsers: next }))}
-              label="Auto-provisionar usuarios"
+              label={t('sso.autoProvisionLabel')}
             />
           </div>
 
@@ -506,11 +482,11 @@ function SamlPanel() {
 
           <div className="flex flex-wrap gap-2 pt-2">
             <Button type="button" onClick={handleSave} disabled={saving}>
-              {saving ? 'Guardando…' : serverConfig ? 'Guardar cambios' : 'Crear configuración'}
+              {saving ? t('sso.saving') : serverConfig ? t('sso.saveExisting') : t('sso.saveNew')}
             </Button>
             {serverConfig ? (
               <Button type="button" variant="ghost" onClick={handleDelete} disabled={deleting}>
-                {deleting ? 'Eliminando…' : 'Eliminar configuración'}
+                {deleting ? t('sso.deleting') : t('sso.deleteButton')}
               </Button>
             ) : null}
             {serverConfig?.enabled && startUrl ? (
@@ -520,7 +496,7 @@ function SamlPanel() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50"
               >
-                Probar flow ↗
+                {t('sso.tryFlow')}
               </a>
             ) : null}
           </div>
@@ -531,54 +507,56 @@ function SamlPanel() {
 }
 
 function SamlStatusBadge({ enabled, hasConfig }: { enabled: boolean; hasConfig: boolean }) {
-  if (enabled) return <Badge className="bg-success-600 text-white">Activo</Badge>;
-  if (hasConfig) return <Badge variant="outline">Deshabilitado</Badge>;
-  return <Badge variant="outline">Sin configurar</Badge>;
+  const t = useTranslations('adminSso');
+  if (enabled) return <Badge className="bg-success-600 text-white">{t('sso.statusActive')}</Badge>;
+  if (hasConfig) return <Badge variant="outline">{t('sso.statusDisabled')}</Badge>;
+  return <Badge variant="outline">{t('sso.statusNotConfigured')}</Badge>;
 }
 
 function ProbeFeedback({ probe }: { probe: SamlConnectionProbe }) {
+  const t = useTranslations('adminSso');
   if (probe.ok) {
     return (
       <div className="rounded-lg border border-success-200 bg-success-50 p-3 text-xs text-success-800">
-        <p className="font-semibold">✓ Cert + URL válidos</p>
+        <p className="font-semibold">{t('saml.probeOk')}</p>
         <ul className="mt-1 space-y-0.5 font-mono text-[11px]">
-          {probe.certSubject ? <li>Subject: {probe.certSubject}</li> : null}
-          {probe.certNotAfter ? <li>Expira: {probe.certNotAfter}</li> : null}
+          {probe.certSubject ? (
+            <li>{t('saml.probeSubject', { value: probe.certSubject })}</li>
+          ) : null}
+          {probe.certNotAfter ? (
+            <li>{t('saml.probeExpires', { value: probe.certNotAfter })}</li>
+          ) : null}
         </ul>
       </div>
     );
   }
   return (
     <div className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-xs text-danger-700">
-      <p className="font-semibold">✗ Validación falló</p>
+      <p className="font-semibold">{t('saml.probeFailed')}</p>
       <p className="mt-1 font-mono text-[11px]">{probe.error}</p>
     </div>
   );
 }
 
 export function SamlUpsellCard() {
+  const t = useTranslations('adminSso');
   return (
-    <Card role="region" aria-label="SSO con SAML 2.0 (Enterprise)" className="border-dashed">
+    <Card role="region" aria-label={t('saml.upsellAria')} className="border-dashed">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="lock" size={18} />
-          Función Enterprise — actualiza tu plan
+          {t('upsell.title')}
         </CardTitle>
-        <CardDescription>
-          Single Sign-On con SAML 2.0 es parte del paquete Didacta Enterprise. Permite a tus
-          usuarios entrar a Didacta con su identidad corporativa de Okta, Azure AD, Auth0, OneLogin,
-          ADFS, Keycloak o cualquier IdP SAML-compatible.
-        </CardDescription>
+        <CardDescription>{t('saml.upsellDesc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-text-muted">
-          La capability requerida es{' '}
-          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">
-            feat:sso.saml
-          </code>
-          . Sin Enterprise, los endpoints <code className="font-mono">/admin/sso/saml/*</code>{' '}
-          devuelven <code className="font-mono">402 Payment Required</code> y los flows de login
-          federado no se inician.
+          {t.rich('saml.upsellCapability', {
+            chip: (chunks) => (
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">{chunks}</code>
+            ),
+            code: (chunks) => <code className="font-mono">{chunks}</code>,
+          })}
         </p>
         <a
           href="https://didacta.io/pricing"
@@ -586,7 +564,7 @@ export function SamlUpsellCard() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
         >
-          Ver planes Enterprise
+          {t('upsell.cta')}
           <Icon name="arrow-right" size={14} />
         </a>
       </CardContent>
@@ -594,13 +572,13 @@ export function SamlUpsellCard() {
   );
 }
 
-function formatApiError(e: ApiHttpError): string {
+function formatApiError(e: ApiHttpError, t: TranslatorLike, tErrors: TranslatorLike): string {
   if (e.status === 402) {
-    return 'Esta función requiere un plan Enterprise con la capability `feat:sso.saml`.';
+    return t('saml.error402');
   }
   if (e.issues && e.issues.length > 0) {
     const list = e.issues.map((iss) => `${iss.path}: ${iss.message}`).join('; ');
     return `${e.message} — ${list}`;
   }
-  return e.message;
+  return apiErrorMessage(e, tErrors);
 }

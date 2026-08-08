@@ -16,21 +16,23 @@
 /// tab "Notificaciones": es infraestructura, no contenido.
 
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { EmailTemplatesManager } from '@/modules/notifications';
 
 export default function AdminEmailsPage() {
+  const t = useTranslations('adminSso');
   return (
     <div className="mx-auto max-w-4xl space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-text">Emails de la plataforma</h1>
+        <h1 className="text-xl font-bold text-text">{t('emails.title')}</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Personaliza el asunto y el cuerpo de cada email que envía la plataforma. Si no
-          personalizas uno, se usa el texto por defecto del producto. El servidor de envío (SMTP) se
-          configura en{' '}
-          <Link href="/admin/configuracion" className="text-brand-700 hover:underline">
-            Configuración → Notificaciones
-          </Link>
-          .
+          {t.rich('emails.subtitle', {
+            link: (chunks) => (
+              <Link href="/admin/configuracion" className="text-brand-700 hover:underline">
+                {chunks}
+              </Link>
+            ),
+          })}
         </p>
       </div>
       <EmailTemplatesManager />

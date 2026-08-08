@@ -11,17 +11,22 @@
  * `apps/api/src/admin/admin-smtp.controller.ts`. El único delta es que acá
  * usamos `coerce.number` para que un `<input type="number">` (que llega como
  * string en algunos browsers) se convierta antes de la validación de rango.
+ *
+ * i18n: un schema no puede usar hooks, así que los mensajes custom son KEYS
+ * del catálogo `adminSso` (grupo `validation`). El componente que muestra el
+ * issue las resuelve con `labelOr(t, issue.message, issue.message)` — si el
+ * mensaje no es una key (defaults de Zod), se muestra tal cual.
  */
 
 import { z } from 'zod';
 
 export const smtpFormSchema = z.object({
-  host: z.string().trim().min(1, 'Host requerido').max(255),
-  port: z.coerce.number().int().min(1, 'Puerto inválido').max(65535),
+  host: z.string().trim().min(1, 'validation.hostRequired').max(255),
+  port: z.coerce.number().int().min(1, 'validation.portInvalid').max(65535),
   secure: z.boolean(),
-  username: z.string().trim().min(1, 'Usuario requerido').max(255),
+  username: z.string().trim().min(1, 'validation.usernameRequired').max(255),
   password: z.string().max(2048).optional(),
-  fromEmail: z.string().trim().email('Email inválido').max(255),
+  fromEmail: z.string().trim().email('validation.fromEmailInvalid').max(255),
   fromName: z.string().trim().max(255).optional(),
 });
 

@@ -19,6 +19,7 @@
  */
 
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { OidcTab } from '@/components/admin/sso/oidc-tab';
 import { SamlTab } from '@/components/admin/sso/saml-tab';
 import { WordpressTab } from '@/components/admin/sso/wordpress-tab';
@@ -28,6 +29,7 @@ const TABS = ['oidc', 'saml', 'wordpress'] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function AdminSsoPage() {
+  const t = useTranslations('adminSso');
   const router = useRouter();
   const params = useSearchParams();
   const requested = params.get('tab');
@@ -38,11 +40,8 @@ export default function AdminSsoPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Identidad (SSO)</h1>
-        <p className="text-text-muted">
-          Cómo inician sesión tus usuarios con una identidad de fuera de Didacta. Elige el protocolo
-          que hable tu proveedor.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('sso.pageTitle')}</h1>
+        <p className="text-text-muted">{t('sso.pageSubtitle')}</p>
       </header>
 
       <Tabs
@@ -52,9 +51,9 @@ export default function AdminSsoPage() {
         }
       >
         <TabsList>
-          <TabsTrigger value="oidc">OpenID Connect</TabsTrigger>
-          <TabsTrigger value="saml">SAML 2.0</TabsTrigger>
-          <TabsTrigger value="wordpress">WordPress</TabsTrigger>
+          <TabsTrigger value="oidc">{t('sso.tabOidc')}</TabsTrigger>
+          <TabsTrigger value="saml">{t('sso.tabSaml')}</TabsTrigger>
+          <TabsTrigger value="wordpress">{t('sso.tabWordpress')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="oidc" className="mt-5">
