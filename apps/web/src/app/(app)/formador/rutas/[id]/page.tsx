@@ -8,6 +8,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
   updatePath,
   publishPath,
@@ -38,6 +39,7 @@ async function getPathById(
 }
 
 export default function EditarRutaPage() {
+  const t = useTranslations('formadorAula');
   const { id } = useParams<{ id: string }>();
 
   const [path, setPath] = useState<(LearningPath & { courses: LearningPathCourseEntry[] }) | null>(
@@ -88,9 +90,9 @@ export default function EditarRutaPage() {
         courses: selectedCourses,
       });
       setPath((prev) => (prev ? { ...prev, ...updated } : prev));
-      showSaveMsg('Cambios guardados');
+      showSaveMsg(t('rutaEditar.saved'));
     } catch {
-      showSaveMsg('Error al guardar');
+      showSaveMsg(t('rutaEditar.saveError'));
     } finally {
       setSaving(false);
     }
@@ -102,19 +104,21 @@ export default function EditarRutaPage() {
     try {
       const updated = await publishPath(path.id);
       setPath((prev) => (prev ? { ...prev, status: updated.status } : prev));
-      showSaveMsg(updated.status === 'PUBLISHED' ? 'Ruta publicada' : 'Ruta despublicada');
+      showSaveMsg(
+        updated.status === 'PUBLISHED' ? t('rutaEditar.published') : t('rutaEditar.unpublished'),
+      );
     } finally {
       setActionBusy(false);
     }
   }
 
   async function handleArchive() {
-    if (!path || !confirm(`¿Archivar "${path.title}"?`)) return;
+    if (!path || !confirm(t('rutaEditar.confirmArchive', { title: path.title }))) return;
     setActionBusy(true);
     try {
       const updated = await archivePath(path.id);
       setPath((prev) => (prev ? { ...prev, status: updated.status } : prev));
-      showSaveMsg('Ruta archivada');
+      showSaveMsg(t('rutaEditar.archived'));
     } finally {
       setActionBusy(false);
     }
@@ -126,7 +130,7 @@ export default function EditarRutaPage() {
     try {
       const updated = await restorePath(path.id);
       setPath((prev) => (prev ? { ...prev, status: updated.status } : prev));
-      showSaveMsg('Ruta restaurada a borrador');
+      showSaveMsg(t('rutaEditar.restored'));
     } finally {
       setActionBusy(false);
     }
@@ -167,9 +171,9 @@ export default function EditarRutaPage() {
   if (!path) {
     return (
       <div className="flex flex-col items-center gap-4 py-20">
-        <p className="text-text-muted">Ruta no encontrada.</p>
+        <p className="text-text-muted">{t('rutaEditar.notFound')}</p>
         <Link href="/formador/rutas" className="text-sm text-(--didacta-trust) hover:underline">
-          Volver
+          {t('rutaEditar.back')}
         </Link>
       </div>
     );
@@ -187,7 +191,7 @@ export default function EditarRutaPage() {
             href="/formador/rutas"
             className="mb-1 flex items-center gap-1 text-xs text-text-muted hover:text-text"
           >
-            ← Mis rutas
+            {t('rutaEditar.backToPaths')}
           </Link>
           <h1 className="font-display text-xl font-bold text-text">{path.title}</h1>
         </div>
@@ -197,10 +201,10 @@ export default function EditarRutaPage() {
             <button
               onClick={handlePublish}
               disabled={actionBusy || (!canPublish && path.status === 'DRAFT')}
-              title={!canPublish ? 'Añade al menos un curso para publicar' : ''}
+              title={!canPublish ? t('rutaEditar.needCourseToPublish') : ''}
               className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-background disabled:opacity-50"
             >
-              {path.status === 'PUBLISHED' ? 'Despublicar' : 'Publicar'}
+              {path.status === 'PUBLISHED' ? t('rutaEditar.unpublish') : t('rutaEditar.publish')}
             </button>
           )}
           {path.status !== 'ARCHIVED' ? (
@@ -209,7 +213,7 @@ export default function EditarRutaPage() {
               disabled={actionBusy}
               className="rounded-lg border border-amber-200 px-3 py-1.5 text-sm font-medium text-amber-600 hover:bg-amber-50 disabled:opacity-50"
             >
-              Archivar
+              {t('rutaEditar.archive')}
             </button>
           ) : (
             <button
@@ -217,7 +221,7 @@ export default function EditarRutaPage() {
               disabled={actionBusy}
               className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-background disabled:opacity-50"
             >
-              Restaurar a borrador
+              {t('rutaEditar.restoreToDraft')}
             </button>
           )}
           <button
@@ -225,17 +229,17 @@ export default function EditarRutaPage() {
             disabled={saving}
             className="rounded-lg bg-(--didacta-trust) px-4 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
           >
-            {saving ? 'Guardando…' : 'Guardar cambios'}
+            {saving ? t('rutaEditar.saving') : t('rutaEditar.saveChanges')}
           </button>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-5 rounded-xl border border-border bg-surface p-5">
-          <h2 className="text-sm font-semibold text-text">Información general</h2>
+          <h2 className="text-sm font-semibold text-text">{t('rutaEditar.generalInfo')}</h2>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-text">Título</label>
+            <label className="text-sm font-medium text-text">{t('rutaEditar.titleLabel')}</label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -245,7 +249,9 @@ export default function EditarRutaPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-text">Descripción</label>
+            <label className="text-sm font-medium text-text">
+              {t('rutaEditar.descriptionLabel')}
+            </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -256,26 +262,33 @@ export default function EditarRutaPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-text">Tipo de secuencia</label>
+            <label className="text-sm font-medium text-text">
+              {t('rutaEditar.sequenceTypeLabel')}
+            </label>
             <div className="flex gap-4">
-              {(['LINEAR', 'FLEXIBLE'] as const).map((t) => (
-                <label key={t} className="flex cursor-pointer items-center gap-2 text-sm text-text">
+              {(['LINEAR', 'FLEXIBLE'] as const).map((seq) => (
+                <label
+                  key={seq}
+                  className="flex cursor-pointer items-center gap-2 text-sm text-text"
+                >
                   <input
                     type="radio"
                     name="seq"
-                    value={t}
-                    checked={sequenceType === t}
-                    onChange={() => setSequenceType(t)}
+                    value={seq}
+                    checked={sequenceType === seq}
+                    onChange={() => setSequenceType(seq)}
                     className="accent-(--didacta-trust)"
                   />
-                  {t === 'LINEAR' ? 'Lineal' : 'Flexible'}
+                  {seq === 'LINEAR' ? t('rutaEditar.linear') : t('rutaEditar.flexible')}
                 </label>
               ))}
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-text">Duración estimada (minutos)</label>
+            <label className="text-sm font-medium text-text">
+              {t('rutaEditar.estimatedDurationLabel')}
+            </label>
             <input
               type="number"
               min={1}
@@ -283,17 +296,17 @@ export default function EditarRutaPage() {
               onChange={(e) =>
                 setEstimatedMinutes(e.target.value === '' ? '' : Number(e.target.value))
               }
-              placeholder="Ej. 120"
+              placeholder={t('rutaEditar.estimatedDurationPlaceholder')}
               className="w-32 rounded-lg border border-border bg-background px-3 py-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--didacta-trust)/40"
             />
           </div>
         </div>
 
         <div className="space-y-4 rounded-xl border border-border bg-surface p-5">
-          <h2 className="text-sm font-semibold text-text">Cursos de la ruta</h2>
+          <h2 className="text-sm font-semibold text-text">{t('rutaEditar.pathCourses')}</h2>
 
           {selectedCourses.length === 0 && (
-            <p className="text-sm text-text-muted">Aún no hay cursos. Añade uno abajo.</p>
+            <p className="text-sm text-text-muted">{t('rutaEditar.noCoursesYet')}</p>
           )}
 
           <div className="space-y-2">
@@ -315,7 +328,7 @@ export default function EditarRutaPage() {
                       onClick={() => moveCourse(sc.courseId, -1)}
                       disabled={idx === 0}
                       className="rounded p-1 text-text-muted hover:text-text disabled:opacity-30"
-                      title="Subir"
+                      title={t('rutaEditar.moveUp')}
                     >
                       ↑
                     </button>
@@ -323,14 +336,14 @@ export default function EditarRutaPage() {
                       onClick={() => moveCourse(sc.courseId, 1)}
                       disabled={idx === selectedCourses.length - 1}
                       className="rounded p-1 text-text-muted hover:text-text disabled:opacity-30"
-                      title="Bajar"
+                      title={t('rutaEditar.moveDown')}
                     >
                       ↓
                     </button>
                     <button
                       onClick={() => removeCourse(sc.courseId)}
                       className="rounded p-1 text-red-400 hover:text-red-600"
-                      title="Eliminar"
+                      title={t('rutaEditar.remove')}
                     >
                       ×
                     </button>
@@ -342,7 +355,9 @@ export default function EditarRutaPage() {
 
           {availableCourses.length > 0 && (
             <div>
-              <p className="mb-2 text-xs font-medium text-text-muted">Añadir curso</p>
+              <p className="mb-2 text-xs font-medium text-text-muted">
+                {t('rutaEditar.addCourse')}
+              </p>
               <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-lg border border-border bg-background p-2">
                 {availableCourses.map((c) => (
                   <button
@@ -359,7 +374,7 @@ export default function EditarRutaPage() {
           )}
 
           {availableCourses.length === 0 && selectedCourses.length > 0 && (
-            <p className="text-xs text-text-muted">Todos los cursos publicados están en la ruta.</p>
+            <p className="text-xs text-text-muted">{t('rutaEditar.allCoursesInPath')}</p>
           )}
         </div>
       </div>

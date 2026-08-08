@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,27 +15,29 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import {
   certificateTemplatesApi,
   type CertificateTemplate,
   type CertificateTemplateInput,
 } from '@/modules/certificates';
 
-const EMPTY: CertificateTemplateInput = {
-  name: '',
-  body: 'Certifica que ha completado satisfactoriamente el curso indicado, cumpliendo con los criterios de finalización establecidos.',
-  primaryColor: '#0f172a',
-  logoUrl: '',
-  signerName: '',
-  signerTitle: '',
-  isDefault: false,
-};
-
 export default function CertificateTemplatesPage() {
+  const t = useTranslations('formadorAula');
+  const tErrors = useTranslations('errors');
+  const emptyDraft: CertificateTemplateInput = {
+    name: '',
+    body: t('certTemplates.defaultBody'),
+    primaryColor: '#0f172a',
+    logoUrl: '',
+    signerName: '',
+    signerTitle: '',
+    isDefault: false,
+  };
   const [items, setItems] = useState<CertificateTemplate[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<CertificateTemplate | null>(null);
-  const [draft, setDraft] = useState<CertificateTemplateInput>(EMPTY);
+  const [draft, setDraft] = useState<CertificateTemplateInput>(emptyDraft);
   const [busy, setBusy] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
@@ -43,7 +46,9 @@ export default function CertificateTemplatesPage() {
       setItems(await certificateTemplatesApi.list());
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las plantillas.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('certTemplates.loadError'),
+      );
     }
   }
 
@@ -53,20 +58,20 @@ export default function CertificateTemplatesPage() {
 
   function startCreate() {
     setEditing(null);
-    setDraft(EMPTY);
+    setDraft(emptyDraft);
     setShowForm(true);
   }
 
-  function startEdit(t: CertificateTemplate) {
-    setEditing(t);
+  function startEdit(tpl: CertificateTemplate) {
+    setEditing(tpl);
     setDraft({
-      name: t.name,
-      body: t.body,
-      primaryColor: t.primaryColor,
-      logoUrl: t.logoUrl ?? '',
-      signerName: t.signerName ?? '',
-      signerTitle: t.signerTitle ?? '',
-      isDefault: t.isDefault,
+      name: tpl.name,
+      body: tpl.body,
+      primaryColor: tpl.primaryColor,
+      logoUrl: tpl.logoUrl ?? '',
+      signerName: tpl.signerName ?? '',
+      signerTitle: tpl.signerTitle ?? '',
+      isDefault: tpl.isDefault,
     });
     setShowForm(true);
   }
@@ -96,19 +101,25 @@ export default function CertificateTemplatesPage() {
       setEditing(null);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar la plantilla.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('certTemplates.saveError'),
+      );
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleSetDefault(t: CertificateTemplate) {
+  async function handleSetDefault(tpl: CertificateTemplate) {
     setBusy(true);
     try {
-      await certificateTemplatesApi.setDefault(t.id);
+      await certificateTemplatesApi.setDefault(tpl.id);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos marcarla como default.');
+      setError(
+        e instanceof ApiHttpError
+          ? apiErrorMessage(e, tErrors)
+          : t('certTemplates.setDefaultError'),
+      );
     } finally {
       setBusy(false);
     }
@@ -129,20 +140,24 @@ export default function CertificateTemplatesPage() {
       window.open(url, '_blank', 'noopener');
       setTimeout(() => URL.revokeObjectURL(url), 30_000);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos generar el preview.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('certTemplates.previewError'),
+      );
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleDelete(t: CertificateTemplate) {
-    if (!confirm(`¿Eliminar la plantilla "${t.name}"?`)) return;
+  async function handleDelete(tpl: CertificateTemplate) {
+    if (!confirm(t('certTemplates.confirmDelete', { name: tpl.name }))) return;
     setBusy(true);
     try {
-      await certificateTemplatesApi.remove(t.id);
+      await certificateTemplatesApi.remove(tpl.id);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar la plantilla.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('certTemplates.deleteError'),
+      );
     } finally {
       setBusy(false);
     }
@@ -153,16 +168,17 @@ export default function CertificateTemplatesPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight">
-            Plantillas de certificado
+            {t('certTemplates.title')}
           </h1>
           <p className="mt-1 max-w-3xl text-text-muted">
-            Personaliza el certificado que reciben tus alumnos. La plantilla marcada como{' '}
-            <strong>default</strong> se usa para cualquier curso que no tenga una asignada.
+            {t.rich('certTemplates.intro', {
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </p>
         </div>
         <Button type="button" onClick={startCreate} disabled={showForm}>
           <Icon name="plus" size={16} />
-          Nueva plantilla
+          {t('certTemplates.newTemplate')}
         </Button>
       </header>
 
@@ -178,9 +194,11 @@ export default function CertificateTemplatesPage() {
       {showForm ? (
         <Card>
           <CardHeader>
-            <CardTitle>{editing ? 'Editar plantilla' : 'Nueva plantilla'}</CardTitle>
+            <CardTitle>
+              {editing ? t('certTemplates.editTemplate') : t('certTemplates.newTemplate')}
+            </CardTitle>
             <CardDescription>
-              Soporta variables en el cuerpo:{' '}
+              {t('certTemplates.variablesIntro')}{' '}
               <code className="font-mono text-xs">{'{{alumno}}'}</code>,{' '}
               <code className="font-mono text-xs">{'{{curso}}'}</code>,{' '}
               <code className="font-mono text-xs">{'{{fecha}}'}</code>,{' '}
@@ -190,18 +208,18 @@ export default function CertificateTemplatesPage() {
           <CardContent>
             <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="tpl-name">Nombre interno</Label>
+                <Label htmlFor="tpl-name">{t('certTemplates.nameLabel')}</Label>
                 <Input
                   id="tpl-name"
                   required
                   maxLength={120}
                   value={draft.name}
                   onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                  placeholder="Ej. Plantilla por defecto, Plantilla Fundae 2026"
+                  placeholder={t('certTemplates.namePlaceholder')}
                 />
               </div>
               <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="tpl-body">Cuerpo</Label>
+                <Label htmlFor="tpl-body">{t('certTemplates.bodyLabel')}</Label>
                 <Textarea
                   id="tpl-body"
                   required
@@ -211,7 +229,7 @@ export default function CertificateTemplatesPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="tpl-color">Color principal (hex)</Label>
+                <Label htmlFor="tpl-color">{t('certTemplates.colorLabel')}</Label>
                 <Input
                   id="tpl-color"
                   required
@@ -222,7 +240,7 @@ export default function CertificateTemplatesPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="tpl-logo">Logo URL (opcional)</Label>
+                <Label htmlFor="tpl-logo">{t('certTemplates.logoLabel')}</Label>
                 <Input
                   id="tpl-logo"
                   type="url"
@@ -232,21 +250,21 @@ export default function CertificateTemplatesPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="tpl-signer">Firmante (nombre)</Label>
+                <Label htmlFor="tpl-signer">{t('certTemplates.signerNameLabel')}</Label>
                 <Input
                   id="tpl-signer"
                   value={draft.signerName ?? ''}
                   onChange={(e) => setDraft({ ...draft, signerName: e.target.value })}
-                  placeholder="Ej. Nombre Apellido"
+                  placeholder={t('certTemplates.signerNamePlaceholder')}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="tpl-signer-title">Firmante (cargo)</Label>
+                <Label htmlFor="tpl-signer-title">{t('certTemplates.signerTitleLabel')}</Label>
                 <Input
                   id="tpl-signer-title"
                   value={draft.signerTitle ?? ''}
                   onChange={(e) => setDraft({ ...draft, signerTitle: e.target.value })}
-                  placeholder="Director de formación"
+                  placeholder={t('certTemplates.signerTitlePlaceholder')}
                 />
               </div>
               <label className="flex items-center gap-2 text-sm sm:col-span-2">
@@ -255,11 +273,15 @@ export default function CertificateTemplatesPage() {
                   checked={draft.isDefault ?? false}
                   onChange={(e) => setDraft({ ...draft, isDefault: e.target.checked })}
                 />
-                Marcar como plantilla default del tenant (desmarca la actual)
+                {t('certTemplates.markDefaultLabel')}
               </label>
               <div className="flex flex-wrap gap-2 sm:col-span-2">
                 <Button type="submit" disabled={busy}>
-                  {busy ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear plantilla'}
+                  {busy
+                    ? t('certTemplates.saving')
+                    : editing
+                      ? t('certTemplates.saveChanges')
+                      : t('certTemplates.createTemplate')}
                 </Button>
                 <Button
                   type="button"
@@ -267,10 +289,10 @@ export default function CertificateTemplatesPage() {
                   onClick={handlePreview}
                   disabled={busy || !draft.name || !draft.body}
                 >
-                  Vista previa PDF
+                  {t('certTemplates.previewPdf')}
                 </Button>
                 <Button type="button" variant="ghost" onClick={cancel} disabled={busy}>
-                  Cancelar
+                  {t('certTemplates.cancel')}
                 </Button>
               </div>
             </form>
@@ -296,78 +318,81 @@ export default function CertificateTemplatesPage() {
             >
               <Icon name="award" size={40} />
             </div>
-            <h3 className="font-display text-2xl font-semibold">Aún no hay plantillas</h3>
+            <h3 className="font-display text-2xl font-semibold">{t('certTemplates.emptyTitle')}</h3>
             <p className="max-w-md text-text-muted">
-              La primera que marques como <strong>default</strong> se aplicará a todos los cursos
-              del tenant que no tengan una asignada.
+              {t.rich('certTemplates.emptyHint', {
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
             </p>
             <Button type="button" onClick={startCreate} className="mt-2">
               <Icon name="plus" size={16} />
-              Crear mi primera plantilla
+              {t('certTemplates.createFirst')}
             </Button>
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-3">
-          {items.map((t) => (
-            <Card key={t.id}>
+          {items.map((tpl) => (
+            <Card key={tpl.id}>
               <CardContent className="flex flex-wrap items-start gap-4 p-4">
                 <span
                   aria-hidden="true"
                   className="grid h-12 w-12 shrink-0 place-items-center rounded-xl text-white"
-                  style={{ background: t.primaryColor }}
+                  style={{ background: tpl.primaryColor }}
                 >
                   <Icon name="award" size={22} />
                 </span>
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-display text-base font-semibold leading-tight text-text">
-                      {t.name}
+                      {tpl.name}
                     </h3>
-                    {t.isDefault ? (
+                    {tpl.isDefault ? (
                       <Badge variant="success" dot>
-                        Default
+                        {t('certTemplates.defaultBadge')}
                       </Badge>
                     ) : null}
                   </div>
-                  <p className="line-clamp-2 text-sm text-text-muted">{t.body}</p>
+                  <p className="line-clamp-2 text-sm text-text-muted">{tpl.body}</p>
                   <p className="flex flex-wrap items-center gap-1 text-xs text-text-subtle">
-                    <span className="font-mono">{t.primaryColor}</span>
-                    {t.signerName ? <span>· firma {t.signerName}</span> : null}
+                    <span className="font-mono">{tpl.primaryColor}</span>
+                    {tpl.signerName ? (
+                      <span>{t('certTemplates.signedBy', { name: tpl.signerName })}</span>
+                    ) : null}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {!t.isDefault ? (
+                  {!tpl.isDefault ? (
                     <Button
                       type="button"
                       variant="secondary"
-                      onClick={() => handleSetDefault(t)}
+                      onClick={() => handleSetDefault(tpl)}
                       disabled={busy}
                       size="sm"
                     >
-                      Marcar default
+                      {t('certTemplates.markDefault')}
                     </Button>
                   ) : null}
                   <Button
                     type="button"
                     variant="secondary"
-                    onClick={() => startEdit(t)}
+                    onClick={() => startEdit(tpl)}
                     disabled={busy}
                     size="sm"
                   >
                     <Icon name="edit" size={13} />
-                    Editar
+                    {t('certTemplates.edit')}
                   </Button>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleDelete(t)}
-                    disabled={busy || t.isDefault}
-                    title={t.isDefault ? 'No se puede eliminar la plantilla default.' : undefined}
+                    onClick={() => handleDelete(tpl)}
+                    disabled={busy || tpl.isDefault}
+                    title={tpl.isDefault ? t('certTemplates.cantDeleteDefault') : undefined}
                   >
                     <Icon name="trash" size={13} />
-                    Eliminar
+                    {t('certTemplates.delete')}
                   </Button>
                 </div>
               </CardContent>
