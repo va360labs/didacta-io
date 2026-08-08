@@ -61,7 +61,10 @@ export class ModuleAssetsController {
   ): Promise<StreamableFile> {
     // Validar surface
     if (!MODULE_SURFACES.includes(surface as ModuleSurface)) {
-      throw new NotFoundException(`Surface "${surface}" no es válida.`);
+      throw new NotFoundException({
+        message: `Surface "${surface}" no es válida.`,
+        code: 'MARKETPLACE_ASSET_SURFACE_INVALID',
+      });
     }
 
     // El slug viene sin "mod." prefix, lo añadimos
@@ -80,12 +83,16 @@ export class ModuleAssetsController {
     // Buscar módulo instalado
     const module = await this.installed.findByName(moduleName);
     if (!module) {
-      throw new NotFoundException(`Módulo "${moduleName}" no está instalado.`);
+      throw new NotFoundException({
+        message: `Módulo "${moduleName}" no está instalado.`,
+        code: 'MARKETPLACE_MODULE_NOT_INSTALLED',
+      });
     }
     if (module.status !== 'INSTALLED') {
-      throw new NotFoundException(
-        `Módulo "${moduleName}" no está disponible (status: ${module.status}).`,
-      );
+      throw new NotFoundException({
+        message: `Módulo "${moduleName}" no está disponible (status: ${module.status}).`,
+        code: 'MARKETPLACE_MODULE_NOT_AVAILABLE',
+      });
     }
 
     // Descargar el paquete desde storage
@@ -94,9 +101,10 @@ export class ModuleAssetsController {
     try {
       packageBuffer = await storage.download(module.packageStorageKey);
     } catch (err) {
-      throw new NotFoundException(
-        `Error descargando paquete del módulo: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      throw new NotFoundException({
+        message: `Error descargando paquete del módulo: ${err instanceof Error ? err.message : String(err)}`,
+        code: 'MARKETPLACE_PACKAGE_DOWNLOAD_FAILED',
+      });
     }
 
     // Extraer el bundle UI
@@ -104,9 +112,10 @@ export class ModuleAssetsController {
     const bundlePath = `dist/ui/${surface}.js`;
     const entry = zip.getEntry(bundlePath);
     if (!entry) {
-      throw new NotFoundException(
-        `El módulo "${moduleName}" no tiene UI para surface "${surface}".`,
-      );
+      throw new NotFoundException({
+        message: `El módulo "${moduleName}" no tiene UI para surface "${surface}".`,
+        code: 'MARKETPLACE_SURFACE_UI_MISSING',
+      });
     }
 
     const bundleData = entry.getData();

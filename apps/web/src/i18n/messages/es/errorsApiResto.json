@@ -1,1 +1,24 @@
-{}
+{
+  "ALREADY_INITIALIZED": "La plataforma ya fue inicializada. Inicia sesión con tu cuenta admin.",
+  "MARKETPLACE_DISPATCHER_METHOD_NOT_ALLOWED": "Método no soportado por el dispatcher",
+  "MARKETPLACE_SUPER_ADMIN_REQUIRED": "Esta acción requiere rol super_admin.",
+  "MODERATION_ADMIN_REQUIRED": "Esta acción requiere rol de administrador.",
+  "MODERATION_CANNOT_SANCTION_SELF": "No puedes sancionarte a ti mismo.",
+  "MODERATION_CANNOT_SANCTION_SUPER_ADMIN": "No se puede sancionar a un super administrador.",
+  "MODERATION_EXPIRY_INVALID": "La fecha de fin no es válida.",
+  "MODERATION_EXPIRY_NOT_FUTURE": "La fecha de fin tiene que ser futura.",
+  "MODERATION_REASON_REQUIRED": "El motivo es obligatorio.",
+  "MODERATION_RESTRICTION_ALREADY_LIFTED": "Esa sanción ya estaba levantada.",
+  "MODERATION_RESTRICTION_NOT_FOUND": "Sanción no encontrada.",
+  "MODERATION_SCOPES_REQUIRED": "Indica al menos un área a sancionar.",
+  "MODERATION_USER_NOT_FOUND": "Usuario no encontrado.",
+  "SETUP_HOSTNAME_INVALID": "Hostname inválido.",
+  "SETUP_SLUG_INVALID": "No pudimos generar un slug válido a partir del nombre. Indica uno manualmente (minúsculas, números, guiones).",
+  "SETUP_TOKEN_INVALID": "Token de setup inválido o ya usado.",
+  "SETUP_TOKEN_REQUIRED": "Falta el token de setup. Consulta los logs del contenedor del primer arranque (docker logs).",
+  "WEBHOOKS_ADMIN_REQUIRED": "Solo super_admin y tenant_admin pueden gestionar webhooks salientes.",
+  "WEBHOOKS_DEAD_LETTER_ADMIN_REQUIRED": "Solo super_admin y tenant_admin pueden gestionar la dead-letter de webhooks.",
+  "WEBHOOKS_DEAD_LETTER_ENDPOINT_DELETED": "El endpoint asociado fue borrado — no hay forma de reintentar.",
+  "WEBHOOKS_DEAD_LETTER_NOT_FOUND": "Dead-letter no encontrado o ajeno al tenant.",
+  "WEBHOOKS_ENDPOINT_NOT_FOUND": "Endpoint no encontrado"
+}

@@ -137,7 +137,11 @@ export class WebhooksService {
     const row = await this.prisma.webhookEndpoint.findFirst({
       where: { id, tenantId },
     });
-    if (!row) throw new NotFoundException('Endpoint no encontrado');
+    if (!row)
+      throw new NotFoundException({
+        message: 'Endpoint no encontrado',
+        code: 'WEBHOOKS_ENDPOINT_NOT_FOUND',
+      });
     return this.toPublic(row);
   }
 
@@ -209,7 +213,11 @@ export class WebhooksService {
     const current = await this.prisma.webhookEndpoint.findFirst({
       where: { id, tenantId },
     });
-    if (!current) throw new NotFoundException('Endpoint no encontrado');
+    if (!current)
+      throw new NotFoundException({
+        message: 'Endpoint no encontrado',
+        code: 'WEBHOOKS_ENDPOINT_NOT_FOUND',
+      });
 
     // Validaciones cuando hay cambios sensibles.
     if (dto.eventTypes) {

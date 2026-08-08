@@ -58,9 +58,10 @@ const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 function requireTenantAdmin(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-    throw new ForbiddenException(
-      'Solo super_admin y tenant_admin pueden gestionar webhooks salientes.',
-    );
+    throw new ForbiddenException({
+      message: 'Solo super_admin y tenant_admin pueden gestionar webhooks salientes.',
+      code: 'WEBHOOKS_ADMIN_REQUIRED',
+    });
   }
   return user;
 }

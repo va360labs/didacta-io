@@ -106,7 +106,10 @@ export class ModulesDispatcherController {
     const method = (req.method ?? '').toUpperCase();
     if (!ALLOWED_METHODS.includes(method as AllowedMethod)) {
       throw new HttpException(
-        'Método no soportado por el dispatcher',
+        {
+          message: 'Método no soportado por el dispatcher',
+          code: 'MARKETPLACE_DISPATCHER_METHOD_NOT_ALLOWED',
+        },
         HttpStatus.METHOD_NOT_ALLOWED,
       );
     }
@@ -125,7 +128,10 @@ export class ModulesDispatcherController {
 
     const matched = this.router.match(method, stripped);
     if (!matched) {
-      throw new NotFoundException(`No hay módulo registrado para ${method} ${stripped}`);
+      throw new NotFoundException({
+        message: `No hay módulo registrado para ${method} ${stripped}`,
+        code: 'MARKETPLACE_DISPATCHER_ROUTE_NOT_FOUND',
+      });
     }
 
     // ctx.http: cliente saliente scoped a este módulo + esta request.
@@ -216,7 +222,10 @@ export class ModulesDispatcherController {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`[mod:${matched.moduleName}] handler lanzó: ${msg}`);
       throw new HttpException(
-        { message: `Error en módulo "${matched.moduleName}": ${msg}` },
+        {
+          message: `Error en módulo "${matched.moduleName}": ${msg}`,
+          code: 'MARKETPLACE_MODULE_HANDLER_ERROR',
+        },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

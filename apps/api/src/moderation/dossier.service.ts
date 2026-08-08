@@ -282,7 +282,11 @@ export class DossierService {
         externalIdentities: true,
       },
     });
-    if (!user) throw new NotFoundException('Usuario no encontrado.');
+    if (!user)
+      throw new NotFoundException({
+        message: 'Usuario no encontrado.',
+        code: 'MODERATION_USER_NOT_FOUND',
+      });
 
     const now = new Date();
 

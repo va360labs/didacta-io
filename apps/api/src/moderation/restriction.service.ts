@@ -191,11 +191,17 @@ export class RestrictionService {
   ): Promise<RestrictionRecord> {
     const scopes = [...new Set(input.scopes ?? [])];
     if (scopes.length === 0) {
-      throw new BadRequestException('Indica al menos un área a sancionar.');
+      throw new BadRequestException({
+        message: 'Indica al menos un área a sancionar.',
+        code: 'MODERATION_SCOPES_REQUIRED',
+      });
     }
     const invalid = scopes.filter((s) => !ALL_SCOPES.includes(s));
     if (invalid.length > 0) {
-      throw new BadRequestException(`Áreas desconocidas: ${invalid.join(', ')}.`);
+      throw new BadRequestException({
+        message: `Áreas desconocidas: ${invalid.join(', ')}.`,
+        code: 'MODERATION_SCOPES_UNKNOWN',
+      });
     }
     // Si viene el comodín, lo demás sobra: guardar ['all'] a secas evita que
     // una sanción total se quede corta cuando se añada un área nueva.
@@ -203,38 +209,60 @@ export class RestrictionService {
 
     const reason = (input.reason ?? '').trim();
     if (!reason) {
-      throw new BadRequestException('El motivo es obligatorio.');
+      throw new BadRequestException({
+        message: 'El motivo es obligatorio.',
+        code: 'MODERATION_REASON_REQUIRED',
+      });
     }
     if (reason.length > MAX_REASON) {
-      throw new BadRequestException(`El motivo no puede pasar de ${MAX_REASON} caracteres.`);
+      throw new BadRequestException({
+        message: `El motivo no puede pasar de ${MAX_REASON} caracteres.`,
+        code: 'MODERATION_REASON_TOO_LONG',
+      });
     }
 
     let expiresAt: Date | null = null;
     if (input.expiresAt) {
       const parsed = new Date(input.expiresAt);
       if (Number.isNaN(parsed.getTime())) {
-        throw new BadRequestException('La fecha de fin no es válida.');
+        throw new BadRequestException({
+          message: 'La fecha de fin no es válida.',
+          code: 'MODERATION_EXPIRY_INVALID',
+        });
       }
       if (parsed.getTime() <= Date.now()) {
-        throw new BadRequestException('La fecha de fin tiene que ser futura.');
+        throw new BadRequestException({
+          message: 'La fecha de fin tiene que ser futura.',
+          code: 'MODERATION_EXPIRY_NOT_FUTURE',
+        });
       }
       expiresAt = parsed;
     }
 
     if (userId === actorId) {
-      throw new BadRequestException('No puedes sancionarte a ti mismo.');
+      throw new BadRequestException({
+        message: 'No puedes sancionarte a ti mismo.',
+        code: 'MODERATION_CANNOT_SANCTION_SELF',
+      });
     }
 
     const target = await this.prisma.user.findFirst({
       where: { id: userId, tenantId, deletedAt: null },
       select: { id: true, roles: { select: { role: { select: { name: true } } } } },
     });
-    if (!target) throw new NotFoundException('Usuario no encontrado.');
+    if (!target)
+      throw new NotFoundException({
+        message: 'Usuario no encontrado.',
+        code: 'MODERATION_USER_NOT_FOUND',
+      });
 
     // Un super_admin no es sancionable desde el panel. Mismo criterio que
     // `TENANT_ASSIGNABLE_ROLES`: el panel nunca toca a quien está por encima.
     if (target.roles.some((r) => r.role.name === 'super_admin')) {
-      throw new BadRequestException('No se puede sancionar a un super administrador.');
+      throw new BadRequestException({
+        message: 'No se puede sancionar a un super administrador.',
+        code: 'MODERATION_CANNOT_SANCTION_SUPER_ADMIN',
+      });
     }
 
     const row = await this.prisma.userRestriction.create({
@@ -274,9 +302,16 @@ export class RestrictionService {
     const existing = await this.prisma.userRestriction.findFirst({
       where: { id: restrictionId, tenantId },
     });
-    if (!existing) throw new NotFoundException('Sanción no encontrada.');
+    if (!existing)
+      throw new NotFoundException({
+        message: 'Sanción no encontrada.',
+        code: 'MODERATION_RESTRICTION_NOT_FOUND',
+      });
     if (existing.liftedAt) {
-      throw new BadRequestException('Esa sanción ya estaba levantada.');
+      throw new BadRequestException({
+        message: 'Esa sanción ya estaba levantada.',
+        code: 'MODERATION_RESTRICTION_ALREADY_LIFTED',
+      });
     }
 
     const trimmed = (liftReason ?? '').trim().slice(0, MAX_REASON) || null;
