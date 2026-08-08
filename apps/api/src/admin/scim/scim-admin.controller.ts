@@ -58,7 +58,10 @@ const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 function requireTenantAdmin(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-    throw new ForbiddenException('Solo super_admin y tenant_admin pueden gestionar el token SCIM.');
+    throw new ForbiddenException({
+      message: 'Solo super_admin y tenant_admin pueden gestionar el token SCIM.',
+      code: 'ADMIN_SCIM_TOKEN_FORBIDDEN',
+    });
   }
   return user;
 }

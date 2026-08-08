@@ -136,7 +136,11 @@ export class AdminTenantsService {
       where: { id, deletedAt: null },
       include: { domains: true, _count: { select: { users: true } } },
     });
-    if (!t) throw new NotFoundException('Tenant no encontrado.');
+    if (!t)
+      throw new NotFoundException({
+        message: 'Tenant no encontrado.',
+        code: 'ADMIN_TENANT_NOT_FOUND',
+      });
 
     const courseCount = await this.prisma.modCoursesCourse.count({ where: { tenantId: id } });
 
@@ -175,13 +179,18 @@ export class AdminTenantsService {
     ctx: ClientContext = NO_CTX,
   ): Promise<TenantListItem> {
     if (!SLUG_RE.test(dto.slug)) {
-      throw new BadRequestException(
-        'El slug debe ser DNS-safe: minúsculas, números y guiones, sin empezar/terminar en guión, máx. 63 chars.',
-      );
+      throw new BadRequestException({
+        message:
+          'El slug debe ser DNS-safe: minúsculas, números y guiones, sin empezar/terminar en guión, máx. 63 chars.',
+        code: 'ADMIN_TENANT_SLUG_INVALID',
+      });
     }
     const hostname = dto.primaryHostname.trim().toLowerCase();
     if (!HOSTNAME_RE.test(hostname)) {
-      throw new BadRequestException('Hostname inválido.');
+      throw new BadRequestException({
+        message: 'Hostname inválido.',
+        code: 'ADMIN_TENANT_HOSTNAME_INVALID',
+      });
     }
 
     // 11º piloto License SDK · `feat:multi_tenant.real`. La instancia community
@@ -196,18 +205,27 @@ export class AdminTenantsService {
 
     const existingSlug = await this.prisma.tenant.findUnique({ where: { slug: dto.slug } });
     if (existingSlug) {
-      throw new ConflictException(`Ya existe un tenant con slug "${dto.slug}".`);
+      throw new ConflictException({
+        message: `Ya existe un tenant con slug "${dto.slug}".`,
+        code: 'ADMIN_TENANT_SLUG_EXISTS',
+      });
     }
     const existingDomain = await this.prisma.tenantDomain.findUnique({ where: { hostname } });
     if (existingDomain) {
-      throw new ConflictException(`El hostname "${hostname}" ya está asignado a otro tenant.`);
+      throw new ConflictException({
+        message: `El hostname "${hostname}" ya está asignado a otro tenant.`,
+        code: 'ADMIN_TENANT_HOSTNAME_EXISTS',
+      });
     }
 
     const tenantAdminRole = await this.prisma.role.findUnique({
       where: { name: 'tenant_admin' },
     });
     if (!tenantAdminRole) {
-      throw new BadRequestException('Rol tenant_admin no existe en seed.');
+      throw new BadRequestException({
+        message: 'Rol tenant_admin no existe en seed.',
+        code: 'ADMIN_TENANT_ADMIN_ROLE_MISSING',
+      });
     }
 
     const created = await this.prisma.$transaction(async (tx) => {
@@ -289,10 +307,17 @@ export class AdminTenantsService {
   ): Promise<TenantListItem> {
     const trimmed = newName.trim();
     if (trimmed.length === 0) {
-      throw new BadRequestException('El nombre del tenant no puede estar vacío.');
+      throw new BadRequestException({
+        message: 'El nombre del tenant no puede estar vacío.',
+        code: 'ADMIN_TENANT_NAME_EMPTY',
+      });
     }
     const t = await this.prisma.tenant.findFirst({ where: { id, deletedAt: null } });
-    if (!t) throw new NotFoundException('Tenant no encontrado.');
+    if (!t)
+      throw new NotFoundException({
+        message: 'Tenant no encontrado.',
+        code: 'ADMIN_TENANT_NOT_FOUND',
+      });
 
     await this.prisma.tenant.update({ where: { id }, data: { name: trimmed } });
 
@@ -319,7 +344,11 @@ export class AdminTenantsService {
     const t = await this.prisma.tenant.findFirst({
       where: { id, deletedAt: null },
     });
-    if (!t) throw new NotFoundException('Tenant no encontrado.');
+    if (!t)
+      throw new NotFoundException({
+        message: 'Tenant no encontrado.',
+        code: 'ADMIN_TENANT_NOT_FOUND',
+      });
 
     await this.prisma.$transaction(async (tx) => {
       await tx.tenant.update({ where: { id }, data: { status } });
@@ -353,13 +382,17 @@ export class AdminTenantsService {
   ): Promise<TenantListItem> {
     const host = hostname.trim().toLowerCase();
     if (!HOSTNAME_RE.test(host)) {
-      throw new BadRequestException('Hostname inválido.');
+      throw new BadRequestException({
+        message: 'Hostname inválido.',
+        code: 'ADMIN_TENANT_HOSTNAME_INVALID',
+      });
     }
     const existing = await this.prisma.tenantDomain.findUnique({ where: { hostname: host } });
     if (existing) {
-      throw new ConflictException(
-        `El hostname "${host}" ya está asignado (al mismo o a otro tenant).`,
-      );
+      throw new ConflictException({
+        message: `El hostname "${host}" ya está asignado (al mismo o a otro tenant).`,
+        code: 'ADMIN_TENANT_HOSTNAME_EXISTS',
+      });
     }
     await this.prisma.tenantDomain.create({
       data: { tenantId, hostname: host, isPrimary: false, isVerified: true },
@@ -388,12 +421,16 @@ export class AdminTenantsService {
       where: { tenantId, hostname: host },
     });
     if (!domain) {
-      throw new NotFoundException('Dominio no encontrado en este tenant.');
+      throw new NotFoundException({
+        message: 'Dominio no encontrado en este tenant.',
+        code: 'ADMIN_TENANT_DOMAIN_NOT_FOUND',
+      });
     }
     if (domain.isPrimary) {
-      throw new BadRequestException(
-        'No puedes eliminar el dominio primario. Asigna otro como primario antes.',
-      );
+      throw new BadRequestException({
+        message: 'No puedes eliminar el dominio primario. Asigna otro como primario antes.',
+        code: 'ADMIN_TENANT_PRIMARY_DOMAIN_DELETE_FORBIDDEN',
+      });
     }
     await this.prisma.tenantDomain.delete({ where: { id: domain.id } });
     await this.auditLog.record({
