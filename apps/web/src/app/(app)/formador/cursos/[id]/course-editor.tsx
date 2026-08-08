@@ -25,6 +25,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import nextDynamic from 'next/dynamic';
+import { useTranslations } from 'next-intl';
 import { CourseStatusBadge } from '@/components/course-status-badge';
 import { Icon, type IconName } from '@/components/icon';
 import { PendingCommentsQueue } from '@/components/pending-comments-queue';
@@ -40,6 +41,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { certificateTemplatesApi, type CertificateTemplate } from '@/modules/certificates';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { storageApi } from '@/lib/storage';
@@ -53,22 +55,9 @@ import {
 } from '@/lib/courses';
 import { LessonContentEditor } from './lesson-content-editor';
 
-const LESSON_TYPES: { value: LessonType; label: string }[] = [
-  { value: 'VIDEO', label: 'Vídeo' },
-  { value: 'HTML', label: 'HTML' },
-  { value: 'PDF', label: 'PDF' },
-  { value: 'TEXT', label: 'Texto' },
-  { value: 'QUIZ', label: 'Quiz' },
-];
-
-const LESSON_TYPE_LABEL: Record<LessonType, string> = {
-  VIDEO: 'Vídeo',
-  HTML: 'HTML',
-  PDF: 'PDF',
-  TEXT: 'Texto',
-  QUIZ: 'Quiz',
-  SCORM: 'SCORM',
-};
+// Tipos ofrecidos al crear una lección (SCORM se configura desde el editor de
+// contenido). Labels en el catálogo `formadorCursos.lessonType.*`.
+const LESSON_TYPE_OPTIONS: LessonType[] = ['VIDEO', 'HTML', 'PDF', 'TEXT', 'QUIZ'];
 
 const LESSON_TYPE_ICON: Record<LessonType, IconName> = {
   VIDEO: 'play',
@@ -91,6 +80,8 @@ export function CourseEditor({
   initial: CourseDetail;
   onChange: () => Promise<void>;
 }) {
+  const t = useTranslations('formadorCursos');
+  const tErrors = useTranslations('errors');
   const [error, setError] = useState<PublishError | null>(null);
   const [pending, setPending] = useState(false);
   const [editingMetadata, setEditingMetadata] = useState(false);
@@ -106,9 +97,9 @@ export function CourseEditor({
         const reasons =
           (e as unknown as { issues?: { message: string }[] }).issues?.map((i) => i.message) ??
           ((e as unknown as Record<string, unknown>).reasons as string[] | undefined);
-        setError({ message: e.message, reasons });
+        setError({ message: apiErrorMessage(e, tErrors), reasons });
       } else {
-        setError({ message: 'Error inesperado' });
+        setError({ message: t('errorUnexpected') });
       }
     } finally {
       setPending(false);
@@ -185,28 +176,28 @@ export function CourseEditor({
                 aria-expanded={editingMetadata}
               >
                 <Icon name="edit" size={16} />
-                {editingMetadata ? 'Cerrar' : 'Editar'}
+                {editingMetadata ? t('close') : t('edit')}
               </Button>
               <Button asChild variant="ghost" className="text-white hover:bg-white/10">
                 <Link href={`/cursos/${initial.slug}` as never}>
                   <Icon name="eye" size={16} />
-                  Vista previa
+                  {t('preview')}
                 </Link>
               </Button>
               {initial.status === 'DRAFT' ? (
                 <Button onClick={handlePublish} disabled={pending}>
                   <Icon name="check" size={16} />
-                  Publicar
+                  {t('publish')}
                 </Button>
               ) : null}
               {initial.status !== 'ARCHIVED' ? (
                 <Button onClick={handleArchive} variant="outline" disabled={pending}>
-                  Archivar
+                  {t('archive')}
                 </Button>
               ) : (
                 <Button onClick={handleUnarchive} disabled={pending}>
                   <Icon name="arrow-left" size={16} />
-                  Desarchivar
+                  {t('unarchive')}
                 </Button>
               )}
             </div>
@@ -220,13 +211,13 @@ export function CourseEditor({
               {initial.modules.length}
             </p>
             <p className="text-xs font-medium text-text-muted">
-              {initial.modules.length === 1 ? 'sección' : 'secciones'}
+              {t('sectionsWord', { count: initial.modules.length })}
             </p>
           </div>
           <div className="p-4 text-center">
             <p className="font-display text-2xl font-bold tabular-nums text-text">{totalLessons}</p>
             <p className="text-xs font-medium text-text-muted">
-              {totalLessons === 1 ? 'lección' : 'lecciones'}
+              {t('lessonsWord', { count: totalLessons })}
             </p>
           </div>
           <div className="p-4 text-center">
@@ -234,7 +225,7 @@ export function CourseEditor({
               {totalMinutes > 0 ? `${totalMinutes}` : '—'}
             </p>
             <p className="text-xs font-medium text-text-muted">
-              {totalMinutes > 0 ? 'minutos totales' : 'sin duración'}
+              {totalMinutes > 0 ? t('totalMinutesLabel') : t('noDurationLabel')}
             </p>
           </div>
         </div>
@@ -290,10 +281,8 @@ export function CourseEditor({
         <CardHeader>
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
-              <CardTitle>Contenido del curso</CardTitle>
-              <CardDescription>
-                Organiza tu curso en secciones (módulos) y dentro de cada sección, lecciones.
-              </CardDescription>
+              <CardTitle>{t('courseContentTitle')}</CardTitle>
+              <CardDescription>{t('courseContentDescription')}</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -311,13 +300,12 @@ export function CourseEditor({
                 <Icon name="book" size={28} />
               </div>
               <h3 className="font-display text-lg font-semibold text-text">
-                Empieza creando tu primera sección
+                {t('emptyModulesTitle')}
               </h3>
               <p className="mx-auto mt-1 max-w-md text-sm text-text-muted">
-                Las secciones agrupan lecciones relacionadas. Por ejemplo:{' '}
-                <span className="font-semibold">Fundamentos</span>,{' '}
-                <span className="font-semibold">Práctica</span>, o{' '}
-                <span className="font-semibold">Evaluación final</span>.
+                {t.rich('emptyModulesHint', {
+                  b: (chunks) => <span className="font-semibold">{chunks}</span>,
+                })}
               </p>
             </div>
           ) : (
@@ -395,6 +383,7 @@ function LessonRow({
   onDelete: () => Promise<void>;
   onChange: () => Promise<void>;
 }) {
+  const t = useTranslations('formadorCursos');
   // `data.moduleId` permite al onDragEnd global del ModuleList saber a qué
   // sección pertenece esta lección y decidir si es reorden interno o
   // cross-module drop.
@@ -425,8 +414,8 @@ function LessonRow({
           type="button"
           {...attributes}
           {...listeners}
-          aria-label={`Arrastrar para reordenar la lección ${lesson.title}`}
-          title="Arrastrar para reordenar"
+          aria-label={t('dragLessonAria', { title: lesson.title })}
+          title={t('dragTitle')}
           className="cursor-grab touch-none rounded p-0.5 text-text-disabled transition-colors hover:bg-surface-3 hover:text-text-muted active:cursor-grabbing"
         >
           <Icon name="grip" size={16} />
@@ -444,8 +433,10 @@ function LessonRow({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-text">{lesson.title}</p>
           <p className="text-xs text-text-subtle">
-            {LESSON_TYPE_LABEL[lesson.type] ?? lesson.type}
-            {lesson.durationMinutes ? ` · ${lesson.durationMinutes} min` : ''}
+            {t(`lessonType.${lesson.type}`)}
+            {lesson.durationMinutes
+              ? ` · ${t('minutesShort', { minutes: lesson.durationMinutes })}`
+              : ''}
           </p>
         </div>
         <div className="flex items-center gap-0.5">
@@ -455,14 +446,14 @@ function LessonRow({
             className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-brand-600 transition-colors hover:bg-brand-50"
           >
             <Icon name="edit" size={13} />
-            {isEditing ? 'Cerrar' : 'Editar'}
+            {isEditing ? t('close') : t('edit')}
           </button>
           <button
             type="button"
             onClick={() => void onDelete()}
             disabled={pending}
-            aria-label={`Eliminar lección ${lesson.title}`}
-            title="Eliminar lección"
+            aria-label={t('deleteLessonAria', { title: lesson.title })}
+            title={t('deleteLessonTitle')}
             className="rounded p-1.5 text-text-disabled transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:opacity-50"
           >
             <Icon name="trash" size={14} />
@@ -494,6 +485,8 @@ function MetadataEditor({
   onSaved: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const t = useTranslations('formadorCursos');
+  const tErrors = useTranslations('errors');
   const [title, setTitle] = useState(course.title);
   const [description, setDescription] = useState(course.description ?? '');
   const [category, setCategory] = useState(course.category ?? '');
@@ -523,7 +516,7 @@ function MetadataEditor({
       const result = await storageApi.uploadImage(file, { optimize: { maxWidth: 1600 } });
       setThumbnailUrl(result.url);
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos subir la imagen.');
+      setError(err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('errorUploadImage'));
     } finally {
       setUploadingImage(false);
     }
@@ -539,13 +532,18 @@ function MetadataEditor({
       if (res.optimized) {
         setThumbnailUrl(res.url);
         setOptimizeNote(
-          `Optimizada: ${formatBytes(res.previousSize)} → ${formatBytes(res.size)}. Pulsa «Guardar cambios» para aplicarla.`,
+          t('optimizedNote', {
+            previous: formatBytes(res.previousSize),
+            size: formatBytes(res.size),
+          }),
         );
       } else {
-        setOptimizeNote('La imagen ya estaba optimizada; no hacía falta reprocesarla.');
+        setOptimizeNote(t('alreadyOptimized'));
       }
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos optimizar la imagen.');
+      setError(
+        err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('errorOptimizeImage'),
+      );
     } finally {
       setOptimizing(false);
     }
@@ -582,7 +580,7 @@ function MetadataEditor({
       });
       await onSaved();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar los cambios.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorSaveChanges'));
     } finally {
       setPending(false);
     }
@@ -603,11 +601,8 @@ function MetadataEditor({
             <Icon name="edit" size={18} />
           </span>
           <div className="min-w-0">
-            <CardTitle className="text-base">Editar metadatos del curso</CardTitle>
-            <CardDescription>
-              El slug y el idioma no se pueden cambiar tras la creación. Para limpiar un campo
-              opcional, dejalo vacío.
-            </CardDescription>
+            <CardTitle className="text-base">{t('metadataTitle')}</CardTitle>
+            <CardDescription>{t('metadataDescription')}</CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -615,7 +610,7 @@ function MetadataEditor({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="meta-title">
-              Título <span className="text-danger-700">*</span>
+              {t('titleLabel')} <span className="text-danger-700">*</span>
             </Label>
             <Input
               id="meta-title"
@@ -627,29 +622,26 @@ function MetadataEditor({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="meta-description">Descripción</Label>
+            <Label htmlFor="meta-description">{t('descriptionLabel')}</Label>
             <RichTextEditor
               value={description}
               onChange={setDescription}
-              placeholder="¿De qué trata este curso? ¿A quién está dirigido?"
-              ariaLabel="Descripción del curso"
+              placeholder={t('descriptionPlaceholder')}
+              ariaLabel={t('descriptionAria')}
             />
-            <p className="text-xs text-text-subtle">
-              Aparece en el catálogo y bajo el cover del curso. Soporta negrita, listas, encabezados
-              y enlaces.
-            </p>
+            <p className="text-xs text-text-subtle">{t('descriptionHelp')}</p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="meta-category">Categoría</Label>
+              <Label htmlFor="meta-category">{t('categoryLabel')}</Label>
               {managedCategories.length > 0 ? (
                 <Select
                   id="meta-category"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                 >
-                  <option value="">— Sin categoría —</option>
+                  <option value="">{t('categoryNone')}</option>
                   {managedCategories.map((c) => (
                     <option key={c.id} value={c.name}>
                       {c.name}
@@ -662,50 +654,46 @@ function MetadataEditor({
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   maxLength={60}
-                  placeholder="Ej: Tecnología"
+                  placeholder={t('categoryPlaceholder')}
                 />
               )}
               {managedCategories.length === 0 ? (
                 <p className="text-xs text-text-subtle">
-                  Tip: el admin puede curar categorías con color e icono en{' '}
-                  <code>/admin/cursos/categorias</code>.
+                  {t.rich('categoryTip', { code: (chunks) => <code>{chunks}</code> })}
                 </p>
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="meta-estimated">Duración estimada (min)</Label>
+              <Label htmlFor="meta-estimated">{t('estimatedLabel')}</Label>
               <Input
                 id="meta-estimated"
                 type="number"
                 min={1}
                 value={estimatedMinutes}
                 onChange={(e) => setEstimatedMinutes(e.target.value)}
-                placeholder="Ej: 90"
+                placeholder={t('estimatedPlaceholder')}
               />
             </div>
           </div>
 
           {/* Media destacada del hero (se muestra al alumno NO inscrito). */}
           <div className="space-y-4 rounded-lg border border-border-soft bg-surface-2 p-4">
-            <p className="text-sm font-semibold text-text">Destacados del hero</p>
-            <p className="-mt-2 text-xs text-text-subtle">
-              Imagen y vídeo que verá el alumno antes de matricularse. Una vez inscrito, el hero se
-              simplifica.
-            </p>
+            <p className="text-sm font-semibold text-text">{t('heroTitle')}</p>
+            <p className="-mt-2 text-xs text-text-subtle">{t('heroHelp')}</p>
 
             <div className="space-y-1.5">
-              <Label htmlFor="meta-thumbnail">Imagen destacada</Label>
+              <Label htmlFor="meta-thumbnail">{t('thumbnailLabel')}</Label>
               <div className="flex flex-wrap items-center gap-3">
                 {thumbnailUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={thumbnailUrl}
-                    alt="Imagen destacada"
+                    alt={t('thumbnailAlt')}
                     className="aspect-video w-28 rounded-md border border-border bg-subtle object-contain"
                   />
                 ) : (
                   <div className="grid aspect-video w-28 place-items-center rounded-md border border-dashed border-border-strong text-xs text-text-subtle">
-                    Sin imagen
+                    {t('noImage')}
                   </div>
                 )}
                 <div className="flex items-center gap-2">
@@ -724,9 +712,9 @@ function MetadataEditor({
                         size="sm"
                         onClick={() => void handleOptimizeExisting()}
                         disabled={uploadingImage || optimizing}
-                        title="Recomprimir a WebP y redimensionar para que cargue más rápido"
+                        title={t('optimizeTooltip')}
                       >
-                        {optimizing ? 'Optimizando…' : 'Optimizar'}
+                        {optimizing ? t('optimizing') : t('optimize')}
                       </Button>
                       <Button
                         type="button"
@@ -738,57 +726,52 @@ function MetadataEditor({
                         }}
                         disabled={uploadingImage || optimizing}
                       >
-                        Quitar
+                        {t('remove')}
                       </Button>
                     </>
                   ) : null}
                 </div>
               </div>
               {uploadingImage ? (
-                <p className="text-xs text-text-subtle">Subiendo imagen…</p>
+                <p className="text-xs text-text-subtle">{t('uploadingImage')}</p>
               ) : optimizeNote ? (
                 <p className="text-xs text-success-700">{optimizeNote}</p>
               ) : (
-                <p className="text-xs text-text-subtle">
-                  PNG, JPG, WebP o GIF (máx. 10 MB). Se optimiza automáticamente al subirla.
-                </p>
+                <p className="text-xs text-text-subtle">{t('imageHelp')}</p>
               )}
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="meta-featured-video">Vídeo destacado (URL)</Label>
+              <Label htmlFor="meta-featured-video">{t('featuredVideoLabel')}</Label>
               <Input
                 id="meta-featured-video"
                 type="url"
                 value={featuredVideoUrl}
                 onChange={(e) => setFeaturedVideoUrl(e.target.value)}
-                placeholder="https://iframe.mediadelivery.net/embed/… (Bunny) o YouTube"
+                placeholder={t('featuredVideoPlaceholder')}
               />
               <p className="text-xs text-text-subtle">
-                Pega la URL de Bunny Stream (<code>iframe.mediadelivery.net/embed/…</code>), YouTube
-                o un <code>.mp4</code>. Tiene prioridad sobre la imagen en el hero.
+                {t.rich('featuredVideoHelp', { code: (chunks) => <code>{chunks}</code> })}
               </p>
             </div>
           </div>
 
           <div className="space-y-4 rounded-lg border border-border-soft p-4">
             <div className="space-y-1.5">
-              <Label htmlFor="meta-external-purchase">URL de compra externa</Label>
+              <Label htmlFor="meta-external-purchase">{t('externalPurchaseLabel')}</Label>
               <Input
                 id="meta-external-purchase"
                 type="url"
                 value={externalPurchaseUrl}
                 onChange={(e) => setExternalPurchaseUrl(e.target.value)}
-                placeholder="https://academia.ejemplo.com/curso"
+                placeholder={t('externalPurchasePlaceholder')}
               />
               <p className="text-xs text-text-subtle">
-                Si la venta de este curso ocurre en una página externa, pega aquí su URL. En la
-                ficha del curso, el botón «Comprar» llevará a esa página. Tras el pago, esa página
-                debe inscribir al alumno llamando a <code>POST /api/v1/inscribe</code>.
+                {t.rich('externalPurchaseHelp', { code: (chunks) => <code>{chunks}</code> })}
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="meta-course-id">ID del curso (para la integración)</Label>
+              <Label htmlFor="meta-course-id">{t('courseIdLabel')}</Label>
               <div className="flex gap-2">
                 <Input
                   id="meta-course-id"
@@ -805,12 +788,11 @@ function MetadataEditor({
                     window.setTimeout(() => setCopiedId(false), 1500);
                   }}
                 >
-                  {copiedId ? 'Copiado' : 'Copiar'}
+                  {copiedId ? t('copied') : t('copy')}
                 </Button>
               </div>
               <p className="text-xs text-text-subtle">
-                Envía este identificador en <code>courseIds</code> al llamar a la API de inscripción
-                desde tu página de ventas.
+                {t.rich('courseIdHelp', { code: (chunks) => <code>{chunks}</code> })}
               </p>
             </div>
           </div>
@@ -826,10 +808,10 @@ function MetadataEditor({
 
           <div className="flex items-center gap-2 border-t border-border-soft pt-4">
             <Button type="submit" disabled={pending || !title.trim()}>
-              {pending ? 'Guardando…' : 'Guardar cambios'}
+              {pending ? t('saving') : t('saveChanges')}
             </Button>
             <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
-              Cancelar
+              {t('cancel')}
             </Button>
           </div>
         </form>
@@ -845,11 +827,12 @@ function PublishChecklist({
   course: CourseDetail;
   totalLessons: number;
 }) {
+  const t = useTranslations('formadorCursos');
   const checks = [
-    { ok: course.title.trim().length > 0, label: 'Título del curso' },
-    { ok: !!course.description?.trim(), label: 'Descripción' },
-    { ok: course.modules.length > 0, label: 'Al menos una sección' },
-    { ok: totalLessons > 0, label: 'Al menos una lección' },
+    { ok: course.title.trim().length > 0, label: t('checkTitle') },
+    { ok: !!course.description?.trim(), label: t('checkDescription') },
+    { ok: course.modules.length > 0, label: t('checkModule') },
+    { ok: totalLessons > 0, label: t('checkLesson') },
   ];
   const allDone = checks.every((c) => c.ok);
 
@@ -869,12 +852,10 @@ function PublishChecklist({
           </span>
           <div className="min-w-0 flex-1">
             <h3 className="font-display text-base font-semibold text-text">
-              {allDone ? 'Listo para publicar' : 'Antes de publicar'}
+              {allDone ? t('readyToPublish') : t('beforePublish')}
             </h3>
             <p className="mt-0.5 text-xs text-text-muted">
-              {allDone
-                ? 'Todos los requisitos están cumplidos. Puedes publicar cuando quieras.'
-                : 'Completa estos elementos para que tu curso esté listo:'}
+              {allDone ? t('readyToPublishHelp') : t('beforePublishHelp')}
             </p>
             <ul className="mt-3 space-y-1.5">
               {checks.map((c, i) => (
@@ -936,6 +917,8 @@ function ModuleList({
   onChange: () => Promise<void>;
   onError: (msg: string) => void;
 }) {
+  const t = useTranslations('formadorCursos');
+  const tErrors = useTranslations('errors');
   const [optimistic, setOptimistic] = useState<CourseModule[]>(modules);
 
   useEffect(() => {
@@ -968,7 +951,7 @@ function ModuleList({
         );
         await onChange();
       } catch (e) {
-        onError(e instanceof ApiHttpError ? e.message : 'No pudimos reordenar las secciones.');
+        onError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorReorderModules'));
         await onChange();
       }
       return;
@@ -1012,7 +995,7 @@ function ModuleList({
         );
         await onChange();
       } catch (e) {
-        onError(e instanceof ApiHttpError ? e.message : 'No pudimos reordenar las lecciones.');
+        onError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorReorderLessons'));
         await onChange();
       }
       return;
@@ -1050,7 +1033,7 @@ function ModuleList({
       await coursesApi.moveLessonToModule(String(active.id), targetModuleId, insertAt);
       await onChange();
     } catch (e) {
-      onError(e instanceof ApiHttpError ? e.message : 'No pudimos mover la lección.');
+      onError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorMoveLesson'));
       await onChange();
     }
   }
@@ -1077,6 +1060,7 @@ function ModuleBlock({
   index: number;
   onChange: () => Promise<void>;
 }) {
+  const t = useTranslations('formadorCursos');
   const [pending, setPending] = useState(false);
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [showAddLesson, setShowAddLesson] = useState(false);
@@ -1108,9 +1092,7 @@ function ModuleBlock({
   }
 
   async function handleDeleteLesson(lessonId: string, lessonTitle: string) {
-    const confirmed = window.confirm(
-      `¿Eliminar la lección "${lessonTitle}"? Es soft-delete: los datos se conservan y el progreso histórico de los alumnos no se pierde, pero dejará de mostrarse.`,
-    );
+    const confirmed = window.confirm(t('confirmDeleteLesson', { title: lessonTitle }));
     if (!confirmed) return;
     setPending(true);
     try {
@@ -1124,7 +1106,10 @@ function ModuleBlock({
 
   async function handleDeleteModule() {
     const confirmed = window.confirm(
-      `¿Eliminar la sección "${courseModule.title}" y sus ${courseModule.lessons.length} lecciones? Esto es soft-delete: los datos se conservan pero dejarán de mostrarse.`,
+      t('confirmDeleteModule', {
+        title: courseModule.title,
+        count: courseModule.lessons.length,
+      }),
     );
     if (!confirmed) return;
     setPending(true);
@@ -1159,8 +1144,8 @@ function ModuleBlock({
           type="button"
           {...attributes}
           {...listeners}
-          aria-label="Arrastrar para reordenar la sección"
-          title="Arrastrar para reordenar"
+          aria-label={t('dragModuleAria')}
+          title={t('dragTitle')}
           className="cursor-grab touch-none rounded p-0.5 text-text-disabled transition-colors hover:bg-surface-3 hover:text-text-muted active:cursor-grabbing"
         >
           <Icon name="grip" size={18} />
@@ -1187,15 +1172,14 @@ function ModuleBlock({
         </div>
         <div className="flex items-center gap-3 text-xs text-text-muted">
           <span className="tabular-nums">
-            {courseModule.lessons.length}{' '}
-            {courseModule.lessons.length === 1 ? 'lección' : 'lecciones'}
+            {t('lessonsWithCount', { count: courseModule.lessons.length })}
           </span>
           {moduleMinutes > 0 ? (
             <>
               <span aria-hidden="true">·</span>
               <span className="inline-flex items-center gap-1 tabular-nums">
                 <Icon name="clock" size={12} />
-                {moduleMinutes} min
+                {t('minutesShort', { minutes: moduleMinutes })}
               </span>
             </>
           ) : null}
@@ -1203,8 +1187,8 @@ function ModuleBlock({
             type="button"
             onClick={handleDeleteModule}
             disabled={pending}
-            aria-label="Eliminar sección"
-            title="Eliminar sección"
+            aria-label={t('deleteModuleAria')}
+            title={t('deleteModuleAria')}
             className="rounded p-1 text-text-disabled transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:opacity-50"
           >
             <Icon name="trash" size={16} />
@@ -1224,7 +1208,7 @@ function ModuleBlock({
         />
       ) : (
         <p className="border-b border-border-soft bg-surface-2 px-4 py-6 text-center text-xs italic text-text-subtle">
-          Sin lecciones todavía. Añade la primera abajo.
+          {t('noLessonsYet')}
         </p>
       )}
 
@@ -1233,19 +1217,19 @@ function ModuleBlock({
           <div className="grid gap-2 sm:grid-cols-12">
             <div className="sm:col-span-2">
               <Label htmlFor={`type-${courseModule.id}`} className="sr-only">
-                Tipo
+                {t('typeLabel')}
               </Label>
               <Select id={`type-${courseModule.id}`} name="type" required defaultValue="TEXT">
-                {LESSON_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
+                {LESSON_TYPE_OPTIONS.map((value) => (
+                  <option key={value} value={value}>
+                    {t(`lessonType.${value}`)}
                   </option>
                 ))}
               </Select>
             </div>
             <Input
               name="title"
-              placeholder="Título de la lección"
+              placeholder={t('lessonTitlePlaceholder')}
               required
               autoFocus
               className="sm:col-span-7"
@@ -1254,11 +1238,11 @@ function ModuleBlock({
               name="durationMinutes"
               type="number"
               min={1}
-              placeholder="min"
+              placeholder={t('minPlaceholder')}
               className="sm:col-span-1"
             />
             <Button type="submit" size="sm" disabled={pending} className="sm:col-span-2">
-              Crear
+              {t('create')}
             </Button>
           </div>
           <button
@@ -1266,7 +1250,7 @@ function ModuleBlock({
             onClick={() => setShowAddLesson(false)}
             className="mt-2 text-xs font-semibold text-text-muted hover:text-text"
           >
-            Cancelar
+            {t('cancel')}
           </button>
         </form>
       ) : (
@@ -1276,7 +1260,7 @@ function ModuleBlock({
           className="flex w-full items-center justify-center gap-1.5 border-t border-border-soft bg-surface px-4 py-3 text-sm font-semibold text-text-muted transition-colors hover:bg-surface-2 hover:text-brand-700"
         >
           <Icon name="plus" size={16} />
-          Añadir lección
+          {t('addLesson')}
         </button>
       )}
     </div>
@@ -1290,6 +1274,7 @@ function AddModuleForm({
   onAddModule: (form: FormData) => Promise<void>;
   pending: boolean;
 }) {
+  const t = useTranslations('formadorCursos');
   const [open, setOpen] = useState(false);
 
   if (!open) {
@@ -1300,7 +1285,7 @@ function AddModuleForm({
         className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-strong bg-surface-2 px-4 py-4 text-sm font-semibold text-text-muted transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
       >
         <Icon name="plus" size={18} />
-        Añadir sección
+        {t('addModule')}
       </button>
     );
   }
@@ -1317,18 +1302,22 @@ function AddModuleForm({
     >
       <p className="flex items-center gap-2 text-sm font-semibold text-text">
         <Icon name="plus" size={16} />
-        Nueva sección
+        {t('newModule')}
       </p>
       <div className="grid gap-2 sm:grid-cols-3">
-        <Input name="title" required autoFocus placeholder="Título de la sección" />
-        <Input name="description" placeholder="Descripción (opcional)" className="sm:col-span-2" />
+        <Input name="title" required autoFocus placeholder={t('moduleTitlePlaceholder')} />
+        <Input
+          name="description"
+          placeholder={t('moduleDescriptionPlaceholder')}
+          className="sm:col-span-2"
+        />
       </div>
       <div className="flex items-center gap-2">
         <Button type="submit" size="sm" disabled={pending}>
-          Crear sección
+          {t('createModule')}
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
-          Cancelar
+          {t('cancel')}
         </Button>
       </div>
     </form>
@@ -1342,6 +1331,8 @@ function CertificateTemplateCard({
   course: CourseDetail;
   onChange: () => Promise<void>;
 }) {
+  const t = useTranslations('formadorCursos');
+  const tErrors = useTranslations('errors');
   const [templates, setTemplates] = useState<CertificateTemplate[] | null>(null);
   const [selected, setSelected] = useState<string>(course.certificateTemplateId ?? '');
   const [busy, setBusy] = useState(false);
@@ -1360,7 +1351,9 @@ function CertificateTemplateCard({
       })
       .catch((e) => {
         if (!cancelled) {
-          setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar plantillas.');
+          setError(
+            e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorLoadTemplates'),
+          );
           setTemplates([]);
         }
       });
@@ -1378,7 +1371,7 @@ function CertificateTemplateCard({
       });
       await onChange();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar la plantilla.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorSaveTemplate'));
     } finally {
       setBusy(false);
     }
@@ -1402,13 +1395,16 @@ function CertificateTemplateCard({
             <Icon name="award" size={18} />
           </span>
           <div className="min-w-0">
-            <CardTitle className="text-base">Plantilla de certificado</CardTitle>
+            <CardTitle className="text-base">{t('certTemplateTitle')}</CardTitle>
             <CardDescription>
-              Si no eliges ninguna, se usa la default del tenant
+              {t('certTemplateDescription')}
               {defaultName ? (
                 <>
                   {' '}
-                  (actualmente: <strong>{defaultName}</strong>)
+                  {t.rich('certTemplateCurrent', {
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                    name: defaultName,
+                  })}
                 </>
               ) : null}
               .
@@ -1418,27 +1414,26 @@ function CertificateTemplateCard({
       </CardHeader>
       <CardContent className="flex flex-wrap items-end gap-3">
         <div className="min-w-64 flex-1 space-y-1.5">
-          <Label htmlFor="cert-template">Plantilla</Label>
+          <Label htmlFor="cert-template">{t('templateLabel')}</Label>
           <Select
             id="cert-template"
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
             disabled={templates === null}
           >
-            <option value="">Por defecto del tenant</option>
-            {(templates ?? []).map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-                {t.isDefault ? ' (default)' : ''}
+            <option value="">{t('templateDefaultOption')}</option>
+            {(templates ?? []).map((tpl) => (
+              <option key={tpl.id} value={tpl.id}>
+                {tpl.isDefault ? t('templateNameDefault', { name: tpl.name }) : tpl.name}
               </option>
             ))}
           </Select>
         </div>
         <Button type="button" onClick={handleSave} disabled={!dirty || busy}>
-          {busy ? 'Guardando…' : 'Guardar'}
+          {busy ? t('saving') : t('save')}
         </Button>
         <Button asChild variant="ghost">
-          <Link href="/formador/certificados/templates">Gestionar plantillas →</Link>
+          <Link href="/formador/certificados/templates">{t('manageTemplates')}</Link>
         </Button>
         {error ? (
           <p role="alert" className="basis-full text-sm text-danger-700">

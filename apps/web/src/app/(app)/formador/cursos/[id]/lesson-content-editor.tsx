@@ -8,6 +8,7 @@
 import Link from 'next/link';
 import nextDynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon, type IconName } from '@/components/icon';
 
 // tiptap (~200KB) solo se baja al abrir el editor de una lección.
@@ -20,6 +21,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
 import { assessmentsApi } from '@/modules/assessments';
 import { coursesApi, type CourseLesson, type LessonType } from '@/lib/courses';
 import { scormApi, type ScormPackageMetadata } from '@/lib/scorm';
@@ -33,16 +36,8 @@ function isoToLocalInput(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-const HELP_BY_TYPE: Record<LessonType, string> = {
-  VIDEO: 'URL del vídeo (mp4, webm, m3u8). Ideal: hosteado en MinIO/Hetzner.',
-  HTML: 'HTML inline que se renderiza en el player. Útil para slides o microcopy.',
-  PDF: 'URL del PDF. Se muestra en iframe a 70dvh.',
-  TEXT: 'Texto plano largo. Se preservan saltos de línea.',
-  QUIZ: 'Crea un nuevo quiz o vincula uno existente por ID. El editor del quiz vive en /formador/quizzes/<id>.',
-  SCORM:
-    'Sube el ZIP del paquete SCORM 1.2 / 2004. El sistema lo descomprime, parsea imsmanifest.xml y lo sirve por iframe.',
-};
-
+// Labels y textos de ayuda por tipo en el catálogo `formadorCursos`
+// (`lessonType.*` y `lessonHelp.*`).
 const TYPE_ICON: Record<LessonType, IconName> = {
   VIDEO: 'play',
   HTML: 'code',
@@ -50,15 +45,6 @@ const TYPE_ICON: Record<LessonType, IconName> = {
   TEXT: 'book',
   QUIZ: 'help',
   SCORM: 'package',
-};
-
-const TYPE_LABEL: Record<LessonType, string> = {
-  VIDEO: 'Vídeo',
-  HTML: 'HTML',
-  PDF: 'PDF',
-  TEXT: 'Texto',
-  QUIZ: 'Quiz',
-  SCORM: 'SCORM',
 };
 
 export function LessonContentEditor({
@@ -70,6 +56,8 @@ export function LessonContentEditor({
   onUpdated: () => Promise<void> | void;
   onCancel: () => void;
 }) {
+  const t = useTranslations('formadorCursos');
+  const tErrors = useTranslations('errors');
   const content = (lesson.content ?? {}) as Record<string, unknown>;
   const [title, setTitle] = useState(lesson.title);
   const [duration, setDuration] = useState<string>(
@@ -134,7 +122,7 @@ export function LessonContentEditor({
       await onUpdated();
       onCancel();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'Error al guardar');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorSave'));
     } finally {
       setPending(false);
     }
@@ -153,12 +141,14 @@ export function LessonContentEditor({
         >
           <Icon name={TYPE_ICON[lesson.type]} size={14} />
         </span>
-        <p className="label-uppercase text-text-muted">Editando · {TYPE_LABEL[lesson.type]}</p>
+        <p className="label-uppercase text-text-muted">
+          {t('editingType', { type: t(`lessonType.${lesson.type}`) })}
+        </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor={`title-${lesson.id}`}>Título</Label>
+          <Label htmlFor={`title-${lesson.id}`}>{t('titleLabel')}</Label>
           <Input
             id={`title-${lesson.id}`}
             value={title}
@@ -167,7 +157,7 @@ export function LessonContentEditor({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`duration-${lesson.id}`}>Duración (min)</Label>
+          <Label htmlFor={`duration-${lesson.id}`}>{t('durationLabel')}</Label>
           <Input
             id={`duration-${lesson.id}`}
             type="number"
@@ -181,59 +171,50 @@ export function LessonContentEditor({
 
       {lesson.type === 'VIDEO' && (
         <div className="space-y-1.5">
-          <Label htmlFor={`videoUrl-${lesson.id}`}>URL del vídeo</Label>
+          <Label htmlFor={`videoUrl-${lesson.id}`}>{t('videoUrlLabel')}</Label>
           <Input
             id={`videoUrl-${lesson.id}`}
             type="url"
             value={videoUrl}
             onChange={(e) => setVideoUrl(e.target.value)}
-            placeholder="https://www.youtube.com/watch?v=… o https://tu-cdn/leccion.mp4"
+            placeholder={t('videoUrlPlaceholder')}
           />
           <p className="text-xs text-text-subtle">
-            Acepta enlaces de YouTube (con o sin timestamp <code>t=</code>), Bunny Stream (
-            <code>iframe.mediadelivery.net/embed/…</code>) y URLs directas a archivos{' '}
-            <code>.mp4</code> / <code>.webm</code> / <code>.m3u8</code>.
+            {t.rich('videoUrlHelp', { code: (chunks) => <code>{chunks}</code> })}
           </p>
 
           <div className="space-y-1.5 pt-2">
-            <Label htmlFor={`resources-${lesson.id}`}>Recursos y capítulos</Label>
+            <Label htmlFor={`resources-${lesson.id}`}>{t('resourcesLabel')}</Label>
             <Textarea
               id={`resources-${lesson.id}`}
               rows={6}
               value={resources}
               onChange={(e) => setResources(e.target.value)}
-              placeholder={
-                '00:00 - Introducción\n02:15 - Instalar n8n\nGrupo de Telegram: https://t.me/...'
-              }
+              placeholder={t('resourcesPlaceholder')}
               className="font-mono text-xs"
             />
             <p className="text-xs text-text-subtle">
-              Una entrada por línea. Las líneas con formato <code>MM:SS - Texto</code> se muestran
-              como capítulos clicables que saltan a ese punto del vídeo; el resto, como recursos
-              (los enlaces se vuelven clicables).
+              {t.rich('resourcesHelp', { code: (chunks) => <code>{chunks}</code> })}
             </p>
           </div>
 
           <div className="space-y-1.5 pt-2">
-            <Label htmlFor={`html-${lesson.id}`}>Contenido complementario (debajo del vídeo)</Label>
+            <Label htmlFor={`html-${lesson.id}`}>{t('htmlBelowLabel')}</Label>
             <RichTextEditor
               value={html}
               onChange={setHtml}
-              ariaLabel="Contenido complementario de la lección"
-              placeholder="Notas, pasos, enlaces, imágenes… se muestran debajo del vídeo."
+              ariaLabel={t('htmlBelowAria')}
+              placeholder={t('htmlBelowPlaceholder')}
             />
-            <p className="text-xs text-text-subtle">
-              Texto enriquecido opcional que complementa la clase (encabezados, listas, enlaces,
-              imágenes). Se sanitiza al mostrarse al alumno. El vídeo va arriba, en su reproductor.
-            </p>
+            <p className="text-xs text-text-subtle">{t('htmlBelowHelp')}</p>
           </div>
 
           <div className="space-y-1.5 pt-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Label htmlFor={`transcript-${lesson.id}`}>Transcripción (para el tutor IA)</Label>
+              <Label htmlFor={`transcript-${lesson.id}`}>{t('transcriptLabel')}</Label>
               <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-brand hover:underline">
                 <Icon name="file" className="h-3.5 w-3.5" />
-                Subir .srt, .vtt o .txt
+                {t('transcriptUpload')}
                 <input
                   type="file"
                   accept=".srt,.vtt,.txt,text/plain"
@@ -245,14 +226,14 @@ export function LessonContentEditor({
                     const crudo = await file.text();
                     const r = normalizeTranscript(crudo);
                     if (!r.text) {
-                      setTranscriptAviso('El archivo no tenía texto que aprovechar.');
+                      setTranscriptAviso(t('transcriptEmpty'));
                       return;
                     }
                     setTranscript(r.text);
                     setTranscriptAviso(
                       r.formato === 'subtitulos'
-                        ? `${file.name}: ${r.bloques} bloques con marca de tiempo. El tutor podrá citar el minuto exacto.`
-                        : `${file.name}: texto sin marcas de tiempo. El tutor lo usará igual, pero no podrá citar el minuto.`,
+                        ? t('transcriptWithTimestamps', { name: file.name, count: r.bloques })
+                        : t('transcriptPlain', { name: file.name }),
                     );
                   }}
                 />
@@ -266,27 +247,24 @@ export function LessonContentEditor({
                 setTranscript(e.target.value);
                 setTranscriptAviso(null);
               }}
-              placeholder={
-                '[0:00] Hola, en esta clase vamos a ver los webhooks.\n\n[0:32] Lo primero es crear el nodo…'
-              }
+              placeholder={t('transcriptPlaceholder')}
               className="font-mono text-xs"
             />
             {transcriptAviso ? (
               <p className="text-xs font-medium text-brand">{transcriptAviso}</p>
             ) : null}
             <p className="text-xs text-text-subtle">
-              No se muestra al alumno: es lo que lee el tutor IA para responder dudas sobre esta
-              clase. Al guardar, la lección se reindexa sola. Si subes subtítulos, se convierten a
-              bloques <code>[mm:ss] texto</code> y el tutor podrá responder «te lo explica en el
-              12:34» enlazando a ese punto del vídeo.
+              {t.rich('transcriptHelp', { code: (chunks) => <code>{chunks}</code> })}
               {transcript ? (
                 <>
                   {' '}
-                  Ahora mismo: <strong>{transcript.length.toLocaleString('es-ES')}</strong>{' '}
-                  caracteres.
+                  {t.rich('transcriptCharCount', {
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                    count: transcript.length,
+                  })}
                 </>
               ) : (
-                ' Ahora mismo esta clase es invisible para el tutor.'
+                <> {t('transcriptInvisible')}</>
               )}
             </p>
           </div>
@@ -295,45 +273,41 @@ export function LessonContentEditor({
 
       {lesson.type === 'PDF' && (
         <div className="space-y-1.5">
-          <Label htmlFor={`pdfUrl-${lesson.id}`}>URL del PDF</Label>
+          <Label htmlFor={`pdfUrl-${lesson.id}`}>{t('pdfUrlLabel')}</Label>
           <Input
             id={`pdfUrl-${lesson.id}`}
             type="url"
             value={pdfUrl}
             onChange={(e) => setPdfUrl(e.target.value)}
-            placeholder="https://docs.ejemplo.com/material.pdf"
+            placeholder={t('pdfUrlPlaceholder')}
           />
         </div>
       )}
 
       {lesson.type === 'HTML' && (
         <div className="space-y-1.5">
-          <Label htmlFor={`html-${lesson.id}`}>HTML</Label>
+          <Label htmlFor={`html-${lesson.id}`}>{t('htmlLabel')}</Label>
           <Textarea
             id={`html-${lesson.id}`}
             rows={8}
             value={html}
             onChange={(e) => setHtml(e.target.value)}
-            placeholder="<p>Tu contenido en HTML…</p>"
+            placeholder={t('htmlPlaceholder')}
             className="font-mono text-xs"
           />
-          <p className="text-xs text-text-subtle">
-            El HTML se renderiza tal cual en el player. Si vas a incrustar un vídeo, usa mejor el
-            tipo «Vídeo» (mejor seguimiento de visionado y reanudación) y pon este contenido como
-            «contenido complementario» debajo del vídeo.
-          </p>
+          <p className="text-xs text-text-subtle">{t('htmlHelp')}</p>
         </div>
       )}
 
       {lesson.type === 'TEXT' && (
         <div className="space-y-1.5">
-          <Label htmlFor={`text-${lesson.id}`}>Texto</Label>
+          <Label htmlFor={`text-${lesson.id}`}>{t('textLabel')}</Label>
           <Textarea
             id={`text-${lesson.id}`}
             rows={8}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Escribe el contenido de la lección…"
+            placeholder={t('textPlaceholder')}
           />
         </div>
       )}
@@ -345,7 +319,7 @@ export function LessonContentEditor({
       {lesson.type === 'SCORM' && <ScormUploader lessonId={lesson.id} />}
 
       <div className="space-y-1.5 border-t border-border-soft pt-4">
-        <Label htmlFor={`publishAt-${lesson.id}`}>Fecha de publicación (opcional)</Label>
+        <Label htmlFor={`publishAt-${lesson.id}`}>{t('publishAtLabel')}</Label>
         <div className="flex flex-wrap items-center gap-2">
           <Input
             id={`publishAt-${lesson.id}`}
@@ -356,20 +330,16 @@ export function LessonContentEditor({
           />
           {publishAt ? (
             <Button type="button" variant="ghost" size="sm" onClick={() => setPublishAt('')}>
-              Quitar
+              {t('remove')}
             </Button>
           ) : null}
         </div>
-        <p className="text-xs text-text-subtle">
-          Vacío = publicada ya. Con una fecha futura, la clase aparece en el listado pero bloqueada
-          hasta ese momento (igual para todos los alumnos); los alumnos podrán pedir que se les
-          avise cuando se desbloquee.
-        </p>
+        <p className="text-xs text-text-subtle">{t('publishAtHelp')}</p>
       </div>
 
       <div className="flex items-start gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-text-muted">
         <Icon name="sparkles" size={14} className="mt-0.5 shrink-0 text-brand-500" />
-        <p>{HELP_BY_TYPE[lesson.type]}</p>
+        <p>{t(`lessonHelp.${lesson.type}`)}</p>
       </div>
 
       {error ? (
@@ -383,10 +353,10 @@ export function LessonContentEditor({
 
       <div className="flex items-center gap-2 border-t border-border-soft pt-3">
         <Button size="sm" onClick={handleSave} disabled={pending}>
-          {pending ? 'Guardando…' : 'Guardar cambios'}
+          {pending ? t('saving') : t('saveChanges')}
         </Button>
         <Button size="sm" variant="ghost" onClick={onCancel} disabled={pending}>
-          Cancelar
+          {t('cancel')}
         </Button>
       </div>
     </div>
@@ -404,6 +374,8 @@ function QuizLink({
   quizId: string;
   setQuizId: (v: string) => void;
 }) {
+  const t = useTranslations('formadorCursos');
+  const tErrors = useTranslations('errors');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -413,11 +385,11 @@ function QuizLink({
     try {
       const quiz = await assessmentsApi.createQuiz({
         lessonId,
-        title: lessonTitle || 'Quiz nuevo',
+        title: lessonTitle || t('quizNewTitle'),
       });
       setQuizId(quiz.id);
     } catch (e) {
-      setCreateError(e instanceof ApiHttpError ? e.message : 'Error al crear');
+      setCreateError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorCreate'));
     } finally {
       setCreating(false);
     }
@@ -425,7 +397,7 @@ function QuizLink({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor={`quizId-${lessonId}`}>Quiz vinculado</Label>
+      <Label htmlFor={`quizId-${lessonId}`}>{t('quizLinkedLabel')}</Label>
       {quizId ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2">
           <span
@@ -439,13 +411,13 @@ function QuizLink({
             <Icon name="help" size={16} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-text">Quiz vinculado</p>
+            <p className="text-sm font-semibold text-text">{t('quizLinkedLabel')}</p>
             <code className="block truncate font-mono text-xs text-text-subtle">{quizId}</code>
           </div>
           <Button asChild size="sm" variant="outline">
             <Link href={`/formador/quizzes/${quizId}` as never}>
               <Icon name="edit" size={13} />
-              Editar
+              {t('edit')}
             </Link>
           </Button>
           <Button
@@ -453,27 +425,24 @@ function QuizLink({
             size="sm"
             variant="ghost"
             onClick={() => setQuizId('')}
-            aria-label="Desvincular quiz"
+            aria-label={t('quizUnlinkAria')}
           >
-            Desvincular
+            {t('quizUnlink')}
           </Button>
         </div>
       ) : (
         <div className="space-y-2 rounded-lg border-2 border-dashed border-border-strong bg-surface-2 p-4">
-          <p className="text-sm text-text-muted">
-            Esta lección no tiene quiz todavía. Puedes crear uno nuevo o pegar el UUID de uno
-            existente.
-          </p>
+          <p className="text-sm text-text-muted">{t('quizEmpty')}</p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" onClick={handleCreate} disabled={creating}>
               <Icon name="plus" size={14} />
-              {creating ? 'Creando…' : 'Crear nuevo quiz'}
+              {creating ? t('quizCreating') : t('quizCreate')}
             </Button>
             <Input
               id={`quizId-${lessonId}`}
               value={quizId}
               onChange={(e) => setQuizId(e.target.value)}
-              placeholder="…o pega el UUID de un quiz existente"
+              placeholder={t('quizIdPlaceholder')}
               className="flex-1 min-w-[240px]"
             />
           </div>
@@ -489,6 +458,8 @@ function QuizLink({
 }
 
 function ScormUploader({ lessonId }: { lessonId: string }) {
+  const t = useTranslations('formadorCursos');
+  const tErrors = useTranslations('errors');
   const [metadata, setMetadata] = useState<ScormPackageMetadata | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -518,9 +489,9 @@ function ScormUploader({ lessonId }: { lessonId: string }) {
       const data = bufferToBase64(buf);
       const res = await scormApi.upload(lessonId, { data, filename: file.name });
       setMetadata(res);
-      setSuccess(`Subido OK (${(res.size / (1024 * 1024)).toFixed(1)} MiB).`);
+      setSuccess(t('scormUploaded', { size: (res.size / (1024 * 1024)).toFixed(1) }));
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos subir el paquete.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorUploadScorm'));
     } finally {
       setBusy(false);
     }
@@ -528,7 +499,7 @@ function ScormUploader({ lessonId }: { lessonId: string }) {
 
   return (
     <div className="space-y-3">
-      <Label htmlFor={`scorm-${lessonId}`}>Paquete SCORM (.zip)</Label>
+      <Label htmlFor={`scorm-${lessonId}`}>{t('scormLabel')}</Label>
 
       {metadata ? (
         <div className="flex flex-wrap items-start gap-3 rounded-lg border border-border bg-surface-2 p-3">
@@ -545,14 +516,19 @@ function ScormUploader({ lessonId }: { lessonId: string }) {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-text">SCORM {metadata.version}</p>
             <p className="mt-0.5 truncate text-xs text-text-muted">
-              entry: <code className="font-mono">{metadata.entryPath}</code>
+              {t.rich('scormEntry', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+                path: metadata.entryPath,
+              })}
             </p>
             <p className="text-xs text-text-subtle tabular-nums">
-              {(metadata.size / (1024 * 1024)).toFixed(1)} MiB · subido el{' '}
-              {new Date(metadata.uploadedAt).toLocaleDateString('es-ES', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric',
+              {t('scormMeta', {
+                size: (metadata.size / (1024 * 1024)).toFixed(1),
+                date: formatDate(metadata.uploadedAt, {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                }),
               })}
             </p>
           </div>
@@ -571,11 +547,9 @@ function ScormUploader({ lessonId }: { lessonId: string }) {
           <Icon name="package" size={24} />
         </div>
         <p className="text-sm font-semibold text-text">
-          {busy ? 'Subiendo paquete…' : metadata ? 'Reemplazar paquete' : 'Subir paquete SCORM'}
+          {busy ? t('scormUploading') : metadata ? t('scormReplace') : t('scormUpload')}
         </p>
-        <p className="mt-1 text-xs text-text-muted">
-          Arrastra o haz clic para seleccionar un archivo .zip con `imsmanifest.xml` en la raíz.
-        </p>
+        <p className="mt-1 text-xs text-text-muted">{t('scormDropHelp')}</p>
         <input
           id={`scorm-${lessonId}`}
           type="file"

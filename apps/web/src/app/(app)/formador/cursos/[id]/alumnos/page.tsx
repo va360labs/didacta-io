@@ -8,6 +8,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select } from '@/components/ui/select';
 import { UserChip } from '@/components/user-chip';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
 import {
   enrollmentsToCsv,
   learningApi,
@@ -25,28 +28,21 @@ import {
 type SortKey = 'name' | 'progress' | 'enrolled' | 'lastLogin';
 type SortDir = 'asc' | 'desc';
 
-const STATUS_LABEL: Record<EnrollmentStatus, string> = {
-  ACTIVE: 'Activo',
-  COMPLETED: 'Completado',
-  CANCELLED: 'Cancelado',
-};
-
+// Labels de estado en el catálogo `formadorCursos.enrollStatus.*`.
 const STATUS_VARIANT: Record<EnrollmentStatus, 'success' | 'warning' | 'muted'> = {
   ACTIVE: 'warning',
   COMPLETED: 'success',
   CANCELLED: 'muted',
 };
 
-function formatDate(iso: string | null): string {
+function shortDate(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatDate(iso, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 export default function AlumnosPage() {
+  const t = useTranslations('formadorCursos');
+  const tErrors = useTranslations('errors');
   const params = useParams<{ id: string }>();
   const courseId = params?.id;
   const [rows, setRows] = useState<CourseEnrollmentRow[] | null>(null);
@@ -64,7 +60,7 @@ export default function AlumnosPage() {
       });
       setRows(data);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar el listado.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorLoadList'));
     }
   }
 
@@ -131,19 +127,17 @@ export default function AlumnosPage() {
     <div className="flex flex-col gap-6">
       <div>
         <Button variant="ghost" asChild className="self-start">
-          <Link href={`/formador/cursos/${courseId}` as never}>← Volver al curso</Link>
+          <Link href={`/formador/cursos/${courseId}` as never}>{t('backToCourse')}</Link>
         </Button>
       </div>
 
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Alumnos del curso</h1>
-          <p className="mt-1 text-text-muted">
-            Quiénes están matriculados, cómo va su progreso y cuándo entraron por última vez.
-          </p>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{t('studentsTitle')}</h1>
+          <p className="mt-1 text-text-muted">{t('studentsSubtitle')}</p>
         </div>
         <Button variant="secondary" onClick={handleExport} disabled={!rows || rows.length === 0}>
-          Exportar CSV
+          {t('exportCsv')}
         </Button>
       </header>
 
@@ -158,10 +152,10 @@ export default function AlumnosPage() {
 
       {rows ? (
         <div className="grid gap-4 sm:grid-cols-4">
-          <StatCard label="Total" value={total} />
-          <StatCard label="Activos" value={active} />
-          <StatCard label="Completados" value={completed} />
-          <StatCard label="Progreso promedio" value={`${avgProgress}%`} />
+          <StatCard label={t('statTotal')} value={total} />
+          <StatCard label={t('statActive')} value={active} />
+          <StatCard label={t('statCompleted')} value={completed} />
+          <StatCard label={t('statAvgProgress')} value={`${avgProgress}%`} />
         </div>
       ) : null}
 
@@ -169,12 +163,12 @@ export default function AlumnosPage() {
         <CardHeader>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <CardTitle className="text-base">{total} matriculaciones</CardTitle>
-              <CardDescription>Haz clic sobre las cabeceras para ordenar.</CardDescription>
+              <CardTitle className="text-base">{t('enrollmentsCount', { count: total })}</CardTitle>
+              <CardDescription>{t('sortHint')}</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <label className="text-xs font-semibold text-text-muted" htmlFor="statusFilter">
-                Estado
+                {t('statusFilterLabel')}
               </label>
               <Select
                 id="statusFilter"
@@ -182,10 +176,10 @@ export default function AlumnosPage() {
                 onChange={(e) => setStatusFilter(e.target.value as EnrollmentStatus)}
                 className="min-w-[160px]"
               >
-                <option value="">Todos</option>
-                <option value="ACTIVE">Activos</option>
-                <option value="COMPLETED">Completados</option>
-                <option value="CANCELLED">Cancelados</option>
+                <option value="">{t('filterAll')}</option>
+                <option value="ACTIVE">{t('filterActive')}</option>
+                <option value="COMPLETED">{t('filterCompleted')}</option>
+                <option value="CANCELLED">{t('filterCancelled')}</option>
               </Select>
             </div>
           </div>
@@ -199,11 +193,8 @@ export default function AlumnosPage() {
             </div>
           ) : sorted.length === 0 ? (
             <div className="flex flex-col items-center gap-3 p-12 text-center">
-              <h3 className="font-display text-xl font-semibold">No hay matriculaciones</h3>
-              <p className="max-w-md text-text-muted">
-                Cuando alguien se matricule en este curso, aparecerá acá. Puedes generar
-                invitaciones desde la pestaña Invitaciones.
-              </p>
+              <h3 className="font-display text-xl font-semibold">{t('emptyEnrollmentsTitle')}</h3>
+              <p className="max-w-md text-text-muted">{t('emptyEnrollmentsBody')}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -216,17 +207,17 @@ export default function AlumnosPage() {
                         dir={sortDir}
                         onClick={() => handleSort('name')}
                       >
-                        Alumno
+                        {t('colStudent')}
                       </SortHeader>
                     </th>
-                    <th className="px-3 py-3">Estado</th>
+                    <th className="px-3 py-3">{t('colStatus')}</th>
                     <th className="px-3 py-3">
                       <SortHeader
                         active={sortKey === 'progress'}
                         dir={sortDir}
                         onClick={() => handleSort('progress')}
                       >
-                        Progreso
+                        {t('colProgress')}
                       </SortHeader>
                     </th>
                     <th className="px-3 py-3">
@@ -235,7 +226,7 @@ export default function AlumnosPage() {
                         dir={sortDir}
                         onClick={() => handleSort('enrolled')}
                       >
-                        Matriculado
+                        {t('colEnrolled')}
                       </SortHeader>
                     </th>
                     <th className="px-3 py-3 text-right">
@@ -244,10 +235,10 @@ export default function AlumnosPage() {
                         dir={sortDir}
                         onClick={() => handleSort('lastLogin')}
                       >
-                        Último login
+                        {t('colLastLogin')}
                       </SortHeader>
                     </th>
-                    <th className="px-6 py-3 text-right">Detalle</th>
+                    <th className="px-6 py-3 text-right">{t('colDetail')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -261,7 +252,7 @@ export default function AlumnosPage() {
                           userId={r.userId}
                           name={r.userName}
                           email={r.userEmail}
-                          fallback="Alumno"
+                          fallback={t('studentFallback')}
                           showAvatar={false}
                           size={20}
                           nameClassName="block truncate font-semibold text-text"
@@ -269,7 +260,9 @@ export default function AlumnosPage() {
                         />
                       </td>
                       <td className="px-3 py-3">
-                        <Badge variant={STATUS_VARIANT[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+                        <Badge variant={STATUS_VARIANT[r.status]}>
+                          {t(`enrollStatus.${r.status}`)}
+                        </Badge>
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-2">
@@ -287,17 +280,17 @@ export default function AlumnosPage() {
                         </div>
                       </td>
                       <td className="px-3 py-3 text-xs text-text-muted tabular-nums">
-                        {formatDate(r.enrolledAt)}
+                        {shortDate(r.enrolledAt)}
                       </td>
                       <td className="px-3 py-3 text-right text-xs text-text-muted tabular-nums">
-                        {r.lastLoginAt ? new Date(r.lastLoginAt).toLocaleDateString('es-ES') : '—'}
+                        {r.lastLoginAt ? formatDate(r.lastLoginAt) : '—'}
                       </td>
                       <td className="px-6 py-3 text-right">
                         <Button variant="ghost" size="sm" asChild>
                           <Link
                             href={`/formador/cursos/${courseId}/alumnos/${r.enrollmentId}` as never}
                           >
-                            Ver progreso →
+                            {t('viewProgress')}
                           </Link>
                         </Button>
                       </td>

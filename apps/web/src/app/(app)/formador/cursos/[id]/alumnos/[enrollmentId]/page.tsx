@@ -8,11 +8,14 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
 import {
   learningApi,
   type EnrollmentProgressDetail,
@@ -22,13 +25,7 @@ import {
 
 type ProgressStatus = EnrollmentProgressDetail['status'];
 
-const STATUS_LABEL: Record<ProgressStatus, string> = {
-  ACTIVE: 'Activo',
-  COMPLETED: 'Completado',
-  CANCELLED: 'Cancelado',
-  PAUSED: 'Pausado',
-};
-
+// Labels de estado en el catálogo `formadorCursos.enrollStatus.*`.
 const STATUS_VARIANT: Record<ProgressStatus, 'success' | 'warning' | 'muted'> = {
   ACTIVE: 'warning',
   COMPLETED: 'success',
@@ -36,13 +33,9 @@ const STATUS_VARIANT: Record<ProgressStatus, 'success' | 'warning' | 'muted'> = 
   PAUSED: 'muted',
 };
 
-function formatDate(iso: string | null): string {
+function shortDate(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatDate(iso, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 /** Formatea segundos vistos a un texto compacto: '2h 5m' / '5m 12s' / '0s'. */
@@ -56,14 +49,14 @@ function formatWatch(seconds: number): string {
   return `${s}s`;
 }
 
-/** Estado visual de una lección a partir de su progreso. */
+/** Estado visual de una lección a partir de su progreso (label vía catálogo). */
 function lessonStatus(lesson: StudentLessonProgress): {
-  label: string;
+  key: 'completed' | 'inProgress' | 'notStarted';
   variant: 'success' | 'warning' | 'muted';
 } {
-  if (lesson.completed) return { label: 'Completada', variant: 'success' };
-  if (lesson.watchedSeconds > 0) return { label: 'En curso', variant: 'warning' };
-  return { label: 'Sin empezar', variant: 'muted' };
+  if (lesson.completed) return { key: 'completed', variant: 'success' };
+  if (lesson.watchedSeconds > 0) return { key: 'inProgress', variant: 'warning' };
+  return { key: 'notStarted', variant: 'muted' };
 }
 
 /** Escapa un valor para una celda CSV. */
@@ -96,6 +89,8 @@ function progressToCsv(detail: EnrollmentProgressDetail): string {
 }
 
 export default function AlumnoProgresoPage() {
+  const t = useTranslations('formadorCursos');
+  const tErrors = useTranslations('errors');
   const params = useParams<{ id: string; enrollmentId: string }>();
   const courseId = params?.id;
   const enrollmentId = params?.enrollmentId;
@@ -112,7 +107,9 @@ export default function AlumnoProgresoPage() {
         if (!cancelled) setDetail(data);
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar el progreso.');
+          setError(
+            e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorLoadProgress'),
+          );
         }
       }
     })();
@@ -142,7 +139,7 @@ export default function AlumnoProgresoPage() {
     <div className="flex flex-col gap-6">
       <div>
         <Button variant="ghost" asChild className="self-start">
-          <Link href={`/formador/cursos/${courseId}/alumnos` as never}>← Volver</Link>
+          <Link href={`/formador/cursos/${courseId}/alumnos` as never}>{t('back')}</Link>
         </Button>
       </div>
 
@@ -150,20 +147,22 @@ export default function AlumnoProgresoPage() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="font-display text-2xl font-bold tracking-tight">
-              {detail ? displayName : 'Progreso del alumno'}
+              {detail ? displayName : t('progressTitle')}
             </h1>
             {detail ? (
-              <Badge variant={STATUS_VARIANT[detail.status]}>{STATUS_LABEL[detail.status]}</Badge>
+              <Badge variant={STATUS_VARIANT[detail.status]}>
+                {t(`enrollStatus.${detail.status}`)}
+              </Badge>
             ) : null}
           </div>
           {detail?.userName && detail.userEmail ? (
             <p className="mt-1 text-text-muted">{detail.userEmail}</p>
           ) : (
-            <p className="mt-1 text-text-muted">Tiempo visto por lección a lo largo del curso.</p>
+            <p className="mt-1 text-text-muted">{t('progressSubtitle')}</p>
           )}
         </div>
         <Button variant="secondary" onClick={handleExport} disabled={!detail}>
-          Exportar CSV
+          {t('exportCsv')}
         </Button>
       </header>
 
@@ -194,24 +193,19 @@ export default function AlumnoProgresoPage() {
       {detail ? (
         <>
           <div className="grid gap-4 sm:grid-cols-3">
-            <StatCard label="Tiempo total visto" value={formatWatch(detail.totalWatchedSeconds)} />
+            <StatCard label={t('statWatchTotal')} value={formatWatch(detail.totalWatchedSeconds)} />
             <StatCard
-              label="Lecciones completadas"
+              label={t('statLessonsCompleted')}
               value={`${detail.lessonsCompleted}/${detail.lessonsTotal}`}
             />
-            <StatCard label="Progreso" value={`${detail.progressPercent}%`} />
+            <StatCard label={t('statProgress')} value={`${detail.progressPercent}%`} />
           </div>
 
           {detail.modules.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
-                <h3 className="font-display text-xl font-semibold">
-                  Este curso no tiene lecciones
-                </h3>
-                <p className="max-w-md text-text-muted">
-                  Cuando el curso tenga módulos y lecciones, aquí verás el tiempo visto por cada
-                  una.
-                </p>
+                <h3 className="font-display text-xl font-semibold">{t('noLessonsTitle')}</h3>
+                <p className="max-w-md text-text-muted">{t('noLessonsBody')}</p>
               </CardContent>
             </Card>
           ) : (
@@ -220,7 +214,7 @@ export default function AlumnoProgresoPage() {
                 <CardHeader>
                   <CardTitle className="text-base">{mod.moduleTitle}</CardTitle>
                   <CardDescription>
-                    {mod.lessons.length} {mod.lessons.length === 1 ? 'lección' : 'lecciones'}
+                    {t('lessonsWithCount', { count: mod.lessons.length })}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -228,10 +222,10 @@ export default function AlumnoProgresoPage() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-y border-border bg-surface-2 text-left text-xs uppercase tracking-wide text-text-muted">
-                          <th className="px-6 py-3">Lección</th>
-                          <th className="px-3 py-3">Tiempo visto</th>
-                          <th className="px-3 py-3">Estado</th>
-                          <th className="px-6 py-3 text-right">Última actividad</th>
+                          <th className="px-6 py-3">{t('colLesson')}</th>
+                          <th className="px-3 py-3">{t('colWatch')}</th>
+                          <th className="px-3 py-3">{t('colStatus')}</th>
+                          <th className="px-6 py-3 text-right">{t('colLastActivity')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -257,15 +251,15 @@ export default function AlumnoProgresoPage() {
                                 {lesson.durationMinutes !== null ? (
                                   <span className="text-text-subtle">
                                     {' '}
-                                    / ~{lesson.durationMinutes}min
+                                    {t('watchOfDuration', { minutes: lesson.durationMinutes })}
                                   </span>
                                 ) : null}
                               </td>
                               <td className="px-3 py-3">
-                                <Badge variant={st.variant}>{st.label}</Badge>
+                                <Badge variant={st.variant}>{t(`lessonState.${st.key}`)}</Badge>
                               </td>
                               <td className="px-6 py-3 text-right text-xs tabular-nums text-text-muted">
-                                {formatDate(lesson.lastAccessedAt)}
+                                {shortDate(lesson.lastAccessedAt)}
                               </td>
                             </tr>
                           );

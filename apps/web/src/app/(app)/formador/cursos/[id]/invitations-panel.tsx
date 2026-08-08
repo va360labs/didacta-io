@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,9 +14,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
 import { learningApi, type Invitation } from '@/lib/learning';
 
 export function InvitationsPanel({ courseId }: { courseId: string }) {
+  const t = useTranslations('formadorCursos');
+  const tErrors = useTranslations('errors');
   const [invitations, setInvitations] = useState<Invitation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -27,7 +32,7 @@ export function InvitationsPanel({ courseId }: { courseId: string }) {
       const list = await learningApi.listInvitations(courseId);
       setInvitations(list);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudieron cargar invitaciones');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorLoadInvitations'));
     }
   }
 
@@ -51,7 +56,9 @@ export function InvitationsPanel({ courseId }: { courseId: string }) {
       setJustCreated(created);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'Error al crear invitación');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorCreateInvitation'),
+      );
     } finally {
       setPending(false);
     }
@@ -64,7 +71,9 @@ export function InvitationsPanel({ courseId }: { courseId: string }) {
       await learningApi.revokeInvitation(id);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'Error al revocar invitación');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorRevokeInvitation'),
+      );
     } finally {
       setPending(false);
     }
@@ -93,10 +102,8 @@ export function InvitationsPanel({ courseId }: { courseId: string }) {
             <Icon name="users" size={18} />
           </span>
           <div className="min-w-0">
-            <CardTitle className="text-base">Invitaciones</CardTitle>
-            <CardDescription>
-              Genera códigos para que alumnos se matriculen sin abrir auto-matriculación pública.
-            </CardDescription>
+            <CardTitle className="text-base">{t('invitationsTitle')}</CardTitle>
+            <CardDescription>{t('invitationsDescription')}</CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -107,20 +114,20 @@ export function InvitationsPanel({ courseId }: { courseId: string }) {
         >
           <div className="space-y-1.5 sm:col-span-4">
             <Label htmlFor={`maxUses-${courseId}`} className="text-xs">
-              Usos máx. (vacío = ilimitado)
+              {t('maxUsesLabel')}
             </Label>
             <Input id={`maxUses-${courseId}`} name="maxUses" type="number" min={1} />
           </div>
           <div className="space-y-1.5 sm:col-span-6">
             <Label htmlFor={`expiresAt-${courseId}`} className="text-xs">
-              Expira (opcional)
+              {t('expiresLabel')}
             </Label>
             <Input id={`expiresAt-${courseId}`} name="expiresAt" type="datetime-local" />
           </div>
           <div className="flex items-end sm:col-span-2">
             <Button type="submit" size="sm" disabled={pending} className="w-full">
               <Icon name="plus" size={14} />
-              Generar
+              {t('generate')}
             </Button>
           </div>
         </form>
@@ -144,10 +151,10 @@ export function InvitationsPanel({ courseId }: { courseId: string }) {
           >
             <div className="flex items-center gap-2">
               <Icon name="check" size={16} />
-              <p className="font-semibold">Código generado</p>
+              <p className="font-semibold">{t('codeGenerated')}</p>
             </div>
             <p className="mt-2 font-mono text-base font-bold tracking-wider">{justCreated.code}</p>
-            <p className="mt-2 text-xs opacity-80">Token URL para link directo:</p>
+            <p className="mt-2 text-xs opacity-80">{t('tokenUrlLabel')}</p>
             <code className="mt-1 block break-all rounded-md bg-white p-2 text-xs text-text">
               {justCreated.token}
             </code>
@@ -157,14 +164,14 @@ export function InvitationsPanel({ courseId }: { courseId: string }) {
               className="mt-3"
               onClick={() => void copy(justCreated.code)}
             >
-              {copied ? '✓ Copiado' : 'Copiar código'}
+              {copied ? t('copiedCheck') : t('copyCode')}
             </Button>
           </div>
         ) : null}
 
         {invitations && invitations.length === 0 ? (
           <p className="rounded-md border border-dashed border-border-soft px-4 py-6 text-center text-sm text-text-subtle">
-            No hay invitaciones activas.
+            {t('noInvitations')}
           </p>
         ) : null}
 
@@ -181,14 +188,15 @@ export function InvitationsPanel({ courseId }: { courseId: string }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <code className="font-mono text-sm font-semibold text-text">{inv.code}</code>
-                      {expired ? <Badge variant="muted">Expirada</Badge> : null}
-                      {exhausted ? <Badge variant="muted">Agotada</Badge> : null}
+                      {expired ? <Badge variant="muted">{t('expiredBadge')}</Badge> : null}
+                      {exhausted ? <Badge variant="muted">{t('exhaustedBadge')}</Badge> : null}
                     </div>
                     <p className="mt-0.5 text-xs text-text-subtle">
-                      Usos: {inv.usedCount}
-                      {inv.maxUses ? ` / ${inv.maxUses}` : ' (ilimitado)'}
+                      {inv.maxUses
+                        ? t('usesOf', { used: inv.usedCount, max: inv.maxUses })
+                        : t('usesUnlimited', { used: inv.usedCount })}
                       {inv.expiresAt
-                        ? ` · expira ${new Date(inv.expiresAt).toLocaleString('es-ES')}`
+                        ? ` · ${t('invitationExpires', { date: formatDateTime(inv.expiresAt) })}`
                         : ''}
                     </p>
                   </div>
@@ -197,12 +205,12 @@ export function InvitationsPanel({ courseId }: { courseId: string }) {
                       size="sm"
                       variant="ghost"
                       onClick={() => void copy(inv.code)}
-                      aria-label="Copiar código"
+                      aria-label={t('copyCode')}
                     >
-                      Copiar
+                      {t('copy')}
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => void handleRevoke(inv.id)}>
-                      Revocar
+                      {t('revoke')}
                     </Button>
                   </div>
                 </li>

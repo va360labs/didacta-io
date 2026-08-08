@@ -7,6 +7,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { NewCourseForm } from '@/components/new-course-form';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ import type { Course } from '@/lib/courses';
  * usa un Dialog modal con el mismo `<NewCourseForm>`.
  */
 export default function NuevoCursoPage() {
+  const t = useTranslations('formadorCursos');
   const router = useRouter();
 
   function handleCreated(course: Course) {
@@ -28,7 +30,7 @@ export default function NuevoCursoPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <Button asChild variant="ghost" className="self-start">
-        <Link href="/formador/cursos">← Volver a mis cursos</Link>
+        <Link href="/formador/cursos">{t('backToMyCourses')}</Link>
       </Button>
 
       <Card>
@@ -45,11 +47,8 @@ export default function NuevoCursoPage() {
               <Icon name="book" size={20} />
             </span>
             <div className="min-w-0">
-              <CardTitle>Nuevo curso</CardTitle>
-              <CardDescription>
-                El curso queda en estado borrador hasta que lo publiques. Luego añades secciones,
-                lecciones y contenido.
-              </CardDescription>
+              <CardTitle>{t('newCourseTitle')}</CardTitle>
+              <CardDescription>{t('newCoursePageDescription')}</CardDescription>
             </div>
           </div>
         </CardHeader>
