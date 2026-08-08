@@ -7,29 +7,29 @@
 
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import { useTranslations } from 'next-intl';
 import { Card, CardContent } from '@/components/ui/card';
 
-/** Mensajes que ve el APROBADOR tras procesar la solicitud desde el email. */
-const OUTCOME_COPY: Record<string, { title: string; body: string; ok: boolean }> = {
-  approved: {
-    title: 'Solicitud aprobada',
-    body: 'La solicitud fue aprobada. El miembro ya tiene acceso.',
-    ok: true,
-  },
-  rejected: { title: 'Solicitud rechazada', body: 'La solicitud fue rechazada.', ok: false },
-  already: {
-    title: 'Ya procesada',
-    body: 'Este registro ya fue procesado anteriormente.',
-    ok: false,
-  },
-  invalid: { title: 'Enlace inválido', body: 'El enlace no es válido.', ok: false },
-  expired: { title: 'Enlace expirado', body: 'El enlace expiró.', ok: false },
-};
+/**
+ * Outcomes que ve el APROBADOR tras procesar la solicitud desde el email. Los
+ * textos viven en `publicSite.decision.*` (grupo por enum cerrado).
+ */
+const OUTCOME_OK = {
+  approved: true,
+  rejected: false,
+  already: false,
+  invalid: false,
+  expired: false,
+} as const;
+
+type Outcome = keyof typeof OUTCOME_OK;
 
 function DecisionContent() {
+  const t = useTranslations('publicSite');
   const searchParams = useSearchParams();
-  const outcome = searchParams.get('outcome') ?? '';
-  const copy = OUTCOME_COPY[outcome] ?? OUTCOME_COPY.invalid;
+  const raw = searchParams.get('outcome') ?? '';
+  const outcome: Outcome = raw in OUTCOME_OK ? (raw as Outcome) : 'invalid';
+  const ok = OUTCOME_OK[outcome];
 
   return (
     <Card>
@@ -38,13 +38,15 @@ function DecisionContent() {
           aria-hidden="true"
           className={
             'mx-auto grid h-14 w-14 place-items-center rounded-full text-2xl text-white ' +
-            (copy.ok ? 'bg-success-500' : 'bg-danger-500')
+            (ok ? 'bg-success-500' : 'bg-danger-500')
           }
         >
-          {copy.ok ? '✓' : '✕'}
+          {ok ? '✓' : '✕'}
         </div>
-        <h1 className="font-display text-xl font-bold tracking-tight">{copy.title}</h1>
-        <p className="text-sm text-text-muted">{copy.body}</p>
+        <h1 className="font-display text-xl font-bold tracking-tight">
+          {t(`decision.${outcome}Title`)}
+        </h1>
+        <p className="text-sm text-text-muted">{t(`decision.${outcome}Body`)}</p>
       </CardContent>
     </Card>
   );
@@ -57,11 +59,12 @@ function DecisionContent() {
  * llama a ningún endpoint. `useSearchParams` exige Suspense en App Router.
  */
 export default function InscripcionDecisionPage() {
+  const t = useTranslations('publicSite');
   return (
     <Suspense
       fallback={
         <Card>
-          <CardContent className="p-8 text-center text-text-muted">Cargando…</CardContent>
+          <CardContent className="p-8 text-center text-text-muted">{t('loading')}</CardContent>
         </Card>
       }
     >

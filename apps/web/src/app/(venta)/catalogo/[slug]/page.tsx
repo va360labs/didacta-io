@@ -3,10 +3,15 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { Suspense } from 'react';
 import { FichaVentaView } from './ficha-venta-view';
 
-export const metadata = { title: 'Curso' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('publicSite');
+  return { title: t('ficha.metaTitle') };
+}
 
 /**
  * Ficha PÚBLICA de venta de un curso suelto (viaje 2): visible sin sesión.

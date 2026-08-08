@@ -17,20 +17,16 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
+import { formatDuration } from '@/lib/i18n/format';
 import { useTenantContext } from '@/lib/tenant-context';
 import { formatCents } from '@/lib/membership';
 import { featuredOption, getPublicCatalog, type CatalogCourse } from '@/lib/catalog';
 
-/** 150 → "2 h 30 min"; 45 → "45 min". */
-function durationLabel(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return `${m} min`;
-  return m === 0 ? `${h} h` : `${h} h ${m} min`;
-}
-
 export function CatalogoView() {
+  const t = useTranslations('publicSite');
+  const tCommon = useTranslations('common');
   const { tenant } = useTenantContext();
   const [courses, setCourses] = useState<CatalogCourse[] | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -53,7 +49,7 @@ export function CatalogoView() {
   if (loadError) {
     return (
       <div className="mx-auto max-w-lg rounded-3xl border border-border bg-surface p-8 text-center shadow-sm">
-        <p className="text-text-muted">No se pudo cargar el catálogo. Recarga para reintentar.</p>
+        <p className="text-text-muted">{t('catalogo.loadError')}</p>
       </div>
     );
   }
@@ -61,7 +57,7 @@ export function CatalogoView() {
   if (courses === null) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center text-sm text-text-muted">
-        Cargando…
+        {t('loading')}
       </div>
     );
   }
@@ -86,26 +82,28 @@ export function CatalogoView() {
             {tenant.name}
           </span>
         ) : null}
-        <h1 className="font-display text-3xl font-bold tracking-tight text-text">Cursos</h1>
+        <h1 className="font-display text-3xl font-bold tracking-tight text-text">
+          {t('catalogo.title')}
+        </h1>
         {courses.length > 0 ? (
           <p className="text-text-muted">
-            {courses.length === 1 ? 'Un curso disponible' : `${courses.length} cursos disponibles`}{' '}
-            — compra el que quieras y empieza hoy mismo.
+            {t('catalogo.coursesAvailable', { count: courses.length })}
           </p>
         ) : null}
         <p className="text-sm text-text-subtle">
-          ¿Ya tienes cuenta?{' '}
-          <Link href="/signin" className="font-medium text-brand-700 hover:underline">
-            Inicia sesión
-          </Link>
+          {t.rich('catalogo.haveAccount', {
+            link: (chunks) => (
+              <Link href="/signin" className="font-medium text-brand-700 hover:underline">
+                {chunks}
+              </Link>
+            ),
+          })}
         </p>
       </header>
 
       {courses.length === 0 ? (
         <div className="mx-auto max-w-lg rounded-3xl border border-border bg-surface p-8 text-center shadow-sm">
-          <p className="text-text-muted">
-            Ahora mismo no hay cursos a la venta. Vuelve pronto o pregunta a tu academia.
-          </p>
+          <p className="text-text-muted">{t('catalogo.emptyCatalog')}</p>
         </div>
       ) : (
         <>
@@ -123,7 +121,7 @@ export function CatalogoView() {
                       : 'rounded-full border border-border bg-surface px-4 py-1.5 text-sm text-text-muted hover:bg-surface-2'
                   }
                 >
-                  {chip}
+                  {chip === 'Todos' ? t('catalogo.filterAll') : chip}
                 </button>
               ))}
             </div>
@@ -162,7 +160,7 @@ export function CatalogoView() {
                       {course.estimatedMinutes ? (
                         <span className="inline-flex items-center gap-1">
                           <Icon name="clock" size={13} />
-                          {durationLabel(course.estimatedMinutes)}
+                          {formatDuration(course.estimatedMinutes, tCommon)}
                         </span>
                       ) : null}
                     </div>
@@ -185,7 +183,7 @@ export function CatalogoView() {
                           ) : null}
                           {option.discountPercent ? (
                             <span className="rounded-full bg-success-100 px-2 py-0.5 text-xs font-semibold text-success-700">
-                              −{option.discountPercent}%
+                              {t('discountBadge', { percent: option.discountPercent })}
                             </span>
                           ) : null}
                         </div>
@@ -193,7 +191,7 @@ export function CatalogoView() {
                         <span />
                       )}
                       <span className="inline-flex items-center gap-1 text-sm font-medium text-brand-700">
-                        Ver curso
+                        {t('catalogo.viewCourse')}
                         <Icon name="arrow-right" size={15} />
                       </span>
                     </div>
@@ -204,10 +202,13 @@ export function CatalogoView() {
           </div>
 
           <p className="pt-2 text-center text-sm text-text-subtle">
-            ¿Prefieres acceso a todo?{' '}
-            <Link href="/unete" className="font-medium text-brand-700 hover:underline">
-              Mira la membresía
-            </Link>
+            {t.rich('catalogo.preferAllAccess', {
+              link: (chunks) => (
+                <Link href="/unete" className="font-medium text-brand-700 hover:underline">
+                  {chunks}
+                </Link>
+              ),
+            })}
           </p>
         </>
       )}

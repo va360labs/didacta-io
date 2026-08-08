@@ -21,16 +21,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { formatDate, formatDuration } from '@/lib/i18n/format';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import { useTenantContext } from '@/lib/tenant-context';
 import {
   formatCents,
   getMembershipPage,
-  intervalDescription,
-  intervalSuffix,
   startMembershipCheckout,
   type MembershipCourse,
   type MembershipPage,
@@ -50,46 +51,34 @@ function categoryStyle(name: string): string {
   return CATEGORY_STYLES[h % CATEGORY_STYLES.length]!;
 }
 
-/** 150 → "2 h 30 min"; 45 → "45 min". */
-function durationLabel(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return `${m} min`;
-  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+/** Etiqueta de periodicidad: "/mes", "/trimestre", …, "/N meses" (catálogo i18n). */
+function intervalSuffixLabel(t: TranslatorLike, intervalMonths: number): string {
+  if (intervalMonths === 12) return t('unete.intervalSuffixYear');
+  if (intervalMonths === 6) return t('unete.intervalSuffixSemester');
+  if (intervalMonths === 3) return t('unete.intervalSuffixQuarter');
+  if (intervalMonths === 1) return t('unete.intervalSuffixMonth');
+  return t('unete.intervalSuffixMonths', { months: intervalMonths });
 }
 
-function nextDateLabel(d: Date): string {
-  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+/** Nombre largo: "Suscripción mensual/trimestral/…/cada N meses" (catálogo i18n). */
+function intervalDescriptionLabel(t: TranslatorLike, intervalMonths: number): string {
+  if (intervalMonths === 12) return t('unete.intervalDescYear');
+  if (intervalMonths === 6) return t('unete.intervalDescSemester');
+  if (intervalMonths === 3) return t('unete.intervalDescQuarter');
+  if (intervalMonths === 1) return t('unete.intervalDescMonth');
+  return t('unete.intervalDescMonths', { months: intervalMonths });
 }
-
-/** FAQ estática: afirmaciones verificables del producto (no datos inventados). */
-const FAQS: Array<{ q: string; a: string }> = [
-  {
-    q: '¿Puedo cancelar cuando quiera?',
-    a: 'Sí. Cancelas desde tu cuenta, en la pestaña Suscripción, sin permanencia.',
-  },
-  {
-    q: '¿Qué pasa cuando termina la prueba gratis?',
-    a: 'Se activa el plan que elegiste y Stripe realiza el primer cargo en la fecha indicada.',
-  },
-  {
-    q: '¿Cómo accedo después de pagar?',
-    a: 'Si aún no tienes cuenta, recibirás un email con un enlace para definir tu contraseña y entrar directamente.',
-  },
-  {
-    q: '¿Cómo se procesa el pago?',
-    a: 'El pago lo procesa Stripe de forma segura. Puedes aplicar un cupón en la pantalla de pago.',
-  },
-];
 
 export function UneteView() {
+  const t = useTranslations('publicSite');
+  const tCommon = useTranslations('common');
   const params = useSearchParams();
   const status = params.get('status');
   const { tenant } = useTenantContext();
 
   const [page, setPage] = useState<MembershipPage | null>(null);
   const [notAvailable, setNotAvailable] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [openCourseId, setOpenCourseId] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('Todos');
@@ -125,7 +114,7 @@ export function UneteView() {
       .catch((err) => {
         if (cancelled) return;
         if (err instanceof ApiHttpError && err.status === 404) setNotAvailable(true);
-        else setLoadError('No se pudo cargar la página. Recarga para reintentar.');
+        else setLoadError(true);
       });
     return () => {
       cancelled = true;
@@ -146,34 +135,31 @@ export function UneteView() {
       );
       window.location.assign(url);
     } catch {
-      setPayError('No se pudo iniciar el pago. Inténtalo de nuevo en unos segundos.');
+      setPayError(t('unete.payError'));
       setPaying(false);
     }
-  }, [selected, session]);
+  }, [selected, session, t]);
 
   // ── Estados de retorno del checkout ────────────────────────────────────────
   if (status === 'success') {
     return (
-      <ReturnCard tone="success" title="¡Pago recibido!">
+      <ReturnCard tone="success" title={t('unete.paymentReceived')}>
         {session ? (
           <>
-            <p className="text-text-muted">
-              Tu membresía se está activando. En unos segundos tendrás acceso a todos los cursos.
-            </p>
+            <p className="text-text-muted">{t('unete.activatingMembership')}</p>
             <Link href="/cursos" className="inline-block">
-              <Button>Ir a mis cursos</Button>
+              <Button>{t('unete.goToCourses')}</Button>
             </Link>
           </>
         ) : (
           <>
             <p className="text-text-muted">
-              Revisa tu correo: te hemos enviado un enlace para{' '}
-              <strong>definir tu contraseña</strong> y entrar a la plataforma. Si no lo ves en unos
-              minutos, mira en spam o usa &ldquo;¿Olvidaste tu contraseña?&rdquo; en el inicio de
-              sesión.
+              {t.rich('unete.checkEmail', {
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
             </p>
             <Link href="/signin" className="inline-block">
-              <Button variant="ghost">Ir al inicio de sesión</Button>
+              <Button variant="ghost">{t('goToSignIn')}</Button>
             </Link>
           </>
         )}
@@ -183,12 +169,10 @@ export function UneteView() {
 
   if (notAvailable) {
     return (
-      <ReturnCard tone="muted" title="Membresía no disponible">
-        <p className="text-text-muted">
-          Esta comunidad no tiene la compra de membresía activada ahora mismo.
-        </p>
+      <ReturnCard tone="muted" title={t('unete.notAvailableTitle')}>
+        <p className="text-text-muted">{t('unete.notAvailableBody')}</p>
         <Link href="/signin" className="inline-block">
-          <Button variant="ghost">Iniciar sesión</Button>
+          <Button variant="ghost">{t('unete.signIn')}</Button>
         </Link>
       </ReturnCard>
     );
@@ -196,8 +180,8 @@ export function UneteView() {
 
   if (loadError) {
     return (
-      <ReturnCard tone="muted" title="Algo no fue bien">
-        <p className="text-text-muted">{loadError}</p>
+      <ReturnCard tone="muted" title={t('unete.errorTitle')}>
+        <p className="text-text-muted">{t('unete.loadError')}</p>
       </ReturnCard>
     );
   }
@@ -205,7 +189,7 @@ export function UneteView() {
   if (!page) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center text-sm text-text-muted">
-        Cargando…
+        {t('loading')}
       </div>
     );
   }
@@ -244,7 +228,7 @@ export function UneteView() {
       <div className="flex flex-col gap-4 lg:sticky lg:top-6">
         {status === 'cancel' && (
           <div className="rounded-xl border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning-700">
-            Pago cancelado. Puedes retomarlo cuando quieras — tu selección sigue aquí.
+            {t('unete.payCanceled')}
           </div>
         )}
 
@@ -286,10 +270,14 @@ export function UneteView() {
             {/* Selector de planes */}
             {page.plans.length === 0 ? (
               <p className="rounded-xl border border-border bg-surface-2 px-4 py-3 text-sm text-text-muted">
-                Aún no hay planes disponibles.
+                {t('unete.noPlans')}
               </p>
             ) : (
-              <div role="radiogroup" aria-label="Planes" className="flex flex-col gap-2.5">
+              <div
+                role="radiogroup"
+                aria-label={t('unete.plansAriaLabel')}
+                className="flex flex-col gap-2.5"
+              >
                 {page.plans.map((plan) => {
                   const isSelected = plan.id === selectedId;
                   return (
@@ -328,19 +316,19 @@ export function UneteView() {
                             {formatCents(plan.amountCents, plan.currency)}
                           </span>
                           <span className="text-sm text-text-muted">
-                            {intervalSuffix(plan.intervalMonths)}
+                            {intervalSuffixLabel(t, plan.intervalMonths)}
                           </span>
                         </span>
                         <span className="mt-0.5 text-[13px] text-text-muted">
-                          {intervalDescription(plan.intervalMonths)}
+                          {intervalDescriptionLabel(t, plan.intervalMonths)}
                           {plan.trialDays > 0
-                            ? ` · ${plan.trialDays} ${plan.trialDays === 1 ? 'día' : 'días'} de prueba gratis`
+                            ? t('unete.planTrialSuffix', { days: plan.trialDays })
                             : ''}
                         </span>
                       </span>
                       {plan.isFeatured ? (
                         <span className="shrink-0 rounded-full bg-success-500 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
-                          Mejor valor
+                          {t('unete.bestValue')}
                         </span>
                       ) : null}
                     </button>
@@ -353,7 +341,7 @@ export function UneteView() {
               <>
                 <div className="my-5 h-px bg-border-soft" />
                 <div className="flex items-baseline justify-between">
-                  <span className="font-semibold">Total hoy</span>
+                  <span className="font-semibold">{t('unete.totalToday')}</span>
                   <span className="text-[22px] font-extrabold">
                     {trialDays > 0
                       ? formatCents(0, selected.currency)
@@ -362,29 +350,33 @@ export function UneteView() {
                 </div>
                 {savings ? (
                   <div className="mt-2 flex justify-between text-sm">
-                    <span className="text-text-muted">Ahorro sobre el precio original</span>
+                    <span className="text-text-muted">{t('unete.savingsLabel')}</span>
                     <span className="font-bold text-success-700">
-                      −{formatCents(savings, selected.currency)}
+                      {t('unete.savingsAmount', {
+                        amount: formatCents(savings, selected.currency),
+                      })}
                     </span>
                   </div>
                 ) : null}
                 <p className="mt-3.5 text-[13px] leading-5 text-text-muted">
                   {trialDays > 0
-                    ? `${trialDays} ${trialDays === 1 ? 'día' : 'días'} de prueba gratis. Primer cargo de ${formatCents(
-                        selected.amountCents,
-                        selected.currency,
-                      )} el ${nextDateLabel(firstChargeDate)}.`
-                    : `Impuestos incluidos. Primer cargo hoy.`}
+                    ? t('unete.trialFirstCharge', {
+                        days: trialDays,
+                        amount: formatCents(selected.amountCents, selected.currency),
+                        date: formatDate(firstChargeDate, {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        }),
+                      })
+                    : t('unete.firstChargeToday')}
                 </p>
                 {trialDays > 0 && page.trialLessonLimit > 0 ? (
                   <p className="mt-1.5 text-[13px] leading-5 text-text-muted">
-                    Durante la prueba ves las primeras {page.trialLessonLimit} clases de cada curso;
-                    al pagar se desbloquea todo.
+                    {t('unete.trialLessonLimit', { count: page.trialLessonLimit })}
                   </p>
                 ) : null}
-                <p className="mt-1.5 text-[13px] text-text-muted">
-                  ¿Tienes un cupón? Podrás aplicarlo en la pantalla de pago.
-                </p>
+                <p className="mt-1.5 text-[13px] text-text-muted">{t('unete.couponHint')}</p>
               </>
             ) : null}
 
@@ -401,10 +393,10 @@ export function UneteView() {
               onClick={() => void checkout()}
             >
               <Icon name="lock" className="mr-2 h-4 w-4" />
-              {paying ? 'Abriendo pago seguro…' : 'Continuar al pago seguro'}
+              {paying ? t('unete.openingPayment') : t('unete.continueToPayment')}
             </Button>
             <p className="mt-3 text-center text-xs text-text-subtle">
-              Pago procesado por Stripe · Cancela cuando quieras
+              {t('unete.securePaymentNote')}
             </p>
           </div>
         </section>
@@ -422,16 +414,14 @@ export function UneteView() {
               <p className="truncate text-[13px] text-text-muted">{session.user.email}</p>
             </div>
             <span className="text-right text-xs leading-4 text-text-subtle">
-              Comprarás con
-              <br />
-              esta cuenta
+              {t.rich('unete.buyWithAccount', { br: () => <br /> })}
             </span>
           </div>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5">
-            <p className="text-sm text-text-muted">Tu cuenta se crea automáticamente al pagar.</p>
+            <p className="text-sm text-text-muted">{t('unete.accountAutoCreated')}</p>
             <Link href="/signin" className="text-sm font-semibold text-brand-700 hover:underline">
-              ¿Ya tienes cuenta?
+              {t('unete.haveAccountLink')}
             </Link>
           </div>
         )}
@@ -441,15 +431,11 @@ export function UneteView() {
       <div className="min-w-0">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-[28px] font-bold tracking-tight">
-              Todo lo que incluye tu membresía
-            </h2>
-            <p className="mt-2 text-[15px] text-text-muted">
-              Filtra por tema y abre el curso que te interese para ver el detalle completo.
-            </p>
+            <h2 className="text-[28px] font-bold tracking-tight">{t('unete.includesTitle')}</h2>
+            <p className="mt-2 text-[15px] text-text-muted">{t('unete.includesSubtitle')}</p>
           </div>
           <span className="whitespace-nowrap text-sm text-text-muted">
-            {page.courses.length} {page.courses.length === 1 ? 'curso' : 'cursos'} · acceso completo
+            {t('unete.coursesCountFull', { count: page.courses.length })}
           </span>
         </div>
 
@@ -459,20 +445,22 @@ export function UneteView() {
             <div className="min-w-[150px] flex-1 rounded-xl border border-border bg-surface p-4">
               <div className="text-[26px] font-bold">{page.stats.activeMembers}</div>
               <div className="mt-0.5 text-[13px] text-text-muted">
-                {page.stats.activeMembers === 1 ? 'alumno activo' : 'alumnos activos'}
+                {t('unete.activeMembers', { count: page.stats.activeMembers })}
               </div>
             </div>
           )}
           <div className="min-w-[150px] flex-1 rounded-xl border border-border bg-surface p-4">
             <div className="text-[26px] font-bold">{page.courses.length}</div>
             <div className="mt-0.5 text-[13px] text-text-muted">
-              {page.courses.length === 1 ? 'curso incluido' : 'cursos incluidos'}
+              {t('unete.coursesIncluded', { count: page.courses.length })}
             </div>
           </div>
           {totalHours > 0 && (
             <div className="min-w-[150px] flex-1 rounded-xl border border-border bg-surface p-4">
-              <div className="text-[26px] font-bold">+{totalHours} h</div>
-              <div className="mt-0.5 text-[13px] text-text-muted">de formación práctica</div>
+              <div className="text-[26px] font-bold">
+                {t('unete.hoursTile', { hours: totalHours })}
+              </div>
+              <div className="mt-0.5 text-[13px] text-text-muted">{t('unete.hoursTileLabel')}</div>
             </div>
           )}
         </div>
@@ -493,7 +481,7 @@ export function UneteView() {
                       : 'rounded-full border border-border bg-surface px-4 py-2 text-[13px] font-semibold text-text-muted transition hover:border-border-strong'
                   }
                 >
-                  {chip}
+                  {chip === 'Todos' ? t('unete.filterAll') : chip}
                 </button>
               );
             })}
@@ -520,32 +508,41 @@ export function UneteView() {
         {page.standaloneTotalCents !== null && selected ? (
           <div className="mt-6 flex flex-wrap items-center gap-6 rounded-2xl border border-border bg-surface px-6 py-5">
             <div>
-              <div className="text-[13px] text-text-muted">Comprados por separado</div>
+              <div className="text-[13px] text-text-muted">{t('unete.boughtSeparately')}</div>
               <div className="text-[22px] font-bold text-text-subtle line-through">
                 {formatCents(page.standaloneTotalCents, selected.currency)}
               </div>
             </div>
             <Icon name="arrow-right" className="h-6 w-6 text-success-600" />
             <div>
-              <div className="text-[13px] text-text-muted">Con la membresía</div>
+              <div className="text-[13px] text-text-muted">{t('unete.withMembership')}</div>
               <div className="text-[22px] font-bold">
                 {formatCents(selected.amountCents, selected.currency)}
-                {intervalSuffix(selected.intervalMonths)}
+                {intervalSuffixLabel(t, selected.intervalMonths)}
               </div>
             </div>
             {catalogSavings ? (
               <span className="ml-auto rounded-full bg-success-100 px-4 py-2.5 text-sm font-bold text-success-700">
-                Ahorras {formatCents(catalogSavings, selected.currency)}
+                {t('unete.youSave', {
+                  amount: formatCents(catalogSavings, selected.currency),
+                })}
               </span>
             ) : null}
           </div>
         ) : null}
 
-        {/* FAQ */}
+        {/* FAQ: afirmaciones verificables del producto (no datos inventados). */}
         <div className="mt-8">
-          <h3 className="mb-4 text-xl font-bold">Preguntas frecuentes</h3>
+          <h3 className="mb-4 text-xl font-bold">{t('unete.faqTitle')}</h3>
           <div className="grid gap-4 sm:grid-cols-2">
-            {FAQS.map((faq) => (
+            {(
+              [
+                { q: t('unete.faq1Q'), a: t('unete.faq1A') },
+                { q: t('unete.faq2Q'), a: t('unete.faq2A') },
+                { q: t('unete.faq3Q'), a: t('unete.faq3A') },
+                { q: t('unete.faq4Q'), a: t('unete.faq4A') },
+              ] as const
+            ).map((faq) => (
               <div key={faq.q} className="rounded-xl border border-border bg-surface px-5 py-4">
                 <div className="mb-1.5 text-[15px] font-semibold">{faq.q}</div>
                 <div className="text-sm leading-[21px] text-text-muted">{faq.a}</div>
@@ -612,11 +609,11 @@ function CourseCardWithDetail({
   open: boolean;
   onToggle: () => void;
 }) {
+  const t = useTranslations('publicSite');
+  const tCommon = useTranslations('common');
   const meta = [
-    course.estimatedMinutes ? durationLabel(course.estimatedMinutes) : null,
-    course.moduleCount > 0
-      ? `${course.moduleCount} ${course.moduleCount === 1 ? 'módulo' : 'módulos'}`
-      : null,
+    course.estimatedMinutes ? formatDuration(course.estimatedMinutes, tCommon) : null,
+    course.moduleCount > 0 ? t('unete.modulesCount', { count: course.moduleCount }) : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -669,10 +666,10 @@ function CourseCardWithDetail({
           <div className="mt-3.5 flex items-center justify-between">
             <span className="flex items-center gap-1.5 text-[13px] font-bold text-success-700">
               <Icon name="check" className="h-3.5 w-3.5" />
-              Incluido
+              {t('unete.included')}
             </span>
             <span className="flex items-center gap-1 text-[13px] font-semibold text-brand-700">
-              {open ? 'Ocultar' : 'Ver detalle'}
+              {open ? t('unete.hide') : t('unete.viewDetail')}
               <Icon
                 name="chevron-down"
                 className={`h-4 w-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
@@ -728,18 +725,22 @@ function CourseCardWithDetail({
             <div className="flex flex-wrap items-center gap-4">
               {course.teacherName ? (
                 <span className="text-[13px] text-text-muted">
-                  Impartido por{' '}
-                  <span className="font-semibold text-text">{course.teacherName}</span>
+                  {t.rich('unete.taughtBy', {
+                    teacher: course.teacherName,
+                    name: (chunks) => <span className="font-semibold text-text">{chunks}</span>,
+                  })}
                 </span>
               ) : null}
               {course.amountCents !== null ? (
                 <span className="text-[13px] text-text-subtle line-through">
-                  Suelto {formatCents(course.amountCents, currency)}
+                  {t('unete.standalonePrice', {
+                    amount: formatCents(course.amountCents, currency),
+                  })}
                 </span>
               ) : null}
               <span className="flex items-center gap-1.5 text-[13px] font-bold text-success-700">
                 <Icon name="check" className="h-3.5 w-3.5" />
-                Incluido en tu membresía
+                {t('unete.includedInMembership')}
               </span>
             </div>
           </div>

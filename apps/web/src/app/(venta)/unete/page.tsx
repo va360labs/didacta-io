@@ -3,12 +3,15 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { Suspense } from 'react';
 import { UneteView } from './unete-view';
 
-export const metadata = {
-  title: 'Únete',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('publicSite');
+  return { title: t('unete.metaTitle') };
+}
 
 /**
  * Página PÚBLICA de compra de la membresía. Todo el contenido (planes, cursos,

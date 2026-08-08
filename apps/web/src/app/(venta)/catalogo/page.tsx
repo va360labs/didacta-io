@@ -3,10 +3,15 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { Suspense } from 'react';
 import { CatalogoView } from './catalogo-view';
 
-export const metadata = { title: 'Cursos' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('publicSite');
+  return { title: t('catalogo.metaTitle') };
+}
 
 /**
  * Catálogo PÚBLICO de cursos sueltos (viaje 2): visible sin cuenta ni sesión.

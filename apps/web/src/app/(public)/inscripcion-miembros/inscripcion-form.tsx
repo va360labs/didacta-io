@@ -6,16 +6,18 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { useTenantContext } from '@/lib/tenant-context';
 import {
   createInscripcion,
   fetchInscripcionConfig,
-  inscripcionErrorMessage,
   requestOtp,
   verifyOtp,
   verifyTelegram,
@@ -84,17 +86,6 @@ function TelegramLoginWidget({
   return <div ref={containerRef} className="flex justify-center" />;
 }
 
-/** Aviso según el estado de pertenencia al grupo de Telegram. */
-function membershipNotice(inGroup: TelegramMembership, communityName: string): string | null {
-  if (inGroup === 'false') {
-    return `No estás en el grupo de ${communityName}, pero puedes solicitar acceso igual; revisaremos tu caso.`;
-  }
-  if (inGroup === 'unknown') {
-    return 'No pudimos verificar tu pertenencia ahora; puedes continuar y revisaremos tu caso.';
-  }
-  return null;
-}
-
 /**
  * Wizard público de inscripción de miembros con PASOS DINÁMICOS: la política
  * del tenant (endpoint `config`) decide qué verificadores aparecen.
@@ -108,10 +99,12 @@ function membershipNotice(inGroup: TelegramMembership, communityName: string): s
  * onboarding posterior).
  */
 export function InscripcionForm() {
+  const t = useTranslations('publicSite');
+  const tErrors = useTranslations('errors');
   const { tenant } = useTenantContext();
   // Nombre del tenant resuelto por host, con fallback genérico mientras carga
   // o si el dominio no está mapeado (misma resolución que la cabecera).
-  const communityName = tenant?.name ?? 'la comunidad';
+  const communityName = tenant?.name ?? t('inscripcion.defaultCommunityName');
 
   // Configuración del flujo (verificadores y botUsername vienen del backend,
   // nunca hardcodeados).
@@ -151,11 +144,11 @@ export function InscripcionForm() {
 
   const steps = useMemo<WizardStep[]>(
     () => [
-      ...(hasTelegram ? [{ key: 'telegram' as const, label: 'Telegram' }] : []),
-      ...(hasOtp ? [{ key: 'otp' as const, label: 'Email' }] : []),
-      { key: 'datos', label: 'Tus datos' },
+      ...(hasTelegram ? [{ key: 'telegram' as const, label: t('inscripcion.stepTelegram') }] : []),
+      ...(hasOtp ? [{ key: 'otp' as const, label: t('inscripcion.stepEmail') }] : []),
+      { key: 'datos', label: t('inscripcion.stepData') },
     ],
-    [hasTelegram, hasOtp],
+    [hasTelegram, hasOtp, t],
   );
   const currentStep = steps[Math.min(step, steps.length - 1)]!;
 
@@ -183,10 +176,7 @@ export function InscripcionForm() {
       setInGroup(res.inGroup);
     } catch (e) {
       setError(
-        inscripcionErrorMessage(
-          e,
-          'No pudimos verificar tu cuenta de Telegram. Inténtalo de nuevo.',
-        ),
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('inscripcion.telegramError'),
       );
     } finally {
       setVerifyingTelegram(false);
@@ -203,10 +193,7 @@ export function InscripcionForm() {
       setOtpSent(true);
     } catch (e) {
       setError(
-        inscripcionErrorMessage(
-          e,
-          'No pudimos enviar el código. Revisa tu email e inténtalo de nuevo.',
-        ),
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('inscripcion.otpSendError'),
       );
     } finally {
       setSendingOtp(false);
@@ -226,7 +213,9 @@ export function InscripcionForm() {
       );
       setVerificationToken(res.verificationToken);
     } catch (e) {
-      setError(inscripcionErrorMessage(e, 'El código no es válido o expiró. Solicita uno nuevo.'));
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('inscripcion.otpVerifyError'),
+      );
     } finally {
       setVerifyingOtp(false);
     }
@@ -254,10 +243,7 @@ export function InscripcionForm() {
       setDone(true);
     } catch (e) {
       setError(
-        inscripcionErrorMessage(
-          e,
-          'No pudimos crear tu solicitud. Revisa tus datos e inténtalo de nuevo.',
-        ),
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('inscripcion.submitError'),
       );
       setSubmitting(false);
     }
@@ -281,17 +267,17 @@ export function InscripcionForm() {
     const finalCopy =
       !hasTelegram || inGroup === 'true'
         ? {
-            title: 'Registro pendiente de validación',
-            body: 'Recibimos tu solicitud. Un administrador la revisará y te avisaremos por email cuando tengas acceso.',
+            title: t('inscripcion.donePendingTitle'),
+            body: t('inscripcion.donePendingBody'),
           }
         : inGroup === 'false'
           ? {
-              title: `No estás en el grupo de ${communityName}`,
-              body: 'Recibimos tu solicitud igualmente. Revisaremos tu caso y te avisaremos por email.',
+              title: t('inscripcion.doneNotInGroupTitle', { name: communityName }),
+              body: t('inscripcion.doneNotInGroupBody'),
             }
           : {
-              title: 'Solicitud recibida',
-              body: 'No pudimos verificar tu pertenencia al grupo, pero recibimos tu solicitud. Revisaremos tu caso y te avisaremos por email.',
+              title: t('inscripcion.doneUnknownTitle'),
+              body: t('inscripcion.doneUnknownBody'),
             };
     return (
       <Card>
@@ -312,7 +298,9 @@ export function InscripcionForm() {
   if (configLoading) {
     return (
       <Card>
-        <CardContent className="p-8 text-center text-sm text-text-muted">Cargando…</CardContent>
+        <CardContent className="p-8 text-center text-sm text-text-muted">
+          {t('loading')}
+        </CardContent>
       </Card>
     );
   }
@@ -321,9 +309,11 @@ export function InscripcionForm() {
     return (
       <div className="space-y-6">
         <header className="text-center">
-          <p className="label-uppercase text-text-muted">Inscripción a {communityName}</p>
+          <p className="label-uppercase text-text-muted">
+            {t('inscripcion.kicker', { name: communityName })}
+          </p>
           <h1 className="font-display mt-2 text-2xl font-bold tracking-tight">
-            Solicita tu acceso
+            {t('inscripcion.title')}
           </h1>
         </header>
         <Card>
@@ -332,7 +322,7 @@ export function InscripcionForm() {
               role="alert"
               className="rounded-lg border border-warning-100 bg-warning-50 p-3 text-sm text-warning-700"
             >
-              La inscripción no está disponible en este momento. Vuelve a intentarlo más tarde.
+              {t('inscripcion.notConfigured')}
             </p>
           </CardContent>
         </Card>
@@ -343,12 +333,16 @@ export function InscripcionForm() {
   return (
     <div className="space-y-6">
       <header className="text-center">
-        <p className="label-uppercase text-text-muted">Inscripción a {communityName}</p>
-        <h1 className="font-display mt-2 text-2xl font-bold tracking-tight">Solicita tu acceso</h1>
+        <p className="label-uppercase text-text-muted">
+          {t('inscripcion.kicker', { name: communityName })}
+        </p>
+        <h1 className="font-display mt-2 text-2xl font-bold tracking-tight">
+          {t('inscripcion.title')}
+        </h1>
         <p className="mt-1 text-sm text-text-subtle">
           {steps.length > 1
-            ? `Verifica tu identidad y crea tu solicitud en ${steps.length === 3 ? 'tres' : 'dos'} pasos.`
-            : 'Completa tus datos y crea tu solicitud.'}
+            ? t('inscripcion.introSteps', { count: steps.length })
+            : t('inscripcion.introSingle')}
         </p>
       </header>
 
@@ -381,10 +375,9 @@ export function InscripcionForm() {
           {currentStep.key === 'telegram' ? (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-semibold">Verifica tu Telegram</h2>
+                <h2 className="text-lg font-semibold">{t('inscripcion.telegramTitle')}</h2>
                 <p className="text-sm text-text-muted">
-                  Usamos Telegram para confirmar tu identidad y tu pertenencia al grupo de{' '}
-                  {communityName}.
+                  {t('inscripcion.telegramBody', { name: communityName })}
                 </p>
               </div>
 
@@ -393,7 +386,7 @@ export function InscripcionForm() {
                   role="alert"
                   className="rounded-lg border border-warning-100 bg-warning-50 p-3 text-sm text-warning-700"
                 >
-                  La inscripción no está disponible en este momento. Vuelve a intentarlo más tarde.
+                  {t('inscripcion.notConfigured')}
                 </p>
               ) : (
                 <>
@@ -401,19 +394,23 @@ export function InscripcionForm() {
                     <TelegramLoginWidget botUsername={botUsername} onAuth={handleTelegramAuth} />
                   ) : null}
                   {verifyingTelegram ? (
-                    <p className="text-center text-sm text-text-muted">Verificando tu cuenta…</p>
+                    <p className="text-center text-sm text-text-muted">
+                      {t('inscripcion.telegramVerifying')}
+                    </p>
                   ) : null}
                   {ticket !== null && inGroup !== null ? (
                     inGroup === 'true' ? (
                       <p className="rounded-lg border border-success-100 bg-success-50 p-3 text-sm text-success-700">
-                        Tu cuenta de Telegram quedó verificada. Continúa al siguiente paso.
+                        {t('inscripcion.telegramVerified')}
                       </p>
                     ) : (
                       <p
                         role="status"
                         className="rounded-lg border border-warning-100 bg-warning-50 p-3 text-sm text-warning-700"
                       >
-                        {membershipNotice(inGroup, communityName)}
+                        {inGroup === 'false'
+                          ? t('inscripcion.telegramNotInGroup', { name: communityName })
+                          : t('inscripcion.telegramUnknownMembership')}
                       </p>
                     )
                   ) : null}
@@ -426,15 +423,13 @@ export function InscripcionForm() {
           {currentStep.key === 'otp' ? (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-semibold">Verifica tu email</h2>
-                <p className="text-sm text-text-muted">
-                  Te enviaremos un código de 6 dígitos para confirmar tu correo.
-                </p>
+                <h2 className="text-lg font-semibold">{t('inscripcion.otpTitle')}</h2>
+                <p className="text-sm text-text-muted">{t('inscripcion.otpBody')}</p>
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="ins-email">
-                  Email <span className="text-danger-700">*</span>
+                  {t('inscripcion.emailLabel')} <span className="text-danger-700">*</span>
                 </Label>
                 <div className="flex gap-2">
                   <Input
@@ -444,7 +439,7 @@ export function InscripcionForm() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={verificationToken !== null}
-                    placeholder="tu@email.com"
+                    placeholder={t('inscripcion.emailPlaceholder')}
                   />
                   <Button
                     type="button"
@@ -452,15 +447,15 @@ export function InscripcionForm() {
                     disabled={sendingOtp || email.trim() === '' || verificationToken !== null}
                     onClick={() => void handleSendOtp()}
                   >
-                    {sendingOtp ? 'Enviando…' : 'Enviar código'}
+                    {sendingOtp ? t('inscripcion.sending') : t('inscripcion.sendCode')}
                   </Button>
                 </div>
               </div>
 
               {otpSent && verificationToken === null ? (
                 <div className="space-y-1.5">
-                  <p className="text-sm text-success-700">Código enviado a tu email.</p>
-                  <Label htmlFor="ins-otp">Código de 6 dígitos</Label>
+                  <p className="text-sm text-success-700">{t('inscripcion.codeSent')}</p>
+                  <Label htmlFor="ins-otp">{t('inscripcion.codeLabel')}</Label>
                   <div className="flex gap-2">
                     <Input
                       id="ins-otp"
@@ -469,14 +464,14 @@ export function InscripcionForm() {
                       maxLength={6}
                       value={code}
                       onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                      placeholder="000000"
+                      placeholder={t('inscripcion.codePlaceholder')}
                     />
                     <Button
                       type="button"
                       disabled={verifyingOtp || code.trim().length === 0}
                       onClick={() => void handleVerifyOtp()}
                     >
-                      {verifyingOtp ? 'Verificando…' : 'Verificar'}
+                      {verifyingOtp ? t('inscripcion.verifying') : t('inscripcion.verify')}
                     </Button>
                   </div>
                 </div>
@@ -484,7 +479,7 @@ export function InscripcionForm() {
 
               {verificationToken !== null ? (
                 <p className="rounded-lg border border-success-100 bg-success-50 p-3 text-sm text-success-700">
-                  Email verificado. Continúa al siguiente paso.
+                  {t('inscripcion.emailVerified')}
                 </p>
               ) : null}
             </div>
@@ -494,16 +489,14 @@ export function InscripcionForm() {
           {currentStep.key === 'datos' ? (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-semibold">Tus datos</h2>
-                <p className="text-sm text-text-muted">
-                  Con esto creamos tu solicitud. Podrás completar tu perfil al entrar.
-                </p>
+                <h2 className="text-lg font-semibold">{t('inscripcion.dataTitle')}</h2>
+                <p className="text-sm text-text-muted">{t('inscripcion.dataBody')}</p>
               </div>
 
               {emailInDatos ? (
                 <div className="space-y-1.5">
                   <Label htmlFor="ins-email-datos">
-                    Email <span className="text-danger-700">*</span>
+                    {t('inscripcion.emailLabel')} <span className="text-danger-700">*</span>
                   </Label>
                   <Input
                     id="ins-email-datos"
@@ -511,30 +504,28 @@ export function InscripcionForm() {
                     autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="tu@email.com"
+                    placeholder={t('inscripcion.emailPlaceholder')}
                   />
-                  <p className="text-xs text-text-subtle">
-                    Te avisaremos a este correo cuando tu solicitud sea revisada.
-                  </p>
+                  <p className="text-xs text-text-subtle">{t('inscripcion.emailNoticeHint')}</p>
                 </div>
               ) : null}
 
               <div className="space-y-1.5">
                 <Label htmlFor="ins-name">
-                  Nombre <span className="text-danger-700">*</span>
+                  {t('inscripcion.nameLabel')} <span className="text-danger-700">*</span>
                 </Label>
                 <Input
                   id="ins-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   maxLength={120}
-                  placeholder="Tu nombre"
+                  placeholder={t('inscripcion.namePlaceholder')}
                 />
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="ins-password">
-                  Contraseña <span className="text-danger-700">*</span>
+                  {t('inscripcion.passwordLabel')} <span className="text-danger-700">*</span>
                 </Label>
                 <Input
                   id="ins-password"
@@ -543,16 +534,19 @@ export function InscripcionForm() {
                   minLength={PASSWORD_MIN_LENGTH}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Mínimo 12 caracteres"
+                  placeholder={t('inscripcion.passwordPlaceholder', {
+                    count: PASSWORD_MIN_LENGTH,
+                  })}
                 />
                 <p className="text-xs text-text-subtle">
-                  Usa al menos {PASSWORD_MIN_LENGTH} caracteres. Combina letras, números y símbolos.
+                  {t('inscripcion.passwordHint', { count: PASSWORD_MIN_LENGTH })}
                 </p>
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="ins-bio">
-                  Biografía <span className="text-text-subtle text-xs">(opcional)</span>
+                  {t('inscripcion.bioLabel')}{' '}
+                  <span className="text-text-subtle text-xs">{t('inscripcion.optional')}</span>
                 </Label>
                 <Textarea
                   id="ins-bio"
@@ -560,7 +554,7 @@ export function InscripcionForm() {
                   onChange={(e) => setBio(e.target.value)}
                   maxLength={280}
                   rows={3}
-                  placeholder="Cuéntanos algo sobre ti (máx 280 caracteres)"
+                  placeholder={t('inscripcion.bioPlaceholder')}
                 />
                 <p className="text-right text-xs text-text-subtle">{bio.length}/280</p>
               </div>
@@ -586,7 +580,7 @@ export function InscripcionForm() {
                 setStep((s) => Math.max(0, s - 1));
               }}
             >
-              Atrás
+              {t('inscripcion.back')}
             </Button>
             {step < steps.length - 1 ? (
               <Button
@@ -597,7 +591,7 @@ export function InscripcionForm() {
                   setStep((s) => s + 1);
                 }}
               >
-                Continuar
+                {t('inscripcion.continue')}
               </Button>
             ) : (
               <Button
@@ -605,7 +599,7 @@ export function InscripcionForm() {
                 disabled={!canNext || submitting}
                 onClick={() => void handleSubmit()}
               >
-                {submitting ? 'Creando…' : 'Crear solicitud'}
+                {submitting ? t('inscripcion.creating') : t('inscripcion.createRequest')}
               </Button>
             )}
           </div>
