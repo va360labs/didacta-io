@@ -8,19 +8,17 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ApiHttpError } from '@/lib/api-client';
-import {
-  adminTenantsApi,
-  STATUS_LABELS,
-  type TenantListItem,
-  type TenantStatus,
-} from '@/lib/admin-tenants';
+import { adminTenantsApi, type TenantListItem, type TenantStatus } from '@/lib/admin-tenants';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
 
 const VARIANT: Record<TenantStatus, 'success' | 'danger' | 'muted'> = {
   ACTIVE: 'success',
@@ -29,6 +27,8 @@ const VARIANT: Record<TenantStatus, 'success' | 'danger' | 'muted'> = {
 };
 
 export default function TenantDetailPage() {
+  const t = useTranslations('adminMarca');
+  const tErrors = useTranslations('errors');
   const params = useParams<{ id: string }>();
   const [tenant, setTenant] = useState<TenantListItem | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +42,9 @@ export default function TenantDetailPage() {
       setError(null);
       setTenant(await adminTenantsApi.getOne(token, params.id));
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar el tenant.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('tenantDetail.loadError'),
+      );
     }
   }
 
@@ -54,9 +56,7 @@ export default function TenantDetailPage() {
   async function handleStatus(status: TenantStatus) {
     if (
       status !== 'ACTIVE' &&
-      !confirm(
-        `¿Cambiar a "${STATUS_LABELS[status]}"? Las sesiones de TODOS los usuarios del tenant se cierran y no podrán entrar.`,
-      )
+      !confirm(t('tenantDetail.statusConfirm', { status: t(`tenantStatus.${status}`) }))
     ) {
       return;
     }
@@ -67,7 +67,9 @@ export default function TenantDetailPage() {
       await adminTenantsApi.setStatus(token, tenant.id, status);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cambiar el estado.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('tenantDetail.statusError'),
+      );
     } finally {
       setBusy(null);
     }
@@ -84,14 +86,16 @@ export default function TenantDetailPage() {
       setNewDomain('');
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos añadir el dominio.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('tenantDetail.addDomainError'),
+      );
     } finally {
       setBusy(null);
     }
   }
 
   async function handleRemoveDomain(hostname: string) {
-    if (!confirm(`¿Quitar el dominio ${hostname} del tenant?`)) return;
+    if (!confirm(t('tenantDetail.removeDomainConfirm', { hostname }))) return;
     const token = authStorage.getAccessToken();
     if (!token || !tenant) return;
     setBusy(`rm-${hostname}`);
@@ -99,7 +103,11 @@ export default function TenantDetailPage() {
       await adminTenantsApi.removeDomain(token, tenant.id, hostname);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos quitar el dominio.');
+      setError(
+        e instanceof ApiHttpError
+          ? apiErrorMessage(e, tErrors)
+          : t('tenantDetail.removeDomainError'),
+      );
     } finally {
       setBusy(null);
     }
@@ -109,7 +117,7 @@ export default function TenantDetailPage() {
     return (
       <div className="flex flex-col gap-4">
         <Button variant="ghost" asChild className="self-start">
-          <Link href="/admin/tenants">← Volver al listado</Link>
+          <Link href="/admin/tenants">{t('tenantDetail.backLink')}</Link>
         </Button>
         <div
           role="alert"
@@ -134,7 +142,7 @@ export default function TenantDetailPage() {
   return (
     <div className="flex flex-col gap-6">
       <Button variant="ghost" asChild className="self-start">
-        <Link href="/admin/tenants">← Volver al listado</Link>
+        <Link href="/admin/tenants">{t('tenantDetail.backLink')}</Link>
       </Button>
 
       {/* === Hero === */}
@@ -155,14 +163,15 @@ export default function TenantDetailPage() {
             <p className="mt-0.5 font-mono text-sm text-text-muted">/{tenant.slug}</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Badge variant={VARIANT[tenant.status]} dot>
-                {STATUS_LABELS[tenant.status]}
+                {t(`tenantStatus.${tenant.status}`)}
               </Badge>
               <span className="text-xs tabular-nums text-text-subtle">
-                Creado{' '}
-                {new Date(tenant.createdAt).toLocaleDateString('es-ES', {
-                  day: '2-digit',
-                  month: 'short',
-                  year: 'numeric',
+                {t('tenantDetail.createdAt', {
+                  date: formatDate(tenant.createdAt, {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  }),
                 })}
               </span>
             </div>
@@ -171,13 +180,13 @@ export default function TenantDetailPage() {
             <div className="text-center">
               <p className="font-display text-3xl font-bold tabular-nums">{tenant.userCount}</p>
               <p className="label-uppercase text-text-muted">
-                {tenant.userCount === 1 ? 'usuario' : 'usuarios'}
+                {t('tenantDetail.usersCount', { count: tenant.userCount })}
               </p>
             </div>
             <div className="text-center">
               <p className="font-display text-3xl font-bold tabular-nums">{tenant.courseCount}</p>
               <p className="label-uppercase text-text-muted">
-                {tenant.courseCount === 1 ? 'curso' : 'cursos'}
+                {t('tenantDetail.coursesCount', { count: tenant.courseCount })}
               </p>
             </div>
           </div>
@@ -208,10 +217,8 @@ export default function TenantDetailPage() {
               <Icon name="lock" size={18} />
             </span>
             <div className="min-w-0">
-              <CardTitle className="text-base">Acceso</CardTitle>
-              <CardDescription>
-                Suspender bloquea el login de todos los usuarios y cierra sus sesiones.
-              </CardDescription>
+              <CardTitle className="text-base">{t('tenantDetail.accessTitle')}</CardTitle>
+              <CardDescription>{t('tenantDetail.accessDescription')}</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -219,7 +226,7 @@ export default function TenantDetailPage() {
           {tenant.status !== 'ACTIVE' ? (
             <Button onClick={() => handleStatus('ACTIVE')} disabled={busy === 'status'}>
               <Icon name="check" size={16} />
-              Reactivar tenant
+              {t('tenantDetail.reactivate')}
             </Button>
           ) : null}
           {tenant.status !== 'SUSPENDED' ? (
@@ -229,7 +236,7 @@ export default function TenantDetailPage() {
               disabled={busy === 'status'}
             >
               <Icon name="lock" size={16} />
-              Suspender
+              {t('tenantDetail.suspend')}
             </Button>
           ) : null}
           {tenant.status !== 'ARCHIVED' ? (
@@ -238,7 +245,7 @@ export default function TenantDetailPage() {
               onClick={() => handleStatus('ARCHIVED')}
               disabled={busy === 'status'}
             >
-              Archivar
+              {t('tenantDetail.archive')}
             </Button>
           ) : null}
         </CardContent>
@@ -259,11 +266,8 @@ export default function TenantDetailPage() {
               <Icon name="route" size={18} />
             </span>
             <div className="min-w-0">
-              <CardTitle className="text-base">Dominios</CardTitle>
-              <CardDescription>
-                Hosts donde este tenant resuelve. Cada signin/signup desde el host correspondiente
-                identifica el tenant automáticamente.
-              </CardDescription>
+              <CardTitle className="text-base">{t('tenantDetail.domainsTitle')}</CardTitle>
+              <CardDescription>{t('tenantDetail.domainsDescription')}</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -276,14 +280,16 @@ export default function TenantDetailPage() {
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <code className="font-mono text-sm font-semibold text-text">{d.hostname}</code>
-                  {d.isPrimary ? <Badge variant="primary">primary</Badge> : null}
+                  {d.isPrimary ? (
+                    <Badge variant="primary">{t('tenantDetail.primaryBadge')}</Badge>
+                  ) : null}
                   {d.isVerified ? (
                     <Badge variant="success" dot>
-                      Verificado
+                      {t('tenantDetail.verifiedBadge')}
                     </Badge>
                   ) : (
                     <Badge variant="warning" dot>
-                      Pendiente
+                      {t('tenantDetail.pendingBadge')}
                     </Badge>
                   )}
                 </div>
@@ -292,8 +298,8 @@ export default function TenantDetailPage() {
                     type="button"
                     onClick={() => handleRemoveDomain(d.hostname)}
                     disabled={busy === `rm-${d.hostname}`}
-                    aria-label={`Quitar dominio ${d.hostname}`}
-                    title={`Quitar dominio ${d.hostname}`}
+                    aria-label={t('tenantDetail.removeDomainLabel', { hostname: d.hostname })}
+                    title={t('tenantDetail.removeDomainLabel', { hostname: d.hostname })}
                     className="rounded p-1.5 text-text-disabled transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:opacity-50"
                   >
                     <Icon name="trash" size={16} />
@@ -306,13 +312,13 @@ export default function TenantDetailPage() {
             <Input
               value={newDomain}
               onChange={(e) => setNewDomain(e.target.value)}
-              placeholder="otro-dominio.com"
+              placeholder={t('tenantDetail.newDomainPlaceholder')}
               className="min-w-[220px] flex-1 font-mono"
-              aria-label="Nuevo dominio"
+              aria-label={t('tenantDetail.newDomainLabel')}
             />
             <Button onClick={handleAddDomain} disabled={busy === 'add-domain' || !newDomain.trim()}>
               <Icon name="plus" size={14} />
-              Añadir dominio
+              {t('tenantDetail.addDomainButton')}
             </Button>
           </div>
         </CardContent>

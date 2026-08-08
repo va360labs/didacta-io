@@ -7,6 +7,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,12 +16,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ApiHttpError } from '@/lib/api-client';
 import {
   adminTenantsApi,
-  STATUS_LABELS,
   type TenantCapacityInfo,
   type TenantListItem,
   type TenantStatus,
 } from '@/lib/admin-tenants';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 
 const VARIANT: Record<TenantStatus, 'success' | 'danger' | 'muted'> = {
   ACTIVE: 'success',
@@ -29,6 +30,8 @@ const VARIANT: Record<TenantStatus, 'success' | 'danger' | 'muted'> = {
 };
 
 export default function TenantsPage() {
+  const t = useTranslations('adminMarca');
+  const tErrors = useTranslations('errors');
   const [items, setItems] = useState<TenantListItem[] | null>(null);
   const [capacity, setCapacity] = useState<TenantCapacityInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,35 +48,30 @@ export default function TenantsPage() {
       setItems(list);
       setCapacity(cap);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los tenants.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('tenants.loadError'));
     }
   }
 
   useEffect(() => {
     void reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div className="flex flex-col gap-6">
       <header className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Tenants</h1>
-          <p className="mt-1 text-text-muted">
-            Organizaciones que usan Didacta. Solo super_admin puede crear nuevos tenants y asignar
-            dominios custom.
-          </p>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{t('tenants.title')}</h1>
+          <p className="mt-1 text-text-muted">{t('tenants.description')}</p>
         </div>
         {capacity?.canCreate ? (
           <Button asChild>
-            <Link href="/admin/tenants/nuevo">Crear tenant</Link>
+            <Link href="/admin/tenants/nuevo">{t('tenants.createButton')}</Link>
           </Button>
         ) : capacity ? (
-          <Button
-            disabled
-            title="Tu plan community ya tiene un tenant. Activa Enterprise para añadir más."
-          >
+          <Button disabled title={t('tenants.createLockedTitle')}>
             <Icon name="lock" size={16} />
-            Crear tenant
+            {t('tenants.createButton')}
           </Button>
         ) : null}
       </header>
@@ -95,18 +93,16 @@ export default function TenantsPage() {
       ) : items.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
-            <h3 className="font-display text-xl font-semibold">No hay tenants</h3>
-            <p className="max-w-md text-text-muted">
-              Crea el primero para empezar a darle acceso a una organización.
-            </p>
+            <h3 className="font-display text-xl font-semibold">{t('tenants.emptyTitle')}</h3>
+            <p className="max-w-md text-text-muted">{t('tenants.emptyDescription')}</p>
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {items.map((t) => (
+          {items.map((tn) => (
             <Link
-              key={t.id}
-              href={`/admin/tenants/${t.id}` as never}
+              key={tn.id}
+              href={`/admin/tenants/${tn.id}` as never}
               className="block rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
             >
               <Card interactive>
@@ -123,23 +119,23 @@ export default function TenantsPage() {
                       <Icon name="building" size={20} />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <CardTitle className="text-lg leading-tight">{t.name}</CardTitle>
-                      <CardDescription className="font-mono text-xs">/{t.slug}</CardDescription>
+                      <CardTitle className="text-lg leading-tight">{tn.name}</CardTitle>
+                      <CardDescription className="font-mono text-xs">/{tn.slug}</CardDescription>
                     </div>
-                    <Badge variant={VARIANT[t.status]}>{STATUS_LABELS[t.status]}</Badge>
+                    <Badge variant={VARIANT[tn.status]}>{t(`tenantStatus.${tn.status}`)}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {t.domains.length > 0 ? (
+                  {tn.domains.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
-                      {t.domains.map((d) => (
+                      {tn.domains.map((d) => (
                         <Badge
                           key={d.hostname}
                           variant={d.isPrimary ? 'primary' : 'muted'}
                           className="font-mono text-[10px]"
                         >
                           {d.hostname}
-                          {d.isPrimary ? ' · primary' : ''}
+                          {d.isPrimary ? ` · ${t('tenants.primaryBadge')}` : ''}
                         </Badge>
                       ))}
                     </div>
@@ -147,11 +143,11 @@ export default function TenantsPage() {
                   <div className="flex gap-5 text-xs text-text-muted tabular-nums">
                     <span className="inline-flex items-center gap-1.5">
                       <Icon name="users" size={14} />
-                      {t.userCount} {t.userCount === 1 ? 'usuario' : 'usuarios'}
+                      {tn.userCount} {t('tenants.usersCount', { count: tn.userCount })}
                     </span>
                     <span className="inline-flex items-center gap-1.5">
                       <Icon name="book" size={14} />
-                      {t.courseCount} {t.courseCount === 1 ? 'curso' : 'cursos'}
+                      {tn.courseCount} {t('tenants.coursesCount', { count: tn.courseCount })}
                     </span>
                   </div>
                 </CardContent>
@@ -169,14 +165,18 @@ export default function TenantsPage() {
  * upsell inline; en EE muestra el contador y "ilimitado".
  */
 function CapacityBanner({ capacity }: { capacity: TenantCapacityInfo }) {
+  const t = useTranslations('adminMarca');
   if (capacity.capabilityActive) {
     return (
       <Card className="border-success-200 bg-success-50">
         <CardContent className="flex items-center gap-3 p-4 text-sm">
           <Icon name="shield" size={18} aria-hidden="true" />
           <div className="flex-1">
-            <strong>Enterprise · multi-tenant activo.</strong> Tenants actuales:{' '}
-            <span className="tabular-nums">{capacity.tenantCount}</span> · sin límite.
+            {t.rich('tenants.capacityEe', {
+              count: String(capacity.tenantCount),
+              strong: (chunks) => <strong>{chunks}</strong>,
+              nums: (chunks) => <span className="tabular-nums">{chunks}</span>,
+            })}
           </div>
         </CardContent>
       </Card>
@@ -186,9 +186,12 @@ function CapacityBanner({ capacity }: { capacity: TenantCapacityInfo }) {
     return (
       <Card>
         <CardContent className="p-4 text-sm text-text-muted">
-          Plan community · usas <strong className="tabular-nums">{capacity.tenantCount}</strong> de{' '}
-          <strong>{capacity.limit}</strong> tenants. Activa Enterprise para crear varias
-          organizaciones aisladas en esta misma instancia.
+          {t.rich('tenants.capacityCe', {
+            count: String(capacity.tenantCount),
+            limit: String(capacity.limit),
+            strong: (chunks) => <strong>{chunks}</strong>,
+            nums: (chunks) => <strong className="tabular-nums">{chunks}</strong>,
+          })}
         </CardContent>
       </Card>
     );
@@ -204,27 +207,29 @@ function CapacityBanner({ capacity }: { capacity: TenantCapacityInfo }) {
  * supera el cap sin licencia EE — esto es solo UX.
  */
 export function MultiTenantUpsellCard({ capacity }: { capacity: TenantCapacityInfo }) {
+  const t = useTranslations('adminMarca');
   return (
-    <Card role="region" aria-label="Multi-tenant real (Enterprise)" className="border-dashed">
+    <Card role="region" aria-label={t('tenants.upsellAria')} className="border-dashed">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="lock" size={18} />
-          Multi-tenant real — función Enterprise
+          {t('tenants.upsellTitle')}
         </CardTitle>
         <CardDescription>
-          Tu plan community tiene <strong>{capacity.tenantCount}</strong> de{' '}
-          <strong>{capacity.limit}</strong> tenants. Para alojar varias organizaciones aisladas en
-          la misma instancia (datos, usuarios, cursos y dominios separados), activa Enterprise.
+          {t.rich('tenants.upsellDescription', {
+            count: String(capacity.tenantCount),
+            limit: String(capacity.limit),
+            strong: (chunks) => <strong>{chunks}</strong>,
+          })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-text-muted">
-          La capability requerida es{' '}
-          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">
-            feat:multi_tenant.real
-          </code>
-          . Si tu licencia Enterprise expira o se revoca, los tenants existentes se conservan, pero
-          NO se pueden crear nuevos hasta renovar.
+          {t.rich('tenants.upsellBody', {
+            code: (chunks) => (
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">{chunks}</code>
+            ),
+          })}
         </p>
         <a
           href="https://didacta.io/pricing"
@@ -232,7 +237,7 @@ export function MultiTenantUpsellCard({ capacity }: { capacity: TenantCapacityIn
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
         >
-          Ver planes Enterprise
+          {t('tenants.upsellCta')}
           <Icon name="arrow-right" size={14} />
         </a>
       </CardContent>

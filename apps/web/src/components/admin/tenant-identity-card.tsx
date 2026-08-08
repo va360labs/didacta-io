@@ -25,6 +25,7 @@
  */
 
 import { useEffect, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -35,6 +36,7 @@ import {
 } from '@/lib/admin-tenants';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage as defaultAuthStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 
 export const MAX_TENANT_NAME_LEN = 120;
 const MAX_NAME_LEN = MAX_TENANT_NAME_LEN;
@@ -88,6 +90,8 @@ export function TenantIdentityCard({
   authStorage = defaultAuthStorage,
   onAfterSave,
 }: TenantIdentityCardProps = {}): React.JSX.Element {
+  const t = useTranslations('adminMarca');
+  const tErrors = useTranslations('errors');
   const [tenant, setTenant] = useState<TenantListItem | null>(null);
   const [name, setName] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -102,7 +106,7 @@ export function TenantIdentityCard({
       const token = authStorage.getAccessToken();
       if (!session || !token) {
         if (!cancelled) {
-          setLoadError('Sesión expirada. Inicia sesión otra vez para configurar la organización.');
+          setLoadError(t('identity.sessionExpiredLoad'));
         }
         return;
       }
@@ -114,15 +118,14 @@ export function TenantIdentityCard({
       } catch (err) {
         if (cancelled) return;
         setLoadError(
-          err instanceof ApiHttpError
-            ? err.message
-            : 'No pudimos cargar la organización. Refresca la página.',
+          err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('identity.loadError'),
         );
       }
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, authStorage]);
 
   const trimmedName = name.trim();
@@ -138,7 +141,7 @@ export function TenantIdentityCard({
     if (!tenant || !canSave) return;
     const token = authStorage.getAccessToken();
     if (!token) {
-      setToast({ variant: 'error', message: 'Sesión expirada. Inicia sesión otra vez.' });
+      setToast({ variant: 'error', message: t('identity.sessionExpired') });
       return;
     }
     setSaving(true);
@@ -149,7 +152,7 @@ export function TenantIdentityCard({
       setName(updated.name);
       setToast({
         variant: 'success',
-        message: `Nombre actualizado. Los próximos emails usarán "${updated.name}".`,
+        message: t('identity.renameSuccess', { name: updated.name }),
       });
       // Refrescamos otros lugares (sidebar, header) que pueden tener el
       // nombre cacheado de la sesión previa. 1 s para que el operador
@@ -163,7 +166,7 @@ export function TenantIdentityCard({
       setToast({
         variant: 'error',
         message:
-          err instanceof ApiHttpError ? err.message : 'No pudimos actualizar el nombre del tenant.',
+          err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('identity.renameError'),
       });
     } finally {
       setSaving(false);
@@ -173,10 +176,11 @@ export function TenantIdentityCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Identidad de la organización</CardTitle>
+        <CardTitle>{t('identity.title')}</CardTitle>
         <CardDescription>
-          El nombre aparece en los emails enviados desde tu plataforma (ej. &quot;Equipo
-          {tenant ? ` ${tenant.name}` : ' {nombre}'}&quot;) y en el header del panel admin.
+          {tenant
+            ? t('identity.description', { name: tenant.name })
+            : t('identity.descriptionEmpty')}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -196,7 +200,7 @@ export function TenantIdentityCard({
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4" aria-busy={saving}>
             <div className="space-y-1.5">
-              <Label htmlFor="tenant-name">Nombre de la organización</Label>
+              <Label htmlFor="tenant-name">{t('identity.nameLabel')}</Label>
               <Input
                 id="tenant-name"
                 required
@@ -204,15 +208,15 @@ export function TenantIdentityCard({
                 maxLength={MAX_NAME_LEN}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Mi Academia"
+                placeholder={t('identity.namePlaceholder')}
               />
-              <p className="text-xs text-text-subtle">
-                Ej: &quot;Mi Academia&quot;, &quot;Mi Centro de Formación&quot;, &quot;Acme Corp
-                Training&quot;.
-              </p>
+              <p className="text-xs text-text-subtle">{t('identity.nameHint')}</p>
               {isTooLong ? (
                 <p className="text-xs text-danger-700">
-                  Máximo {MAX_NAME_LEN} caracteres ({trimmedName.length} actuales).
+                  {t('identity.tooLong', {
+                    max: String(MAX_NAME_LEN),
+                    current: String(trimmedName.length),
+                  })}
                 </p>
               ) : null}
             </div>
@@ -235,7 +239,7 @@ export function TenantIdentityCard({
 
             <div className="flex justify-end border-t border-border-soft pt-4">
               <Button type="submit" disabled={!canSave}>
-                {saving ? 'Guardando…' : 'Guardar'}
+                {saving ? t('identity.saving') : t('identity.save')}
               </Button>
             </div>
           </form>

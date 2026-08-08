@@ -6,14 +6,15 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import {
   adminImagesApi,
   formatBytes,
-  SOURCE_LABELS,
   type AnalyzedImage,
   type ImageSource,
   type SkipReason,
@@ -31,20 +32,28 @@ import {
 /** Tope por lote en el backend. Se envía de 50 en 50. */
 const BATCH = 50;
 
-const FILTERS: Array<{ value: ImageSource | 'todas'; label: string }> = [
-  { value: 'todas', label: 'Todas' },
-  { value: 'avatar', label: 'Avatares' },
-  { value: 'curso', label: 'Cursos' },
-  { value: 'coleccion', label: 'Recursos' },
-  { value: 'post', label: 'Comunidad' },
-  { value: 'logo', label: 'Logo' },
+/** Valores del filtro; el label de cada uno vive en `adminMarca.imageFilter`. */
+const FILTER_VALUES: Array<ImageSource | 'todas'> = [
+  'todas',
+  'avatar',
+  'curso',
+  'coleccion',
+  'post',
+  'logo',
 ];
 
-const SKIP_LABELS: Record<Exclude<SkipReason, null>, string> = {
-  externa: 'Alojada fuera de Didacta',
-  'no-encontrada': 'El fichero ya no está en el storage',
-  'no-raster': 'Vectorial (SVG): ya es ligera',
-  'ya-optima': 'Ya está optimizada',
+/**
+ * Mapa del enum del API (con guiones) a la key camelCase del catálogo
+ * (`adminMarca.skipReason.<key>`). Solo keys, nunca copy.
+ */
+const SKIP_KEYS: Record<
+  Exclude<SkipReason, null>,
+  'externa' | 'noEncontrada' | 'noRaster' | 'yaOptima'
+> = {
+  externa: 'externa',
+  'no-encontrada': 'noEncontrada',
+  'no-raster': 'noRaster',
+  'ya-optima': 'yaOptima',
 };
 
 type RowState =
@@ -58,6 +67,8 @@ function rowKey(img: { source: string; ownerId: string; url: string }): string {
 }
 
 export default function AdminImagenesPage() {
+  const t = useTranslations('adminMarca');
+  const tErrors = useTranslations('errors');
   const [inventory, setInventory] = useState<AnalyzedImage[] | null>(null);
   const [totals, setTotals] = useState<{ current: number; optimized: number; count: number }>({
     current: 0,
@@ -90,10 +101,13 @@ export default function AdminImagenesPage() {
       setTruncated(inv.truncated);
       setStates({});
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos analizar las imágenes.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('imagenes.analyzeError'),
+      );
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -149,18 +163,20 @@ export default function AdminImagenesPage() {
                   previousSize: res.previousSize ?? 0,
                   size: res.size ?? 0,
                 }
-              : { kind: 'error', message: res.error ?? 'No se pudo optimizar.' };
+              : { kind: 'error', message: res.error ?? t('imagenes.optimizeItemError') };
           });
           return next;
         });
       }
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'Falló la optimización.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('imagenes.optimizeError'),
+      );
       setStates((s) => {
         const next = { ...s };
         for (const r of refs) {
           if (next[rowKey(r)]?.kind === 'running') {
-            next[rowKey(r)] = { kind: 'error', message: 'Interrumpida.' };
+            next[rowKey(r)] = { kind: 'error', message: t('imagenes.interrupted') };
           }
         }
         return next;
@@ -182,9 +198,7 @@ export default function AdminImagenesPage() {
   if (!canManage) {
     return (
       <Card>
-        <CardContent className="p-6 text-sm text-danger-700">
-          Solo los administradores del tenant pueden reoptimizar las imágenes.
-        </CardContent>
+        <CardContent className="p-6 text-sm text-danger-700">{t('imagenes.forbidden')}</CardContent>
       </Card>
     );
   }
@@ -194,12 +208,8 @@ export default function AdminImagenesPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Imágenes</h1>
-        <p className="mt-1 max-w-2xl text-text-muted">
-          Recomprime a WebP las imágenes que ya estaban en la plataforma: avatares, portadas de
-          curso y de recursos, logo y fotos de la comunidad. Lo que se sube ahora ya se optimiza
-          solo, así que esta herramienta es solo para el histórico.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('imagenes.title')}</h1>
+        <p className="mt-1 max-w-2xl text-text-muted">{t('imagenes.description')}</p>
       </header>
 
       {error ? (
@@ -212,10 +222,10 @@ export default function AdminImagenesPage() {
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <Metrica valor={loading ? null : totals.count} etiqueta="Imágenes que pueden mejorar" />
+        <Metrica valor={loading ? null : totals.count} etiqueta={t('imagenes.metricOptimizable')} />
         <Metrica
           valor={loading ? null : ahorroPrevisto}
-          etiqueta="Ahorro previsto"
+          etiqueta={t('imagenes.metricForecast')}
           formato="bytes"
           detalle={
             totals.current > 0
@@ -225,16 +235,15 @@ export default function AdminImagenesPage() {
         />
         <Metrica
           valor={ahorroReal}
-          etiqueta="Ahorro conseguido"
+          etiqueta={t('imagenes.metricAchieved')}
           formato="bytes"
-          detalle="En esta sesión"
+          detalle={t('imagenes.metricSession')}
         />
       </div>
 
       {truncated ? (
         <div className="rounded-lg border border-warning-100 bg-warning-50 p-3 text-sm text-warning-700">
-          Hay más imágenes de las que se analizan de una vez. Optimiza las de esta lista y vuelve a
-          analizar para seguir con el resto.
+          {t('imagenes.truncated')}
         </div>
       ) : null}
 
@@ -242,11 +251,14 @@ export default function AdminImagenesPage() {
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <CardTitle>Inventario</CardTitle>
+              <CardTitle>{t('imagenes.inventoryTitle')}</CardTitle>
               <CardDescription>
                 {inventory === null
-                  ? 'Analizando el storage del tenant…'
-                  : `${visibles.length} imagen${visibles.length === 1 ? '' : 'es'} · ${pendientes.length} por optimizar`}
+                  ? t('imagenes.analyzing')
+                  : t('imagenes.inventorySummary', {
+                      count: visibles.length,
+                      pending: String(pendientes.length),
+                    })}
               </CardDescription>
             </div>
             <div className="flex gap-2">
@@ -256,30 +268,32 @@ export default function AdminImagenesPage() {
                 onClick={() => void cargar()}
                 disabled={running}
               >
-                Volver a analizar
+                {t('imagenes.reanalyze')}
               </Button>
               <Button
                 type="button"
                 onClick={() => void optimizar(pendientes)}
                 disabled={running || pendientes.length === 0}
               >
-                {running ? 'Optimizando…' : `Optimizar ${pendientes.length}`}
+                {running
+                  ? t('imagenes.optimizing')
+                  : t('imagenes.optimizeAll', { count: String(pendientes.length) })}
               </Button>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            {FILTERS.map((f) => (
+            {FILTER_VALUES.map((value) => (
               <button
-                key={f.value}
+                key={value}
                 type="button"
-                onClick={() => setFilter(f.value)}
+                onClick={() => setFilter(value)}
                 className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                  filter === f.value
+                  filter === value
                     ? 'border-brand-500 bg-brand-50 text-brand-700'
                     : 'border-border text-text-muted hover:border-border-strong hover:text-text'
                 }`}
               >
-                {f.label}
+                {t(`imageFilter.${value}`)}
               </button>
             ))}
           </div>
@@ -292,7 +306,7 @@ export default function AdminImagenesPage() {
               ))}
             </div>
           ) : visibles.length === 0 ? (
-            <p className="text-sm text-text-subtle">No hay imágenes en esta categoría.</p>
+            <p className="text-sm text-text-subtle">{t('imagenes.emptyCategory')}</p>
           ) : (
             <ul className="divide-y divide-border-soft">
               {visibles.map((img) => {
@@ -309,7 +323,7 @@ export default function AdminImagenesPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-text">{img.label}</p>
                       <p className="truncate text-xs text-text-subtle">
-                        <span className="text-text-muted">{SOURCE_LABELS[img.source]}</span>
+                        <span className="text-text-muted">{t(`imageSource.${img.source}`)}</span>
                         {' · '}
                         <Estado img={img} state={st} />
                       </p>
@@ -323,7 +337,7 @@ export default function AdminImagenesPage() {
                         !mejorable || running || st.kind === 'running' || st.kind === 'done'
                       }
                     >
-                      {st.kind === 'running' ? 'Optimizando…' : 'Optimizar'}
+                      {st.kind === 'running' ? t('imagenes.optimizing') : t('imagenes.optimizeOne')}
                     </Button>
                   </li>
                 );
@@ -337,11 +351,15 @@ export default function AdminImagenesPage() {
 }
 
 function Estado({ img, state }: { img: AnalyzedImage; state: RowState }) {
-  if (state.kind === 'running') return <span>Optimizando…</span>;
+  const t = useTranslations('adminMarca');
+  if (state.kind === 'running') return <span>{t('imagenes.optimizing')}</span>;
   if (state.kind === 'done') {
     return (
       <span className="text-success-700">
-        Optimizada: {formatBytes(state.previousSize)} → {formatBytes(state.size)}
+        {t('imagenes.optimizedResult', {
+          before: formatBytes(state.previousSize),
+          after: formatBytes(state.size),
+        })}
       </span>
     );
   }
@@ -349,7 +367,7 @@ function Estado({ img, state }: { img: AnalyzedImage; state: RowState }) {
   if (img.skipReason) {
     return (
       <span>
-        {SKIP_LABELS[img.skipReason]}
+        {t(`skipReason.${SKIP_KEYS[img.skipReason]}`)}
         {img.currentSize !== null ? ` · ${formatBytes(img.currentSize)}` : ''}
       </span>
     );

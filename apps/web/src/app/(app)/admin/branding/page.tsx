@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { EeGate, LICENSE_CAPABILITIES } from '@didacta/license-sdk/react';
 import { Icon } from '@/components/icon';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -17,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { publishThemeUpdate, themingApi, type TenantTheme } from '@/lib/theming';
 
 const DISPLAY_FONTS = [
@@ -70,6 +72,8 @@ function themeToForm(t: TenantTheme): FormState {
 }
 
 export default function BrandingPage() {
+  const t = useTranslations('adminMarca');
+  const tErrors = useTranslations('errors');
   const [theme, setTheme] = useState<TenantTheme | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -81,13 +85,14 @@ export default function BrandingPage() {
     if (!token) return;
     void (async () => {
       try {
-        const t = await themingApi.getMine(token);
-        setTheme(t);
-        setForm(themeToForm(t));
+        const fresh = await themingApi.getMine(token);
+        setTheme(fresh);
+        setForm(themeToForm(fresh));
       } catch (e) {
-        setError(e instanceof ApiHttpError ? e.message : 'No se pudo cargar el theme');
+        setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('branding.loadError'));
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Preview live: aplicamos los cambios del form a un <style> local sin
@@ -132,12 +137,12 @@ export default function BrandingPage() {
       setTimeout(() => setStatus('idle'), 2000);
     } catch (e) {
       setStatus('error');
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudo guardar el theme');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('branding.saveError'));
     }
   }
 
   async function handleReset() {
-    if (!confirm('¿Restaurar el theme a los valores por defecto Didacta?')) return;
+    if (!confirm(t('branding.resetConfirm'))) return;
     const token = authStorage.getAccessToken();
     if (!token) return;
     setResetStatus('resetting');
@@ -149,7 +154,7 @@ export default function BrandingPage() {
       setStatus('saved');
       setTimeout(() => setStatus('idle'), 2000);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudo resetear');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('branding.resetError'));
     } finally {
       setResetStatus('idle');
     }
@@ -158,7 +163,7 @@ export default function BrandingPage() {
   if (error && !form) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="font-display text-2xl font-bold">Branding</h1>
+        <h1 className="font-display text-2xl font-bold">{t('branding.title')}</h1>
         <Card>
           <CardContent className="p-6">
             <p className="text-danger-700">{error}</p>
@@ -171,7 +176,7 @@ export default function BrandingPage() {
   if (!form) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="font-display text-2xl font-bold">Branding</h1>
+        <h1 className="font-display text-2xl font-bold">{t('branding.title')}</h1>
         <div className="space-y-3">
           <div className="skeleton h-32 w-full" />
           <div className="skeleton h-48 w-full" />
@@ -186,15 +191,15 @@ export default function BrandingPage() {
 
       <header className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Branding</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{t('branding.title')}</h1>
           <p className="mt-1 text-text-muted">
-            Personaliza la identidad visual de tu organización. Los cambios se guardan al hacer clic
-            en <span className="font-semibold">Guardar</span>; puedes ver una vista previa mientras
-            editas.
+            {t.rich('branding.headerDescription', {
+              strong: (chunks) => <span className="font-semibold">{chunks}</span>,
+            })}
           </p>
         </div>
         <Button variant="ghost" onClick={handleReset} disabled={resetStatus === 'resetting'}>
-          {resetStatus === 'resetting' ? 'Restaurando…' : 'Restaurar valores por defecto'}
+          {resetStatus === 'resetting' ? t('branding.resetting') : t('branding.resetButton')}
         </Button>
       </header>
 
@@ -202,16 +207,13 @@ export default function BrandingPage() {
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Color de marca</CardTitle>
-              <CardDescription>
-                Mueves el matiz y la saturación; los 10 escalones de la paleta se derivan
-                automáticamente sobre HSL.
-              </CardDescription>
+              <CardTitle>{t('branding.colorTitle')}</CardTitle>
+              <CardDescription>{t('branding.colorDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div>
                 <Label htmlFor="brandHue" className="flex items-center justify-between">
-                  <span>Matiz (hue)</span>
+                  <span>{t('branding.hueLabel')}</span>
                   <Badge variant="outline">{form.brandHue}°</Badge>
                 </Label>
                 <input
@@ -264,7 +266,7 @@ export default function BrandingPage() {
 
               <div>
                 <Label htmlFor="brandSaturation" className="flex items-center justify-between">
-                  <span>Saturación</span>
+                  <span>{t('branding.saturationLabel')}</span>
                   <Badge variant="outline">{form.brandSaturation}%</Badge>
                 </Label>
                 <input
@@ -279,24 +281,19 @@ export default function BrandingPage() {
                   }
                   className="mt-2 h-2 w-full cursor-pointer appearance-none rounded-full bg-surface-3"
                 />
-                <p className="mt-2 text-xs text-text-subtle">
-                  Saturaciones bajas dan tonos pastel; saturaciones altas, colores vibrantes.
-                </p>
+                <p className="mt-2 text-xs text-text-subtle">{t('branding.saturationHint')}</p>
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Tipografía</CardTitle>
-              <CardDescription>
-                Sora + Inter es el default Didacta. Otras combinaciones están limitadas a Google
-                Fonts compatibles con la jerarquía del sistema.
-              </CardDescription>
+              <CardTitle>{t('branding.typographyTitle')}</CardTitle>
+              <CardDescription>{t('branding.typographyDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <Label htmlFor="displayFont">Fuente de titulares (display)</Label>
+                <Label htmlFor="displayFont">{t('branding.displayFontLabel')}</Label>
                 <Select
                   id="displayFont"
                   value={form.displayFontFamily}
@@ -311,7 +308,7 @@ export default function BrandingPage() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="bodyFont">Fuente del cuerpo (body)</Label>
+                <Label htmlFor="bodyFont">{t('branding.bodyFontLabel')}</Label>
                 <Select
                   id="bodyFont"
                   value={form.bodyFontFamily}
@@ -330,10 +327,8 @@ export default function BrandingPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Logo y favicon</CardTitle>
-              <CardDescription>
-                Sube el logo del tenant directamente al storage o pega una URL externa (https).
-              </CardDescription>
+              <CardTitle>{t('branding.logoTitle')}</CardTitle>
+              <CardDescription>{t('branding.logoDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <LogoUploader
@@ -345,16 +340,16 @@ export default function BrandingPage() {
                   // subir (solo se refresca en save/reset) y el bloque "Logo
                   // subido" (con el botón Eliminar) no aparece hasta recargar
                   // la página, aunque la vista previa de arriba sí lo muestre.
-                  setTheme((t) => t && { ...t, logoUploaded: true, logoUrl: url });
+                  setTheme((th) => th && { ...th, logoUploaded: true, logoUrl: url });
                 }}
                 onRemoved={() => {
                   setForm((f) => f && { ...f, logoUrl: '' });
-                  setTheme((t) => t && { ...t, logoUploaded: false, logoUrl: null });
+                  setTheme((th) => th && { ...th, logoUploaded: false, logoUrl: null });
                 }}
               />
 
               <div>
-                <Label htmlFor="logoUrl">URL del logo (alternativa)</Label>
+                <Label htmlFor="logoUrl">{t('branding.logoUrlLabel')}</Label>
                 <Input
                   id="logoUrl"
                   /* type="text" (NO "url"): el logo subido se sirve desde un
@@ -365,21 +360,19 @@ export default function BrandingPage() {
                      ya valida https:// | /api/v1/... */
                   type="text"
                   inputMode="url"
-                  placeholder="https://cdn.tudominio.com/logo.svg"
+                  placeholder={t('branding.logoUrlPlaceholder')}
                   value={form.logoUrl}
                   onChange={(e) => setForm((f) => f && { ...f, logoUrl: e.target.value })}
                   className="mt-1.5"
                 />
-                <p className="mt-1 text-xs text-text-subtle">
-                  Si pegas aquí una URL externa pisará el logo subido (al guardar).
-                </p>
+                <p className="mt-1 text-xs text-text-subtle">{t('branding.logoUrlHint')}</p>
               </div>
               <div>
-                <Label htmlFor="faviconUrl">URL del favicon</Label>
+                <Label htmlFor="faviconUrl">{t('branding.faviconUrlLabel')}</Label>
                 <Input
                   id="faviconUrl"
                   type="url"
-                  placeholder="https://cdn.tudominio.com/favicon.png"
+                  placeholder={t('branding.faviconUrlPlaceholder')}
                   value={form.faviconUrl}
                   onChange={(e) => setForm((f) => f && { ...f, faviconUrl: e.target.value })}
                   className="mt-1.5"
@@ -395,41 +388,39 @@ export default function BrandingPage() {
            */}
           <Card>
             <CardHeader>
-              <CardTitle>Pantalla de acceso</CardTitle>
+              <CardTitle>{t('branding.signinTitle')}</CardTitle>
               <CardDescription>
-                Texto del panel oscuro de <code>/signin</code>. Si lo dejas vacío se usa el texto
-                genérico de Didacta. Las cifras que aparecen debajo (alumnos activos, cursos
-                publicados) son reales y se calculan solas: no se configuran aquí.
+                {t.rich('branding.signinDescription', {
+                  code: (chunks) => <code>{chunks}</code>,
+                })}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div>
-                <Label htmlFor="signinHeadline">Titular</Label>
+                <Label htmlFor="signinHeadline">{t('branding.headlineLabel')}</Label>
                 <Input
                   id="signinHeadline"
                   type="text"
                   maxLength={160}
-                  placeholder="Formación en IA aplicada, con la comunidad que la usa cada día."
+                  placeholder={t('branding.headlinePlaceholder')}
                   value={form.signinHeadline}
                   onChange={(e) => setForm((f) => f && { ...f, signinHeadline: e.target.value })}
                   className="mt-1.5"
                 />
-                <p className="mt-1 text-xs text-text-subtle">
-                  Máximo 160 caracteres. Se ve muy grande: funciona mejor con una frase corta.
-                </p>
+                <p className="mt-1 text-xs text-text-subtle">{t('branding.headlineHint')}</p>
               </div>
               <div>
-                <Label htmlFor="signinSubheadline">Línea de apoyo (opcional)</Label>
+                <Label htmlFor="signinSubheadline">{t('branding.subheadlineLabel')}</Label>
                 <Input
                   id="signinSubheadline"
                   type="text"
                   maxLength={240}
-                  placeholder="Cursos, comunidad y clases en directo en un mismo sitio."
+                  placeholder={t('branding.subheadlinePlaceholder')}
                   value={form.signinSubheadline}
                   onChange={(e) => setForm((f) => f && { ...f, signinSubheadline: e.target.value })}
                   className="mt-1.5"
                 />
-                <p className="mt-1 text-xs text-text-subtle">Máximo 240 caracteres.</p>
+                <p className="mt-1 text-xs text-text-subtle">{t('branding.subheadlineHint')}</p>
               </div>
             </CardContent>
           </Card>
@@ -448,11 +439,12 @@ export default function BrandingPage() {
           <EeGate capability={LICENSE_CAPABILITIES.WHITE_LABEL} fallback={<WhiteLabelUpsellCard />}>
             <Card>
               <CardHeader>
-                <CardTitle>CSS personalizado (avanzado)</CardTitle>
+                <CardTitle>{t('branding.cssTitle')}</CardTitle>
                 <CardDescription>
-                  Solo para usuarios técnicos. Se sanitiza en el servidor: <code>@import</code>,{' '}
-                  <code>expression()</code>, <code>javascript:</code> y cierre de{' '}
-                  <code>&lt;/style&gt;</code> están bloqueados. Máximo 16&nbsp;KB.
+                  {t.rich('branding.cssDescription', {
+                    code: (chunks) => <code>{chunks}</code>,
+                    styleTag: '</style>',
+                  })}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -460,30 +452,33 @@ export default function BrandingPage() {
                   value={form.customCss}
                   onChange={(e) => setForm((f) => f && { ...f, customCss: e.target.value })}
                   rows={6}
-                  placeholder=":root { --radius-card: 12px; }"
+                  placeholder={t('branding.cssPlaceholder')}
                   className="font-mono text-xs"
                 />
                 <p className="mt-2 text-xs text-text-subtle">
-                  {Math.round(new TextEncoder().encode(form.customCss).length / 102.4) / 10} KB de
-                  16 KB
+                  {t('branding.cssBytes', {
+                    kb: String(
+                      Math.round(new TextEncoder().encode(form.customCss).length / 102.4) / 10,
+                    ),
+                  })}
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Footer personalizado</CardTitle>
-                <CardDescription>
-                  HTML del footer (sanitizado a etiquetas básicas). Aparece en el pie de las
-                  pantallas autenticadas. Máximo 4&nbsp;KB.
-                </CardDescription>
+                <CardTitle>{t('branding.footerTitle')}</CardTitle>
+                <CardDescription>{t('branding.footerDescription')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <Textarea
                   value={form.footerHtml}
                   onChange={(e) => setForm((f) => f && { ...f, footerHtml: e.target.value })}
                   rows={3}
-                  placeholder="<p>&copy; 2026 Tu Organización · <a href='...'>Privacidad</a></p>"
+                  placeholder={t.markup('branding.footerPlaceholder', {
+                    p: (chunks) => `<p>${chunks}</p>`,
+                    a: (chunks) => `<a href='...'>${chunks}</a>`,
+                  })}
                   className="font-mono text-xs"
                 />
               </CardContent>
@@ -494,10 +489,8 @@ export default function BrandingPage() {
         <aside className="lg:sticky lg:top-6 lg:self-start">
           <Card>
             <CardHeader>
-              <CardTitle>Vista previa</CardTitle>
-              <CardDescription>
-                Así se ve tu marca en la plataforma. Los cambios se aplican en vivo.
-              </CardDescription>
+              <CardTitle>{t('branding.previewTitle')}</CardTitle>
+              <CardDescription>{t('branding.previewDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-lg border border-border bg-surface p-4">
@@ -505,7 +498,7 @@ export default function BrandingPage() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={form.logoUrl}
-                    alt="Logo del tenant"
+                    alt={t('branding.previewLogoAlt')}
                     className="h-10 max-w-full object-contain"
                   />
                 ) : (
@@ -531,9 +524,9 @@ export default function BrandingPage() {
                     color: `hsl(${form.brandHue}, ${form.brandSaturation + 10}%, 14%)`,
                   }}
                 >
-                  Tarjeta destacada
+                  {t('branding.previewCardTitle')}
                 </h4>
-                <p className="mt-1 text-sm text-text-muted">Curso de liderazgo · 12 módulos</p>
+                <p className="mt-1 text-sm text-text-muted">{t('branding.previewCardMeta')}</p>
               </div>
               <button
                 type="button"
@@ -542,7 +535,7 @@ export default function BrandingPage() {
                   backgroundColor: `hsl(${form.brandHue}, ${form.brandSaturation}%, 45%)`,
                 }}
               >
-                Botón primario
+                {t('branding.previewButton')}
               </button>
               <Badge
                 style={{
@@ -550,7 +543,7 @@ export default function BrandingPage() {
                   color: `hsl(${form.brandHue}, ${form.brandSaturation + 5}%, 30%)`,
                 }}
               >
-                Etiqueta
+                {t('branding.previewBadge')}
               </Badge>
             </CardContent>
           </Card>
@@ -561,18 +554,16 @@ export default function BrandingPage() {
             {status === 'saved' ? (
               <span className="inline-flex items-center gap-1.5 font-semibold text-success-700">
                 <Icon name="check" size={16} />
-                Cambios guardados
+                {t('branding.savedStatus')}
               </span>
             ) : status === 'error' && error ? (
               <span className="font-semibold text-danger-700">{error}</span>
             ) : (
-              <span className="text-text-subtle">
-                Al guardar, los cambios afectarán a todos los usuarios de tu organización.
-              </span>
+              <span className="text-text-subtle">{t('branding.saveNotice')}</span>
             )}
           </div>
           <Button type="submit" disabled={status === 'saving'} size="lg">
-            {status === 'saving' ? 'Guardando…' : 'Guardar cambios'}
+            {status === 'saving' ? t('branding.saving') : t('branding.saveButton')}
           </Button>
         </div>
       </form>
@@ -590,30 +581,23 @@ export default function BrandingPage() {
  * persistir customCss / footerHtml sin la capability sigue rebotando con 402.
  */
 function WhiteLabelUpsellCard() {
+  const t = useTranslations('adminMarca');
   return (
-    <Card
-      role="region"
-      aria-label="Funcionalidades Enterprise white-label"
-      className="border-dashed"
-    >
+    <Card role="region" aria-label={t('branding.upsellAria')} className="border-dashed">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="lock" size={18} />
-          Función Enterprise — actualiza tu plan
+          {t('branding.upsellTitle')}
         </CardTitle>
-        <CardDescription>
-          El CSS personalizado y el footer HTML del tenant son parte del paquete white-label de
-          Didacta Enterprise. Tu plan actual (community) no incluye esta funcionalidad.
-        </CardDescription>
+        <CardDescription>{t('branding.upsellDescription')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-text-muted">
-          Con la licencia Enterprise activa podrás inyectar reglas CSS propias, sustituir el footer
-          por HTML personalizado y ocultar la marca Didacta. La capability requerida es{' '}
-          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">
-            feat:white_label
-          </code>
-          .
+          {t.rich('branding.upsellBody', {
+            code: (chunks) => (
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">{chunks}</code>
+            ),
+          })}
         </p>
         <a
           href="https://didacta.io/pricing"
@@ -621,7 +605,7 @@ function WhiteLabelUpsellCard() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
         >
-          Ver planes Enterprise
+          {t('branding.upsellCta')}
           <Icon name="arrow-right" size={14} />
         </a>
       </CardContent>
@@ -643,17 +627,19 @@ function LogoUploader({
   onUploaded: (url: string) => void;
   onRemoved: () => void;
 }) {
+  const t = useTranslations('adminMarca');
+  const tErrors = useTranslations('errors');
   const [busy, setBusy] = useState<'upload' | 'remove' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleUpload(file: File) {
     setError(null);
     if (!ALLOWED_TYPES.includes(file.type)) {
-      setError('Formato no soportado. Sube PNG, JPG, SVG o WebP.');
+      setError(t('branding.uploadBadType'));
       return;
     }
     if (file.size > MAX_BYTES) {
-      setError('El archivo supera los 2 MB.');
+      setError(t('branding.uploadTooBig'));
       return;
     }
     const token = authStorage.getAccessToken();
@@ -670,14 +656,14 @@ function LogoUploader({
       publishThemeUpdate(updated);
       if (updated.logoUrl) onUploaded(updated.logoUrl);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos subir el logo.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('branding.uploadError'));
     } finally {
       setBusy(null);
     }
   }
 
   async function handleRemove() {
-    if (!confirm('¿Eliminar el logo subido? Volverás al wordmark Didacta.')) return;
+    if (!confirm(t('branding.removeConfirm'))) return;
     const token = authStorage.getAccessToken();
     if (!token) return;
     setBusy('remove');
@@ -687,7 +673,7 @@ function LogoUploader({
       publishThemeUpdate(updated);
       onRemoved();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar el logo.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('branding.removeError'));
     } finally {
       setBusy(null);
     }
@@ -697,19 +683,17 @@ function LogoUploader({
 
   return (
     <div className="space-y-3">
-      <Label>Logo subido</Label>
+      <Label>{t('branding.uploadedLabel')}</Label>
       {showPreview ? (
         <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-surface-2 p-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={currentLogoUrl}
-            alt="Logo subido del tenant"
+            alt={t('branding.uploadedAlt')}
             className="h-12 max-w-[200px] object-contain"
           />
           <div className="flex flex-1 items-center justify-between gap-2">
-            <p className="text-xs text-text-muted">
-              El logo está subido en el storage del tenant. Para cambiarlo, sube otro archivo.
-            </p>
+            <p className="text-xs text-text-muted">{t('branding.uploadedHint')}</p>
             <Button
               type="button"
               variant="ghost"
@@ -717,7 +701,7 @@ function LogoUploader({
               onClick={handleRemove}
               disabled={busy !== null}
             >
-              {busy === 'remove' ? 'Eliminando…' : 'Eliminar'}
+              {busy === 'remove' ? t('branding.removing') : t('branding.removeButton')}
             </Button>
           </div>
         </div>
@@ -732,14 +716,12 @@ function LogoUploader({
       >
         <p className="text-sm font-semibold text-text">
           {busy === 'upload'
-            ? 'Subiendo…'
+            ? t('branding.uploading')
             : showPreview
-              ? 'Reemplazar logo'
-              : 'Subir logo al storage'}
+              ? t('branding.replaceLogo')
+              : t('branding.uploadCta')}
         </p>
-        <p className="mt-1 text-xs text-text-muted">
-          PNG, JPG, SVG o WebP. Máximo 2 MB. Arrastra o haz clic para seleccionar.
-        </p>
+        <p className="mt-1 text-xs text-text-muted">{t('branding.uploadHint')}</p>
         <input
           type="file"
           accept={ALLOWED_TYPES.join(',')}
