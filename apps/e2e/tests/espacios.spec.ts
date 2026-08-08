@@ -20,7 +20,7 @@ import { injectSession } from '../helpers/auth';
 // ── Auth real contra dev ───────────────────────────────────────────────────
 
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? 'admin@didacta.io';
-const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'nJyLDGRncsWm637yJ9rJvGEw';
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? '';
 const TENANT_SLUG = process.env.E2E_TENANT_SLUG ?? 'didacta';
 const API_BASE = process.env.E2E_BASE_URL ?? 'https://dev.didacta.io';
 
@@ -121,9 +121,7 @@ test.describe('Sidebar — sección ESPACIOS', () => {
     }
   });
 
-  test('el sidebar NO muestra "1.240 miembros" hardcodeado (dato de cartón CLAUDE.md §3)', async ({
-    page,
-  }) => {
+  test('el sidebar NO muestra "1.240 miembros" hardcodeado (dato de cartón)', async ({ page }) => {
     await withAdminSession(page, '/comunidad');
     const sidebar = page.locator('aside').first();
     await expect(sidebar.getByText('1.240 miembros')).not.toBeVisible();
