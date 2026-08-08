@@ -5,6 +5,7 @@
 
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { formatCents } from '@/lib/i18n/format';
 
 /**
  * Client de mod.referrals: área del miembro (/referidos), captura del enlace
@@ -83,7 +84,8 @@ export interface AdminReferrerRow {
 
 function withAuth(): string {
   const token = authStorage.getAccessToken();
-  if (!token) throw new ApiHttpError({ message: 'Sesión expirada', status: 401 });
+  if (!token)
+    throw new ApiHttpError({ message: 'Sesión expirada', status: 401, code: 'sessionExpired' });
   return token;
 }
 
@@ -215,10 +217,14 @@ export const referralsAdminApi = {
   },
 };
 
-/** Céntimos → "12,34 €" (es-ES). */
+/**
+ * Céntimos → importe en el LOCALE ACTIVO ("12,34 €" / "$12.34").
+ *
+ * Delega en la conversión canónica de `@/lib/i18n/format`, que además quita los
+ * decimales cuando la cantidad es redonda: una comisión de 1900 céntimos pasa
+ * de «19,00 €» a «19 €». Es un cambio VISIBLE y deliberado (decisión 16 del
+ * plan de i18n): la regla de decimales del producto vive en un único sitio.
+ */
 export function formatReferralCents(cents: number, currency = 'eur'): string {
-  return new Intl.NumberFormat('es-ES', {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-  }).format(cents / 100);
+  return formatCents(cents, currency.toUpperCase());
 }

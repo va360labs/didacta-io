@@ -19,6 +19,7 @@
  */
 
 import { apiFetch } from '@/lib/api-client';
+import { formatCurrency } from '@/lib/i18n/format';
 
 export type PaymentConnectionStatus = 'PENDING' | 'VERIFIED' | 'ERROR' | 'DISCONNECTED';
 
@@ -217,13 +218,21 @@ export const paymentConnectionsApi = {
   },
 };
 
-/** Importe en céntimos + moneda → "19,99 €". */
+/**
+ * Importe en céntimos + moneda → "19,99 €" en el LOCALE ACTIVO.
+ *
+ * Sigue conservando decimales SIEMPRE (no usa `formatCents`, que los quita en
+ * cantidades redondas): la moneda la manda un proveedor externo (Stripe,
+ * WooCommerce, PayPal) y estas cifras se leen contra su panel, donde «19,00 €»
+ * y «19 €» no son la misma línea. El `catch` también se queda: un código de
+ * moneda inválido del proveedor haría reventar a `Intl`.
+ */
 export function formatAmount(unitAmount: number | null, currency: string | null): string {
   if (unitAmount === null) return '—';
   const value = unitAmount / 100;
   const cur = (currency ?? 'eur').toUpperCase();
   try {
-    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: cur }).format(value);
+    return formatCurrency(value, cur);
   } catch {
     return `${value.toFixed(2)} ${cur}`;
   }

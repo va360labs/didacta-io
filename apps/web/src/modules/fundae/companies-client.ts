@@ -5,6 +5,7 @@
 
 import { apiFetch, ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { formatCurrency } from '@/lib/i18n/format';
 
 /**
  * Cliente HTTP de empresas bonificadas Fundae (LMS-79). Espeja el contrato
@@ -60,7 +61,8 @@ export interface UpdateCompanyInput {
 
 function withAuth(): string {
   const token = authStorage.getAccessToken();
-  if (!token) throw new ApiHttpError({ message: 'Sesión expirada', status: 401 });
+  if (!token)
+    throw new ApiHttpError({ message: 'Sesión expirada', status: 401, code: 'sessionExpired' });
   return token;
 }
 
@@ -110,15 +112,19 @@ export const fundaeCompaniesApi = {
   },
 };
 
-/** Formatea céntimos como "12.345,67 €" (locale es-ES). */
+/**
+ * Formatea céntimos como "12.345,67 €" en el LOCALE ACTIVO.
+ *
+ * Conserva los dos decimales SIEMPRE (no usa `formatCents` canónico): son
+ * importes de crédito Fundae que se cuadran contra la aplicación telemática
+ * de la Fundación, donde el céntimo se escribe aunque sea cero.
+ */
 export function formatCents(cents: number | null): string {
   if (cents === null) return '—';
-  return new Intl.NumberFormat('es-ES', {
-    style: 'currency',
-    currency: 'EUR',
+  return formatCurrency(cents / 100, 'EUR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(cents / 100);
+  });
 }
 
 // -------------------- Notificaciones RLPT (LMS-80) --------------------

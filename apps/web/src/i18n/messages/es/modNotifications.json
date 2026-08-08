@@ -1,1 +1,43 @@
-{}
+{
+  "channel": {
+    "EMAIL": "Email",
+    "IN_APP": "In-app",
+    "WEBHOOK": "Webhook"
+  },
+  "category": {
+    "account": "Cuenta y acceso",
+    "members": "Inscripción de miembros",
+    "billing": "Membresía y pagos",
+    "learning": "Aprendizaje",
+    "community": "Comunidad",
+    "system": "Sistema"
+  },
+  "errorLoad": "No pudimos cargar los emails.",
+  "errorSave": "No pudimos guardar la plantilla.",
+  "errorTest": "No pudimos enviar la prueba.",
+  "errorRestore": "No pudimos restaurar la plantilla.",
+  "noticeSaved": "Plantilla de «{name}» personalizada.",
+  "noticeTestSent": "Prueba enviada a {email}. Si no llega, mira en spam.",
+  "noticeRestored": "«{name}» vuelve al texto por defecto.",
+  "promptTestAddress": "¿A qué dirección enviamos la prueba de «{name}»?",
+  "confirmRestore": "¿Restaurar «{name}» ({channel} · {locale}) al texto por defecto del producto?",
+  "editorTitle": "Personalizar «{name}»",
+  "variablesTitle": "Variables disponibles (las no resueltas quedan vacías):",
+  "channelLabel": "Canal",
+  "localeLabel": "Idioma",
+  "localeOption": "{label} ({code})",
+  "transactionalNote": "Email transaccional — se personaliza el canal Email en español (es-ES).",
+  "subjectLabel": "Asunto",
+  "bodyLabel": "Cuerpo",
+  "restoreDefault": "Restaurar por defecto",
+  "sendTest": "Enviarme una prueba",
+  "cancel": "Cancelar",
+  "saving": "Guardando…",
+  "save": "Guardar",
+  "customized": "Personalizado",
+  "subjectPrefix": "Asunto:",
+  "noSubject": "(sin asunto)",
+  "edit": "Editar",
+  "restore": "Restaurar",
+  "customize": "Personalizar"
+}

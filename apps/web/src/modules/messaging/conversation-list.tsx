@@ -5,10 +5,10 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { relTime } from '@/components/community-thread-card';
+import { useTranslations } from 'next-intl';
 import type { ConversationView } from './client';
 import { ConversationBadge } from './conversation-badge';
-import { keyOf, previewOf } from './shared';
+import { keyOf, previewOf, relTime } from './shared';
 
 /**
  * Grupo de conversaciones de la bandeja. Lo usan la página `/mensajes` y el
@@ -36,6 +36,7 @@ export function ConversationGroup({
   size?: number;
   dense?: boolean;
 }) {
+  const t = useTranslations('modMessaging');
   if (items.length === 0) return null;
 
   return (
@@ -75,12 +76,12 @@ export function ConversationGroup({
                     <span className="truncate text-sm font-semibold text-text">{c.title}</span>
                     {c.lastMessage ? (
                       <span className="shrink-0 text-[11px] text-text-subtle">
-                        {relTime(c.lastMessage.createdAt)}
+                        {relTime(c.lastMessage.createdAt, t)}
                       </span>
                     ) : null}
                   </span>
                   <span className="flex items-center justify-between gap-2">
-                    <span className="truncate text-xs text-text-muted">{previewOf(c)}</span>
+                    <span className="truncate text-xs text-text-muted">{previewOf(c, t)}</span>
                     {c.unreadCount > 0 ? (
                       <span
                         className="grid min-h-4 min-w-4 shrink-0 place-items-center rounded-full bg-brand-500 px-1 text-[10px] font-bold leading-none text-text-on-brand"

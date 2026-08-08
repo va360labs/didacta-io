@@ -12,6 +12,7 @@
  */
 
 import { apiFetch } from './api-client';
+import { formatCents as formatCentsI18n } from './i18n/format';
 
 const PUBLIC_BASE = '/api/v1/membership';
 const ADMIN_BASE = '/api/v1/membership/admin';
@@ -170,13 +171,14 @@ export const membershipAdminApi = {
 
 // ── Helpers de formato ───────────────────────────────────────────────────────
 
-/** "999,00 €" a partir de céntimos. */
+/**
+ * Céntimos → importe en el LOCALE ACTIVO ("999 €" / "$999"). Delega en la
+ * conversión canónica de `@/lib/i18n/format`: la regla de decimales («sin
+ * decimales si la cantidad es redonda») vive allí y solo allí, y coincide con
+ * la que este wrapper aplicaba a mano — el español sale byte a byte igual.
+ */
 export function formatCents(cents: number, currency = 'eur'): string {
-  return new Intl.NumberFormat('es-ES', {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
-  }).format(cents / 100);
+  return formatCentsI18n(cents, currency.toUpperCase());
 }
 
 /** Etiqueta de periodicidad: "/mes", "/trimestre", …, "/N meses". */

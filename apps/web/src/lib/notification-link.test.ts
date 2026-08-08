@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { createTranslator } from 'next-intl';
+import es from '@/i18n/messages/es';
+import en from '@/i18n/messages/en';
 import { notificationLink } from './notification-link';
+
+const tEs = createTranslator({ locale: 'es-ES', messages: es, namespace: 'libShared' });
+const tEn = createTranslator({ locale: 'en-US', messages: en, namespace: 'libShared' });
 
 describe('notificationLink', () => {
   it('comentario en post → hilo enfocado en el comentario con acción Responder', () => {
@@ -42,5 +48,12 @@ describe('notificationLink', () => {
   it('metadata ausente → null sin lanzar', () => {
     expect(notificationLink('community.comment.on_post', undefined)).toBeNull();
     expect(notificationLink('community.comment.on_post', null)).toBeNull();
+  });
+
+  it('con traductor, la acción sale del catálogo (MUST-FIX 25)', () => {
+    const meta = { postId: 'p1', commentId: 'c1' };
+    expect(notificationLink('community.comment.on_post', meta, tEs)?.actionLabel).toBe('Responder');
+    expect(notificationLink('community.comment.on_post', meta, tEn)?.actionLabel).toBe('Reply');
+    expect(notificationLink('community.mention', meta, tEn)?.actionLabel).toBe('View');
   });
 });

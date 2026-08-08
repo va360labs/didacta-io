@@ -11,6 +11,7 @@
  * Devuelve `null` cuando la notificación no tiene una acción de navegación
  * asociada (p. ej. avisos de sistema) — el consumidor la muestra sin enlace.
  */
+import type { TranslatorLike } from './i18n/labels';
 import { postPath } from './post-link';
 
 export interface NotificationLink {
@@ -22,12 +23,23 @@ function str(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+/**
+ * `t` = `useTranslations('libShared')` del componente que la llama.
+ *
+ * Va OPCIONAL solo por compatibilidad: `/notificaciones` y el toaster
+ * pertenecen a otras unidades de la migración y todavía la llaman sin
+ * traductor. Sin `t` devuelve el español cableado de siempre (nunca una key en
+ * pantalla). Cuando esos dos pasen el suyo, `t` pasa a obligatorio.
+ */
 export function notificationLink(
   templateKey: string,
   metadata: Record<string, unknown> | null | undefined,
+  t?: TranslatorLike,
 ): NotificationLink | null {
   const meta = metadata ?? {};
   const postId = str(meta.postId);
+  const reply = t ? t('notificationAction.reply') : 'Responder';
+  const view = t ? t('notificationAction.view') : 'Ver';
 
   switch (templateKey) {
     case 'community.comment.on_post': {
@@ -36,7 +48,7 @@ export function notificationLink(
       const commentId = str(meta.commentId);
       return {
         href: postPath(postId, { commentId: commentId ?? undefined }),
-        actionLabel: 'Responder',
+        actionLabel: reply,
       };
     }
     case 'community.reply.to_comment': {
@@ -46,7 +58,7 @@ export function notificationLink(
       const focusId = str(meta.parentCommentId) ?? str(meta.commentId);
       return {
         href: postPath(postId, { commentId: focusId ?? undefined }),
-        actionLabel: 'Responder',
+        actionLabel: reply,
       };
     }
     case 'community.mention': {
@@ -54,7 +66,7 @@ export function notificationLink(
       const commentId = str(meta.commentId);
       return {
         href: postPath(postId, { commentId: commentId ?? undefined }),
-        actionLabel: 'Ver',
+        actionLabel: view,
       };
     }
     default:

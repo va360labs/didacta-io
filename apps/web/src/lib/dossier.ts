@@ -14,6 +14,11 @@
 
 import { apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
+import {
+  formatCurrency,
+  formatDate as formatDateI18n,
+  formatDateTime as formatDateTimeI18n,
+} from './i18n/format';
 import type { Restriction } from './restrictions';
 
 export interface DossierOrder {
@@ -237,13 +242,10 @@ export const dossierApi = {
   },
 };
 
-/** Céntimos → «119,00 €». */
+/** Céntimos → «119,00 €» en el locale activo. */
 export function formatMoney(cents: number | null, currency = 'eur'): string {
   if (cents === null) return '—';
-  return (cents / 100).toLocaleString('es-ES', {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-  });
+  return formatCurrency(cents / 100, currency.toUpperCase());
 }
 
 /** «hace 3 meses», «hace 2 años»: la antigüedad se lee mejor que 847 días. */
@@ -261,14 +263,10 @@ export function formatMembership(days: number): string {
 
 export function formatDate(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  return formatDateI18n(iso, { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 export function formatDateTime(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('es-ES');
+  return formatDateTimeI18n(iso);
 }

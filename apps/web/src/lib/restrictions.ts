@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
+import { formatDate } from './i18n/format';
 
 /** Mismas claves que `restriction-scopes.ts` en la API. */
 export const RESTRICTION_SCOPES = [
@@ -248,7 +249,7 @@ export function expiresAtFromDuration(duration: DurationValue): string | null {
 export function restrictionSummary(r: Restriction): string {
   const areas = r.scopeLabels.join(', ');
   if (!r.expiresAt) return `${areas} · permanente`;
-  return `${areas} · hasta ${new Date(r.expiresAt).toLocaleDateString('es-ES', {
+  return `${areas} · hasta ${formatDate(r.expiresAt, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',

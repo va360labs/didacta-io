@@ -6,6 +6,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type UIEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { usePublicUsers } from '@/lib/public-users';
 import { messagingApi, type ConversationView, type MessageView } from './client';
 import { useMessagingContext } from './messaging-provider';
@@ -20,6 +21,7 @@ import { humanizeError } from './shared';
  * no-leídos si cada una lleva su propia copia (regla #5).
  */
 export function useConversationThread() {
+  const t = useTranslations('modMessaging');
   const { subscribe, refreshConversations, markReadLocally, registerActiveConversation, viewerId } =
     useMessagingContext();
 
@@ -105,10 +107,10 @@ export function useConversationThread() {
         setNextCursor(page.nextCursor);
         markRead(id);
       } catch (e) {
-        if (activeIdRef.current === id) setError(humanizeError(e));
+        if (activeIdRef.current === id) setError(humanizeError(e, t));
       }
     },
-    [markRead],
+    [markRead, t],
   );
 
   /** Click en un item de la lista (materializa salas si hace falta). */
@@ -125,10 +127,10 @@ export function useConversationThread() {
           void refreshConversations();
         }
       } catch (e) {
-        setError(humanizeError(e));
+        setError(humanizeError(e, t));
       }
     },
-    [openConversation, refreshConversations],
+    [openConversation, refreshConversations, t],
   );
 
   const close = useCallback(() => {
@@ -219,11 +221,11 @@ export function useConversationThread() {
         if (el) el.scrollTop = el.scrollHeight - prevHeight;
       });
     } catch (e) {
-      if (activeIdRef.current === id) setError(humanizeError(e));
+      if (activeIdRef.current === id) setError(humanizeError(e, t));
     } finally {
       setLoadingMore(false);
     }
-  }, [nextCursor, loadingMore]);
+  }, [nextCursor, loadingMore, t]);
 
   const onScroll = useCallback(
     (e: UIEvent<HTMLDivElement>) => {
@@ -251,11 +253,11 @@ export function useConversationThread() {
       });
       void refreshConversations();
     } catch (e) {
-      setError(humanizeError(e));
+      setError(humanizeError(e, t));
     } finally {
       setSending(false);
     }
-  }, [draft, sending, refreshConversations]);
+  }, [draft, sending, refreshConversations, t]);
 
   /** Aviso de escritura: best-effort puro, ya acelerado por el composer. */
   const notifyTyping = useCallback(() => {
