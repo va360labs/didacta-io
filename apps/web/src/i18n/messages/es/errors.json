@@ -1,5 +1,6 @@
 {
   "unknown": "Algo salió mal. Inténtalo de nuevo.",
+  "sessionExpired": "Sesión expirada",
   "mfa_required": "Se requiere verificación en dos pasos para continuar.",
   "AMBIGUOUS_TENANT": "Tu cuenta existe en varias academias. Accede desde el dominio de tu academia."
 }
