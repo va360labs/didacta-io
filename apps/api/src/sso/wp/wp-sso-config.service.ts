@@ -101,9 +101,11 @@ export class WpSsoConfigService {
       dto.sharedSecret && dto.sharedSecret.length > 0 ? dto.sharedSecret : null;
     const finalSecret = incomingSecret ?? previous?.sharedSecret;
     if (!finalSecret) {
-      throw new BadRequestException(
-        'El secreto compartido es obligatorio la primera vez. Pégalo (el mismo que en wp-config.php); no se mostrará después.',
-      );
+      throw new BadRequestException({
+        message:
+          'El secreto compartido es obligatorio la primera vez. Pégalo (el mismo que en wp-config.php); no se mostrará después.',
+        code: 'SSO_WP_SHARED_SECRET_REQUIRED',
+      });
     }
 
     const now = new Date().toISOString();

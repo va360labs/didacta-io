@@ -236,9 +236,11 @@ export class OidcService {
         : previous?.clientSecret;
 
     if (!finalSecret) {
-      throw new BadRequestException(
-        'clientSecret es obligatorio en la primera configuración del IdP. Pegalo del panel del IdP (no se mostrará después).',
-      );
+      throw new BadRequestException({
+        message:
+          'clientSecret es obligatorio en la primera configuración del IdP. Pegalo del panel del IdP (no se mostrará después).',
+        code: 'SSO_OIDC_CLIENT_SECRET_REQUIRED',
+      });
     }
 
     const now = new Date().toISOString();
@@ -373,7 +375,10 @@ export class OidcService {
   async startFlow(tenantSlug: string): Promise<OidcAuthorizationParams> {
     const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
     if (!tenant || tenant.status !== 'ACTIVE') {
-      throw new NotFoundException('Tenant no encontrado o inactivo.');
+      throw new NotFoundException({
+        message: 'Tenant no encontrado o inactivo.',
+        code: 'SSO_TENANT_NOT_FOUND',
+      });
     }
 
     // RLS F2: endpoint público — config + audit bajo el ALS del tenant.
@@ -388,7 +393,10 @@ export class OidcService {
   }): Promise<OidcAuthorizationParams> {
     const config = await this.getConfig(tenant.id);
     if (!config || !config.enabled) {
-      throw new NotFoundException('Este tenant no tiene SSO OIDC habilitado.');
+      throw new NotFoundException({
+        message: 'Este tenant no tiene SSO OIDC habilitado.',
+        code: 'SSO_OIDC_NOT_ENABLED',
+      });
     }
 
     const { client } = await this.discoverIssuerOrThrow(config);
@@ -452,23 +460,33 @@ export class OidcService {
     errorDescription?: string;
   }): Promise<CallbackResult> {
     if (params.error) {
-      throw new UnauthorizedException(
-        `IdP devolvió error: ${params.error}${params.errorDescription ? ` — ${params.errorDescription}` : ''}`,
-      );
+      throw new UnauthorizedException({
+        message: `IdP devolvió error: ${params.error}${params.errorDescription ? ` — ${params.errorDescription}` : ''}`,
+        code: 'SSO_OIDC_IDP_ERROR',
+      });
     }
     if (!params.state || !params.code) {
-      throw new BadRequestException('Faltan parámetros state/code en el callback.');
+      throw new BadRequestException({
+        message: 'Faltan parámetros state/code en el callback.',
+        code: 'SSO_OIDC_CALLBACK_PARAMS_MISSING',
+      });
     }
 
     const flow = this.flowStore.get(params.state);
     if (!flow) {
-      throw new UnauthorizedException('State desconocido o expirado.');
+      throw new UnauthorizedException({
+        message: 'State desconocido o expirado.',
+        code: 'SSO_OIDC_STATE_UNKNOWN',
+      });
     }
     // El flow se consume una sola vez (defensa replay).
     this.flowStore.delete(params.state);
 
     if (Date.now() > flow.expiresAt) {
-      throw new UnauthorizedException('State expirado.');
+      throw new UnauthorizedException({
+        message: 'State expirado.',
+        code: 'SSO_OIDC_STATE_EXPIRED',
+      });
     }
 
     // RLS F2: endpoint público — el cierre del flow (config, upsert de user,
@@ -486,12 +504,16 @@ export class OidcService {
   ): Promise<CallbackResult> {
     const config = await this.getConfig(flow.tenantId);
     if (!config || !config.enabled) {
-      throw new UnauthorizedException(
-        'La config OIDC del tenant fue deshabilitada durante el flow.',
-      );
+      throw new UnauthorizedException({
+        message: 'La config OIDC del tenant fue deshabilitada durante el flow.',
+        code: 'SSO_OIDC_CONFIG_DISABLED_MID_FLOW',
+      });
     }
     if (config.issuer !== flow.issuer || config.clientId !== flow.clientId) {
-      throw new UnauthorizedException('La config OIDC cambió durante el flow. Reintenta el login.');
+      throw new UnauthorizedException({
+        message: 'La config OIDC cambió durante el flow. Reintenta el login.',
+        code: 'SSO_OIDC_CONFIG_CHANGED_MID_FLOW',
+      });
     }
 
     const { client } = await this.discoverIssuerOrThrow(config);
@@ -508,31 +530,43 @@ export class OidcService {
     const claims = tokenSet.idTokenClaims;
     const expectedIss = stripTrailingSlash(config.issuer);
     if (stripTrailingSlash(claims.iss) !== expectedIss) {
-      throw new UnauthorizedException('iss del id_token no coincide con el issuer configurado.');
+      throw new UnauthorizedException({
+        message: 'iss del id_token no coincide con el issuer configurado.',
+        code: 'SSO_OIDC_ISS_MISMATCH',
+      });
     }
     const audOk = Array.isArray(claims.aud)
       ? claims.aud.includes(config.clientId)
       : claims.aud === config.clientId;
     if (!audOk) {
-      throw new UnauthorizedException('aud del id_token no coincide con clientId.');
+      throw new UnauthorizedException({
+        message: 'aud del id_token no coincide con clientId.',
+        code: 'SSO_OIDC_AUD_MISMATCH',
+      });
     }
     if (claims.nonce !== flow.nonce) {
-      throw new UnauthorizedException('nonce del id_token no coincide.');
+      throw new UnauthorizedException({
+        message: 'nonce del id_token no coincide.',
+        code: 'SSO_OIDC_NONCE_MISMATCH',
+      });
     }
 
     const email = (claims.email ?? claims.preferred_username ?? '').toString().trim().toLowerCase();
     if (!isValidEmail(email)) {
-      throw new UnauthorizedException(
-        'El IdP no devolvió un email válido en el id_token. Asegúrate de incluir el scope "email" y configurarlo en el IdP.',
-      );
+      throw new UnauthorizedException({
+        message:
+          'El IdP no devolvió un email válido en el id_token. Asegúrate de incluir el scope "email" y configurarlo en el IdP.',
+        code: 'SSO_OIDC_EMAIL_MISSING',
+      });
     }
 
     if (config.allowedEmailDomains.length > 0) {
       const domain = email.split('@')[1];
       if (!domain || !config.allowedEmailDomains.includes(domain)) {
-        throw new UnauthorizedException(
-          `El email "${email}" no pertenece a los dominios permitidos para SSO en este tenant.`,
-        );
+        throw new UnauthorizedException({
+          message: `El email "${email}" no pertenece a los dominios permitidos para SSO en este tenant.`,
+          code: 'SSO_EMAIL_DOMAIN_NOT_ALLOWED',
+        });
       }
     }
 
@@ -553,9 +587,10 @@ export class OidcService {
           resourceId: params.state.slice(0, 12),
           metadata: { reason: 'user_not_provisioned', email },
         });
-        throw new UnauthorizedException(
-          `No tienes cuenta en este tenant. Pídele al admin que active el auto-provisioning o que te dé de alta primero.`,
-        );
+        throw new UnauthorizedException({
+          message: `No tienes cuenta en este tenant. Pídele al admin que active el auto-provisioning o que te dé de alta primero.`,
+          code: 'SSO_USER_NOT_PROVISIONED',
+        });
       }
 
       user = await this.prisma.user.create({
@@ -580,7 +615,10 @@ export class OidcService {
       });
     } else {
       if (user.status !== 'ACTIVE') {
-        throw new UnauthorizedException('Tu cuenta no está activa. Contacta al admin del tenant.');
+        throw new UnauthorizedException({
+          message: 'Tu cuenta no está activa. Contacta al admin del tenant.',
+          code: 'SSO_ACCOUNT_INACTIVE',
+        });
       }
       // Refrescamos lastLogin + name si vino en el id_token.
       await this.prisma.user.update({
@@ -692,9 +730,11 @@ export class OidcService {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Discovery falló para ${config.issuer}: ${msg}`);
-      throw new ServiceUnavailableException(
-        'No pudimos contactar al proveedor de identidad. Verifica que el issuer esté online y reintenta.',
-      );
+      throw new ServiceUnavailableException({
+        message:
+          'No pudimos contactar al proveedor de identidad. Verifica que el issuer esté online y reintenta.',
+        code: 'SSO_OIDC_IDP_UNREACHABLE',
+      });
     }
   }
 

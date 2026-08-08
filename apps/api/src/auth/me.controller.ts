@@ -226,7 +226,10 @@ export class MeController {
       // Prisma P2002 = unique constraint violation. Para este modelo solo
       // puede ser por (tenantId, documentId) ya que email no se edita acá.
       if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002') {
-        throw new BadRequestException('Ese DNI/NIE ya está registrado en este tenant.');
+        throw new BadRequestException({
+          message: 'Ese DNI/NIE ya está registrado en este tenant.',
+          code: 'AUTH_DOCUMENT_ID_TAKEN',
+        });
       }
       throw e;
     }
@@ -277,6 +280,7 @@ export class MeController {
     if (missing.length > 0) {
       throw new UnprocessableEntityException({
         message: 'Faltan datos obligatorios para completar el onboarding.',
+        code: 'AUTH_ONBOARDING_MISSING_FIELDS',
         missing,
       });
     }
@@ -407,10 +411,16 @@ export class MeController {
     }
     const ok = await this.passwords.verify(dbUser.passwordHash, dto.currentPassword);
     if (!ok) {
-      throw new ForbiddenException('La contraseña actual no es correcta.');
+      throw new ForbiddenException({
+        message: 'La contraseña actual no es correcta.',
+        code: 'AUTH_CURRENT_PASSWORD_INCORRECT',
+      });
     }
     if (dto.currentPassword === dto.newPassword) {
-      throw new BadRequestException('La nueva contraseña debe ser distinta de la actual.');
+      throw new BadRequestException({
+        message: 'La nueva contraseña debe ser distinta de la actual.',
+        code: 'AUTH_NEW_PASSWORD_SAME_AS_CURRENT',
+      });
     }
 
     const newHash = await this.passwords.hash(dto.newPassword);
@@ -473,7 +483,11 @@ export class MeController {
     const sess = await this.prisma.session.findFirst({
       where: { id, userId: user.sub },
     });
-    if (!sess) throw new ForbiddenException('Sesión no encontrada o no es tuya.');
+    if (!sess)
+      throw new ForbiddenException({
+        message: 'Sesión no encontrada o no es tuya.',
+        code: 'AUTH_SESSION_NOT_FOUND',
+      });
     await this.prisma.session.delete({ where: { id } });
     // Que el cierre surta efecto ya y no en los próximos 30 s.
     this.accountState.invalidateSession(id);

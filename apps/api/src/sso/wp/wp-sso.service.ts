@@ -129,7 +129,10 @@ export class WpSsoService {
     if (user) {
       // Vino por identidad estable: validar estado.
       if (user.status !== 'ACTIVE') {
-        throw new UnauthorizedException('Tu cuenta no está activa. Contacta al administrador.');
+        throw new UnauthorizedException({
+          message: 'Tu cuenta no está activa. Contacta al administrador.',
+          code: 'SSO_WP_ACCOUNT_INACTIVE',
+        });
       }
     } else {
       // 2) Sin identidad → resolver por email (lazy-link o auto-provisión).
@@ -148,16 +151,20 @@ export class WpSsoService {
             resourceId: claims.jti.slice(0, 12),
             metadata: { reason: 'user_not_provisioned', email: claims.email },
           });
-          throw new UnauthorizedException(
-            'No tienes cuenta en Didacta. Pídele al administrador que te dé de alta.',
-          );
+          throw new UnauthorizedException({
+            message: 'No tienes cuenta en Didacta. Pídele al administrador que te dé de alta.',
+            code: 'SSO_WP_USER_NOT_PROVISIONED',
+          });
         }
         user = await this.provisionUser(tenant.id, claims.email, claims.name ?? null);
         provisioned = true;
       } else if (user.status !== 'ACTIVE') {
         // Un PENDING (p.ej. a la espera de un flujo de registro con aprobación
         // manual) NO entra por SSO hasta que se le active. Regla de coexistencia.
-        throw new UnauthorizedException('Tu cuenta no está activa. Contacta al administrador.');
+        throw new UnauthorizedException({
+          message: 'Tu cuenta no está activa. Contacta al administrador.',
+          code: 'SSO_WP_ACCOUNT_INACTIVE',
+        });
       }
     }
 

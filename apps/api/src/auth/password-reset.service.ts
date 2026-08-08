@@ -195,13 +195,22 @@ export class PasswordResetService {
     );
 
     if (!record) {
-      throw new UnauthorizedException('Token inválido o ya utilizado.');
+      throw new UnauthorizedException({
+        message: 'Token inválido o ya utilizado.',
+        code: 'AUTH_RESET_TOKEN_INVALID',
+      });
     }
     if (record.usedAt) {
-      throw new UnauthorizedException('Este enlace ya fue usado. Pide uno nuevo.');
+      throw new UnauthorizedException({
+        message: 'Este enlace ya fue usado. Pide uno nuevo.',
+        code: 'AUTH_RESET_LINK_USED',
+      });
     }
     if (record.expiresAt.getTime() < Date.now()) {
-      throw new UnauthorizedException('Este enlace expiró. Pide uno nuevo.');
+      throw new UnauthorizedException({
+        message: 'Este enlace expiró. Pide uno nuevo.',
+        code: 'AUTH_RESET_LINK_EXPIRED',
+      });
     }
 
     return runAsTenant(record.tenantId, () => this.consumeToken(record, newPassword, ctx), {
