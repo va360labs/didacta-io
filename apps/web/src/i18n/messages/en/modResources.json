@@ -1,1 +1,46 @@
-{}
+{
+  "modal": {
+    "close": "Close"
+  },
+  "share": {
+    "label": "Share a resource",
+    "title": "Share a resource",
+    "subtitle": "A workflow, a skill, a tool or a template that is useful to the community.",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Lead capture workflow",
+    "collectionLabel": "Collection",
+    "kindLabel": "Type",
+    "kindFile": "File",
+    "kindLink": "Link",
+    "fileLabel": "File (PDF, Word, Excel, ZIP, JSON…)",
+    "linkLabel": "Link",
+    "linkPlaceholder": "https://…",
+    "descriptionLabel": "Description (optional)",
+    "descriptionPlaceholder": "What it is and what it is for",
+    "cancel": "Cancel",
+    "sharing": "Sharing…",
+    "submit": "Share resource",
+    "titleTooShort": "The title needs at least 3 characters.",
+    "pickCollection": "Choose a collection.",
+    "pickFile": "Select the file to upload."
+  },
+  "collection": {
+    "label": "Collection",
+    "titleNew": "New collection",
+    "titleEdit": "Edit collection",
+    "subtitle": "Collections group resources together and have their own cover image.",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Class workflows",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "What you will find inside",
+    "coverLabel": "Cover",
+    "coverEmpty": "No cover: the brand gradient is used instead",
+    "coverRemove": "Remove",
+    "coverUploading": "Uploading cover…",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "save": "Save changes",
+    "create": "Create collection",
+    "titleTooShort": "The title needs at least 3 characters."
+  }
+}
