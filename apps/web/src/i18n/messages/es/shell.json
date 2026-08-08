@@ -37,7 +37,7 @@
   },
   "notifications": {
     "title": "Notificaciones",
-    "unreadAria": "{count} notificaciones sin leer",
+    "unreadAria": "{count, plural, one {# notificación sin leer} other {# notificaciones sin leer}}",
     "unreadShort": "{count} sin leer",
     "toastDefaultTitle": "Nueva notificación",
     "toastClose": "Cerrar notificación"
