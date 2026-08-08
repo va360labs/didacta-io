@@ -65,7 +65,7 @@ jobs:
           BASE="${VERSION%%-*}"
           echo "base=${BASE}" >> $GITHUB_OUTPUT
 
-          # Componer tags Docker según política versionado (docs/versioning.md)
+          # Componer tags Docker según la política de versionado
           TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}"
           if [[ "${VERSION}" =~ -alpha\.[0-9]+$ ]]; then
             # ej. 0.0.1-alpha.0 → además exporta tag :0.0.1-alpha y :alpha
@@ -170,10 +170,6 @@ jobs:
             docker compose -f docker-compose.alpha.yml up -d
             ```
 
-            Ver [`docs/INSTALL.md`](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/INSTALL.md) para guía paso a paso.
-
-            ### Política de versiones
-
-            Ver [`docs/versioning.md`](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/versioning.md).
+            Guía de instalación paso a paso y política de versiones: <https://didacta.io/docs>.
 
             ${{ steps.version.outputs.is_prerelease == 'true' && '⚠️ **Esta es una pre-release**. No usar en producción con datos reales.' || '' }}

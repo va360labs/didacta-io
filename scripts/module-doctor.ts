@@ -8,7 +8,6 @@
  *   - Si edition === 'enterprise': requiredLicenseFeature presente.
  *   - tablePrefix con formato correcto (`mod_<nombre>_`).
  *   - apiNamespace con formato correcto (`/modules/<nombre>`).
- *   - README.md existe y contiene secciones obligatorias.
  *   - prisma/schema.prisma con todas las tablas con prefijo correcto (best-effort regex).
  *   - module.json COHERENTE con src/manifest.ts (el manifest runtime que parsea
  *     el registry): version, coreVersionRequired, tablePrefix, apiNamespace,
@@ -74,18 +73,6 @@ function isMarketplaceStyle(manifest: any): boolean {
   return MARKETPLACE_STYLE_MARKERS.some((k) => manifest[k] !== undefined);
 }
 
-const REQUIRED_README_SECTIONS = [
-  /^#\s+`?mod\./m, // título con `mod.`
-  /^##\s+(Edici[oó]n|Edition)/m,
-  /^##\s+(Estado|Status)/m,
-  /^##\s+(Resumen funcional|Summary)/m,
-  /^##\s+(Modelo de datos|Data model)/m,
-  /^##\s+(API p[uú]blica|Public API)/m,
-  /^##\s+(Eventos|Events)/m,
-  /^##\s+(Configuraci[oó]n|Configuration)/m,
-  /^##\s+(Dependencias|Dependencies)/m,
-];
-
 function listModules(): string[] {
   if (!existsSync(MODULES_DIR)) return [];
   return readdirSync(MODULES_DIR).filter((name) => {
@@ -99,7 +86,6 @@ function validateModule(moduleDir: string): Issue[] {
   const name = moduleDir;
   const dirPath = join(MODULES_DIR, moduleDir);
   const manifestPath = join(dirPath, 'module.json');
-  const readmePath = join(dirPath, 'README.md');
   const schemaPath = join(dirPath, 'src', 'prisma', 'schema.prisma');
 
   // module.json
@@ -212,27 +198,10 @@ function validateModule(moduleDir: string): Issue[] {
     }
   }
 
-  // README
-  if (!existsSync(readmePath)) {
-    issues.push({
-      module: name,
-      severity: 'error',
-      field: 'README.md',
-      message: `Missing README.md`,
-    });
-  } else {
-    const readme = readFileSync(readmePath, 'utf8');
-    for (const re of REQUIRED_README_SECTIONS) {
-      if (!re.test(readme)) {
-        issues.push({
-          module: name,
-          severity: 'warning',
-          field: 'README.md',
-          message: `README missing section matching ${re}`,
-        });
-      }
-    }
-  }
+  // README: el repositorio ya no versiona documentación (ver .gitignore
+  // → .fueradegit/), así que no se exige README.md por módulo. El contrato
+  // de módulo se sigue validando por module.json + src/manifest.ts, que es
+  // lo que el host lee en runtime.
 
   // Coherencia module.json ↔ src/manifest.ts (contrato runtime)
   issues.push(...compareWithRuntimeManifest(name, dirPath, manifest));

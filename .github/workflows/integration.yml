@@ -5,7 +5,7 @@ name: Integration Tests
 #
 # Política activa desde 2026-05-01: NO ejecutar tests en GitHub Actions.
 # Se corren en local sobre Docker Desktop vía `scripts/test-local.sh`
-# (ver docs/TESTING-LOCAL.md). Este workflow queda como `workflow_dispatch`
+# Este workflow queda como `workflow_dispatch`
 # para poder lanzarlo manualmente si en algún momento se quiere validar
 # en runner Linux real, pero no es la vía principal.
 

@@ -22,7 +22,7 @@ jobs:
     # Política activa desde 2026-05-01: las pruebas de integración y E2E
     # (las que requieren Postgres/Redis reales) NO se ejecutan en CI. Se
     # corren en local sobre Docker Desktop a través de `scripts/test-local.sh`
-    # (ver docs/TESTING-LOCAL.md). Este job mantiene las verificaciones
+    # Este job mantiene las verificaciones
     # estáticas obligatorias antes de merge: format, lint, typecheck y build
     # del workspace. Los tests unit corren en el job `unit-tests` de abajo.
 

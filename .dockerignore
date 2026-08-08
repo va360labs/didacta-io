@@ -21,11 +21,10 @@ Thumbs.db
 .gitignore
 .github
 
-# Docs (no necesarias en runtime)
-docs/
-prompts/
+# Docs: el repo ya no las versiona (ver .gitignore → .fueradegit/), pero
+# .fueradegit/ sí existe en local y no debe entrar al contexto de build.
+.fueradegit/
 *.md
-!README.md
 
 # Tests
 **/tests/

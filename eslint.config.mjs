@@ -38,6 +38,8 @@ export default [
       '**/build/**',
       '**/coverage/**',
       '**/.turbo/**',
+      // Documentación fuera del árbol versionado (ver .gitignore).
+      '.fueradegit/**',
     ],
   },
   js.configs.recommended,

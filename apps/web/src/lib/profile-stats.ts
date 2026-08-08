@@ -12,7 +12,7 @@ import { learningApi } from './learning';
 /**
  * Estadísticas reales del perfil ("Mi perfil"). Cada métrica es `null` si su
  * módulo/fuente no está disponible (módulo deshabilitado, 403/404, red) — la UI
- * muestra "—" en ese caso. CLAUDE.md §3: nunca inventamos un número.
+ * muestra "—" en ese caso: nunca inventamos un número.
  */
 export interface ProfileStats {
   /** Cursos con matrícula COMPLETED. */

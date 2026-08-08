@@ -15,7 +15,7 @@ import { SessionRegistryService } from '../../auth/session-registry.service';
 
 /**
  * WpSsoService — intercambia el token firmado por WordPress por una sesión
- * Didacta. Flujo (ver modules/wp-sso/README.md):
+ * Didacta. Flujo:
  *
  *   1. Verifica el token (firma HMAC, audiencia, issuer, exp, TTL máx) →
  *      mod.wp-sso `verifyWpSsoToken` (pura).

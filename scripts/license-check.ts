@@ -7,7 +7,7 @@
  *
  * Uso:
  *   pnpm tsx scripts/license-check.ts                              # solo reporta
- *   pnpm tsx scripts/license-check.ts --output docs/licensing/third-party-licenses.md
+ *   pnpm tsx scripts/license-check.ts --output /ruta/third-party-licenses.md
  */
 
 import { execSync } from 'node:child_process';

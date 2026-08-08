@@ -2,7 +2,7 @@
 REM ===========================================================================
 REM Wrapper Windows para scripts/test-local.sh.
 REM Política activa desde 2026-05-01: pruebas SOLO en local sobre Docker Desktop
-REM (ver docs/TESTING-LOCAL.md). CI no ejecuta tests.
+REM CI no ejecuta tests.
 REM
 REM Uso:
 REM   scripts\test-local.cmd                full (pre-flight + build + unit + integ)

@@ -639,7 +639,7 @@ export class OidcService {
       // exigimos verify MFA local adicional. Tenants que quieran enforcement
       // local activan `feat:mfa.enforcement` (3er piloto) — el AuthService
       // sigue chequeando esa policy en signins password; SSO la salta por
-      // diseño. Documentado en docs/licensing/enterprise.md.
+      // diseño.
       mfaVerified: true,
     });
 

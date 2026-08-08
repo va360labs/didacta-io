@@ -2,7 +2,7 @@ name: E2E
 
 # Política activa desde 2026-05-01: NO ejecutar tests en GitHub Actions.
 # E2E con Playwright se corre en local sobre Docker Desktop antes de mergear
-# (ver docs/TESTING-LOCAL.md). Este workflow queda como `workflow_dispatch`
+# Este workflow queda como `workflow_dispatch`
 # para poder lanzarlo manualmente si se quiere validar en runner Linux real.
 
 on:

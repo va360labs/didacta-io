@@ -37,12 +37,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # El inventario se escribe fuera del árbol versionado: el repo no
+      # versiona documentación (ver .gitignore → .fueradegit/). Sigue
+      # publicándose como artifact de CI, que es donde se consulta.
       - name: Run license-check
-        run: pnpm tsx scripts/license-check.ts --output docs/licensing/third-party-licenses.md
+        run: pnpm tsx scripts/license-check.ts --output "${RUNNER_TEMP}/third-party-licenses.md"
 
       - name: Upload license inventory artifact
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: third-party-licenses
-          path: docs/licensing/third-party-licenses.md
+          path: ${{ runner.temp }}/third-party-licenses.md

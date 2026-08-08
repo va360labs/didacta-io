@@ -73,9 +73,16 @@ playwright-report/
 # Trabajo local / scripts temporales
 work/
 
-# Claude Code settings locales
-.claude/settings.local.json
-.claude/scheduled_tasks.lock
+# Documentación y meta de proyecto: fuera del repo por decisión de producto.
+# El repositorio versiona SOLO lo necesario para construir y ejecutar la
+# aplicación (más LICENSE/LICENSE_EE, que son el instrumento legal del
+# modelo fair-code). Todo lo demás vive aquí, en local.
+.fueradegit/
+
+# Claude Code: estado local del agente (settings, locks y worktrees). El
+# directorio entero es local — los worktrees de agente son clones completos
+# del repo y pesan GB.
+.claude/
 
 # Evidencia local de e2e (se regenera al correr el spec)
 drip-evidence/
