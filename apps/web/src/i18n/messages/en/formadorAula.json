@@ -140,7 +140,7 @@
     "updateError": "We couldn't save the changes.",
     "createError": "We couldn't create the session.",
     "topicLabel": "Title",
-    "topicPlaceholder": "E.g.: Weekly Q&A for the n8n course",
+    "topicPlaceholder": "E.g.: Weekly Q&A for the introduction course",
     "startTimeLabel": "Date and time",
     "durationLabel": "Duration (min)",
     "hostEmailLabel": "Host email",

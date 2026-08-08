@@ -294,7 +294,12 @@ export default function MembresiaAdminPage() {
         .filter((x): x is { courseId: string; amountCents: number } => x.amountCents !== null);
       const updated = await membershipAdminApi.updateConfig(bearer, {
         active,
-        headline: headline.trim() || t('defaultHeadline'),
+        // Literal, NO traducido: este valor se PERSISTE y lo leen los visitantes
+        // de la página pública, no el admin. Traducirlo guardaría el titular en
+        // el idioma de la UI de quien guardó (un admin en inglés dejaría
+        // «Become a member» a un público español). Coincide con el default de la
+        // columna en el schema (`MembershipConfig.headline`).
+        headline: headline.trim() || 'Hazte miembro',
         subheadline: subheadline.trim() || null,
         accessGroupId: accessGroupId || null,
         showCourses,
@@ -543,6 +548,7 @@ export default function MembresiaAdminPage() {
               <Input
                 id="cfg-headline"
                 value={headline}
+                placeholder={t('defaultHeadline')}
                 onChange={(e) => setHeadline(e.target.value)}
               />
             </div>

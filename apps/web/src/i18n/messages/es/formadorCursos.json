@@ -8,7 +8,7 @@
     "SCORM": "SCORM"
   },
   "lessonHelp": {
-    "VIDEO": "URL del vídeo (mp4, webm, m3u8). Ideal: hosteado en MinIO/Hetzner.",
+    "VIDEO": "URL del vídeo (mp4, webm, m3u8). Ideal: hosteado en tu almacenamiento S3.",
     "HTML": "HTML inline que se renderiza en el player. Útil para slides o microcopy.",
     "PDF": "URL del PDF. Se muestra en iframe a 70dvh.",
     "TEXT": "Texto plano largo. Se preservan saltos de línea.",
@@ -134,7 +134,7 @@
   "videoUrlPlaceholder": "https://www.youtube.com/watch?v=… o https://tu-cdn/leccion.mp4",
   "videoUrlHelp": "Acepta enlaces de YouTube (con o sin timestamp <code>t=</code>), Bunny Stream (<code>iframe.mediadelivery.net/embed/…</code>) y URLs directas a archivos <code>.mp4</code> / <code>.webm</code> / <code>.m3u8</code>.",
   "resourcesLabel": "Recursos y capítulos",
-  "resourcesPlaceholder": "00:00 - Introducción\n02:15 - Instalar n8n\nGrupo de Telegram: https://t.me/...",
+  "resourcesPlaceholder": "00:00 - Introducción\n02:15 - Primeros pasos\nGuía en PDF: https://ejemplo.com/guia.pdf",
   "resourcesHelp": "Una entrada por línea. Las líneas con formato <code>MM:SS - Texto</code> se muestran como capítulos clicables que saltan a ese punto del vídeo; el resto, como recursos (los enlaces se vuelven clicables).",
   "htmlBelowLabel": "Contenido complementario (debajo del vídeo)",
   "htmlBelowAria": "Contenido complementario de la lección",

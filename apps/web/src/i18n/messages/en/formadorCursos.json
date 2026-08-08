@@ -8,7 +8,7 @@
     "SCORM": "SCORM"
   },
   "lessonHelp": {
-    "VIDEO": "Video URL (mp4, webm, m3u8). Ideally: hosted on MinIO/Hetzner.",
+    "VIDEO": "Video URL (mp4, webm, m3u8). Ideally: hosted on your S3 storage.",
     "HTML": "Inline HTML rendered in the player. Useful for slides or microcopy.",
     "PDF": "PDF URL. Shown in an iframe at 70dvh.",
     "TEXT": "Long plain text. Line breaks are preserved.",
@@ -134,7 +134,7 @@
   "videoUrlPlaceholder": "https://www.youtube.com/watch?v=… or https://your-cdn/lesson.mp4",
   "videoUrlHelp": "Accepts YouTube links (with or without a <code>t=</code> timestamp), Bunny Stream (<code>iframe.mediadelivery.net/embed/…</code>) and direct URLs to <code>.mp4</code> / <code>.webm</code> / <code>.m3u8</code> files.",
   "resourcesLabel": "Resources and chapters",
-  "resourcesPlaceholder": "00:00 - Introduction\n02:15 - Install n8n\nTelegram group: https://t.me/...",
+  "resourcesPlaceholder": "00:00 - Introduction\n02:15 - Getting started\nPDF guide: https://example.com/guide.pdf",
   "resourcesHelp": "One entry per line. Lines in <code>MM:SS - Text</code> format are shown as clickable chapters that jump to that point of the video; the rest, as resources (links become clickable).",
   "htmlBelowLabel": "Complementary content (below the video)",
   "htmlBelowAria": "Complementary content of the lesson",
