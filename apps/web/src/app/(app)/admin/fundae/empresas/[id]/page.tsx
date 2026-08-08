@@ -7,6 +7,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +17,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
 import {
   fundaeCompaniesApi,
   fundaeRlptApi,
@@ -28,12 +30,6 @@ import {
   type UploadRlptInput,
 } from '@/modules/fundae';
 
-const TIPO_LABEL: Record<RlptNoticeType, string> = {
-  NOTIFICACION_INICIAL: 'Notificación inicial',
-  ACUSE_RECIBO: 'Acuse de recibo',
-  ACTA_DISCREPANCIA: 'Acta de discrepancia',
-};
-
 const TIPO_VARIANT: Record<RlptNoticeType, 'success' | 'warning' | 'info'> = {
   NOTIFICACION_INICIAL: 'info',
   ACUSE_RECIBO: 'success',
@@ -42,9 +38,13 @@ const TIPO_VARIANT: Record<RlptNoticeType, 'success' | 'warning' | 'info'> = {
 
 const ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'] as const;
 
+const NOTICE_DATE_FORMAT = { day: '2-digit', month: 'short', year: 'numeric' } as const;
+
 export default function FundaeEmpresaDetailPage() {
   const params = useParams<{ id: string }>();
   const companyId = params?.id;
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const [company, setCompany] = useState<FundaeCompany | null>(null);
   const [notices, setNotices] = useState<RlptNotice[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +60,7 @@ export default function FundaeEmpresaDetailPage() {
       setCompany(c);
       setNotices(n);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar la empresa.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -72,8 +72,10 @@ export default function FundaeEmpresaDetailPage() {
   async function handleDelete(notice: RlptNotice) {
     if (
       !confirm(
-        `¿Borrar la ${TIPO_LABEL[notice.tipo].toLowerCase()} del ${formatDate(notice.fechaNotificacionAt)}?\n\n` +
-          'El blob queda en Evidence Vault por trazabilidad. La fila se marca como borrada.',
+        t('companyDetail.rlptDeleteConfirm', {
+          tipo: t(`rlptTipo.${notice.tipo}`).toLowerCase(),
+          fecha: formatDate(notice.fechaNotificacionAt, NOTICE_DATE_FORMAT),
+        }),
       )
     ) {
       return;
@@ -82,7 +84,7 @@ export default function FundaeEmpresaDetailPage() {
       await fundaeRlptApi.remove(notice.companyId, notice.id);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos borrar la notificación.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -92,7 +94,7 @@ export default function FundaeEmpresaDetailPage() {
     <section className="space-y-6">
       <nav className="text-sm text-text-muted">
         <Link href="/admin/fundae/empresas" className="hover:underline">
-          ← Empresas
+          {t('companyDetail.back')}
         </Link>
       </nav>
 
@@ -115,25 +117,35 @@ export default function FundaeEmpresaDetailPage() {
           <header className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <code className="font-mono text-sm font-semibold text-text">{company.nif}</code>
-              {company.deletedAt ? <Badge variant="muted">Borrada</Badge> : null}
+              {company.deletedAt ? (
+                <Badge variant="muted">{t('companies.deletedBadge')}</Badge>
+              ) : null}
               {company.cccPrincipal ? (
-                <Badge variant="info">CCC {company.cccPrincipal}</Badge>
+                <Badge variant="info">
+                  {t('companies.cccBadge', { ccc: company.cccPrincipal })}
+                </Badge>
               ) : null}
               {company.plantilla !== null ? (
-                <Badge variant="muted">{company.plantilla} empleados</Badge>
+                <Badge variant="muted">
+                  {t('companies.employeesBadge', { count: String(company.plantilla) })}
+                </Badge>
               ) : null}
             </div>
             <h1 className="font-display text-2xl font-bold tracking-tight">
               {company.razonSocial}
             </h1>
             <p className="text-sm tabular-nums text-text-muted">
-              Crédito: {formatCents(company.creditoTotalCents)} · usado{' '}
-              {formatCents(company.creditoUsadoCents)}
+              {t('companies.creditSummary', {
+                total: formatCents(company.creditoTotalCents),
+                used: formatCents(company.creditoUsadoCents),
+              })}
               {company.creditoDisponibleCents !== null ? (
                 <>
                   {' · '}
                   <span className="font-semibold text-text">
-                    disponible {formatCents(company.creditoDisponibleCents)}
+                    {t('companies.creditAvailable', {
+                      available: formatCents(company.creditoDisponibleCents),
+                    })}
                   </span>
                 </>
               ) : null}
@@ -163,6 +175,7 @@ function RlptSection({
   onUploaded: () => Promise<void>;
   onDelete: (n: RlptNotice) => void;
 }) {
+  const t = useTranslations('adminFundae');
   const [showForm, setShowForm] = useState(false);
   const hasNotificacionInicial = notices?.some((n) => n.tipo === 'NOTIFICACION_INICIAL') ?? false;
   const hasActaDiscrepancia = notices?.some((n) => n.tipo === 'ACTA_DISCREPANCIA') ?? false;
@@ -178,17 +191,16 @@ function RlptSection({
     <section className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="font-display text-2xl font-bold">Notificaciones a la RLPT</h2>
+          <h2 className="font-display text-2xl font-bold">{t('companyDetail.rlptTitle')}</h2>
           <p className="mt-1 max-w-3xl text-text-muted">
-            Documentos exigidos por el RD 694/2017: la antelación mínima entre la notificación
-            inicial y el inicio del grupo bonificable es de <strong>15 días naturales</strong>. Si
-            la representación legal formaliza una discrepancia, registra el acta para autorizar el
-            avance con trazabilidad.
+            {t.rich('companyDetail.rlptDescription', {
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </p>
         </div>
         <Button type="button" onClick={() => setShowForm((v) => !v)}>
           <Icon name="plus" size={16} />
-          {showForm ? 'Cerrar' : 'Subir documento'}
+          {showForm ? t('shared.close') : t('companyDetail.uploadDocument')}
         </Button>
       </header>
 
@@ -202,10 +214,10 @@ function RlptSection({
       >
         <Icon name={grupoPodriaIniciarse ? 'check' : 'alert'} size={16} />
         {grupoPodriaIniciarse
-          ? 'La empresa cumple los plazos para iniciar grupos bonificables.'
+          ? t('companyDetail.statusOk')
           : !hasNotificacionInicial
-            ? 'Falta subir la notificación inicial a la RLPT.'
-            : 'Aún no se cumplen los 15 días naturales desde la notificación inicial.'}
+            ? t('companyDetail.statusMissingInitial')
+            : t('companyDetail.statusWaiting')}
       </div>
 
       {showForm ? (
@@ -224,7 +236,7 @@ function RlptSection({
       ) : notices.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-text-muted">
-            No hay notificaciones registradas. Sube la notificación inicial para empezar.
+            {t('companyDetail.noticesEmpty')}
           </CardContent>
         </Card>
       ) : (
@@ -234,15 +246,19 @@ function RlptSection({
               <CardContent className="flex flex-wrap items-start gap-4 p-5">
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={TIPO_VARIANT[n.tipo]}>{TIPO_LABEL[n.tipo]}</Badge>
+                    <Badge variant={TIPO_VARIANT[n.tipo]}>{t(`rlptTipo.${n.tipo}`)}</Badge>
                     <span className="text-sm tabular-nums text-text-muted">
-                      Fecha: {formatDate(n.fechaNotificacionAt)} · Plazo:{' '}
-                      {formatDate(n.plazoVencimientoAt)}
+                      {t('companyDetail.noticeDates', {
+                        fecha: formatDate(n.fechaNotificacionAt, NOTICE_DATE_FORMAT),
+                        plazo: formatDate(n.plazoVencimientoAt, NOTICE_DATE_FORMAT),
+                      })}
                     </span>
                   </div>
                   <p className="text-xs font-mono text-text-subtle">
-                    SHA-256: {n.evidenceHash.slice(0, 16)}… · {(n.evidenceSize / 1024).toFixed(1)}{' '}
-                    KB
+                    {t('companyDetail.noticeHash', {
+                      hash: n.evidenceHash.slice(0, 16),
+                      kb: (n.evidenceSize / 1024).toFixed(1),
+                    })}
                   </p>
                   {n.observaciones ? (
                     <p className="text-sm text-text-muted">{n.observaciones}</p>
@@ -250,7 +266,7 @@ function RlptSection({
                 </div>
                 <Button type="button" size="sm" variant="ghost" onClick={() => onDelete(n)}>
                   <Icon name="trash" size={13} />
-                  Borrar
+                  {t('companyDetail.deleteNotice')}
                 </Button>
               </CardContent>
             </Card>
@@ -270,6 +286,8 @@ function UploadForm({
   onUploaded: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -281,11 +299,11 @@ function UploadForm({
       const form = new FormData(e.currentTarget);
       const file = form.get('file') as File | null;
       if (!file || file.size === 0) {
-        setError('Adjunta un PDF o imagen del documento.');
+        setError(t('companyDetail.fileRequired'));
         return;
       }
       if (!ALLOWED_MIME.includes(file.type as (typeof ALLOWED_MIME)[number])) {
-        setError(`Tipo de archivo no permitido (${file.type}).`);
+        setError(t('companyDetail.fileTypeNotAllowed', { type: file.type }));
         return;
       }
       const base64 = await fileToBase64(file);
@@ -302,7 +320,7 @@ function UploadForm({
       await fundaeRlptApi.upload(companyId, payload);
       await onUploaded();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos subir el documento.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(false);
     }
@@ -311,34 +329,32 @@ function UploadForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Subir notificación RLPT</CardTitle>
-        <CardDescription>
-          Acepta PDF o imagen (PNG/JPG/WebP) hasta 10 MB. El blob se persiste con hash SHA-256.
-        </CardDescription>
+        <CardTitle>{t('companyDetail.uploadTitle')}</CardTitle>
+        <CardDescription>{t('companyDetail.uploadDescription')}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="tipo">
-                Tipo <span className="text-danger-700">*</span>
+                {t('companyDetail.tipoLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Select id="tipo" name="tipo" required defaultValue="NOTIFICACION_INICIAL">
-                <option value="NOTIFICACION_INICIAL">Notificación inicial</option>
-                <option value="ACUSE_RECIBO">Acuse de recibo</option>
-                <option value="ACTA_DISCREPANCIA">Acta de discrepancia</option>
+                <option value="NOTIFICACION_INICIAL">{t('rlptTipo.NOTIFICACION_INICIAL')}</option>
+                <option value="ACUSE_RECIBO">{t('rlptTipo.ACUSE_RECIBO')}</option>
+                <option value="ACTA_DISCREPANCIA">{t('rlptTipo.ACTA_DISCREPANCIA')}</option>
               </Select>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="fechaNotificacionAt">
-                Fecha de notificación <span className="text-danger-700">*</span>
+                {t('companyDetail.fechaLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input id="fechaNotificacionAt" name="fechaNotificacionAt" type="date" required />
             </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="file">
-              Documento (PDF/imagen, máx 10 MB) <span className="text-danger-700">*</span>
+              {t('companyDetail.fileLabel')} <span className="text-danger-700">*</span>
             </Label>
             <input
               id="file"
@@ -350,7 +366,7 @@ function UploadForm({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="observaciones">Observaciones</Label>
+            <Label htmlFor="observaciones">{t('companyDetail.observacionesLabel')}</Label>
             <Textarea id="observaciones" name="observaciones" rows={2} maxLength={2000} />
           </div>
 
@@ -365,22 +381,14 @@ function UploadForm({
 
           <div className="flex items-center gap-2 border-t border-border-soft pt-4">
             <Button type="submit" disabled={pending}>
-              {pending ? 'Subiendo…' : 'Subir documento'}
+              {pending ? t('companyDetail.uploading') : t('companyDetail.uploadDocument')}
             </Button>
             <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
-              Cancelar
+              {t('shared.cancel')}
             </Button>
           </div>
         </form>
       </CardContent>
     </Card>
   );
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
 }

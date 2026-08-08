@@ -6,6 +6,7 @@
  */
 
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import {
   fundaeCompaniesApi,
   formatCents,
@@ -31,6 +32,8 @@ import {
  * de grupos cerrados.
  */
 export default function FundaeEmpresasPage() {
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const [companies, setCompanies] = useState<FundaeCompany[] | null>(null);
   const [search, setSearch] = useState('');
   const [includeDeleted, setIncludeDeleted] = useState(false);
@@ -47,7 +50,7 @@ export default function FundaeEmpresasPage() {
       });
       setCompanies(list);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las empresas.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -57,20 +60,14 @@ export default function FundaeEmpresasPage() {
   }, [includeDeleted]);
 
   async function handleDelete(c: FundaeCompany) {
-    if (
-      !confirm(
-        `¿Borrar la empresa "${c.razonSocial}" (${c.nif})?\n\n` +
-          'Soft-delete: la fila se preserva para que los grupos cerrados sigan ' +
-          'teniendo trazabilidad. Si tiene grupos activos, la API rechazará.',
-      )
-    ) {
+    if (!confirm(t('companies.deleteConfirm', { razonSocial: c.razonSocial, nif: c.nif }))) {
       return;
     }
     try {
       await fundaeCompaniesApi.remove(c.id);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos borrar la empresa.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -78,11 +75,8 @@ export default function FundaeEmpresasPage() {
     <section className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Empresas bonificadas</h1>
-          <p className="mt-1 max-w-3xl text-text-muted">
-            Empresas que financian formación con crédito Fundae. Cada grupo bonificable se vincula a
-            una de estas (los costes y comunicaciones oficiales heredan los datos fiscales).
-          </p>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{t('companies.title')}</h1>
+          <p className="mt-1 max-w-3xl text-text-muted">{t('companies.description')}</p>
         </div>
         <Button
           type="button"
@@ -92,13 +86,13 @@ export default function FundaeEmpresasPage() {
           }}
         >
           <Icon name="plus" size={16} />
-          {showForm ? 'Cerrar' : 'Nueva empresa'}
+          {showForm ? t('shared.close') : t('companies.newCompany')}
         </Button>
       </header>
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[280px] flex-1 space-y-1.5">
-          <Label htmlFor="search">Buscar por NIF o razón social</Label>
+          <Label htmlFor="search">{t('companies.searchLabel')}</Label>
           <Input
             id="search"
             value={search}
@@ -106,7 +100,7 @@ export default function FundaeEmpresasPage() {
             onKeyDown={(e) => {
               if (e.key === 'Enter') void reload();
             }}
-            placeholder="Ej: A58818501 o Telefónica"
+            placeholder={t('companies.searchPlaceholder')}
           />
         </div>
         <div className="space-y-1.5">
@@ -118,12 +112,12 @@ export default function FundaeEmpresasPage() {
               onChange={(e) => setIncludeDeleted(e.target.checked)}
               className="mr-2"
             />
-            Incluir borradas
+            {t('companies.includeDeleted')}
           </Label>
         </div>
         <Button type="button" variant="secondary" onClick={() => void reload()}>
           <Icon name="search" size={14} />
-          Buscar
+          {t('companies.search')}
         </Button>
       </div>
 
@@ -159,10 +153,8 @@ export default function FundaeEmpresasPage() {
       ) : companies.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
-            <h3 className="font-display text-2xl font-semibold">Sin empresas registradas</h3>
-            <p className="max-w-md text-text-muted">
-              Empieza creando la empresa bonificada que financiará el primer grupo formativo.
-            </p>
+            <h3 className="font-display text-2xl font-semibold">{t('companies.emptyTitle')}</h3>
+            <p className="max-w-md text-text-muted">{t('companies.emptyDescription')}</p>
           </CardContent>
         </Card>
       ) : (
@@ -173,23 +165,35 @@ export default function FundaeEmpresasPage() {
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <code className="font-mono text-sm font-semibold text-text">{c.nif}</code>
-                    {c.deletedAt ? <Badge variant="muted">Borrada</Badge> : null}
-                    {c.cccPrincipal ? <Badge variant="info">CCC {c.cccPrincipal}</Badge> : null}
+                    {c.deletedAt ? (
+                      <Badge variant="muted">{t('companies.deletedBadge')}</Badge>
+                    ) : null}
+                    {c.cccPrincipal ? (
+                      <Badge variant="info">
+                        {t('companies.cccBadge', { ccc: c.cccPrincipal })}
+                      </Badge>
+                    ) : null}
                     {c.plantilla !== null ? (
-                      <Badge variant="muted">{c.plantilla} empleados</Badge>
+                      <Badge variant="muted">
+                        {t('companies.employeesBadge', { count: String(c.plantilla) })}
+                      </Badge>
                     ) : null}
                   </div>
                   <p className="font-display text-base font-semibold leading-tight text-text">
                     {c.razonSocial}
                   </p>
                   <p className="text-sm tabular-nums text-text-muted">
-                    Crédito: {formatCents(c.creditoTotalCents)} · usado{' '}
-                    {formatCents(c.creditoUsadoCents)}
+                    {t('companies.creditSummary', {
+                      total: formatCents(c.creditoTotalCents),
+                      used: formatCents(c.creditoUsadoCents),
+                    })}
                     {c.creditoDisponibleCents !== null ? (
                       <>
                         {' · '}
                         <span className="font-semibold text-text">
-                          disponible {formatCents(c.creditoDisponibleCents)}
+                          {t('companies.creditAvailable', {
+                            available: formatCents(c.creditoDisponibleCents),
+                          })}
                         </span>
                       </>
                     ) : null}
@@ -208,7 +212,9 @@ export default function FundaeEmpresasPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button asChild size="sm" variant="ghost">
-                    <Link href={`/admin/fundae/empresas/${c.id}` as never}>Detalle / RLPT</Link>
+                    <Link href={`/admin/fundae/empresas/${c.id}` as never}>
+                      {t('companies.detailLink')}
+                    </Link>
                   </Button>
                   {!c.deletedAt ? (
                     <>
@@ -222,7 +228,7 @@ export default function FundaeEmpresasPage() {
                         }}
                       >
                         <Icon name="edit" size={13} />
-                        Editar
+                        {t('companies.edit')}
                       </Button>
                       <Button
                         type="button"
@@ -231,7 +237,7 @@ export default function FundaeEmpresasPage() {
                         onClick={() => void handleDelete(c)}
                       >
                         <Icon name="trash" size={13} />
-                        Borrar
+                        {t('companies.delete')}
                       </Button>
                     </>
                   ) : null}
@@ -254,6 +260,8 @@ function CompanyForm({
   onSaved: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isEdit = editing !== null;
@@ -301,7 +309,7 @@ function CompanyForm({
       }
       await onSaved();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar la empresa.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(false);
     }
@@ -311,12 +319,12 @@ function CompanyForm({
     <Card>
       <CardHeader>
         <CardTitle>
-          {isEdit ? `Editar ${editing!.razonSocial}` : 'Nueva empresa bonificada'}
+          {isEdit
+            ? t('companies.editTitle', { razonSocial: editing!.razonSocial })
+            : t('companies.createTitle')}
         </CardTitle>
         <CardDescription>
-          {isEdit
-            ? 'El NIF no se puede modificar: si la empresa cambia de NIF, hay que crear una nueva entrada por trazabilidad histórica.'
-            : 'Datos fiscales mínimos. La validación NIF acepta DNI, NIE y CIF con checksum español.'}
+          {isEdit ? t('companies.editDescription') : t('companies.createDescription')}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -324,7 +332,7 @@ function CompanyForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="nif">
-                NIF / CIF <span className="text-danger-700">*</span>
+                {t('companies.nifLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input
                 id="nif"
@@ -334,12 +342,12 @@ function CompanyForm({
                 defaultValue={editing?.nif}
                 maxLength={20}
                 className="font-mono uppercase"
-                placeholder="A58818501"
+                placeholder={t('companies.nifPlaceholder')}
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="razonSocial">
-                Razón social <span className="text-danger-700">*</span>
+                {t('companies.razonSocialLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input
                 id="razonSocial"
@@ -353,18 +361,18 @@ function CompanyForm({
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
-              <Label htmlFor="cccPrincipal">Código Cuenta Cotización</Label>
+              <Label htmlFor="cccPrincipal">{t('companies.cccLabel')}</Label>
               <Input
                 id="cccPrincipal"
                 name="cccPrincipal"
                 defaultValue={editing?.cccPrincipal ?? ''}
                 maxLength={15}
-                placeholder="11 dígitos"
+                placeholder={t('companies.cccPlaceholder')}
                 className="font-mono"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="plantilla">Plantilla</Label>
+              <Label htmlFor="plantilla">{t('companies.plantillaLabel')}</Label>
               <Input
                 id="plantilla"
                 name="plantilla"
@@ -374,7 +382,7 @@ function CompanyForm({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="creditoEur">Crédito Fundae (€)</Label>
+              <Label htmlFor="creditoEur">{t('companies.creditLabel')}</Label>
               <Input
                 id="creditoEur"
                 name="creditoEur"
@@ -386,16 +394,18 @@ function CompanyForm({
                     ? (editing.creditoTotalCents / 100).toFixed(2)
                     : ''
                 }
-                placeholder="0,00"
+                placeholder={t('companies.creditPlaceholder')}
               />
             </div>
           </div>
 
           <fieldset className="space-y-3 rounded-lg border border-border-soft p-4">
-            <legend className="px-1 text-sm font-semibold text-text-muted">Contacto</legend>
+            <legend className="px-1 text-sm font-semibold text-text-muted">
+              {t('companies.contactLegend')}
+            </legend>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
-                <Label htmlFor="contactoNombre">Persona contacto</Label>
+                <Label htmlFor="contactoNombre">{t('companies.contactNameLabel')}</Label>
                 <Input
                   id="contactoNombre"
                   name="contactoNombre"
@@ -404,7 +414,7 @@ function CompanyForm({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="contactoEmail">Email</Label>
+                <Label htmlFor="contactoEmail">{t('companies.contactEmailLabel')}</Label>
                 <Input
                   id="contactoEmail"
                   name="contactoEmail"
@@ -414,7 +424,7 @@ function CompanyForm({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="contactoTelefono">Teléfono</Label>
+                <Label htmlFor="contactoTelefono">{t('companies.contactPhoneLabel')}</Label>
                 <Input
                   id="contactoTelefono"
                   name="contactoTelefono"
@@ -425,7 +435,7 @@ function CompanyForm({
             </div>
             <div className="grid gap-3 sm:grid-cols-4">
               <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="direccion">Dirección</Label>
+                <Label htmlFor="direccion">{t('companies.addressLabel')}</Label>
                 <Input
                   id="direccion"
                   name="direccion"
@@ -434,7 +444,7 @@ function CompanyForm({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="ciudad">Ciudad</Label>
+                <Label htmlFor="ciudad">{t('companies.cityLabel')}</Label>
                 <Input
                   id="ciudad"
                   name="ciudad"
@@ -443,7 +453,7 @@ function CompanyForm({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="codigoPostal">CP</Label>
+                <Label htmlFor="codigoPostal">{t('companies.postalCodeLabel')}</Label>
                 <Input
                   id="codigoPostal"
                   name="codigoPostal"
@@ -456,7 +466,7 @@ function CompanyForm({
           </fieldset>
 
           <div className="space-y-1.5">
-            <Label htmlFor="notas">Notas internas</Label>
+            <Label htmlFor="notas">{t('companies.notesLabel')}</Label>
             <Textarea
               id="notas"
               name="notas"
@@ -477,10 +487,14 @@ function CompanyForm({
 
           <div className="flex items-center gap-2 border-t border-border-soft pt-4">
             <Button type="submit" disabled={pending}>
-              {pending ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Crear empresa'}
+              {pending
+                ? t('companies.saving')
+                : isEdit
+                  ? t('companies.saveChanges')
+                  : t('companies.createCompany')}
             </Button>
             <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
-              Cancelar
+              {t('shared.cancel')}
             </Button>
           </div>
         </form>

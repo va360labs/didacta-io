@@ -6,6 +6,7 @@
  */
 
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -15,8 +16,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { fundaeApi, type ActionStatus, type FundaeAction, type Modalidad } from '@/modules/fundae';
 
 const STATUS_VARIANT: Record<ActionStatus, 'success' | 'warning' | 'muted' | 'danger'> = {
@@ -26,20 +27,9 @@ const STATUS_VARIANT: Record<ActionStatus, 'success' | 'warning' | 'muted' | 'da
   ARCHIVED: 'muted',
 };
 
-const STATUS_LABEL: Record<ActionStatus, string> = {
-  ACTIVE: 'Activa',
-  DRAFT: 'Borrador',
-  CLOSED: 'Cerrada',
-  ARCHIVED: 'Archivada',
-};
-
-const MODALIDAD_LABEL: Record<Modalidad, string> = {
-  PRESENCIAL: 'Presencial',
-  TELEFORMACION: 'Teleformación',
-  MIXTA: 'Mixta',
-};
-
 export default function FundaePage() {
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const [actions, setActions] = useState<FundaeAction[] | null>(null);
   // Por acción: número si la API contestó OK, 'error' si falló, undefined si
   // todavía no se resolvió. Permite distinguir "0 participantes reales" de
@@ -66,7 +56,7 @@ export default function FundaePage() {
       );
       setParticipantCounts(Object.fromEntries(entries));
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las acciones.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -75,15 +65,12 @@ export default function FundaePage() {
   }, []);
 
   async function handleArchive(id: string, codigo: string) {
-    if (
-      !confirm(`¿Archivar la acción "${codigo}"? La fila se preserva pero deja de aparecer activa.`)
-    )
-      return;
+    if (!confirm(t('actions.archiveConfirm', { codigo }))) return;
     try {
       await fundaeApi.archive(id);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos archivar.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -105,7 +92,7 @@ export default function FundaePage() {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 30_000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No pudimos descargar el XML.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -113,28 +100,25 @@ export default function FundaePage() {
     <section className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Fundae</h1>
-          <p className="mt-1 max-w-3xl text-text-muted">
-            Acciones formativas para presentar a la fundación. Cada acción puede vincularse a un
-            curso del catálogo y exportarse como XML para subida manual al sistema oficial.
-          </p>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{t('actions.title')}</h1>
+          <p className="mt-1 max-w-3xl text-text-muted">{t('actions.description')}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button asChild type="button" variant="secondary">
             <Link href="/admin/fundae/grupos">
               <Icon name="users" size={14} />
-              Grupos bonificables
+              {t('actions.groupsLink')}
             </Link>
           </Button>
           <Button asChild type="button" variant="secondary">
             <Link href="/admin/fundae/empresas">
               <Icon name="building" size={14} />
-              Empresas bonificadas
+              {t('actions.companiesLink')}
             </Link>
           </Button>
           <Button type="button" onClick={() => setShowForm((v) => !v)}>
             <Icon name="plus" size={16} />
-            {showForm ? 'Cerrar' : 'Nueva acción'}
+            {showForm ? t('shared.close') : t('actions.newAction')}
           </Button>
         </div>
       </header>
@@ -176,11 +160,8 @@ export default function FundaePage() {
             >
               <Icon name="file" size={40} />
             </div>
-            <h3 className="font-display text-2xl font-semibold">Sin acciones formativas</h3>
-            <p className="max-w-md text-text-muted">
-              Empieza creando tu primera acción Fundae. Una vez creada, podrás generar el XML para
-              presentar a la fundación.
-            </p>
+            <h3 className="font-display text-2xl font-semibold">{t('actions.emptyTitle')}</h3>
+            <p className="max-w-md text-text-muted">{t('actions.emptyDescription')}</p>
           </CardContent>
         </Card>
       ) : (
@@ -204,18 +185,21 @@ export default function FundaePage() {
                       {a.codigoAccion}
                     </code>
                     <Badge variant={STATUS_VARIANT[a.status]} dot>
-                      {STATUS_LABEL[a.status]}
+                      {t(`actionStatus.${a.status}`)}
                     </Badge>
-                    <Badge variant="muted">{MODALIDAD_LABEL[a.modalidad]}</Badge>
+                    <Badge variant="muted">{t(`modalidad.${a.modalidad}`)}</Badge>
                     {a.courseId ? (
                       participantCounts[a.id] === 'error' ? (
-                        <Badge variant="warning" title="No pudimos cargar el contador">
-                          <Icon name="users" size={12} />— participantes
+                        <Badge variant="warning" title={t('actions.participantsErrorTitle')}>
+                          <Icon name="users" size={12} />
+                          {t('actions.participantsUnknown')}
                         </Badge>
                       ) : (
                         <Badge variant="info">
                           <Icon name="users" size={12} />
-                          {participantCounts[a.id] ?? '…'} participantes
+                          {t('actions.participantsCount', {
+                            count: String(participantCounts[a.id] ?? '…'),
+                          })}
                         </Badge>
                       )
                     ) : null}
@@ -224,7 +208,11 @@ export default function FundaePage() {
                     {a.nombre}
                   </p>
                   <p className="text-sm tabular-nums text-text-muted">
-                    {a.fechaInicio} → {a.fechaFin} · {a.horasFormacion} h
+                    {t('actions.meta', {
+                      inicio: a.fechaInicio,
+                      fin: a.fechaFin,
+                      horas: String(a.horasFormacion),
+                    })}
                     {a.lugar ? ` · ${a.lugar}` : ''}
                   </p>
                   {a.notas ? (
@@ -233,7 +221,7 @@ export default function FundaePage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button asChild size="sm" variant="ghost">
-                    <Link href={`/admin/fundae/${a.id}` as never}>Ver bloques</Link>
+                    <Link href={`/admin/fundae/${a.id}` as never}>{t('actions.viewBlocks')}</Link>
                   </Button>
                   <Button
                     type="button"
@@ -242,7 +230,7 @@ export default function FundaePage() {
                     onClick={() => handleExport(a)}
                   >
                     <Icon name="file" size={13} />
-                    Descargar XML
+                    {t('actions.downloadXml')}
                   </Button>
                   {a.status !== 'ARCHIVED' ? (
                     <Button
@@ -252,7 +240,7 @@ export default function FundaePage() {
                       onClick={() => handleArchive(a.id, a.codigoAccion)}
                     >
                       <Icon name="trash" size={13} />
-                      Archivar
+                      {t('actions.archive')}
                     </Button>
                   ) : null}
                 </div>
@@ -272,6 +260,8 @@ function CreateActionForm({
   onCreated: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -295,7 +285,7 @@ function CreateActionForm({
       });
       await onCreated();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos crear la acción.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(false);
     }
@@ -316,11 +306,8 @@ function CreateActionForm({
             <Icon name="plus" size={18} />
           </span>
           <div className="min-w-0">
-            <CardTitle>Nueva acción formativa</CardTitle>
-            <CardDescription>
-              Datos requeridos por Fundae para presentar la acción. El código tiene que ser único
-              dentro del tenant.
-            </CardDescription>
+            <CardTitle>{t('actions.formTitle')}</CardTitle>
+            <CardDescription>{t('actions.formDescription')}</CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -329,51 +316,51 @@ function CreateActionForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="codigoAccion">
-                Código de acción <span className="text-danger-700">*</span>
+                {t('actions.codeLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input
                 id="codigoAccion"
                 name="codigoAccion"
                 required
                 maxLength={25}
-                placeholder="Ej: AF-2026-001"
+                placeholder={t('actions.codePlaceholder')}
                 className="font-mono"
                 autoFocus
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="modalidad">
-                Modalidad <span className="text-danger-700">*</span>
+                {t('actions.modalidadLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Select id="modalidad" name="modalidad" required defaultValue="TELEFORMACION">
-                <option value="PRESENCIAL">Presencial</option>
-                <option value="TELEFORMACION">Teleformación</option>
-                <option value="MIXTA">Mixta</option>
+                <option value="PRESENCIAL">{t('modalidad.PRESENCIAL')}</option>
+                <option value="TELEFORMACION">{t('modalidad.TELEFORMACION')}</option>
+                <option value="MIXTA">{t('modalidad.MIXTA')}</option>
               </Select>
             </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="nombre">
-              Nombre <span className="text-danger-700">*</span>
+              {t('actions.nameLabel')} <span className="text-danger-700">*</span>
             </Label>
             <Input id="nombre" name="nombre" required maxLength={200} />
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="fechaInicio">
-                Fecha inicio <span className="text-danger-700">*</span>
+                {t('actions.startDateLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input id="fechaInicio" name="fechaInicio" type="date" required />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="fechaFin">
-                Fecha fin <span className="text-danger-700">*</span>
+                {t('actions.endDateLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input id="fechaFin" name="fechaFin" type="date" required />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="horasFormacion">
-                Horas <span className="text-danger-700">*</span>
+                {t('actions.hoursLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input
                 id="horasFormacion"
@@ -388,20 +375,25 @@ function CreateActionForm({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="lugar">Lugar</Label>
-              <Input id="lugar" name="lugar" maxLength={200} placeholder="Ej: On-line" />
+              <Label htmlFor="lugar">{t('actions.placeLabel')}</Label>
+              <Input
+                id="lugar"
+                name="lugar"
+                maxLength={200}
+                placeholder={t('actions.placePlaceholder')}
+              />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="cifCentro">CIF/NIF del centro</Label>
+              <Label htmlFor="cifCentro">{t('actions.cifLabel')}</Label>
               <Input id="cifCentro" name="cifCentro" maxLength={20} className="font-mono" />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="courseId">UUID del curso vinculado (opcional)</Label>
+            <Label htmlFor="courseId">{t('actions.courseIdLabel')}</Label>
             <Input id="courseId" name="courseId" className="font-mono" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="notas">Notas internas (no van al XML)</Label>
+            <Label htmlFor="notas">{t('actions.notesLabel')}</Label>
             <Textarea id="notas" name="notas" rows={2} maxLength={2000} />
           </div>
 
@@ -416,10 +408,10 @@ function CreateActionForm({
 
           <div className="flex items-center gap-2 border-t border-border-soft pt-4">
             <Button type="submit" disabled={pending}>
-              {pending ? 'Creando…' : 'Crear acción'}
+              {pending ? t('shared.creating') : t('actions.create')}
             </Button>
             <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
-              Cancelar
+              {t('shared.cancel')}
             </Button>
           </div>
         </form>

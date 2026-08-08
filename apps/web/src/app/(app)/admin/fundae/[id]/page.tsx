@@ -7,6 +7,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,8 +17,8 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
-import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import {
   fundaeApi,
   type FundaeAction,
@@ -32,6 +33,8 @@ export default function FundaeActionDetailPage() {
   const params = useParams<{ id: string }>();
   const actionId = params.id;
 
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const [action, setAction] = useState<FundaeAction | null>(null);
   const [blocks, setBlocks] = useState<FundaeBlock[] | null>(null);
   const [participants, setParticipants] = useState<FundaeParticipant[] | null>(null);
@@ -50,7 +53,7 @@ export default function FundaeActionDetailPage() {
       setBlocks(list);
       setParticipants(parts);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar la acción.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -82,7 +85,7 @@ export default function FundaeActionDetailPage() {
         `fundae-${action.codigoAccion}.zip`,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No pudimos descargar el ZIP.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setZipPending(false);
     }
@@ -96,7 +99,7 @@ export default function FundaeActionDetailPage() {
         `evidencia-${idLabel}.pdf`,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No pudimos descargar la evidencia.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -132,14 +135,14 @@ export default function FundaeActionDetailPage() {
         <div>
           <p className="text-xs uppercase tracking-wide text-text-muted">
             <Link href="/admin/fundae" className="underline">
-              Acciones formativas
+              {t('actionDetail.breadcrumb')}
             </Link>{' '}
             / {action.codigoAccion}
           </p>
           <h1 className="mt-1 font-display text-2xl font-bold tracking-tight">{action.nombre}</h1>
           <div className="mt-2 flex flex-wrap gap-1.5 text-sm text-text-muted">
             <Badge>{action.modalidad}</Badge>
-            <span>· {action.horasFormacion}h totales</span>
+            <span>· {t('actionDetail.hoursTotal', { horas: String(action.horasFormacion) })}</span>
             <span>
               · {action.fechaInicio} → {action.fechaFin}
             </span>
@@ -148,21 +151,27 @@ export default function FundaeActionDetailPage() {
         <div className="flex flex-wrap items-center gap-2">
           <Button asChild variant="ghost" size="sm">
             <a href={fundaeApi.exportXmlUrl(action.id)} target="_blank" rel="noopener noreferrer">
-              XML
+              {t('actionDetail.xml')}
             </a>
           </Button>
           <Button onClick={handleDownloadZip} disabled={zipPending}>
-            {zipPending ? 'Generando ZIP…' : 'Descargar ZIP de presentación'}
+            {zipPending ? t('actionDetail.zipGenerating') : t('actionDetail.zipDownload')}
           </Button>
         </div>
       </header>
 
       <Card>
         <CardHeader>
-          <CardTitle>Módulos formativos</CardTitle>
+          <CardTitle>{t('actionDetail.blocksTitle')}</CardTitle>
           <CardDescription>
-            Desglose de la acción en bloques. Las horas suman {totalBlockHours} de un máximo de{' '}
-            {action.horasFormacion} ({remaining > 0 ? `quedan ${remaining}h` : 'completo'}).
+            {t('actionDetail.blocksDescription', {
+              total: String(totalBlockHours),
+              max: String(action.horasFormacion),
+              estado:
+                remaining > 0
+                  ? t('actionDetail.blocksRemaining', { remaining: String(remaining) })
+                  : t('actionDetail.blocksComplete'),
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -176,9 +185,7 @@ export default function FundaeActionDetailPage() {
           ) : null}
 
           {blocks.length === 0 ? (
-            <p className="text-sm text-text-muted">
-              Todavía no hay bloques. Crea el primero abajo.
-            </p>
+            <p className="text-sm text-text-muted">{t('actionDetail.blocksEmpty')}</p>
           ) : (
             <ul className="divide-y divide-border rounded-lg border border-border">
               {blocks.map((b) => (
@@ -203,17 +210,14 @@ export default function FundaeActionDetailPage() {
       {action.courseId && participants ? (
         <Card>
           <CardHeader>
-            <CardTitle>Participantes ({participants.length})</CardTitle>
-            <CardDescription>
-              Cada participante puede tener una evidencia PDF firmada. El ZIP de presentación
-              empaqueta el XML + todas las evidencias.
-            </CardDescription>
+            <CardTitle>
+              {t('actionDetail.participantsTitle', { count: String(participants.length) })}
+            </CardTitle>
+            <CardDescription>{t('actionDetail.participantsDescription')}</CardDescription>
           </CardHeader>
           <CardContent>
             {participants.length === 0 ? (
-              <p className="text-sm text-text-muted">
-                No hay matriculaciones activas en el curso vinculado.
-              </p>
+              <p className="text-sm text-text-muted">{t('actionDetail.participantsEmpty')}</p>
             ) : (
               <ul className="divide-y divide-border rounded-lg border border-border">
                 {participants.map((p) => (
@@ -222,7 +226,7 @@ export default function FundaeActionDetailPage() {
                       <p className="font-medium text-text">{p.name ?? p.email}</p>
                       <p className="text-xs text-text-muted">
                         {p.email}
-                        {p.documentId ? ` · ${p.documentId}` : ' · sin DNI declarado'}
+                        {p.documentId ? ` · ${p.documentId}` : ` · ${t('actionDetail.noDni')}`}
                       </p>
                     </div>
                     <Badge
@@ -234,7 +238,7 @@ export default function FundaeActionDetailPage() {
                             : 'warning'
                       }
                     >
-                      {p.status === 'EN_CURSO' ? 'EN CURSO' : p.status}
+                      {t(`participantStatus.${p.status}`)}
                     </Badge>
                     <span className="text-xs text-text-muted tabular-nums">
                       {p.progressPercent}%
@@ -244,7 +248,7 @@ export default function FundaeActionDetailPage() {
                       size="sm"
                       onClick={() => void handleDownloadEvidence(p)}
                     >
-                      Evidencia PDF
+                      {t('actionDetail.evidencePdf')}
                     </Button>
                   </li>
                 ))}
@@ -266,17 +270,19 @@ function BlockRow({
   block: FundaeBlock;
   onChanged: () => void;
 }) {
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onDelete() {
-    if (!confirm(`¿Eliminar el bloque "${block.title}"?`)) return;
+    if (!confirm(t('actionDetail.deleteBlockConfirm', { title: block.title }))) return;
     setPending(true);
     try {
       await fundaeApi.deleteBlock(actionId, block.id);
       onChanged();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar el bloque.');
+      setError(apiErrorMessage(e, tErrors));
       setPending(false);
     }
   }
@@ -289,7 +295,7 @@ function BlockRow({
       <div className="min-w-0 flex-1">
         <p className="font-medium text-text">{block.title}</p>
         <p className="text-xs text-text-muted">
-          {block.hours}h · {block.modalidad}
+          {t('actionDetail.blockHours', { hours: String(block.hours) })} · {block.modalidad}
         </p>
         {block.contenidos ? (
           <p className="mt-1 whitespace-pre-line text-xs text-text-subtle">{block.contenidos}</p>
@@ -297,7 +303,7 @@ function BlockRow({
         {error ? <p className="mt-1 text-xs text-danger-700">{error}</p> : null}
       </div>
       <Button variant="ghost" size="sm" onClick={onDelete} disabled={pending}>
-        Eliminar
+        {t('actionDetail.deleteBlock')}
       </Button>
     </li>
   );
@@ -312,6 +318,8 @@ function CreateBlockForm({
   nextOrdinal: number;
   onCreated: () => void;
 }) {
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const [title, setTitle] = useState('');
   const [hours, setHours] = useState('');
   const [modalidad, setModalidad] = useState<Modalidad>('TELEFORMACION');
@@ -336,7 +344,7 @@ function CreateBlockForm({
       setContenidos('');
       onCreated();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos crear el bloque.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(false);
     }
@@ -348,11 +356,11 @@ function CreateBlockForm({
       className="space-y-3 rounded-lg border border-dashed border-border bg-surface p-4"
     >
       <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-        Nuevo bloque (#{nextOrdinal})
+        {t('actionDetail.newBlockTitle', { ordinal: String(nextOrdinal) })}
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="block-title">Título</Label>
+          <Label htmlFor="block-title">{t('actionDetail.blockTitleLabel')}</Label>
           <Input
             id="block-title"
             value={title}
@@ -362,7 +370,7 @@ function CreateBlockForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="block-hours">Horas</Label>
+          <Label htmlFor="block-hours">{t('actionDetail.blockHoursLabel')}</Label>
           <Input
             id="block-hours"
             type="number"
@@ -375,7 +383,7 @@ function CreateBlockForm({
         </div>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="block-modalidad">Modalidad</Label>
+        <Label htmlFor="block-modalidad">{t('actionDetail.blockModalidadLabel')}</Label>
         <Select
           id="block-modalidad"
           value={modalidad}
@@ -389,19 +397,19 @@ function CreateBlockForm({
         </Select>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="block-contenidos">Contenidos (opcional)</Label>
+        <Label htmlFor="block-contenidos">{t('actionDetail.blockContentsLabel')}</Label>
         <Textarea
           id="block-contenidos"
           value={contenidos}
           onChange={(e) => setContenidos(e.target.value)}
           rows={3}
           maxLength={4000}
-          placeholder="Lista de temas, objetivos, materiales…"
+          placeholder={t('actionDetail.blockContentsPlaceholder')}
         />
       </div>
       {error ? <p className="text-sm text-danger-700">{error}</p> : null}
       <Button type="submit" disabled={pending || !title.trim() || !hours}>
-        {pending ? 'Creando…' : 'Añadir bloque'}
+        {pending ? t('shared.creating') : t('actionDetail.addBlock')}
       </Button>
     </form>
   );

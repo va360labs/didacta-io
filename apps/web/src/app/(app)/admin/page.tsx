@@ -21,24 +21,23 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { StatCard } from '@/components/stat-card';
 import { BusinessMetricsPanel } from '@/components/admin/business-metrics-panel';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import { adminStatsApi, type AdminStats, type StatsRange } from '@/lib/admin-stats';
 
-const RANGE_LABELS: Array<{ key: StatsRange; label: string }> = [
-  { key: 'all', label: 'Histórico' },
-  { key: '30d', label: 'Últimos 30 días' },
-  { key: '7d', label: 'Últimos 7 días' },
-];
+const RANGES: StatsRange[] = ['all', '30d', '7d'];
 
 const TABS = ['actividad', 'negocio'] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function AdminDashboardPage() {
+  const t = useTranslations('adminFundae');
   const router = useRouter();
   const params = useSearchParams();
   const requested = params.get('tab');
@@ -55,16 +54,14 @@ export default function AdminDashboardPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Panel del tenant</h1>
-        <p className="mt-1 text-text-muted">
-          Cómo va tu organización: la actividad del aula y los números del negocio.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('dashboard.title')}</h1>
+        <p className="mt-1 text-text-muted">{t('dashboard.description')}</p>
       </header>
 
       <Tabs value={tab} onValueChange={selectTab}>
         <TabsList>
-          <TabsTrigger value="actividad">Actividad</TabsTrigger>
-          <TabsTrigger value="negocio">Negocio</TabsTrigger>
+          <TabsTrigger value="actividad">{t('dashboard.tabActivity')}</TabsTrigger>
+          <TabsTrigger value="negocio">{t('dashboard.tabBusiness')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="actividad" className="mt-5">
@@ -79,6 +76,8 @@ export default function AdminDashboardPage() {
 }
 
 function ActivityTab(): ReactNode {
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<StatsRange>('all');
@@ -97,7 +96,7 @@ function ActivityTab(): ReactNode {
       })
       .catch((e) => {
         if (!cancelled) {
-          setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las stats.');
+          setError(apiErrorMessage(e, tErrors));
         }
       })
       .finally(() => {
@@ -112,23 +111,24 @@ function ActivityTab(): ReactNode {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <p className="max-w-2xl text-sm text-text-muted">
-          Las <strong>matriculaciones</strong> y <strong>certificados</strong> respetan el rango;
-          usuarios activos y cursos publicados son siempre el snapshot actual.
+          {t.rich('dashboard.rangeNote', {
+            strong: (chunks) => <strong>{chunks}</strong>,
+          })}
         </p>
 
         <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1">
-          {RANGE_LABELS.map((r) => (
+          {RANGES.map((r) => (
             <button
-              key={r.key}
+              key={r}
               type="button"
-              onClick={() => setRange(r.key)}
+              onClick={() => setRange(r)}
               className={
-                range === r.key
+                range === r
                   ? 'rounded-md bg-brand-500 px-3 py-1.5 text-xs font-semibold text-text-on-brand'
                   : 'rounded-md px-3 py-1.5 text-xs font-medium text-text-muted hover:text-text'
               }
             >
-              {r.label}
+              {t(`statsRange.${r}`)}
             </button>
           ))}
         </div>
@@ -154,39 +154,47 @@ function ActivityTab(): ReactNode {
       ) : stats !== null ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard
-            label="Usuarios activos"
+            label={t('dashboard.statActiveUsers')}
             value={stats.activeUsers}
-            hint="con status ACTIVE"
+            hint={t('dashboard.statActiveUsersHint')}
             icon="users"
             tone="info"
             href="/admin/usuarios"
           />
           <StatCard
-            label="Cursos publicados"
+            label={t('dashboard.statCourses')}
             value={stats.coursesPublished}
-            hint="snapshot actual del catálogo"
+            hint={t('dashboard.statCoursesHint')}
             icon="book"
             tone="info"
             href="/formador/cursos"
           />
           <StatCard
-            label="Matriculaciones"
+            label={t('dashboard.statEnrollments')}
             value={stats.totalEnrollments}
-            hint={range === 'all' ? 'histórico total' : `nuevas en ${rangeLabel(range)}`}
+            hint={
+              range === 'all'
+                ? t('dashboard.hintHistoric')
+                : t('dashboard.hintNewIn', { rango: rangeLabel(range, t) })
+            }
             icon="trending"
             tone="success"
           />
           <StatCard
-            label="Certificados emitidos"
+            label={t('dashboard.statCertificates')}
             value={stats.certificatesIssued}
-            hint={range === 'all' ? 'histórico total' : `emitidos en ${rangeLabel(range)}`}
+            hint={
+              range === 'all'
+                ? t('dashboard.hintHistoric')
+                : t('dashboard.hintIssuedIn', { rango: rangeLabel(range, t) })
+            }
             icon="award"
             tone="success"
           />
           <StatCard
-            label="Tasa de finalización"
+            label={t('dashboard.statCompletionRate')}
             value={`${stats.completionRate}%`}
-            hint="completed / total del rango"
+            hint={t('dashboard.statCompletionRateHint')}
             icon="check"
             tone="success"
           />
@@ -196,8 +204,8 @@ function ActivityTab(): ReactNode {
   );
 }
 
-function rangeLabel(r: StatsRange): string {
-  return r === '7d' ? 'los últimos 7 días' : 'los últimos 30 días';
+function rangeLabel(r: StatsRange, t: TranslatorLike): string {
+  return r === '7d' ? t('dashboard.rangeLast7') : t('dashboard.rangeLast30');
 }
 
 /**
@@ -207,6 +215,7 @@ function rangeLabel(r: StatsRange): string {
  * den de alta (gate Telegram + aprobación manual).
  */
 function MemberOnboardingCard(): ReactNode {
+  const t = useTranslations('adminFundae');
   const [url, setUrl] = useState('');
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -222,11 +231,8 @@ function MemberOnboardingCard(): ReactNode {
   return (
     <Card>
       <CardContent className="p-6">
-        <h2 className="font-display text-lg font-semibold">Onboarding de miembros</h2>
-        <p className="mt-1 text-sm text-text-muted">
-          Comparte este enlace con los miembros actuales de tu comunidad para que se den de alta.
-          Pasan por el gate de Telegram y quedan pendientes de aprobación.
-        </p>
+        <h2 className="font-display text-lg font-semibold">{t('dashboard.onboardingTitle')}</h2>
+        <p className="mt-1 text-sm text-text-muted">{t('dashboard.onboardingDescription')}</p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <code className="min-w-60 flex-1 break-all rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">
             {url || '…'}
@@ -237,7 +243,7 @@ function MemberOnboardingCard(): ReactNode {
             disabled={!url}
             className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-text-on-brand transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {copied ? 'Copiado ✓' : 'Copiar enlace'}
+            {copied ? t('dashboard.copied') : t('dashboard.copyLink')}
           </button>
           <a
             href={url || '#'}
@@ -245,7 +251,7 @@ function MemberOnboardingCard(): ReactNode {
             rel="noopener noreferrer"
             className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-muted transition-colors hover:border-border-strong hover:text-text"
           >
-            Abrir
+            {t('dashboard.open')}
           </a>
         </div>
       </CardContent>
