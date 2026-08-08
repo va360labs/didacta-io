@@ -7,11 +7,19 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { groupsApi, type Group, type GroupWithRole } from '@/lib/groups';
 
-type Tab = 'Mis grupos' | 'Explorar';
+/** Identificador interno de la pestaña; el label sale del catálogo. */
+type Tab = 'mine' | 'explore';
+
+const TABS: { id: Tab; key: 'tabMisGrupos' | 'tabExplorar' }[] = [
+  { id: 'mine', key: 'tabMisGrupos' },
+  { id: 'explore', key: 'tabExplorar' },
+];
 
 function GroupCard({ group, myRole }: { group: Group; myRole?: string }) {
+  const t = useTranslations('alumnoSocial');
   return (
     <Link
       href={`/grupos/${group.id}`}
@@ -26,19 +34,20 @@ function GroupCard({ group, myRole }: { group: Group; myRole?: string }) {
         </div>
         {myRole && (
           <span className="shrink-0 rounded-full bg-(--didacta-trust)/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-(--didacta-trust)">
-            {myRole === 'owner' ? 'Admin' : 'Miembro'}
+            {myRole === 'owner' ? t('grupos.rolAdmin') : t('grupos.rolMiembro')}
           </span>
         )}
       </div>
       <p className="mt-2 text-xs text-text-muted">
-        {group.memberCount} miembro{group.memberCount !== 1 ? 's' : ''}
+        {t('grupos.miembros', { count: group.memberCount })}
       </p>
     </Link>
   );
 }
 
 export default function GruposPage() {
-  const [tab, setTab] = useState<Tab>('Mis grupos');
+  const t = useTranslations('alumnoSocial');
+  const [tab, setTab] = useState<Tab>('mine');
   const [myGroups, setMyGroups] = useState<GroupWithRole[]>([]);
   const [allGroups, setAllGroups] = useState<Group[]>([]);
   // No loading spinners: start in empty state, update silently when data arrives
@@ -56,7 +65,7 @@ export default function GruposPage() {
   }, []);
 
   useEffect(() => {
-    if (tab !== 'Explorar' || allGroups.length > 0) return;
+    if (tab !== 'explore' || allGroups.length > 0) return;
     let cancelled = false;
     groupsApi
       .list()
@@ -73,23 +82,23 @@ export default function GruposPage() {
     <div className="flex gap-6">
       <div className="min-w-0 flex-1 space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="font-display text-2xl font-bold text-text">Grupos</h1>
+          <h1 className="font-display text-2xl font-bold text-text">{t('grupos.titulo')}</h1>
         </div>
 
         <div className="flex gap-1 border-b border-border">
-          {(['Mis grupos', 'Explorar'] as Tab[]).map((t) => (
+          {TABS.map(({ id, key }) => (
             <button
-              key={t}
+              key={id}
               type="button"
-              onClick={() => setTab(t)}
+              onClick={() => setTab(id)}
               className={`px-4 pb-2.5 text-sm font-medium transition-colors ${
-                tab === t
+                tab === id
                   ? 'border-b-2 border-(--didacta-trust) text-(--didacta-trust)'
                   : 'text-text-muted hover:text-text'
               }`}
             >
-              {t}
-              {t === 'Mis grupos' && (
+              {t(`grupos.${key}`)}
+              {id === 'mine' && (
                 <span className="ml-1.5 rounded-full bg-bg-subtle px-1.5 py-0.5 text-[10px] font-semibold text-text-muted">
                   {myGroups.length}
                 </span>
@@ -98,13 +107,11 @@ export default function GruposPage() {
           ))}
         </div>
 
-        {tab === 'Mis grupos' ? (
+        {tab === 'mine' ? (
           myGroups.length === 0 ? (
             <div className="rounded-xl border border-border bg-surface p-12 text-center">
-              <p className="text-base font-semibold text-text">Aún no perteneces a ningún grupo</p>
-              <p className="mt-1 text-sm text-text-muted">
-                Cuando te unas a un grupo, aparecerá aquí.
-              </p>
+              <p className="text-base font-semibold text-text">{t('grupos.vacioMisTitulo')}</p>
+              <p className="mt-1 text-sm text-text-muted">{t('grupos.vacioMisNota')}</p>
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -115,10 +122,8 @@ export default function GruposPage() {
           )
         ) : allGroups.length === 0 ? (
           <div className="rounded-xl border border-border bg-surface p-12 text-center">
-            <p className="text-base font-semibold text-text">No hay grupos disponibles</p>
-            <p className="mt-1 text-sm text-text-muted">
-              Los grupos estarán disponibles próximamente.
-            </p>
+            <p className="text-base font-semibold text-text">{t('grupos.vacioTodosTitulo')}</p>
+            <p className="mt-1 text-sm text-text-muted">{t('grupos.vacioTodosNota')}</p>
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">

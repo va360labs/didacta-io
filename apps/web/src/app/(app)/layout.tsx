@@ -6,7 +6,8 @@
  */
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { AppSidebar, type SidebarGroup } from '@/components/app-sidebar';
 import { CommandPalette } from '@/components/command-palette';
 import { Icon } from '@/components/icon';
@@ -162,6 +163,7 @@ function Shell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const t = useTranslations('alumnoSocial');
 
   const isAdminOrFormador = session.user.roles.some((r) =>
     ['super_admin', 'tenant_admin', 'formador'].includes(r),
@@ -296,7 +298,18 @@ function Shell({
   // con fallback al slug title-cased.
   const { tenant: hostTenant } = useTenantContext();
   const tenantName = hostTenant?.name?.trim() || formatTenantName(session.user.tenantSlug);
-  const sectionLabel = resolveSectionLabel(mergedGroups, pathname ?? '');
+  const sectionExtras = useMemo(
+    () => [
+      { href: '/cuenta', label: t('shell.seccionMiPerfil') },
+      // /grupos ya no tiene item en el sidebar (bloque 9) pero la ruta sigue viva.
+      { href: '/grupos', label: t('shell.seccionGrupos') },
+      // Ídem /rutas: item del alumno retirado del menú, la página sigue accesible
+      // por URL y desde el detalle de una ruta.
+      { href: '/rutas', label: t('shell.seccionRutas') },
+    ],
+    [t],
+  );
+  const sectionLabel = resolveSectionLabel(mergedGroups, pathname ?? '', sectionExtras);
   useEffect(() => {
     const parts = [sectionLabel, tenantName, 'Didacta'].filter((p): p is string => Boolean(p));
     document.title = parts.join(' | ');
@@ -335,7 +348,7 @@ function Shell({
               <button
                 type="button"
                 onClick={() => setMobileNavOpen(true)}
-                aria-label="Abrir menú de navegación"
+                aria-label={t('shell.abrirMenu')}
                 aria-expanded={mobileNavOpen}
                 className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text lg:hidden"
               >
@@ -383,25 +396,17 @@ function Shell({
 }
 
 /**
- * Rutas del shell que NO tienen item en el sidebar pero merecen un nombre de
- * sección en el `<title>` (se acceden desde el menú de perfil, banners, etc.).
- */
-const SECTION_TITLE_EXTRAS: ReadonlyArray<{ href: string; label: string }> = [
-  { href: '/cuenta', label: 'Mi perfil' },
-  // /grupos ya no tiene item en el sidebar (bloque 9) pero la ruta sigue viva.
-  { href: '/grupos', label: 'Grupos' },
-  // Ídem /rutas: item del alumno retirado del menú, la página sigue accesible
-  // por URL y desde el detalle de una ruta.
-  { href: '/rutas', label: 'Rutas de aprendizaje' },
-];
-
-/**
  * Deriva el label de la sección actual a partir del pathname, reutilizando el
- * mapa ruta→label del sidebar (más SECTION_TITLE_EXTRAS). Match por prefijo más
- * largo (la ruta más específica gana); respeta `exactMatch`. Devuelve null si
- * ninguna ruta coincide (el `<title>` cae a "Tenant | Didacta").
+ * mapa ruta→label del sidebar (más `extras`: rutas sin item de menú que igual
+ * merecen nombre en el `<title>`, ya traducidas por quien llama). Match por
+ * prefijo más largo (la ruta más específica gana); respeta `exactMatch`.
+ * Devuelve null si ninguna ruta coincide (el `<title>` cae a "Tenant | Didacta").
  */
-function resolveSectionLabel(groups: SidebarGroup[], pathname: string): string | null {
+function resolveSectionLabel(
+  groups: SidebarGroup[],
+  pathname: string,
+  extras: ReadonlyArray<{ href: string; label: string }>,
+): string | null {
   if (!pathname) return null;
   const candidates: Array<{ href: string; label: string; exact?: boolean }> = [];
   for (const g of groups) {
@@ -409,7 +414,7 @@ function resolveSectionLabel(groups: SidebarGroup[], pathname: string): string |
       if (it.href) candidates.push({ href: it.href, label: it.label, exact: it.exactMatch });
     }
   }
-  candidates.push(...SECTION_TITLE_EXTRAS);
+  candidates.push(...extras);
 
   let best: { href: string; label: string } | null = null;
   for (const c of candidates) {

@@ -8,11 +8,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { UserChip } from '@/components/user-chip';
 import { groupsApi, type GroupDetail } from '@/lib/groups';
 import { usePublicUsers } from '@/lib/public-users';
 
 export default function GroupDetailPage() {
+  const t = useTranslations('alumnoSocial');
   const params = useParams();
   const id = params.id as string;
 
@@ -53,13 +55,13 @@ export default function GroupDetailPage() {
   if (!group) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
-        <p className="text-base font-semibold text-text">Grupo no encontrado</p>
-        <p className="text-sm text-text-muted">Este grupo no existe o aún no está disponible.</p>
+        <p className="text-base font-semibold text-text">{t('grupos.noEncontrado')}</p>
+        <p className="text-sm text-text-muted">{t('grupos.noDisponible')}</p>
         <Link
           href="/grupos"
           className="mt-2 rounded-lg bg-(--didacta-trust) px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
         >
-          Volver a grupos
+          {t('grupos.volver')}
         </Link>
       </div>
     );
@@ -70,12 +72,12 @@ export default function GroupDetailPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <Link href="/grupos" className="text-xs text-text-muted hover:text-text">
-            ← Grupos
+            {t('grupos.volverFlecha')}
           </Link>
           <h1 className="mt-1 font-display text-2xl font-bold text-text">{group.name}</h1>
           {group.description && <p className="mt-1 text-sm text-text-muted">{group.description}</p>}
           <p className="mt-2 text-xs text-text-muted">
-            {group.memberCount} miembro{group.memberCount !== 1 ? 's' : ''}
+            {t('grupos.miembros', { count: group.memberCount })}
           </p>
         </div>
         {!joined && (
@@ -85,12 +87,12 @@ export default function GroupDetailPage() {
             onClick={handleJoin}
             className="shrink-0 rounded-lg bg-(--didacta-trust) px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
           >
-            {joining ? '…' : 'Unirme'}
+            {joining ? '…' : t('grupos.unirme')}
           </button>
         )}
         {joined && (
           <span className="shrink-0 rounded-full bg-(--didacta-growth)/10 px-3 py-1.5 text-sm font-semibold text-(--didacta-growth)">
-            Miembro
+            {t('grupos.rolMiembro')}
           </span>
         )}
       </div>
@@ -98,7 +100,7 @@ export default function GroupDetailPage() {
       {group.members.length > 0 && (
         <div>
           <h2 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-            Miembros
+            {t('grupos.miembrosTitulo')}
           </h2>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {group.members.map((m) => (

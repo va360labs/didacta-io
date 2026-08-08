@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { CommunityAvatar } from '@/components/community-avatar';
 import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,7 @@ import {
  * — cero datos inventados.
  */
 export default function MensajesPage() {
+  const t = useTranslations('alumnoSocial');
   const session = useMemo(() => authStorage.getSession(), []);
   const isStaff = useMemo(
     () => (session?.user.roles ?? []).some((r) => STAFF_ROLES.includes(r)),
@@ -77,12 +79,12 @@ export default function MensajesPage() {
       >
         <div className="border-b border-border p-4">
           <div className="flex items-center justify-between">
-            <h1 className="font-display text-lg font-bold text-text">Mensajes</h1>
+            <h1 className="font-display text-lg font-bold text-text">{t('mensajes.titulo')}</h1>
             <button
               type="button"
               onClick={() => setNewDmOpen(true)}
               className="rounded-lg border border-border p-1.5 text-text-muted hover:border-border-strong hover:text-text"
-              aria-label="Nueva conversación"
+              aria-label={t('mensajes.nuevaConversacion')}
               data-testid="new-dm-button"
             >
               <Icon name="plus" size={16} />
@@ -94,7 +96,7 @@ export default function MensajesPage() {
               type="text"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="Buscar conversaciones…"
+              placeholder={t('mensajes.buscarPlaceholder')}
               className="flex-1 bg-transparent text-sm text-text placeholder:text-text-muted focus:outline-none"
               data-testid="conversations-filter"
             />
@@ -117,25 +119,25 @@ export default function MensajesPage() {
             </div>
           ) : filtered.length === 0 ? (
             <p className="p-6 text-center text-sm text-text-muted">
-              No hay conversaciones que coincidan.
+              {t('mensajes.sinCoincidencias')}
             </p>
           ) : (
             <>
               <ConversationGroup
-                label="Salas"
+                label={t('mensajes.grupoSalas')}
                 items={groups.salas}
                 activeKey={activeKey}
                 onSelect={selectConversation}
               />
               <ConversationGroup
-                label={isStaff ? 'Consultas de alumnos' : 'Profesores'}
+                label={isStaff ? t('mensajes.grupoConsultas') : t('mensajes.grupoProfesores')}
                 items={groups.profesores}
                 activeKey={activeKey}
                 onSelect={selectConversation}
                 onlineUserIds={onlineUserIds}
               />
               <ConversationGroup
-                label="Directos"
+                label={t('mensajes.grupoDirectos')}
                 items={groups.directos}
                 activeKey={activeKey}
                 onSelect={selectConversation}
@@ -155,7 +157,7 @@ export default function MensajesPage() {
                 type="button"
                 onClick={() => setMobileChatOpen(false)}
                 className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border text-text-muted hover:text-text lg:hidden"
-                aria-label="Volver a la lista"
+                aria-label={t('mensajes.volverLista')}
               >
                 <Icon name="arrow-left" size={16} />
               </button>
@@ -169,12 +171,10 @@ export default function MensajesPage() {
                     href={`/espacios/${encodeURIComponent(thread.active.space.slug)}`}
                     className="text-xs text-text-muted hover:text-text"
                   >
-                    Ver espacio en la comunidad
+                    {t('mensajes.verEspacio')}
                   </a>
                 ) : thread.active.type === 'FACULTY' && !isStaff ? (
-                  <p className="text-xs text-text-muted">
-                    Tu canal privado con el equipo de profesores
-                  </p>
+                  <p className="text-xs text-text-muted">{t('mensajes.canalProfesores')}</p>
                 ) : null}
               </div>
             </div>
@@ -194,7 +194,7 @@ export default function MensajesPage() {
                     onClick={() => void thread.loadOlder()}
                     disabled={thread.loadingMore}
                   >
-                    {thread.loadingMore ? 'Cargando…' : 'Cargar mensajes anteriores'}
+                    {thread.loadingMore ? t('mensajes.cargando') : t('mensajes.cargarAnteriores')}
                   </Button>
                 </div>
               ) : null}
@@ -207,8 +207,8 @@ export default function MensajesPage() {
               ) : thread.messages.length === 0 ? (
                 <p className="py-10 text-center text-sm text-text-muted">
                   {thread.active.type === 'FACULTY' && !isStaff
-                    ? 'Escribe tu primera consulta: el equipo de profesores la verá al momento.'
-                    : 'Todavía no hay mensajes. Escribe el primero.'}
+                    ? t('mensajes.primeraConsulta')
+                    : t('mensajes.sinMensajes')}
                 </p>
               ) : (
                 <MessageTimeline
@@ -240,11 +240,8 @@ export default function MensajesPage() {
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-            <p className="text-base font-semibold text-text">Mensajes</p>
-            <p className="text-sm text-text-muted">
-              Selecciona una sala, tu canal de profesores o un directo — o inicia una conversación
-              nueva.
-            </p>
+            <p className="text-base font-semibold text-text">{t('mensajes.titulo')}</p>
+            <p className="text-sm text-text-muted">{t('mensajes.vacioNota')}</p>
             {thread.error ? (
               <div
                 role="alert"
@@ -268,7 +265,7 @@ export default function MensajesPage() {
             {
               id: conversationId,
               type: 'DM',
-              title: member.name ?? 'Miembro',
+              title: member.name ?? t('mensajes.miembro'),
               space: null,
               counterpart: member,
               lastMessage: null,
@@ -292,6 +289,7 @@ function NewDmDialog({
   onClose: () => void;
   onOpened: (conversationId: string, member: MessagingPublicUser) => void | Promise<void>;
 }) {
+  const t = useTranslations('alumnoSocial');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<MessagingPublicUser[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -333,15 +331,17 @@ function NewDmDialog({
     <Dialog
       open={open}
       onOpenChange={(v) => (!v ? onClose() : undefined)}
-      ariaLabel="Nueva conversación"
+      ariaLabel={t('mensajes.nuevaConversacion')}
     >
       <div className="space-y-3 p-5" data-testid="new-dm-dialog">
-        <h2 className="font-display text-lg font-bold text-text">Nueva conversación</h2>
+        <h2 className="font-display text-lg font-bold text-text">
+          {t('mensajes.nuevaConversacion')}
+        </h2>
         <Input
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Busca un miembro por nombre…"
+          placeholder={t('mensajes.buscarMiembroPlaceholder')}
           data-testid="new-dm-search"
         />
         {error ? (
@@ -360,7 +360,7 @@ function NewDmDialog({
             </div>
           ) : results.length === 0 ? (
             <p className="py-6 text-center text-sm text-text-muted">
-              Ningún miembro coincide con la búsqueda.
+              {t('mensajes.ningunMiembro')}
             </p>
           ) : (
             <ul className="divide-y divide-border-soft">
@@ -381,10 +381,10 @@ function NewDmDialog({
                       linkToProfile={false}
                     />
                     <span className="flex-1 truncate text-sm font-semibold text-text">
-                      {m.name ?? 'Miembro'}
+                      {m.name ?? t('mensajes.miembro')}
                     </span>
                     {openingId === m.id ? (
-                      <span className="text-xs text-text-muted">Abriendo…</span>
+                      <span className="text-xs text-text-muted">{t('mensajes.abriendo')}</span>
                     ) : null}
                   </button>
                 </li>

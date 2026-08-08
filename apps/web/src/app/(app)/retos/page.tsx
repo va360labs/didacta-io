@@ -6,7 +6,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon, type IconName } from '@/components/icon';
+import { formatDate, formatNumber } from '@/lib/i18n/format';
+import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import {
   RequestPerkModal,
   SubmitChallengeModal,
@@ -25,18 +28,26 @@ import {
 /// BD no se inventa: por eso no hay duración estimada por reto, ni contadores de
 /// entregas de la comunidad (requieren campo/endpoint nuevos).
 
-const STATUS_LABEL: Record<string, { label: string; tone: 'info' | 'ok' | 'off' }> = {
-  PENDING: { label: 'En revisión', tone: 'info' },
-  APPROVED: { label: 'Aprobado', tone: 'ok' },
-  REJECTED: { label: 'No aprobado', tone: 'off' },
+/** Estado de entrega → key del catálogo + tono (el tono es estilo, no copy). */
+const STATUS_LABEL: Record<string, { key: string; tone: 'info' | 'ok' | 'off' }> = {
+  PENDING: { key: 'retos.estadoRevision', tone: 'info' },
+  APPROVED: { key: 'retos.estadoAprobado', tone: 'ok' },
+  REJECTED: { key: 'retos.estadoNoAprobado', tone: 'off' },
 };
 
+/** Estado de solicitud de beneficio → key del catálogo. Clave abierta → crudo. */
 const REQUEST_LABEL: Record<string, string> = {
-  PENDING: 'Solicitado',
-  APPROVED: 'Aprobado',
-  DONE: 'Hecho',
-  REJECTED: 'No concedido',
+  PENDING: 'retos.solicitadoPendiente',
+  APPROVED: 'retos.solicitadoAprobado',
+  DONE: 'retos.solicitadoHecho',
+  REJECTED: 'retos.solicitadoNoConcedido',
 };
+
+/** El estado lo manda la API: si llega uno que no conocemos, se muestra crudo. */
+function requestLabel(status: string, t: TranslatorLike): string {
+  const key = REQUEST_LABEL[status];
+  return key ? labelOr(t, key, status) : status;
+}
 
 /**
  * Iconos de los beneficios. NO es un dato del beneficio (la tabla no tiene
@@ -46,6 +57,7 @@ const REQUEST_LABEL: Record<string, string> = {
 const PERK_ICONS: IconName[] = ['message', 'file', 'users', 'award'];
 
 export default function RetosPage() {
+  const t = useTranslations('alumnoSocial');
   const [challenges, setChallenges] = useState<ChallengeView[]>([]);
   const [levels, setLevels] = useState<LevelView[]>([]);
   const [perks, setPerks] = useState<MyPerkView[]>([]);
@@ -67,11 +79,11 @@ export default function RetosPage() {
       setStanding(mine);
       setPerks(myPerks);
     } catch {
-      setError('No se pudieron cargar los retos.');
+      setError(t('retos.errorCarga'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -103,7 +115,7 @@ export default function RetosPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="sr-only">Retos</h1>
+      <h1 className="sr-only">{t('retos.titulo')}</h1>
 
       <Hero
         standing={standing}
@@ -118,10 +130,7 @@ export default function RetosPage() {
       />
 
       {ordered.length > 0 ? (
-        <Section
-          title="Tu escalera"
-          note="Cada nivel abre algo concreto. Nada caduca: los puntos se acumulan."
-        >
+        <Section title={t('retos.escaleraTitulo')} note={t('retos.escaleraNota')}>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {ordered.map((level) => (
               <LevelCard
@@ -137,10 +146,7 @@ export default function RetosPage() {
       ) : null}
 
       {perks.length > 0 ? (
-        <Section
-          title="En qué puedes gastar tus puntos"
-          note="Los puntos no se gastan: al alcanzar el nivel, la ventaja queda abierta."
-        >
+        <Section title={t('retos.gastarTitulo')} note={t('retos.gastarNota')}>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {perksPorNivel.map((perk, i) => (
               <PerkCard
@@ -159,19 +165,17 @@ export default function RetosPage() {
         </Section>
       ) : null}
 
-      <Section title="Retos abiertos" note="Las entregas las revisa el equipo.">
+      <Section title={t('retos.abiertosTitulo')} note={t('retos.abiertosNota')}>
         {loading ? (
-          <p className="text-sm text-text-muted">Cargando retos…</p>
+          <p className="text-sm text-text-muted">{t('retos.cargando')}</p>
         ) : error ? (
           <div className="rounded-xl border border-border bg-surface p-4 text-sm text-text-muted">
             {error}
           </div>
         ) : challenges.length === 0 ? (
           <div className="rounded-xl border border-border bg-surface p-12 text-center">
-            <p className="text-base font-semibold text-text">Todavía no hay retos abiertos</p>
-            <p className="mt-1 text-sm text-text-muted">
-              Cuando el equipo publique uno, aparecerá aquí con su premio en puntos.
-            </p>
+            <p className="text-base font-semibold text-text">{t('retos.vacioTitulo')}</p>
+            <p className="mt-1 text-sm text-text-muted">{t('retos.vacioNota')}</p>
           </div>
         ) : (
           <div className="grid gap-4 lg:grid-cols-3">
@@ -209,6 +213,7 @@ function Hero({
   puntosDisponibles: number;
   onSubmitted: () => Promise<void>;
 }) {
+  const t = useTranslations('alumnoSocial');
   const [open, setOpen] = useState(false);
   if (!standing) return null;
 
@@ -225,7 +230,7 @@ function Hero({
         <div className="min-w-0">
           {muyCerca ? (
             <span className="inline-flex rounded-full bg-(--didacta-growth)/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-(--didacta-growth)">
-              Estás muy cerca
+              {t('retos.muyCerca')}
             </span>
           ) : null}
 
@@ -233,27 +238,33 @@ function Hero({
               al `text-white` heredado de la sección. */}
           <h2 className="mt-3 font-display text-3xl font-bold leading-tight text-white">
             {nextLevel
-              ? `Te faltan ${gap.toLocaleString('es-ES')} ${gap === 1 ? 'punto' : 'puntos'} para ser ${nextLevel.name}`
+              ? t('retos.faltanPuntos', { gap, name: nextLevel.name })
               : currentLevel
-                ? `Estás en ${currentLevel.name}, el nivel más alto`
-                : 'Empieza a sumar puntos'}
+                ? t('retos.nivelMaximo', { name: currentLevel.name })
+                : t('retos.empiezaSumar')}
           </h2>
 
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/70">
             {atajo ? (
               <>
-                Con el reto de <span className="text-white">{lowerFirst(atajo.title)}</span> ya
-                tienes {atajo.points} puntos.
+                {t.rich('retos.atajoFrase', {
+                  em: (chunks) => <span className="text-white">{chunks}</span>,
+                  title: lowerFirst(atajo.title),
+                  points: atajo.points,
+                })}
               </>
             ) : (
-              'Ahora mismo no tienes retos pendientes de entregar.'
+              t('retos.sinPendientes')
             )}{' '}
             {/* Lo que se abre arriba: mejor el beneficio concreto que la
                 descripción del nivel — es lo que de verdad mueve a entregar. */}
             {siguienteBeneficio
-              ? `Al llegar a ${nextLevel!.name} se abre: ${siguienteBeneficio}.`
+              ? t('retos.seAbre', { name: nextLevel!.name, perk: siguienteBeneficio })
               : nextLevel?.benefitText
-                ? `Al llegar a ${nextLevel.name}: ${lowerFirst(nextLevel.benefitText)}`
+                ? t('retos.alLlegar', {
+                    name: nextLevel.name,
+                    benefit: lowerFirst(nextLevel.benefitText),
+                  })
                 : null}
           </p>
 
@@ -265,10 +276,10 @@ function Hero({
                 className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-(--didacta-night) transition-opacity hover:opacity-90"
               >
                 <Icon name="arrow-right" size={15} />
-                Entregar el reto más rápido
+                {t('retos.entregarRapido')}
               </button>
               <p className="text-sm text-white/60">
-                {atajo.title} · +{atajo.points} puntos
+                {t('retos.atajoDetalle', { title: atajo.title, points: atajo.points })}
               </p>
               <SubmitChallengeModal
                 challenge={atajo}
@@ -285,19 +296,17 @@ function Hero({
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-white/50">
-                Puntos acumulados
+                {t('retos.puntosAcumulados')}
               </p>
-              <p className="font-display text-4xl font-bold leading-none">
-                {points.toLocaleString('es-ES')}
-              </p>
+              <p className="font-display text-4xl font-bold leading-none">{formatNumber(points)}</p>
             </div>
             {nextLevel ? (
               <div className="text-right">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-white/50">
-                  Siguiente nivel
+                  {t('retos.siguienteNivel')}
                 </p>
                 <p className="font-semibold text-(--didacta-growth)">
-                  {nextLevel.name} · {nextLevel.minPoints.toLocaleString('es-ES')}
+                  {t('retos.nivelDesde', { name: nextLevel.name, points: nextLevel.minPoints })}
                 </p>
               </div>
             ) : null}
@@ -310,20 +319,23 @@ function Hero({
             />
           </div>
           <div className="mt-2 flex justify-between text-xs text-white/50">
-            <span>{currentLevel?.name ?? 'Sin nivel todavía'}</span>
-            {nextLevel ? (
-              <span>
-                {gap.toLocaleString('es-ES')} {gap === 1 ? 'punto' : 'puntos'} para {nextLevel.name}
-              </span>
-            ) : null}
+            <span>{currentLevel?.name ?? t('retos.sinNivel')}</span>
+            {nextLevel ? <span>{t('retos.paraNivel', { gap, name: nextLevel.name })}</span> : null}
           </div>
 
           <dl className="mt-5 grid grid-cols-3 gap-4 border-t border-white/10 pt-4">
-            <Cifra label="Retos abiertos" valor={retosAbiertos.toLocaleString('es-ES')} />
-            <Cifra label="Puntos disponibles" valor={puntosDisponibles.toLocaleString('es-ES')} />
+            <Cifra label={t('retos.cifraRetosAbiertos')} valor={formatNumber(retosAbiertos)} />
             <Cifra
-              label="Tu puesto"
-              valor={standing.rank ? `${standing.rank} de ${standing.total}` : '—'}
+              label={t('retos.cifraPuntosDisponibles')}
+              valor={formatNumber(puntosDisponibles)}
+            />
+            <Cifra
+              label={t('retos.cifraTuPuesto')}
+              valor={
+                standing.rank
+                  ? t('retos.puestoDe', { rank: standing.rank, total: standing.total })
+                  : '—'
+              }
             />
           </dl>
         </div>
@@ -397,6 +409,7 @@ function LevelCard({
   isNext: boolean;
   perks: MyPerkView[];
 }) {
+  const t = useTranslations('alumnoSocial');
   const alcanzado = points >= level.minPoints;
   const faltan = Math.max(0, level.minPoints - points);
 
@@ -408,14 +421,14 @@ function LevelCard({
     >
       <div className="flex items-center justify-between gap-2">
         {alcanzado ? (
-          <Chip tone="ok">Alcanzado</Chip>
+          <Chip tone="ok">{t('retos.chipAlcanzado')}</Chip>
         ) : isNext ? (
-          <Chip tone="ok">A {faltan.toLocaleString('es-ES')} puntos</Chip>
+          <Chip tone="ok">{t('retos.chipAPuntos', { points: faltan })}</Chip>
         ) : (
-          <Chip>Bloqueado</Chip>
+          <Chip>{t('retos.chipBloqueado')}</Chip>
         )}
         <span className="text-xs text-text-muted">
-          Desde {level.minPoints.toLocaleString('es-ES')}
+          {t('retos.desde', { points: level.minPoints })}
         </span>
       </div>
 
@@ -457,15 +470,15 @@ function LevelCard({
 // ───────────────────────── beneficios ─────────────────────────
 
 /** "Una cada 30 días", "Acceso permanente", "Sin límite"… con datos del beneficio. */
-function limiteTexto(perk: MyPerkView): string {
+function limiteTexto(perk: MyPerkView, t: TranslatorLike): string {
   const { maxPerUser, cooldownDays } = perk;
   if (cooldownDays > 0 && maxPerUser > 0) {
-    return `${maxPerUser} en total, una cada ${cooldownDays} días`;
+    return t('retos.limiteTotalCada', { max: maxPerUser, days: cooldownDays });
   }
-  if (cooldownDays > 0) return `Una cada ${cooldownDays} días`;
-  if (maxPerUser === 1) return 'Una sola vez';
-  if (maxPerUser > 1) return `Hasta ${maxPerUser} veces`;
-  return 'Sin límite de solicitudes';
+  if (cooldownDays > 0) return t('retos.limiteCada', { days: cooldownDays });
+  if (maxPerUser === 1) return t('retos.limiteUnaVez');
+  if (maxPerUser > 1) return t('retos.limiteHasta', { max: maxPerUser });
+  return t('retos.limiteSin');
 }
 
 function PerkCard({
@@ -480,6 +493,7 @@ function PerkCard({
   puntosQueFaltan: number | null;
   onDone: () => Promise<void>;
 }) {
+  const t = useTranslations('alumnoSocial');
   const [open, setOpen] = useState(false);
 
   return (
@@ -499,13 +513,13 @@ function PerkCard({
           <Icon name={icon} size={16} />
         </span>
         {perk.lastRequestStatus ? (
-          <Chip tone="info">{REQUEST_LABEL[perk.lastRequestStatus]}</Chip>
+          <Chip tone="info">{requestLabel(perk.lastRequestStatus, t)}</Chip>
         ) : perk.unlocked ? (
-          <Chip tone="ok">Disponible</Chip>
+          <Chip tone="ok">{t('retos.chipDisponible')}</Chip>
         ) : puntosQueFaltan !== null ? (
-          <Chip tone="ok">A {puntosQueFaltan.toLocaleString('es-ES')} puntos</Chip>
+          <Chip tone="ok">{t('retos.chipAPuntos', { points: puntosQueFaltan })}</Chip>
         ) : (
-          <Chip>Bloqueado</Chip>
+          <Chip>{t('retos.chipBloqueado')}</Chip>
         )}
       </div>
 
@@ -515,11 +529,14 @@ function PerkCard({
       ) : null}
 
       <div className="mt-4 space-y-1 border-t border-border pt-3 text-xs">
-        <p className="font-semibold text-text">{limiteTexto(perk)}</p>
+        <p className="font-semibold text-text">{limiteTexto(perk, t)}</p>
         <p className="text-text-muted">
           {perk.unlocked
-            ? `Desbloqueado con ${perk.levelName}`
-            : `Se desbloquea en ${perk.levelName} · ${perk.levelMinPoints.toLocaleString('es-ES')} puntos`}
+            ? t('retos.desbloqueadoCon', { level: perk.levelName })
+            : t('retos.seDesbloquea', {
+                level: perk.levelName,
+                points: perk.levelMinPoints,
+              })}
         </p>
       </div>
 
@@ -531,14 +548,14 @@ function PerkCard({
               onClick={() => setOpen(true)}
               className="rounded-lg bg-(--didacta-trust) px-3 py-1.5 text-sm font-medium text-white"
             >
-              Pedirlo
+              {t('retos.pedirlo')}
             </button>
           ) : perk.availableAt ? (
             <p className="text-xs text-text-muted">
-              Podrás volver a pedirlo el {new Date(perk.availableAt).toLocaleDateString('es-ES')}.
+              {t('retos.volverPedir', { date: formatDate(perk.availableAt) })}
             </p>
           ) : (
-            <p className="text-xs text-text-muted">Ya lo has aprovechado.</p>
+            <p className="text-xs text-text-muted">{t('retos.aprovechado')}</p>
           )}
         </div>
       ) : null}
@@ -557,6 +574,7 @@ function ChallengeCard({
   challenge: ChallengeView;
   onDone: () => Promise<void>;
 }) {
+  const t = useTranslations('alumnoSocial');
   const [open, setOpen] = useState(false);
   const submitted = challenge.mySubmission;
   const estado = submitted ? STATUS_LABEL[submitted.status] : null;
@@ -568,14 +586,16 @@ function ChallengeCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {challenge.proofRequired ? <Chip tone="info">Con prueba</Chip> : null}
-          {estado ? <Chip tone={estado.tone}>{estado.label}</Chip> : null}
+          {challenge.proofRequired ? <Chip tone="info">{t('retos.conPrueba')}</Chip> : null}
+          {estado && submitted ? (
+            <Chip tone={estado.tone}>{labelOr(t, estado.key, submitted.status)}</Chip>
+          ) : null}
         </div>
         <p className="shrink-0 text-right">
           <span className="font-display text-2xl font-bold text-(--didacta-growth)">
-            +{challenge.points}
+            {t('retos.masPuntos', { points: challenge.points })}
           </span>
-          <span className="block text-[11px] text-text-muted">puntos</span>
+          <span className="block text-[11px] text-text-muted">{t('retos.puntos')}</span>
         </p>
       </div>
 
@@ -590,7 +610,7 @@ function ChallengeCard({
 
       {submitted?.reviewNote ? (
         <p className="mt-3 rounded-lg bg-bg-subtle px-3 py-2 text-sm text-text-muted">
-          <span className="font-medium text-text">Respuesta del equipo:</span>{' '}
+          <span className="font-medium text-text">{t('retos.respuestaEquipo')}</span>{' '}
           {submitted.reviewNote}
         </p>
       ) : null}
@@ -602,7 +622,7 @@ function ChallengeCard({
             onClick={() => setOpen(true)}
             className="rounded-lg bg-(--didacta-trust) px-4 py-2 text-sm font-medium text-white"
           >
-            Entregar
+            {t('retos.entregar')}
           </button>
         </div>
       ) : null}

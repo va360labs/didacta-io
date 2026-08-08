@@ -7,25 +7,34 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon, type IconName } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
+import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import { cn } from '@/lib/utils';
 import { notificationLink } from '@/lib/notification-link';
 import { notificationsApi, type Notification } from '@/lib/notifications';
 
+/**
+ * `templateKey` → key del catálogo. Es un diccionario de clave ABIERTA: los
+ * módulos pueden emitir plantillas propias, así que lo desconocido cae al
+ * `subject` de la notificación (y en último término al propio templateKey).
+ */
 const TEMPLATE_LABEL: Record<string, string> = {
-  'learning.enrollment.created': 'Te matriculaste en un curso',
-  'learning.course.completed': 'Completaste un curso',
-  'certificates.issued': 'Tu certificado está listo',
-  'assessments.attempt.passed': 'Aprobaste un quiz',
-  'assessments.attempt.failed': 'No alcanzaste el umbral',
-  'assessments.attempt.graded': 'Tu intento fue corregido',
-  'community.mention': 'Te mencionaron en la comunidad',
-  'community.comment.on_post': 'Nuevo comentario en tu publicación',
-  'community.reply.to_comment': 'Respondieron a tu comentario',
+  'learning.enrollment.created': 'notificaciones.tplMatricula',
+  'learning.course.completed': 'notificaciones.tplCursoCompletado',
+  'certificates.issued': 'notificaciones.tplCertificado',
+  'assessments.attempt.passed': 'notificaciones.tplQuizAprobado',
+  'assessments.attempt.failed': 'notificaciones.tplQuizNoAlcanzado',
+  'assessments.attempt.graded': 'notificaciones.tplQuizCorregido',
+  'community.mention': 'notificaciones.tplMencion',
+  'community.comment.on_post': 'notificaciones.tplComentario',
+  'community.reply.to_comment': 'notificaciones.tplRespuesta',
 };
 
 interface IconSpec {
@@ -51,25 +60,27 @@ const TONE_STYLES: Record<IconSpec['tone'], { bg: string; fg: string }> = {
   warn: { bg: 'var(--didacta-warn-bg)', fg: 'var(--didacta-warn-fg)' },
 };
 
-function formatRelative(iso: string): string {
+function formatRelative(iso: string, t: TranslatorLike): string {
   try {
     const d = new Date(iso);
     const now = Date.now();
     const diffMs = now - d.getTime();
     const min = Math.floor(diffMs / 60000);
-    if (min < 1) return 'recién';
-    if (min < 60) return `hace ${min} min`;
+    if (min < 1) return t('notificaciones.recien');
+    if (min < 60) return t('notificaciones.haceMin', { min });
     const hours = Math.floor(min / 60);
-    if (hours < 24) return `hace ${hours} h`;
+    if (hours < 24) return t('notificaciones.haceHoras', { hours });
     const days = Math.floor(hours / 24);
-    if (days < 7) return `hace ${days} d`;
-    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    if (days < 7) return t('notificaciones.haceDias', { days });
+    return formatDate(d, { day: '2-digit', month: 'short' });
   } catch {
     return iso;
   }
 }
 
 export default function NotificacionesPage() {
+  const t = useTranslations('alumnoSocial');
+  const tErrors = useTranslations('errors');
   const [notifications, setNotifications] = useState<Notification[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -80,9 +91,7 @@ export default function NotificacionesPage() {
       setError(null);
     } catch (e) {
       setError(
-        e instanceof ApiHttpError
-          ? e.message
-          : 'No pudimos cargar tus notificaciones. Prueba refrescar la página.',
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('notificaciones.errorCarga'),
       );
     }
   }
@@ -127,16 +136,18 @@ export default function NotificacionesPage() {
     <section className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Notificaciones</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">
+            {t('notificaciones.titulo')}
+          </h1>
           <p className="mt-1 text-text-muted">
             {unread > 0
-              ? `Tienes ${unread} sin leer.`
-              : 'Al día. Te avisaremos cuando haya algo nuevo.'}
+              ? t('notificaciones.sinLeer', { count: unread })
+              : t('notificaciones.alDia')}
           </p>
         </div>
         {unread > 0 ? (
           <Button variant="secondary" onClick={handleMarkAllRead} disabled={pending}>
-            Marcar todas como leídas
+            {t('notificaciones.marcarTodas')}
           </Button>
         ) : null}
       </header>
@@ -163,11 +174,10 @@ export default function NotificacionesPage() {
             >
               <Icon name="bell" size={30} />
             </div>
-            <h3 className="font-display text-xl font-semibold">No hay notificaciones</h3>
-            <p className="max-w-md text-text-muted">
-              Cuando te matricules en un curso, completes lecciones o recibas un certificado, vas a
-              ver el resumen acá.
-            </p>
+            <h3 className="font-display text-xl font-semibold">
+              {t('notificaciones.vacioTitulo')}
+            </h3>
+            <p className="max-w-md text-text-muted">{t('notificaciones.vacioNota')}</p>
           </CardContent>
         </Card>
       ) : (
@@ -175,7 +185,9 @@ export default function NotificacionesPage() {
           <ul>
             {(notifications ?? []).map((n, idx) => {
               const isUnread = !n.readAt;
-              const label = TEMPLATE_LABEL[n.templateKey] ?? n.subject ?? n.templateKey;
+              const tplKey = TEMPLATE_LABEL[n.templateKey];
+              const fallback = n.subject ?? n.templateKey;
+              const label = tplKey ? labelOr(t, tplKey, fallback) : fallback;
               const spec = TEMPLATE_ICON[n.templateKey] ?? {
                 name: 'bell' as const,
                 tone: 'info' as const,
@@ -188,7 +200,7 @@ export default function NotificacionesPage() {
                     <p className="font-semibold text-text">{label}</p>
                     {isUnread ? (
                       <Badge variant="info" dot className="text-[10px]">
-                        Nueva
+                        {t('notificaciones.nueva')}
                       </Badge>
                     ) : null}
                   </div>
@@ -196,7 +208,7 @@ export default function NotificacionesPage() {
                     <p className="mt-1 text-sm leading-relaxed text-text-muted">{n.body}</p>
                   ) : null}
                   <p className="mt-1.5 flex items-center gap-1.5 text-xs text-text-subtle tabular-nums">
-                    {formatRelative(n.createdAt)}
+                    {formatRelative(n.createdAt, t)}
                     {link ? (
                       <span className="font-semibold text-[var(--didacta-info-fg)]">
                         · {link.actionLabel}
@@ -244,7 +256,7 @@ export default function NotificacionesPage() {
                       disabled={pending}
                       className="shrink-0 text-xs font-semibold text-[var(--didacta-info-fg)] transition-colors hover:underline"
                     >
-                      Marcar leída
+                      {t('notificaciones.marcarLeida')}
                     </button>
                   ) : null}
                 </li>

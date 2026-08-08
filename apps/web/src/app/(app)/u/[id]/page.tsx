@@ -7,6 +7,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog } from '@/components/ui/dialog';
 import { CommunityAvatar } from '@/components/community-avatar';
@@ -32,6 +33,7 @@ import { communityApi, useCommunityTags, type Post } from '@/modules/community';
  * en la equivocada.
  */
 export default function PublicProfilePage({ params }: { params: Promise<{ id: string }> }) {
+  const t = useTranslations('alumnoSocial');
   const { id } = use(params);
   const searchParams = useSearchParams();
   const canModerate = useCanModerate(id);
@@ -92,7 +94,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ id: st
     return (
       <Card>
         <CardContent className="p-8 text-center text-sm text-text-muted">
-          No encontramos este perfil en tu organización.
+          {t('perfil.noEncontrado')}
         </CardContent>
       </Card>
     );
@@ -114,7 +116,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ id: st
             />
             <div className="min-w-0 flex-1">
               <h1 className="font-display text-2xl font-bold tracking-tight text-text">
-                {profile.name ?? 'Usuario'}
+                {profile.name ?? t('perfil.usuario')}
               </h1>
               {meta ? <p className="mt-0.5 text-sm text-text-muted">{meta}</p> : null}
               {profile.bio ? (
@@ -132,14 +134,16 @@ export default function PublicProfilePage({ params }: { params: Promise<{ id: st
 
       {/* Publicaciones del usuario */}
       <div>
-        <h2 className="mb-3 font-display text-lg font-semibold text-text">Publicaciones</h2>
+        <h2 className="mb-3 font-display text-lg font-semibold text-text">
+          {t('perfil.publicaciones')}
+        </h2>
         <div className="space-y-4">
           {posts === null ? (
             <div className="skeleton h-32 w-full" />
           ) : posts.length === 0 ? (
             <Card>
               <CardContent className="p-8 text-center text-sm text-text-muted">
-                {profile.name ?? 'Este usuario'} aún no ha publicado nada.
+                {t('perfil.sinPublicaciones', { name: profile.name ?? t('perfil.esteUsuario') })}
               </CardContent>
             </Card>
           ) : (
@@ -164,7 +168,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ id: st
         onOpenChange={(open) => {
           if (!open) setSelectedPostId(null);
         }}
-        ariaLabel="Detalle de la conversación"
+        ariaLabel={t('perfil.detalleConversacion')}
         maxWidthClass="max-w-5xl"
         contentClassName="p-6 sm:p-8"
       >
