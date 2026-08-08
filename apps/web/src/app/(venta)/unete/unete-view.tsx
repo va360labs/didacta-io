@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon';
 import { ApiHttpError } from '@/lib/api-client';
@@ -72,6 +72,11 @@ function intervalDescriptionLabel(t: TranslatorLike, intervalMonths: number): st
 export function UneteView() {
   const t = useTranslations('publicSite');
   const tCommon = useTranslations('common');
+  // `/unete` sí se pinta en SSR y ahí el singleton de `user-prefs` está vacío a
+  // propósito: sin `locale` explícito el servidor pintaría la fecha del primer
+  // cargo con el locale por defecto y el cliente la repintaría → mismatch de
+  // hidratación visible.
+  const locale = useLocale();
   const params = useSearchParams();
   const status = params.get('status');
   const { tenant } = useTenantContext();
@@ -364,6 +369,7 @@ export function UneteView() {
                         days: trialDays,
                         amount: formatCents(selected.amountCents, selected.currency),
                         date: formatDate(firstChargeDate, {
+                          locale,
                           day: 'numeric',
                           month: 'long',
                           year: 'numeric',
