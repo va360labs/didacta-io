@@ -8,6 +8,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,11 +16,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { accessGroupsApi, type AccessGroupListItem } from '@/lib/access-groups';
-import { ApiHttpError } from '@/lib/api-client';
-import { adminUsersApi, ROLE_LABELS, type AssignableRole } from '@/lib/admin-users';
+import { adminUsersApi, ASSIGNABLE_ROLES, type AssignableRole } from '@/lib/admin-users';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { authStorage } from '@/lib/auth-storage';
 
 export default function InvitarPage() {
+  const t = useTranslations('adminUsuarios');
+  const tErrors = useTranslations('errors');
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +54,7 @@ export default function InvitarPage() {
     setError(null);
     const token = authStorage.getAccessToken();
     if (!token) {
-      setError('Tu sesión expiró.');
+      setError(t('invite.sessionExpired'));
       setPending(false);
       return;
     }
@@ -64,7 +67,7 @@ export default function InvitarPage() {
       });
       router.push('/admin/usuarios');
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos enviar la invitación.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(false);
     }
@@ -73,14 +76,12 @@ export default function InvitarPage() {
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6">
       <Button asChild variant="ghost" className="self-start">
-        <Link href="/admin/usuarios">← Volver al listado</Link>
+        <Link href="/admin/usuarios">{t('invite.back')}</Link>
       </Button>
 
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Invitar persona</h1>
-        <p className="mt-1 text-text-muted">
-          Le enviaremos un email con un enlace para que defina su contraseña y entre.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('invite.title')}</h1>
+        <p className="mt-1 text-text-muted">{t('invite.subtitle')}</p>
       </header>
 
       <Card>
@@ -97,10 +98,8 @@ export default function InvitarPage() {
               <Icon name="user" size={18} />
             </span>
             <div className="min-w-0">
-              <CardTitle>Datos del nuevo usuario</CardTitle>
-              <CardDescription>
-                El email tiene que ser único en tu organización. El rol se puede cambiar después.
-              </CardDescription>
+              <CardTitle>{t('invite.cardTitle')}</CardTitle>
+              <CardDescription>{t('invite.cardDescription')}</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -108,7 +107,7 @@ export default function InvitarPage() {
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">
-                Email <span className="text-danger-700">*</span>
+                {t('invite.emailLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Input
                 id="email"
@@ -116,68 +115,55 @@ export default function InvitarPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="persona@empresa.com"
+                placeholder={t('invite.emailPlaceholder')}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="name">Nombre completo (opcional)</Label>
+              <Label htmlFor="name">{t('invite.nameLabel')}</Label>
               <Input
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="María Pérez"
+                placeholder={t('invite.namePlaceholder')}
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="role">
-                Rol inicial <span className="text-danger-700">*</span>
+                {t('invite.roleLabel')} <span className="text-danger-700">*</span>
               </Label>
               <Select
                 id="role"
                 value={role}
                 onChange={(e) => setRole(e.target.value as AssignableRole)}
               >
-                {Object.entries(ROLE_LABELS).map(([k, label]) => (
+                {ASSIGNABLE_ROLES.map((k) => (
                   <option key={k} value={k}>
-                    {label}
+                    {t(`roles.${k}`)}
                   </option>
                 ))}
               </Select>
-              <p className="text-xs text-text-subtle">
-                {role === 'tenant_admin' &&
-                  'Los administradores tienen acceso completo al panel y deberán activar MFA.'}
-                {role === 'formador' &&
-                  'Los formadores pueden crear y gestionar cursos, quizzes y correcciones.'}
-                {role === 'alumno' &&
-                  'Los alumnos consumen los cursos publicados de la organización.'}
-                {role === 'auditor' && 'Los auditores pueden consultar el log y certificados.'}
-                {role === 'empresa_manager' &&
-                  'Los gerentes ven analytics y miembros de su empresa.'}
-              </p>
+              <p className="text-xs text-text-subtle">{t(`roleDesc.${role}`)}</p>
             </div>
 
             {groups ? (
               <div className="space-y-2">
-                <Label htmlFor="accessGroup">Grupo de acceso (opcional)</Label>
+                <Label htmlFor="accessGroup">{t('invite.groupLabel')}</Label>
                 <Select
                   id="accessGroup"
                   value={groupId}
                   onChange={(e) => setGroupId(e.target.value)}
                   data-testid="invite-group-select"
                 >
-                  <option value="">Sin grupo</option>
+                  <option value="">{t('invite.noGroup')}</option>
                   {groups.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.name}
                     </option>
                   ))}
                 </Select>
-                <p className="text-xs text-text-subtle">
-                  Queda matriculado ya en los cursos del grupo: cuando defina su contraseña entrará
-                  con su aula lista, no a un campus vacío.
-                </p>
+                <p className="text-xs text-text-subtle">{t('invite.groupHint')}</p>
               </div>
             ) : null}
 
@@ -192,10 +178,10 @@ export default function InvitarPage() {
 
             <div className="flex items-center justify-end gap-3 border-t border-border-soft pt-4">
               <Button type="button" variant="ghost" onClick={() => router.back()}>
-                Cancelar
+                {t('invite.cancel')}
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? 'Enviando…' : 'Enviar invitación'}
+                {pending ? t('invite.submitting') : t('invite.submit')}
               </Button>
             </div>
           </form>

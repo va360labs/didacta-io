@@ -7,6 +7,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,15 +15,16 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { UserChip } from '@/components/user-chip';
-import { ApiHttpError } from '@/lib/api-client';
 import {
   adminUsersApi,
-  ROLE_LABELS,
-  STATUS_LABELS,
+  ASSIGNABLE_ROLES,
   type AssignableRole,
   type UserListItem,
   type UserStatus,
 } from '@/lib/admin-users';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import { paymentTiersApi, type PaymentTier, type UserTier } from '@/lib/payment-connections';
 import { authStorage } from '@/lib/auth-storage';
 
@@ -38,6 +40,8 @@ const STATUS_VARIANT: Record<UserStatus, 'success' | 'warning' | 'muted' | 'dang
 };
 
 export default function UsuariosPage() {
+  const t = useTranslations('adminUsuarios');
+  const tErrors = useTranslations('errors');
   const [users, setUsers] = useState<UserListItem[] | null>(null);
   const [total, setTotal] = useState<number>(0);
   const [hasMore, setHasMore] = useState<boolean>(false);
@@ -72,7 +76,7 @@ export default function UsuariosPage() {
       setPage(res.page);
       void loadTiers(res.items);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los usuarios.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -89,7 +93,7 @@ export default function UsuariosPage() {
       ]);
       setTierCatalog(catRes.tiers);
       const map: Record<string, UserTier> = {};
-      for (const t of utRes.tiers) map[t.userId] = t;
+      for (const ut of utRes.tiers) map[ut.userId] = ut;
       setTierByUser(map);
       setTiersEnabled(true);
     } catch {
@@ -105,7 +109,7 @@ export default function UsuariosPage() {
       const { tier } = await paymentTiersApi.assignUserTier(token, userId, tierId);
       setTierByUser((prev) => ({ ...prev, [userId]: tier }));
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudo asignar el tier.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -128,17 +132,15 @@ export default function UsuariosPage() {
     <div className="flex flex-col gap-6">
       <header className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Usuarios</h1>
-          <p className="mt-1 text-text-muted">
-            Gestiona las personas que tienen acceso a tu organización.
-          </p>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{t('list.title')}</h1>
+          <p className="mt-1 text-text-muted">{t('list.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button asChild variant="secondary">
-            <Link href="/admin/usuarios/importar">Importar CSV</Link>
+            <Link href="/admin/usuarios/importar">{t('list.importCsv')}</Link>
           </Button>
           <Button asChild>
-            <Link href="/admin/usuarios/invitar">Invitar persona</Link>
+            <Link href="/admin/usuarios/invitar">{t('list.invitePerson')}</Link>
           </Button>
         </div>
       </header>
@@ -147,12 +149,12 @@ export default function UsuariosPage() {
         <CardContent className="flex flex-wrap items-end gap-4 p-4">
           <div className="flex-1 min-w-[240px]">
             <label className="text-xs font-semibold text-text-muted" htmlFor="search">
-              Buscar
+              {t('list.searchLabel')}
             </label>
             <Input
               id="search"
               type="search"
-              placeholder="Email o nombre…"
+              placeholder={t('list.searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
@@ -163,7 +165,7 @@ export default function UsuariosPage() {
           </div>
           <div>
             <label className="text-xs font-semibold text-text-muted" htmlFor="status">
-              Estado
+              {t('list.statusLabel')}
             </label>
             <Select
               id="status"
@@ -171,16 +173,16 @@ export default function UsuariosPage() {
               onChange={(e) => setStatusFilter(e.target.value as UserStatus)}
               className="mt-1 min-w-[160px]"
             >
-              <option value="">Todos</option>
-              <option value="ACTIVE">Activos</option>
-              <option value="PENDING">Pendientes</option>
-              <option value="SUSPENDED">Suspendidos</option>
-              <option value="DEACTIVATED">Desactivados</option>
+              <option value="">{t('list.filterAll')}</option>
+              <option value="ACTIVE">{t('list.filterActive')}</option>
+              <option value="PENDING">{t('list.filterPending')}</option>
+              <option value="SUSPENDED">{t('list.filterSuspended')}</option>
+              <option value="DEACTIVATED">{t('list.filterDeactivated')}</option>
             </Select>
           </div>
           <div>
             <label className="text-xs font-semibold text-text-muted" htmlFor="role">
-              Rol
+              {t('list.roleLabel')}
             </label>
             <Select
               id="role"
@@ -188,17 +190,17 @@ export default function UsuariosPage() {
               onChange={(e) => setRoleFilter(e.target.value as AssignableRole)}
               className="mt-1 min-w-[180px]"
             >
-              <option value="">Todos</option>
-              {Object.entries(ROLE_LABELS).map(([k, label]) => (
+              <option value="">{t('list.filterAll')}</option>
+              {ASSIGNABLE_ROLES.map((k) => (
                 <option key={k} value={k}>
-                  {label}
+                  {t(`roles.${k}`)}
                 </option>
               ))}
             </Select>
           </div>
           <div>
             <label className="text-xs font-semibold text-text-muted" htmlFor="source">
-              Origen
+              {t('list.sourceLabel')}
             </label>
             <Select
               id="source"
@@ -206,12 +208,12 @@ export default function UsuariosPage() {
               onChange={(e) => setSourceFilter(e.target.value)}
               className="mt-1 min-w-40"
             >
-              <option value="">Todos</option>
+              <option value="">{t('list.filterAll')}</option>
               <option value="learndash">LearnDash</option>
             </Select>
           </div>
           <Button variant="secondary" onClick={applyFilters}>
-            Aplicar
+            {t('list.apply')}
           </Button>
         </CardContent>
       </Card>
@@ -232,16 +234,14 @@ export default function UsuariosPage() {
       ) : users.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
-            <h3 className="font-display text-xl font-semibold">No hay usuarios todavía</h3>
-            <p className="max-w-md text-text-muted">
-              Invita a tu primer usuario o ajusta los filtros si esperabas ver a alguien acá.
-            </p>
+            <h3 className="font-display text-xl font-semibold">{t('list.emptyTitle')}</h3>
+            <p className="max-w-md text-text-muted">{t('list.emptyBody')}</p>
             <div className="flex items-center gap-2">
               <Button asChild variant="secondary">
-                <Link href="/admin/usuarios/importar">Importar CSV</Link>
+                <Link href="/admin/usuarios/importar">{t('list.importCsv')}</Link>
               </Button>
               <Button asChild>
-                <Link href="/admin/usuarios/invitar">Invitar persona</Link>
+                <Link href="/admin/usuarios/invitar">{t('list.invitePerson')}</Link>
               </Button>
             </div>
           </CardContent>
@@ -251,24 +251,24 @@ export default function UsuariosPage() {
           <CardHeader>
             <CardTitle className="text-base">
               {total === 0
-                ? '0 usuarios'
-                : `Mostrando ${rangeStart}–${rangeEnd} de ${total} usuarios`}
+                ? t('list.countZero')
+                : t('list.countRange', { start: rangeStart, end: rangeEnd, total })}
             </CardTitle>
-            <CardDescription>
-              Click sobre un usuario para ver el detalle y gestionar su acceso.
-            </CardDescription>
+            <CardDescription>{t('list.tableHint')}</CardDescription>
           </CardHeader>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-y border-border bg-surface-2 text-left text-xs uppercase tracking-wide text-text-muted">
-                  <th className="px-6 py-3 font-semibold">Persona</th>
-                  <th className="px-3 py-3 font-semibold">Roles</th>
-                  <th className="px-3 py-3 font-semibold">Estado</th>
-                  {tiersEnabled ? <th className="px-3 py-3 font-semibold">Tier</th> : null}
-                  <th className="px-3 py-3 font-semibold">Origen</th>
-                  <th className="px-3 py-3 font-semibold">MFA</th>
-                  <th className="px-6 py-3 font-semibold text-right">Último login</th>
+                  <th className="px-6 py-3 font-semibold">{t('list.colPerson')}</th>
+                  <th className="px-3 py-3 font-semibold">{t('list.colRoles')}</th>
+                  <th className="px-3 py-3 font-semibold">{t('list.colStatus')}</th>
+                  {tiersEnabled ? (
+                    <th className="px-3 py-3 font-semibold">{t('list.colTier')}</th>
+                  ) : null}
+                  <th className="px-3 py-3 font-semibold">{t('list.colSource')}</th>
+                  <th className="px-3 py-3 font-semibold">{t('list.colMfa')}</th>
+                  <th className="px-6 py-3 font-semibold text-right">{t('list.colLastLogin')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -290,18 +290,22 @@ export default function UsuariosPage() {
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-1">
                         {u.roles.length === 0 ? (
-                          <span className="text-xs italic text-text-subtle">Sin rol</span>
+                          <span className="text-xs italic text-text-subtle">
+                            {t('list.noRole')}
+                          </span>
                         ) : (
                           u.roles.map((r) => (
                             <Badge key={r} variant="muted">
-                              {ROLE_LABELS[r as AssignableRole] ?? r}
+                              {labelOr(t, `roles.${r}`, r)}
                             </Badge>
                           ))
                         )}
                       </div>
                     </td>
                     <td className="px-3 py-3">
-                      <Badge variant={STATUS_VARIANT[u.status]}>{STATUS_LABELS[u.status]}</Badge>
+                      <Badge variant={STATUS_VARIANT[u.status]}>
+                        {t(`userStatus.${u.status}`)}
+                      </Badge>
                     </td>
                     {tiersEnabled ? (
                       <td className="px-3 py-3">
@@ -318,20 +322,20 @@ export default function UsuariosPage() {
                           {u.externalSource}
                         </Badge>
                       ) : (
-                        <span className="text-xs text-text-subtle">Nativo</span>
+                        <span className="text-xs text-text-subtle">{t('list.sourceNative')}</span>
                       )}
                     </td>
                     <td className="px-3 py-3">
                       {u.mfaEnabled ? (
                         <Badge variant="success" dot>
-                          Activo
+                          {t('list.mfaOn')}
                         </Badge>
                       ) : (
-                        <Badge variant="muted">No</Badge>
+                        <Badge variant="muted">{t('list.mfaOff')}</Badge>
                       )}
                     </td>
                     <td className="px-6 py-3 text-right text-xs text-text-muted tabular-nums">
-                      {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString('es-ES') : '—'}
+                      {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : '—'}
                     </td>
                   </tr>
                 ))}
@@ -342,7 +346,7 @@ export default function UsuariosPage() {
           {totalPages > 1 ? (
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface-2 px-6 py-3">
               <p className="text-xs text-text-muted tabular-nums">
-                Página {page} de {totalPages}
+                {t('list.pageOf', { page, total: totalPages })}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -350,14 +354,14 @@ export default function UsuariosPage() {
                   onClick={() => void reload(page - 1)}
                   disabled={page <= 1}
                 >
-                  ← Anterior
+                  {t('list.prev')}
                 </Button>
                 <Button
                   variant="secondary"
                   onClick={() => void reload(page + 1)}
                   disabled={!hasMore}
                 >
-                  Siguiente →
+                  {t('list.next')}
                 </Button>
               </div>
             </div>
@@ -380,6 +384,7 @@ function TierCell({
   catalog: PaymentTier[];
   onAssign: (tierId: string | null) => void;
 }) {
+  const t = useTranslations('adminUsuarios');
   const effective = tier?.effectiveLabel ?? null;
   const manualId = tier?.manualTierId ?? '';
   return (
@@ -387,19 +392,18 @@ function TierCell({
       {effective ? (
         <Badge variant={tier?.source === 'derived' ? 'success' : 'muted'}>{effective}</Badge>
       ) : (
-        <span className="text-xs italic text-text-subtle">Desconocido</span>
+        <span className="text-xs italic text-text-subtle">{t('list.tierUnknown')}</span>
       )}
       <Select
         value={manualId}
         onChange={(e) => onAssign(e.target.value || null)}
         className="min-w-32 text-xs"
-        aria-label="Asignar tier manual"
+        aria-label={t('list.tierAssignAria')}
       >
-        <option value="">— manual —</option>
-        {catalog.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.name}
-            {t.isFree ? ' (free)' : ''}
+        <option value="">{t('list.tierManualOption')}</option>
+        {catalog.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.isFree ? t('list.tierFreeOption', { name: option.name }) : option.name}
           </option>
         ))}
       </Select>

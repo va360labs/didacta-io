@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +15,9 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { UserChip } from '@/components/user-chip';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import {
   decideMemberRequest,
   listMemberRequests,
@@ -42,6 +45,8 @@ import { RenewalEmailModal } from '@/components/renewal-email-modal';
  * aprobar, se asigna ese tier (que, si está vinculado a un grupo, da el acceso).
  */
 export default function SolicitudesMiembrosPage() {
+  const t = useTranslations('adminUsuarios');
+  const tErrors = useTranslations('errors');
   const [requests, setRequests] = useState<MemberRequest[] | null>(null);
   const [tiers, setTiers] = useState<PaymentTier[]>([]);
   const [selected, setSelected] = useState<Record<string, string>>({});
@@ -93,7 +98,7 @@ export default function SolicitudesMiembrosPage() {
         return next;
       });
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las solicitudes.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -111,47 +116,49 @@ export default function SolicitudesMiembrosPage() {
       await rerunMemberLookup(t, userId, email);
       await load();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos volver a consultar.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(null);
     }
   }
 
   async function approve(req: MemberRequest) {
-    const t = authStorage.getAccessToken();
-    if (!t) return;
+    const bearer = authStorage.getAccessToken();
+    if (!bearer) return;
     setBusy(`approve:${req.userId}`);
     try {
       setError(null);
       const tierId = selected[req.userId] || null;
       // 1) Asigna el tier (emite el evento → reconcilia el grupo vinculado/acceso).
-      if (tierId) await paymentTiersApi.assignUserTier(t, req.userId, tierId);
+      if (tierId) await paymentTiersApi.assignUserTier(bearer, req.userId, tierId);
       // 2) Aprueba (ACTIVE + grupo por defecto + bienvenida).
-      await decideMemberRequest(t, req.userId, 'approve');
+      await decideMemberRequest(bearer, req.userId, 'approve');
       const tierName = tiers.find((x) => x.id === tierId)?.name;
       setNotice(
-        `${req.name ?? req.email} aprobado${tierName ? ` con el tier «${tierName}»` : ''}.`,
+        tierName
+          ? t('requests.approvedWithTier', { name: req.name ?? req.email, tier: tierName })
+          : t('requests.approved', { name: req.name ?? req.email }),
       );
       await load();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos aprobar la solicitud.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(null);
     }
   }
 
   async function reject(req: MemberRequest) {
-    const t = authStorage.getAccessToken();
-    if (!t) return;
-    if (!window.confirm(`¿Rechazar la solicitud de ${req.name ?? req.email}?`)) return;
+    const bearer = authStorage.getAccessToken();
+    if (!bearer) return;
+    if (!window.confirm(t('requests.rejectConfirm', { name: req.name ?? req.email }))) return;
     setBusy(`reject:${req.userId}`);
     try {
       setError(null);
-      await decideMemberRequest(t, req.userId, 'reject');
-      setNotice(`${req.name ?? req.email} rechazado.`);
+      await decideMemberRequest(bearer, req.userId, 'reject');
+      setNotice(t('requests.rejected', { name: req.name ?? req.email }));
       await load();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos rechazar la solicitud.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(null);
     }
@@ -160,12 +167,8 @@ export default function SolicitudesMiembrosPage() {
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
       <header>
-        <h1 className="text-2xl font-semibold text-text">Solicitudes de inscripción</h1>
-        <p className="text-text-muted">
-          Miembros que solicitaron acceso, pendientes de validar. Por cada uno se consulta su
-          suscripción en todas las cuentas de pago conectadas y se preselecciona el tier que
-          corresponda (puedes cambiarlo antes de aprobar).
-        </p>
+        <h1 className="text-2xl font-semibold text-text">{t('requests.title')}</h1>
+        <p className="text-text-muted">{t('requests.subtitle')}</p>
       </header>
 
       {error && (
@@ -182,7 +185,7 @@ export default function SolicitudesMiembrosPage() {
       {requests === null ? (
         <Skeleton className="h-32 w-full" />
       ) : requests.length === 0 ? (
-        <p className="text-text-muted">No hay solicitudes pendientes.</p>
+        <p className="text-text-muted">{t('requests.empty')}</p>
       ) : (
         <div className="flex flex-col gap-3">
           {requests.map((r) => (
@@ -204,16 +207,18 @@ export default function SolicitudesMiembrosPage() {
                     onClick={() => void rerun(r.userId)}
                     disabled={busy === `rerun:${r.userId}`}
                   >
-                    {busy === `rerun:${r.userId}` ? 'Consultando…' : 'Volver a consultar'}
+                    {busy === `rerun:${r.userId}`
+                      ? t('requests.requerying')
+                      : t('requests.requery')}
                   </Button>
                 </div>
                 <CardDescription>
                   {r.email}
-                  {r.telegramId ? ` · Telegram ${r.telegramId}` : ''}
+                  {r.telegramId ? t('requests.telegramTag', { id: r.telegramId }) : ''}
                   {r.telegramInGroup === true
-                    ? ' · en el grupo'
+                    ? t('requests.inGroupTag')
                     : r.telegramInGroup === false
-                      ? ' · NO en el grupo'
+                      ? t('requests.notInGroupTag')
                       : ''}
                 </CardDescription>
               </CardHeader>
@@ -238,7 +243,7 @@ export default function SolicitudesMiembrosPage() {
 
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="min-w-[14rem] flex-1">
-                    <Label htmlFor={`tier-${r.userId}`}>Tier a asignar</Label>
+                    <Label htmlFor={`tier-${r.userId}`}>{t('requests.tierLabel')}</Label>
                     <Select
                       id={`tier-${r.userId}`}
                       value={selected[r.userId] ?? ''}
@@ -246,28 +251,28 @@ export default function SolicitudesMiembrosPage() {
                         setSelected((prev) => ({ ...prev, [r.userId]: e.target.value }))
                       }
                     >
-                      <option value="">— Sin tier —</option>
-                      {tiers.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
+                      <option value="">{t('requests.noTier')}</option>
+                      {tiers.map((tier) => (
+                        <option key={tier.id} value={tier.id}>
+                          {tier.name}
                         </option>
                       ))}
                     </Select>
                     {selected[r.userId] && selected[r.userId] === suggestTierId(r, tiers) && (
-                      <p className="mt-1 text-xs text-brand-700">
-                        Preseleccionado por su suscripción detectada.
-                      </p>
+                      <p className="mt-1 text-xs text-brand-700">{t('requests.preselected')}</p>
                     )}
                   </div>
                   <Button onClick={() => void approve(r)} disabled={busy === `approve:${r.userId}`}>
-                    {busy === `approve:${r.userId}` ? 'Aprobando…' : 'Aprobar'}
+                    {busy === `approve:${r.userId}`
+                      ? t('requests.approving')
+                      : t('requests.approve')}
                   </Button>
                   <Button
                     variant="ghost"
                     onClick={() => void reject(r)}
                     disabled={busy === `reject:${r.userId}`}
                   >
-                    Rechazar
+                    {t('requests.reject')}
                   </Button>
                 </div>
               </CardContent>
@@ -283,14 +288,18 @@ export default function SolicitudesMiembrosPage() {
           unitAmount={emailFor.match?.unitAmount ?? null}
           currency={emailFor.match?.currency ?? null}
           loadContext={async () => {
-            const t = authStorage.getAccessToken();
-            if (!t) throw new Error('No hay sesión activa.');
-            return memberRenewalContext(t, emailFor.req.userId, emailFor.match?.subscriptionId);
+            const bearer = authStorage.getAccessToken();
+            if (!bearer) throw new Error(t('requests.noSession'));
+            return memberRenewalContext(
+              bearer,
+              emailFor.req.userId,
+              emailFor.match?.subscriptionId,
+            );
           }}
           send={async (payload) => {
-            const t = authStorage.getAccessToken();
-            if (!t) throw new Error('No hay sesión activa.');
-            return sendMemberRenewalEmail(t, emailFor.req.userId, payload);
+            const bearer = authStorage.getAccessToken();
+            if (!bearer) throw new Error(t('requests.noSession'));
+            return sendMemberRenewalEmail(bearer, emailFor.req.userId, payload);
           }}
           onClose={() => setEmailFor(null)}
           onSent={(msg) => {
@@ -320,24 +329,28 @@ function MapSubscriptionRow({
   onChange: (v: string) => void;
   onSearch: () => void;
 }) {
+  const t = useTranslations('adminUsuarios');
   const usedEmail = request.lookup?.email ?? null;
   const mapped = usedEmail && usedEmail.toLowerCase() !== request.email.toLowerCase();
   return (
     <div className="flex flex-col gap-1.5 rounded-lg border border-dashed border-border bg-surface-2 p-3">
       {mapped ? (
         <p className="text-xs text-brand-700">
-          Suscripción consultada por <strong>{usedEmail}</strong> (mapeado).
+          {t.rich('requests.mappedNote', {
+            email: usedEmail,
+            strong: (chunks) => <strong>{chunks}</strong>,
+          })}
         </p>
       ) : null}
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[16rem] flex-1">
           <Label htmlFor={`mapemail-${request.userId}`} className="text-xs text-text-muted">
-            ¿La suscripción está a otro email? Mapéala aquí
+            {t('requests.mapLabel')}
           </Label>
           <Input
             id={`mapemail-${request.userId}`}
             type="email"
-            placeholder="email de la suscripción…"
+            placeholder={t('requests.mapPlaceholder')}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={(e) => {
@@ -346,7 +359,7 @@ function MapSubscriptionRow({
           />
         </div>
         <Button variant="secondary" onClick={onSearch} disabled={busy || !value.trim()}>
-          {busy ? 'Buscando…' : 'Buscar suscripción'}
+          {busy ? t('requests.searching') : t('requests.searchSubscription')}
         </Button>
       </div>
     </div>
@@ -364,22 +377,21 @@ function SubscriptionBlock({
   /** Enviar un email al solicitante SIN suscripción detectada (sin enlace de renovación). */
   onEmail: () => void;
 }) {
+  const t = useTranslations('adminUsuarios');
   const lookup = request.lookup;
   if (!lookup || lookup.status === 'PENDING') {
     return (
       <p className="text-sm text-text-muted">
-        {lookup?.status === 'PENDING'
-          ? 'Consultando la suscripción…'
-          : 'Aún no se ha consultado la suscripción.'}
+        {lookup?.status === 'PENDING' ? t('requests.lookupPending') : t('requests.lookupNotYet')}
       </p>
     );
   }
   if (lookup.status === 'ERROR') {
     return (
       <div className="rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-warning-700">
-        ⚠ No se pudo verificar la suscripción
-        {lookup.error ? `: ${lookup.error}` : ''}. Revisa que las cuentas de pago estén conectadas y
-        vuelve a consultar.
+        {lookup.error
+          ? t('requests.lookupErrorDetail', { error: lookup.error })
+          : t('requests.lookupError')}
       </div>
     );
   }
@@ -387,11 +399,9 @@ function SubscriptionBlock({
   if (lookup.matchCount === 0 || results.length === 0) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2">
-        <span className="text-sm text-text-muted">
-          Sin suscripción detectada en las cuentas de pago conectadas.
-        </span>
+        <span className="text-sm text-text-muted">{t('requests.noSubscription')}</span>
         <Button variant="ghost" size="sm" onClick={onEmail}>
-          Enviar email
+          {t('requests.sendEmail')}
         </Button>
       </div>
     );
@@ -415,8 +425,8 @@ function SubscriptionBlock({
         }
       >
         {hasEntitled
-          ? `Suscripción vigente (${results.length})`
-          : `⚠ Suscripción no vigente — baja o impago (${results.length})`}
+          ? t('requests.subEntitled', { count: results.length })
+          : t('requests.subNotEntitled', { count: results.length })}
       </p>
       <ul className="flex flex-col gap-1">
         {results.map((m) => (
@@ -424,9 +434,9 @@ function SubscriptionBlock({
             key={m.subscriptionId}
             className="flex flex-wrap items-center justify-between gap-2 text-sm text-text"
           >
-            <span>{describeMatch(m)}</span>
+            <span>{describeMatch(m, t)}</span>
             <Button variant="ghost" onClick={() => onRemind(m)}>
-              Enviar recordatorio
+              {t('requests.sendReminder')}
             </Button>
           </li>
         ))}
@@ -442,12 +452,13 @@ function SubscriptionBlock({
  * compras (para no añadir ruido a las solicitudes normales).
  */
 function PurchasesBlock({ request }: { request: MemberRequest }) {
+  const t = useTranslations('adminUsuarios');
   const purchases = request.lookup?.purchases ?? [];
   if (purchases.length === 0) return null;
   return (
     <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2">
       <p className="mb-1 text-sm font-medium text-brand-700">
-        Compras detectadas ({purchases.length})
+        {t('requests.purchases', { count: purchases.length })}
       </p>
       <ul className="flex flex-col gap-1">
         {purchases.map((p) => (
@@ -465,7 +476,7 @@ function describePurchase(p: MemberPurchaseMatch): string {
   const date = p.createdAt ? new Date(p.createdAt) : null;
   const head = [
     p.orderNumber ? `#${p.orderNumber}` : `#${p.orderId}`,
-    date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString('es-ES') : '',
+    date && !Number.isNaN(date.getTime()) ? formatDate(date) : '',
     p.status,
     p.total !== null ? formatAmount(p.total, p.currency) : '',
   ]
@@ -475,8 +486,8 @@ function describePurchase(p: MemberPurchaseMatch): string {
   return `${head}${products} (${p.connectionName})`;
 }
 
-function describeMatch(m: MemberSubscriptionMatch): string {
-  const plan = m.planName ?? 'Plan';
+function describeMatch(m: MemberSubscriptionMatch, t: TranslatorLike): string {
+  const plan = m.planName ?? t('requests.planFallback');
   const { label } = classifySubscriptionStatus(m.status);
   const amount = m.unitAmount !== null ? ` · ${formatAmount(m.unitAmount, m.currency)}` : '';
   return `${plan} — ${label}${amount} (${m.connectionName})`;

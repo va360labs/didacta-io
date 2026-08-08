@@ -7,21 +7,22 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { accessGroupsApi, type AccessGroupListItem } from '@/lib/access-groups';
-import { ApiHttpError } from '@/lib/api-client';
 import {
   adminUsersApi,
+  ASSIGNABLE_ROLES,
   parseBulkInviteCsv,
-  ROLE_LABELS,
   type AssignableRole,
   type BulkInviteRow,
   type BulkInviteState,
 } from '@/lib/admin-users';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { authStorage } from '@/lib/auth-storage';
 
 /// Mismo tope que el backend (`bulkInviteSchema.rows.max(300)`): un CSV más
@@ -30,6 +31,8 @@ const MAX_ROWS = 300;
 const POLL_MS = 1500;
 
 export default function ImportarUsuariosPage() {
+  const t = useTranslations('adminUsuarios');
+  const tErrors = useTranslations('errors');
   const [role, setRole] = useState<AssignableRole>('alumno');
   const [groupId, setGroupId] = useState('');
   const [groups, setGroups] = useState<AccessGroupListItem[] | null>(null);
@@ -100,18 +103,16 @@ export default function ImportarUsuariosPage() {
       const text = await readFileAsText(file);
       const parsed = parseBulkInviteCsv(text);
       if (parsed.length === 0) {
-        setParseError('No encontramos filas con un email válido (revisá la columna "email").');
+        setParseError(t('import.parseNoRows'));
         return;
       }
       if (parsed.length > MAX_ROWS) {
-        setParseError(
-          `El archivo trae ${parsed.length} filas y el máximo por subida es ${MAX_ROWS}. Partilo en varios CSV.`,
-        );
+        setParseError(t('import.parseTooMany', { count: parsed.length, max: MAX_ROWS }));
         return;
       }
       setRows(parsed);
     } catch {
-      setParseError('No pudimos leer el archivo.');
+      setParseError(t('import.parseReadError'));
     }
   }
 
@@ -119,7 +120,7 @@ export default function ImportarUsuariosPage() {
     if (!rows) return;
     const token = authStorage.getAccessToken();
     if (!token) {
-      setError('Tu sesión expiró.');
+      setError(t('import.sessionExpired'));
       return;
     }
     setStarting(true);
@@ -131,12 +132,12 @@ export default function ImportarUsuariosPage() {
         accessGroupId: groupId || undefined,
       });
       if (res.yaEnCurso) {
-        setError('Ya hay una importación en curso; esperá a que termine.');
+        setError(t('import.alreadyRunning'));
       }
       const s = await adminUsersApi.bulkInviteStatus(token);
       setEstado(s);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos arrancar la importación.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setStarting(false);
     }
@@ -153,15 +154,12 @@ export default function ImportarUsuariosPage() {
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6">
       <Button asChild variant="ghost" className="self-start">
-        <Link href="/admin/usuarios">← Volver al listado</Link>
+        <Link href="/admin/usuarios">{t('import.back')}</Link>
       </Button>
 
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Importar CSV</h1>
-        <p className="mt-1 text-text-muted">
-          Da de alta a varias personas a la vez. A todas se les asigna el mismo rol y (si elegís
-          uno) el mismo grupo de acceso; cada una recibe su propio email para definir contraseña.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('import.title')}</h1>
+        <p className="mt-1 text-text-muted">{t('import.subtitle')}</p>
       </header>
 
       <Card>
@@ -178,11 +176,11 @@ export default function ImportarUsuariosPage() {
               <Icon name="file" size={18} />
             </span>
             <div className="min-w-0">
-              <CardTitle>Archivo y datos comunes</CardTitle>
+              <CardTitle>{t('import.cardTitle')}</CardTitle>
               <CardDescription>
-                El CSV necesita una columna <code>email</code> (o <code>correo</code>); una columna{' '}
-                <code>name</code>/<code>nombre</code> es opcional. Filas sin email válido se
-                ignoran.
+                {t.rich('import.cardDescription', {
+                  code: (chunks) => <code>{chunks}</code>,
+                })}
               </CardDescription>
             </div>
           </div>
@@ -190,7 +188,7 @@ export default function ImportarUsuariosPage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="role">
-              Rol para todos <span className="text-danger-700">*</span>
+              {t('import.roleLabel')} <span className="text-danger-700">*</span>
             </Label>
             <Select
               id="role"
@@ -198,9 +196,9 @@ export default function ImportarUsuariosPage() {
               onChange={(e) => setRole(e.target.value as AssignableRole)}
               disabled={!!estado?.enCurso}
             >
-              {Object.entries(ROLE_LABELS).map(([k, label]) => (
+              {ASSIGNABLE_ROLES.map((k) => (
                 <option key={k} value={k}>
-                  {label}
+                  {t(`roles.${k}`)}
                 </option>
               ))}
             </Select>
@@ -208,7 +206,7 @@ export default function ImportarUsuariosPage() {
 
           {groups ? (
             <div className="space-y-2">
-              <Label htmlFor="accessGroup">Grupo de acceso para todos (opcional)</Label>
+              <Label htmlFor="accessGroup">{t('import.groupLabel')}</Label>
               <Select
                 id="accessGroup"
                 value={groupId}
@@ -216,21 +214,19 @@ export default function ImportarUsuariosPage() {
                 disabled={!!estado?.enCurso}
                 data-testid="bulk-invite-group-select"
               >
-                <option value="">Sin grupo</option>
+                <option value="">{t('import.noGroup')}</option>
                 {groups.map((g) => (
                   <option key={g.id} value={g.id}>
                     {g.name}
                   </option>
                 ))}
               </Select>
-              <p className="text-xs text-text-subtle">
-                Todas las personas del CSV quedan matriculadas en los cursos de este grupo.
-              </p>
+              <p className="text-xs text-text-subtle">{t('import.groupHint')}</p>
             </div>
           ) : null}
 
           <div className="space-y-2">
-            <Label>Archivo CSV</Label>
+            <Label>{t('import.fileLabel')}</Label>
             <input
               ref={fileInputRef}
               type="file"
@@ -245,7 +241,7 @@ export default function ImportarUsuariosPage() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={!!estado?.enCurso}
               >
-                Elegir archivo
+                {t('import.chooseFile')}
               </Button>
               {fileName ? <span className="text-sm text-text-muted">{fileName}</span> : null}
             </div>
@@ -262,8 +258,10 @@ export default function ImportarUsuariosPage() {
 
           {rows && !estado ? (
             <div className="rounded-lg border border-border bg-bg-subtle p-3 text-sm text-text-muted">
-              Encontramos <strong className="text-text">{rows.length}</strong> persona
-              {rows.length === 1 ? '' : 's'} válida{rows.length === 1 ? '' : 's'} en el archivo.
+              {t.rich('import.foundRows', {
+                count: rows.length,
+                strong: (chunks) => <strong className="text-text">{chunks}</strong>,
+              })}
             </div>
           ) : null}
 
@@ -280,9 +278,11 @@ export default function ImportarUsuariosPage() {
             <div className="rounded-lg border border-border bg-bg-subtle p-4 text-sm">
               <p className="font-semibold text-text">
                 {estado.enCurso
-                  ? `Importando… ${estado.creados} de ${estado.total}`
-                  : `Importados ${estado.creados} de ${estado.total}`}
-                {estado.fallidos.length > 0 ? ` · ${estado.fallidos.length} fallaron` : ''}
+                  ? t('import.progressRunning', { done: estado.creados, total: estado.total })
+                  : t('import.progressDone', { done: estado.creados, total: estado.total })}
+                {estado.fallidos.length > 0
+                  ? t('import.failedSuffix', { count: estado.fallidos.length })
+                  : ''}
               </p>
               {estado.enCurso ? (
                 <>
@@ -300,9 +300,7 @@ export default function ImportarUsuariosPage() {
                       }}
                     />
                   </div>
-                  <p className="mt-2 text-text-muted">
-                    Va de una en una. Sigue en el servidor: podés cerrar esta página sin cortarlo.
-                  </p>
+                  <p className="mt-2 text-text-muted">{t('import.progressHint')}</p>
                 </>
               ) : null}
               {estado.fallidos.length > 0 ? (
@@ -321,10 +319,10 @@ export default function ImportarUsuariosPage() {
             {estado && !estado.enCurso ? (
               <>
                 <Button type="button" variant="ghost" onClick={resetForm}>
-                  Importar otro archivo
+                  {t('import.importAnother')}
                 </Button>
                 <Button asChild>
-                  <Link href="/admin/usuarios">Ir al listado</Link>
+                  <Link href="/admin/usuarios">{t('import.goToList')}</Link>
                 </Button>
               </>
             ) : (
@@ -334,10 +332,12 @@ export default function ImportarUsuariosPage() {
                 disabled={!rows || starting || !!estado?.enCurso}
               >
                 {starting
-                  ? 'Arrancando…'
+                  ? t('import.ctaStarting')
                   : estado?.enCurso
-                    ? 'Importando…'
-                    : `Importar ${rows?.length ?? ''} persona${rows?.length === 1 ? '' : 's'}`}
+                    ? t('import.ctaRunning')
+                    : rows
+                      ? t('import.ctaCount', { count: rows.length })
+                      : t('import.ctaEmpty')}
               </Button>
             )}
           </div>
