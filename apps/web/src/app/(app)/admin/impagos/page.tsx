@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { paymentFlagsApi, parsePaymentFlagsCsv, type PaymentFlag } from '@/lib/payment-flags';
 
 interface FormState {
@@ -35,6 +37,8 @@ const EMPTY_FORM: FormState = {
 };
 
 export default function ImpagosPage() {
+  const t = useTranslations('adminPagos');
+  const tErrors = useTranslations('errors');
   const [flags, setFlags] = useState<PaymentFlag[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -69,7 +73,7 @@ export default function ImpagosPage() {
       });
       setFlags(res);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los impagos.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('impagos.loadError'));
     }
   }
 
@@ -117,7 +121,9 @@ export default function ImpagosPage() {
       cancelEdit();
       await reload();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos guardar el registro.');
+      setError(
+        err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('impagos.saveError'),
+      );
     } finally {
       setPending(false);
     }
@@ -125,7 +131,7 @@ export default function ImpagosPage() {
 
   async function handleDelete(flag: PaymentFlag) {
     const label = flag.name ?? flag.email ?? flag.telegramId ?? flag.id;
-    if (!window.confirm(`¿Eliminar el registro de "${label}"?`)) return;
+    if (!window.confirm(t('impagos.deleteConfirm', { name: label }))) return;
     const token = authStorage.getAccessToken();
     if (!token) return;
     setPending(true);
@@ -136,7 +142,9 @@ export default function ImpagosPage() {
       if (editing?.id === flag.id) cancelEdit();
       await reload();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos eliminar el registro.');
+      setError(
+        err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('impagos.deleteError'),
+      );
     } finally {
       setPending(false);
     }
@@ -159,16 +167,16 @@ export default function ImpagosPage() {
       const text = await readFileAsText(file);
       const rows = parsePaymentFlagsCsv(text);
       if (rows.length === 0) {
-        setError('No encontramos filas válidas en el CSV (revisá la columna email o user_id).');
+        setError(t('impagos.csvNoRows'));
         return;
       }
       const res = await paymentFlagsApi.import(token, rows);
-      setNotice(
-        `Importados ${res.imported} de ${rows.length} registro${rows.length === 1 ? '' : 's'} del CSV.`,
-      );
+      setNotice(t('impagos.csvImported', { imported: res.imported, total: rows.length }));
       await reload();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos importar el CSV.');
+      setError(
+        err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('impagos.importError'),
+      );
     } finally {
       setImporting(false);
     }
@@ -177,9 +185,7 @@ export default function ImpagosPage() {
   if (!canManage) {
     return (
       <Card>
-        <CardContent className="p-6 text-sm text-danger-700">
-          Solo los administradores del tenant pueden gestionar los impagos.
-        </CardContent>
+        <CardContent className="p-6 text-sm text-danger-700">{t('impagos.notAllowed')}</CardContent>
       </Card>
     );
   }
@@ -188,12 +194,8 @@ export default function ImpagosPage() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Impagos</h1>
-          <p className="mt-1 max-w-2xl text-text-muted">
-            Marca miembros con cuotas pendientes por su email (o su Telegram ID legacy). La
-            inscripción usa estas marcas para avisarte de quien solicita acceso sin tener los pagos
-            al día.
-          </p>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{t('impagos.title')}</h1>
+          <p className="mt-1 max-w-2xl text-text-muted">{t('impagos.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <input
@@ -208,7 +210,7 @@ export default function ImpagosPage() {
             onClick={() => fileInputRef.current?.click()}
             disabled={importing || pending}
           >
-            {importing ? 'Importando…' : 'Importar CSV'}
+            {importing ? t('impagos.importingCta') : t('impagos.importCta')}
           </Button>
         </div>
       </header>
@@ -233,12 +235,12 @@ export default function ImpagosPage() {
           <CardContent className="flex flex-wrap items-end gap-4 p-4">
             <div className="flex-1 min-w-[220px]">
               <label className="text-xs font-semibold text-text-muted" htmlFor="search">
-                Buscar
+                {t('impagos.searchLabel')}
               </label>
               <Input
                 id="search"
                 type="search"
-                placeholder="Email, Telegram ID o nombre…"
+                placeholder={t('impagos.searchPh')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
@@ -251,12 +253,12 @@ export default function ImpagosPage() {
               <Switch
                 checked={delinquentOnly}
                 onCheckedChange={setDelinquentOnly}
-                label="Solo impagos"
+                label={t('impagos.delinquentOnly')}
               />
-              Solo impagos
+              {t('impagos.delinquentOnly')}
             </label>
             <Button variant="secondary" onClick={applyFilters} className="ml-auto">
-              Aplicar
+              {t('impagos.applyCta')}
             </Button>
           </CardContent>
 
@@ -268,23 +270,22 @@ export default function ImpagosPage() {
             </div>
           ) : flags.length === 0 ? (
             <CardContent className="flex flex-col items-center gap-2 p-12 text-center">
-              <h3 className="font-display text-lg font-semibold">Sin registros</h3>
-              <p className="max-w-sm text-text-muted">
-                No hay impagos con estos filtros. Carga un CSV o crea uno manualmente desde el
-                formulario.
-              </p>
+              <h3 className="font-display text-lg font-semibold">{t('impagos.emptyTitle')}</h3>
+              <p className="max-w-sm text-text-muted">{t('impagos.emptyHelp')}</p>
             </CardContent>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-y border-border bg-surface-2 text-left text-xs uppercase tracking-wide text-text-muted">
-                    <th className="px-6 py-3 font-semibold">Email</th>
-                    <th className="px-3 py-3 font-semibold">Telegram ID</th>
-                    <th className="px-3 py-3 font-semibold">Nombre</th>
-                    <th className="px-3 py-3 font-semibold">Estado</th>
-                    <th className="px-3 py-3 font-semibold">Nota</th>
-                    <th className="px-6 py-3 font-semibold text-right">Acciones</th>
+                    <th className="px-6 py-3 font-semibold">{t('impagos.colEmail')}</th>
+                    <th className="px-3 py-3 font-semibold">{t('impagos.colTelegramId')}</th>
+                    <th className="px-3 py-3 font-semibold">{t('impagos.colName')}</th>
+                    <th className="px-3 py-3 font-semibold">{t('impagos.colStatus')}</th>
+                    <th className="px-3 py-3 font-semibold">{t('impagos.colNote')}</th>
+                    <th className="px-6 py-3 font-semibold text-right">
+                      {t('impagos.colActions')}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -296,7 +297,7 @@ export default function ImpagosPage() {
                       <td className="px-6 py-3 text-sm">
                         {f.email ?? (
                           <span className="text-xs italic text-text-subtle">
-                            Sin email (legacy)
+                            {t('impagos.noEmailLegacy')}
                           </span>
                         )}
                       </td>
@@ -307,17 +308,19 @@ export default function ImpagosPage() {
                         {f.name ? (
                           <span className="font-semibold text-text">{f.name}</span>
                         ) : (
-                          <span className="text-xs italic text-text-subtle">Sin nombre</span>
+                          <span className="text-xs italic text-text-subtle">
+                            {t('impagos.noName')}
+                          </span>
                         )}
                       </td>
                       <td className="px-3 py-3">
                         {f.isDelinquent ? (
                           <Badge variant="danger" dot>
-                            Impago
+                            {t('impagos.delinquentBadge')}
                           </Badge>
                         ) : (
                           <Badge variant="success" dot>
-                            Al día
+                            {t('impagos.upToDateBadge')}
                           </Badge>
                         )}
                       </td>
@@ -337,7 +340,7 @@ export default function ImpagosPage() {
                             onClick={() => startEdit(f)}
                             disabled={pending}
                           >
-                            Editar
+                            {t('impagos.editCta')}
                           </Button>
                           <Button
                             type="button"
@@ -347,7 +350,7 @@ export default function ImpagosPage() {
                             disabled={pending}
                             className="text-danger-700 hover:bg-danger-50"
                           >
-                            Eliminar
+                            {t('impagos.deleteCta')}
                           </Button>
                         </div>
                       </td>
@@ -362,30 +365,29 @@ export default function ImpagosPage() {
         {/* === Form alta / edición === */}
         <Card>
           <CardHeader>
-            <CardTitle>{editing ? 'Editar registro' : 'Nuevo registro'}</CardTitle>
+            <CardTitle>{editing ? t('impagos.editTitle') : t('impagos.newTitle')}</CardTitle>
             <CardDescription>
-              {editing
-                ? 'Modifica el estado o la nota. El email identifica al miembro; a una fila legacy puedes añadirle email para migrarla.'
-                : 'Marca manualmente a un miembro por su email (o su Telegram ID legacy). Si ya existe, se actualiza.'}
+              {editing ? t('impagos.editHelp') : t('impagos.newHelp')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="flag-email">Email</Label>
+                <Label htmlFor="flag-email">{t('impagos.emailLabel')}</Label>
                 <Input
                   id="flag-email"
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
-                  placeholder="miembro@email.com"
+                  placeholder={t('impagos.emailPh')}
                   disabled={!!editing && !!editing.email}
                 />
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="telegram-id">
-                  Telegram ID <span className="text-text-subtle text-xs">(legacy, opcional)</span>
+                  {t('impagos.telegramIdLabel')}{' '}
+                  <span className="text-text-subtle text-xs">{t('impagos.telegramIdHint')}</span>
                 </Label>
                 <Input
                   id="telegram-id"
@@ -393,47 +395,47 @@ export default function ImpagosPage() {
                   onChange={(e) => setForm((s) => ({ ...s, telegramId: e.target.value }))}
                   inputMode="numeric"
                   pattern="\d+"
-                  placeholder="123456789"
+                  placeholder={t('impagos.telegramIdPh')}
                   disabled={!!editing && !editing.email}
                   className="font-mono"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="flag-name">Nombre</Label>
+                <Label htmlFor="flag-name">{t('impagos.nameLabel')}</Label>
                 <Input
                   id="flag-name"
                   value={form.name}
                   onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
                   maxLength={120}
-                  placeholder="Nombre visible (opcional)"
+                  placeholder={t('impagos.namePh')}
                 />
               </div>
 
               <label className="flex items-center justify-between gap-3 rounded-md border border-border-soft bg-surface-2 px-3 py-2.5">
-                <span className="text-sm font-medium text-text">Marcar como impago</span>
+                <span className="text-sm font-medium text-text">{t('impagos.markDelinquent')}</span>
                 <Switch
                   checked={form.isDelinquent}
                   onCheckedChange={(v) => setForm((s) => ({ ...s, isDelinquent: v }))}
-                  label="Marcar como impago"
+                  label={t('impagos.markDelinquent')}
                 />
               </label>
 
               <div className="space-y-1.5">
-                <Label htmlFor="flag-note">Nota</Label>
+                <Label htmlFor="flag-note">{t('impagos.noteLabel')}</Label>
                 <Textarea
                   id="flag-note"
                   value={form.note}
                   onChange={(e) => setForm((s) => ({ ...s, note: e.target.value }))}
                   maxLength={500}
-                  placeholder="Motivo, fecha del último pago, etc. (opcional)"
+                  placeholder={t('impagos.notePh')}
                 />
               </div>
 
               <div className="flex justify-end gap-2 border-t border-border-soft pt-3">
                 {editing ? (
                   <Button type="button" variant="ghost" onClick={cancelEdit} disabled={pending}>
-                    Cancelar
+                    {t('impagos.cancelCta')}
                   </Button>
                 ) : null}
                 <Button
@@ -443,7 +445,11 @@ export default function ImpagosPage() {
                     (form.email.trim().length === 0 && form.telegramId.trim().length === 0)
                   }
                 >
-                  {pending ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear registro'}
+                  {pending
+                    ? t('impagos.savingCta')
+                    : editing
+                      ? t('impagos.saveChangesCta')
+                      : t('impagos.createCta')}
                 </Button>
               </div>
             </form>

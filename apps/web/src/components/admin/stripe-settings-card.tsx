@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -36,6 +37,8 @@ import {
   type AdminStripeUpsertPayload,
 } from '@/lib/admin-stripe';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
 
 interface StripeFormValues {
   secretKey: string;
@@ -62,6 +65,8 @@ export interface StripeSettingsCardProps {
 export function StripeSettingsCard({
   api = adminStripeApi,
 }: StripeSettingsCardProps): React.JSX.Element {
+  const t = useTranslations('adminPagos');
+  const tErrors = useTranslations('errors');
   const [dto, setDto] = useState<AdminStripeDto | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [form, setForm] = useState<StripeFormValues>(EMPTY_FORM);
@@ -81,28 +86,27 @@ export function StripeSettingsCard({
       } catch (err) {
         if (cancelled) return;
         setLoadError(
-          err instanceof ApiHttpError
-            ? err.message
-            : 'No pudimos cargar la configuración de Stripe. Reintenta.',
+          err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('stripe.loadError'),
         );
       }
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api]);
 
   async function handleSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
     setToast(null);
     if (!dto?.hasSecretKey && !form.secretKey.trim()) {
-      setToast({ variant: 'error', message: 'Falta la clave secreta (no hay una guardada).' });
+      setToast({ variant: 'error', message: t('stripe.missingSecretKey') });
       return;
     }
     if (!dto?.hasWebhookSecret && !form.webhookSecret.trim()) {
       setToast({
         variant: 'error',
-        message: 'Falta el secreto del webhook (no hay uno guardado).',
+        message: t('stripe.missingWebhookSecret'),
       });
       return;
     }
@@ -120,12 +124,13 @@ export function StripeSettingsCard({
       setForm(EMPTY_FORM);
       setToast({
         variant: 'success',
-        message: 'Credenciales guardadas. Usa "Probar conexión" para verificarlas contra Stripe.',
+        message: t('stripe.savedInfo'),
       });
     } catch (err) {
       setToast({
         variant: 'error',
-        message: err instanceof ApiHttpError ? err.message : 'No pudimos guardar las credenciales.',
+        message:
+          err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('stripe.saveError'),
       });
     } finally {
       setSaving(false);
@@ -142,12 +147,13 @@ export function StripeSettingsCard({
       );
       setToast({
         variant: 'success',
-        message: `Conexión verificada — cuenta en modo ${result.mode === 'live' ? 'LIVE' : 'test'}.`,
+        message: t('stripe.testOkInfo', { mode: result.mode }),
       });
     } catch (err) {
       setToast({
         variant: 'error',
-        message: err instanceof ApiHttpError ? err.message : 'No pudimos probar la conexión.',
+        message:
+          err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('stripe.testError'),
       });
     } finally {
       setTesting(false);
@@ -164,15 +170,15 @@ export function StripeSettingsCard({
       setToast({
         variant: 'success',
         message: refreshed.hasGlobalFallback
-          ? 'Credenciales eliminadas. El tenant ahora usa el Stripe global del host.'
-          : 'Credenciales eliminadas. Sin Stripe, la venta de cursos y las suscripciones no funcionan hasta que guardes unas nuevas.',
+          ? t('stripe.deletedFallbackInfo')
+          : t('stripe.deletedNoFallbackInfo'),
       });
       setDeleteDialogOpen(false);
     } catch (err) {
       setToast({
         variant: 'error',
         message:
-          err instanceof ApiHttpError ? err.message : 'No pudimos eliminar las credenciales.',
+          err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('stripe.deleteError'),
       });
     } finally {
       setDeleting(false);
@@ -184,12 +190,8 @@ export function StripeSettingsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Pagos · Stripe</CardTitle>
-        <CardDescription>
-          Cuenta de Stripe de esta academia: cobra la venta de cursos sueltos (mod.billing) y las
-          suscripciones/membresía (mod.subscriptions). Si no se configura, el tenant hereda el
-          Stripe global del host (si el operador lo expuso por env).
-        </CardDescription>
+        <CardTitle>{t('stripe.title')}</CardTitle>
+        <CardDescription>{t('stripe.help')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         {loadError ? (
@@ -206,7 +208,7 @@ export function StripeSettingsCard({
         <form onSubmit={handleSubmit} aria-busy={saving} className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="stripe-secret-key">
-              Clave secreta{dto?.hasSecretKey ? ' (opcional)' : ''}
+              {dto?.hasSecretKey ? t('stripe.secretKeyLabelOptional') : t('stripe.secretKeyLabel')}
             </Label>
             <Input
               id="stripe-secret-key"
@@ -216,19 +218,15 @@ export function StripeSettingsCard({
               value={form.secretKey}
               onChange={(e) => setForm({ ...form, secretKey: e.target.value })}
               placeholder={
-                dto?.hasSecretKey
-                  ? '•••••• (déjalo vacío para mantener la actual)'
-                  : 'sk_test_… o sk_live_…'
+                dto?.hasSecretKey ? t('stripe.secretKeyPhSaved') : t('stripe.secretKeyPhEmpty')
               }
               className="font-mono"
             />
-            <p className="text-xs text-text-subtle">
-              Panel de Stripe → Desarrolladores → Claves de API → Clave secreta.
-            </p>
+            <p className="text-xs text-text-subtle">{t('stripe.secretKeyHint')}</p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="stripe-webhook-secret">
-              Secreto del webhook{dto?.hasWebhookSecret ? ' (opcional)' : ''}
+              {dto?.hasWebhookSecret ? t('stripe.webhookLabelOptional') : t('stripe.webhookLabel')}
             </Label>
             <Input
               id="stripe-webhook-secret"
@@ -237,17 +235,20 @@ export function StripeSettingsCard({
               autoComplete="off"
               value={form.webhookSecret}
               onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
-              placeholder={dto?.hasWebhookSecret ? '•••••• (mantener el actual)' : 'whsec_…'}
+              placeholder={
+                dto?.hasWebhookSecret ? t('stripe.webhookPhSaved') : t('stripe.webhookPhEmpty')
+              }
               className="font-mono"
             />
             <p className="break-all text-xs text-text-subtle">
-              Endpoint de cursos sueltos: <code>{origin}/api/v1/modules/billing/webhook</code>
+              {t.rich('stripe.billingEndpoint', {
+                url: `${origin}/api/v1/modules/billing/webhook`,
+                code: (chunks) => <code>{chunks}</code>,
+              })}
             </p>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="stripe-subs-webhook-secret">
-              Secreto del webhook de suscripciones (opcional)
-            </Label>
+            <Label htmlFor="stripe-subs-webhook-secret">{t('stripe.subsWebhookLabel')}</Label>
             <Input
               id="stripe-subs-webhook-secret"
               type="password"
@@ -256,13 +257,16 @@ export function StripeSettingsCard({
               onChange={(e) => setForm({ ...form, subscriptionsWebhookSecret: e.target.value })}
               placeholder={
                 dto?.hasSubscriptionsWebhookSecret
-                  ? '•••••• (mantener el actual)'
-                  : 'whsec_… (si lo dejas vacío, se usa el mismo de arriba)'
+                  ? t('stripe.webhookPhSaved')
+                  : t('stripe.subsWebhookPhEmpty')
               }
               className="font-mono"
             />
             <p className="break-all text-xs text-text-subtle">
-              Endpoint de suscripciones: <code>{origin}/api/v1/modules/subscriptions/webhook</code>
+              {t.rich('stripe.subsEndpoint', {
+                url: `${origin}/api/v1/modules/subscriptions/webhook`,
+                code: (chunks) => <code>{chunks}</code>,
+              })}
             </p>
           </div>
 
@@ -287,7 +291,7 @@ export function StripeSettingsCard({
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-soft pt-4 sm:col-span-2">
             <div className="flex flex-wrap items-center gap-2">
               <Button type="submit" disabled={saving}>
-                {saving ? 'Guardando…' : 'Guardar'}
+                {saving ? t('stripe.savingCta') : t('stripe.saveCta')}
               </Button>
               <Button
                 type="button"
@@ -295,7 +299,7 @@ export function StripeSettingsCard({
                 disabled={!dto?.hasTenantConfig || testing}
                 onClick={() => void handleTest()}
               >
-                {testing ? 'Probando…' : 'Probar conexión'}
+                {testing ? t('stripe.testingCta') : t('stripe.testCta')}
               </Button>
             </div>
             <Button
@@ -305,7 +309,7 @@ export function StripeSettingsCard({
               onClick={() => setDeleteDialogOpen(true)}
               className="text-danger-700 hover:bg-danger-50"
             >
-              Eliminar configuración
+              {t('stripe.deleteConfigCta')}
             </Button>
           </div>
         </form>
@@ -314,12 +318,8 @@ export function StripeSettingsCard({
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Eliminar configuración de Stripe</DialogTitle>
-            <DialogDescription>
-              Vas a borrar las credenciales guardadas para este tenant. Si el host tiene un Stripe
-              global expuesto por env, el tenant cae a ese fallback; si no, la venta de cursos y las
-              suscripciones dejan de funcionar hasta que guardes una nueva configuración.
-            </DialogDescription>
+            <DialogTitle>{t('stripe.dialogTitle')}</DialogTitle>
+            <DialogDescription>{t('stripe.dialogDescription')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
@@ -328,7 +328,7 @@ export function StripeSettingsCard({
               onClick={() => setDeleteDialogOpen(false)}
               disabled={deleting}
             >
-              Cancelar
+              {t('stripe.cancelCta')}
             </Button>
             <Button
               type="button"
@@ -336,7 +336,7 @@ export function StripeSettingsCard({
               onClick={() => void handleDelete()}
               disabled={deleting}
             >
-              {deleting ? 'Eliminando…' : 'Eliminar'}
+              {deleting ? t('stripe.deletingCta') : t('stripe.deleteCta')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -350,13 +350,12 @@ export function StripeSettingsCard({
  * uno de 4 estilos según `deriveStripeStatus(dto)`.
  */
 export function StripeStatusBanner({ dto }: { dto: AdminStripeDto }): React.JSX.Element {
+  const t = useTranslations('adminPagos');
   const status = deriveStripeStatus(dto);
-  const modeLabel =
-    dto.mode === 'live' ? ' (modo LIVE)' : dto.mode === 'test' ? ' (modo test)' : '';
 
   if (status === 'verified') {
     const date = dto.verifiedAt
-      ? new Date(dto.verifiedAt).toLocaleString('es-ES', {
+      ? formatDateTime(dto.verifiedAt, {
           day: '2-digit',
           month: 'short',
           year: 'numeric',
@@ -372,8 +371,11 @@ export function StripeStatusBanner({ dto }: { dto: AdminStripeDto }): React.JSX.
       >
         <span aria-hidden="true">●</span>
         <span>
-          <strong>Verificado</strong> el {date}
-          {modeLabel}.
+          {t.rich('stripe.verifiedBanner', {
+            mode: dto.mode ?? 'none',
+            date,
+            strong: (chunks) => <strong>{chunks}</strong>,
+          })}
         </span>
       </div>
     );
@@ -387,10 +389,7 @@ export function StripeStatusBanner({ dto }: { dto: AdminStripeDto }): React.JSX.
         className="flex items-center gap-2 rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700"
       >
         <span aria-hidden="true">●</span>
-        <span>
-          Configurado pero sin verificar — usa el botón <em>Probar conexión</em> para confirmar que
-          las claves son válidas.
-        </span>
+        <span>{t.rich('stripe.unverifiedBanner', { em: (chunks) => <em>{chunks}</em> })}</span>
       </div>
     );
   }
@@ -403,10 +402,7 @@ export function StripeStatusBanner({ dto }: { dto: AdminStripeDto }): React.JSX.
         className="flex items-center gap-2 rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-sm text-brand-700"
       >
         <span aria-hidden="true">●</span>
-        <span>
-          Usando Stripe global del host (fallback). Si quieres cobrar en tu propia cuenta, guarda
-          una configuración de tenant.
-        </span>
+        <span>{t('stripe.fallbackBanner')}</span>
       </div>
     );
   }
@@ -418,10 +414,7 @@ export function StripeStatusBanner({ dto }: { dto: AdminStripeDto }): React.JSX.
       className="flex items-center gap-2 rounded-lg border border-danger-100 bg-danger-50 px-3 py-2 text-sm text-danger-700"
     >
       <span aria-hidden="true">●</span>
-      <span>
-        Sin Stripe configurado — la venta de cursos sueltos y las suscripciones/membresía no
-        funcionan.
-      </span>
+      <span>{t('stripe.noneBanner')}</span>
     </div>
   );
 }

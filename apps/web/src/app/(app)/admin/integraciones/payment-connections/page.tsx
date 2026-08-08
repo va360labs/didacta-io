@@ -22,6 +22,7 @@
  */
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,12 +32,13 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatCurrency, formatDateTime } from '@/lib/i18n/format';
 import { SubscriptionsDashboard } from './subscriptions-dashboard';
 import { SubscriptionAlertsSettings } from './subscription-alerts-settings';
 import {
   paymentConnectionsApi,
   paymentTiersApi,
-  formatAmount,
   stripeSubscriptionUrl,
   type ConnectBody,
   type PaymentConnection,
@@ -49,7 +51,19 @@ import {
 
 const API_KEY_PATTERN = /^(sk|rk)_(live|test)_[A-Za-z0-9]+$/;
 
+/** Importe en céntimos + moneda → moneda formateada según el locale activo. */
+function fmtAmount(unitAmount: number | null, currency: string | null): string {
+  if (unitAmount === null) return '—';
+  const cur = (currency ?? 'eur').toUpperCase();
+  try {
+    return formatCurrency(unitAmount / 100, cur);
+  } catch {
+    return `${(unitAmount / 100).toFixed(2)} ${cur}`;
+  }
+}
+
 export default function PaymentConnectionsPage() {
+  const t = useTranslations('adminPagos');
   const isSuperAdmin = useMemo(() => {
     const session = authStorage.getSession();
     return session?.user.roles.includes('super_admin') ?? false;
@@ -58,10 +72,9 @@ export default function PaymentConnectionsPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Conexiones de pago</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('connections.title')}</h1>
         <p className="text-text-muted">
-          Conecta tus cuentas de Stripe en modo <strong>solo lectura</strong> y comprueba qué
-          suscriptores ya están en Didacta y cuáles no. PayPal llegará más adelante.
+          {t.rich('connections.subtitle', { strong: (chunks) => <strong>{chunks}</strong> })}
         </p>
       </header>
 
@@ -74,8 +87,9 @@ export default function PaymentConnectionsPage() {
       ) : (
         <Card>
           <CardContent className="p-6 text-sm text-text-muted">
-            Esta sección es exclusiva de <strong>super_admin</strong> porque muestra datos de pago
-            de tus clientes.
+            {t.rich('connections.superAdminOnly', {
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </CardContent>
         </Card>
       )}
@@ -84,6 +98,8 @@ export default function PaymentConnectionsPage() {
 }
 
 function PaymentConnectionsPanel() {
+  const t = useTranslations('adminPagos');
+  const tErrors = useTranslations('errors');
   const [connections, setConnections] = useState<PaymentConnection[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -110,7 +126,7 @@ function PaymentConnectionsPanel() {
   useEffect(() => {
     const token = authStorage.getAccessToken();
     if (!token) {
-      setError('Sesión sin token. Vuelve a iniciar sesión.');
+      setError(t('connections.noTokenError'));
       return;
     }
     void (async () => {
@@ -119,10 +135,11 @@ function PaymentConnectionsPanel() {
         setConnections(res.connections);
       } catch (e) {
         setError(
-          e instanceof ApiHttpError ? e.message : 'No se pudieron cargar las conexiones de pago.',
+          e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('connections.loadError'),
         );
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleCreate(e: FormEvent) {
@@ -133,18 +150,13 @@ function PaymentConnectionsPanel() {
     let body: ConnectBody;
     if (provider === 'stripe') {
       if (!API_KEY_PATTERN.test(apiKey.trim())) {
-        setActionError(
-          'La clave debe ser una Stripe API key (rk_live_… / rk_test_… / sk_live_… / sk_test_…) ' +
-            'restringida con permisos Customers + Subscriptions = Read.',
-        );
+        setActionError(t('connections.keyFormatError'));
         return;
       }
       body = { provider: 'stripe', displayName: displayName.trim(), apiKey: apiKey.trim() };
     } else if (provider === 'paypal') {
       if (!clientId.trim() || !clientSecret.trim()) {
-        setActionError(
-          'PayPal necesita el Client ID y el Secret de una app REST con el permiso «Transaction Search».',
-        );
+        setActionError(t('connections.paypalCredsError'));
         return;
       }
       body = {
@@ -156,9 +168,7 @@ function PaymentConnectionsPanel() {
       };
     } else {
       if (!/^https:\/\//i.test(storeUrl.trim()) || !wooKey.trim() || !wooSecret.trim()) {
-        setActionError(
-          'WooCommerce necesita la URL https:// de la tienda + Consumer Key y Secret (WooCommerce → Ajustes → Avanzado → REST API).',
-        );
+        setActionError(t('connections.wooCredsError'));
         return;
       }
       body = {
@@ -183,12 +193,10 @@ function PaymentConnectionsPanel() {
       setStoreUrl('');
       setWooKey('');
       setWooSecret('');
-      setActionInfo(`Cuenta "${connection.displayName}" conectada y verificada.`);
+      setActionInfo(t('connections.createdInfo', { name: connection.displayName }));
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError
-          ? e.message
-          : 'No se pudo conectar la cuenta. Revisa las credenciales.',
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('connections.createError'),
       );
     } finally {
       setCreating(false);
@@ -206,11 +214,13 @@ function PaymentConnectionsPanel() {
       setConnections((prev) =>
         prev ? prev.map((c) => (c.id === connection.id ? connection : c)) : prev,
       );
-      setActionInfo(`"${connection.displayName}" verificada correctamente.`);
+      setActionInfo(t('connections.verifiedInfo', { name: connection.displayName }));
     } catch (e) {
       // El backend ya marcó la conexión en ERROR; refrescamos el listado.
       await refreshList(token);
-      setActionError(e instanceof ApiHttpError ? e.message : 'No se pudo verificar la conexión.');
+      setActionError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('connections.verifyError'),
+      );
     } finally {
       setBusyId(null);
     }
@@ -219,12 +229,7 @@ function PaymentConnectionsPanel() {
   async function handleDisconnect(conn: PaymentConnection) {
     const token = authStorage.getAccessToken();
     if (!token) return;
-    if (
-      !window.confirm(
-        `¿Desconectar "${conn.displayName}"? Se borrará la clave guardada. Las suscripciones en Stripe no se tocan.`,
-      )
-    )
-      return;
+    if (!window.confirm(t('connections.disconnectConfirm', { name: conn.displayName }))) return;
     setBusyId(conn.id);
     setActionError(null);
     setActionInfo(null);
@@ -235,9 +240,11 @@ function PaymentConnectionsPanel() {
         setSelected(null);
         setReconcile(null);
       }
-      setActionInfo('Conexión desconectada.');
+      setActionInfo(t('connections.disconnectedInfo'));
     } catch (e) {
-      setActionError(e instanceof ApiHttpError ? e.message : 'No se pudo desconectar la conexión.');
+      setActionError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('connections.disconnectError'),
+      );
     } finally {
       setBusyId(null);
     }
@@ -256,7 +263,7 @@ function PaymentConnectionsPanel() {
       setReconcile(res);
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError ? e.message : 'No se pudieron leer las suscripciones de Stripe.',
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('connections.reconcileError'),
       );
     } finally {
       setReconciling(false);
@@ -300,50 +307,49 @@ function PaymentConnectionsPanel() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Icon name="plus" size={18} />
-            Conectar una cuenta de pago
+            {t('connections.formTitle')}
           </CardTitle>
           <CardDescription>
-            {provider === 'stripe' ? (
-              <>
-                Crea una <strong>clave API restringida</strong> en{' '}
-                <a
-                  href="https://dashboard.stripe.com/apikeys/create"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-brand-700 underline"
-                >
-                  tu panel de Stripe
-                </a>{' '}
-                con permisos <code className="font-mono">Customers = Read</code> y{' '}
-                <code className="font-mono">Subscriptions = Read</code>. Se guarda cifrada.
-              </>
-            ) : provider === 'paypal' ? (
-              <>
-                Usa el <strong>Client ID</strong> y <strong>Secret</strong> de una app REST de{' '}
-                <a
-                  href="https://developer.paypal.com/dashboard/applications"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-brand-700 underline"
-                >
-                  tu panel de PayPal
-                </a>{' '}
-                con el permiso <strong>Transaction Search</strong> activado. Se guardan cifrados.
-              </>
-            ) : (
-              <>
-                Usa la URL de tu tienda + <strong>Consumer Key</strong> y <strong>Secret</strong>{' '}
-                (WooCommerce → Ajustes → Avanzado → REST API, permiso <em>Lectura</em>). Requiere el
-                plugin <strong>WooCommerce Subscriptions</strong> y HTTPS. Se guardan cifrados.
-              </>
-            )}
+            {provider === 'stripe'
+              ? t.rich('connections.formHelpStripe', {
+                  strong: (chunks) => <strong>{chunks}</strong>,
+                  code: (chunks) => <code className="font-mono">{chunks}</code>,
+                  link: (chunks) => (
+                    <a
+                      href="https://dashboard.stripe.com/apikeys/create"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-brand-700 underline"
+                    >
+                      {chunks}
+                    </a>
+                  ),
+                })
+              : provider === 'paypal'
+                ? t.rich('connections.formHelpPaypal', {
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                    link: (chunks) => (
+                      <a
+                        href="https://developer.paypal.com/dashboard/applications"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-brand-700 underline"
+                      >
+                        {chunks}
+                      </a>
+                    ),
+                  })
+                : t.rich('connections.formHelpWoo', {
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                    em: (chunks) => <em>{chunks}</em>,
+                  })}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleCreate} className="flex flex-col gap-3">
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="provider">Proveedor</Label>
+                <Label htmlFor="provider">{t('connections.providerLabel')}</Label>
                 <Select
                   id="provider"
                   value={provider}
@@ -359,15 +365,15 @@ function PaymentConnectionsPanel() {
                 </Select>
               </div>
               <div className="flex flex-1 flex-col gap-1.5">
-                <Label htmlFor="displayName">Nombre de la cuenta</Label>
+                <Label htmlFor="displayName">{t('connections.displayNameLabel')}</Label>
                 <Input
                   id="displayName"
                   placeholder={
                     provider === 'stripe'
-                      ? 'Mi cuenta Stripe'
+                      ? t('connections.displayNamePhStripe')
                       : provider === 'paypal'
-                        ? 'Mi cuenta PayPal'
-                        : 'Mi tienda WooCommerce'
+                        ? t('connections.displayNamePhPaypal')
+                        : t('connections.displayNamePhWoo')
                   }
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
@@ -379,10 +385,10 @@ function PaymentConnectionsPanel() {
 
             {provider === 'stripe' ? (
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="apiKey">Stripe API key (restringida, read-only)</Label>
+                <Label htmlFor="apiKey">{t('connections.apiKeyLabel')}</Label>
                 <Input
                   id="apiKey"
-                  placeholder="rk_live_…"
+                  placeholder={t('connections.apiKeyPh')}
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   autoComplete="off"
@@ -394,10 +400,10 @@ function PaymentConnectionsPanel() {
             ) : provider === 'paypal' ? (
               <div className="flex flex-col gap-3 md:flex-row">
                 <div className="flex flex-1 flex-col gap-1.5">
-                  <Label htmlFor="clientId">PayPal Client ID</Label>
+                  <Label htmlFor="clientId">{t('connections.clientIdLabel')}</Label>
                   <Input
                     id="clientId"
-                    placeholder="AeA1Q…"
+                    placeholder={t('connections.clientIdPh')}
                     value={clientId}
                     onChange={(e) => setClientId(e.target.value)}
                     autoComplete="off"
@@ -406,10 +412,10 @@ function PaymentConnectionsPanel() {
                   />
                 </div>
                 <div className="flex flex-1 flex-col gap-1.5">
-                  <Label htmlFor="clientSecret">Secret</Label>
+                  <Label htmlFor="clientSecret">{t('connections.clientSecretLabel')}</Label>
                   <Input
                     id="clientSecret"
-                    placeholder="EJ2x…"
+                    placeholder={t('connections.clientSecretPh')}
                     value={clientSecret}
                     onChange={(e) => setClientSecret(e.target.value)}
                     autoComplete="off"
@@ -419,7 +425,7 @@ function PaymentConnectionsPanel() {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="environment">Entorno</Label>
+                  <Label htmlFor="environment">{t('connections.environmentLabel')}</Label>
                   <Select
                     id="environment"
                     value={environment}
@@ -427,18 +433,18 @@ function PaymentConnectionsPanel() {
                     disabled={creating}
                     className="min-w-32"
                   >
-                    <option value="live">Live</option>
-                    <option value="sandbox">Sandbox</option>
+                    <option value="live">{t('connections.envLive')}</option>
+                    <option value="sandbox">{t('connections.envSandbox')}</option>
                   </Select>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col gap-3 md:flex-row">
                 <div className="flex flex-[2] flex-col gap-1.5">
-                  <Label htmlFor="storeUrl">URL de la tienda</Label>
+                  <Label htmlFor="storeUrl">{t('connections.storeUrlLabel')}</Label>
                   <Input
                     id="storeUrl"
-                    placeholder="https://tutienda.com"
+                    placeholder={t('connections.storeUrlPh')}
                     value={storeUrl}
                     onChange={(e) => setStoreUrl(e.target.value)}
                     autoComplete="off"
@@ -447,10 +453,10 @@ function PaymentConnectionsPanel() {
                   />
                 </div>
                 <div className="flex flex-1 flex-col gap-1.5">
-                  <Label htmlFor="wooKey">Consumer Key</Label>
+                  <Label htmlFor="wooKey">{t('connections.wooKeyLabel')}</Label>
                   <Input
                     id="wooKey"
-                    placeholder="ck_…"
+                    placeholder={t('connections.wooKeyPh')}
                     value={wooKey}
                     onChange={(e) => setWooKey(e.target.value)}
                     autoComplete="off"
@@ -459,10 +465,10 @@ function PaymentConnectionsPanel() {
                   />
                 </div>
                 <div className="flex flex-1 flex-col gap-1.5">
-                  <Label htmlFor="wooSecret">Consumer Secret</Label>
+                  <Label htmlFor="wooSecret">{t('connections.wooSecretLabel')}</Label>
                   <Input
                     id="wooSecret"
-                    placeholder="cs_…"
+                    placeholder={t('connections.wooSecretPh')}
                     value={wooSecret}
                     onChange={(e) => setWooSecret(e.target.value)}
                     autoComplete="off"
@@ -476,7 +482,7 @@ function PaymentConnectionsPanel() {
 
             <div>
               <Button type="submit" disabled={creating || !displayName.trim()}>
-                {creating ? 'Conectando…' : 'Conectar'}
+                {creating ? t('connections.connectingCta') : t('connections.connectCta')}
               </Button>
             </div>
           </form>
@@ -489,8 +495,7 @@ function PaymentConnectionsPanel() {
       {list.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-sm text-text-muted">
-            Aún no has conectado ninguna cuenta de Stripe. Conecta una arriba para ver sus
-            suscriptores.
+            {t('connections.emptyList')}
           </CardContent>
         </Card>
       ) : (
@@ -527,6 +532,8 @@ function PaymentConnectionsPanel() {
 /// Catálogo de tiers del tenant. El admin define aquí los tiers (Free, Básico,
 /// Pro…) que luego asigna a usuarios manualmente desde /admin/usuarios.
 function TierCatalogPanel() {
+  const t = useTranslations('adminPagos');
+  const tErrors = useTranslations('errors');
   const [tiers, setTiers] = useState<PaymentTier[] | null>(null);
   const [name, setName] = useState('');
   const [isFree, setIsFree] = useState(false);
@@ -542,7 +549,7 @@ function TierCatalogPanel() {
       const res = await paymentTiersApi.listCatalog(token);
       setTiers(res.tiers);
     } catch (e) {
-      setErr(e instanceof ApiHttpError ? e.message : 'No se pudo cargar el catálogo de tiers.');
+      setErr(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('tiers.loadError'));
     }
   }
 
@@ -559,14 +566,23 @@ function TierCatalogPanel() {
     setSyncInfo(null);
     try {
       const res = await paymentTiersApi.syncFromPayments(token);
-      const errSuffix = res.errors.length ? ` · ${res.errors.length} cuenta(s) con error` : '';
       setSyncInfo(
-        `Sincronizadas ${res.connections} cuenta(s): ${res.tiersCreated} tier(s) nuevo(s) en el ` +
-          `catálogo, ${res.updated} usuario(s) con tier de pago${errSuffix}.`,
+        res.errors.length
+          ? t('tiers.syncInfoWithErrors', {
+              connections: res.connections,
+              tiersCreated: res.tiersCreated,
+              updated: res.updated,
+              errors: res.errors.length,
+            })
+          : t('tiers.syncInfo', {
+              connections: res.connections,
+              tiersCreated: res.tiersCreated,
+              updated: res.updated,
+            }),
       );
       await loadTiers(); // refrescar para ver los tiers recién creados + sus conteos
     } catch (e) {
-      setErr(e instanceof ApiHttpError ? e.message : 'No se pudo sincronizar desde pagos.');
+      setErr(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('tiers.syncError'));
     } finally {
       setSyncing(false);
     }
@@ -584,25 +600,22 @@ function TierCatalogPanel() {
       setName('');
       setIsFree(false);
     } catch (e) {
-      setErr(e instanceof ApiHttpError ? e.message : 'No se pudo crear el tier.');
+      setErr(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('tiers.createError'));
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleDelete(t: PaymentTier) {
+  async function handleDelete(tier: PaymentTier) {
     const token = authStorage.getAccessToken();
     if (!token) return;
-    if (
-      !window.confirm(`¿Borrar el tier "${t.name}"? Las asignaciones manuales quedarán sin tier.`)
-    )
-      return;
+    if (!window.confirm(t('tiers.deleteConfirm', { name: tier.name }))) return;
     setErr(null);
     try {
-      await paymentTiersApi.deleteTier(token, t.id);
-      setTiers((prev) => (prev ? prev.filter((x) => x.id !== t.id) : prev));
+      await paymentTiersApi.deleteTier(token, tier.id);
+      setTiers((prev) => (prev ? prev.filter((x) => x.id !== tier.id) : prev));
     } catch (e) {
-      setErr(e instanceof ApiHttpError ? e.message : 'No se pudo borrar el tier.');
+      setErr(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('tiers.deleteError'));
     }
   }
 
@@ -611,28 +624,27 @@ function TierCatalogPanel() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Icon name="award" size={16} />
-          Catálogo de tiers
+          {t('tiers.title')}
         </CardTitle>
         <CardDescription>
-          Define los planes (Free, Básico, Pro…). Luego los asignas a cada usuario desde{' '}
-          <strong>Usuarios</strong>. El tier de pago real se rellena con «Sincronizar desde pagos».
+          {t.rich('tiers.help', { strong: (chunks) => <strong>{chunks}</strong> })}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-3">
           <Button type="button" variant="secondary" onClick={handleSync} disabled={syncing}>
             <Icon name="trending" size={16} />
-            {syncing ? 'Sincronizando…' : 'Sincronizar tiers desde pagos'}
+            {syncing ? t('tiers.syncingCta') : t('tiers.syncCta')}
           </Button>
           {syncInfo ? <span className="text-sm text-success-700">{syncInfo}</span> : null}
         </div>
 
         <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="tierName">Nombre del tier</Label>
+            <Label htmlFor="tierName">{t('tiers.nameLabel')}</Label>
             <Input
               id="tierName"
-              placeholder="Pro"
+              placeholder={t('tiers.namePh')}
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={busy}
@@ -641,10 +653,10 @@ function TierCatalogPanel() {
           </div>
           <label className="flex items-center gap-2 pb-2 text-sm">
             <input type="checkbox" checked={isFree} onChange={(e) => setIsFree(e.target.checked)} />
-            Es el tier gratuito
+            {t('tiers.isFreeLabel')}
           </label>
           <Button type="submit" disabled={busy || !name.trim()}>
-            {busy ? 'Creando…' : 'Añadir tier'}
+            {busy ? t('tiers.creatingCta') : t('tiers.addCta')}
           </Button>
         </form>
         {err ? <p className="text-sm text-danger-700">{err}</p> : null}
@@ -652,25 +664,25 @@ function TierCatalogPanel() {
         {tiers === null ? (
           <div className="skeleton h-16 w-full" />
         ) : tiers.length === 0 ? (
-          <p className="text-sm text-text-muted">Aún no hay tiers. Crea el primero arriba.</p>
+          <p className="text-sm text-text-muted">{t('tiers.empty')}</p>
         ) : (
           <ul className="flex flex-wrap gap-2">
-            {tiers.map((t) => (
+            {tiers.map((tier) => (
               <li
-                key={t.id}
+                key={tier.id}
                 className="flex items-center gap-2 rounded-lg border border-border-soft bg-surface-2 px-3 py-1.5 text-sm"
               >
-                <span className="font-semibold">{t.name}</span>
-                {t.isFree ? <Badge variant="outline">free</Badge> : null}
-                <span className="text-xs text-text-muted" title="Usuarios con este tier">
-                  {t.memberCount ?? 0} usuario{(t.memberCount ?? 0) === 1 ? '' : 's'}
+                <span className="font-semibold">{tier.name}</span>
+                {tier.isFree ? <Badge variant="outline">{t('tiers.freeBadge')}</Badge> : null}
+                <span className="text-xs text-text-muted" title={t('tiers.memberCountTitle')}>
+                  {t('tiers.memberCount', { count: tier.memberCount ?? 0 })}
                 </span>
                 <button
                   type="button"
-                  onClick={() => handleDelete(t)}
+                  onClick={() => handleDelete(tier)}
                   className="text-text-subtle hover:text-danger-700"
-                  title="Borrar tier"
-                  aria-label={`Borrar ${t.name}`}
+                  title={t('tiers.deleteTitle')}
+                  aria-label={t('tiers.deleteAria', { name: tier.name })}
                 >
                   <Icon name="trash" size={14} />
                 </button>
@@ -684,20 +696,26 @@ function TierCatalogPanel() {
 }
 
 function StatusBadge({ status }: { status: PaymentConnectionStatus }) {
+  const t = useTranslations('adminPagos');
   const map: Record<
     PaymentConnectionStatus,
-    { label: string; className?: string; variant?: 'outline' }
+    {
+      key: 'verified' | 'error' | 'pending' | 'disconnected';
+      className?: string;
+      variant?: 'outline';
+    }
   > = {
-    VERIFIED: { label: 'Verificada', className: 'bg-success-600 text-white' },
-    ERROR: { label: 'Error', className: 'bg-danger-600 text-white' },
-    PENDING: { label: 'Pendiente', variant: 'outline' },
-    DISCONNECTED: { label: 'Desconectada', variant: 'outline' },
+    VERIFIED: { key: 'verified', className: 'bg-success-600 text-white' },
+    ERROR: { key: 'error', className: 'bg-danger-600 text-white' },
+    PENDING: { key: 'pending', variant: 'outline' },
+    DISCONNECTED: { key: 'disconnected', variant: 'outline' },
   };
   const cfg = map[status];
+  const label = t(`connStatus.${cfg.key}`);
   return cfg.className ? (
-    <Badge className={cfg.className}>{cfg.label}</Badge>
+    <Badge className={cfg.className}>{label}</Badge>
   ) : (
-    <Badge variant="outline">{cfg.label}</Badge>
+    <Badge variant="outline">{label}</Badge>
   );
 }
 
@@ -716,6 +734,7 @@ function ConnectionRow({
   onVerify: () => void;
   onDisconnect: () => void;
 }) {
+  const t = useTranslations('adminPagos');
   const meta: NonNullable<PaymentConnection['publicMetadata']> = conn.publicMetadata ?? {};
   return (
     <Card className={selected ? 'border-brand-400' : undefined}>
@@ -725,17 +744,17 @@ function ConnectionRow({
           <span>{conn.displayName}</span>
           <StatusBadge status={conn.status} />
           {meta.livemode === false ? (
-            <Badge variant="outline">Modo test</Badge>
+            <Badge variant="outline">{t('connections.modeTestBadge')}</Badge>
           ) : (
-            <Badge className="bg-brand-600 text-white">Live</Badge>
+            <Badge className="bg-brand-600 text-white">{t('connections.liveBadge')}</Badge>
           )}
         </CardTitle>
         <CardDescription>
           {meta.businessName ? `${meta.businessName} · ` : ''}
-          {meta.email ?? 'sin email de cuenta'}
+          {meta.email ?? t('connections.noAccountEmail')}
           {meta.country ? ` · ${meta.country}` : ''}
           {conn.lastVerifiedAt
-            ? ` · verificada ${new Date(conn.lastVerifiedAt).toLocaleString('es-ES')}`
+            ? ` · ${t('connections.verifiedOn', { date: formatDateTime(conn.lastVerifiedAt) })}`
             : ''}
         </CardDescription>
       </CardHeader>
@@ -748,15 +767,15 @@ function ConnectionRow({
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={onReconcile} disabled={busy}>
             <Icon name="users" size={16} />
-            Ver suscriptores
+            {t('connections.viewSubscribers')}
           </Button>
           <Button type="button" variant="secondary" onClick={onVerify} disabled={busy}>
             <Icon name="check" size={16} />
-            {busy ? 'Verificando…' : 'Verificar'}
+            {busy ? t('connections.verifyingCta') : t('connections.verifyCta')}
           </Button>
           <Button type="button" variant="ghost" onClick={onDisconnect} disabled={busy}>
             <Icon name="trash" size={16} />
-            Desconectar
+            {t('connections.disconnectCta')}
           </Button>
         </div>
       </CardContent>
@@ -775,6 +794,8 @@ function ReconcileSection({
   data: ReconcileResult | null;
   onInvited: (info: string) => void;
 }) {
+  const t = useTranslations('adminPagos');
+  const tErrors = useTranslations('errors');
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
   const [inviting, setInviting] = useState(false);
   const [inviteResults, setInviteResults] = useState<InviteResultRow[] | null>(null);
@@ -810,11 +831,11 @@ function ReconcileSection({
       const res = await paymentConnectionsApi.invite(token, connection.id, [...selectedEmails]);
       setInviteResults(res.results);
       const invited = res.results.filter((r) => r.outcome === 'invited').length;
-      onInvited(`${invited} invitación(es) enviada(s).`);
+      onInvited(t('connections.inviteSentInfo', { count: invited }));
       setSelectedEmails(new Set());
     } catch (e) {
       setInviteError(
-        e instanceof ApiHttpError ? e.message : 'No se pudieron enviar las invitaciones.',
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('connections.inviteError'),
       );
     } finally {
       setInviting(false);
@@ -836,17 +857,22 @@ function ReconcileSection({
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="font-display text-xl font-bold tracking-tight">
-          Suscriptores de «{connection.displayName}»
+          {t('connections.reconcileTitle', { name: connection.displayName })}
         </h2>
-        <Badge variant="outline">{data.counts.total} activas</Badge>
-        <Badge className="bg-success-600 text-white">{data.counts.matched} en Didacta</Badge>
-        <Badge className="bg-warning-600 text-white">{data.counts.unmatched} fuera</Badge>
+        <Badge variant="outline">
+          {t('connections.activeCount', { count: data.counts.total })}
+        </Badge>
+        <Badge className="bg-success-600 text-white">
+          {t('connections.matchedCount', { count: data.counts.matched })}
+        </Badge>
+        <Badge className="bg-warning-600 text-white">
+          {t('connections.unmatchedCount', { count: data.counts.unmatched })}
+        </Badge>
       </div>
 
       {data.truncated ? (
         <div className="rounded-lg border border-warning-200 bg-warning-50 p-3 text-sm text-warning-800">
-          <Icon name="alert" size={14} /> La cuenta tiene muchas suscripciones y se alcanzó el
-          límite de lectura: la lista puede estar incompleta.
+          <Icon name="alert" size={14} /> {t('connections.truncatedWarning')}
         </div>
       ) : null}
 
@@ -855,24 +881,22 @@ function ReconcileSection({
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Icon name="users" size={16} />
-            En Didacta con suscripción activa ({data.matched.length})
+            {t('connections.matchedTitle', { count: data.matched.length })}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {data.matched.length === 0 ? (
-            <p className="text-sm text-text-muted">
-              Ningún suscriptor coincide con un usuario de Didacta.
-            </p>
+            <p className="text-sm text-text-muted">{t('connections.matchedEmpty')}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-border-soft border-b text-left text-text-muted">
-                    <th className="py-2 pr-3 font-medium">Email</th>
-                    <th className="py-2 pr-3 font-medium">Usuario</th>
-                    <th className="py-2 pr-3 font-medium">Estado usuario</th>
-                    <th className="py-2 pr-3 font-medium">Suscripción</th>
-                    <th className="py-2 pr-3 font-medium">Importe</th>
+                    <th className="py-2 pr-3 font-medium">{t('connections.colEmail')}</th>
+                    <th className="py-2 pr-3 font-medium">{t('connections.colUser')}</th>
+                    <th className="py-2 pr-3 font-medium">{t('connections.colUserStatus')}</th>
+                    <th className="py-2 pr-3 font-medium">{t('connections.colSubscription')}</th>
+                    <th className="py-2 pr-3 font-medium">{t('connections.colAmount')}</th>
                     <th className="py-2 font-medium" />
                   </tr>
                 </thead>
@@ -891,7 +915,7 @@ function ReconcileSection({
                         <Badge variant="outline">{s.status}</Badge>
                       </td>
                       <td className="py-2 pr-3 font-mono text-xs">
-                        {formatAmount(s.unitAmount, s.currency)}
+                        {fmtAmount(s.unitAmount, s.currency)}
                         {s.interval ? `/${s.interval}` : ''}
                       </td>
                       <td className="py-2">
@@ -911,18 +935,13 @@ function ReconcileSection({
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center gap-2 text-base">
             <Icon name="user" size={16} />
-            Suscritos que NO están en Didacta ({data.unmatched.length})
+            {t('connections.unmatchedTitle', { count: data.unmatched.length })}
           </CardTitle>
-          <CardDescription>
-            Selecciona y pulsa «Invitar» para crearles una cuenta (PENDING) y enviarles email de
-            activación.
-          </CardDescription>
+          <CardDescription>{t('connections.unmatchedHelp')}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {data.unmatched.length === 0 ? (
-            <p className="text-sm text-text-muted">
-              Todos los suscriptores ya están en Didacta. 🎉
-            </p>
+            <p className="text-sm text-text-muted">{t('connections.unmatchedEmpty')}</p>
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2">
@@ -933,8 +952,8 @@ function ReconcileSection({
                   disabled={invitableEmails.length === 0}
                 >
                   {selectedEmails.size === invitableEmails.length && invitableEmails.length > 0
-                    ? 'Quitar selección'
-                    : 'Seleccionar todos con email'}
+                    ? t('connections.clearSelection')
+                    : t('connections.selectAllWithEmail')}
                 </Button>
                 <Button
                   type="button"
@@ -942,7 +961,9 @@ function ReconcileSection({
                   disabled={inviting || selectedEmails.size === 0}
                 >
                   <Icon name="mail" size={16} />
-                  {inviting ? 'Invitando…' : `Invitar (${selectedEmails.size})`}
+                  {inviting
+                    ? t('connections.invitingCta')
+                    : t('connections.inviteCta', { count: selectedEmails.size })}
                 </Button>
               </div>
               {inviteError ? <p className="text-sm text-danger-700">{inviteError}</p> : null}
@@ -951,10 +972,10 @@ function ReconcileSection({
                   <thead>
                     <tr className="border-border-soft border-b text-left text-text-muted">
                       <th className="w-8 py-2" />
-                      <th className="py-2 pr-3 font-medium">Email</th>
-                      <th className="py-2 pr-3 font-medium">Nombre (Stripe)</th>
-                      <th className="py-2 pr-3 font-medium">Suscripción</th>
-                      <th className="py-2 pr-3 font-medium">Importe</th>
+                      <th className="py-2 pr-3 font-medium">{t('connections.colEmail')}</th>
+                      <th className="py-2 pr-3 font-medium">{t('connections.colNameStripe')}</th>
+                      <th className="py-2 pr-3 font-medium">{t('connections.colSubscription')}</th>
+                      <th className="py-2 pr-3 font-medium">{t('connections.colAmount')}</th>
                       <th className="py-2 font-medium" />
                     </tr>
                   </thead>
@@ -991,6 +1012,7 @@ function UnmatchedRow({
   checked: boolean;
   onToggle: () => void;
 }) {
+  const t = useTranslations('adminPagos');
   return (
     <tr className="border-border-soft border-b last:border-0">
       <td className="py-2">
@@ -999,18 +1021,20 @@ function UnmatchedRow({
           checked={checked}
           onChange={onToggle}
           disabled={!sub.email}
-          aria-label={`Seleccionar ${sub.email ?? 'sin email'}`}
+          aria-label={t('connections.selectAria', {
+            email: sub.email ?? t('connections.noEmail'),
+          })}
         />
       </td>
       <td className="py-2 pr-3 font-mono text-xs">
-        {sub.email ?? <span className="text-text-subtle">sin email</span>}
+        {sub.email ?? <span className="text-text-subtle">{t('connections.noEmail')}</span>}
       </td>
       <td className="py-2 pr-3">{sub.name ?? '—'}</td>
       <td className="py-2 pr-3">
         <Badge variant="outline">{sub.status}</Badge>
       </td>
       <td className="py-2 pr-3 font-mono text-xs">
-        {formatAmount(sub.unitAmount, sub.currency)}
+        {fmtAmount(sub.unitAmount, sub.currency)}
         {sub.interval ? `/${sub.interval}` : ''}
       </td>
       <td className="py-2">
@@ -1021,34 +1045,38 @@ function UnmatchedRow({
 }
 
 function CancelLink({ livemode, subId }: { livemode: boolean; subId: string }) {
+  const t = useTranslations('adminPagos');
   return (
     <a
       href={stripeSubscriptionUrl(livemode, subId)}
       target="_blank"
       rel="noopener noreferrer"
       className="text-xs font-semibold text-brand-700 underline"
-      title="Gestionar / cancelar esta suscripción en Stripe"
+      title={t('connections.cancelLinkTitle')}
     >
-      Gestionar en Stripe ↗
+      {t('connections.cancelLinkText')}
     </a>
   );
 }
 
 function InviteResults({ results }: { results: InviteResultRow[] }) {
+  const t = useTranslations('adminPagos');
   return (
     <div className="rounded-lg border border-border-soft bg-surface-2 p-3 text-sm">
-      <p className="mb-2 font-semibold">Resultado de las invitaciones</p>
+      <p className="mb-2 font-semibold">{t('connections.inviteResultsTitle')}</p>
       <ul className="flex flex-col gap-1">
         {results.map((r) => (
           <li key={r.email} className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-xs">{r.email}</span>
             {r.outcome === 'invited' ? (
-              <Badge className="bg-success-600 text-white">Invitado</Badge>
+              <Badge className="bg-success-600 text-white">{t('connections.outcomeInvited')}</Badge>
             ) : r.outcome === 'already_member' ? (
-              <Badge variant="outline">Ya estaba en Didacta</Badge>
+              <Badge variant="outline">{t('connections.outcomeAlreadyMember')}</Badge>
             ) : (
               <Badge className="bg-danger-600 text-white">
-                Error{r.message ? `: ${r.message}` : ''}
+                {r.message
+                  ? t('connections.outcomeErrorWithMessage', { message: r.message })
+                  : t('connections.outcomeError')}
               </Badge>
             )}
           </li>
