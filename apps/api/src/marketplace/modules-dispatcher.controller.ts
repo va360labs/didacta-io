@@ -219,11 +219,25 @@ export class ModulesDispatcherController {
         : matched.handler(ctx));
       result = ret ?? { status: 204, body: null };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`[mod:${matched.moduleName}] handler lanzó: ${msg}`);
+      // SEGURIDAD (MUST-FIX 26): el mensaje del error lo escribe código
+      // third-party del marketplace y puede llevar cualquier cosa —
+      // fragmentos de SQL, rutas de fichero, respuestas de una API externa,
+      // incluso un secreto interpolado por descuido del módulo. Este
+      // dispatcher sirve rutas que pueden ser anónimas, así que el detalle
+      // NO viaja al cliente: se queda en el log del servidor y el cliente
+      // recibe un mensaje genérico y estable con su `code`.
+      //
+      // Un módulo que quiera comunicar algo al usuario final no debe lanzar:
+      // devuelve `{ status, body }` desde el handler, que sí se envía tal cual.
+      this.logger.error(
+        `Dispatcher · el handler del módulo lanzó una excepción — ` +
+          `module=${matched.moduleName} tenant=${user?.tenantId ?? 'anónimo'} ` +
+          `operation=${method} ${stripped}`,
+        err instanceof Error ? (err.stack ?? err.message) : String(err),
+      );
       throw new HttpException(
         {
-          message: `Error en módulo "${matched.moduleName}": ${msg}`,
+          message: 'El módulo no pudo completar la operación.',
           code: 'MARKETPLACE_MODULE_HANDLER_ERROR',
         },
         HttpStatus.INTERNAL_SERVER_ERROR,

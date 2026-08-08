@@ -5,6 +5,7 @@
   "MANIFEST_CONSISTENCY_INVALID": "The module manifest is inconsistent with the package contents.",
   "MANIFEST_INVALID_JSON": "The module manifest is not valid JSON.",
   "MANIFEST_SCHEMA_INVALID": "The module manifest does not match the expected schema.",
+  "MARKETPLACE_ASSET_NOT_FOUND": "The requested asset is not available.",
   "MARKETPLACE_ASSET_SURFACE_INVALID": "That surface is not valid.",
   "MARKETPLACE_DISPATCHER_METHOD_NOT_ALLOWED": "Method not supported by the dispatcher",
   "MARKETPLACE_DISPATCHER_ROUTE_NOT_FOUND": "No module is registered for that route.",
