@@ -8,6 +8,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import { useNotificationsContext } from './notifications-provider';
 
 /**
@@ -16,6 +17,7 @@ import { useNotificationsContext } from './notifications-provider';
  * campana solo lo consume por contexto.
  */
 export function NotificationsBell() {
+  const t = useTranslations('shell');
   const { unreadCount, refresh } = useNotificationsContext();
   const pathname = usePathname();
 
@@ -33,8 +35,16 @@ export function NotificationsBell() {
     <Link
       href="/notificaciones"
       className="relative inline-flex items-center justify-center rounded-md p-2 text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
-      aria-label={unreadCount > 0 ? `${unreadCount} notificaciones sin leer` : 'Notificaciones'}
-      title={unreadCount > 0 ? `${unreadCount} sin leer` : 'Notificaciones'}
+      aria-label={
+        unreadCount > 0
+          ? t('notifications.unreadAria', { count: unreadCount })
+          : t('notifications.title')
+      }
+      title={
+        unreadCount > 0
+          ? t('notifications.unreadShort', { count: unreadCount })
+          : t('notifications.title')
+      }
     >
       <BellIcon />
       {unreadCount > 0 ? (

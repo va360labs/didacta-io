@@ -20,6 +20,7 @@ import { FloatingChat, MessagingProvider } from '@/modules/messaging';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
 import { clearIntendedPath, rememberIntendedPath } from '@/lib/post-login-redirect';
 import { meApi } from '@/lib/me';
+import { labelOr } from '@/lib/i18n/labels';
 import { formatTenantName } from '@/lib/tenant-name';
 import { useTenantContext } from '@/lib/tenant-context';
 import { mergeExtensionSidebarItems } from '@/lib/sidebar-extensions-merge';
@@ -309,7 +310,18 @@ function Shell({
     ],
     [t],
   );
-  const sectionLabel = resolveSectionLabel(mergedGroups, pathname ?? '', sectionExtras);
+  // Los `label` del sidebar son TOKENS canónicos en español (ver SidebarContent):
+  // sin resolverlos, con la UI en inglés el `<title>` del navegador mezclaría
+  // idiomas. `labelOr` degrada al token crudo si no hay traducción. Los extras
+  // de arriba ya llegan traducidos por `t`, así que se emiten tal cual (pasarlos
+  // por `labelOr` buscaría una key `nav.items.<texto ya traducido>` que no existe).
+  const tNav = useTranslations('nav');
+  const sectionMatch = resolveSectionLabel(mergedGroups, pathname ?? '', sectionExtras);
+  const sectionLabel = sectionMatch
+    ? sectionMatch.fromExtras
+      ? sectionMatch.label
+      : labelOr(tNav, `items.${sectionMatch.label}`, sectionMatch.label)
+    : null;
   useEffect(() => {
     const parts = [sectionLabel, tenantName, 'Didacta'].filter((p): p is string => Boolean(p));
     document.title = parts.join(' | ');
@@ -401,31 +413,42 @@ function Shell({
  * merecen nombre en el `<title>`, ya traducidas por quien llama). Match por
  * prefijo más largo (la ruta más específica gana); respeta `exactMatch`.
  * Devuelve null si ninguna ruta coincide (el `<title>` cae a "Tenant | Didacta").
+ *
+ * `fromExtras` distingue el origen del label: los del sidebar son tokens
+ * canónicos en español que el llamante aún tiene que pasar por `labelOr`; los
+ * de `extras` ya vienen traducidos y se emiten tal cual.
  */
 function resolveSectionLabel(
   groups: SidebarGroup[],
   pathname: string,
   extras: ReadonlyArray<{ href: string; label: string }>,
-): string | null {
+): { label: string; fromExtras: boolean } | null {
   if (!pathname) return null;
-  const candidates: Array<{ href: string; label: string; exact?: boolean }> = [];
+  const candidates: Array<{
+    href: string;
+    label: string;
+    exact?: boolean;
+    fromExtras?: boolean;
+  }> = [];
   for (const g of groups) {
     for (const it of g.items) {
       if (it.href) candidates.push({ href: it.href, label: it.label, exact: it.exactMatch });
     }
   }
-  candidates.push(...extras);
+  for (const e of extras) {
+    candidates.push({ href: e.href, label: e.label, fromExtras: true });
+  }
 
-  let best: { href: string; label: string } | null = null;
+  let best: { href: string; label: string; fromExtras: boolean } | null = null;
   for (const c of candidates) {
     const match = c.exact
       ? pathname === c.href
       : pathname === c.href || pathname.startsWith(`${c.href}/`);
     if (match && (!best || c.href.length > best.href.length)) {
-      best = { href: c.href, label: c.label };
+      best = { href: c.href, label: c.label, fromExtras: c.fromExtras ?? false };
     }
   }
-  return best?.label ?? null;
+  return best ? { label: best.label, fromExtras: best.fromExtras } : null;
 }
 
 // `buildGroups` y `buildAdminGroups` viven ahora en `@/lib/sidebar-nav` — son

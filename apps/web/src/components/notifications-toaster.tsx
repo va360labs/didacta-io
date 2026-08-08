@@ -7,6 +7,7 @@
 
 import Link from 'next/link';
 import { useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import { notificationLink } from '@/lib/notification-link';
 import { useNotificationsContext, type ToastItem } from './notifications-provider';
 
@@ -45,6 +46,7 @@ export function NotificationsToaster() {
 }
 
 function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string) => void }) {
+  const t = useTranslations('shell');
   const { id } = toast;
 
   useEffect(() => {
@@ -53,7 +55,7 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: str
   }, [id, onDismiss]);
 
   const link = notificationLink(toast.templateKey, toast.metadata);
-  const title = toast.subject ?? 'Nueva notificación';
+  const title = toast.subject ?? t('notifications.toastDefaultTitle');
 
   return (
     <div
@@ -82,7 +84,7 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: str
       <button
         type="button"
         onClick={() => onDismiss(id)}
-        aria-label="Cerrar notificación"
+        aria-label={t('notifications.toastClose')}
         className="shrink-0 rounded-md p-1 text-text-subtle transition-colors hover:bg-neutral-100 hover:text-text dark:hover:bg-neutral-800"
       >
         <svg

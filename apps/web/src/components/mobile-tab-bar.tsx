@@ -6,6 +6,7 @@
  */
 
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Icon, type IconName } from '@/components/icon';
 
 interface Props {
@@ -16,7 +17,8 @@ interface Props {
 
 interface Tab {
   href: string;
-  label: string;
+  /** Sufijo de la key `shell.tabBar.*` con el rótulo de la pestaña. */
+  labelKey: 'feed' | 'cursos' | 'miembros' | 'perfil';
   icon: IconName;
   /** Prefijos de ruta que marcan la pestaña como activa. */
   matches: string[];
@@ -30,10 +32,10 @@ interface Tab {
  * de un espacio de comunidad (`/espacios/...`), que es contenido del feed.
  */
 const TABS: Tab[] = [
-  { href: '/comunidad', label: 'Feed', icon: 'globe', matches: ['/comunidad', '/espacios'] },
-  { href: '/cursos', label: 'Cursos', icon: 'book', matches: ['/cursos'] },
-  { href: '/miembros', label: 'Miembros', icon: 'users', matches: ['/miembros'] },
-  { href: '/cuenta', label: 'Perfil', icon: 'user', matches: ['/cuenta'] },
+  { href: '/comunidad', labelKey: 'feed', icon: 'globe', matches: ['/comunidad', '/espacios'] },
+  { href: '/cursos', labelKey: 'cursos', icon: 'book', matches: ['/cursos'] },
+  { href: '/miembros', labelKey: 'miembros', icon: 'users', matches: ['/miembros'] },
+  { href: '/cuenta', labelKey: 'perfil', icon: 'user', matches: ['/cuenta'] },
 ];
 
 function isActive(pathname: string, matches: string[]): boolean {
@@ -41,6 +43,7 @@ function isActive(pathname: string, matches: string[]): boolean {
 }
 
 export function MobileTabBar({ pathname, onOpenMenu }: Props) {
+  const t = useTranslations('shell');
   const p = pathname ?? '';
 
   const itemClass = (active: boolean) =>
@@ -50,7 +53,7 @@ export function MobileTabBar({ pathname, onOpenMenu }: Props) {
 
   return (
     <nav
-      aria-label="Navegación principal"
+      aria-label={t('tabBar.ariaLabel')}
       className="fixed inset-x-0 bottom-0 z-(--z-sticky) flex items-stretch border-t border-border-soft bg-surface/95 backdrop-blur lg:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
@@ -64,13 +67,13 @@ export function MobileTabBar({ pathname, onOpenMenu }: Props) {
             className={itemClass(active)}
           >
             <Icon name={tab.icon} size={22} strokeWidth={active ? 2 : 1.75} />
-            <span>{tab.label}</span>
+            <span>{t(`tabBar.${tab.labelKey}`)}</span>
           </Link>
         );
       })}
       <button type="button" onClick={onOpenMenu} className={itemClass(false)}>
         <Icon name="menu" size={22} />
-        <span>Menú</span>
+        <span>{t('tabBar.menu')}</span>
       </button>
     </nav>
   );

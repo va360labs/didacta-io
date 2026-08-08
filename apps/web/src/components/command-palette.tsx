@@ -7,7 +7,9 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
+import { labelOr } from '@/lib/i18n/labels';
 import { Dialog } from '@/components/ui/dialog';
 import type { SidebarGroup } from '@/components/app-sidebar';
 
@@ -34,6 +36,11 @@ export function CommandPalette({
   groups: SidebarGroup[];
 }) {
   const router = useRouter();
+  const t = useTranslations('shell');
+  // Los `label`/`group` del sidebar son TOKENS canónicos en español (ver
+  // SidebarContent); aquí se resuelven a su PRESENTACIÓN antes de aplanar, para
+  // que la lista se muestre Y se filtre en el idioma activo.
+  const tNav = useTranslations('nav');
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
@@ -45,20 +52,20 @@ export function CommandPalette({
           .filter((i) => i.href)
           .map((i) => ({
             href: i.href,
-            label: i.label,
-            group: g.label,
+            label: labelOr(tNav, `items.${i.label}`, i.label),
+            group: labelOr(tNav, `groups.${g.label}`, g.label),
             icon: i.icon,
             emoji: i.emoji,
           })),
       ),
-    [groups],
+    [groups, tNav],
   );
 
   const filtered = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    if (!t) return items;
+    const needle = q.trim().toLowerCase();
+    if (!needle) return items;
     return items.filter(
-      (i) => i.label.toLowerCase().includes(t) || i.group.toLowerCase().includes(t),
+      (i) => i.label.toLowerCase().includes(needle) || i.group.toLowerCase().includes(needle),
     );
   }, [q, items]);
 
@@ -104,7 +111,7 @@ export function CommandPalette({
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
-      ariaLabel="Buscar y navegar"
+      ariaLabel={t('palette.ariaLabel')}
       maxWidthClass="max-w-lg"
       contentClassName="p-0 overflow-hidden"
     >
@@ -115,14 +122,16 @@ export function CommandPalette({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Buscar secciones…"
+          placeholder={t('palette.placeholder')}
           className="w-full bg-transparent text-sm text-text placeholder:text-text-subtle focus:outline-none"
-          aria-label="Buscar secciones"
+          aria-label={t('palette.inputAriaLabel')}
         />
       </div>
       <ul ref={listRef} className="max-h-80 overflow-y-auto p-2">
         {filtered.length === 0 ? (
-          <li className="px-3 py-6 text-center text-sm text-text-muted">Sin resultados</li>
+          <li className="px-3 py-6 text-center text-sm text-text-muted">
+            {t('palette.noResults')}
+          </li>
         ) : (
           filtered.map((it, idx) => (
             <li key={`${it.group}-${it.href}`}>

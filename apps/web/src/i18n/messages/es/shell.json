@@ -1,1 +1,54 @@
-{}
+{
+  "closeMenu": "Cerrar menú",
+  "sidebar": {
+    "logoAlt": "Logo",
+    "expandMenu": "Expandir menú",
+    "collapseMenu": "Plegar menú",
+    "search": "Buscar...",
+    "searchShortcut": "Buscar (⌘K)",
+    "communitySubtitle": "Comunidad",
+    "myProfile": "Mi perfil",
+    "logout": "Cerrar sesión"
+  },
+  "roles": {
+    "super_admin": "Super admin",
+    "tenant_admin": "Administradora",
+    "formador": "Formador",
+    "alumno": "Alumno",
+    "auditor": "Auditor",
+    "empresa_manager": "Manager"
+  },
+  "palette": {
+    "ariaLabel": "Buscar y navegar",
+    "placeholder": "Buscar secciones…",
+    "inputAriaLabel": "Buscar secciones",
+    "noResults": "Sin resultados"
+  },
+  "drawer": {
+    "ariaLabel": "Menú de navegación"
+  },
+  "tabBar": {
+    "ariaLabel": "Navegación principal",
+    "feed": "Feed",
+    "cursos": "Cursos",
+    "miembros": "Miembros",
+    "perfil": "Perfil",
+    "menu": "Menú"
+  },
+  "notifications": {
+    "title": "Notificaciones",
+    "unreadAria": "{count} notificaciones sin leer",
+    "unreadShort": "{count} sin leer",
+    "toastDefaultTitle": "Nueva notificación",
+    "toastClose": "Cerrar notificación"
+  },
+  "versionBanner": {
+    "label": "Nueva versión:",
+    "view": "Ver",
+    "dismiss": "Descartar aviso de versión nueva"
+  },
+  "dialog": {
+    "close": "Cerrar",
+    "fallbackLabel": "Dialog"
+  }
+}
