@@ -56,34 +56,27 @@ export function relTime(iso: string, t: TranslatorLike): string {
 }
 
 /**
- * `t` = `useTranslations('modMessaging')`.
- *
- * Va OPCIONAL solo por compatibilidad: la página `/mensajes` pertenece a otra
- * unidad de la migración y todavía la llama sin traductor. Sin `t` devuelve el
- * español cableado de siempre (nunca una key en pantalla). Cuando esa página
- * pase el suyo, `t` pasa a obligatorio y esta rama desaparece.
+ * `t` = `useTranslations('modMessaging')`, y es OBLIGATORIO: los 6 call-sites
+ * (los 4 de `use-conversation-thread` y los 2 de `/mensajes`) le pasan el suyo.
+ * No hay rama degradada a español — un `t` opcional aquí significaba español en
+ * la UI inglesa sin que fallara ningún test.
  */
-export function humanizeError(e: unknown, t?: TranslatorLike): string {
-  if (!(e instanceof ApiHttpError))
-    return t ? t('errorLoad') : 'No pudimos cargar los mensajes. Recarga para reintentar.';
+export function humanizeError(e: unknown, t: TranslatorLike): string {
+  if (!(e instanceof ApiHttpError)) return t('errorLoad');
   switch (e.code) {
     case 'MESSAGING_NOT_PARTICIPANT':
-      return t ? t('errorNotParticipant') : 'No participas en esta conversación.';
+      return t('errorNotParticipant');
     case 'MESSAGING_CONVERSATION_NOT_FOUND':
-      return t ? t('errorConversationNotFound') : 'La conversación ya no está disponible.';
+      return t('errorConversationNotFound');
     case 'MESSAGING_BODY_INVALID':
-      return t ? t('errorBodyInvalid') : 'El mensaje debe tener entre 1 y 4000 caracteres.';
+      return t('errorBodyInvalid');
     case 'MESSAGING_SELF_DM':
-      return t ? t('errorSelfDm') : 'No puedes abrir un directo contigo mismo.';
+      return t('errorSelfDm');
     case 'MESSAGING_RATE_LIMITED':
-      return t
-        ? t('errorRateLimited')
-        : 'Vas demasiado rápido. Espera unos segundos y vuelve a intentarlo.';
+      return t('errorRateLimited');
     default:
       if (e.status !== 403) return e.message;
-      return t
-        ? t('errorModuleInactive')
-        : 'El módulo de mensajería no está activo en esta comunidad.';
+      return t('errorModuleInactive');
   }
 }
 

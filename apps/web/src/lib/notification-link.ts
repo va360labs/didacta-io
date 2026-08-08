@@ -24,22 +24,20 @@ function str(value: unknown): string | null {
 }
 
 /**
- * `t` = `useTranslations('libShared')` del componente que la llama.
- *
- * Va OPCIONAL solo por compatibilidad: `/notificaciones` y el toaster
- * pertenecen a otras unidades de la migración y todavía la llaman sin
- * traductor. Sin `t` devuelve el español cableado de siempre (nunca una key en
- * pantalla). Cuando esos dos pasen el suyo, `t` pasa a obligatorio.
+ * `t` = `useTranslations('libShared')` del componente que la llama, y es
+ * OBLIGATORIO: los dos únicos llamantes (`/notificaciones` y el toaster) le
+ * pasan el suyo. No hay rama degradada a español — un `t` opcional aquí
+ * significaba español en la UI inglesa sin que fallara ningún test.
  */
 export function notificationLink(
   templateKey: string,
   metadata: Record<string, unknown> | null | undefined,
-  t?: TranslatorLike,
+  t: TranslatorLike,
 ): NotificationLink | null {
   const meta = metadata ?? {};
   const postId = str(meta.postId);
-  const reply = t ? t('notificationAction.reply') : 'Responder';
-  const view = t ? t('notificationAction.view') : 'Ver';
+  const reply = t('notificationAction.reply');
+  const view = t('notificationAction.view');
 
   switch (templateKey) {
     case 'community.comment.on_post': {
