@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,8 +15,10 @@ import { NativeSelect } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { StatCard } from '@/components/stat-card';
 import { UserChip } from '@/components/user-chip';
-import { ApiHttpError } from '@/lib/api-client';
 import { coursesApi, type Course } from '@/lib/courses';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
+import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import {
   aiTutorReviewApi,
   type ListAnswersResultView,
@@ -33,14 +36,16 @@ import {
  * pendientes primero y el contador de pendientes está siempre a la vista.
  */
 
-const ESTADO_LABEL: Record<ReviewStatus, string> = {
-  PENDING: 'Sin revisar',
-  OK: 'Correcta',
-  CORRECTED: 'Corregida',
-};
+/**
+ * El estado llega del backend: `labelOr` degrada a su valor crudo si algún día
+ * aparece uno que el catálogo no conoce, nunca a una key en pantalla.
+ */
+function estadoLabel(t: TranslatorLike, status: ReviewStatus): string {
+  return labelOr(t, `review.status.${status}`, status);
+}
 
 function formatFecha(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-ES', {
+  return formatDate(iso, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -50,6 +55,8 @@ function formatFecha(iso: string): string {
 }
 
 export function AdminTutorRevision(): React.JSX.Element {
+  const t = useTranslations('modAiTutor');
+  const tErrors = useTranslations('errors');
   const [data, setData] = useState<ListAnswersResultView | null>(null);
   const [cursos, setCursos] = useState<Course[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -78,8 +85,10 @@ export function AdminTutorRevision(): React.JSX.Element {
 
   useEffect(() => {
     cargar().catch((e) => {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las conversaciones.');
+      setError(apiErrorMessage(e, tErrors));
     });
+    // `tErrors` fuera de deps: solo traduce el error de la carga.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cargar]);
 
   useEffect(() => {
@@ -100,11 +109,12 @@ export function AdminTutorRevision(): React.JSX.Element {
         setAbierta(null);
         await cargar();
       } catch (e) {
-        setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar la revisión.');
+        setError(apiErrorMessage(e, tErrors));
       } finally {
         setBusy(false);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [cargar],
   );
 
@@ -133,23 +143,23 @@ export function AdminTutorRevision(): React.JSX.Element {
       {data ? (
         <div className="grid gap-3 sm:grid-cols-3">
           <StatCard
-            label="Preguntas encontradas"
+            label={t('review.statFound')}
             value={data.total}
-            hint="con los filtros actuales"
+            hint={t('review.statFoundHint')}
             icon="message"
             tone="info"
           />
           <StatCard
-            label="Sin revisar"
+            label={t('review.statPending')}
             value={data.pendientes}
-            hint="esperan veredicto"
+            hint={t('review.statPendingHint')}
             icon="bell"
             tone={data.pendientes > 0 ? 'warn' : 'success'}
           />
           <StatCard
-            label="Página"
-            value={`${data.page} / ${totalPaginas}`}
-            hint={`${data.pageSize} por página`}
+            label={t('review.statPage')}
+            value={t('review.statPageValue', { page: data.page, total: totalPaginas })}
+            hint={t('review.statPageHint', { size: data.pageSize })}
             icon="chart"
             tone="neutral"
           />
@@ -158,16 +168,13 @@ export function AdminTutorRevision(): React.JSX.Element {
 
       <Card>
         <CardHeader>
-          <CardTitle>Filtros</CardTitle>
-          <CardDescription>
-            «Solo sin respaldo» enseña las respuestas que el tutor dio sin poder citar ninguna
-            lección. Son las que más probablemente estén mal o señalen material que falta.
-          </CardDescription>
+          <CardTitle>{t('review.filtersTitle')}</CardTitle>
+          <CardDescription>{t('review.filtersDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="space-y-1 text-sm">
-              <span className="text-text-muted">Curso</span>
+              <span className="text-text-muted">{t('review.courseLabel')}</span>
               <NativeSelect
                 value={courseId}
                 data-testid="filtro-curso"
@@ -176,7 +183,7 @@ export function AdminTutorRevision(): React.JSX.Element {
                   setPage(1);
                 }}
               >
-                <option value="">Todos los cursos</option>
+                <option value="">{t('review.allCourses')}</option>
                 {cursos.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title}
@@ -186,7 +193,7 @@ export function AdminTutorRevision(): React.JSX.Element {
             </label>
 
             <label className="space-y-1 text-sm">
-              <span className="text-text-muted">Estado</span>
+              <span className="text-text-muted">{t('review.statusLabel')}</span>
               <NativeSelect
                 value={status}
                 data-testid="filtro-estado"
@@ -195,19 +202,19 @@ export function AdminTutorRevision(): React.JSX.Element {
                   setPage(1);
                 }}
               >
-                <option value="">Todos</option>
-                <option value="PENDING">Sin revisar</option>
-                <option value="OK">Correctas</option>
-                <option value="CORRECTED">Corregidas</option>
+                <option value="">{t('review.statusAll')}</option>
+                <option value="PENDING">{t('review.statusPending')}</option>
+                <option value="OK">{t('review.statusOk')}</option>
+                <option value="CORRECTED">{t('review.statusCorrected')}</option>
               </NativeSelect>
             </label>
 
             <label className="space-y-1 text-sm">
-              <span className="text-text-muted">Buscar en la pregunta o la respuesta</span>
+              <span className="text-text-muted">{t('review.searchLabel')}</span>
               <div className="flex gap-2">
                 <Input
                   value={q}
-                  placeholder="p. ej. certificado"
+                  placeholder={t('review.searchPlaceholder')}
                   onChange={(e) => setQ(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key !== 'Enter') return;
@@ -222,7 +229,7 @@ export function AdminTutorRevision(): React.JSX.Element {
                     setPage(1);
                   }}
                 >
-                  Buscar
+                  {t('review.searchButton')}
                 </Button>
               </div>
             </label>
@@ -238,7 +245,7 @@ export function AdminTutorRevision(): React.JSX.Element {
                   setPage(1);
                 }}
               />
-              <span className="pb-2.5 text-text">Solo sin respaldo</span>
+              <span className="pb-2.5 text-text">{t('review.onlyUnsupported')}</span>
             </label>
           </div>
         </CardContent>
@@ -246,15 +253,12 @@ export function AdminTutorRevision(): React.JSX.Element {
 
       <Card data-testid="tutor-answers-card">
         <CardHeader>
-          <CardTitle>Preguntas al tutor</CardTitle>
-          <CardDescription>Las más recientes primero.</CardDescription>
+          <CardTitle>{t('review.listTitle')}</CardTitle>
+          <CardDescription>{t('review.listDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {!data || data.items.length === 0 ? (
-            <p className="text-sm text-text-subtle">
-              No hay preguntas con estos filtros. Cuando un alumno pregunte al tutor desde una
-              clase, aparecerá aquí.
-            </p>
+            <p className="text-sm text-text-subtle">{t('review.listEmpty')}</p>
           ) : (
             data.items.map((item) => (
               <FilaRespuesta
@@ -276,10 +280,10 @@ export function AdminTutorRevision(): React.JSX.Element {
                 disabled={data.page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
-                Anterior
+                {t('review.previous')}
               </Button>
               <span className="text-xs text-text-subtle">
-                {data.page} de {totalPaginas}
+                {t('review.pageOf', { page: data.page, total: totalPaginas })}
               </span>
               <Button
                 variant="ghost"
@@ -287,7 +291,7 @@ export function AdminTutorRevision(): React.JSX.Element {
                 disabled={data.page >= totalPaginas}
                 onClick={() => setPage((p) => p + 1)}
               >
-                Siguiente
+                {t('review.next')}
               </Button>
             </div>
           ) : null}
@@ -313,12 +317,25 @@ function FilaRespuesta({
     input: Parameters<typeof aiTutorReviewApi.review>[1],
   ) => Promise<void>;
 }): React.JSX.Element {
+  const t = useTranslations('modAiTutor');
   const [respuesta, setRespuesta] = useState(item.correction?.answer ?? item.answer);
   const [pregunta, setPregunta] = useState(item.correction?.question ?? item.question);
   const [nota, setNota] = useState(item.reviewNote ?? '');
   const [global, setGlobal] = useState(false);
 
   const sinRespaldo = item.citations.length === 0;
+
+  // Cuatro frases completas en vez de trozos concatenados: la fecha y la nota
+  // son opcionales y cada combinación tiene su propia key.
+  const revisadaPor = (() => {
+    const by = item.reviewedBy?.name ?? t('review.adminFallback');
+    const date = item.reviewedAt ? formatFecha(item.reviewedAt) : null;
+    const note = item.reviewNote;
+    if (date && note) return t('review.reviewedByOnWithNote', { by, date, note });
+    if (date) return t('review.reviewedByOn', { by, date });
+    if (note) return t('review.reviewedByWithNote', { by, note });
+    return t('review.reviewedBy', { by });
+  })();
 
   return (
     <div
@@ -334,18 +351,21 @@ function FilaRespuesta({
               userId={item.user.id}
               name={item.user.name}
               email={item.user.email}
-              fallback="Alumno"
+              fallback={t('review.studentFallback')}
               showAvatar={false}
               size={18}
               nameClassName="block truncate text-xs text-text-subtle"
             />
             <span>
-              · {item.courseTitle ?? 'Curso'} · {formatFecha(item.askedAt)}
+              {t('review.rowMeta', {
+                course: item.courseTitle ?? t('review.courseFallback'),
+                date: formatFecha(item.askedAt),
+              })}
             </span>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {sinRespaldo ? <Badge variant="warning">Sin respaldo</Badge> : null}
+          {sinRespaldo ? <Badge variant="warning">{t('review.unsupportedBadge')}</Badge> : null}
           <Badge
             variant={
               item.reviewStatus === 'OK'
@@ -355,10 +375,10 @@ function FilaRespuesta({
                   : 'muted'
             }
           >
-            {ESTADO_LABEL[item.reviewStatus]}
+            {estadoLabel(t, item.reviewStatus)}
           </Badge>
           <Button size="sm" variant="secondary" onClick={onToggle}>
-            {abierta ? 'Cerrar' : 'Revisar'}
+            {abierta ? t('review.close') : t('review.open')}
           </Button>
         </div>
       </div>
@@ -367,23 +387,23 @@ function FilaRespuesta({
 
       {item.citations.length > 0 ? (
         <p className="mt-1.5 text-xs text-text-subtle">
-          Se apoyó en: {item.citations.map((c) => c.lessonTitle ?? 'lección').join(' · ')}
+          {t('review.citations', {
+            sources: item.citations
+              .map((c) => c.lessonTitle ?? t('review.lessonFallback'))
+              .join(' · '),
+          })}
         </p>
       ) : null}
 
       {item.reviewStatus !== 'PENDING' ? (
-        <p className="mt-1.5 text-xs text-text-subtle">
-          Revisada por {item.reviewedBy?.name ?? 'un admin'}
-          {item.reviewedAt ? ` el ${formatFecha(item.reviewedAt)}` : ''}
-          {item.reviewNote ? ` — ${item.reviewNote}` : ''}
-        </p>
+        <p className="mt-1.5 text-xs text-text-subtle">{revisadaPor}</p>
       ) : null}
 
       {abierta ? (
         <div className="mt-3 space-y-3 border-t border-border-soft pt-3">
           <div className="space-y-1">
             <label className="text-sm text-text-muted" htmlFor={`pregunta-${item.messageId}`}>
-              Pregunta con la que se guardará (generalízala si la original es muy suya)
+              {t('review.canonicalQuestionLabel')}
             </label>
             <Input
               id={`pregunta-${item.messageId}`}
@@ -394,7 +414,7 @@ function FilaRespuesta({
 
           <div className="space-y-1">
             <label className="text-sm text-text-muted" htmlFor={`respuesta-${item.messageId}`}>
-              Respuesta correcta
+              {t('review.correctAnswerLabel')}
             </label>
             <Textarea
               id={`respuesta-${item.messageId}`}
@@ -403,20 +423,17 @@ function FilaRespuesta({
               rows={6}
               onChange={(e) => setRespuesta(e.target.value)}
             />
-            <p className="text-xs text-text-subtle">
-              Al guardar la corrección, el tutor la usará en las próximas preguntas parecidas, por
-              encima del contenido del curso. No hace falta reindexar nada.
-            </p>
+            <p className="text-xs text-text-subtle">{t('review.correctAnswerHint')}</p>
           </div>
 
           <div className="space-y-1">
             <label className="text-sm text-text-muted" htmlFor={`nota-${item.messageId}`}>
-              Nota interna (opcional)
+              {t('review.noteLabel')}
             </label>
             <Input
               id={`nota-${item.messageId}`}
               value={nota}
-              placeholder="p. ej. falta grabar la clase de facturación"
+              placeholder={t('review.notePlaceholder')}
               onChange={(e) => setNota(e.target.value)}
             />
           </div>
@@ -428,7 +445,7 @@ function FilaRespuesta({
               checked={global}
               onChange={(e) => setGlobal(e.target.checked)}
             />
-            <span className="text-text">Vale para todos los cursos, no solo para este</span>
+            <span className="text-text">{t('review.appliesToAll')}</span>
           </label>
 
           <div className="flex flex-wrap gap-2">
@@ -445,7 +462,7 @@ function FilaRespuesta({
                 })
               }
             >
-              Guardar corrección
+              {t('review.saveCorrection')}
             </Button>
             <Button
               variant="secondary"
@@ -458,10 +475,10 @@ function FilaRespuesta({
                 })
               }
             >
-              Está bien
+              {t('review.markOk')}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={onToggle}>
-              Cancelar
+              {t('review.cancel')}
             </Button>
           </div>
         </div>
