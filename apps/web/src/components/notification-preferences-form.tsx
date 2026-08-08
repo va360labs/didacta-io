@@ -5,27 +5,17 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import type {
   NotificationPreference,
   NotificationPrefCategory,
   NotificationPrefChannel,
 } from '@/lib/me';
 
-const CATEGORIES: { key: NotificationPrefCategory; label: string; desc: string }[] = [
-  { key: 'COMMUNITY', label: 'Comunidad', desc: 'Menciones, respuestas y resumen semanal.' },
-  {
-    key: 'LEARNING',
-    label: 'Aprendizaje',
-    desc: 'Matrículas, cursos completados y certificados.',
-  },
-  { key: 'ASSESSMENTS', label: 'Evaluaciones', desc: 'Resultados de tus cuestionarios.' },
-  { key: 'SYSTEM', label: 'Sistema', desc: 'Avisos administrativos y de la plataforma.' },
-];
+/** Orden de la matriz; el copy vive en `notifCategory*` del catálogo. */
+const CATEGORIES: NotificationPrefCategory[] = ['COMMUNITY', 'LEARNING', 'ASSESSMENTS', 'SYSTEM'];
 
-const CHANNELS: { key: NotificationPrefChannel; label: string }[] = [
-  { key: 'EMAIL', label: 'Email' },
-  { key: 'IN_APP', label: 'En la app' },
-];
+const CHANNELS: NotificationPrefChannel[] = ['EMAIL', 'IN_APP'];
 
 /** Default = activado cuando no hay fila para esa combinación. */
 function isEnabled(
@@ -51,6 +41,8 @@ export function NotificationMatrix({
   onChange: (next: NotificationPreference[]) => void;
   disabled?: boolean;
 }) {
+  const t = useTranslations('cuentaComponentes');
+
   function toggle(category: NotificationPrefCategory, channel: NotificationPrefChannel) {
     const next = !isEnabled(value, category, channel);
     const without = value.filter((p) => !(p.category === category && p.channel === channel));
@@ -60,31 +52,34 @@ export function NotificationMatrix({
   return (
     <div className="overflow-hidden rounded-lg border border-border-soft">
       <div className="grid grid-cols-[1fr_5.5rem_5.5rem] items-center border-b border-border-soft bg-surface-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-text-muted">
-        <span>Categoría</span>
-        {CHANNELS.map((c) => (
-          <span key={c.key} className="text-center">
-            {c.label}
+        <span>{t('notif.categoryHeader')}</span>
+        {CHANNELS.map((ch) => (
+          <span key={ch} className="text-center">
+            {t(`notifChannel.${ch}`)}
           </span>
         ))}
       </div>
       {CATEGORIES.map((cat) => (
         <div
-          key={cat.key}
+          key={cat}
           className="grid grid-cols-[1fr_5.5rem_5.5rem] items-center border-b border-border-soft px-4 py-3 last:border-b-0"
         >
           <div className="pr-3">
-            <p className="font-medium text-text">{cat.label}</p>
-            <p className="text-sm text-text-muted">{cat.desc}</p>
+            <p className="font-medium text-text">{t(`notifCategory.${cat}`)}</p>
+            <p className="text-sm text-text-muted">{t(`notifCategoryDesc.${cat}`)}</p>
           </div>
           {CHANNELS.map((ch) => (
-            <label key={ch.key} className="flex cursor-pointer justify-center">
+            <label key={ch} className="flex cursor-pointer justify-center">
               <input
                 type="checkbox"
                 className="h-4 w-4 cursor-pointer rounded border-border-strong"
-                checked={isEnabled(value, cat.key, ch.key)}
+                checked={isEnabled(value, cat, ch)}
                 disabled={disabled}
-                onChange={() => toggle(cat.key, ch.key)}
-                aria-label={`${cat.label} por ${ch.label}`}
+                onChange={() => toggle(cat, ch)}
+                aria-label={t('notif.toggleAria', {
+                  category: t(`notifCategory.${cat}`),
+                  channel: t(`notifChannel.${ch}`),
+                })}
               />
             </label>
           ))}
@@ -104,9 +99,9 @@ export function fullMatrix(partial: NotificationPreference[]): NotificationPrefe
   for (const cat of CATEGORIES) {
     for (const ch of CHANNELS) {
       out.push({
-        category: cat.key,
-        channel: ch.key,
-        enabled: isEnabled(partial, cat.key, ch.key),
+        category: cat,
+        channel: ch,
+        enabled: isEnabled(partial, cat, ch),
       });
     }
   }

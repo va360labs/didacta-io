@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,24 +17,18 @@ import {
   type AccessGroupListItem,
   type CourseCatalogItem,
 } from '@/lib/access-groups';
-import {
-  adminUsersApi,
-  ASSIGNABLE_ROLES,
-  ROLE_LABELS,
-  type AssignableRole,
-} from '@/lib/admin-users';
+import { adminUsersApi, ASSIGNABLE_ROLES, type AssignableRole } from '@/lib/admin-users';
 import { authStorage } from '@/lib/auth-storage';
-import { learningApi } from '@/lib/learning';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import {
-  dossierApi,
-  ENTITLEMENT_LABELS,
-  formatDate,
-  formatDateTime,
-  formatMembership,
-  formatMoney,
-  WOO_STATUS_LABELS,
-  type UserDossier,
-} from '@/lib/dossier';
+  formatCents,
+  formatDate as fmtDate,
+  formatDateTime as fmtDateTime,
+  formatNumber,
+} from '@/lib/i18n/format';
+import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
+import { learningApi } from '@/lib/learning';
+import { dossierApi, type UserDossier } from '@/lib/dossier';
 
 /**
  * Expediente de un usuario, visible solo para admins dentro de `/u/[id]`.
@@ -45,59 +40,46 @@ import {
  */
 
 const TABS = [
-  { id: 'resumen', label: 'Resumen' },
-  { id: 'compras', label: 'Compras y suscripción' },
-  { id: 'formacion', label: 'Formación' },
-  { id: 'actividad', label: 'Actividad' },
-  { id: 'mensajes', label: 'Mensajes' },
-  { id: 'acceso', label: 'Acceso' },
-  { id: 'sanciones', label: 'Sanciones' },
+  { id: 'resumen', labelKey: 'dossier.tabResumen' },
+  { id: 'compras', labelKey: 'dossier.tabCompras' },
+  { id: 'formacion', labelKey: 'dossier.tabFormacion' },
+  { id: 'actividad', labelKey: 'dossier.tabActividad' },
+  { id: 'mensajes', labelKey: 'dossier.tabMensajes' },
+  { id: 'acceso', labelKey: 'dossier.tabAcceso' },
+  { id: 'sanciones', labelKey: 'dossier.tabSanciones' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
 
-const STATUS_LABEL: Record<string, string> = {
-  ACTIVE: 'Activo',
-  PENDING: 'Pendiente',
-  SUSPENDED: 'Suspendido',
-  DEACTIVATED: 'Desactivado',
-};
+/** Fecha corta del expediente (dd/mm/aaaa), tolerante a null. */
+function formatDate(iso: string | null): string {
+  if (!iso) return '—';
+  return fmtDate(iso, { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
 
-const SUB_STATUS_LABEL: Record<string, string> = {
-  PENDING: 'Pendiente',
-  TRIALING: 'En prueba',
-  ACTIVE: 'Activa',
-  PAST_DUE: 'Impago',
-  UNPAID: 'Sin pagar',
-  CANCELED: 'Cancelada',
-};
+function formatDateTime(iso: string | null): string {
+  if (!iso) return '—';
+  return fmtDateTime(iso);
+}
 
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  PENDING: 'Pendiente',
-  COMPLETED: 'Pagado',
-  CANCELLED: 'Cancelado',
-  FAILED: 'Fallido',
-  REFUNDED: 'Devuelto',
-};
+/** Céntimos → moneda, tolerante a null. */
+function formatMoney(cents: number | null, currency = 'eur'): string {
+  if (cents === null) return '—';
+  return formatCents(cents, currency.toUpperCase());
+}
 
-const ENROLLMENT_STATUS_LABEL: Record<string, string> = {
-  ACTIVE: 'Activa',
-  COMPLETED: 'Completada',
-  CANCELLED: 'De baja',
-  PAUSED: 'Pausada',
-};
-
-/** De dónde salió la matrícula: decide qué acción tiene sentido en la ficha. */
-const ENROLLMENT_SOURCE_LABEL: Record<string, string> = {
-  ADMIN: 'Alta manual',
-  CODE: 'Código',
-  INVITATION_LINK: 'Enlace',
-  PURCHASE: 'Compra',
-  IMPORT: 'Importación',
-  SUBSCRIPTION: 'Suscripción',
-  API: 'API',
-  GROUP: 'Grupo de acceso',
-};
+/** «3 meses», «2 años»: la antigüedad se lee mejor que 847 días. */
+function formatMembership(days: number, t: TranslatorLike): string {
+  if (days < 1) return t('dossier.membershipToday');
+  if (days < 30) return t('dossier.membershipDays', { days });
+  const months = Math.floor(days / 30);
+  if (months < 12) return t('dossier.membershipMonths', { months });
+  const years = Math.floor(days / 365);
+  const restMonths = Math.floor((days % 365) / 30);
+  return restMonths > 0
+    ? t('dossier.membershipYearsMonths', { years, months: restMonths })
+    : t('dossier.membershipYears', { years });
+}
 
 export function UserDossierPanel({
   userId,
@@ -106,6 +88,8 @@ export function UserDossierPanel({
   userId: string;
   initialTab?: string | null;
 }) {
+  const t = useTranslations('cuentaComponentes');
+  const tErrors = useTranslations('errors');
   const [data, setData] = useState<UserDossier | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>(
@@ -117,9 +101,7 @@ export function UserDossierPanel({
     dossierApi
       .get(userId)
       .then(setData)
-      .catch((err) =>
-        setError(err instanceof Error ? err.message : 'No se pudo cargar el expediente.'),
-      );
+      .catch((err) => setError(apiErrorMessage(err, tErrors)));
   };
 
   useEffect(() => {
@@ -133,12 +115,14 @@ export function UserDossierPanel({
       })
       .catch((err) => {
         if (!aborted) {
-          setError(err instanceof Error ? err.message : 'No se pudo cargar el expediente.');
+          setError(apiErrorMessage(err, tErrors));
         }
       });
     return () => {
       aborted = true;
     };
+    // `tErrors` es estable entre renders y queda fuera de deps a propósito: no
+    // tiene sentido recargar el expediente por un cambio de traductor.
   }, [userId]);
 
   if (error) {
@@ -156,14 +140,14 @@ export function UserDossierPanel({
   return (
     <section className="space-y-4" data-testid="user-dossier">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-display text-lg font-semibold text-text">Expediente</h2>
+        <h2 className="font-display text-lg font-semibold text-text">{t('dossier.title')}</h2>
         <button
           type="button"
           onClick={() => setModerating(true)}
           className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-bg-subtle"
           data-testid="open-moderation"
         >
-          Moderar
+          {t('dossier.moderate')}
         </button>
       </div>
 
@@ -171,32 +155,36 @@ export function UserDossierPanel({
         <Card>
           <CardContent className="border-l-4 border-l-red-500 p-4">
             <p className="text-sm font-semibold text-red-700 dark:text-red-400">
-              Sancionado: {activeRestrictions.map((r) => r.scopeLabels.join(', ')).join(' · ')}
+              {t('dossier.sanctioned', {
+                scopes: activeRestrictions.map((r) => r.scopeLabels.join(', ')).join(' · '),
+              })}
             </p>
             <p className="mt-0.5 text-xs text-text-muted">
               {activeRestrictions[0]!.expiresAt
-                ? `Hasta el ${formatDateTime(activeRestrictions[0]!.expiresAt)}`
-                : 'Permanente'}{' '}
-              · «{activeRestrictions[0]!.reason}»
+                ? t('dossier.untilDateTime', {
+                    date: formatDateTime(activeRestrictions[0]!.expiresAt),
+                  })
+                : t('dossier.permanent')}{' '}
+              · {t('dossier.quotedReason', { reason: activeRestrictions[0]!.reason })}
             </p>
           </CardContent>
         </Card>
       ) : null}
 
       <div className="flex flex-wrap gap-1 border-b border-border">
-        {TABS.map((t) => (
+        {TABS.map((tabDef) => (
           <button
-            key={t.id}
+            key={tabDef.id}
             type="button"
-            onClick={() => setTab(t.id)}
-            data-testid={`dossier-tab-${t.id}`}
+            onClick={() => setTab(tabDef.id)}
+            data-testid={`dossier-tab-${tabDef.id}`}
             className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
-              tab === t.id
+              tab === tabDef.id
                 ? 'border-brand-500 font-semibold text-brand-700'
                 : 'border-transparent text-text-muted hover:text-text'
             }`}
           >
-            {t.label}
+            {t(tabDef.labelKey)}
           </button>
         ))}
       </div>
@@ -252,51 +240,63 @@ function antiguedadDias(d: UserDossier): number {
 }
 
 function ResumenTab({ d }: { d: UserDossier }) {
+  const t = useTranslations('cuentaComponentes');
   const sub = d.commerce.subscriptions.find(
     (s) => s.status === 'ACTIVE' || s.status === 'TRIALING',
   );
   return (
     <div className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Antigüedad" value={formatMembership(antiguedadDias(d))} />
+        <Stat label={t('dossier.statSeniority')} value={formatMembership(antiguedadDias(d), t)} />
         <Stat
-          label="Total pagado"
+          label={t('dossier.statTotalPaid')}
           value={formatMoney(d.commerce.totalPaidCents + d.commerce.totalPaidExternalCents)}
         />
-        <Stat label="Cursos" value={d.learning.enrollments.length} />
-        <Stat label="Último acceso" value={formatDate(d.identity.lastLoginAt)} />
-        <Stat label="Publicaciones" value={d.activity.counts.posts} />
-        <Stat label="Comentarios" value={d.activity.counts.comments} />
-        <Stat label="Mensajes" value={d.activity.counts.messages} />
-        <Stat label="Preguntas al tutor" value={d.activity.counts.aiQuestions} />
+        <Stat label={t('dossier.statCourses')} value={d.learning.enrollments.length} />
+        <Stat label={t('dossier.statLastLogin')} value={formatDate(d.identity.lastLoginAt)} />
+        <Stat label={t('dossier.statPosts')} value={d.activity.counts.posts} />
+        <Stat label={t('dossier.statComments')} value={d.activity.counts.comments} />
+        <Stat label={t('dossier.statMessages')} value={d.activity.counts.messages} />
+        <Stat label={t('dossier.statTutorQuestions')} value={d.activity.counts.aiQuestions} />
       </div>
 
       <Card>
         <CardContent className="space-y-2 p-4 text-sm">
-          <Row label="Email" value={d.identity.email} />
-          <Row label="Estado" value={STATUS_LABEL[d.identity.status] ?? d.identity.status} />
-          <Row label="Roles" value={d.identity.roles.join(', ') || '—'} />
-          <Row label="Alta" value={formatDate(d.identity.createdAt)} />
+          <Row label={t('dossier.rowEmail')} value={d.identity.email} />
           <Row
-            label="Suscripción"
+            label={t('dossier.rowStatus')}
+            value={labelOr(t, `userStatus.${d.identity.status}`, d.identity.status)}
+          />
+          <Row label={t('dossier.rowRoles')} value={d.identity.roles.join(', ') || '—'} />
+          <Row label={t('dossier.rowCreated')} value={formatDate(d.identity.createdAt)} />
+          <Row
+            label={t('dossier.rowSubscription')}
             value={
               sub
-                ? `${sub.planName ?? 'Plan'} · ${SUB_STATUS_LABEL[sub.status] ?? sub.status}${
-                    sub.currentPeriodEnd ? ` · vence ${formatDate(sub.currentPeriodEnd)}` : ''
+                ? `${sub.planName ?? t('dossier.planFallback')} · ${labelOr(
+                    t,
+                    `subStatus.${sub.status}`,
+                    sub.status,
+                  )}${
+                    sub.currentPeriodEnd
+                      ? ` · ${t('dossier.expiresDate', { date: formatDate(sub.currentPeriodEnd) })}`
+                      : ''
                   }`
-                : 'Sin suscripción activa'
+                : t('dossier.noActiveSub')
             }
           />
           {d.gamification ? (
             <Row
-              label="Puntos"
-              value={`${d.gamification.lifetimePoints.toLocaleString('es-ES')}${
-                d.gamification.levelKey ? ` · nivel ${d.gamification.levelKey}` : ''
+              label={t('dossier.rowPoints')}
+              value={`${formatNumber(d.gamification.lifetimePoints)}${
+                d.gamification.levelKey
+                  ? ` · ${t('dossier.levelLabel', { level: d.gamification.levelKey })}`
+                  : ''
               }`}
             />
           ) : null}
           {d.identity.externalSource ? (
-            <Row label="Origen" value={d.identity.externalSource} />
+            <Row label={t('dossier.rowOrigin')} value={d.identity.externalSource} />
           ) : null}
         </CardContent>
       </Card>
@@ -315,13 +315,14 @@ function Row({ label, value }: { label: string; value: string }) {
 
 /** Pastilla del tipo de derecho: lo que decide si ese acceso caduca o no. */
 function KindPill({ kind }: { kind: string }) {
+  const t = useTranslations('cuentaComponentes');
   const variant =
     kind === 'LIFETIME'
       ? 'success'
       : kind === 'SUBSCRIPTION' || kind === 'TIMED'
         ? 'warning'
         : 'muted';
-  return <Badge variant={variant}>{ENTITLEMENT_LABELS[kind] ?? kind}</Badge>;
+  return <Badge variant={variant}>{labelOr(t, `entitlementKind.${kind}`, kind)}</Badge>;
 }
 
 /**
@@ -329,18 +330,21 @@ function KindPill({ kind }: { kind: string }) {
  * dentro de Didacta son un puñado y todo lo demás se compró en la tienda.
  */
 function TiendaExterna({ d }: { d: UserDossier }) {
+  const t = useTranslations('cuentaComponentes');
   const pedidos = d.commerce.externalOrders;
   if (pedidos.length === 0) return null;
 
   return (
     <div>
       <h3 className="mb-2 text-sm font-semibold text-text">
-        Compras en la tienda ({pedidos.length}) · {formatMoney(d.commerce.totalPaidExternalCents)}{' '}
-        cobrado
+        {t('dossier.storePurchases', {
+          count: pedidos.length,
+          amount: formatMoney(d.commerce.totalPaidExternalCents),
+        })}
         {d.commerce.customerSince ? (
           <span className="font-normal text-text-muted">
             {' '}
-            · cliente desde {formatDate(d.commerce.customerSince)}
+            · {t('dossier.customerSince', { date: formatDate(d.commerce.customerSince) })}
           </span>
         ) : null}
       </h3>
@@ -351,11 +355,11 @@ function TiendaExterna({ d }: { d: UserDossier }) {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-semibold text-text">
-                    {o.products.join(' · ') || `Pedido ${o.externalId}`}
+                    {o.products.join(' · ') || t('dossier.orderFallback', { id: o.externalId })}
                   </p>
                   <p className="text-xs text-text-muted">
                     {formatDate(o.paidAt ?? o.placedAt)} · {o.provider} #{o.externalId} ·{' '}
-                    {WOO_STATUS_LABELS[o.status] ?? o.status}
+                    {labelOr(t, `wooStatus.${o.status}`, o.status)}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -377,10 +381,13 @@ function TiendaExterna({ d }: { d: UserDossier }) {
                   }`}
                 >
                   {o.daysToExpiry !== null && o.daysToExpiry < 0
-                    ? `Acceso caducado el ${formatDate(o.accessEndsAt)}`
-                    : `Acceso hasta el ${formatDate(o.accessEndsAt)}${
-                        o.daysToExpiry !== null ? ` (quedan ${o.daysToExpiry} días)` : ''
-                      }`}
+                    ? t('dossier.accessExpired', { date: formatDate(o.accessEndsAt) })
+                    : o.daysToExpiry !== null
+                      ? t('dossier.accessUntilDaysLeft', {
+                          date: formatDate(o.accessEndsAt),
+                          days: o.daysToExpiry,
+                        })
+                      : t('dossier.accessUntil', { date: formatDate(o.accessEndsAt) })}
                 </p>
               ) : null}
             </CardContent>
@@ -392,34 +399,41 @@ function TiendaExterna({ d }: { d: UserDossier }) {
 }
 
 function ComprasTab({ d }: { d: UserDossier }) {
+  const t = useTranslations('cuentaComponentes');
   return (
     <div className="space-y-4">
       <TiendaExterna d={d} />
       <div>
         <h3 className="mb-2 text-sm font-semibold text-text">
-          Suscripciones ({d.commerce.subscriptions.length})
+          {t('dossier.subscriptionsHeading', { count: d.commerce.subscriptions.length })}
         </h3>
         {d.commerce.subscriptions.length === 0 ? (
-          <Empty>Sin suscripciones.</Empty>
+          <Empty>{t('dossier.noSubscriptions')}</Empty>
         ) : (
           <div className="space-y-2">
             {d.commerce.subscriptions.map((s) => (
               <Card key={s.id}>
                 <CardContent className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
                   <div>
-                    <p className="font-semibold text-text">{s.planName ?? 'Plan'}</p>
+                    <p className="font-semibold text-text">
+                      {s.planName ?? t('dossier.planFallback')}
+                    </p>
                     <p className="text-xs text-text-muted">
                       {formatMoney(s.unitAmount, s.currency)} / {s.interval}
-                      {s.currentPeriodEnd ? ` · vence ${formatDate(s.currentPeriodEnd)}` : ''}
-                      {s.daysToRenewal !== null && s.daysToRenewal >= 0
-                        ? ` (en ${s.daysToRenewal} días)`
+                      {s.currentPeriodEnd
+                        ? ` · ${t('dossier.expiresDate', { date: formatDate(s.currentPeriodEnd) })}`
                         : ''}
-                      {s.cancelAtPeriodEnd ? ' · no renueva' : ''}
-                      {s.trialEndsAt ? ` · prueba hasta ${formatDate(s.trialEndsAt)}` : ''}
+                      {s.daysToRenewal !== null && s.daysToRenewal >= 0
+                        ? ` ${t('dossier.inDays', { days: s.daysToRenewal })}`
+                        : ''}
+                      {s.cancelAtPeriodEnd ? ` · ${t('dossier.noRenew')}` : ''}
+                      {s.trialEndsAt
+                        ? ` · ${t('dossier.trialUntil', { date: formatDate(s.trialEndsAt) })}`
+                        : ''}
                     </p>
                   </div>
                   <Badge variant={s.status === 'ACTIVE' ? 'success' : 'muted'}>
-                    {SUB_STATUS_LABEL[s.status] ?? s.status}
+                    {labelOr(t, `subStatus.${s.status}`, s.status)}
                   </Badge>
                 </CardContent>
               </Card>
@@ -430,7 +444,9 @@ function ComprasTab({ d }: { d: UserDossier }) {
 
       {d.commerce.externalSubscriptions.length > 0 ? (
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-text">Suscripciones en otras pasarelas</h3>
+          <h3 className="mb-2 text-sm font-semibold text-text">
+            {t('dossier.externalSubsHeading')}
+          </h3>
           <div className="space-y-2">
             {d.commerce.externalSubscriptions.map((s, i) => (
               <Card key={`${s.provider}-${i}`}>
@@ -439,7 +455,9 @@ function ComprasTab({ d }: { d: UserDossier }) {
                     <p className="font-semibold text-text">{s.productName ?? s.provider}</p>
                     <p className="text-xs text-text-muted">
                       {s.provider}
-                      {s.currentPeriodEnd ? ` · vence ${formatDate(s.currentPeriodEnd)}` : ''}
+                      {s.currentPeriodEnd
+                        ? ` · ${t('dossier.expiresDate', { date: formatDate(s.currentPeriodEnd) })}`
+                        : ''}
                     </p>
                   </div>
                   <Badge variant={s.entitled ? 'success' : 'muted'}>{s.status}</Badge>
@@ -452,19 +470,22 @@ function ComprasTab({ d }: { d: UserDossier }) {
 
       <div>
         <h3 className="mb-2 text-sm font-semibold text-text">
-          Compras ({d.commerce.orders.length}) · {formatMoney(d.commerce.totalPaidCents)} cobrado
+          {t('dossier.purchasesHeading', {
+            count: d.commerce.orders.length,
+            amount: formatMoney(d.commerce.totalPaidCents),
+          })}
         </h3>
         {d.commerce.orders.length === 0 ? (
-          <Empty>Sin compras.</Empty>
+          <Empty>{t('dossier.noPurchases')}</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-sm">
               <thead className="text-left text-xs uppercase text-text-muted">
                 <tr>
-                  <th className="py-2">Curso</th>
-                  <th className="py-2">Importe</th>
-                  <th className="py-2">Estado</th>
-                  <th className="py-2">Fecha</th>
+                  <th className="py-2">{t('dossier.colCourse')}</th>
+                  <th className="py-2">{t('dossier.colAmount')}</th>
+                  <th className="py-2">{t('dossier.colStatus')}</th>
+                  <th className="py-2">{t('dossier.colDate')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -474,7 +495,7 @@ function ComprasTab({ d }: { d: UserDossier }) {
                     <td className="py-2">{formatMoney(o.amountPaid, o.currency)}</td>
                     <td className="py-2">
                       <Badge variant={o.status === 'COMPLETED' ? 'success' : 'muted'}>
-                        {ORDER_STATUS_LABEL[o.status] ?? o.status}
+                        {labelOr(t, `orderStatus.${o.status}`, o.status)}
                       </Badge>
                     </td>
                     <td className="py-2 text-text-muted">
@@ -502,6 +523,8 @@ function ComprasTab({ d }: { d: UserDossier }) {
  * expediente y no depende del módulo activo.
  */
 function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void }) {
+  const t = useTranslations('cuentaComponentes');
+  const tErrors = useTranslations('errors');
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -540,7 +563,7 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
       if (okMsg) setMsg(okMsg);
       onChanged();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'No se pudo completar la acción.');
+      setErr(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(null);
     }
@@ -559,10 +582,10 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
     <div className="space-y-4">
       <div>
         <h3 className="mb-2 text-sm font-semibold text-text">
-          Cursos ({d.learning.enrollments.length})
+          {t('dossier.coursesHeading', { count: d.learning.enrollments.length })}
         </h3>
         {d.learning.enrollments.length === 0 ? (
-          <Empty>Sin matrículas.</Empty>
+          <Empty>{t('dossier.noEnrollments')}</Empty>
         ) : (
           <div className="space-y-2">
             {d.learning.enrollments.map((e) => (
@@ -580,35 +603,36 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
                               : 'warning'
                         }
                       >
-                        {ENROLLMENT_STATUS_LABEL[e.status] ?? e.status}
+                        {labelOr(t, `enrollmentStatus.${e.status}`, e.status)}
                       </Badge>
-                      <Badge variant="muted">{ENROLLMENT_SOURCE_LABEL[e.source] ?? e.source}</Badge>
+                      <Badge variant="muted">
+                        {labelOr(t, `enrollmentSource.${e.source}`, e.source)}
+                      </Badge>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <span className="text-xs text-text-muted">
-                        {e.progressPercent}% · desde {formatDate(e.enrolledAt)}
-                        {e.completedAt ? ` · completado ${formatDate(e.completedAt)}` : ''}
+                        {e.progressPercent}% ·{' '}
+                        {t('dossier.sinceDate', { date: formatDate(e.enrolledAt) })}
+                        {e.completedAt
+                          ? ` · ${t('dossier.completedDate', { date: formatDate(e.completedAt) })}`
+                          : ''}
                       </span>
                       {e.status !== 'CANCELLED' ? (
                         <Button
                           size="sm"
                           variant="outline"
                           disabled={busy !== null}
-                          title={
-                            e.source === 'GROUP'
-                              ? 'Vino de un grupo de acceso: si el grupo sigue otorgando el curso, puede volver a matricularse.'
-                              : undefined
-                          }
+                          title={e.source === 'GROUP' ? t('dossier.groupSourceHint') : undefined}
                           onClick={() =>
                             void run(
                               `unenroll-${e.id}`,
                               () => learningApi.cancelByAdmin(e.id),
-                              'Matrícula dada de baja. El progreso se conserva.',
+                              t('dossier.unenrolledMsg'),
                             )
                           }
                           data-testid={`dossier-unenroll-${e.courseId}`}
                         >
-                          Dar de baja
+                          {t('dossier.unenroll')}
                         </Button>
                       ) : null}
                     </div>
@@ -632,7 +656,7 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
               className="w-auto min-w-[220px]"
               data-testid="dossier-enroll-select"
             >
-              <option value="">Matricular en un curso…</option>
+              <option value="">{t('dossier.enrollPlaceholder')}</option>
               {availableCourses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.title}
@@ -649,12 +673,12 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
                     await learningApi.enrollByAdmin(d.identity.id, courseId);
                     setCourseId('');
                   },
-                  'Matriculado.',
+                  t('dossier.enrolledMsg'),
                 )
               }
               data-testid="dossier-enroll-submit"
             >
-              Matricular
+              {t('dossier.enroll')}
             </Button>
           </div>
         ) : null}
@@ -662,10 +686,10 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
 
       <div>
         <h3 className="mb-2 text-sm font-semibold text-text">
-          Grupos de acceso ({d.accessGroups.length})
+          {t('dossier.groupsHeading', { count: d.accessGroups.length })}
         </h3>
         {d.accessGroups.length === 0 ? (
-          <Empty>No pertenece a ningún grupo.</Empty>
+          <Empty>{t('dossier.noGroups')}</Empty>
         ) : (
           <div className="space-y-2">
             {d.accessGroups.map((g) => (
@@ -673,13 +697,17 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
                 <CardContent className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <p className="font-semibold text-text">{g.name}</p>
-                    {g.source === 'TIER' ? <Badge variant="muted">Por tier</Badge> : null}
+                    {g.source === 'TIER' ? (
+                      <Badge variant="muted">{t('dossier.byTier')}</Badge>
+                    ) : null}
                     {g.source === 'MEMBERSHIP' ? (
-                      <Badge variant="muted">Por membresía</Badge>
+                      <Badge variant="muted">{t('dossier.byMembership')}</Badge>
                     ) : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <span className="text-xs text-text-muted">desde {formatDate(g.grantedAt)}</span>
+                    <span className="text-xs text-text-muted">
+                      {t('dossier.sinceDate', { date: formatDate(g.grantedAt) })}
+                    </span>
                     {g.source !== 'TIER' ? (
                       <Button
                         size="sm"
@@ -689,12 +717,12 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
                           void run(
                             `ungroup-${g.groupId}`,
                             () => accessGroupsApi.revokeMember(token(), g.groupId, d.identity.id),
-                            'Quitado del grupo. Pierde los cursos que solo venían de ahí.',
+                            t('dossier.ungroupedMsg'),
                           )
                         }
                         data-testid={`dossier-ungroup-${g.slug}`}
                       >
-                        Quitar
+                        {t('dossier.removeFromGroup')}
                       </Button>
                     ) : null}
                   </div>
@@ -711,7 +739,7 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
               className="w-auto min-w-[220px]"
               data-testid="dossier-group-select"
             >
-              <option value="">Añadir a un grupo…</option>
+              <option value="">{t('dossier.addGroupPlaceholder')}</option>
               {availableGroups.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.name}
@@ -728,20 +756,16 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
                     await accessGroupsApi.assignMembers(token(), groupId, [d.identity.id]);
                     setGroupId('');
                   },
-                  'Añadido al grupo: queda matriculado en sus cursos.',
+                  t('dossier.groupedMsg'),
                 )
               }
               data-testid="dossier-group-submit"
             >
-              Añadir
+              {t('dossier.addGroup')}
             </Button>
           </div>
         ) : null}
-        <p className="mt-1.5 text-xs text-text-muted">
-          Quitar de un grupo retira la matrícula de los cursos que solo venían de ese grupo; el
-          progreso se conserva por si vuelve. Las membresías «por tier» las gestiona el pago y no se
-          pueden quitar a mano.
-        </p>
+        <p className="mt-1.5 text-xs text-text-muted">{t('dossier.groupsHint')}</p>
         {msg ? <p className="text-sm text-green-700 dark:text-green-400">{msg}</p> : null}
         {err ? (
           <p className="text-sm text-red-600 dark:text-red-400" role="alert">
@@ -753,10 +777,10 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
       <div className="grid gap-4 lg:grid-cols-2">
         <div>
           <h3 className="mb-2 text-sm font-semibold text-text">
-            Certificados ({d.learning.certificates.length})
+            {t('dossier.certificatesHeading', { count: d.learning.certificates.length })}
           </h3>
           {d.learning.certificates.length === 0 ? (
-            <Empty>Sin certificados.</Empty>
+            <Empty>{t('dossier.noCertificates')}</Empty>
           ) : (
             <ul className="space-y-1 text-sm">
               {d.learning.certificates.map((c) => (
@@ -764,7 +788,7 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
                   <span className="font-mono text-xs">{c.number}</span>
                   <span className="text-text-muted">
                     {formatDate(c.issuedAt)}
-                    {c.revokedAt ? ' · revocado' : ''}
+                    {c.revokedAt ? ` · ${t('dossier.revoked')}` : ''}
                   </span>
                 </li>
               ))}
@@ -774,16 +798,20 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
 
         <div>
           <h3 className="mb-2 text-sm font-semibold text-text">
-            Asistencia a clases ({d.learning.liveAttendance.length})
+            {t('dossier.attendanceHeading', { count: d.learning.liveAttendance.length })}
           </h3>
           {d.learning.liveAttendance.length === 0 ? (
-            <Empty>Sin asistencias registradas.</Empty>
+            <Empty>{t('dossier.noAttendance')}</Empty>
           ) : (
             <ul className="space-y-1 text-sm">
               {d.learning.liveAttendance.map((a) => (
                 <li key={a.sessionId} className="flex justify-between gap-2">
                   <span className="text-text-muted">{formatDate(a.joinedAt)}</span>
-                  <span>{a.present ? `${a.minutes ?? 0} min` : 'No asistió'}</span>
+                  <span>
+                    {a.present
+                      ? t('dossier.minutesShort', { minutes: a.minutes ?? 0 })
+                      : t('dossier.absent')}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -794,7 +822,7 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
       {d.learning.quizAttempts.length > 0 ? (
         <div>
           <h3 className="mb-2 text-sm font-semibold text-text">
-            Intentos de evaluación ({d.learning.quizAttempts.length})
+            {t('dossier.quizAttemptsHeading', { count: d.learning.quizAttempts.length })}
           </h3>
           <ul className="space-y-1 text-sm">
             {d.learning.quizAttempts.map((a) => (
@@ -802,7 +830,11 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
                 <span className="text-text-muted">{formatDate(a.submittedAt)}</span>
                 <span>
                   {a.scorePercent !== null ? `${a.scorePercent}%` : '—'}
-                  {a.passed === true ? ' · apto' : a.passed === false ? ' · no apto' : ''}
+                  {a.passed === true
+                    ? ` · ${t('dossier.passed')}`
+                    : a.passed === false
+                      ? ` · ${t('dossier.notPassed')}`
+                      : ''}
                 </span>
               </li>
             ))}
@@ -814,21 +846,22 @@ function FormacionTab({ d, onChanged }: { d: UserDossier; onChanged: () => void 
 }
 
 function ActividadTab({ d }: { d: UserDossier }) {
+  const t = useTranslations('cuentaComponentes');
   return (
     <div className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat label="Publicaciones" value={d.activity.counts.posts} />
-        <Stat label="Comentarios" value={d.activity.counts.comments} />
-        <Stat label="Reacciones" value={d.activity.counts.reactions} />
-        <Stat label="Coment. lección" value={d.activity.counts.lessonComments} />
-        <Stat label="Recursos" value={d.activity.counts.resources} />
-        <Stat label="Preguntas IA" value={d.activity.counts.aiQuestions} />
+        <Stat label={t('dossier.statPosts')} value={d.activity.counts.posts} />
+        <Stat label={t('dossier.statComments')} value={d.activity.counts.comments} />
+        <Stat label={t('dossier.statReactions')} value={d.activity.counts.reactions} />
+        <Stat label={t('dossier.statLessonComments')} value={d.activity.counts.lessonComments} />
+        <Stat label={t('dossier.statResources')} value={d.activity.counts.resources} />
+        <Stat label={t('dossier.statAiQuestions')} value={d.activity.counts.aiQuestions} />
       </div>
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-text">Últimas publicaciones</h3>
+        <h3 className="mb-2 text-sm font-semibold text-text">{t('dossier.recentPosts')}</h3>
         {d.activity.posts.length === 0 ? (
-          <Empty>No ha publicado nada.</Empty>
+          <Empty>{t('dossier.noPosts')}</Empty>
         ) : (
           <div className="space-y-2">
             {d.activity.posts.map((p) => (
@@ -837,8 +870,8 @@ function ActividadTab({ d }: { d: UserDossier }) {
                   <div className="flex flex-wrap items-center gap-2">
                     {p.title ? <span className="font-semibold text-text">{p.title}</span> : null}
                     <span className="text-xs text-text-muted">{formatDateTime(p.createdAt)}</span>
-                    {p.hiddenAt ? <Badge variant="warning">Oculto</Badge> : null}
-                    {p.deletedAt ? <Badge variant="muted">Borrado</Badge> : null}
+                    {p.hiddenAt ? <Badge variant="warning">{t('dossier.hidden')}</Badge> : null}
+                    {p.deletedAt ? <Badge variant="muted">{t('dossier.deleted')}</Badge> : null}
                   </div>
                   <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-text-muted">{p.body}</p>
                 </CardContent>
@@ -849,9 +882,9 @@ function ActividadTab({ d }: { d: UserDossier }) {
       </div>
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-text">Últimos comentarios</h3>
+        <h3 className="mb-2 text-sm font-semibold text-text">{t('dossier.recentComments')}</h3>
         {d.activity.comments.length === 0 ? (
-          <Empty>No ha comentado nada.</Empty>
+          <Empty>{t('dossier.noComments')}</Empty>
         ) : (
           <div className="space-y-2">
             {d.activity.comments.map((c) => (
@@ -859,8 +892,8 @@ function ActividadTab({ d }: { d: UserDossier }) {
                 <CardContent className="p-3 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs text-text-muted">{formatDateTime(c.createdAt)}</span>
-                    {c.hiddenAt ? <Badge variant="warning">Oculto</Badge> : null}
-                    {c.deletedAt ? <Badge variant="muted">Borrado</Badge> : null}
+                    {c.hiddenAt ? <Badge variant="warning">{t('dossier.hidden')}</Badge> : null}
+                    {c.deletedAt ? <Badge variant="muted">{t('dossier.deleted')}</Badge> : null}
                   </div>
                   <p className="mt-1 whitespace-pre-wrap text-text-muted">{c.body}</p>
                 </CardContent>
@@ -874,21 +907,24 @@ function ActividadTab({ d }: { d: UserDossier }) {
 }
 
 function MensajesTab({ d }: { d: UserDossier }) {
+  const t = useTranslations('cuentaComponentes');
   return (
     <div className="space-y-3">
       <Card>
         <CardContent className="p-3 text-xs text-text-muted">
-          Contiene comunicaciones privadas. Cada apertura de este expediente queda registrada en el
-          log de auditoría con tu usuario y la fecha.
+          {t('dossier.messagesNotice')}
         </CardContent>
       </Card>
 
       <h3 className="text-sm font-semibold text-text">
-        {d.messages.total.toLocaleString('es-ES')} mensajes · últimos {d.messages.recent.length}
+        {t('dossier.messagesHeading', {
+          total: d.messages.total,
+          count: d.messages.recent.length,
+        })}
       </h3>
 
       {d.messages.recent.length === 0 ? (
-        <Empty>No ha enviado mensajes.</Empty>
+        <Empty>{t('dossier.noMessages')}</Empty>
       ) : (
         <div className="space-y-2">
           {d.messages.recent.map((m) => (
@@ -897,7 +933,9 @@ function MensajesTab({ d }: { d: UserDossier }) {
                 <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
                   <Badge variant="muted">{m.conversationType}</Badge>
                   <span>{formatDateTime(m.createdAt)}</span>
-                  {m.deletedAt ? <Badge variant="warning">Eliminado por el autor</Badge> : null}
+                  {m.deletedAt ? (
+                    <Badge variant="warning">{t('dossier.deletedByAuthor')}</Badge>
+                  ) : null}
                 </div>
                 <p className="mt-1 whitespace-pre-wrap text-text">{m.body}</p>
               </CardContent>
@@ -918,6 +956,8 @@ function MensajesTab({ d }: { d: UserDossier }) {
  * no simplificar.
  */
 function AccesoTab({ d, onChanged }: { d: UserDossier; onChanged: () => void }) {
+  const t = useTranslations('cuentaComponentes');
+  const tErrors = useTranslations('errors');
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -932,7 +972,7 @@ function AccesoTab({ d, onChanged }: { d: UserDossier; onChanged: () => void }) 
       if (okMsg) setMsg(okMsg);
       onChanged();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'No se pudo completar la acción.');
+      setErr(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(null);
     }
@@ -955,12 +995,12 @@ function AccesoTab({ d, onChanged }: { d: UserDossier; onChanged: () => void }) 
                   void run(
                     'status',
                     () => adminUsersApi.setStatus(token(), d.identity.id, 'ACTIVE'),
-                    'Acceso reactivado.',
+                    t('dossier.reactivatedMsg'),
                   )
                 }
                 data-testid="reactivate-user"
               >
-                Reactivar acceso
+                {t('dossier.reactivate')}
               </Button>
             ) : (
               <Button
@@ -971,12 +1011,12 @@ function AccesoTab({ d, onChanged }: { d: UserDossier; onChanged: () => void }) 
                   void run(
                     'status',
                     () => adminUsersApi.setStatus(token(), d.identity.id, 'SUSPENDED'),
-                    'Acceso suspendido y sesiones cerradas.',
+                    t('dossier.suspendedMsg'),
                   )
                 }
                 data-testid="suspend-user"
               >
-                Suspender acceso
+                {t('dossier.suspend')}
               </Button>
             )}
             <Button
@@ -987,17 +1027,14 @@ function AccesoTab({ d, onChanged }: { d: UserDossier; onChanged: () => void }) 
                 void run(
                   'resend',
                   () => adminUsersApi.resendInvite(token(), d.identity.id),
-                  'Email enviado.',
+                  t('dossier.emailSentMsg'),
                 )
               }
             >
-              Reenviar email de contraseña
+              {t('dossier.resendPassword')}
             </Button>
           </div>
-          <p className="text-xs text-text-muted">
-            Suspender corta el acceso entero. Para dejarle entrar y leer pero no publicar, usa
-            «Moderar».
-          </p>
+          <p className="text-xs text-text-muted">{t('dossier.suspendHint')}</p>
           {msg ? <p className="text-sm text-green-700 dark:text-green-400">{msg}</p> : null}
           {err ? (
             <p className="text-sm text-red-600 dark:text-red-400" role="alert">
@@ -1009,33 +1046,45 @@ function AccesoTab({ d, onChanged }: { d: UserDossier; onChanged: () => void }) 
 
       <Card>
         <CardContent className="space-y-2 p-4 text-sm">
-          <Row label="Estado" value={STATUS_LABEL[d.identity.status] ?? d.identity.status} />
-          <Row label="Email verificado" value={d.identity.emailVerified ? 'Sí' : 'No'} />
-          <Row label="Doble factor" value={d.identity.mfaEnabled ? 'Activado' : 'No'} />
-          <Row label="Idioma" value={d.identity.locale} />
-          <Row label="Zona horaria" value={d.identity.timezone} />
-          <Row label="Documento" value={d.identity.documentId ?? '—'} />
-          <Row label="Onboarding" value={formatDate(d.identity.onboardingCompletedAt)} />
+          <Row
+            label={t('dossier.rowStatus')}
+            value={labelOr(t, `userStatus.${d.identity.status}`, d.identity.status)}
+          />
+          <Row
+            label={t('dossier.rowEmailVerified')}
+            value={d.identity.emailVerified ? t('dossier.yes') : t('dossier.no')}
+          />
+          <Row
+            label={t('dossier.rowMfa')}
+            value={d.identity.mfaEnabled ? t('dossier.enabled') : t('dossier.no')}
+          />
+          <Row label={t('dossier.rowLocale')} value={d.identity.locale} />
+          <Row label={t('dossier.rowTimezone')} value={d.identity.timezone} />
+          <Row label={t('dossier.rowDocument')} value={d.identity.documentId ?? '—'} />
+          <Row
+            label={t('dossier.rowOnboarding')}
+            value={formatDate(d.identity.onboardingCompletedAt)}
+          />
         </CardContent>
       </Card>
 
       <Card>
         <CardContent className="space-y-3 p-4">
-          <h3 className="text-sm font-semibold text-text">Roles</h3>
+          <h3 className="text-sm font-semibold text-text">{t('dossier.rolesHeading')}</h3>
           <div className="flex flex-wrap gap-2">
             {d.identity.roles.length === 0 ? (
-              <span className="text-sm text-text-muted">Sin roles.</span>
+              <span className="text-sm text-text-muted">{t('dossier.noRoles')}</span>
             ) : (
               d.identity.roles.map((r) => (
                 <span
                   key={r}
                   className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs"
                 >
-                  {ROLE_LABELS[r as AssignableRole] ?? r}
+                  {labelOr(t, `role.${r}`, r)}
                   {r !== 'super_admin' ? (
                     <button
                       type="button"
-                      aria-label={`Quitar rol ${r}`}
+                      aria-label={t('dossier.removeRoleAria', { role: r })}
                       disabled={busy !== null}
                       onClick={() =>
                         void run('role', () =>
@@ -1060,7 +1109,7 @@ function AccesoTab({ d, onChanged }: { d: UserDossier; onChanged: () => void }) 
               >
                 {assignable.map((r) => (
                   <option key={r} value={r}>
-                    {ROLE_LABELS[r] ?? r}
+                    {t(`role.${r}`)}
                   </option>
                 ))}
               </NativeSelect>
@@ -1072,7 +1121,7 @@ function AccesoTab({ d, onChanged }: { d: UserDossier; onChanged: () => void }) 
                   void run('role', () => adminUsersApi.assignRole(token(), d.identity.id, newRole))
                 }
               >
-                Añadir rol
+                {t('dossier.addRole')}
               </Button>
             </div>
           ) : null}
@@ -1080,18 +1129,18 @@ function AccesoTab({ d, onChanged }: { d: UserDossier; onChanged: () => void }) 
       </Card>
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-text">Sesiones recientes</h3>
+        <h3 className="mb-2 text-sm font-semibold text-text">{t('dossier.recentSessions')}</h3>
         {d.access.recentSessions.length === 0 ? (
-          <Empty>Sin sesiones activas.</Empty>
+          <Empty>{t('dossier.noSessions')}</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-sm">
               <thead className="text-left text-xs uppercase text-text-muted">
                 <tr>
-                  <th className="py-2">Inicio</th>
-                  <th className="py-2">Caduca</th>
-                  <th className="py-2">IP</th>
-                  <th className="py-2">Dispositivo</th>
+                  <th className="py-2">{t('dossier.colStart')}</th>
+                  <th className="py-2">{t('dossier.colExpires')}</th>
+                  <th className="py-2">{t('dossier.colIp')}</th>
+                  <th className="py-2">{t('dossier.colDevice')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1113,7 +1162,9 @@ function AccesoTab({ d, onChanged }: { d: UserDossier; onChanged: () => void }) 
 
       {d.access.externalIdentities.length > 0 ? (
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-text">Identidades externas</h3>
+          <h3 className="mb-2 text-sm font-semibold text-text">
+            {t('dossier.externalIdentities')}
+          </h3>
           <ul className="space-y-1 text-sm">
             {d.access.externalIdentities.map((i, idx) => (
               <li key={`${i.provider}-${idx}`} className="flex justify-between gap-2">
@@ -1121,8 +1172,10 @@ function AccesoTab({ d, onChanged }: { d: UserDossier; onChanged: () => void }) 
                   {i.provider} · <span className="text-text-muted">{i.issuer}</span>
                 </span>
                 <span className="text-text-muted">
-                  vinculada {formatDate(i.linkedAt)}
-                  {i.lastSeenAt ? ` · vista ${formatDate(i.lastSeenAt)}` : ''}
+                  {t('dossier.linkedDate', { date: formatDate(i.linkedAt) })}
+                  {i.lastSeenAt
+                    ? ` · ${t('dossier.lastSeenDate', { date: formatDate(i.lastSeenAt) })}`
+                    : ''}
                 </span>
               </li>
             ))}
@@ -1134,8 +1187,9 @@ function AccesoTab({ d, onChanged }: { d: UserDossier; onChanged: () => void }) 
 }
 
 function SancionesTab({ d }: { d: UserDossier }) {
+  const t = useTranslations('cuentaComponentes');
   if (d.restrictions.length === 0) {
-    return <Empty>Nunca ha sido sancionado.</Empty>;
+    return <Empty>{t('dossier.neverSanctioned')}</Empty>;
   }
   return (
     <div className="space-y-2">
@@ -1145,20 +1199,28 @@ function SancionesTab({ d }: { d: UserDossier }) {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-semibold text-text">{r.scopeLabels.join(', ')}</span>
               <Badge variant={r.active ? 'warning' : 'muted'}>
-                {r.active ? 'Vigente' : r.liftedAt ? 'Levantada' : 'Caducada'}
+                {r.active
+                  ? t('dossier.sanctionActive')
+                  : r.liftedAt
+                    ? t('dossier.sanctionLifted')
+                    : t('dossier.sanctionExpired')}
               </Badge>
             </div>
             <p className="mt-1 text-xs text-text-muted">
               {formatDateTime(r.createdAt)}
-              {r.createdByName ? ` · por ${r.createdByName}` : ''} ·{' '}
-              {r.expiresAt ? `hasta ${formatDateTime(r.expiresAt)}` : 'permanente'}
+              {r.createdByName ? ` · ${t('dossier.byName', { name: r.createdByName })}` : ''} ·{' '}
+              {r.expiresAt
+                ? t('dossier.untilDateTimeLower', { date: formatDateTime(r.expiresAt) })
+                : t('dossier.permanentLower')}
             </p>
-            <p className="mt-1 whitespace-pre-wrap text-text-muted">«{r.reason}»</p>
+            <p className="mt-1 whitespace-pre-wrap text-text-muted">
+              {t('dossier.quotedReason', { reason: r.reason })}
+            </p>
             {r.liftedAt ? (
               <p className="mt-1 text-xs text-text-muted">
-                Levantada el {formatDateTime(r.liftedAt)}
-                {r.liftedByName ? ` por ${r.liftedByName}` : ''}
-                {r.liftReason ? ` — «${r.liftReason}»` : ''}
+                {t('dossier.liftedOn', { date: formatDateTime(r.liftedAt) })}
+                {r.liftedByName ? ` ${t('dossier.byName', { name: r.liftedByName })}` : ''}
+                {r.liftReason ? ` ${t('dossier.dashQuotedReason', { reason: r.liftReason })}` : ''}
               </p>
             ) : null}
           </CardContent>

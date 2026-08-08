@@ -12,11 +12,13 @@
 /// el % que anuncia es el REAL de la config (regla #3: cero datos inventados).
 /// Enlaza al área del miembro /referidos.
 
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { referralsApi } from '@/lib/referrals';
 
 export function ReferralsPromoButton() {
+  const t = useTranslations('cuentaComponentes');
   const [percent, setPercent] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,9 +48,9 @@ export function ReferralsPromoButton() {
       href="/referidos"
       data-testid="referrals-promo-button"
       className="referral-promo-ring hidden shrink-0 sm:inline-flex"
-      aria-label={`Plan de referidos: gana el ${percent}% de los pagos de quien entre con tu enlace`}
+      aria-label={t('referrals.promoAria', { percent })}
     >
-      <span className="referral-promo-core">Plan de Referidos {percent}%</span>
+      <span className="referral-promo-core">{t('referrals.promoCta', { percent })}</span>
     </Link>
   );
 }

@@ -18,13 +18,16 @@
  * asunto y cuerpo EDITABLES antes de enviar.
  */
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiHttpError } from '@/lib/api-client';
-import { formatAmount, type RenewalTemplate } from '@/lib/payment-connections';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatCents } from '@/lib/i18n/format';
+import { type RenewalTemplate } from '@/lib/payment-connections';
 
 export interface RenewalEmailModalProps {
   /** Email destinatario (a quién se le envía el recordatorio). */
@@ -53,6 +56,8 @@ export function RenewalEmailModal({
   onClose,
   onSent,
 }: RenewalEmailModalProps) {
+  const t = useTranslations('cuentaComponentes');
+  const tErrors = useTranslations('errors');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [renewalUrl, setRenewalUrl] = useState<string | null>(null);
@@ -68,15 +73,22 @@ export function RenewalEmailModal({
         if (!active) return;
         const resolve = (s: string) =>
           s
-            .replaceAll('{plan}', productName ?? 'tu plan')
-            .replaceAll('{enlace}', url ?? '(enlace no disponible)')
-            .replaceAll('{importe}', unitAmount !== null ? formatAmount(unitAmount, currency) : '')
+            .replaceAll('{plan}', productName ?? t('renewal.yourPlan'))
+            .replaceAll('{enlace}', url ?? t('renewal.linkUnavailable'))
+            .replaceAll(
+              '{importe}',
+              unitAmount !== null ? formatCents(unitAmount, (currency ?? 'eur').toUpperCase()) : '',
+            )
             .replaceAll('{email}', to);
         setRenewalUrl(url);
         setSubject(resolve(template.subject));
         setBody(resolve(template.body));
       } catch (e) {
-        if (active) setErr(e instanceof ApiHttpError ? e.message : 'No pudimos preparar el email.');
+        if (active) {
+          setErr(
+            e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('renewal.prepareError'),
+          );
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -92,9 +104,9 @@ export function RenewalEmailModal({
     setErr(null);
     try {
       const res = await send({ subject, body });
-      onSent(`Recordatorio enviado a ${res.to}.`);
+      onSent(t('renewal.sentMsg', { to: res.to }));
     } catch (e) {
-      setErr(e instanceof ApiHttpError ? e.message : 'No se pudo enviar el email.');
+      setErr(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('renewal.sendError'));
     } finally {
       setSending(false);
     }
@@ -110,9 +122,12 @@ export function RenewalEmailModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div>
-          <h3 className="text-lg font-semibold text-text">Recordatorio de renovación</h3>
+          <h3 className="text-lg font-semibold text-text">{t('renewal.title')}</h3>
           <p className="text-sm text-text-muted">
-            Para {to} · {productName ?? 'suscripción'}
+            {t('renewal.forRecipient', {
+              to,
+              product: productName ?? t('renewal.subscriptionFallback'),
+            })}
           </p>
         </div>
 
@@ -122,13 +137,11 @@ export function RenewalEmailModal({
           <>
             {!renewalUrl && (
               <div className="rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning-700">
-                No hay enlace de renovación disponible para esta suscripción (Stripe necesita
-                permiso de lectura de Facturas, o no hay factura impaga abierta). Puedes editar el
-                cuerpo.
+                {t('renewal.noLinkWarning')}
               </div>
             )}
             <div>
-              <Label htmlFor="renew-subject">Asunto</Label>
+              <Label htmlFor="renew-subject">{t('renewal.subject')}</Label>
               <Input
                 id="renew-subject"
                 value={subject}
@@ -136,7 +149,7 @@ export function RenewalEmailModal({
               />
             </div>
             <div>
-              <Label htmlFor="renew-body">Mensaje</Label>
+              <Label htmlFor="renew-body">{t('renewal.message')}</Label>
               <textarea
                 id="renew-body"
                 value={body}
@@ -151,10 +164,10 @@ export function RenewalEmailModal({
 
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose} disabled={sending}>
-            Cancelar
+            {t('renewal.cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={loading || sending || !subject || !body}>
-            {sending ? 'Enviando…' : 'Enviar'}
+            {sending ? t('renewal.sending') : t('renewal.send')}
           </Button>
         </div>
       </div>

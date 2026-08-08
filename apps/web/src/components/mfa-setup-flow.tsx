@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -13,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { consumeIntendedPath } from '@/lib/post-login-redirect';
 
 interface SetupResponse {
@@ -35,6 +37,8 @@ interface EnableResponse {
  *    (cerrar modal + refrescar) en vez de navegar.
  */
 export function MfaSetupFlow({ onDone }: { onDone?: () => void }) {
+  const t = useTranslations('cuentaComponentes');
+  const tErrors = useTranslations('errors');
   const router = useRouter();
   const [setup, setSetup] = useState<SetupResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +61,7 @@ export function MfaSetupFlow({ onDone }: { onDone?: () => void }) {
         if (!aborted) setSetup(response);
       } catch (e) {
         if (!aborted) {
-          setError(e instanceof ApiHttpError ? e.message : 'No se pudo iniciar setup');
+          setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('mfa.setupError'));
         }
       }
     }
@@ -87,7 +91,7 @@ export function MfaSetupFlow({ onDone }: { onDone?: () => void }) {
       // igual que mfa-verify-form. En el modal del perfil no aplica.
       else router.push(consumeIntendedPath() ?? '/');
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudo confirmar el código');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('mfa.confirmError'));
     } finally {
       setPending(false);
     }
@@ -102,7 +106,7 @@ export function MfaSetupFlow({ onDone }: { onDone?: () => void }) {
   }
 
   if (!setup) {
-    return <p className="text-sm text-text-subtle">Generando código…</p>;
+    return <p className="text-sm text-text-subtle">{t('mfa.generating')}</p>;
   }
 
   return (
@@ -110,21 +114,21 @@ export function MfaSetupFlow({ onDone }: { onDone?: () => void }) {
       <div className="flex flex-col items-center gap-3">
         <Image
           src={setup.qrCodeDataUrl}
-          alt="QR de configuración TOTP"
+          alt={t('mfa.qrAlt')}
           width={192}
           height={192}
           unoptimized
           className="rounded-md border border-border"
         />
         <details className="text-xs text-text-subtle">
-          <summary className="cursor-pointer">URL otpauth (manual)</summary>
+          <summary className="cursor-pointer">{t('mfa.otpauthManual')}</summary>
           <code className="mt-2 block break-all rounded bg-surface-2 p-2">{setup.otpauthUrl}</code>
         </details>
       </div>
 
       <div className="rounded-md border border-warning-200 bg-warning-50 p-3 text-xs text-warning-800">
-        <p className="font-semibold">Guarda estos recovery codes en un lugar seguro.</p>
-        <p className="mt-1">Cada uno funciona una sola vez si pierdes el acceso a tu app TOTP.</p>
+        <p className="font-semibold">{t('mfa.recoveryTitle')}</p>
+        <p className="mt-1">{t('mfa.recoveryDesc')}</p>
         <ul className="mt-2 grid grid-cols-2 gap-1 font-mono">
           {setup.recoveryCodes.map((c) => (
             <li key={c}>{c}</li>
@@ -134,7 +138,7 @@ export function MfaSetupFlow({ onDone }: { onDone?: () => void }) {
 
       <form action={onConfirm} className="space-y-3">
         <div className="space-y-2">
-          <Label htmlFor="code">Código de la app</Label>
+          <Label htmlFor="code">{t('mfa.codeLabel')}</Label>
           <Input
             id="code"
             name="code"
@@ -151,7 +155,7 @@ export function MfaSetupFlow({ onDone }: { onDone?: () => void }) {
           </p>
         ) : null}
         <Button type="submit" disabled={pending} className="w-full">
-          {pending ? 'Verificando…' : 'Confirmar y activar MFA'}
+          {pending ? t('mfa.verifying') : t('mfa.confirmCta')}
         </Button>
       </form>
     </div>
