@@ -29,7 +29,10 @@ export const COMMUNITY_AUDIT_RETENTION_DAYS = 90;
 function requireAdmin(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-    throw new ForbiddenException('Solo super_admin, tenant_admin o auditor pueden acceder al log');
+    throw new ForbiddenException({
+      message: 'Solo super_admin, tenant_admin o auditor pueden acceder al log',
+      code: 'AUDIT_LOG_FORBIDDEN',
+    });
   }
   return user;
 }

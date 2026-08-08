@@ -78,7 +78,10 @@ const uuidSchema = z.string().uuid();
  */
 function ensureUuid(id: string): string {
   if (!uuidSchema.safeParse(id).success) {
-    throw new NotFoundException('Solicitante no encontrado.');
+    throw new NotFoundException({
+      message: 'Solicitante no encontrado.',
+      code: 'MEMBER_REG_APPLICANT_NOT_FOUND',
+    });
   }
   return id;
 }
@@ -110,9 +113,10 @@ export class MemberRegistrationAdminController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException(
-        'Solo administradores pueden ver las solicitudes de inscripción.',
-      );
+      throw new ForbiddenException({
+        message: 'Solo administradores pueden ver las solicitudes de inscripción.',
+        code: 'MEMBER_REG_ADMIN_ONLY',
+      });
     }
     return user;
   }
@@ -197,7 +201,11 @@ export class MemberRegistrationAdminController {
     const user = this.requireAdmin(rawUser);
     ensureUuid(userId);
     const account = await this.registration.getUserEmail(user.tenantId, userId);
-    if (!account) throw new NotFoundException('Solicitante no encontrado.');
+    if (!account)
+      throw new NotFoundException({
+        message: 'Solicitante no encontrado.',
+        code: 'MEMBER_REG_APPLICANT_NOT_FOUND',
+      });
     // Prioridad: email mapeado ahora → el que ya se usó antes (persiste el mapeo) → el de registro.
     const existing = await this.lookup.getForUser(user.tenantId, userId);
     const emailToUse = body.email ?? existing?.email ?? account;
@@ -224,7 +232,10 @@ export class MemberRegistrationAdminController {
     const action = dto.action === 'approve' ? 'APPROVE' : 'REJECT';
     const result = await this.decision.decideByAdmin(user.tenantId, userId, action, ctx);
     if (result.outcome === 'invalid') {
-      throw new NotFoundException('Solicitante no encontrado.');
+      throw new NotFoundException({
+        message: 'Solicitante no encontrado.',
+        code: 'MEMBER_REG_APPLICANT_NOT_FOUND',
+      });
     }
     return { outcome: result.outcome };
   }
@@ -277,12 +288,17 @@ export class MemberRegistrationAdminController {
     const user = this.requireAdmin(rawUser);
     ensureUuid(userId);
     const to = (await this.registration.getUserEmail(user.tenantId, userId))?.trim();
-    if (!to) throw new NotFoundException('Solicitante no encontrado o sin email.');
+    if (!to)
+      throw new NotFoundException({
+        message: 'Solicitante no encontrado o sin email.',
+        code: 'MEMBER_REG_APPLICANT_EMAIL_MISSING',
+      });
     const resolved = await this.smtpResolver.resolve(user.tenantId);
     if (!resolved) {
-      throw new ConflictException(
-        'El tenant no tiene SMTP configurado: no se puede enviar el recordatorio.',
-      );
+      throw new ConflictException({
+        message: 'El tenant no tiene SMTP configurado: no se puede enviar el recordatorio.',
+        code: 'MEMBER_REG_SMTP_NOT_CONFIGURED',
+      });
     }
     const branding = await resolveEmailBranding(
       this.prisma as unknown as BrandingPrisma,
@@ -300,7 +316,10 @@ export class MemberRegistrationAdminController {
       branding.tenantName,
     );
     if (!result.ok) {
-      throw new ConflictException(`No se pudo enviar el email: ${result.error ?? 'error SMTP'}`);
+      throw new ConflictException({
+        message: `No se pudo enviar el email: ${result.error ?? 'error SMTP'}`,
+        code: 'MEMBER_REG_EMAIL_SEND_FAILED',
+      });
     }
     return { ok: true, to };
   }
@@ -319,7 +338,10 @@ export class MemberRegistrationAdminController {
     const results = (row?.results ?? []) as unknown as MemberSubscriptionMatch[];
     const match = results.find((m) => m.subscriptionId === subscriptionId);
     if (!match) {
-      throw new NotFoundException('Suscripción no encontrada en el lookup de la solicitud.');
+      throw new NotFoundException({
+        message: 'Suscripción no encontrada en el lookup de la solicitud.',
+        code: 'MEMBER_REG_SUBSCRIPTION_NOT_FOUND',
+      });
     }
     return match;
   }

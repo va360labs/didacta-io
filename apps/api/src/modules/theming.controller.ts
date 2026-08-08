@@ -77,7 +77,10 @@ export class ThemingController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException('Solo administradores pueden modificar el theme.');
+      throw new ForbiddenException({
+        message: 'Solo administradores pueden modificar el theme.',
+        code: 'THEMING_UPDATE_FORBIDDEN',
+      });
     }
     // El gate white-label solo debe saltar cuando se INTENTA ESTABLECER
     // contenido white-label (string no vacío), no cuando el campo llega como
@@ -101,7 +104,10 @@ export class ThemingController {
   async resetMine(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException('Solo administradores pueden resetear el theme.');
+      throw new ForbiddenException({
+        message: 'Solo administradores pueden resetear el theme.',
+        code: 'THEMING_RESET_FORBIDDEN',
+      });
     }
     return this.registry.getThemingService().reset(user.tenantId);
   }
@@ -118,7 +124,10 @@ export class ThemingController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException('Solo administradores pueden subir el logo.');
+      throw new ForbiddenException({
+        message: 'Solo administradores pueden subir el logo.',
+        code: 'THEMING_LOGO_UPLOAD_FORBIDDEN',
+      });
     }
     return this.registry.getThemingService().uploadLogo(user.tenantId, dto);
   }
@@ -131,7 +140,10 @@ export class ThemingController {
   async removeLogo(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException('Solo administradores pueden eliminar el logo.');
+      throw new ForbiddenException({
+        message: 'Solo administradores pueden eliminar el logo.',
+        code: 'THEMING_LOGO_DELETE_FORBIDDEN',
+      });
     }
     return this.registry.getThemingService().removeLogo(user.tenantId);
   }

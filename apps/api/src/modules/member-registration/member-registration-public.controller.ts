@@ -78,9 +78,10 @@ export class MemberRegistrationPublicController {
   private requireAuthSecret(): string {
     const secret = process.env['AUTH_SECRET']?.trim();
     if (!secret) {
-      throw new ServiceUnavailableException(
-        'El flujo de inscripción no está configurado (falta AUTH_SECRET).',
-      );
+      throw new ServiceUnavailableException({
+        message: 'El flujo de inscripción no está configurado (falta AUTH_SECRET).',
+        code: 'MEMBER_REG_NOT_CONFIGURED',
+      });
     }
     return secret;
   }
@@ -93,7 +94,10 @@ export class MemberRegistrationPublicController {
   private async requirePolicy(tenantId: string): Promise<EffectiveRegistrationPolicy> {
     const policy = await this.settings.resolveEffectivePolicy(tenantId);
     if (!policy.enabled || !policy.operational) {
-      throw new ServiceUnavailableException('La inscripción no está disponible en esta comunidad.');
+      throw new ServiceUnavailableException({
+        message: 'La inscripción no está disponible en esta comunidad.',
+        code: 'MEMBER_REG_UNAVAILABLE',
+      });
     }
     return policy;
   }
@@ -132,18 +136,25 @@ export class MemberRegistrationPublicController {
     return runAsTenant(tenantId, async () => {
       const policy = await this.requirePolicy(tenantId);
       if (!policy.verifiers.includes('telegram')) {
-        throw new ServiceUnavailableException(
-          'Esta comunidad no verifica por Telegram su inscripción.',
-        );
+        throw new ServiceUnavailableException({
+          message: 'Esta comunidad no verifica por Telegram su inscripción.',
+          code: 'MEMBER_REG_TELEGRAM_NOT_ENABLED',
+        });
       }
       // Operativo garantizado por requirePolicy → la config del bot existe.
       const telegramConfig = await this.settings.resolveTelegram(tenantId);
       if (!telegramConfig) {
-        throw new ServiceUnavailableException('El acceso por Telegram no está configurado.');
+        throw new ServiceUnavailableException({
+          message: 'El acceso por Telegram no está configurado.',
+          code: 'MEMBER_REG_TELEGRAM_NOT_CONFIGURED',
+        });
       }
 
       if (!this.telegram.verifyLoginHash(telegramConfig, dto)) {
-        throw new UnauthorizedException('Firma de Telegram inválida.');
+        throw new UnauthorizedException({
+          message: 'Firma de Telegram inválida.',
+          code: 'MEMBER_REG_TELEGRAM_SIGNATURE_INVALID',
+        });
       }
 
       const inGroup = await this.telegram.getChatMember(telegramConfig, dto.id);
@@ -167,9 +178,10 @@ export class MemberRegistrationPublicController {
     return runAsTenant(tenantId, async () => {
       const policy = await this.requirePolicy(tenantId);
       if (!policy.verifiers.includes('otp')) {
-        throw new ServiceUnavailableException(
-          'Esta comunidad no verifica por email su inscripción.',
-        );
+        throw new ServiceUnavailableException({
+          message: 'Esta comunidad no verifica por email su inscripción.',
+          code: 'MEMBER_REG_OTP_NOT_ENABLED',
+        });
       }
       this.requireTelegramClaims(policy, secret, dto.ticket);
 
@@ -197,9 +209,10 @@ export class MemberRegistrationPublicController {
     return runAsTenant(tenantId, async () => {
       const policy = await this.requirePolicy(tenantId);
       if (!policy.verifiers.includes('otp')) {
-        throw new ServiceUnavailableException(
-          'Esta comunidad no verifica por email su inscripción.',
-        );
+        throw new ServiceUnavailableException({
+          message: 'Esta comunidad no verifica por email su inscripción.',
+          code: 'MEMBER_REG_OTP_NOT_ENABLED',
+        });
       }
       const telegramClaims = this.requireTelegramClaims(policy, secret, dto.ticket);
 
@@ -210,7 +223,10 @@ export class MemberRegistrationPublicController {
         extractClientContext(req),
       );
       if (!ok) {
-        throw new UnauthorizedException('Código inválido o expirado.');
+        throw new UnauthorizedException({
+          message: 'Código inválido o expirado.',
+          code: 'MEMBER_REG_OTP_INVALID',
+        });
       }
 
       const verificationToken = signTicket(
@@ -251,14 +267,23 @@ export class MemberRegistrationPublicController {
         // El verificationToken del OTP es la evidencia final (arrastra la de
         // Telegram si ese verificador también estaba exigido).
         if (!dto.verificationToken) {
-          throw new UnauthorizedException('Token de verificación inválido o expirado.');
+          throw new UnauthorizedException({
+            message: 'Token de verificación inválido o expirado.',
+            code: 'MEMBER_REG_VERIFICATION_TOKEN_INVALID',
+          });
         }
         const claims = verifyTicket<VerificationTokenClaims>(dto.verificationToken, secret);
         if (!claims || claims.purpose !== 'member-register') {
-          throw new UnauthorizedException('Token de verificación inválido o expirado.');
+          throw new UnauthorizedException({
+            message: 'Token de verificación inválido o expirado.',
+            code: 'MEMBER_REG_VERIFICATION_TOKEN_INVALID',
+          });
         }
         if (policy.verifiers.includes('telegram') && !claims.telegramId) {
-          throw new UnauthorizedException('Falta la verificación de Telegram.');
+          throw new UnauthorizedException({
+            message: 'Falta la verificación de Telegram.',
+            code: 'MEMBER_REG_TELEGRAM_VERIFICATION_MISSING',
+          });
         }
         email = claims.email;
         telegramId = claims.telegramId ?? null;
@@ -268,7 +293,10 @@ export class MemberRegistrationPublicController {
         // del formulario (sin verificar — la aprobación manual sigue delante).
         const claims = dto.ticket ? verifyTicket<TelegramTicketClaims>(dto.ticket, secret) : null;
         if (!claims || claims.purpose !== 'telegram') {
-          throw new UnauthorizedException('Ticket de Telegram inválido o expirado.');
+          throw new UnauthorizedException({
+            message: 'Ticket de Telegram inválido o expirado.',
+            code: 'MEMBER_REG_TELEGRAM_TICKET_INVALID',
+          });
         }
         email = this.requireEmail(dto);
         telegramId = claims.telegramId;
@@ -340,7 +368,10 @@ export class MemberRegistrationPublicController {
     if (!policy.verifiers.includes('telegram')) return null;
     const claims = ticket ? verifyTicket<TelegramTicketClaims>(ticket, secret) : null;
     if (!claims || claims.purpose !== 'telegram') {
-      throw new UnauthorizedException('Ticket de Telegram inválido o expirado.');
+      throw new UnauthorizedException({
+        message: 'Ticket de Telegram inválido o expirado.',
+        code: 'MEMBER_REG_TELEGRAM_TICKET_INVALID',
+      });
     }
     return claims;
   }
@@ -349,7 +380,10 @@ export class MemberRegistrationPublicController {
   private requireEmail(dto: RegisterDto): string {
     const email = dto.email?.trim().toLowerCase();
     if (!email) {
-      throw new BadRequestException('Falta el email de la solicitud.');
+      throw new BadRequestException({
+        message: 'Falta el email de la solicitud.',
+        code: 'MEMBER_REG_EMAIL_MISSING',
+      });
     }
     return email;
   }
@@ -364,7 +398,10 @@ export class MemberRegistrationPublicController {
     const hostStr = Array.isArray(host) ? host[0] : host;
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
     if (!tenant) {
-      throw new NotFoundException('Comunidad no encontrada para este dominio.');
+      throw new NotFoundException({
+        message: 'Comunidad no encontrada para este dominio.',
+        code: 'MEMBER_REG_TENANT_NOT_FOUND',
+      });
     }
     return tenant.id;
   }

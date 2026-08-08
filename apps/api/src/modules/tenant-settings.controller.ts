@@ -45,7 +45,10 @@ function requireAdmin(user: SessionClaims | undefined) {
   if (!user) throw new UnauthorizedException();
   const isAdmin = user.roles.some((r) => ADMIN_ROLES.has(r));
   if (!isAdmin) {
-    throw new ForbiddenException('Solo super_admin o tenant_admin pueden gestionar settings');
+    throw new ForbiddenException({
+      message: 'Solo super_admin o tenant_admin pueden gestionar settings',
+      code: 'TENANT_SETTINGS_ADMIN_ONLY',
+    });
   }
   return user;
 }
@@ -53,7 +56,10 @@ function requireAdmin(user: SessionClaims | undefined) {
 function validateParam(name: string, value: string) {
   const r = ScopeKeyParamSchema.safeParse(value);
   if (!r.success) {
-    throw new NotFoundException(`Parámetro ${name} inválido`);
+    throw new NotFoundException({
+      message: `Parámetro ${name} inválido`,
+      code: 'TENANT_SETTINGS_PARAM_INVALID',
+    });
   }
   return r.data;
 }
@@ -243,16 +249,20 @@ export class TenantSettingsController {
 
     const raw = await config.get(claims.tenantId, 'notifications', 'smtp');
     if (!raw) {
-      throw new BadRequestException('SMTP no configurado para este tenant');
+      throw new BadRequestException({
+        message: 'SMTP no configurado para este tenant',
+        code: 'TENANT_SETTINGS_SMTP_NOT_CONFIGURED',
+      });
     }
 
     let parsed;
     try {
       parsed = smtp.parseConfig(raw);
     } catch (err) {
-      throw new BadRequestException(
-        `Config SMTP inválida: ${(err as Error).message.slice(0, 200)}`,
-      );
+      throw new BadRequestException({
+        message: `Config SMTP inválida: ${(err as Error).message.slice(0, 200)}`,
+        code: 'TENANT_SETTINGS_SMTP_CONFIG_INVALID',
+      });
     }
 
     const me = await this.prisma.user.findUnique({
@@ -260,7 +270,10 @@ export class TenantSettingsController {
       select: { email: true, tenantId: true },
     });
     if (!me || me.tenantId !== claims.tenantId) {
-      throw new BadRequestException('No se pudo resolver tu email del tenant');
+      throw new BadRequestException({
+        message: 'No se pudo resolver tu email del tenant',
+        code: 'TENANT_SETTINGS_EMAIL_UNRESOLVED',
+      });
     }
 
     const tenant = await this.prisma.tenant.findUnique({
@@ -275,7 +288,10 @@ export class TenantSettingsController {
     });
 
     if (!result.ok) {
-      throw new BadRequestException(`SMTP falló: ${result.error ?? 'sin detalle'}`);
+      throw new BadRequestException({
+        message: `SMTP falló: ${result.error ?? 'sin detalle'}`,
+        code: 'TENANT_SETTINGS_SMTP_TEST_FAILED',
+      });
     }
     return { ok: true, sentTo: me.email, messageId: result.messageId };
   }

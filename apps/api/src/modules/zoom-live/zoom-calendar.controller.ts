@@ -75,7 +75,11 @@ export class ZoomCalendarController {
 
   /** Carga la sesión y la traduce al evento, o 404 si no procede. */
   private async resolve(id: string): Promise<CalendarEventInput> {
-    if (!uuidSchema.safeParse(id).success) throw new NotFoundException('Clase no encontrada.');
+    if (!uuidSchema.safeParse(id).success)
+      throw new NotFoundException({
+        message: 'Clase no encontrada.',
+        code: 'ZOOM_LIVE_CLASS_NOT_FOUND',
+      });
     // Lookup cross-tenant DELIBERADO por UUID compartible (ADR-017): el id es la
     // credencial y el service resuelve internamente sesión + nombre del tenant,
     // sin más queries después (los builders de ICS/URL son puros). Inventario
@@ -84,7 +88,10 @@ export class ZoomCalendarController {
       this.registry.getZoomLiveService().getCalendarInfo(id),
     );
     if (!info || info.status === 'CANCELLED') {
-      throw new NotFoundException('Clase no encontrada.');
+      throw new NotFoundException({
+        message: 'Clase no encontrada.',
+        code: 'ZOOM_LIVE_CLASS_NOT_FOUND',
+      });
     }
     return {
       sessionId: info.id,

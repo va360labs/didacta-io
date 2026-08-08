@@ -55,17 +55,27 @@ const updatePathSchema = z.object({
 function requireEditor(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   if (!user.roles.some((r) => EDITOR_ROLES.has(r))) {
-    throw new ForbiddenException('Esta acción requiere rol formador o admin.');
+    throw new ForbiddenException({
+      message: 'Esta acción requiere rol formador o admin.',
+      code: 'LEARNING_REQUIRES_EDITOR_ROLE',
+    });
   }
   return user;
 }
 
 function mapError(err: unknown): never {
-  if (err instanceof LearningPathNotFoundError) throw new NotFoundException(err.message);
-  if (err instanceof LearningPathNotPublishedError) throw new NotFoundException(err.message);
-  if (err instanceof LearningPathAlreadyEnrolledError) throw new ConflictException(err.message);
-  if (err instanceof LearningPathEnrollmentNotFoundError) throw new NotFoundException(err.message);
-  if (err instanceof LearningPathNoCourseError) throw new BadRequestException(err.message);
+  // Se preserva el `code` del error de dominio (LEARNING_PATH_*) en el body
+  // para que el front lo traduzca; el mensaje es-ES queda como fallback.
+  if (err instanceof LearningPathNotFoundError)
+    throw new NotFoundException({ message: err.message, code: err.code });
+  if (err instanceof LearningPathNotPublishedError)
+    throw new NotFoundException({ message: err.message, code: err.code });
+  if (err instanceof LearningPathAlreadyEnrolledError)
+    throw new ConflictException({ message: err.message, code: err.code });
+  if (err instanceof LearningPathEnrollmentNotFoundError)
+    throw new NotFoundException({ message: err.message, code: err.code });
+  if (err instanceof LearningPathNoCourseError)
+    throw new BadRequestException({ message: err.message, code: err.code });
   throw err as Error;
 }
 

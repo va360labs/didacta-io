@@ -100,7 +100,10 @@ type UpdateDripScheduleDto = z.infer<typeof updateDripScheduleSchema>;
 function requireScormEditor(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   if (!user.roles.some((r) => SCORM_EDITOR_ROLES.has(r))) {
-    throw new ForbiddenException('Esta acción requiere rol formador o admin.');
+    throw new ForbiddenException({
+      message: 'Esta acción requiere rol formador o admin.',
+      code: 'LEARNING_REQUIRES_EDITOR_ROLE',
+    });
   }
   return user;
 }
@@ -176,7 +179,10 @@ export class LearningController {
       return await this.registry.getLearningService().createCompetency(u.tenantId, dto);
     } catch (e) {
       if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002') {
-        throw new BadRequestException('Ya existe una competencia con ese nombre.');
+        throw new BadRequestException({
+          message: 'Ya existe una competencia con ese nombre.',
+          code: 'LEARNING_COMPETENCY_NAME_TAKEN',
+        });
       }
       throw e;
     }
@@ -255,9 +261,10 @@ export class LearningController {
       return { schedule };
     } catch (e) {
       if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002') {
-        throw new BadRequestException(
-          'Ya existe un calendario de drip para ese curso y audiencia.',
-        );
+        throw new BadRequestException({
+          message: 'Ya existe un calendario de drip para ese curso y audiencia.',
+          code: 'LEARNING_DRIP_SCHEDULE_EXISTS',
+        });
       }
       throw e;
     }
@@ -348,7 +355,10 @@ export class LearningController {
   async runUnlockNotifier(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.includes('super_admin')) {
-      throw new ForbiddenException('Solo super_admin.');
+      throw new ForbiddenException({
+        message: 'Solo super_admin.',
+        code: 'LEARNING_SUPER_ADMIN_ONLY',
+      });
     }
     return this.unlockNotifier.runNow();
   }
@@ -410,7 +420,10 @@ export class LearningController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r))) {
-      throw new ForbiddenException('Sólo formadores y admins pueden ver la cola de moderación.');
+      throw new ForbiddenException({
+        message: 'Sólo formadores y admins pueden ver la cola de moderación.',
+        code: 'LEARNING_MODERATION_QUEUE_FORBIDDEN',
+      });
     }
     return this.registry.getLearningService().listPendingCommentsForCourse(user.tenantId, courseId);
   }
@@ -424,7 +437,10 @@ export class LearningController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r))) {
-      throw new ForbiddenException('Sólo formadores y admins pueden moderar comentarios.');
+      throw new ForbiddenException({
+        message: 'Sólo formadores y admins pueden moderar comentarios.',
+        code: 'LEARNING_COMMENT_MODERATION_FORBIDDEN',
+      });
     }
     return this.registry
       .getLearningService()
@@ -442,7 +458,10 @@ export class LearningController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r))) {
-      throw new ForbiddenException('Sólo formadores y admins pueden moderar comentarios.');
+      throw new ForbiddenException({
+        message: 'Sólo formadores y admins pueden moderar comentarios.',
+        code: 'LEARNING_COMMENT_MODERATION_FORBIDDEN',
+      });
     }
     return this.registry
       .getLearningService()
@@ -476,9 +495,10 @@ export class LearningController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r))) {
-      throw new ForbiddenException(
-        'Solo formadores y administradores pueden ver el listado de alumnos.',
-      );
+      throw new ForbiddenException({
+        message: 'Solo formadores y administradores pueden ver el listado de alumnos.',
+        code: 'LEARNING_ENROLLMENTS_LIST_FORBIDDEN',
+      });
     }
     return this.registry.getLearningService().listEnrollmentsByCourse(user.tenantId, courseId, {
       status,
@@ -498,9 +518,10 @@ export class LearningController {
   ) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r))) {
-      throw new ForbiddenException(
-        'Solo formadores y administradores pueden ver el progreso de un alumno.',
-      );
+      throw new ForbiddenException({
+        message: 'Solo formadores y administradores pueden ver el progreso de un alumno.',
+        code: 'LEARNING_ENROLLMENT_PROGRESS_FORBIDDEN',
+      });
     }
     return this.registry
       .getLearningService()
@@ -638,13 +659,19 @@ export class LearningController {
   ) {
     const u = requireScormEditor(user);
     if (dto.data.length > MAX_SCORM_BASE64_BYTES) {
-      throw new BadRequestException('Paquete demasiado grande');
+      throw new BadRequestException({
+        message: 'Paquete demasiado grande',
+        code: 'LEARNING_SCORM_PACKAGE_TOO_LARGE',
+      });
     }
     let buf: Buffer;
     try {
       buf = Buffer.from(dto.data, 'base64');
     } catch {
-      throw new BadRequestException('data debe ser base64 válido');
+      throw new BadRequestException({
+        message: 'data debe ser base64 válido',
+        code: 'LEARNING_SCORM_INVALID_BASE64',
+      });
     }
     return this.registry
       .getScormService()
@@ -673,7 +700,10 @@ export class LearningController {
         lessonId,
       );
       if (!enrolled) {
-        throw new ForbiddenException('Necesitas una matrícula activa para ver esta lección.');
+        throw new ForbiddenException({
+          message: 'Necesitas una matrícula activa para ver esta lección.',
+          code: 'LEARNING_ACTIVE_ENROLLMENT_REQUIRED',
+        });
       }
       // DRIP/TRIAL: una lección bloqueada tampoco se reproduce vía paquete
       // directo (attempt/commit ya estaban gateados; esto también).

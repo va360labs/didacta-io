@@ -111,7 +111,11 @@ export class EventsController {
       },
     });
 
-    if (!event) throw new NotFoundException('Evento no encontrado');
+    if (!event)
+      throw new NotFoundException({
+        message: 'Evento no encontrado',
+        code: 'EVENTS_EVENT_NOT_FOUND',
+      });
 
     return {
       id: event.id,
@@ -135,7 +139,11 @@ export class EventsController {
   ) {
     if (!user) throw new UnauthorizedException();
     const isAdmin = user.roles.some((r) => ['super_admin', 'tenant_admin', 'formador'].includes(r));
-    if (!isAdmin) throw new ForbiddenException('Solo admins o formadores pueden crear eventos');
+    if (!isAdmin)
+      throw new ForbiddenException({
+        message: 'Solo admins o formadores pueden crear eventos',
+        code: 'EVENTS_CREATE_FORBIDDEN',
+      });
 
     return this.prisma.modEvent.create({
       data: {
@@ -161,7 +169,11 @@ export class EventsController {
       where: { id, tenantId: user.tenantId, deletedAt: null },
       include: { _count: { select: { registrations: true } } },
     });
-    if (!event) throw new NotFoundException('Evento no encontrado');
+    if (!event)
+      throw new NotFoundException({
+        message: 'Evento no encontrado',
+        code: 'EVENTS_EVENT_NOT_FOUND',
+      });
     if (event.capacity !== null && event._count.registrations >= event.capacity) {
       return { registered: false, reason: 'full' };
     }
