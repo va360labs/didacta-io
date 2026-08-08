@@ -13,13 +13,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
 import { communityApi, type Post } from '@/modules/community';
 
 function dateLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-ES', {
+  return formatDate(iso, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -29,6 +31,8 @@ function dateLabel(iso: string): string {
 }
 
 export default function AdminPublicacionesApiPage() {
+  const t = useTranslations('adminEngagement');
+  const tErrors = useTranslations('errors');
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,16 +44,12 @@ export default function AdminPublicacionesApiPage() {
         if (!cancelled) setPosts(rows);
       })
       .catch((e) => {
-        if (!cancelled) {
-          setError(
-            e instanceof ApiHttpError ? e.message : 'No pudimos cargar las publicaciones por API.',
-          );
-        }
+        if (!cancelled) setError(apiErrorMessage(e, tErrors));
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [tErrors]);
 
   /** Agrupación por autor (dueño de la API key que publicó). */
   const byAuthor = useMemo(() => {
@@ -69,20 +69,21 @@ export default function AdminPublicacionesApiPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-text">Publicaciones por API</h1>
+        <h1 className="text-xl font-bold text-text">{t('apiPosts.title')}</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Posts creados con{' '}
-          <code className="rounded bg-surface-2 px-1">POST /community-api/posts</code> (API key con
-          scope <code className="rounded bg-surface-2 px-1">community:post</code>), agrupados por el
-          admin dueño de la key. Las claves se gestionan en{' '}
-          <Link href="/admin/api-keys" className="text-brand-700 hover:underline">
-            Claves API
-          </Link>{' '}
-          y el endpoint está documentado en{' '}
-          <Link href="/admin/api-keys?tab=docs" className="text-brand-700 hover:underline">
-            Claves API → Documentación
-          </Link>
-          .
+          {t.rich('apiPosts.description', {
+            code: (chunks) => <code className="rounded bg-surface-2 px-1">{chunks}</code>,
+            keysLink: (chunks) => (
+              <Link href="/admin/api-keys" className="text-brand-700 hover:underline">
+                {chunks}
+              </Link>
+            ),
+            docsLink: (chunks) => (
+              <Link href="/admin/api-keys?tab=docs" className="text-brand-700 hover:underline">
+                {chunks}
+              </Link>
+            ),
+          })}
         </p>
       </div>
 
@@ -102,9 +103,7 @@ export default function AdminPublicacionesApiPage() {
         </div>
       ) : byAuthor.length === 0 ? (
         <Card>
-          <CardContent className="py-6 text-sm text-text-subtle">
-            Todavía no hay publicaciones creadas por API.
-          </CardContent>
+          <CardContent className="py-6 text-sm text-text-subtle">{t('apiPosts.empty')}</CardContent>
         </Card>
       ) : (
         byAuthor.map((group) => (
@@ -113,10 +112,10 @@ export default function AdminPublicacionesApiPage() {
               <CardTitle className="flex items-center gap-2">
                 {group.name}
                 <Badge variant="info">
-                  {group.posts.length} {group.posts.length === 1 ? 'post' : 'posts'}
+                  {t('apiPosts.postCount', { count: group.posts.length })}
                 </Badge>
               </CardTitle>
-              <CardDescription>Publicado vía API key de este usuario.</CardDescription>
+              <CardDescription>{t('apiPosts.viaApiKey')}</CardDescription>
             </CardHeader>
             <CardContent>
               <ul className="divide-y divide-border-soft">
@@ -136,7 +135,9 @@ export default function AdminPublicacionesApiPage() {
                         #{tag}
                       </Badge>
                     ))}
-                    {post.hiddenAt ? <Badge variant="danger">Oculto</Badge> : null}
+                    {post.hiddenAt ? (
+                      <Badge variant="danger">{t('apiPosts.hiddenBadge')}</Badge>
+                    ) : null}
                   </li>
                 ))}
               </ul>

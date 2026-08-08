@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,6 +23,7 @@ import {
   type TenantProviderConfig,
 } from '@/modules/ai-tutor';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 
 type Purpose = 'chat' | 'embed';
 
@@ -43,11 +45,10 @@ const EMPTY_DRAFT: FormDraft = {
   notas: '',
 };
 
-const PURPOSE_LABEL: Record<Purpose, string> = {
-  chat: 'Chat (tutor IA)',
-  embed: 'Embeddings (indexación de cursos)',
-};
-
+/**
+ * Nombres de los proveedores soportados. Son MARCAS (OpenAI, Anthropic,
+ * Gemini…): no se traducen, por eso no viven en el catálogo i18n.
+ */
 const PROVIDER_NAME: Record<string, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic (Claude)',
@@ -72,6 +73,8 @@ const PROVIDER_NAME: Record<string, string> = {
  * etc.). Si tampoco hay default → error 424 al usar el tutor.
  */
 export default function AiProvidersAdminPage() {
+  const t = useTranslations('adminEngagement');
+  const tErrors = useTranslations('errors');
   const [catalog, setCatalog] = useState<ProviderCatalogEntry[] | null>(null);
   const [configs, setConfigs] = useState<TenantProviderConfig[] | null>(null);
   const [drafts, setDrafts] = useState<Record<Purpose, FormDraft>>({
@@ -91,7 +94,7 @@ export default function AiProvidersAdminPage() {
       setConfigs(list);
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las configs IA.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -119,7 +122,7 @@ export default function AiProvidersAdminPage() {
     e.preventDefault();
     const d = drafts[purpose];
     if (!d.provider || !d.apiKey) {
-      setError('Tienes que elegir un proveedor y una API key.');
+      setError(t('aiProviders.missingFields'));
       return;
     }
     setPending(purpose);
@@ -134,11 +137,11 @@ export default function AiProvidersAdminPage() {
         enabled: d.enabled,
         notas: d.notas.trim() || undefined,
       });
-      setInfo(`Config de ${PURPOSE_LABEL[purpose]} guardada.`);
+      setInfo(t('aiProviders.savedInfo', { purpose: t(`purposeLabels.${purpose}`) }));
       updateDraft(purpose, { apiKey: '' }); // limpiar key del form post-save
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar la config.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(null);
     }
@@ -146,7 +149,7 @@ export default function AiProvidersAdminPage() {
 
   async function handleRemove(purpose: Purpose) {
     if (
-      !window.confirm(`¿Borrar la config de ${PURPOSE_LABEL[purpose]}? Caerá al default global.`)
+      !window.confirm(t('aiProviders.deleteConfirm', { purpose: t(`purposeLabels.${purpose}`) }))
     ) {
       return;
     }
@@ -155,10 +158,10 @@ export default function AiProvidersAdminPage() {
     setInfo(null);
     try {
       await aiProvidersApi.remove(purpose);
-      setInfo(`Config de ${PURPOSE_LABEL[purpose]} eliminada.`);
+      setInfo(t('aiProviders.removedInfo', { purpose: t(`purposeLabels.${purpose}`) }));
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos borrar la config.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(null);
     }
@@ -173,7 +176,13 @@ export default function AiProvidersAdminPage() {
       const res = await aiTutorApi.reindexAll();
       setReindexResult(res);
       setInfo(
-        `Reindexado: ${res.indexed}/${res.total} cursos OK${res.failed ? `, ${res.failed} con error` : ''}.`,
+        res.failed
+          ? t('aiProviders.reindexDoneWithFailed', {
+              indexed: res.indexed,
+              total: res.total,
+              failed: res.failed,
+            })
+          : t('aiProviders.reindexDoneOk', { indexed: res.indexed, total: res.total }),
       );
     } catch (e) {
       // Reindexar el catálogo entero tarda minutos y el proxy corta la conexión
@@ -183,9 +192,8 @@ export default function AiProvidersAdminPage() {
       // (2026-07-30). Sólo un error con respuesta del servidor es un error real.
       setError(
         e instanceof ApiHttpError
-          ? e.message
-          : 'Se cortó la conexión antes de terminar, pero el reindexado sigue en marcha en el servidor. ' +
-              'Espera unos minutos y pregúntale algo al tutor para comprobarlo; no hace falta repetir.',
+          ? apiErrorMessage(e, tErrors)
+          : t('aiProviders.reindexConnectionCut'),
       );
     } finally {
       setReindexing(false);
@@ -205,11 +213,8 @@ export default function AiProvidersAdminPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Proveedores de IA</h1>
-        <p className="mt-1 text-text-muted">
-          Configura qué proveedor de IA usar para el tutor (chat) y para la indexación de cursos
-          (embeddings). La API key se cifra antes de guardarse y nunca se vuelve a mostrar.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('aiProviders.title')}</h1>
+        <p className="mt-1 text-text-muted">{t('aiProviders.subtitle')}</p>
       </header>
 
       {error ? (
@@ -234,19 +239,28 @@ export default function AiProvidersAdminPage() {
           <Card key={purpose}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                {PURPOSE_LABEL[purpose]}
+                {t(`purposeLabels.${purpose}`)}
                 {current ? (
                   <Badge variant={current.enabled ? 'success' : 'muted'}>
-                    {current.enabled ? 'Activo' : 'Desactivado'}
+                    {current.enabled
+                      ? t('aiProviders.activeBadge')
+                      : t('aiProviders.disabledBadge')}
                   </Badge>
                 ) : (
-                  <Badge variant="muted">Sin config (default global)</Badge>
+                  <Badge variant="muted">{t('aiProviders.noConfigBadge')}</Badge>
                 )}
               </CardTitle>
               <CardDescription>
                 {current
-                  ? `Proveedor actual: ${PROVIDER_NAME[current.provider] ?? current.provider}${current.model ? ` · modelo ${current.model}` : ''}.`
-                  : 'No hay proveedor específico para este tenant. Se usará el default del cluster si está configurado.'}
+                  ? current.model
+                    ? t('aiProviders.currentProviderModel', {
+                        name: PROVIDER_NAME[current.provider] ?? current.provider,
+                        model: current.model,
+                      })
+                    : t('aiProviders.currentProvider', {
+                        name: PROVIDER_NAME[current.provider] ?? current.provider,
+                      })
+                  : t('aiProviders.noConfigDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -255,13 +269,13 @@ export default function AiProvidersAdminPage() {
                 className="grid gap-4 sm:grid-cols-2"
               >
                 <div className="space-y-1">
-                  <Label htmlFor={`${purpose}-provider`}>Proveedor</Label>
+                  <Label htmlFor={`${purpose}-provider`}>{t('aiProviders.providerLabel')}</Label>
                   <Select
                     id={`${purpose}-provider`}
                     value={draft.provider}
                     onChange={(e) => updateDraft(purpose, { provider: e.target.value })}
                   >
-                    <option value="">— Elige proveedor —</option>
+                    <option value="">{t('aiProviders.providerPlaceholder')}</option>
                     {opts.map((o) => (
                       <option key={o.id} value={o.id}>
                         {PROVIDER_NAME[o.id] ?? o.id}
@@ -270,48 +284,46 @@ export default function AiProvidersAdminPage() {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor={`${purpose}-model`}>Modelo (opcional)</Label>
+                  <Label htmlFor={`${purpose}-model`}>{t('aiProviders.modelLabel')}</Label>
                   <Input
                     id={`${purpose}-model`}
                     value={draft.model}
                     onChange={(e) => updateDraft(purpose, { model: e.target.value })}
                     placeholder={
                       purpose === 'chat'
-                        ? 'ej. gpt-4o-mini, claude-3-5-sonnet-20241022'
-                        : 'ej. text-embedding-3-small, voyage-3'
+                        ? t('aiProviders.modelPlaceholderChat')
+                        : t('aiProviders.modelPlaceholderEmbed')
                     }
                   />
                 </div>
                 <div className="space-y-1 sm:col-span-2">
-                  <Label htmlFor={`${purpose}-key`}>API key</Label>
+                  <Label htmlFor={`${purpose}-key`}>{t('aiProviders.apiKeyLabel')}</Label>
                   <Input
                     id={`${purpose}-key`}
                     type="password"
                     value={draft.apiKey}
                     onChange={(e) => updateDraft(purpose, { apiKey: e.target.value })}
-                    placeholder={current?.hasApiKey ? '•••••••••• (reintroducir para cambiar)' : ''}
+                    placeholder={current?.hasApiKey ? t('aiProviders.apiKeyPlaceholder') : ''}
                     autoComplete="new-password"
                   />
-                  <p className="text-xs text-text-subtle">
-                    Se cifra con AES-256-GCM antes de persistirse. Nunca se devuelve al cliente.
-                  </p>
+                  <p className="text-xs text-text-subtle">{t('aiProviders.apiKeyHint')}</p>
                 </div>
                 <div className="space-y-1 sm:col-span-2">
-                  <Label htmlFor={`${purpose}-baseurl`}>Base URL (opcional)</Label>
+                  <Label htmlFor={`${purpose}-baseurl`}>{t('aiProviders.baseUrlLabel')}</Label>
                   <Input
                     id={`${purpose}-baseurl`}
                     value={draft.baseUrl}
                     onChange={(e) => updateDraft(purpose, { baseUrl: e.target.value })}
-                    placeholder="ej. https://openrouter.ai/api/v1 o http://ollama.local:11434"
+                    placeholder={t('aiProviders.baseUrlPlaceholder')}
                   />
                 </div>
                 <div className="space-y-1 sm:col-span-2">
-                  <Label htmlFor={`${purpose}-notas`}>Notas internas</Label>
+                  <Label htmlFor={`${purpose}-notas`}>{t('aiProviders.notesLabel')}</Label>
                   <Input
                     id={`${purpose}-notas`}
                     value={draft.notas}
                     onChange={(e) => updateDraft(purpose, { notas: e.target.value })}
-                    placeholder="Para acordarse en qué cuenta facturadora vive esta key."
+                    placeholder={t('aiProviders.notesPlaceholder')}
                   />
                 </div>
                 <div className="flex items-center gap-2 sm:col-span-2">
@@ -321,12 +333,16 @@ export default function AiProvidersAdminPage() {
                     id={`${purpose}-enabled`}
                   />
                   <Label htmlFor={`${purpose}-enabled`} className="cursor-pointer">
-                    Habilitado
+                    {t('aiProviders.enabled')}
                   </Label>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
                   <Button type="submit" disabled={pending === purpose}>
-                    {pending === purpose ? 'Guardando…' : current ? 'Actualizar' : 'Guardar'}
+                    {pending === purpose
+                      ? t('aiProviders.saving')
+                      : current
+                        ? t('aiProviders.update')
+                        : t('aiProviders.save')}
                   </Button>
                   {current ? (
                     <Button
@@ -335,7 +351,7 @@ export default function AiProvidersAdminPage() {
                       onClick={() => void handleRemove(purpose)}
                       disabled={pending === purpose}
                     >
-                      Borrar config (caer a default)
+                      {t('aiProviders.removeConfig')}
                     </Button>
                   ) : null}
                 </div>
@@ -347,27 +363,22 @@ export default function AiProvidersAdminPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Indexación de cursos existentes</CardTitle>
-          <CardDescription>
-            Los cursos se indexan automáticamente al publicarse. Si publicaste cursos antes de
-            configurar el proveedor de embeddings (o la indexación falló), usa esto para reindexar
-            TODOS los cursos publicados de una vez. Requiere el proveedor de embeddings configurado
-            arriba.
-          </CardDescription>
+          <CardTitle>{t('aiProviders.reindexTitle')}</CardTitle>
+          <CardDescription>{t('aiProviders.reindexDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <Button type="button" onClick={() => void handleReindexAll()} disabled={reindexing}>
-            {reindexing ? 'Reindexando…' : 'Reindexar todos los cursos publicados'}
+            {reindexing ? t('aiProviders.reindexing') : t('aiProviders.reindexRun')}
           </Button>
           {reindexResult ? (
             <p className="text-sm text-text-muted">
-              {reindexResult.indexed} indexados · {reindexResult.failed} con error ·{' '}
-              {reindexResult.total} total.
+              {t('aiProviders.reindexStats', {
+                indexed: reindexResult.indexed,
+                failed: reindexResult.failed,
+                total: reindexResult.total,
+              })}
               {reindexResult.failed > 0 ? (
-                <span className="text-danger-700">
-                  {' '}
-                  Revisa que el proveedor de embeddings esté activo y con cuota.
-                </span>
+                <span className="text-danger-700"> {t('aiProviders.reindexCheckQuota')}</span>
               ) : null}
             </p>
           ) : null}

@@ -6,19 +6,21 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatCard } from '@/components/stat-card';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
 import { surveysAdminApi, type SurveyListItem, type SurveyResults } from '@/modules/surveys';
 
 /// Panel admin de mod.surveys (bloque 2): listado de encuestas con nº de
 /// respuestas y resultados agregados (NPS, medias, respuestas libres). Las
 /// respuestas son anónimas: aquí solo se ven agregados y textos sin autor.
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-ES', {
+function dateLabel(iso: string): string {
+  return formatDate(iso, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -28,6 +30,8 @@ function formatDate(iso: string): string {
 }
 
 export default function AdminEncuestasPage() {
+  const t = useTranslations('adminEngagement');
+  const tErrors = useTranslations('errors');
   const [surveys, setSurveys] = useState<SurveyListItem[] | null>(null);
   const [selected, setSelected] = useState<SurveyResults | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,9 +44,9 @@ export default function AdminEncuestasPage() {
 
   useEffect(() => {
     reload().catch((e) => {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las encuestas.');
+      setError(apiErrorMessage(e, tErrors));
     });
-  }, [reload]);
+  }, [reload, tErrors]);
 
   async function openResults(id: string) {
     setBusy(true);
@@ -50,7 +54,7 @@ export default function AdminEncuestasPage() {
     try {
       setSelected(await surveysAdminApi.results(id));
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los resultados.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -64,7 +68,7 @@ export default function AdminEncuestasPage() {
       await reload();
       if (selected?.id === id) await openResults(id);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cerrar la encuesta.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -84,11 +88,8 @@ export default function AdminEncuestasPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-text">Encuestas</h1>
-        <p className="mt-1 text-sm text-text-muted">
-          Feedback anónimo de la comunidad. La encuesta post-clase se crea sola al terminar cada
-          directo; aquí ves los agregados (NPS, medias) y las respuestas libres.
-        </p>
+        <h1 className="text-xl font-bold text-text">{t('surveys.title')}</h1>
+        <p className="mt-1 text-sm text-text-muted">{t('surveys.subtitle')}</p>
       </div>
 
       {error ? (
@@ -102,23 +103,21 @@ export default function AdminEncuestasPage() {
 
       <Card data-testid="surveys-list-card">
         <CardHeader>
-          <CardTitle>Todas las encuestas</CardTitle>
-          <CardDescription>Las más recientes primero.</CardDescription>
+          <CardTitle>{t('surveys.listTitle')}</CardTitle>
+          <CardDescription>{t('surveys.listDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           {surveys.length === 0 ? (
-            <p className="text-sm text-text-subtle">
-              Aún no hay encuestas. Se crean automáticamente al terminar cada clase en directo.
-            </p>
+            <p className="text-sm text-text-subtle">{t('surveys.empty')}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border-soft text-left text-xs text-text-subtle">
-                    <th className="py-2 pr-3">Encuesta</th>
-                    <th className="py-2 pr-3">Fecha</th>
-                    <th className="py-2 pr-3">Estado</th>
-                    <th className="py-2 pr-3">Respuestas</th>
+                    <th className="py-2 pr-3">{t('surveys.thSurvey')}</th>
+                    <th className="py-2 pr-3">{t('surveys.thDate')}</th>
+                    <th className="py-2 pr-3">{t('surveys.thStatus')}</th>
+                    <th className="py-2 pr-3">{t('surveys.thResponses')}</th>
                     <th className="py-2 pr-3" />
                   </tr>
                 </thead>
@@ -126,10 +125,12 @@ export default function AdminEncuestasPage() {
                   {surveys.map((s) => (
                     <tr key={s.id} className="border-b border-border-soft">
                       <td className="py-2 pr-3 font-medium text-text">{s.title}</td>
-                      <td className="py-2 pr-3 text-text-muted">{formatDate(s.createdAt)}</td>
+                      <td className="py-2 pr-3 text-text-muted">{dateLabel(s.createdAt)}</td>
                       <td className="py-2 pr-3">
                         <Badge variant={s.status === 'OPEN' ? 'success' : 'muted'}>
-                          {s.status === 'OPEN' ? 'Abierta' : 'Cerrada'}
+                          {s.status === 'OPEN'
+                            ? t('surveys.statusOpen')
+                            : t('surveys.statusClosed')}
                         </Badge>
                       </td>
                       <td className="py-2 pr-3 text-text">{s.responseCount}</td>
@@ -141,7 +142,7 @@ export default function AdminEncuestasPage() {
                             disabled={busy}
                             onClick={() => void openResults(s.id)}
                           >
-                            Resultados
+                            {t('surveys.results')}
                           </Button>
                           {s.status === 'OPEN' ? (
                             <Button
@@ -150,7 +151,7 @@ export default function AdminEncuestasPage() {
                               disabled={busy}
                               onClick={() => void closeSurvey(s.id)}
                             >
-                              Cerrar
+                              {t('surveys.close')}
                             </Button>
                           ) : null}
                         </div>
@@ -169,16 +170,16 @@ export default function AdminEncuestasPage() {
           <CardHeader>
             <CardTitle>{selected.title}</CardTitle>
             <CardDescription>
-              {selected.responseCount} respuesta{selected.responseCount !== 1 ? 's' : ''} ·{' '}
-              {formatDate(selected.createdAt)}
+              {t('surveys.responseCount', { count: selected.responseCount })} ·{' '}
+              {dateLabel(selected.createdAt)}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="grid gap-3 sm:grid-cols-3">
               <StatCard
-                label="NPS"
+                label={t('surveys.npsLabel')}
                 value={npsQuestion?.nps ? npsQuestion.nps.score : '—'}
-                hint="promotores − detractores"
+                hint={t('surveys.npsHint')}
                 icon="chart"
                 tone={
                   npsQuestion?.nps && npsQuestion.nps.score >= 30
@@ -189,16 +190,20 @@ export default function AdminEncuestasPage() {
                 }
               />
               <StatCard
-                label="Respuestas"
+                label={t('surveys.responsesLabel')}
                 value={selected.responseCount}
-                hint="anónimas"
+                hint={t('surveys.responsesHint')}
                 icon="users"
                 tone="info"
               />
               <StatCard
-                label="Detractores"
+                label={t('surveys.detractorsLabel')}
                 value={npsQuestion?.nps ? npsQuestion.nps.detractors : '—'}
-                hint={npsQuestion?.nps ? `${npsQuestion.nps.promoters} promotores` : undefined}
+                hint={
+                  npsQuestion?.nps
+                    ? t('surveys.promotersHint', { count: npsQuestion.nps.promoters })
+                    : undefined
+                }
                 icon="bell"
                 tone="neutral"
               />
@@ -211,28 +216,36 @@ export default function AdminEncuestasPage() {
                 </p>
                 {q.nps ? (
                   <p className="text-sm text-text-muted">
-                    NPS <strong className="text-text">{q.nps.score}</strong> · {q.nps.promoters}{' '}
-                    promotores · {q.nps.passives} pasivos · {q.nps.detractors} detractores (
-                    {q.answerCount} respuestas)
+                    {t.rich('surveys.npsLine', {
+                      score: q.nps.score,
+                      promoters: q.nps.promoters,
+                      passives: q.nps.passives,
+                      detractors: q.nps.detractors,
+                      answerCount: q.answerCount,
+                      strong: (chunks) => <strong className="text-text">{chunks}</strong>,
+                    })}
                   </p>
                 ) : q.average !== null ? (
                   <p className="text-sm text-text-muted">
-                    Media <strong className="text-text">{q.average}</strong> / 5 ({q.answerCount}{' '}
-                    respuestas)
+                    {t.rich('surveys.avgLine', {
+                      average: q.average,
+                      answerCount: q.answerCount,
+                      strong: (chunks) => <strong className="text-text">{chunks}</strong>,
+                    })}
                   </p>
                 ) : q.texts.length > 0 ? (
                   <ul className="space-y-1.5">
-                    {q.texts.map((t, i) => (
+                    {q.texts.map((text, i) => (
                       <li
                         key={i}
                         className="rounded-lg border border-border-soft bg-bg-subtle p-2.5 text-sm text-text"
                       >
-                        {t}
+                        {text}
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-sm text-text-subtle">Sin respuestas todavía.</p>
+                  <p className="text-sm text-text-subtle">{t('surveys.noAnswers')}</p>
                 )}
               </div>
             ))}

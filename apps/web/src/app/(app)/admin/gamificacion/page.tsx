@@ -6,6 +6,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +15,9 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { UserChip } from '@/components/user-chip';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import {
   gamificationAdminApi,
   gamificationApi,
@@ -31,29 +34,15 @@ import {
 /// los RETOS nacen vacíos a propósito — sus nombres y premios son decisiones de
 /// marca, no datos que pueda inventar el sistema.
 
-/** Etiquetas legibles de las reglas automáticas. */
-const RULE_LABELS: Record<string, string> = {
-  'community.post': 'Publicar un post',
-  'community.comment': 'Responder a alguien',
-  'resources.shared': 'Compartir un recurso',
-  'learning.course': 'Terminar un curso',
-  'referrals.converted': 'Traer a un referido',
-};
-
-function errorMessage(e: unknown, fallback: string): string {
-  return e instanceof ApiHttpError || e instanceof Error ? e.message : fallback;
-}
-
 export default function AdminGamificacionPage() {
+  const t = useTranslations('adminEngagement');
   const [error, setError] = useState<string | null>(null);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-bold text-text">Puntos y retos</h1>
-        <p className="mt-1 text-sm text-text-muted">
-          Define cuánto vale cada cosa, qué niveles hay y qué retos están abiertos.
-        </p>
+        <h1 className="font-display text-2xl font-bold text-text">{t('gamification.title')}</h1>
+        <p className="mt-1 text-sm text-text-muted">{t('gamification.subtitle')}</p>
       </div>
 
       {error ? (
@@ -64,12 +53,12 @@ export default function AdminGamificacionPage() {
 
       <Tabs defaultValue="retos">
         <TabsList>
-          <TabsTrigger value="retos">Retos</TabsTrigger>
-          <TabsTrigger value="entregas">Entregas</TabsTrigger>
-          <TabsTrigger value="niveles">Niveles</TabsTrigger>
-          <TabsTrigger value="beneficios">Beneficios</TabsTrigger>
-          <TabsTrigger value="solicitudes">Solicitudes</TabsTrigger>
-          <TabsTrigger value="reglas">Reglas</TabsTrigger>
+          <TabsTrigger value="retos">{t('gamification.tabChallenges')}</TabsTrigger>
+          <TabsTrigger value="entregas">{t('gamification.tabSubmissions')}</TabsTrigger>
+          <TabsTrigger value="niveles">{t('gamification.tabLevels')}</TabsTrigger>
+          <TabsTrigger value="beneficios">{t('gamification.tabPerks')}</TabsTrigger>
+          <TabsTrigger value="solicitudes">{t('gamification.tabRequests')}</TabsTrigger>
+          <TabsTrigger value="reglas">{t('gamification.tabRules')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="retos">
@@ -98,6 +87,8 @@ export default function AdminGamificacionPage() {
 // ── Retos ────────────────────────────────────────────────────────────────────
 
 function ChallengesPanel({ onError }: { onError: (m: string | null) => void }) {
+  const t = useTranslations('adminEngagement');
+  const tErrors = useTranslations('errors');
   const [challenges, setChallenges] = useState<ChallengeView[] | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -110,8 +101,8 @@ function ChallengesPanel({ onError }: { onError: (m: string | null) => void }) {
   }, []);
 
   useEffect(() => {
-    reload().catch((e) => onError(errorMessage(e, 'No pudimos cargar los retos.')));
-  }, [reload, onError]);
+    reload().catch((e) => onError(apiErrorMessage(e, tErrors)));
+  }, [reload, onError, tErrors]);
 
   async function create() {
     setBusy(true);
@@ -128,7 +119,7 @@ function ChallengesPanel({ onError }: { onError: (m: string | null) => void }) {
       setPoints('100');
       await reload();
     } catch (e) {
-      onError(errorMessage(e, 'No pudimos crear el reto.'));
+      onError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -140,7 +131,7 @@ function ChallengesPanel({ onError }: { onError: (m: string | null) => void }) {
       await gamificationAdminApi.updateChallenge(challenge.id, { status });
       await reload();
     } catch (e) {
-      onError(errorMessage(e, 'No pudimos cambiar el estado del reto.'));
+      onError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -150,7 +141,7 @@ function ChallengesPanel({ onError }: { onError: (m: string | null) => void }) {
       await gamificationAdminApi.deleteChallenge(challenge.id);
       await reload();
     } catch (e) {
-      onError(errorMessage(e, 'No pudimos borrar el reto.'));
+      onError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -158,24 +149,22 @@ function ChallengesPanel({ onError }: { onError: (m: string | null) => void }) {
     <div className="mt-4 space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Nuevo reto</CardTitle>
-          <CardDescription>
-            Nace en borrador. Ábrelo cuando quieras que la comunidad lo vea.
-          </CardDescription>
+          <CardTitle>{t('challenges.newTitle')}</CardTitle>
+          <CardDescription>{t('challenges.newDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-[1fr_140px]">
             <div className="space-y-1.5">
-              <Label htmlFor="reto-titulo">Título</Label>
+              <Label htmlFor="reto-titulo">{t('challenges.titleLabel')}</Label>
               <Input
                 id="reto-titulo"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Publica tu caso de éxito"
+                placeholder={t('challenges.titlePlaceholder')}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="reto-puntos">Puntos</Label>
+              <Label htmlFor="reto-puntos">{t('challenges.pointsLabel')}</Label>
               <Input
                 id="reto-puntos"
                 type="number"
@@ -186,13 +175,13 @@ function ChallengesPanel({ onError }: { onError: (m: string | null) => void }) {
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="reto-desc">Qué hay que hacer</Label>
+            <Label htmlFor="reto-desc">{t('challenges.descLabel')}</Label>
             <Textarea
               id="reto-desc"
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Explica el reto y qué prueba esperas recibir."
+              placeholder={t('challenges.descPlaceholder')}
             />
           </div>
           <label className="flex items-center gap-2 text-sm text-text">
@@ -201,23 +190,21 @@ function ChallengesPanel({ onError }: { onError: (m: string | null) => void }) {
               checked={proofRequired}
               onChange={(e) => setProofRequired(e.target.checked)}
             />
-            Exigir prueba (captura, archivo o enlace) para poder entregar
+            {t('challenges.proofCheckbox')}
           </label>
           <Button onClick={() => void create()} disabled={busy || title.trim().length < 3}>
-            {busy ? 'Creando…' : 'Crear reto'}
+            {busy ? t('challenges.creating') : t('challenges.create')}
           </Button>
         </CardContent>
       </Card>
 
       {challenges === null ? (
-        <p className="text-sm text-text-muted">Cargando retos…</p>
+        <p className="text-sm text-text-muted">{t('challenges.loading')}</p>
       ) : challenges.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <p className="font-semibold text-text">Todavía no has creado ningún reto</p>
-            <p className="mt-1 text-sm text-text-muted">
-              El primero que suele funcionar: pedir que documenten y publiquen su caso de éxito.
-            </p>
+            <p className="font-semibold text-text">{t('challenges.emptyTitle')}</p>
+            <p className="mt-1 text-sm text-text-muted">{t('challenges.emptyHint')}</p>
           </CardContent>
         </Card>
       ) : (
@@ -229,34 +216,34 @@ function ChallengesPanel({ onError }: { onError: (m: string | null) => void }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold text-text">{c.title}</p>
                     <Badge variant={c.status === 'OPEN' ? 'success' : 'muted'}>
-                      {c.status === 'OPEN'
-                        ? 'Abierto'
-                        : c.status === 'DRAFT'
-                          ? 'Borrador'
-                          : 'Cerrado'}
+                      {t(`challengeStatus.${c.status}`)}
                     </Badge>
-                    <Badge variant="info">+{c.points} puntos</Badge>
-                    {c.proofRequired ? <Badge variant="muted">Con prueba</Badge> : null}
+                    <Badge variant="info">
+                      {t('challenges.pointsBadge', { points: c.points })}
+                    </Badge>
+                    {c.proofRequired ? (
+                      <Badge variant="muted">{t('challenges.proofBadge')}</Badge>
+                    ) : null}
                   </div>
                   {c.description ? (
                     <p className="mt-1 text-sm text-text-muted">{c.description}</p>
                   ) : null}
                   <p className="mt-1 text-xs text-text-muted">
-                    {c.submissionCount ?? 0} entrega(s)
+                    {t('challenges.submissionCount', { count: c.submissionCount ?? 0 })}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
                   {c.status !== 'OPEN' ? (
                     <Button size="sm" onClick={() => void setStatus(c, 'OPEN')}>
-                      Abrir
+                      {t('challenges.open')}
                     </Button>
                   ) : (
                     <Button variant="outline" size="sm" onClick={() => void setStatus(c, 'CLOSED')}>
-                      Cerrar
+                      {t('challenges.close')}
                     </Button>
                   )}
                   <Button variant="ghost" size="sm" onClick={() => void remove(c)}>
-                    Borrar
+                    {t('challenges.delete')}
                   </Button>
                 </div>
               </CardContent>
@@ -271,6 +258,8 @@ function ChallengesPanel({ onError }: { onError: (m: string | null) => void }) {
 // ── Entregas ─────────────────────────────────────────────────────────────────
 
 function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) {
+  const t = useTranslations('adminEngagement');
+  const tErrors = useTranslations('errors');
   const [submissions, setSubmissions] = useState<SubmissionView[] | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [soloPendientes, setSoloPendientes] = useState(true);
@@ -282,8 +271,8 @@ function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) 
   }, []);
 
   useEffect(() => {
-    reload().catch((e) => onError(errorMessage(e, 'No pudimos cargar las entregas.')));
-  }, [reload, onError]);
+    reload().catch((e) => onError(apiErrorMessage(e, tErrors)));
+  }, [reload, onError, tErrors]);
 
   async function review(submission: SubmissionView, approve: boolean) {
     onError(null);
@@ -295,7 +284,7 @@ function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) 
       });
       await reload();
     } catch (e) {
-      onError(errorMessage(e, 'No pudimos registrar la revisión.'));
+      onError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -315,7 +304,8 @@ function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) 
               : 'border-border text-text-muted hover:text-text'
           }`}
         >
-          Por revisar{pendientes.length > 0 ? ` (${pendientes.length})` : ''}
+          {t('submissions.pendingTab')}
+          {pendientes.length > 0 ? ` (${pendientes.length})` : ''}
         </button>
         <button
           type="button"
@@ -326,21 +316,20 @@ function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) 
               : 'border-border text-text-muted hover:text-text'
           }`}
         >
-          Todas{todas.length > 0 ? ` (${todas.length})` : ''}
+          {t('submissions.allTab')}
+          {todas.length > 0 ? ` (${todas.length})` : ''}
         </button>
       </div>
 
       {submissions === null ? (
-        <p className="text-sm text-text-muted">Cargando entregas…</p>
+        <p className="text-sm text-text-muted">{t('submissions.loading')}</p>
       ) : visibles.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
             <p className="font-semibold text-text">
-              {soloPendientes ? 'No hay entregas por revisar' : 'Todavía no hay entregas'}
+              {soloPendientes ? t('submissions.emptyPendingTitle') : t('submissions.emptyAllTitle')}
             </p>
-            <p className="mt-1 text-sm text-text-muted">
-              Aquí aparecen las entregas en cuanto alguien completa un reto.
-            </p>
+            <p className="mt-1 text-sm text-text-muted">{t('submissions.emptyHint')}</p>
           </CardContent>
         </Card>
       ) : (
@@ -354,17 +343,19 @@ function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) 
                     <UserChip
                       userId={s.userId}
                       name={s.displayName}
-                      fallback="Alumno"
+                      fallback={t('submissions.studentFallback')}
                       showAvatar={false}
                       size={20}
                       nameClassName="block truncate text-sm text-text-muted"
                     />
-                    <span>· {new Date(s.createdAt).toLocaleDateString('es-ES')}</span>
+                    <span>· {formatDate(s.createdAt)}</span>
                   </div>
                 </div>
                 {s.status !== 'PENDING' ? (
                   <Badge variant={s.status === 'APPROVED' ? 'success' : 'muted'}>
-                    {s.status === 'APPROVED' ? 'Aprobada' : 'Rechazada'}
+                    {s.status === 'APPROVED'
+                      ? t('submissions.approvedBadge')
+                      : t('submissions.rejectedBadge')}
                   </Badge>
                 ) : null}
                 {s.proofUrl ? (
@@ -374,10 +365,11 @@ function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) 
                     rel="noreferrer noopener"
                     className="text-sm font-medium text-(--didacta-trust) underline"
                   >
-                    Ver prueba{s.proofName ? ` (${s.proofName})` : ''}
+                    {t('submissions.viewProof')}
+                    {s.proofName ? ` (${s.proofName})` : ''}
                   </a>
                 ) : (
-                  <span className="text-sm text-text-muted">Sin prueba adjunta</span>
+                  <span className="text-sm text-text-muted">{t('submissions.noProof')}</span>
                 )}
               </div>
 
@@ -389,7 +381,8 @@ function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) 
 
               {s.reviewNote ? (
                 <p className="whitespace-pre-line text-sm text-text-muted">
-                  <span className="font-medium text-text">Tu comentario:</span> {s.reviewNote}
+                  <span className="font-medium text-text">{t('submissions.yourComment')}</span>{' '}
+                  {s.reviewNote}
                 </p>
               ) : null}
 
@@ -397,17 +390,17 @@ function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) 
                 <>
                   <Textarea
                     rows={2}
-                    placeholder="Comentario para quien entrega (opcional)"
+                    placeholder={t('submissions.notePlaceholder')}
                     value={notes[s.id] ?? ''}
                     onChange={(e) => setNotes((prev) => ({ ...prev, [s.id]: e.target.value }))}
                   />
 
                   <div className="flex gap-2">
                     <Button size="sm" onClick={() => void review(s, true)}>
-                      Aprobar y dar puntos
+                      {t('submissions.approve')}
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => void review(s, false)}>
-                      Rechazar
+                      {t('submissions.reject')}
                     </Button>
                   </div>
                 </>
@@ -423,6 +416,8 @@ function SubmissionsPanel({ onError }: { onError: (m: string | null) => void }) 
 // ── Niveles ──────────────────────────────────────────────────────────────────
 
 function LevelsPanel({ onError }: { onError: (m: string | null) => void }) {
+  const t = useTranslations('adminEngagement');
+  const tErrors = useTranslations('errors');
   const [levels, setLevels] = useState<LevelView[] | null>(null);
   const [name, setName] = useState('');
   const [minPoints, setMinPoints] = useState('100');
@@ -434,8 +429,8 @@ function LevelsPanel({ onError }: { onError: (m: string | null) => void }) {
   }, []);
 
   useEffect(() => {
-    load().catch((e) => onError(errorMessage(e, 'No pudimos cargar los niveles.')));
-  }, [load, onError]);
+    load().catch((e) => onError(apiErrorMessage(e, tErrors)));
+  }, [load, onError, tErrors]);
 
   async function create() {
     setBusy(true);
@@ -452,7 +447,7 @@ function LevelsPanel({ onError }: { onError: (m: string | null) => void }) {
       setBenefitText('');
       await load();
     } catch (e) {
-      onError(errorMessage(e, 'No pudimos crear el nivel.'));
+      onError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -464,7 +459,7 @@ function LevelsPanel({ onError }: { onError: (m: string | null) => void }) {
       await gamificationAdminApi.deleteLevel(level.id);
       await load();
     } catch (e) {
-      onError(errorMessage(e, 'No pudimos borrar el nivel.'));
+      onError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -472,24 +467,22 @@ function LevelsPanel({ onError }: { onError: (m: string | null) => void }) {
     <div className="mt-4 space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Nuevo nivel</CardTitle>
-          <CardDescription>
-            El nivel se alcanza con los puntos acumulados de por vida, que nunca se reinician.
-          </CardDescription>
+          <CardTitle>{t('levels.newTitle')}</CardTitle>
+          <CardDescription>{t('levels.newDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-[1fr_160px]">
             <div className="space-y-1.5">
-              <Label htmlFor="nivel-nombre">Nombre</Label>
+              <Label htmlFor="nivel-nombre">{t('levels.nameLabel')}</Label>
               <Input
                 id="nivel-nombre"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Cómo quieres llamarlo"
+                placeholder={t('levels.namePlaceholder')}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="nivel-puntos">Desde (puntos)</Label>
+              <Label htmlFor="nivel-puntos">{t('levels.minPointsLabel')}</Label>
               <Input
                 id="nivel-puntos"
                 type="number"
@@ -500,30 +493,28 @@ function LevelsPanel({ onError }: { onError: (m: string | null) => void }) {
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="nivel-beneficio">Beneficio</Label>
+            <Label htmlFor="nivel-beneficio">{t('levels.benefitLabel')}</Label>
             <Textarea
               id="nivel-beneficio"
               rows={2}
               value={benefitText}
               onChange={(e) => setBenefitText(e.target.value)}
-              placeholder="Qué se lleva quien llega hasta aquí."
+              placeholder={t('levels.benefitPlaceholder')}
             />
           </div>
           <Button onClick={() => void create()} disabled={busy || name.trim().length < 2}>
-            {busy ? 'Creando…' : 'Crear nivel'}
+            {busy ? t('levels.creating') : t('levels.create')}
           </Button>
         </CardContent>
       </Card>
 
       {levels === null ? (
-        <p className="text-sm text-text-muted">Cargando niveles…</p>
+        <p className="text-sm text-text-muted">{t('levels.loading')}</p>
       ) : levels.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <p className="font-semibold text-text">Todavía no has definido ningún nivel</p>
-            <p className="mt-1 text-sm text-text-muted">
-              Hasta que crees el primero, nadie tiene nivel: los puntos se acumulan igual.
-            </p>
+            <p className="font-semibold text-text">{t('levels.emptyTitle')}</p>
+            <p className="mt-1 text-sm text-text-muted">{t('levels.emptyHint')}</p>
           </CardContent>
         </Card>
       ) : (
@@ -534,14 +525,14 @@ function LevelsPanel({ onError }: { onError: (m: string | null) => void }) {
                 <div className="min-w-0">
                   <p className="font-semibold text-text">{l.name}</p>
                   <p className="text-xs text-text-muted">
-                    Desde {l.minPoints.toLocaleString('es-ES')} puntos
+                    {t('levels.fromPoints', { points: l.minPoints })}
                   </p>
                   {l.benefitText ? (
                     <p className="mt-1 text-sm text-text-muted">{l.benefitText}</p>
                   ) : null}
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => void remove(l)}>
-                  Borrar
+                  {t('levels.delete')}
                 </Button>
               </CardContent>
             </Card>
@@ -566,6 +557,8 @@ function slugify(value: string): string {
 // ── Beneficios ───────────────────────────────────────────────────────────────
 
 function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
+  const t = useTranslations('adminEngagement');
+  const tErrors = useTranslations('errors');
   const [perks, setPerks] = useState<PerkView[] | null>(null);
   const [levels, setLevels] = useState<LevelView[]>([]);
   const [levelId, setLevelId] = useState('');
@@ -586,8 +579,8 @@ function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
   }, []);
 
   useEffect(() => {
-    load().catch((e) => onError(errorMessage(e, 'No pudimos cargar los beneficios.')));
-  }, [load, onError]);
+    load().catch((e) => onError(apiErrorMessage(e, tErrors)));
+  }, [load, onError, tErrors]);
 
   async function create() {
     setBusy(true);
@@ -604,7 +597,7 @@ function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
       setDescription('');
       await load();
     } catch (e) {
-      onError(errorMessage(e, 'No pudimos crear el beneficio.'));
+      onError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -616,7 +609,7 @@ function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
       await gamificationAdminApi.updatePerk(perk.id, { active: !perk.active });
       await load();
     } catch (e) {
-      onError(errorMessage(e, 'No pudimos cambiar el beneficio.'));
+      onError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -626,7 +619,7 @@ function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
       await gamificationAdminApi.deletePerk(perk.id);
       await load();
     } catch (e) {
-      onError(errorMessage(e, 'No pudimos borrar el beneficio.'));
+      onError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -634,10 +627,8 @@ function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
     return (
       <Card className="mt-4">
         <CardContent className="py-10 text-center">
-          <p className="font-semibold text-text">Primero crea un nivel</p>
-          <p className="mt-1 text-sm text-text-muted">
-            Un beneficio cuelga de un nivel: es lo que hay que alcanzar para desbloquearlo.
-          </p>
+          <p className="font-semibold text-text">{t('perks.needLevelTitle')}</p>
+          <p className="mt-1 text-sm text-text-muted">{t('perks.needLevelHint')}</p>
         </CardContent>
       </Card>
     );
@@ -647,25 +638,22 @@ function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
     <div className="mt-4 space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Nuevo beneficio</CardTitle>
-          <CardDescription>
-            Lo que desbloquea un nivel: una sesión 1:1, una clase extra, una píldora a medida… No se
-            concede solo — el alumno lo pide y tú lo atiendes.
-          </CardDescription>
+          <CardTitle>{t('perks.newTitle')}</CardTitle>
+          <CardDescription>{t('perks.newDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-[1fr_220px]">
             <div className="space-y-1.5">
-              <Label htmlFor="perk-titulo">Qué desbloquea</Label>
+              <Label htmlFor="perk-titulo">{t('perks.titleLabel')}</Label>
               <Input
                 id="perk-titulo"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Sesión 1:1 de 30 minutos conmigo"
+                placeholder={t('perks.titlePlaceholder')}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="perk-nivel">Nivel que lo desbloquea</Label>
+              <Label htmlFor="perk-nivel">{t('perks.levelLabel')}</Label>
               <select
                 id="perk-nivel"
                 value={levelId}
@@ -674,7 +662,7 @@ function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
               >
                 {levels.map((l) => (
                   <option key={l.id} value={l.id}>
-                    {l.name} ({l.minPoints} pts)
+                    {t('perks.levelOption', { name: l.name, points: l.minPoints })}
                   </option>
                 ))}
               </select>
@@ -682,19 +670,19 @@ function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="perk-desc">Detalle para el alumno</Label>
+            <Label htmlFor="perk-desc">{t('perks.descLabel')}</Label>
             <Textarea
               id="perk-desc"
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Qué incluye y cómo se organiza."
+              placeholder={t('perks.descPlaceholder')}
             />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="perk-max">Veces por alumno (0 = sin límite)</Label>
+              <Label htmlFor="perk-max">{t('perks.maxLabel')}</Label>
               <Input
                 id="perk-max"
                 type="number"
@@ -704,7 +692,7 @@ function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="perk-cooldown">Espera entre solicitudes (días)</Label>
+              <Label htmlFor="perk-cooldown">{t('perks.cooldownLabel')}</Label>
               <Input
                 id="perk-cooldown"
                 type="number"
@@ -716,20 +704,18 @@ function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
           </div>
 
           <Button onClick={() => void create()} disabled={busy || title.trim().length < 3}>
-            {busy ? 'Creando…' : 'Crear beneficio'}
+            {busy ? t('perks.creating') : t('perks.create')}
           </Button>
         </CardContent>
       </Card>
 
       {perks === null ? (
-        <p className="text-sm text-text-muted">Cargando beneficios…</p>
+        <p className="text-sm text-text-muted">{t('perks.loading')}</p>
       ) : perks.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <p className="font-semibold text-text">Ningún beneficio todavía</p>
-            <p className="mt-1 text-sm text-text-muted">
-              Sin beneficios, un nivel es solo un nombre.
-            </p>
+            <p className="font-semibold text-text">{t('perks.emptyTitle')}</p>
+            <p className="mt-1 text-sm text-text-muted">{t('perks.emptyHint')}</p>
           </CardContent>
         </Card>
       ) : (
@@ -741,13 +727,17 @@ function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold text-text">{perk.title}</p>
                     <Badge variant={perk.active ? 'success' : 'muted'}>
-                      {perk.active ? 'Activo' : 'Pausado'}
+                      {perk.active ? t('perks.activeBadge') : t('perks.pausedBadge')}
                     </Badge>
                   </div>
                   <p className="mt-0.5 text-xs text-text-muted">
-                    {perk.levelName} · {perk.levelMinPoints.toLocaleString('es-ES')} puntos ·{' '}
-                    {perk.maxPerUser === 0 ? 'sin límite' : `${perk.maxPerUser} por alumno`}
-                    {perk.cooldownDays > 0 ? ` · cada ${perk.cooldownDays} días` : ''}
+                    {perk.levelName} · {t('perks.metaPoints', { points: perk.levelMinPoints })} ·{' '}
+                    {perk.maxPerUser === 0
+                      ? t('perks.noLimit')
+                      : t('perks.perStudent', { count: perk.maxPerUser })}
+                    {perk.cooldownDays > 0
+                      ? ` · ${t('perks.everyDays', { days: perk.cooldownDays })}`
+                      : ''}
                   </p>
                   {perk.description ? (
                     <p className="mt-1 text-sm text-text-muted">{perk.description}</p>
@@ -755,10 +745,10 @@ function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <Button variant="outline" size="sm" onClick={() => void toggle(perk)}>
-                    {perk.active ? 'Pausar' : 'Activar'}
+                    {perk.active ? t('perks.pause') : t('perks.activate')}
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => void remove(perk)}>
-                    Borrar
+                    {t('perks.delete')}
                   </Button>
                 </div>
               </CardContent>
@@ -773,6 +763,8 @@ function PerksPanel({ onError }: { onError: (m: string | null) => void }) {
 // ── Solicitudes de beneficio ─────────────────────────────────────────────────
 
 function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void }) {
+  const t = useTranslations('adminEngagement');
+  const tErrors = useTranslations('errors');
   const [requests, setRequests] = useState<PerkRequestView[] | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [view, setView] = useState<'PENDING' | 'APPROVED' | 'CLOSED'>('PENDING');
@@ -784,8 +776,8 @@ function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void })
   }, []);
 
   useEffect(() => {
-    load().catch((e) => onError(errorMessage(e, 'No pudimos cargar las solicitudes.')));
-  }, [load, onError]);
+    load().catch((e) => onError(apiErrorMessage(e, tErrors)));
+  }, [load, onError, tErrors]);
 
   async function handle(request: PerkRequestView, status: 'APPROVED' | 'DONE' | 'REJECTED') {
     onError(null);
@@ -797,7 +789,7 @@ function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void })
       });
       await load();
     } catch (e) {
-      onError(errorMessage(e, 'No pudimos registrar la respuesta.'));
+      onError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -808,48 +800,48 @@ function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void })
   const visible = view === 'PENDING' ? porAprobar : view === 'APPROVED' ? porCumplir : cerradas;
 
   const TABS: Array<{ key: typeof view; label: string; count: number }> = [
-    { key: 'PENDING', label: 'Por aprobar', count: porAprobar.length },
-    { key: 'APPROVED', label: 'Por cumplir', count: porCumplir.length },
-    { key: 'CLOSED', label: 'Historial', count: cerradas.length },
+    { key: 'PENDING', label: t('requests.tabPending'), count: porAprobar.length },
+    { key: 'APPROVED', label: t('requests.tabApproved'), count: porCumplir.length },
+    { key: 'CLOSED', label: t('requests.tabHistory'), count: cerradas.length },
   ];
 
   const EMPTY: Record<typeof view, { title: string; hint: string }> = {
     PENDING: {
-      title: 'No hay solicitudes por aprobar',
-      hint: 'Aquí caen las peticiones de beneficios en cuanto alguien las manda.',
+      title: t('requests.emptyPendingTitle'),
+      hint: t('requests.emptyPendingHint'),
     },
     APPROVED: {
-      title: 'No debes nada',
-      hint: 'Lo que apruebas se queda aquí hasta que lo marcas como hecho.',
+      title: t('requests.emptyApprovedTitle'),
+      hint: t('requests.emptyApprovedHint'),
     },
     CLOSED: {
-      title: 'Todavía no hay historial',
-      hint: 'Aquí quedan las solicitudes ya cumplidas o rechazadas.',
+      title: t('requests.emptyClosedTitle'),
+      hint: t('requests.emptyClosedHint'),
     },
   };
 
   return (
     <div className="mt-4 space-y-3">
       <div className="flex flex-wrap gap-2">
-        {TABS.map((t) => (
+        {TABS.map((tab) => (
           <button
-            key={t.key}
+            key={tab.key}
             type="button"
-            onClick={() => setView(t.key)}
+            onClick={() => setView(tab.key)}
             className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-              view === t.key
+              view === tab.key
                 ? 'border-(--didacta-trust) bg-(--didacta-trust)/10 text-(--didacta-trust)'
                 : 'border-border text-text-muted hover:text-text'
             }`}
           >
-            {t.label}
-            {t.count > 0 ? ` (${t.count})` : ''}
+            {tab.label}
+            {tab.count > 0 ? ` (${tab.count})` : ''}
           </button>
         ))}
       </div>
 
       {requests === null ? (
-        <p className="text-sm text-text-muted">Cargando solicitudes…</p>
+        <p className="text-sm text-text-muted">{t('requests.loading')}</p>
       ) : visible.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center">
@@ -868,15 +860,15 @@ function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void })
                     <UserChip
                       userId={r.userId}
                       name={r.displayName}
-                      fallback="Alumno"
+                      fallback={t('requests.studentFallback')}
                       showAvatar={false}
                       size={20}
                       nameClassName="block truncate text-sm text-text-muted"
                     />
                     <span>
-                      · pedida el {new Date(r.createdAt).toLocaleDateString('es-ES')}
+                      · {t('requests.requestedOn', { date: formatDate(r.createdAt) })}
                       {r.handledAt
-                        ? ` · respondida el ${new Date(r.handledAt).toLocaleDateString('es-ES')}`
+                        ? ` · ${t('requests.respondedOn', { date: formatDate(r.handledAt) })}`
                         : ''}
                     </span>
                   </div>
@@ -892,13 +884,7 @@ function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void })
                           : 'info'
                   }
                 >
-                  {r.status === 'PENDING'
-                    ? 'Por aprobar'
-                    : r.status === 'APPROVED'
-                      ? 'Pendiente de cumplir'
-                      : r.status === 'DONE'
-                        ? 'Hecho'
-                        : 'Rechazada'}
+                  {t(`requestStatus.${r.status}`)}
                 </Badge>
               </div>
 
@@ -910,7 +896,8 @@ function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void })
 
               {r.staffNote ? (
                 <p className="whitespace-pre-line text-sm text-text-muted">
-                  <span className="font-medium text-text">Tu respuesta:</span> {r.staffNote}
+                  <span className="font-medium text-text">{t('requests.yourReply')}</span>{' '}
+                  {r.staffNote}
                 </p>
               ) : null}
 
@@ -918,14 +905,14 @@ function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void })
                 <>
                   <Textarea
                     rows={2}
-                    placeholder="Respuesta para el alumno (opcional)"
+                    placeholder={t('requests.replyPlaceholder')}
                     value={notes[r.id] ?? ''}
                     onChange={(e) => setNotes((prev) => ({ ...prev, [r.id]: e.target.value }))}
                   />
                   <div className="flex flex-wrap gap-2">
                     {r.status === 'PENDING' ? (
                       <Button size="sm" onClick={() => void handle(r, 'APPROVED')}>
-                        Aprobar
+                        {t('requests.approve')}
                       </Button>
                     ) : null}
                     <Button
@@ -933,10 +920,10 @@ function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void })
                       size="sm"
                       onClick={() => void handle(r, 'DONE')}
                     >
-                      Marcar hecho
+                      {t('requests.markDone')}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => void handle(r, 'REJECTED')}>
-                      Rechazar
+                      {t('requests.reject')}
                     </Button>
                   </div>
                 </>
@@ -952,6 +939,8 @@ function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void })
 // ── Reglas ───────────────────────────────────────────────────────────────────
 
 function RulesPanel({ onError }: { onError: (m: string | null) => void }) {
+  const t = useTranslations('adminEngagement');
+  const tErrors = useTranslations('errors');
   const [rules, setRules] = useState<RuleView[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [backfill, setBackfill] = useState<string | null>(null);
@@ -961,8 +950,8 @@ function RulesPanel({ onError }: { onError: (m: string | null) => void }) {
   }, []);
 
   useEffect(() => {
-    reload().catch((e) => onError(errorMessage(e, 'No pudimos cargar las reglas.')));
-  }, [reload, onError]);
+    reload().catch((e) => onError(apiErrorMessage(e, tErrors)));
+  }, [reload, onError, tErrors]);
 
   async function save(rule: RuleView, patch: Partial<RuleView>) {
     onError(null);
@@ -974,7 +963,7 @@ function RulesPanel({ onError }: { onError: (m: string | null) => void }) {
       });
       await reload();
     } catch (e) {
-      onError(errorMessage(e, 'No pudimos guardar la regla.'));
+      onError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -985,13 +974,18 @@ function RulesPanel({ onError }: { onError: (m: string | null) => void }) {
     try {
       const summary = await gamificationAdminApi.runBackfill();
       setBackfill(
-        `Listo: ${summary.awarded} apunte(s) nuevos a partir de ${summary.posts} post(s), ` +
-          `${summary.comments} comentario(s), ${summary.resources} recurso(s), ` +
-          `${summary.courses} curso(s) terminado(s) y ${summary.referrals} referido(s).`,
+        t('rules.backfillDone', {
+          awarded: summary.awarded,
+          posts: summary.posts,
+          comments: summary.comments,
+          resources: summary.resources,
+          courses: summary.courses,
+          referrals: summary.referrals,
+        }),
       );
       await reload();
     } catch (e) {
-      onError(errorMessage(e, 'No pudimos rellenar el histórico.'));
+      onError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -1001,15 +995,12 @@ function RulesPanel({ onError }: { onError: (m: string | null) => void }) {
     <div className="mt-4 space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Cuánto vale cada cosa</CardTitle>
-          <CardDescription>
-            El techo diario limita cuántas veces al día puntúa una misma acción: es lo que evita que
-            se sumen puntos publicando por publicar. Cero significa sin límite.
-          </CardDescription>
+          <CardTitle>{t('rules.title')}</CardTitle>
+          <CardDescription>{t('rules.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {rules === null ? (
-            <p className="text-sm text-text-muted">Cargando reglas…</p>
+            <p className="text-sm text-text-muted">{t('rules.loading')}</p>
           ) : (
             rules.map((rule) => (
               <div
@@ -1018,13 +1009,13 @@ function RulesPanel({ onError }: { onError: (m: string | null) => void }) {
               >
                 <div className="min-w-[180px] flex-1">
                   <p className="text-sm font-medium text-text">
-                    {RULE_LABELS[rule.key] ?? rule.key}
+                    {labelOr(t, `ruleLabels.${rule.key.replace(/\./g, '_')}`, rule.key)}
                   </p>
                   <p className="text-xs text-text-muted">{rule.key}</p>
                 </div>
                 <div className="w-24 space-y-1">
                   <Label htmlFor={`pts-${rule.key}`} className="text-xs">
-                    Puntos
+                    {t('rules.pointsLabel')}
                   </Label>
                   <Input
                     id={`pts-${rule.key}`}
@@ -1039,7 +1030,7 @@ function RulesPanel({ onError }: { onError: (m: string | null) => void }) {
                 </div>
                 <div className="w-28 space-y-1">
                   <Label htmlFor={`cap-${rule.key}`} className="text-xs">
-                    Techo/día
+                    {t('rules.capLabel')}
                   </Label>
                   <Input
                     id={`cap-${rule.key}`}
@@ -1058,7 +1049,7 @@ function RulesPanel({ onError }: { onError: (m: string | null) => void }) {
                     checked={rule.enabled}
                     onChange={(e) => void save(rule, { enabled: e.target.checked })}
                   />
-                  Activa
+                  {t('rules.active')}
                 </label>
               </div>
             ))
@@ -1068,15 +1059,12 @@ function RulesPanel({ onError }: { onError: (m: string | null) => void }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Rellenar el histórico</CardTitle>
-          <CardDescription>
-            Da puntos por la actividad anterior a los puntos, con su fecha original. Se puede
-            repetir sin miedo: no duplica nada.
-          </CardDescription>
+          <CardTitle>{t('rules.backfillTitle')}</CardTitle>
+          <CardDescription>{t('rules.backfillDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <Button onClick={() => void runBackfill()} disabled={busy}>
-            {busy ? 'Rellenando…' : 'Rellenar ahora'}
+            {busy ? t('rules.backfillRunning') : t('rules.backfillRun')}
           </Button>
           {backfill ? <p className="text-sm text-text-muted">{backfill}</p> : null}
         </CardContent>

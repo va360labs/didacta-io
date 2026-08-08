@@ -6,17 +6,20 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Icon } from '@/components/icon';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { coursesApi, type Course } from '@/lib/courses';
 import { learningApi, type Competency } from '@/lib/learning';
 
 export default function AdminCompetenciasPage() {
+  const t = useTranslations('adminEngagement');
+  const tErrors = useTranslations('errors');
   const [competencies, setCompetencies] = useState<Competency[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
@@ -38,7 +41,7 @@ export default function AdminCompetenciasPage() {
       setError(null);
       setCompetencies(await learningApi.listCompetencies());
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar las competencias.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -63,7 +66,7 @@ export default function AdminCompetenciasPage() {
       setNewDesc('');
       await reloadCatalog();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos crear la competencia.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setCreating(false);
     }
@@ -74,7 +77,7 @@ export default function AdminCompetenciasPage() {
       await learningApi.deleteCompetency(id);
       await reloadCatalog();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos eliminar la competencia.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -97,9 +100,7 @@ export default function AdminCompetenciasPage() {
       }
       setTagState(state);
     } catch (e) {
-      setError(
-        e instanceof ApiHttpError ? e.message : 'No pudimos cargar las competencias del curso.',
-      );
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setTagLoading(false);
     }
@@ -117,9 +118,7 @@ export default function AdminCompetenciasPage() {
       setTagSaved(true);
       setTimeout(() => setTagSaved(false), 2500);
     } catch (e) {
-      setError(
-        e instanceof ApiHttpError ? e.message : 'No pudimos guardar las competencias del curso.',
-      );
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setTagSaving(false);
     }
@@ -138,12 +137,9 @@ export default function AdminCompetenciasPage() {
           className="font-display text-2xl font-bold tracking-tight text-text"
           style={{ letterSpacing: '-0.02em' }}
         >
-          Competencias
+          {t('competencies.title')}
         </h1>
-        <p className="mt-1.5 text-text-muted">
-          Define el catálogo de competencias y asígnalas a los cursos. La puntuación de cada alumno
-          se calcula automáticamente desde su progreso en los cursos asociados.
-        </p>
+        <p className="mt-1.5 text-text-muted">{t('competencies.subtitle')}</p>
       </header>
 
       {error ? (
@@ -156,35 +152,33 @@ export default function AdminCompetenciasPage() {
         {/* Catálogo */}
         <Card>
           <CardHeader>
-            <CardTitle>Catálogo de competencias</CardTitle>
-            <CardDescription>Las competencias disponibles en tu organización.</CardDescription>
+            <CardTitle>{t('competencies.catalogTitle')}</CardTitle>
+            <CardDescription>{t('competencies.catalogDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Nombre (ej. Comunicación)"
+                placeholder={t('competencies.namePlaceholder')}
                 maxLength={80}
               />
               <Button onClick={() => void handleCreate()} disabled={creating || !newName.trim()}>
                 <Icon name="plus" size={16} />
-                Añadir
+                {t('competencies.add')}
               </Button>
             </div>
             <Input
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
-              placeholder="Descripción (opcional)"
+              placeholder={t('competencies.descPlaceholder')}
               maxLength={280}
             />
 
             {competencies === null ? (
-              <p className="py-4 text-sm text-text-muted">Cargando…</p>
+              <p className="py-4 text-sm text-text-muted">{t('competencies.loading')}</p>
             ) : catalogEmpty ? (
-              <p className="py-4 text-sm text-text-muted">
-                Aún no hay competencias. Crea la primera arriba.
-              </p>
+              <p className="py-4 text-sm text-text-muted">{t('competencies.catalogEmpty')}</p>
             ) : (
               <ul className="divide-y divide-[#F1F5F9]">
                 {competencies.map((c) => (
@@ -198,7 +192,7 @@ export default function AdminCompetenciasPage() {
                     <button
                       type="button"
                       onClick={() => void handleDelete(c.id)}
-                      aria-label={`Eliminar ${c.name}`}
+                      aria-label={t('competencies.deleteAria', { name: c.name })}
                       className="shrink-0 rounded-md p-1.5 text-text-subtle transition-colors hover:bg-danger-50 hover:text-danger-700"
                     >
                       <Icon name="trash" size={16} />
@@ -213,21 +207,18 @@ export default function AdminCompetenciasPage() {
         {/* Competencias por curso */}
         <Card>
           <CardHeader>
-            <CardTitle>Competencias por curso</CardTitle>
-            <CardDescription>
-              Asigna competencias a un curso y su peso. El progreso del alumno en el curso alimenta
-              esas competencias.
-            </CardDescription>
+            <CardTitle>{t('competencies.byCourseTitle')}</CardTitle>
+            <CardDescription>{t('competencies.byCourseDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="course">Curso</Label>
+              <Label htmlFor="course">{t('competencies.courseLabel')}</Label>
               <Select
                 id="course"
                 value={selectedCourse}
                 onChange={(e) => void selectCourse(e.target.value)}
               >
-                <option value="">Selecciona un curso…</option>
+                <option value="">{t('competencies.coursePlaceholder')}</option>
                 {sortedCourses.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title}
@@ -237,15 +228,11 @@ export default function AdminCompetenciasPage() {
             </div>
 
             {!selectedCourse ? (
-              <p className="py-4 text-sm text-text-muted">
-                Elige un curso para asignar competencias.
-              </p>
+              <p className="py-4 text-sm text-text-muted">{t('competencies.chooseCourse')}</p>
             ) : catalogEmpty ? (
-              <p className="py-4 text-sm text-text-muted">
-                Primero crea competencias en el catálogo.
-              </p>
+              <p className="py-4 text-sm text-text-muted">{t('competencies.createFirst')}</p>
             ) : tagLoading ? (
-              <p className="py-4 text-sm text-text-muted">Cargando…</p>
+              <p className="py-4 text-sm text-text-muted">{t('competencies.loading')}</p>
             ) : (
               <>
                 <ul className="divide-y divide-[#F1F5F9]">
@@ -268,7 +255,9 @@ export default function AdminCompetenciasPage() {
                           {c.name}
                         </label>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-text-subtle">peso</span>
+                          <span className="text-xs text-text-subtle">
+                            {t('competencies.weight')}
+                          </span>
                           <input
                             type="number"
                             min={1}
@@ -293,14 +282,14 @@ export default function AdminCompetenciasPage() {
                 </ul>
                 <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
                   {tagSaved ? (
-                    <span className="text-sm font-semibold text-success-700">✓ Guardado</span>
-                  ) : (
-                    <span className="text-sm text-text-subtle">
-                      Define qué competencias cubre el curso.
+                    <span className="text-sm font-semibold text-success-700">
+                      {t('competencies.saved')}
                     </span>
+                  ) : (
+                    <span className="text-sm text-text-subtle">{t('competencies.defineHint')}</span>
                   )}
                   <Button onClick={() => void handleSaveTags()} disabled={tagSaving}>
-                    {tagSaving ? 'Guardando…' : 'Guardar'}
+                    {tagSaving ? t('competencies.saving') : t('competencies.save')}
                   </Button>
                 </div>
               </>
